@@ -1,0 +1,43 @@
+import { describe, expect, it } from 'vitest'
+import { blankMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress } from './model'
+describe('manual AO3 identity and progress', () => {
+  it('recognizes supported URLs and preserves the exact submission', () => {
+    const original = ' https://archiveofourown.org/works/123/chapters/998?view_adult=true#main '
+    expect(parseWorkUrl(original)).toEqual({ workId: 123, chapterId: '998', original })
+    expect(parseWorkUrl('http://www.archiveofourown.org/works/123/').workId).toBe(123)
+  })
+  it.each(['https://example.com/works/123', 'https://archiveofourown.org.evil.test/works/123', 'https://archiveofourown.org/users/123', 'https://archiveofourown.org/works/0', 'https://archiveofourown.org/works/-1', 'https://name@archiveofourown.org/works/1', 'https://archiveofourown.org:443/works/1', 'javascript:alert(1)', 'https://archiveofourown.org/works/9007199254740992'])('rejects unsupported URL %s', url => expect(() => parseWorkUrl(url)).toThrow())
+  it('defaults a work or verified chapter 1 to To Read', () => {
+    expect(initialProgress('https://archiveofourown.org/works/123').status).toBe('to_read')
+    expect(initialProgress('https://archiveofourown.org/works/123/chapters/999', { 1: '999' })).toEqual({ status: 'to_read', lastRead: 0, chapterVerified: true })
+  })
+  it('a verified chapter 4 means three chapters read', () => {
+    expect(initialProgress('https://archiveofourown.org/works/123/chapters/999', { 4: '999' })).toEqual({ status: 'reading', lastRead: 3, chapterVerified: true })
+    expect(nextUnread(3)).toBe(4)
+  })
+  it('never interprets an unverified chapter ID as its position', () => {
+    expect(initialProgress('https://archiveofourown.org/works/123/chapters/4')).toEqual({ status: 'to_read', lastRead: 0, chapterVerified: false })
+  })
+  it('accepts unknown totals and rejects invalid progress or known bounds', () => {
+    expect(blankMetadata.total_chapters).toBeNull()
+    expect(validateProgress(18, blankMetadata)).toBe(18)
+    for (const invalid of [-1, 2.5, NaN, Infinity]) expect(() => validateProgress(invalid, blankMetadata)).toThrow()
+    expect(() => validateProgress(4, { ...blankMetadata, published_chapters: 3 })).toThrow()
+    expect(() => validateProgress(4, { ...blankMetadata, total_chapters: 3 })).toThrow()
+  })
+})
+
+it('only produces next-chapter destinations from trusted mappings', async () => {
+  const { chapterUrl } = await import('./model')
+  const story = { last_read_chapter: 3, work: { ao3_work_id: 123, verified_chapters: { 4: '900' } } } as unknown as Parameters<typeof chapterUrl>[0]
+  expect(chapterUrl(story)).toBe('https://archiveofourown.org/works/123/chapters/900')
+  expect(chapterUrl({ ...story, last_read_chapter: 4 })).toBeNull()
+  expect(chapterUrl({ ...story, work: { ...story.work, verified_chapters: { 4: 'javascript:alert(1)' } } })).toBeNull()
+})
+
+it('keeps an editable URL separate from the original and rejects unsafe saved destinations', async () => {
+  const { savedWorkUrl } = await import('./model')
+  const story = { original_url: 'https://archiveofourown.org/works/123', work: { ao3_work_id: 123 }, metadata: { manual_url: 'https://archiveofourown.org/works/123/chapters/999' } } as unknown as Parameters<typeof savedWorkUrl>[0]
+  expect(savedWorkUrl(story)).toContain('/chapters/999')
+  for (const manual_url of ['javascript:alert(1)', 'https://evil.test', 'https://archiveofourown.org/works/456']) expect(savedWorkUrl({ ...story, metadata: { ...story.metadata, manual_url } })).toBe(story.original_url)
+})

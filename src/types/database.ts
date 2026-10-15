@@ -1,4 +1,4 @@
-// Generated from the Phase 1 migration by npm run db:types:embedded.
+// Generated from versioned migrations by npm run db:types:embedded.
 // After linking Supabase, use npm run db:types for the authoritative remote types.
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
@@ -318,6 +318,7 @@ export type Database = {
           field_provenance: Json
           created_at: string
           updated_at: string
+          verified_chapters: Json
         }
         Insert: {
           id?: string
@@ -339,6 +340,7 @@ export type Database = {
           field_provenance?: Json
           created_at?: string
           updated_at?: string
+          verified_chapters?: Json
         }
         Update: {
           id?: string
@@ -360,13 +362,19 @@ export type Database = {
           field_provenance?: Json
           created_at?: string
           updated_at?: string
+          verified_chapters?: Json
         }
         Relationships: [
         ]
       }
     }
     Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
+    Functions: {
+      save_library_story: {
+        Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
+        Returns: string
+      }
+    }
     Enums: {
       metadata_source: 'unknown' | 'ao3' | 'manual' | 'extension'
       ao3_tag_category: 'relationship' | 'character' | 'freeform' | 'warning' | 'category'

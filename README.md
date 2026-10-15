@@ -1,8 +1,10 @@
 # AO3 Library & Reading Tracker
 
-Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **between chapters**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
+Phases 1 and 2 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **between chapters**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
 
-The code foundation is implemented; a hosted Supabase project and production deployment have **not** been provisioned. Phase 2 has not started. Navigation destinations deliberately show planned features rather than story-management controls.
+Phase 2 implements a private, manually managed library: story creation and editing, reading progress and statuses, favorites, notes, personal ratings, default shelves, multiple custom collections, and personal tags. All changes persist in Supabase. Automatic metadata retrieval and importing remain future work. See [the Phase 2 report](docs/PHASE_2_REPORT.md) for verification, decisions, and changed files.
+
+The additive Phase 2 migration was applied to the local development Supabase stack. No hosted database was changed or deployed during this phase.
 
 ## Run locally
 
@@ -17,9 +19,30 @@ npm run dev
 
 Open the URL printed by Vite, normally `http://127.0.0.1:5173`. Without environment configuration, the app shows a setup screen and makes no Supabase requests. The only browser configuration is the Supabase project URL and **publishable** key, or a legacy **anon** key. Never put a secret/service-role key, database password, or connection string in a `VITE_` variable. Build-time validation rejects privileged keys, even if mislabeled as public.
 
+## Use the manual library
+
+1. Sign in with your invited account. Choose **Library → Add Story**, or **Add → Save for Later / Starting a Fic**.
+2. Enter an AO3 work URL and title. Enter optional authors, fandoms, tags, summary, rating, and chapter counts by hand. Leave unknown counts blank.
+3. Choose reading status, fully read chapter count, favorites, private notes, personal tags, and any custom collections, then **Save story**.
+4. Open **See Full Details** to edit metadata and organization. Use **Edit chapter progress** to save or cancel progress changes. **Mark as Caught Up** uses the saved published count and preserves reading status.
+5. Create collections with **New Shelf**. Choose a collection to rename or delete it. Deleting a collection keeps its stories. Removing a story requires confirmation and deletes that account’s private entry and memberships.
+6. DNF entries remain in the searchable Library and the **Did Not Finish** shelf. Change reading status to recover them. Re-reading preserves metadata and progress until you change progress explicitly.
+
+No AO3 request is required to save. Chapter IDs do not identify chapter positions. An unverified chapter link preserves its full original URL and leaves inferred progress at zero. Enter progress manually. Only trusted, verified chapter mappings can produce a next-chapter destination; Phase 2 does not fetch or verify mappings. Unknown totals display as `?`.
+
+For an existing local Phase 1 database, apply the additive migration without resetting data:
+
+```sh
+npx supabase migration up --local
+npm run db:lint
+npm run test:integration
+```
+
+Hosted projects require reviewing and applying the migrations through the normal `supabase db push --dry-run` / `supabase db push` workflow. Never run `db:reset` against an established database to upgrade it.
+
 ## Set up Supabase
 
-Choose either a hosted project or a local Docker stack. Database changes always use the versioned migration under `supabase/migrations/`.
+Choose either a hosted project or a local Docker stack. Database changes always use versioned migrations under `supabase/migrations/`.
 
 ### Hosted project
 
@@ -68,7 +91,7 @@ If startup fails, retry `npm run db:start -- --debug` after confirming Docker De
 
 ## Server boundary
 
-`server/invite-user.mjs` is a trusted operator utility, never a frontend import. No browser-accessible endpoint can create accounts or mutate shared metadata.
+`server/invite-user.mjs` is a trusted operator utility, never a frontend import. No browser-accessible endpoint can create accounts or mutate shared AO3 metadata. The authenticated `save_library_story` PostgreSQL function can create a bare shared work identity and atomically save only the caller’s private manual metadata and organization.
 
 `supabase/functions/account-status/` establishes the authenticated Edge Function boundary. It verifies the supplied bearer token using `auth.getUser(token)`, derives identity exclusively from that verified user, restricts CORS to `APP_ORIGIN`, and returns only user ID and schema version with `Cache-Control: no-store`. The gateway JWT switch is off because the handler verifies tokens itself, including tokens using modern signing keys; it does **not** permit anonymous handler access. No privileged credential is required by this function.
 
@@ -78,7 +101,7 @@ To deploy it after project setup, set the **server-side** `APP_ORIGIN` secret in
 npx supabase functions deploy account-status
 ```
 
-Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. Importers, library-writing endpoints, and email handlers are deliberately absent in Phase 1.
+Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. Importers and email handlers remain absent. Phase 2 library writes use a narrow authenticated PostgreSQL RPC; the account-status function remains optional.
 
 ## Schema and access model
 
@@ -93,7 +116,7 @@ Supabase supplies its server URL and anon key. The function is optional for rend
 
 All twelve tables enable and force RLS. Anonymous table access is denied. Personal rows require `auth.uid() = user_id` for both existing and new values. Composite foreign keys also prevent attaching another account's entry, collection, or tag. Shared metadata has no browser write grants; a trusted server can write it using a secret key.
 
-`library_entries` creation and identity changes are server-only. This prevents a browser from guessing a global work UUID, attaching it to its library, and revealing another account's metadata. Existing owners may update a limited set of personal columns or delete their own entry. Phase 2 will add a narrow, authenticated, transactional creation service without opening shared metadata writes.
+`library_entries` creation is restricted to `save_library_story`, a narrowly scoped SECURITY DEFINER function with an empty search path. It validates an AO3 work URL, derives ownership from `auth.uid()`, creates or reuses the work identity, and saves private overrides and memberships in one transaction. It accepts no caller-supplied owner or work UUID. Existing owners may update a limited set of personal columns or delete their own entry. Work identity and original submission remain immutable on edits. Shared AO3 metadata has no browser write grants.
 
 Key modeling decisions:
 
@@ -135,7 +158,7 @@ npm run check                 # lint, TypeScript, production build, unit/SQL tes
 npm run test:unit             # frontend, auth, config, server-boundary tests
 npm run test:db               # real embedded PostgreSQL migrations/RLS; no Docker required
 npx playwright install chromium
-npm run test:e2e              # desktop and mobile Chromium, mocked Auth responses
+npm run test:e2e              # desktop and mobile Chromium, mocked Auth/REST contracts; real PostgreSQL and live local Supabase tested separately
 npm audit --audit-level=moderate
 npm run db:lint               # requires full local Supabase stack
 npm run test:integration      # requires full local Supabase stack; real Auth and REST

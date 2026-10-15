@@ -1,4 +1,4 @@
-# Phase 1 steps followed:
+# AO3 Library & Reading Tracker
 
 Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **between chapters**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
 
@@ -49,6 +49,8 @@ For operator invitations, `npm run invite` is an alternative to the Dashboard. S
 
 Install and start Docker Desktop or a compatible Docker engine, then:
 
+Run these commands one at a time. Continue only after the previous command succeeds. If startup reports a failed health check, the database may still be running while Auth and the API are unavailable; a successful reset/lint alone does not confirm the full stack is ready.
+
 ```sh
 npm run db:start
 npm run db:reset
@@ -58,7 +60,11 @@ npm run test:integration
 
 `db:reset` **erases the local development database** and reapplies migrations. It is not a production rollback command. Copy the local API URL and **anon** key from `npx supabase status` into the two frontend variables; do not copy the service-role key. Local Studio is at port 54323; the local email inbox is at port 54324. Use Studio to invite a development user. Local public signup is disabled in `supabase/config.toml`.
 
+Keep `[auth].enable_signup = false` and `[auth.email].enable_signup = true`. Despite its name, the latter setting also controls whether the Email provider is available for existing/invited accounts to sign in. Global signup remains disabled. After changing Auth config, use the normal `npx supabase stop` and `npm run db:start` to apply it; a database reset is unnecessary.
+
 The live integration script reads local keys into process memory, creates two temporary accounts, signs in through real Supabase Auth, checks all twelve tables through PostgREST, and removes its fixtures. It refuses non-loopback endpoints. Do not point destructive integration tests at production.
+
+If startup fails, retry `npm run db:start -- --debug` after confirming Docker Desktop is running. Already downloaded images are reused. If that returns success but lists Auth, Kong or PostgREST under **Stopped services**, run `npx supabase stop` (the default keeps a database backup), then `npm run db:start -- --debug` again. Do not use `--no-backup` for this recovery. The integration runner accepts both legacy flat status JSON and newer CLI status responses containing an `env` map. If it reports a missing API URL or keys, complete startup before retrying `npm run test:integration`; do not substitute your hosted project's credentials.
 
 ## Server boundary
 
@@ -133,6 +139,7 @@ npm run test:e2e              # desktop and mobile Chromium, mocked Auth respons
 npm audit --audit-level=moderate
 npm run db:lint               # requires full local Supabase stack
 npm run test:integration      # requires full local Supabase stack; real Auth and REST
+npm run test:integration:config # status parsing and private email-sign-in config; no Docker needed
 ```
 
 PGlite runs the actual PostgreSQL engine, SQL migration, grants, constraints, and RLS. Its `auth.users`, `auth.uid()`, and roles are a minimal test contract, **not** the full Supabase Auth service. Component/browser tests simulate authentication responses. The live integration script and Docker CI job cover the actual Auth/PostgREST layer when that infrastructure is available. The implementation environment had no Docker or connected Supabase project; those limits are recorded in `docs/PHASE_1_REPORT.md`. The Edge Function passed `npx --yes deno check supabase/functions/account-status/index.ts`; a deployed invocation still needs your Supabase project.

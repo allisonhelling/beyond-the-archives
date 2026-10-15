@@ -9,7 +9,7 @@ try {
     join pg_type t on t.oid = e.enumtypid order by e.enumsortorder`)
   const types = { uuid: 'string', text: 'string', timestamptz: 'string', int8: 'number', int4: 'number', int2: 'number', bool: 'boolean', jsonb: 'Json' }
   const enumNames = new Set(enums.map(e => e.name))
-  let output = '// Generated from the Phase 1 migration by npm run db:types:embedded.\n// After linking Supabase, use npm run db:types for the authoritative remote types.\nexport type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]\n\nexport type Database = {\n  public: {\n    Tables: {\n'
+  let output = '// Generated from versioned migrations by npm run db:types:embedded.\n// After linking Supabase, use npm run db:types for the authoritative remote types.\nexport type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]\n\nexport type Database = {\n  public: {\n    Tables: {\n'
   for (const table of [...new Set(columns.map(c => c.table_name))]) {
     const fields = columns.filter(c => c.table_name === table)
     const fieldType = c => (types[c.udt_name] ?? (enumNames.has(c.udt_name) ? `Database['public']['Enums']['${c.udt_name}']` : 'never')) + (c.is_nullable === 'YES' ? ' | null' : '')
@@ -31,7 +31,15 @@ try {
     }
     output += '        ]\n      }\n'
   }
-  output += '    }\n    Views: { [_ in never]: never }\n    Functions: { [_ in never]: never }\n    Enums: {\n'
+  output += `    }
+    Views: { [_ in never]: never }
+    Functions: {
+      save_library_story: {
+        Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
+        Returns: string
+      }
+    }
+    Enums: {\n`
   for (const name of enumNames) output += `      ${name}: ${enums.filter(e => e.name === name).map(e => `'${e.value}'`).join(' | ')}\n`
   output += '    }\n    CompositeTypes: { [_ in never]: never }\n  }\n}\n'
   await writeFile(new URL('../src/types/database.ts', import.meta.url), output)

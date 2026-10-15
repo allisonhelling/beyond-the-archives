@@ -5,6 +5,8 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { StrictMode } from 'react'
 import App from './App'
 
+vi.mock('../features/library/repository', () => ({ loadLibrary: async () => ({ stories: [], collections: [] }) }))
+
 const fakeSession = { user: { id: 'account-1', email: 'reader@example.com' }, access_token: 'session-token' } as Session
 const auth = vi.hoisted(() => ({
   session: null as Session | null,
@@ -88,8 +90,8 @@ describe('private app access and navigation', () => {
     await user.click(screen.getAllByRole('link', { name: 'Library' })[1])
     expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add' }))
-    expect(screen.getByRole('button', { name: /Save for Later/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Import History from AO3/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Save for Later/ })).toBeEnabled()
+    expect(screen.getAllByRole('button', { name: /Import History from AO3/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
   })
   it('removes protected content when the session expires', async () => {
     auth.session = fakeSession

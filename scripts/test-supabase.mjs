@@ -41,7 +41,7 @@ try {
     assert.ok(!created.error, `Could not create test account (Auth status ${created.error?.status ?? 'unknown'}, code ${created.error?.code ?? 'unknown'})`)
     const userId = created.data.user.id
     const client = createClient(url, publicKey, options)
-    users.push({ id: userId, client })
+    users.push({ id: userId, client, email, password })
     stage = `signing in local test account ${index}`
     const signedIn = await client.auth.signInWithPassword({ email, password })
     assert.ok(!signedIn.error, `Could not authenticate test account (Auth status ${signedIn.error?.status ?? 'unknown'}, code ${signedIn.error?.code ?? 'unknown'})`)
@@ -88,6 +88,38 @@ try {
     assert.equal(deleted.data.length, 0)
     const own = await bob.client.from('library_entries').select('notes').single()
     assert.equal(own.data.notes, 'private 2')
+  })
+  await check('Phase 2 manual saves, duplicate prevention, collections, tags and login persistence', async () => {
+    const [alice, bob] = users
+    const ao3Id = Math.floor(Date.now() / 10) + 100
+    const createdCollections = await alice.client.from('collections').insert([{ name: `Manual A ${randomUUID()}` }, { name: `Manual B ${randomUUID()}` }]).select('id')
+    assert.ok(!createdCollections.error)
+    const args = { p_url: `https://archiveofourown.org/works/${ao3Id}/chapters/999`, p_metadata: { title: 'Manual private title', authors: ['One', 'Two'], total_chapters: null, published_chapters: 6, publication_status: 'complete' }, p_status: 'reading', p_progress: 3, p_notes: 'Persistent private note', p_rating: 5, p_favorite: true, p_collections: createdCollections.data.map(c => c.id), p_tags: ['Manual tag'], p_id: null }
+    const created = await alice.client.rpc('save_library_story', args)
+    assert.ok(!created.error, 'Manual RPC failed; apply the Phase 2 migration locally')
+    const work = await admin.from('works').select('id').eq('ao3_work_id', ao3Id).single()
+    assert.ok(!work.error); cleanup.works.push(work.data.id)
+    const duplicate = await alice.client.rpc('save_library_story', { ...args, p_url: `https://archiveofourown.org/works/${ao3Id}` })
+    assert.equal(duplicate.error?.code, '23505')
+    assert.ok((await anonymous.rpc('save_library_story', args)).error)
+    assert.ok((await bob.client.rpc('save_library_story', { ...args, p_id: created.data })).error)
+    assert.equal((await bob.client.from('library_entries').select('id').eq('id', created.data)).data.length, 0)
+    await alice.client.auth.signOut()
+    alice.client = createClient(url, publicKey, options)
+    assert.ok(!(await alice.client.auth.signInWithPassword({ email: alice.email, password: alice.password })).error)
+    const restored = await alice.client.from('library_entries').select('*').eq('id', created.data).single()
+    assert.ok(!restored.error); assert.equal(restored.data.notes, args.p_notes); assert.equal(restored.data.last_read_chapter, 3); assert.equal(restored.data.metadata_overrides.total_chapters, null)
+    assert.equal((await alice.client.from('collection_works').select('*').eq('library_entry_id', created.data)).data.length, 2)
+    assert.equal((await alice.client.from('library_entry_tags').select('*').eq('library_entry_id', created.data)).data.length, 1)
+    for (const reading_status of ['did_not_finish', 're_reading', 'waiting_for_updates', 'reading']) {
+      assert.ok(!(await alice.client.from('library_entries').update({ reading_status }).eq('id', created.data)).error)
+    }
+    assert.ok(!(await alice.client.from('library_entries').update({ last_read_chapter: 6 }).eq('id', created.data)).error)
+    const caughtUp = await alice.client.from('library_entries').select('reading_status').eq('id', created.data).single()
+    assert.equal(caughtUp.data.reading_status, 'reading')
+    assert.ok(!(await alice.client.rpc('save_library_story', { ...args, p_id: created.data, p_metadata: { ...args.p_metadata, title: 'Edited manually' } })).error)
+    assert.ok(!(await alice.client.from('library_entries').delete().eq('id', created.data)).error)
+    assert.equal((await alice.client.from('library_entries').select('*').eq('id', created.data)).data.length, 0)
   })
   await check('public registration is disabled', async () => {
     const signup = await anonymous.auth.signUp({ email: `blocked-${randomUUID()}@example.test`, password: `Test-${randomUUID()}!Aa1` })
