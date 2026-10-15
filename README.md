@@ -1,0 +1,152 @@
+# AO3 Library & Reading Tracker
+
+Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **between chapters**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
+
+The code foundation is implemented; a hosted Supabase project and production deployment have **not** been provisioned. Phase 2 has not started. Navigation destinations deliberately show planned features rather than story-management controls.
+
+## Run locally
+
+Requires Node **22.12+** (Node 22 LTS recommended) and npm.
+
+```sh
+npm ci
+cp .env.example .env.local
+# Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local.
+npm run dev
+```
+
+Open the URL printed by Vite, normally `http://127.0.0.1:5173`. Without environment configuration, the app shows a setup screen and makes no Supabase requests. The only browser configuration is the Supabase project URL and **publishable** key, or a legacy **anon** key. Never put a secret/service-role key, database password, or connection string in a `VITE_` variable. Build-time validation rejects privileged keys, even if mislabeled as public.
+
+## Set up Supabase
+
+Choose either a hosted project or a local Docker stack. Database changes always use the versioned migration under `supabase/migrations/`.
+
+### Hosted project
+
+1. Create a Supabase project in your own account. Keep the database password and secret/service-role keys outside this repository.
+2. Authenticate the CLI interactively with `npx supabase login`, then link with `npx supabase link --project-ref YOUR_PROJECT_REF`.
+3. Review the migration, run `npx supabase db push --dry-run`, then `npx supabase db push` to apply it. These are setup instructions; no hosted migration was applied during implementation.
+4. **Disable “Allow new users to sign up” and anonymous sign-ins in the hosted Auth settings.** The local `config.toml` does not configure hosted Auth. An email/password provider must remain enabled for invited users.
+5. Set the Site URL to your app origin. Allow the exact `http://127.0.0.1:5173/auth/callback` development redirect and the exact `https://YOUR-APP.vercel.app/auth/callback` production redirect. Avoid broad wildcard production redirects.
+6. Set the minimum password length to 12 and require upper/lower case letters, a number, and a symbol. Configure your SMTP provider for reliable invitation and recovery delivery.
+7. Set email templates as described below, then invite your own address from **Authentication → Users → Invite user**. No public registration form or signup API is used by this app.
+8. Set the two public environment variables in `.env.local`, restart Vite, follow the invitation, set your password, and sign in.
+
+Use these email-template links so the app can verify one-time token hashes and request a password for both invitation and recovery:
+
+```html
+<!-- Invite user template -->
+<a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite">Accept invitation</a>
+<!-- Reset password template -->
+<a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery">Reset password</a>
+```
+
+These templates target the configured Site URL; use separate development/production projects or change Site URL deliberately when testing. Default Supabase invitation/recovery redirect links are also recognized. PKCE recovery links must be opened in the browser that requested them. Expired or already consumed links fail closed.
+
+For operator invitations, `npm run invite` is an alternative to the Dashboard. Supply `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_EMAIL`, and `APP_ORIGIN` through your trusted terminal's environment/secret manager. It calls the Admin API from `server/` with session persistence disabled. Never store the secret in frontend env files, paste it into chat, or prefix it with `VITE_`.
+
+### Local stack
+
+Install and start Docker Desktop or a compatible Docker engine, then:
+
+```sh
+npm run db:start
+npm run db:reset
+npm run db:lint
+npm run test:integration
+```
+
+`db:reset` **erases the local development database** and reapplies migrations. It is not a production rollback command. Copy the local API URL and **anon** key from `npx supabase status` into the two frontend variables; do not copy the service-role key. Local Studio is at port 54323; the local email inbox is at port 54324. Use Studio to invite a development user. Local public signup is disabled in `supabase/config.toml`.
+
+The live integration script reads local keys into process memory, creates two temporary accounts, signs in through real Supabase Auth, checks all twelve tables through PostgREST, and removes its fixtures. It refuses non-loopback endpoints. Do not point destructive integration tests at production.
+
+## Server boundary
+
+`server/invite-user.mjs` is a trusted operator utility, never a frontend import. No browser-accessible endpoint can create accounts or mutate shared metadata.
+
+`supabase/functions/account-status/` establishes the authenticated Edge Function boundary. It verifies the supplied bearer token using `auth.getUser(token)`, derives identity exclusively from that verified user, restricts CORS to `APP_ORIGIN`, and returns only user ID and schema version with `Cache-Control: no-store`. The gateway JWT switch is off because the handler verifies tokens itself, including tokens using modern signing keys; it does **not** permit anonymous handler access. No privileged credential is required by this function.
+
+To deploy it after project setup, set the **server-side** `APP_ORIGIN` secret in Supabase and run:
+
+```sh
+npx supabase functions deploy account-status
+```
+
+Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. Importers, library-writing endpoints, and email handlers are deliberately absent in Phase 1.
+
+## Schema and access model
+
+| Tables | Purpose and browser access |
+| --- | --- |
+| `works` | Globally unique AO3 identity and canonical metadata; readable only through your library |
+| `authors`, `fandoms`, `tags` | Normalized shared AO3 metadata; readable only when linked to your saved works |
+| `work_authors`, `work_fandoms`, `work_tags` | Many-to-many AO3 metadata relationships; same visibility rules |
+| `library_entries` | Private status, progress, favorite, rating, notes, original URL, and manual overrides |
+| `collections`, `collection_works` | Owned shelves and membership of owned library entries |
+| `personal_tags`, `library_entry_tags` | Private organizational tags and owned entry membership |
+
+All twelve tables enable and force RLS. Anonymous table access is denied. Personal rows require `auth.uid() = user_id` for both existing and new values. Composite foreign keys also prevent attaching another account's entry, collection, or tag. Shared metadata has no browser write grants; a trusted server can write it using a secret key.
+
+`library_entries` creation and identity changes are server-only. This prevents a browser from guessing a global work UUID, attaching it to its library, and revealing another account's metadata. Existing owners may update a limited set of personal columns or delete their own entry. Phase 2 will add a narrow, authenticated, transactional creation service without opening shared metadata writes.
+
+Key modeling decisions:
+
+- `works.ao3_work_id` is globally unique; `(user_id, work_id)` is unique per library.
+- `library_entries.original_url` preserves the exact user's submission, including chapter/query parameters. It is separate from `works.canonical_url`, which remains NULL until verified. The latter must match the canonical AO3 work ID and have a verification timestamp.
+- `published_chapters`, `total_chapters`, and `is_complete` are nullable. Unknown totals stay NULL; zero is not a substitute for an unknown total. Progress defaults to zero fully read chapters.
+- Reading status and AO3 completion are independent. No trigger changes personal progress or completion when shared metadata changes.
+- `metadata_overrides` lives on the private entry; automatic metadata and field provenance live on the work. Future metadata refreshes must leave private overrides untouched. Phase 1 establishes this storage boundary without implementing a Phase 3 refresh pipeline.
+- All timestamps use `timestamptz`; PostgreSQL stores instants in UTC. Future UI timestamps should use the reader's local timezone.
+- `collection_works.library_entry_id` intentionally references an owned library entry rather than a bare global work.
+- No later-phase import/job, series, notification, or history tables are created.
+
+## Project layout
+
+```text
+src/
+  app/                 protected routes and responsive shell
+  components/          shared presentation components
+  features/auth/       session provider, sign-in and password recovery
+  lib/                 public configuration and typed Supabase client
+  types/database.ts    generated migration-derived types
+  test/                frontend and server-boundary test setup
+server/                trusted operator utilities, excluded from browser imports
+supabase/
+  migrations/          versioned PostgreSQL schema, constraints, grants and RLS
+  functions/           authenticated server boundary
+  tests/               PostgreSQL migration and isolation tests
+scripts/               database harness, types, integration and security checks
+tests/e2e/             desktop and mobile browser tests
+docs/                  phase scope, verification, and changed-file inventory
+```
+
+`npm run db:types:embedded` regenerates types from the embedded migrated schema. With a running local Supabase stack, `npm run db:types` generates official Supabase types. Relationships, nullable values, inserts, updates, and enum types are included. Do not hand-edit generated types.
+
+## Verify
+
+```sh
+npm run check                 # lint, TypeScript, production build, unit/SQL tests, security checks
+npm run test:unit             # frontend, auth, config, server-boundary tests
+npm run test:db               # real embedded PostgreSQL migrations/RLS; no Docker required
+npx playwright install chromium
+npm run test:e2e              # desktop and mobile Chromium, mocked Auth responses
+npm audit --audit-level=moderate
+npm run db:lint               # requires full local Supabase stack
+npm run test:integration      # requires full local Supabase stack; real Auth and REST
+```
+
+PGlite runs the actual PostgreSQL engine, SQL migration, grants, constraints, and RLS. Its `auth.users`, `auth.uid()`, and roles are a minimal test contract, **not** the full Supabase Auth service. Component/browser tests simulate authentication responses. The live integration script and Docker CI job cover the actual Auth/PostgREST layer when that infrastructure is available. The implementation environment had no Docker or connected Supabase project; those limits are recorded in `docs/PHASE_1_REPORT.md`. The Edge Function passed `npx --yes deno check supabase/functions/account-status/index.ts`; a deployed invocation still needs your Supabase project.
+
+Security checks inspect frontend boundaries, reject a deliberately mislabeled privileged key at build time, build with a synthetic server-secret canary, and scan the resulting artifacts to ensure it is absent. Only test canaries are used; no real privileged key was provided. This is targeted automated coverage, not an external penetration test.
+
+GitHub Actions runs lint/build/tests/security/audit/browser checks and a separate Docker Supabase migration/lint/live-integration job. It also type-checks the Edge Function with Deno. No GitHub repository was supplied or connected for this project, so this workflow has not run remotely.
+
+## Vercel deployment
+
+Connect your eventual GitHub repository to Vercel, choose Vite, and use `npm run build` with output `dist`. Set **only** the two public environment variables for the frontend. `vercel.json` supplies SPA route fallback, CSP and other security headers. Hosted Supabase uses `*.supabase.co`; update CSP deliberately if using a custom Supabase domain. Configure the exact production Auth URL/redirect and server `APP_ORIGIN` before inviting your production account. Verify an invite, sign-in, refresh, recovery, sign-out, unauthenticated API denial, and isolation using two accounts before relying on production.
+
+Nothing was pushed, committed, migrated to a hosted database, or deployed during this implementation. For a new project, choose a GitHub repository and review the changes before the first push. Never commit `.env.local` or server credentials. The two original PDFs are unchanged.
+
+## References
+
+Requirements come from the two PDFs in this folder: Implementation Plan Phase 1 (pages 1–2), and Specification sections 2, 3, 8, 9, 11.6, and 13. Implementation references: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Supabase user management](https://supabase.com/docs/guides/auth/managing-user-data), [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [Vite environment variables](https://vite.dev/guide/env-and-mode).

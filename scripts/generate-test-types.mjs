@@ -1,0 +1,39 @@
+import { writeFile } from 'node:fs/promises'
+import { createTestDatabase } from './test-database.mjs'
+
+const db = await createTestDatabase()
+try {
+  const { rows: columns } = await db.query(`select table_name, column_name, udt_name, is_nullable, column_default
+    from information_schema.columns where table_schema = 'public' order by table_name, ordinal_position`)
+  const { rows: enums } = await db.query(`select t.typname as name, e.enumlabel as value from pg_enum e
+    join pg_type t on t.oid = e.enumtypid order by e.enumsortorder`)
+  const types = { uuid: 'string', text: 'string', timestamptz: 'string', int8: 'number', int4: 'number', int2: 'number', bool: 'boolean', jsonb: 'Json' }
+  const enumNames = new Set(enums.map(e => e.name))
+  let output = '// Generated from the Phase 1 migration by npm run db:types:embedded.\n// After linking Supabase, use npm run db:types for the authoritative remote types.\nexport type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]\n\nexport type Database = {\n  public: {\n    Tables: {\n'
+  for (const table of [...new Set(columns.map(c => c.table_name))]) {
+    const fields = columns.filter(c => c.table_name === table)
+    const fieldType = c => (types[c.udt_name] ?? (enumNames.has(c.udt_name) ? `Database['public']['Enums']['${c.udt_name}']` : 'never')) + (c.is_nullable === 'YES' ? ' | null' : '')
+    output += `      ${table}: {\n        Row: {\n${fields.map(c => `          ${c.column_name}: ${fieldType(c)}`).join('\n')}\n        }\n`
+    for (const mode of ['Insert', 'Update']) {
+      output += `        ${mode}: {\n${fields.map(c => `          ${c.column_name}${mode === 'Update' || c.column_default || c.is_nullable === 'YES' ? '?' : ''}: ${fieldType(c)}`).join('\n')}\n        }\n`
+    }
+    const { rows: relations } = await db.query(`select c.conname as name, a.attname as col, ft.relname as target, fa.attname as target_col
+      from pg_constraint c join pg_class t on t.oid = c.conrelid join pg_namespace n on n.oid=t.relnamespace
+      join pg_class ft on ft.oid=c.confrelid join pg_namespace fn on fn.oid=ft.relnamespace
+      cross join lateral unnest(c.conkey, c.confkey) as keys(col, target_col)
+      join pg_attribute a on a.attrelid=t.oid and a.attnum=keys.col
+      join pg_attribute fa on fa.attrelid=ft.oid and fa.attnum=keys.target_col
+      where c.contype='f' and n.nspname='public' and fn.nspname='public' and t.relname=$1`, [table])
+    output += '        Relationships: [\n'
+    for (const name of [...new Set(relations.map(r => r.name))]) {
+      const group = relations.filter(r => r.name === name)
+      output += `          { foreignKeyName: '${name}'; columns: [${group.map(r => `'${r.col}'`).join(', ')}]; isOneToOne: false; referencedRelation: '${group[0].target}'; referencedColumns: [${group.map(r => `'${r.target_col}'`).join(', ')}] },\n`
+    }
+    output += '        ]\n      }\n'
+  }
+  output += '    }\n    Views: { [_ in never]: never }\n    Functions: { [_ in never]: never }\n    Enums: {\n'
+  for (const name of enumNames) output += `      ${name}: ${enums.filter(e => e.name === name).map(e => `'${e.value}'`).join(' | ')}\n`
+  output += '    }\n    CompositeTypes: { [_ in never]: never }\n  }\n}\n'
+  await writeFile(new URL('../src/types/database.ts', import.meta.url), output)
+  console.log('Generated types for twelve migrated tables.')
+} finally { await db.close() }
