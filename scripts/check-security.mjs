@@ -32,6 +32,9 @@ else {
 const ignored = await readFile('.gitignore', 'utf8')
 if (!ignored.includes('.env.*') || !ignored.includes('!.env.example')) errors.push('Environment ignore rules are missing')
 const config = await readFile('supabase/config.toml', 'utf8')
-if (!config.includes('enable_signup = false') || !config.includes('enable_anonymous_sign_ins = false')) errors.push('Private account configuration missing')
+const auth = config.match(/^\[auth\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1] || ''
+const email = config.match(/^\[auth\.email\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1] || ''
+if (!/^enable_signup\s*=\s*false\s*$/m.test(auth) || !/^enable_anonymous_sign_ins\s*=\s*false\s*$/m.test(auth)) errors.push('Private account configuration missing')
+if (!/^enable_signup\s*=\s*true\s*$/m.test(email)) errors.push('Email provider must remain enabled for invited users to sign in')
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1 }
 else console.log('Security checks passed: frontend boundary, privileged-key build rejection, production secret canary, environment exclusions, invite-only configuration.')

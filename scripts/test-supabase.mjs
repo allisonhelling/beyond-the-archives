@@ -3,38 +3,48 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { createClient } from '@supabase/supabase-js'
+import { parseLocalSupabaseStatus } from './supabase-status.mjs'
 
-const status = spawnSync('npx', ['supabase', 'status', '-o', 'json'], { encoding: 'utf8' })
+console.log('Checking local Supabase service status…')
+const status = spawnSync('npx', ['supabase', 'status', '-o', 'json'], { encoding: 'utf8', timeout: 60000 })
 if (status.status !== 0) {
   console.error('Local Supabase is unavailable. Install/start Docker, then run npm run db:start and npm run db:reset.')
   process.exit(1)
 }
-const settings = JSON.parse(status.stdout)
-const url = settings.API_URL
-if (!['127.0.0.1', 'localhost'].includes(new URL(url).hostname)) throw new Error('Integration tests only run against the local stack.')
+let settings
+try { settings = parseLocalSupabaseStatus(status.stdout) } catch (error) {
+  console.error(error.message)
+  process.exit(1)
+}
+const { url, publicKey, secretKey } = settings
+const { createClient } = await import('@supabase/supabase-js')
 const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
-const admin = createClient(url, settings.SERVICE_ROLE_KEY, options)
-const anonymous = createClient(url, settings.ANON_KEY, options)
+const admin = createClient(url, secretKey, options)
+const anonymous = createClient(url, publicKey, options)
 const tables = ['works', 'library_entries', 'authors', 'work_authors', 'fandoms', 'work_fandoms', 'tags', 'work_tags', 'collections', 'collection_works', 'personal_tags', 'library_entry_tags']
 const users = []
 const cleanup = { works: [], authors: [], fandoms: [], tags: [] }
 let passed = 0
+let stage = 'initializing local test fixtures'
 async function check(name, action) {
+  stage = name
   await action()
   passed++
   console.log(`PASS ${name}`)
 }
 try {
   for (const index of [1, 2]) {
+    stage = `creating local test account ${index}`
     const email = `phase1-${randomUUID()}@example.test`
     const password = `Test-${randomUUID()}!Aa1`
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true })
-    assert.ok(!created.error, 'Could not create test account')
+    assert.ok(!created.error, `Could not create test account (Auth status ${created.error?.status ?? 'unknown'}, code ${created.error?.code ?? 'unknown'})`)
     const userId = created.data.user.id
-    const client = createClient(url, settings.ANON_KEY, options)
+    const client = createClient(url, publicKey, options)
     users.push({ id: userId, client })
-    assert.ok(!(await client.auth.signInWithPassword({ email, password })).error, 'Could not authenticate test account')
+    stage = `signing in local test account ${index}`
+    const signedIn = await client.auth.signInWithPassword({ email, password })
+    assert.ok(!signedIn.error, `Could not authenticate test account (Auth status ${signedIn.error?.status ?? 'unknown'}, code ${signedIn.error?.code ?? 'unknown'})`)
     const workId = randomUUID(), entryId = randomUUID(), authorId = randomUUID(), fandomId = randomUUID(), tagId = randomUUID(), collectionId = randomUUID(), personalTagId = randomUUID()
     const seed = [
       ['works', { id: workId, ao3_work_id: Math.floor(Date.now() / 10) + index, title: `Integration ${index}` }],
@@ -51,6 +61,7 @@ try {
       ['library_entry_tags', { user_id: userId, personal_tag_id: personalTagId, library_entry_id: entryId }],
     ]
     for (const [table, row] of seed) {
+      stage = `seeding ${table} for local test account ${index}`
       assert.ok(!(await admin.from(table).insert(row)).error, `Seed failed for ${table}`)
       if (table in cleanup) cleanup[table].push(row.id)
     }
@@ -83,9 +94,12 @@ try {
     // Track an unexpected account so a failed security assertion still cleans it up.
     if (signup.data.user) users.push({ id: signup.data.user.id, client: anonymous })
     assert.ok(signup.error, 'Public registration unexpectedly succeeded')
+    assert.equal(signup.error.code, 'signup_disabled', 'Registration must be rejected by the signup policy, not a disabled provider or invalid input')
   })
   console.log(`${passed} live Supabase integration checks passed.`)
-} catch {
+} catch (error) {
+  console.error(`Failed stage: ${stage}`)
+  if (error instanceof assert.AssertionError) console.error(error.message)
   console.error('Live Supabase integration checks failed. Inspect local Auth/PostgREST configuration and migrations; credentials are intentionally omitted.')
   process.exitCode = 1
 } finally {

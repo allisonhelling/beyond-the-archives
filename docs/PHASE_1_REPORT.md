@@ -61,3 +61,20 @@ All implementation files are new; the original PDFs are unchanged.
 | `README.md`, `docs/PHASE_1_REPORT.md` | Setup, architecture, verification and handoff |
 
 Ignored generated artifacts include `node_modules/`, `dist/`, TypeScript build info, Playwright `test-results/`, and Supabase temporary state. These should not be committed.
+
+## Local-stack follow-up — October 15, 2026
+
+Docker was subsequently installed and the user successfully ran the migration/reset and database lint (`No schema errors found`). A failed initial startup left only PostgreSQL running. A normal, data-preserving `supabase stop` followed by `supabase start` restored the complete stack.
+
+The integration runner previously assumed `API_URL` always existed. It now validates status output before creating clients, explains incomplete startup, accepts both flat JSON and nested `env` maps, supports legacy/modern key names, and rejects remote URLs without exposing credentials. It also logs the failing test stage and safe Auth error codes.
+
+Live testing then exposed a local Auth configuration error: `[auth.email].enable_signup = false` also disabled the Email provider, preventing invited users from signing in (`email_provider_disabled`). This is corrected to `true`, with `[auth].enable_signup = false` retained to block public registration. The local stack was restarted normally to apply it, preserving the database backup. The public-registration assertion now requires the `signup_disabled` error specifically.
+
+Verification after these fixes:
+
+- **26 live Supabase integration checks passed**, covering real two-account sign-in, anonymous denial and isolation across all twelve tables, cross-account note protection, and disabled public registration. Temporary accounts and fixtures were cleaned up successfully.
+- **7 new native Node regression tests passed** with `npm run test:integration:config`, covering status formats, missing/malformed values, local-only safety, and the private-signup/enabled-email configuration. These are included in `npm run check`.
+- JavaScript syntax checks passed for the changed integration runner and status parser.
+- Full/targeted ESLint and the attempted Vitest run stalled in this environment; those reruns are not recorded as passed. The earlier Phase 1 results above remain historical results.
+
+Changed files for this follow-up: `supabase/config.toml`, `scripts/test-supabase.mjs`, new `scripts/supabase-status.mjs`, new `scripts/tests/supabase-status.mjs`, `scripts/check-security.mjs`, `package.json`, `README.md`, and this report. No hosted settings or frontend credentials were changed, no database reset was performed during troubleshooting, and nothing was committed or pushed.

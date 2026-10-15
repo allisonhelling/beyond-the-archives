@@ -13,14 +13,15 @@
     "test:db": "vitest run supabase/tests",
     "test:e2e": "playwright test",
     "check:security": "node scripts/check-security.mjs",
-    "check": "npm run lint && npm run build && npm test && npm run check:security",
+    "check": "npm run lint && npm run build && npm test && npm run test:integration:config && npm run check:security",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
     "db:lint": "supabase db lint --local --level warning",
     "db:types": "supabase gen types typescript --local > src/types/database.ts",
     "db:types:embedded": "node scripts/generate-test-types.mjs",
     "invite": "node server/invite-user.mjs",
-    "test:integration": "node scripts/test-supabase.mjs"
+    "test:integration": "node scripts/test-supabase.mjs",
+    "test:integration:config": "node --test scripts/tests/supabase-status.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",
