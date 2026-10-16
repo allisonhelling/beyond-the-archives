@@ -83,7 +83,7 @@ describe('private app access and navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Welcome back.' })).toBeVisible()
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
-  it('provides mobile navigation and phase-labelled add options', async () => {
+  it('provides mobile navigation and an enabled bulk import option', async () => {
     auth.session = fakeSession
     const user = userEvent.setup()
     render(<App />)
@@ -95,7 +95,7 @@ describe('private app access and navigation', () => {
     expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add' }))
     expect(screen.getByRole('button', { name: /Save for Later/ })).toBeEnabled()
-    expect(screen.getAllByRole('button', { name: /Import History from AO3/ }).every(button => button.hasAttribute('disabled'))).toBe(true)
+    expect(screen.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
   })
   it('removes protected content when the session expires', async () => {
     auth.session = fakeSession

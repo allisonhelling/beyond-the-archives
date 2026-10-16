@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
-    "test:unit": "vitest run src",
+    "test:unit": "vitest run src server",
     "test:db": "vitest run supabase/tests",
     "test:e2e": "playwright test",
     "check:security": "node scripts/check-security.mjs",
@@ -22,10 +22,12 @@
     "db:types:embedded": "node scripts/generate-test-types.mjs",
     "invite": "node server/invite-user.mjs",
     "test:integration": "node scripts/test-supabase.mjs",
-    "test:integration:config": "node --test scripts/tests/supabase-status.mjs"
+    "test:integration:config": "node --test scripts/tests/supabase-status.mjs",
+    "worker": "node --env-file-if-exists=.env.worker --experimental-strip-types server/import-worker.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",
+    "cheerio": "^1.2.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

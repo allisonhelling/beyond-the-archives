@@ -8,7 +8,7 @@ type Library = { stories: Story[]; collections: Collection[] }
 
 function makeWork(id: number): Work {
   return {
-    id: `sample-work-${id}`, ao3_work_id: id, canonical_url: null, canonical_verified_at: null,
+    id: `sample-work-${id}`, ao3_work_id: id, automatic_metadata: {}, last_metadata_success: null, canonical_url: null, canonical_verified_at: null,
     title: null, summary: null, rating: null, language: null, word_count: null,
     published_chapters: null, total_chapters: null, is_complete: null,
     ao3_published_at: null, ao3_updated_at: null, last_metadata_check: null,

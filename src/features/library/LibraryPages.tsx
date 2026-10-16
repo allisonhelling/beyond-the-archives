@@ -1,3 +1,6 @@
+import { SeriesNames } from './SeriesNames'
+import { MetadataControls, MetadataRefreshButton } from '../imports/MetadataControls'
+import { useMetadataRefresh } from '../imports/useMetadataRefresh'
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, LockKeyhole, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react'
@@ -11,7 +14,7 @@ import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
 import { AuthorNames } from './AuthorNames'
 import { StoryForm } from './StoryForm'
-import { CollectionChoices } from './CollectionChoices'
+import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
 import { ReadingDashboard } from './ReadingDashboard'
 import { publicationStatuses } from './publication-status'
 
@@ -117,7 +120,7 @@ function StoryCard({ story }: { story: Story }) {
     <p className="story-facts">{story.metadata.rating || 'Rating unknown'} · {story.metadata.word_count?.toLocaleString() ?? '?'} words</p>
     <hr className="story-summary-divider" />
     {story.metadata.summary && <p className="story-summary">{story.metadata.summary}</p>}
-    <Link className="story-details-link" to={`/stories/${story.id}`} state={origin}>See Full Details…</Link>
+    <Link className="story-details-link clickable-text" to={`/stories/${story.id}`} state={origin}>See Full Details…</Link>
     <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />
   </>}</StoryControls></article>
 }
@@ -148,11 +151,11 @@ function LibraryContent() {
   return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Your Library</h1><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
     <div className="library-toolbar">
       <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
-      <button className="button secondary library-create-action" disabled={busy} onClick={() => { const name = window.prompt('New collection name'); if (name !== null) void collectionAction(() => saveCollection(name)) }}>New Shelf</button>
-      <button className="button secondary" disabled title="Phase 3">Import History from AO3 · Phase 3</button>
+      <NewCollectionButton label="New Shelf" className="button secondary library-create-action" disabled={busy} />
+      <Link className="button secondary" to="/imports">Import History from AO3</Link>
     </div>
     <nav className="shelf-tabs" aria-label="Library shelves">{shelves.map(([key, label]) => <button className={selected === key ? 'selected' : ''} aria-pressed={selected === key} key={key} onClick={() => { if ((key === 'currently_reading' || key === 'to_read')) navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }}>{label}</button>)}{collections.filter(c => !c.default_key).map(c => <button key={c.id} className={selected === c.id ? 'selected' : ''} aria-pressed={selected === c.id} onClick={() => setParams({ shelf: c.id })}>{c.name}</button>)}</nav>
-    {collection && <div className="collection-heading"><h2>{collection.name}</h2><button disabled={busy} className="text-button" onClick={() => { const name = window.prompt('Rename collection', collection.name); if (name !== null) void collectionAction(() => saveCollection(name, collection.id)) }}>Rename collection</button><button disabled={busy} className="text-button" onClick={() => setDeleteCollectionOpen(true)}>Delete collection</button></div>}
+    {collection && <div className="collection-heading"><h2>{collection.name}</h2><button disabled={busy} className="text-button clickable-text" onClick={() => { const name = window.prompt('Rename collection', collection.name); if (name !== null) void collectionAction(() => saveCollection(name, collection.id)) }}>Rename collection</button><button disabled={busy} className="text-button clickable-text" onClick={() => setDeleteCollectionOpen(true)}>Delete collection</button></div>}
     {collection && deleteCollectionOpen && <ConfirmationDialog title="Delete collection?" confirmLabel="Delete collection" onClose={() => setDeleteCollectionOpen(false)} onConfirm={async () => { await deleteCollection(collection.id); await refresh(); setParams({ shelf: 'all' }) }}><p>Delete “{collection.name}”?</p><p>Stories will stay in your library.</p></ConfirmationDialog>}
     {error && <p role="alert" className="error-message">{error}</p>}
     <ReadingDashboard mode="library" stories={shelfStories} renderStory={story => <StoryCard key={story.id} story={story} />} />
@@ -174,14 +177,14 @@ function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | '
     setBusy(true); setError('')
     try {
       if (field === 'notes') await updateEntry(story.id, { notes: text })
-      else await saveStory({ id: story.id, url: savedWorkUrl(story), metadata: story.metadata, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections: field === 'collections' ? collections : story.collectionIds, tags: field === 'tags' ? parseLines(text) : story.personalTags })
+      else await saveStory({ id: story.id, url: savedWorkUrl(story), metadata: story.metadata, metadataChanges: {}, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections: field === 'collections' ? collections : story.collectionIds, tags: field === 'tags' ? parseLines(text) : story.personalTags })
       await library.refresh(); close()
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save changes.') }
     finally { setBusy(false) }
   }
   const note = field === 'notes'
   return <div className={note ? `inline-personal-field note-panel ${story.notes || editing ? 'note-panel-filled' : ''}` : 'inline-personal-field'}>
-    {note ? <div className="note-heading">{(story.notes || editing) && <><span><NotebookPen size={18} aria-hidden="true" />Your note</span><span className="note-private"><LockKeyhole size={14} aria-hidden="true" />private</span></>}{!editing && <button ref={trigger} type="button" className="text-button inline-edit" onClick={open} aria-label={story.notes ? 'Edit note' : 'Add a note'}>{story.notes ? <Pencil size={16} aria-hidden="true" /> : <NotebookPen size={18} aria-hidden="true" />}{story.notes ? 'Edit' : 'Add a note'}</button>}</div> : !editing && <button ref={trigger} type="button" className="icon-button inline-edit-icon" aria-label={`Edit ${field === 'tags' ? 'personal tags' : 'collections'}`} onClick={open}><Pencil size={12} aria-hidden="true" /></button>}
+    {note ? <div className="note-heading">{(story.notes || editing) && <><span><NotebookPen size={18} aria-hidden="true" />Your note</span><span className="note-private"><LockKeyhole size={14} aria-hidden="true" />private</span></>}{!editing && <button ref={trigger} type="button" className={`text-button inline-edit${story.notes ? '' : ' clickable-text'}`} onClick={open} aria-label={story.notes ? 'Edit note' : 'Add a note'}>{story.notes ? <Pencil size={16} aria-hidden="true" /> : <NotebookPen size={18} aria-hidden="true" />}{story.notes ? 'Edit' : 'Add a note'}</button>}</div> : !editing && <button ref={trigger} type="button" className="icon-button inline-edit-icon" aria-label={`Edit ${field === 'tags' ? 'personal tags' : 'collections'}`} onClick={open}><Pencil size={12} aria-hidden="true" /></button>}
     {editing ? <form className="inline-personal-form" onSubmit={event => { event.preventDefault(); void save() }}><fieldset disabled={busy}>
       {field === 'collections' ? <><legend>Custom collections</legend><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} /></> : <label className={note ? 'note-input-label' : undefined}><span className={note ? 'sr-only' : undefined}>{label}</span><textarea autoFocus rows={note ? 4 : 3} value={text} placeholder={note ? 'e.g. left off on a cliffhanger — waiting to see what happens next chapter.' : undefined} onChange={event => setText(event.target.value)} /></label>}
       <div className="form-actions"><button className="button primary" type="submit">{busy ? 'Saving…' : 'Save'}</button><button className="text-button" type="button" onClick={close}>Cancel</button></div>
@@ -197,11 +200,13 @@ export function StoryDetailsPage() {
   const returnTo = typeof candidate === 'string' && /^\/(?:reading|library)(?:\?[^#]*)?$/.test(candidate) ? candidate : '/library'
   const returnLabel = returnTo.startsWith('/reading') ? 'Currently Reading' : 'Library'
   const story = library.stories.find(s => s.id === id)
+  const metadataRefresh = useMetadataRefresh(story)
+  const metadataRefreshProps = { ...metadataRefresh, onRefresh: () => void metadataRefresh.refresh() }
   return <LibraryBoundary>{story ? <StoryControls story={story}>{({ favorite, readingStatus, caughtUp, editProgress, rating }) => <div className="story-details-page">
     <div className="page-heading story-details-heading"><div>
-      <Link className="story-return-link" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
-      {!editing && !!story.metadata.series?.length && <p className="story-series-eyebrow">Series: {story.metadata.series.join(' · ')}</p>}
-      <div className="story-title-row"><h1><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a></h1>{!editing && <>{favorite}<button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></>}</div>
+      <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
+      {!editing && !!story.metadata.series?.length && <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p>}
+      <div className="story-title-row"><h1><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a></h1>{!editing && <>{favorite}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}</div>
       <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>
       {!editing && <>
         <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {story.metadata.rating || 'Rating unknown'}</p>
@@ -231,7 +236,7 @@ export function StoryDetailsPage() {
           <div><dt className="editable-field-heading">Personal tags<PersonalStoryField key={story.id} story={story} field="tags" /></dt><dd>{story.personalTags.join(', ') || 'None'}</dd></div>
           <div><dt>Saved</dt><dd>{new Date(story.created_at).toLocaleString()}</dd></div>
           <div><dt>Last edited</dt><dd>{new Date(story.updated_at).toLocaleString()}</dd></div>
-          <div><dt>Series (manually saved)</dt><dd>{story.metadata.series?.join(', ') || 'None saved'}</dd></div>
+          <div><dt>Series</dt><dd><SeriesNames metadata={story.metadata} /></dd></div>
         </dl>
         <details className="details-disclosure"><summary>Other metadata</summary><p className="muted">Manually entered values are private field-level overrides.</p>
         <dl className="metadata-list">
@@ -245,6 +250,7 @@ export function StoryDetailsPage() {
           {savedWorkUrl(story) !== story.original_url && <div><dt>Updated provided URL</dt><dd><ExternalUrl url={savedWorkUrl(story)} /></dd></div>}
         </dl></details>
       </section>
+      <MetadataControls story={story} refreshButton={<MetadataRefreshButton {...metadataRefreshProps} />} refreshMessage={metadataRefresh.message} />
     </>}
   </div>}</StoryControls> : <p>Story unavailable. <Link to={returnTo}>Return to {returnLabel}</Link></p>}</LibraryBoundary>
 }

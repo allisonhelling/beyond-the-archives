@@ -9,7 +9,7 @@ async function fixture(page: Page) {
     return route.fulfill({ json: path.endsWith('/token') ? { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } : path.endsWith('/user') ? user : {} })
   })
   type Row = Record<string, unknown>
-  const tables: Record<string, Row[]> = { library_entries: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [] }
+  const tables: Record<string, Row[]> = { library_entries: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
@@ -23,7 +23,7 @@ async function fixture(page: Page) {
         entry = { id: crypto.randomUUID(), user_id: user.id, work_id: work.id, original_url: body.p_url, created_at: now }
         tables.library_entries.push(entry)
       }
-      Object.assign(entry, { metadata_overrides: body.p_metadata, reading_status: body.p_status, last_read_chapter: body.p_progress, notes: body.p_notes, is_favorite: body.p_favorite, personal_rating: body.p_rating, updated_at: now })
+      Object.assign(entry, { metadata_overrides: { ...entry.metadata_overrides as Row, ...body.p_metadata as Row }, reading_status: body.p_status, last_read_chapter: body.p_progress, notes: body.p_notes, is_favorite: body.p_favorite, personal_rating: body.p_rating, updated_at: now })
       tables.collection_works = tables.collection_works.filter(m => m.library_entry_id !== entry.id)
       for (const id of body.p_collections as string[]) tables.collection_works.push({ collection_id: id, library_entry_id: entry.id })
       tables.library_entry_tags = tables.library_entry_tags.filter(t => t.library_entry_id !== entry.id)
@@ -57,7 +57,7 @@ async function login(page: Page) { await page.getByLabel('Email address').fill('
 async function library(page: Page, mobile: boolean) { if (mobile) await page.getByRole('button', { name: 'Open navigation' }).click(); await page.getByRole('link', { name: 'Library', exact: true }).click() }
 
 test('manual library workflow persists through refresh and sign-out, on desktop and mobile', async ({ page }, info) => {
-  await fixture(page); await page.goto('/library'); await login(page)
+  const tables = await fixture(page); await page.goto('/library'); await login(page)
   for (const name of ['Comfort reads', 'Long fics']) {
     page.once('dialog', d => d.accept(name)); await page.getByRole('button', { name: 'New Shelf' }).click(); await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
   }
@@ -67,6 +67,16 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(addStory).toHaveAttribute('href', '/add?mode=finished')
   await addStory.click()
   await expect(page.getByLabel('Reading status', { exact: true })).toHaveValue('finished')
+  page.once('dialog', dialog => dialog.accept('Created while adding'))
+  await page.getByRole('button', { name: 'New collection', exact: true }).click()
+  const createdCollection = page.getByRole('checkbox', { name: 'Created while adding', exact: true })
+  await expect(createdCollection).toBeVisible()
+  await expect(page.getByText('Custom collections', { exact: true })).toBeVisible()
+  await expect(page.getByText('Custom collections (choose any)', { exact: true })).toHaveCount(0)
+  const collectionLabel = page.locator('.collection-choices .check-label').filter({ has: createdCollection })
+  const labelBox = await collectionLabel.locator('span').boundingBox()
+  const checkboxBox = await createdCollection.boundingBox()
+  expect(Math.abs(labelBox!.y + labelBox!.height / 2 - checkboxBox!.y - checkboxBox!.height / 2)).toBeLessThan(1)
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/123/chapters/999?view_adult=true')
   await page.getByLabel('Title', { exact: true }).fill('A private story')
   await expect(page.getByLabel('Reading status', { exact: true })).toHaveValue('finished')
@@ -105,8 +115,42 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(page.getByRole('button', { name: 'Clear rating', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Chapter 3 of ? — edit progress', exact: true })).toBeVisible()
   await expect(page.getByText('Comfort reads, Long fics', { exact: true })).toBeVisible()
-  await expect(page.getByText('My manual series', { exact: true })).toBeVisible()
+  await expect(page.locator('.story-series-eyebrow')).toHaveText('Part ? of My manual series')
+  tables.works[0].automatic_metadata = { series_memberships: [{ id: 77, name: 'My manual series', url: 'https://archiveofourown.org/series/77', position: 3 }] }
   await page.reload(); await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
+  const series = page.locator('.story-series-eyebrow')
+  await expect(series).toHaveText('Part 3 of My manual series')
+  await expect(series.getByRole('link', { name: 'My manual series' })).toHaveAttribute('href', 'https://archiveofourown.org/series/77')
+  await expect(series.locator('strong')).toHaveCount(0)
+  await expect(series.locator('.series-membership')).toHaveCSS('text-transform', 'uppercase')
+  await expect(series).toHaveCSS('padding-top', '12px')
+  for (const link of [series.getByRole('link'), page.locator('.story-details-authors').getByRole('link', { name: 'Author One', exact: true })]) {
+    await page.mouse.move(0, 0)
+    await expect(link).toHaveCSS('text-decoration-line', 'none')
+    await link.hover()
+    await expect(link).toHaveCSS('text-decoration-line', 'underline')
+  }
+  const automaticMetadata = page.getByRole('region', { name: 'Automatic metadata', exact: true })
+  const refreshMetadata = automaticMetadata.getByRole('button', { name: 'Retry / Update Metadata', exact: true })
+  const metadataHeading = await page.getByRole('heading', { name: 'Automatic metadata', exact: true }).boundingBox()
+  const refreshPosition = await refreshMetadata.boundingBox()
+  expect(refreshPosition!.x).toBeGreaterThan(metadataHeading!.x + metadataHeading!.width)
+  expect(refreshPosition!.x - metadataHeading!.x - metadataHeading!.width).toBeLessThan(16)
+  expect(Math.abs(refreshPosition!.y + refreshPosition!.height / 2 - metadataHeading!.y - metadataHeading!.height / 2)).toBeLessThan(2)
+  const personalTagsEdit = page.getByRole('button', { name: 'Edit personal tags', exact: true })
+  for (const property of ['width', 'height', 'padding', 'borderRadius'] as const) {
+    await expect(refreshMetadata).toHaveCSS(property.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`), await personalTagsEdit.evaluate((el, key) => getComputedStyle(el)[key], property))
+  }
+  await expect(refreshMetadata.locator('svg')).toHaveCSS('height', await automaticMetadata.getByRole('heading', { name: 'Automatic metadata', exact: true }).evaluate(el => getComputedStyle(el).fontSize))
+  await refreshMetadata.hover()
+  await expect(page.getByRole('tooltip', { name: 'Retry / Update Metadata', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  const importHistory = automaticMetadata.getByRole('link', { name: 'View import history', exact: true })
+  await expect(importHistory).toHaveCSS('color', 'rgb(128, 0, 32)')
+  const historyColor = await importHistory.evaluate(el => getComputedStyle(el).color)
+  await importHistory.hover()
+  await expect(importHistory).toHaveCSS('text-decoration-line', 'underline')
+  await expect(importHistory).not.toHaveCSS('color', historyColor)
   await expect(page.locator('.page-heading .story-details-authors')).toHaveText('By Author One, Author Two')
   await expect(page.locator('.story-details-authors').getByRole('link', { name: 'Author One', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/users/AuthorOne')
   await expect(page.locator('.story-details-authors').getByRole('link', { name: 'Author Two', exact: true })).toHaveCount(0)
@@ -120,9 +164,25 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const summaryBounds = await ficSection.getByText('Summary', { exact: true }).boundingBox()
   expect(summaryBounds!.y - ficBounds!.y).toBeLessThan(32)
   const metadataEdit = await page.locator('.story-title-row').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).boundingBox()
+  const titleRefresh = await page.locator('.story-title-row').getByRole('button', { name: 'Retry / Update Metadata', exact: true }).boundingBox()
+  expect(metadataEdit!.x - titleRefresh!.x - titleRefresh!.width).toBeLessThan(16)
+  expect(metadataEdit!.x).toBeGreaterThan(titleRefresh!.x + titleRefresh!.width)
+  for (const property of ['height', 'padding', 'border', 'borderRadius', 'backgroundColor'] as const) {
+    const editButton = page.getByRole('button', { name: 'Edit AO3 metadata', exact: true })
+    const refreshButton = page.locator('.story-title-row').getByRole('button', { name: 'Retry / Update Metadata', exact: true })
+    expect(await refreshButton.evaluate((el, key) => getComputedStyle(el)[key], property)).toBe(await editButton.evaluate((el, key) => getComputedStyle(el)[key], property))
+  }
+  const automaticBounds = await automaticMetadata.boundingBox()
+  expect(automaticBounds!.y).toBeGreaterThan(ficBounds!.y + ficBounds!.height)
+  for (const property of ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform'] as const) {
+    const expected = await ficSection.getByText('Summary', { exact: true }).evaluate((el, key) => getComputedStyle(el)[key], property)
+    expect(await automaticMetadata.getByRole('heading', { name: 'Automatic metadata', exact: true }).evaluate((el, key) => getComputedStyle(el)[key], property)).toBe(expected)
+  }
+  const summaryFontSize = await page.locator('.story-details-summary').evaluate(el => getComputedStyle(el).fontSize)
+  for (const element of await automaticMetadata.locator('p, label, select, .button, a').all()) expect(await element.evaluate(el => getComputedStyle(el).fontSize)).toBe(summaryFontSize)
   const titleRow = await page.locator('.story-title-row').boundingBox()
   expect(Math.abs(metadataEdit!.x + metadataEdit!.width - titleRow!.x - titleRow!.width)).toBeLessThan(2)
-  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Fandoms', 'Relationships', 'Characters', 'Additional Tags', 'All tags', 'Custom collections', 'Personal tags', 'Saved', 'Last edited', 'Series (manually saved)'])
+  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Fandoms', 'Relationships', 'Characters', 'Additional Tags', 'All tags', 'Custom collections', 'Personal tags', 'Saved', 'Last edited', 'Series'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -134,7 +194,12 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const favorite = page.locator('.story-title-row').getByRole('button', { name: 'Unmark favorite', exact: true })
   await favorite.click()
   await expect(page.locator('.story-title-row').getByRole('button', { name: 'Mark favorite', exact: true })).toHaveAttribute('aria-pressed', 'false')
-  await page.locator('.story-title-row').getByRole('button', { name: 'Mark favorite', exact: true }).click()
+  const unselectedFavorite = page.locator('.story-title-row').getByRole('button', { name: 'Mark favorite', exact: true })
+  await unselectedFavorite.hover()
+  await expect(unselectedFavorite).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(unselectedFavorite.locator('svg')).toHaveCSS('fill', await unselectedFavorite.evaluate(el => getComputedStyle(el).color))
+  await expect(unselectedFavorite).toHaveAttribute('aria-pressed', 'false')
+  await unselectedFavorite.click()
   await expect(favorite).toHaveAttribute('aria-pressed', 'true')
   const readingSection = page.getByRole('region', { name: 'Reading and organization', exact: true })
   const metadataSection = page.locator('.details-fic-panel')
@@ -205,7 +270,14 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.getByRole('button', { name: 'Edit note', exact: true }).click()
   await page.getByRole('textbox', { name: 'Private notes', exact: true }).fill('')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await page.getByRole('button', { name: 'Add a note', exact: true }).click()
+  const addNote = page.getByRole('button', { name: 'Add a note', exact: true })
+  const noteColor = await addNote.evaluate(el => getComputedStyle(el).color)
+  await addNote.hover()
+  await expect(addNote).toHaveCSS('text-decoration-line', 'underline')
+  await expect(addNote).not.toHaveCSS('color', noteColor)
+  await expect(addNote.locator('svg')).toHaveCSS('box-shadow', 'none')
+  await expect(addNote.locator('svg')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await addNote.click()
   const noteSave = await page.getByRole('button', { name: 'Save', exact: true }).boundingBox()
   const noteCancel = await page.getByRole('button', { name: 'Cancel', exact: true }).boundingBox()
   expect(Math.abs(noteSave!.y - noteCancel!.y)).toBeLessThan(2)
@@ -244,7 +316,21 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await library(page, info.project.name === 'mobile')
   await page.getByLabel('Search title or author', { exact: true }).fill('Author Two')
   await expect(page.getByRole('heading', { name: 'My corrected title' })).toBeVisible()
-  await page.getByRole('button', { name: 'Comfort reads', exact: true }).click()
+  const collectionChip = page.getByRole('button', { name: 'Comfort reads', exact: true })
+  const chipBackground = await collectionChip.evaluate(el => getComputedStyle(el).backgroundColor)
+  await collectionChip.hover()
+  await expect(collectionChip).not.toHaveCSS('background-color', chipBackground)
+  await collectionChip.click()
+  await expect(page.locator('.collection-heading h2')).toHaveCSS('font-size', '24px')
+  for (const name of ['Rename collection', 'Delete collection']) {
+    const control = page.getByRole('button', { name, exact: true })
+    await page.locator('.collection-heading h2').hover()
+    await expect(control).toHaveCSS('color', 'rgb(128, 0, 32)')
+    await expect(control).toHaveCSS('text-decoration-line', 'none')
+    await control.hover()
+    await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await expect(control).toHaveCSS('text-decoration-line', 'underline')
+  }
   page.once('dialog', d => d.accept('Renamed shelf')); await page.getByRole('button', { name: 'Rename collection' }).click()
   await expect(page.getByRole('heading', { name: 'Renamed shelf' })).toBeVisible()
   await page.getByRole('button', { name: 'Delete collection', exact: true }).click()
@@ -761,7 +847,7 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(page.getByLabel('Private notes', { exact: true })).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Summary', exact: true }).fill('Updated AO3 summary')
   await page.getByRole('button', { name: 'Save story', exact: true }).click()
-  await expect(page.locator('.story-form')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Save story', exact: true })).toHaveCount(0)
   await expect(page.getByText('Updated AO3 summary', { exact: true })).toBeVisible()
   expect(initialEntry.notes).toBe('New private note')
   expect(initialEntry.personal_rating).toBe(4)
@@ -807,3 +893,36 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(cards).toHaveCount(4)
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
 })
+
+for (const outcome of ['completed', 'failed'] as const) {
+  test(`metadata refresh buttons share queue and ${outcome} feedback`, async ({ page }) => {
+    const tables = await fixture(page)
+    tables.works.push({ id: 'refresh-work', ao3_work_id: 123, verified_chapters: {} })
+    tables.library_entries.push({ id: 'refresh-entry', work_id: 'refresh-work', reading_status: 'to_read', last_read_chapter: 0, is_favorite: false, notes: '', original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: 'Refresh example', authors: [], fandoms: [] } })
+    await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+      tables.metadata_jobs.push({ id: 'refresh-job', entry_id: 'refresh-entry', batch_id: 'refresh-batch', status: 'pending', error_category: null, error_message: null, created_at: new Date().toISOString() })
+      return route.fulfill({ json: 'refresh-batch' })
+    })
+    await page.goto('/stories/refresh-entry'); await login(page)
+    const buttons = page.getByRole('button', { name: 'Retry / Update Metadata', exact: true })
+    await expect(buttons).toHaveCount(2)
+    await buttons.first().click()
+    for (const button of await buttons.all()) {
+      await expect(button).toBeDisabled()
+      await expect(button).toHaveAttribute('data-refresh-status', 'pending')
+    }
+    const panel = page.getByRole('region', { name: 'Automatic metadata' })
+    await expect(panel.getByRole('status')).toHaveText('Metadata refresh queued. Waiting for the worker.')
+    Object.assign(tables.metadata_jobs[0], { status: outcome, error_category: outcome === 'failed' ? 'unavailable' : null, error_message: outcome === 'failed' ? 'AO3 is unavailable.' : null })
+    tables.works[0].last_metadata_check = '2026-10-16T12:00:00Z'
+    if (outcome === 'completed') tables.works[0].last_metadata_success = '2026-10-16T12:00:00Z'
+    await expect(panel.getByRole('status')).toHaveText(outcome === 'completed' ? 'Metadata refreshed successfully.' : 'Metadata refresh failed. AO3 is unavailable.', { timeout: 10_000 })
+    for (const button of await buttons.all()) {
+      await expect(button).toBeEnabled()
+      await expect(button).toHaveAttribute('data-refresh-status', outcome)
+      await expect(button.locator(outcome === 'completed' ? '.lucide-check' : '.lucide-circle-alert')).toBeVisible()
+    }
+    await expect(panel).not.toContainText('Last attempted: Never')
+    if (outcome === 'completed') await expect(panel).not.toContainText('Last successful: Never')
+  })
+}

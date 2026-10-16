@@ -7,7 +7,7 @@ describe('manual AO3 identity and progress', () => {
   })
   it('recognizes supported URLs and preserves the exact submission', () => {
     const original = ' https://archiveofourown.org/works/123/chapters/998?view_adult=true#main '
-    expect(parseWorkUrl(original)).toEqual({ workId: 123, chapterId: '998', original })
+    expect(parseWorkUrl(original)).toEqual({ workId: 123, chapterId: '998', original, normalizedUrl: 'https://archiveofourown.org/works/123' })
     expect(parseWorkUrl('http://www.archiveofourown.org/works/123/').workId).toBe(123)
   })
   it.each(['https://example.com/works/123', 'https://archiveofourown.org.evil.test/works/123', 'https://archiveofourown.org/users/123', 'https://archiveofourown.org/works/0', 'https://archiveofourown.org/works/-1', 'https://name@archiveofourown.org/works/1', 'https://archiveofourown.org:443/works/1', 'javascript:alert(1)', 'https://archiveofourown.org/works/9007199254740992'])('rejects unsupported URL %s', url => expect(() => parseWorkUrl(url)).toThrow())
@@ -44,4 +44,11 @@ it('keeps an editable URL separate from the original and rejects unsafe saved de
   const story = { original_url: 'https://archiveofourown.org/works/123', work: { ao3_work_id: 123 }, metadata: { manual_url: 'https://archiveofourown.org/works/123/chapters/999' } } as unknown as Parameters<typeof savedWorkUrl>[0]
   expect(savedWorkUrl(story)).toContain('/chapters/999')
   for (const manual_url of ['javascript:alert(1)', 'https://evil.test', 'https://archiveofourown.org/works/456']) expect(savedWorkUrl({ ...story, metadata: { ...story.metadata, manual_url } })).toBe(story.original_url)
+})
+
+it('only changed metadata fields become manual overrides', async () => {
+  const { changedMetadata, blankMetadata } = await import('./model')
+  const automatic = { ...blankMetadata, title: 'Automatic title', authors: ['AO3 author'] }
+  expect(changedMetadata(automatic, { ...automatic })).toEqual({})
+  expect(changedMetadata(automatic, { ...automatic, title: 'My title' })).toEqual({ title: 'My title' })
 })

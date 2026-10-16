@@ -47,3 +47,6 @@ secure_password_change = true
 [functions.account-status]
 # Handler verifies every bearer token with Supabase Auth; supports modern signing keys.
 verify_jwt = false
+
+[functions.import-worker]
+verify_jwt = false # Dedicated IMPORT_WORKER_TOKEN is checked inside the handler.

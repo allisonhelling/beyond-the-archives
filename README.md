@@ -2,7 +2,7 @@
 
 Phases 1 and 2 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **between chapters**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
 
-Phase 2 implements a private, manually managed library: story creation and editing, reading progress and statuses, favorites, notes, personal ratings, default shelves, multiple custom collections, and personal tags. All changes persist in Supabase. Automatic metadata retrieval and importing remain future work. See [the Phase 2 report](docs/PHASE_2_REPORT.md) for verification, decisions, and changed files.
+Phase 2 implements a private, manually managed library: story creation and editing, reading progress and statuses, favorites, notes, personal ratings, default shelves, multiple custom collections, and personal tags. All changes persist in Supabase. Phase 3 adds persistent bulk imports and a separately run metadata worker; see the Phase 3 section below for setup. See [the Phase 2 report](docs/PHASE_2_REPORT.md) for verification, decisions, and changed files.
 
 The additive Phase 2 migration was applied to the local development Supabase stack. No hosted database was changed or deployed during this phase.
 
@@ -42,7 +42,7 @@ Two works require AO3 sign-in: **On My Love** (8577016) and **Something’s Diff
 5. Create collections with **New Shelf**. Choose a collection to rename or delete it. Deleting a collection keeps its stories. Removing a story requires confirmation and deletes that account’s private entry and memberships. The two-minute Undo notice restores its original entry ID, timestamps, metadata overrides, notes, rating, favorite, progress, and surviving collection/tag memberships.
 6. DNF entries remain in the searchable Library and the **Did Not Finish** shelf. Change reading status to recover them. Re-reading preserves metadata and progress until you change progress explicitly.
 
-No AO3 request is required to save. Chapter IDs do not identify chapter positions. An unverified chapter link preserves its full original URL and leaves inferred progress at zero. Enter progress manually. Only trusted, verified chapter mappings can produce a next-chapter destination; Phase 2 does not fetch or verify mappings. Unknown totals display as `?`.
+No AO3 request is required to save. Chapter IDs do not identify chapter positions. An unverified chapter link preserves its full original URL and leaves inferred progress at zero. Enter progress manually. Only trusted, verified chapter mappings can produce a next-chapter destination; The Phase 3 background worker verifies mappings only when public AO3 metadata provides explicit positions. Unknown totals display as `?`.
 
 For an existing local Phase 1 database, apply the additive migration without resetting data:
 
@@ -141,7 +141,7 @@ To deploy it after project setup, set the **server-side** `APP_ORIGIN` secret in
 npx supabase functions deploy account-status
 ```
 
-Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. Importers and email handlers remain absent. Phase 2 library writes use a narrow authenticated PostgreSQL RPC; the account-status function remains optional.
+Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. The Phase 3 importer runs in a separate trusted worker; email handlers remain future work. Phase 2 library writes use a narrow authenticated PostgreSQL RPC; the account-status function remains optional.
 
 ## Schema and access model
 
@@ -166,7 +166,7 @@ Key modeling decisions:
 - `library_entries.original_url` preserves the exact user's submission, including chapter/query parameters. It is separate from `works.canonical_url`, which remains NULL until verified. The latter must match the canonical AO3 work ID and have a verification timestamp.
 - `published_chapters`, `total_chapters`, and `is_complete` are nullable. Unknown totals stay NULL; zero is not a substitute for an unknown total. Progress defaults to zero fully read chapters.
 - Reading status and AO3 completion are independent. No trigger changes personal progress or completion when shared metadata changes.
-- `metadata_overrides` lives on the private entry; automatic metadata and field provenance live on the work. Future metadata refreshes must leave private overrides untouched. Phase 1 establishes this storage boundary without implementing a Phase 3 refresh pipeline.
+- `metadata_overrides` lives on the private entry; automatic metadata and field provenance live on the work. Metadata refreshes leave private overrides untouched. The Phase 3 worker and field-level editing controls now enforce this original storage boundary.
 - All timestamps use `timestamptz`; PostgreSQL stores instants in UTC. Future UI timestamps should use the reader's local timezone.
 - `collection_works.library_entry_id` intentionally references an owned library entry rather than a bare global work.
 - No later-phase import/job, series, notification, or history tables are created.
@@ -222,3 +222,9 @@ Nothing was pushed, committed, migrated to a hosted database, or deployed during
 ## References
 
 Requirements come from the two PDFs in this folder: Implementation Plan Phase 1 (pages 1–2), and Specification sections 2, 3, 8, 9, 11.6, and 13. Implementation references: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Supabase user management](https://supabase.com/docs/guides/auth/managing-user-data), [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [Vite environment variables](https://vite.dev/guide/env-and-mode).
+
+## Phase 3: persistent AO3 imports
+
+Open **Add → Import History from AO3** or `/imports` to submit batches of up to 2,000 URL tokens. Valid identities save immediately, independently of metadata retrieval. Run `npm run worker` in a separate terminal with ignored `.env.worker` server configuration to process persistent jobs locally; closing the import page does not stop that process. Hosted processing requires the supplied Supabase Edge Function and optional Cron/Vault setup.
+
+See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cancellation behavior, manual override protection, complete setup instructions, validation results and deployment limitations.

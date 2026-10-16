@@ -110,6 +110,92 @@ export type Database = {
         Relationships: [
         ]
       }
+      import_batches: {
+        Row: {
+          id: string
+          user_id: string
+          created_at: string
+          cancelled_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          created_at?: string
+          cancelled_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          created_at?: string
+          cancelled_at?: string | null
+        }
+        Relationships: [
+        ]
+      }
+      import_items: {
+        Row: {
+          id: string
+          batch_id: string
+          user_id: string
+          ordinal: number
+          original_url: string
+          ao3_work_id: number | null
+          chapter_id: string | null
+          status: string
+          result: string | null
+          metadata_status: string
+          error_category: string | null
+          error_message: string | null
+          entry_id: string | null
+          duplicate_of: string | null
+          verified_position: number | null
+          last_attempt_at: string | null
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          user_id: string
+          ordinal: number
+          original_url: string
+          ao3_work_id?: number | null
+          chapter_id?: string | null
+          status: string
+          result?: string | null
+          metadata_status?: string
+          error_category?: string | null
+          error_message?: string | null
+          entry_id?: string | null
+          duplicate_of?: string | null
+          verified_position?: number | null
+          last_attempt_at?: string | null
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          batch_id?: string
+          user_id?: string
+          ordinal?: number
+          original_url?: string
+          ao3_work_id?: number | null
+          chapter_id?: string | null
+          status?: string
+          result?: string | null
+          metadata_status?: string
+          error_category?: string | null
+          error_message?: string | null
+          entry_id?: string | null
+          duplicate_of?: string | null
+          verified_position?: number | null
+          last_attempt_at?: string | null
+          completed_at?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: 'import_items_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
+          { foreignKeyName: 'import_items_duplicate_of_fkey'; columns: ['duplicate_of']; isOneToOne: false; referencedRelation: 'import_items'; referencedColumns: ['id'] },
+          { foreignKeyName: 'import_items_batch_id_user_id_fkey'; columns: ['batch_id', 'user_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
       library_entries: {
         Row: {
           id: string
@@ -193,6 +279,92 @@ export type Database = {
           { foreignKeyName: 'library_entry_tags_personal_tag_id_user_id_fkey'; columns: ['personal_tag_id', 'user_id']; isOneToOne: false; referencedRelation: 'personal_tags'; referencedColumns: ['id', 'user_id'] },
         ]
       }
+      metadata_jobs: {
+        Row: {
+          id: string
+          batch_id: string
+          user_id: string
+          work_id: string
+          entry_id: string | null
+          created_entry: boolean
+          status: string
+          attempts: number
+          retryable: boolean
+          next_attempt_at: string
+          lease_token: string | null
+          lease_until: string | null
+          last_attempt_at: string | null
+          completed_at: string | null
+          error_category: string | null
+          error_message: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          user_id: string
+          work_id: string
+          entry_id?: string | null
+          created_entry: boolean
+          status?: string
+          attempts?: number
+          retryable?: boolean
+          next_attempt_at?: string
+          lease_token?: string | null
+          lease_until?: string | null
+          last_attempt_at?: string | null
+          completed_at?: string | null
+          error_category?: string | null
+          error_message?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          batch_id?: string
+          user_id?: string
+          work_id?: string
+          entry_id?: string | null
+          created_entry?: boolean
+          status?: string
+          attempts?: number
+          retryable?: boolean
+          next_attempt_at?: string
+          lease_token?: string | null
+          lease_until?: string | null
+          last_attempt_at?: string | null
+          completed_at?: string | null
+          error_category?: string | null
+          error_message?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
+          { foreignKeyName: 'metadata_jobs_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
+          { foreignKeyName: 'metadata_jobs_batch_id_user_id_fkey'; columns: ['batch_id', 'user_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
+      metadata_worker_state: {
+        Row: {
+          id: number
+          next_request_at: string
+          paused_until: string | null
+          reason: string | null
+        }
+        Insert: {
+          id: number
+          next_request_at?: string
+          paused_until?: string | null
+          reason?: string | null
+        }
+        Update: {
+          id?: number
+          next_request_at?: string
+          paused_until?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+        ]
+      }
       personal_tags: {
         Row: {
           id: string
@@ -216,6 +388,35 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+        ]
+      }
+      processing_logs: {
+        Row: {
+          id: string
+          job_id: string
+          user_id: string
+          created_at: string
+          category: string
+          message: string
+        }
+        Insert: {
+          id?: string
+          job_id: string
+          user_id: string
+          created_at?: string
+          category: string
+          message: string
+        }
+        Update: {
+          id?: string
+          job_id?: string
+          user_id?: string
+          created_at?: string
+          category?: string
+          message?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'processing_logs_job_id_user_id_fkey'; columns: ['job_id', 'user_id']; isOneToOne: false; referencedRelation: 'metadata_jobs'; referencedColumns: ['id', 'user_id'] },
         ]
       }
       tags: {
@@ -283,14 +484,17 @@ export type Database = {
         Row: {
           work_id: string
           tag_id: string
+          source_position: number | null
         }
         Insert: {
           work_id: string
           tag_id: string
+          source_position?: number | null
         }
         Update: {
           work_id?: string
           tag_id?: string
+          source_position?: number | null
         }
         Relationships: [
           { foreignKeyName: 'work_tags_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -319,6 +523,8 @@ export type Database = {
           created_at: string
           updated_at: string
           verified_chapters: Json
+          automatic_metadata: Json
+          last_metadata_success: string | null
         }
         Insert: {
           id?: string
@@ -341,6 +547,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           verified_chapters?: Json
+          automatic_metadata?: Json
+          last_metadata_success?: string | null
         }
         Update: {
           id?: string
@@ -363,6 +571,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           verified_chapters?: Json
+          automatic_metadata?: Json
+          last_metadata_success?: string | null
         }
         Relationships: [
         ]
@@ -370,10 +580,13 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
-      restore_library_story: {
-        Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }
-        Returns: string
-      }
+      submit_import_urls: { Args: { p_urls: string[] }; Returns: string | null }
+      cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
+      retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
+      approve_import_progress: { Args: { p_item: string }; Returns: undefined }
+      clear_metadata_override: { Args: { p_entry: string; p_field: string }; Returns: undefined }
+      restore_library_story: { Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }; Returns: string }
+
       save_library_story: {
         Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
         Returns: string

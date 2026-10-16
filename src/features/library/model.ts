@@ -1,8 +1,9 @@
+import { parseWorkUrl } from '../imports/urls'
 import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
-export type Metadata = { manual_url?: string; author_links?: Record<string, string>; series?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Database['public']['Tables']['collections']['Row']
@@ -11,11 +12,7 @@ export const blankMetadata: Metadata = { title: '', authors: [], fandoms: [], ao
 export function authorPageUrl(value: unknown): string | null {
   return typeof value === 'string' && /^https?:\/\/(?:www\.)?archiveofourown\.org\/users\/[^/?#\s]+(?:\/pseuds\/[^/?#\s]+)?(?:\/(?:profile|works))?\/?(?:[?#][^\s]*)?$/.test(value.trim()) ? value.trim() : null
 }
-export function parseWorkUrl(original: string) {
-  const match = original.trim().match(/^https?:\/\/(?:www\.)?archiveofourown\.org\/works\/([1-9]\d*)(?:\/chapters\/([1-9]\d*))?\/?(?:[?#][^\s]*)?$/)
-  if (!match || !Number.isSafeInteger(Number(match[1]))) throw new Error('Enter a supported AO3 work URL, such as https://archiveofourown.org/works/123.')
-  return { workId: Number(match[1]), chapterId: match[2] ?? null, original }
-}
+export { parseWorkUrl }
 export function initialProgress(url: string, verifiedChapters: Record<string, string> = {}) {
   const parsed = parseWorkUrl(url)
   const position = parsed.chapterId ? Number(Object.keys(verifiedChapters).find(key => verifiedChapters[key] === parsed.chapterId)) : 1
@@ -34,11 +31,11 @@ export function chapterUrl(story: Story, position = nextUnread(story.last_read_c
   return typeof chapter === 'string' && /^[1-9]\d*$/.test(chapter) ? `https://archiveofourown.org/works/${story.work.ao3_work_id}/chapters/${chapter}` : null
 }
 export function active(story: Story) { return ['reading', 'waiting_for_updates', 're_reading'].includes(story.reading_status) }
-export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Database['public']['Tables']['tags']['Row'], 'name' | 'category'>[] = []): Metadata {
+export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Database['public']['Tables']['tags']['Row'], 'name' | 'category'>[] = [], authors: { name: string; ao3_url: string | null }[] = [], fandoms: {name: string}[] = []): Metadata {
   const manual = overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {}
-  return { ...blankMetadata, title: work.title ?? '', summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...manual } as Metadata
+  return { ...blankMetadata, authors: authors.map(a => a.name), author_links: Object.fromEntries(authors.filter(a => a.ao3_url).map(a => [a.name, a.ao3_url!])), fandoms: fandoms.map(f => f.name), title: work.title ?? `AO3 work ${work.ao3_work_id}`, summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', archive_warnings: tags.filter(tag => tag.category === 'warning').map(tag => tag.name), categories: tags.filter(tag => tag.category === 'category').map(tag => tag.name), ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...(work.automatic_metadata as Partial<Metadata>), ...manual } as Metadata
 }
-export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string }
+export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata> }
 
 export function savedWorkUrl(story: Story) {
   try {
@@ -57,4 +54,9 @@ export function tagNames(metadata: Metadata, category: 'relationship' | 'charact
 // Multiline metadata and personal tags share trimming and stable deduplication.
 export function parseLines(text: string): string[] {
   return [...new Set(text.split('\n').map(value => value.trim()).filter(Boolean))]
+}
+
+/** Editing personal fields must not turn automatic metadata into manual overrides. */
+export function changedMetadata(current: Metadata, next: Metadata): Partial<Metadata> {
+  return Object.fromEntries(Object.entries(next).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(current[key as keyof Metadata])))
 }

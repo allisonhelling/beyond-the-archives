@@ -1,4 +1,12 @@
 {
-  "compilerOptions": { "strict": true },
-  "fmt": { "lineWidth": 120 }
+  "compilerOptions": {
+    "strict": true
+  },
+  "fmt": {
+    "lineWidth": 120
+  },
+  "imports": {
+    "cheerio": "npm:cheerio@1.2.0",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2"
+  }
 }

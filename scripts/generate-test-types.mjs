@@ -34,6 +34,13 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      submit_import_urls: { Args: { p_urls: string[] }; Returns: string | null }
+      cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
+      retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
+      approve_import_progress: { Args: { p_item: string }; Returns: undefined }
+      clear_metadata_override: { Args: { p_entry: string; p_field: string }; Returns: undefined }
+      restore_library_story: { Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }; Returns: string }
+
       save_library_story: {
         Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
         Returns: string
@@ -43,5 +50,5 @@ try {
   for (const name of enumNames) output += `      ${name}: ${enums.filter(e => e.name === name).map(e => `'${e.value}'`).join(' | ')}\n`
   output += '    }\n    CompositeTypes: { [_ in never]: never }\n  }\n}\n'
   await writeFile(new URL('../src/types/database.ts', import.meta.url), output)
-  console.log('Generated types for twelve migrated tables.')
+  console.log('Generated types from all migrated tables.')
 } finally { await db.close() }

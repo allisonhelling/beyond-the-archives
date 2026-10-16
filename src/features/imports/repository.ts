@@ -1,0 +1,39 @@
+import { supabase } from '../../lib/supabase'
+import { allRows } from '../library/repository'
+import { extractUrls } from './urls'
+function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
+export async function importHistory(batchId?: string) {
+ const db=client()
+ const batches=await allRows((from,to)=>db.from('import_batches').select('*').order('created_at',{ascending:false}).order('id').range(from,to))
+ const selected=batchId??batches[0]?.id
+ if(!selected) return {batches,items:[],jobs:[]}
+ const [items,jobs]=await Promise.all([
+  allRows((from,to)=>db.from('import_items').select('*').eq('batch_id',selected).order('ordinal').range(from,to)),
+  allRows((from,to)=>db.from('metadata_jobs').select('*').eq('batch_id',selected).order('id').range(from,to)),
+ ])
+ return {batches,items,jobs}
+}
+export async function submitImport(text:string) {
+ const urls=extractUrls(text)
+ if(!urls.length) throw new Error('Paste at least one http or https URL.')
+ if(urls.length>2000) throw new Error('Use at most 2,000 URLs per submission.')
+ const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls})
+ if(error) {
+  if(error.code==='PGRST202') throw new Error('The connected Supabase database is missing the Phase 3 importer. Apply the Phase 3 migration to the database used by VITE_SUPABASE_URL, then try again.')
+  if(error.code==='42501') throw new Error('Import access was denied. Sign in again; if it continues, check the Phase 3 database permissions.')
+  throw new Error('Could not confirm the import. Check your connection and import history before trying again.')
+ }
+ return data
+}
+export async function cancelBatch(id:string) { const {error}=await client().rpc('cancel_import_batch',{p_batch:id}); if(error) throw new Error('Could not cancel this batch.') }
+export async function retryJob(id:string) { const {error}=await client().rpc('retry_metadata_job',{p_job:id}); if(error) throw new Error('Retry unavailable. Check the attempt limit, cancellation and retry time.') }
+export async function approveProgress(id:string) { const {error}=await client().rpc('approve_import_progress',{p_item:id}); if(error) throw new Error('Could not apply verified progress.') }
+export async function clearOverride(entry:string,field:string) { const {error}=await client().rpc('clear_metadata_override',{p_entry:entry,p_field:field}); if(error) throw new Error('Could not restore automatic metadata.') }
+
+export async function metadataRefreshJob(entryId: string, batchId?: string) {
+ let query = client().from('metadata_jobs').select('*').eq('entry_id', entryId)
+ if (batchId) query = query.eq('batch_id', batchId)
+ const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle()
+ if (error) throw new Error('Could not check metadata refresh status. Check your connection or view import history.')
+ return data
+}

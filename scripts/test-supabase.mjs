@@ -121,6 +121,39 @@ try {
     assert.ok(!(await alice.client.from('library_entries').delete().eq('id', created.data)).error)
     assert.equal((await alice.client.from('library_entries').select('*').eq('id', created.data)).data.length, 0)
   })
+  await check('Phase 3 bulk imports, real concurrent claims, account isolation and fenced cancellation', async () => {
+    const [alice, bob] = users
+    const active = await admin.from('metadata_jobs').select('id').in('status', ['pending', 'processing'])
+    assert.ok(!active.error, 'Apply the Phase 3 migration before running integration tests')
+    assert.equal(active.data.length, 0, 'Stop local workers and finish/cancel pre-existing jobs before running queue integration tests')
+    const workIds = Array.from({ length: 110 }, (_, n) => Date.now() + n + 100000)
+    const urls = workIds.map(id => `https://archiveofourown.org/works/${id}`)
+    const batch = await alice.client.rpc('submit_import_urls', { p_urls: [...urls, `${urls[0]}/chapters/960`, `${urls[0]}/chapters/920`, 'https://example.com', 'https://archiveofourown.org/works/0'] })
+    assert.ok(!batch.error)
+    const works = await admin.from('works').select('id').in('ao3_work_id', workIds)
+    cleanup.works.push(...works.data.map(w => w.id))
+    const items = await alice.client.from('import_items').select('*').eq('batch_id', batch.data)
+    assert.equal(items.data.length, 113)
+    assert.equal(items.data.filter(i => i.result === 'duplicate').length, 2)
+    for (const table of ['import_batches', 'import_items', 'metadata_jobs', 'processing_logs']) {
+      assert.ok((await anonymous.from(table).select('*')).error)
+      assert.equal((await bob.client.from(table).select('*')).data.length, 0)
+    }
+    assert.ok((await bob.client.rpc('cancel_import_batch', { p_batch: batch.data })).error)
+    assert.ok((await alice.client.rpc('claim_metadata_job')).error)
+    assert.ok(!(await admin.from('metadata_worker_state').update({ next_request_at: new Date(0).toISOString(), paused_until: null }).eq('id', 1)).error)
+    const claims = await Promise.all([admin.rpc('claim_metadata_job'), admin.rpc('claim_metadata_job')])
+    assert.ok(claims.every(c => !c.error))
+    assert.equal(claims.filter(c => c.data).length, 1, 'Concurrent workers must claim exactly one global job')
+    const claim = claims.find(c => c.data).data
+    const commit = { p_job: claim.id, p_token: claim.token, p_metadata: { title: 'Fixture metadata', published_chapters: 6 }, p_chapters: { '2': '920', '6': '960' }, p_category: null, p_message: null, p_retryable: false, p_pause_seconds: 0 }
+    assert.ok(!(await admin.rpc('finish_metadata_job', commit)).error)
+    assert.equal((await admin.rpc('finish_metadata_job', commit)).data, false, 'Duplicate completion must be fenced out')
+    assert.ok(!(await alice.client.rpc('cancel_import_batch', { p_batch: batch.data })).error)
+    assert.equal((await alice.client.from('metadata_jobs').select('id').eq('batch_id', batch.data).in('status', ['pending', 'processing'])).data.length, 0)
+    const retained = await alice.client.from('library_entries').select('id').in('work_id', works.data.map(w => w.id))
+    assert.equal(retained.data.length, 110, 'Cancellation must retain every saved work')
+  })
   await check('public registration is disabled', async () => {
     const signup = await anonymous.auth.signUp({ email: `blocked-${randomUUID()}@example.test`, password: `Test-${randomUUID()}!Aa1` })
     // Track an unexpected account so a failed security assertion still cleans it up.
