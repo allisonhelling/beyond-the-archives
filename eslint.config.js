@@ -5,10 +5,11 @@ import hooks from 'eslint-plugin-react-hooks'
 import refresh from 'eslint-plugin-react-refresh'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'supabase/functions'] },
+  { ignores: ['dist', 'extension/dist', 'node_modules', 'playwright-report', 'test-results', 'supabase/functions'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
+  { files: ['extension/**/*.js'], languageOptions: { globals: { chrome: 'readonly', __APP_ORIGIN__: 'readonly', __SUPABASE_URL__: 'readonly', __SUPABASE_KEY__: 'readonly' } } },
   { files: ['src/**/*.{ts,tsx}'], plugins: { 'react-hooks': hooks, 'react-refresh': refresh },
     rules: { ...hooks.configs.recommended.rules, 'react-refresh/only-export-components': ['error', { allowConstantExport: true }] } },
 )

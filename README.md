@@ -228,3 +228,7 @@ Requirements come from the two PDFs in this folder: Implementation Plan Phase 1 
 Open **Add → Import History from AO3** or `/imports` to submit batches of up to 2,000 URL tokens. Valid identities save immediately, independently of metadata retrieval. Run `npm run worker` in a separate terminal with ignored `.env.worker` server configuration to process persistent jobs locally; closing the import page does not stop that process. Hosted processing requires the supplied Supabase Edge Function and optional Cron/Vault setup.
 
 See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cancellation behavior, manual override protection, complete setup instructions, validation results and deployment limitations.
+
+## Browser extension mode
+
+Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes only jobs created by Import URLs or Refresh metadata, keeps browser results private, and preserves manual corrections and reading progress. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).

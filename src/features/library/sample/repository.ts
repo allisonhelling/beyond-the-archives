@@ -38,7 +38,7 @@ function seedLibrary(): Library {
       return {
         id: `sample-entry-${sample.id}`, user_id: userId, work_id: work.id, original_url: sample.url,
         reading_status: sample.status as Entry['reading_status'], last_read_chapter: sample.progress,
-        personal_rating: null, is_favorite: false, notes: '', metadata_overrides: {},
+        personal_rating: null, is_favorite: false, notes: '', metadata_overrides: {}, extension_metadata: {}, extension_chapters: {},
         started_at: null, finished_at: null, last_update_notification_at: null, update_dismissed_at: null,
         created_at: capturedAt, updated_at: capturedAt, work,
         metadata: { ...sample.metadata, publication_status: sample.metadata.publication_status as Story['metadata']['publication_status'] },
@@ -91,7 +91,7 @@ export async function saveSampleStory(input: StoryInput) {
     original_url: existing?.original_url ?? input.url, work,
     reading_status: input.status, last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, personal_rating: input.personalRating,
-    metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: input.metadata,
+    metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: input.metadata, extension_metadata: {}, extension_chapters: {},
     collectionIds: input.collections, personalTags: input.tags,
     created_at: existing?.created_at ?? now, updated_at: now,
     started_at: existing?.started_at ?? null, finished_at: existing?.finished_at ?? null,

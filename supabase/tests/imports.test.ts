@@ -129,3 +129,68 @@ it('preserves AO3 tag order across metadata refreshes independently of tag ident
  expect((await ordered()).rows).toEqual([{name:'Middle tag',source_position:1},{name:'Zulu tag',source_position:2},{name:'Alpha tag',source_position:3}])
  await clearJobs()
 })
+
+async function extensionMode(owner=alice) {
+ await asUser(owner,()=>db.query("insert into public.metadata_preferences(user_id,retrieval_mode) values($1,'extension') on conflict(user_id) do update set retrieval_mode='extension'",[owner]))
+}
+async function claimExtension(owner=alice) { return asUser(owner,async()=>(await db.query<{job:Claim|null}>('select public.claim_extension_job() job')).rows[0].job) }
+it('routes explicitly submitted extension jobs separately, snapshots mode, and isolates claims by owner',async()=>{
+ await extensionMode()
+ const batch=await submit(['https://archiveofourown.org/works/9100'])
+ expect(await claim()).toBeNull()
+ expect(await claimExtension(bob)).toBeNull()
+ await asUser(bob,async()=>{
+  expect((await db.query('select * from public.metadata_preferences')).rows).toHaveLength(0)
+  await expect(db.query("insert into public.metadata_preferences(user_id,retrieval_mode) values($1,'extension')",[alice])).rejects.toThrow()
+ })
+ await asUser(alice,()=>db.query("update public.metadata_preferences set retrieval_mode='direct'"))
+ const browser=(await claimExtension())!
+ expect(browser.workId).toBe(9100)
+ expect(await claimExtension()).toBeNull()
+ await submit(['https://archiveofourown.org/works/9101'],bob);await ready()
+ const direct=(await claim())!;expect(direct.workId).toBe(9101)
+ await finish(direct)
+ await asUser(alice,()=>db.query('select public.cancel_import_batch($1)',[batch]))
+ expect(await finish(browser)).toBe(false)
+ expect((await db.query<{paced:boolean}>("select next_request_at<=now()+interval '16 seconds' paced from public.metadata_worker_state")).rows[0].paced).toBe(true)
+ await clearJobs();await db.exec('delete from public.metadata_preferences')
+})
+it('commits browser metadata privately without replacing manual overrides, shared works or reading progress',async()=>{
+ await extensionMode()
+ await submit(['https://archiveofourown.org/works/9200/chapters/960'])
+ const job=(await claimExtension())!
+ const entry=(await db.query<{id:string}>('select entry_id id from public.metadata_jobs where id=$1',[job.id])).rows[0].id
+ await db.query("update public.library_entries set metadata_overrides='{\"title\":\"My correction\"}',notes='My notes',last_read_chapter=2,reading_status='reading' where id=$1",[entry])
+ await asUser(alice,()=>expect(finish(job)).rejects.toThrow('permission denied'))
+ await asUser(alice,()=>expect(db.query("update public.library_entries set extension_metadata='{}' where id=$1",[entry])).rejects.toThrow('permission denied'))
+ expect(await finish(job,{title:'Browser title',summary:'Private summary',published_chapters:6,total_chapters:6}, {'6':'960'})).toBe(true)
+ expect((await db.query('select title,summary,verified_chapters,last_metadata_success from public.works where ao3_work_id=9200')).rows[0]).toEqual({title:null,summary:null,verified_chapters:{},last_metadata_success:null})
+ expect((await db.query('select verified_position,error_category from public.import_items where batch_id=(select batch_id from public.metadata_jobs where id=$1)',[job.id])).rows[0]).toEqual({verified_position:6,error_category:null})
+ expect((await db.query('select extension_metadata,extension_chapters,metadata_overrides,notes,last_read_chapter,reading_status from public.library_entries where id=$1',[entry])).rows[0]).toMatchObject({extension_metadata:{title:'Browser title',summary:'Private summary',published_chapters:6,total_chapters:6,last_metadata_success:expect.any(String),last_metadata_check:expect.any(String)},extension_chapters:{'6':'960'},metadata_overrides:{title:'My correction'},notes:'My notes',last_read_chapter:2,reading_status:'reading'})
+ await asUser(bob,async()=>{expect((await db.query('select extension_metadata from public.library_entries where id=$1',[entry])).rows).toHaveLength(0)})
+ await clearJobs();await submit(['https://archiveofourown.org/works/9200'])
+ const partial=(await claimExtension())!;await finish(partial,{title:'Updated browser title',published_chapters:7},{},'partial')
+ expect((await db.query('select extension_metadata from public.library_entries where id=$1',[entry])).rows[0]).toMatchObject({extension_metadata:{title:'Updated browser title',summary:'Private summary',published_chapters:7,total_chapters:null}})
+ await clearJobs();await asUser(alice,()=>db.query("update public.metadata_preferences set retrieval_mode='direct'"));await submit(['https://archiveofourown.org/works/9200']);await ready()
+ const direct=(await claim())!;await finish(direct,{title:'Latest direct title',published_chapters:8},{},'partial')
+ expect((await db.query('select extension_metadata,metadata_overrides from public.library_entries where id=$1',[entry])).rows[0]).toMatchObject({extension_metadata:{title:'Latest direct title',summary:'Private summary',published_chapters:8},metadata_overrides:{title:'My correction'}})
+ await clearJobs();await db.exec('delete from public.metadata_preferences')
+})
+it('requires explicit retry after browser confirmation timeout and fences expired extension leases',async()=>{
+ await extensionMode()
+ await submit(['https://archiveofourown.org/works/9300'])
+ const first=(await claimExtension())!
+ await finish(first,null,{},'extension_waiting',true)
+ expect((await db.query('select status,retryable from public.metadata_jobs where id=$1',[first.id])).rows[0]).toEqual({status:'failed',retryable:true})
+ expect(await claimExtension()).toBeNull()
+ await asUser(alice,()=>db.query('select public.retry_metadata_job($1)',[first.id]));await ready()
+ const next=(await claimExtension())!
+ expect(next.token).not.toBe(first.token)
+ expect(await finish(first)).toBe(false)
+ await db.query("update public.metadata_jobs set attempts=4,lease_until=now()-interval '1 second' where id=$1",[next.id])
+ expect(await claimExtension()).toBeNull()
+ expect((await db.query('select status,retryable from public.metadata_jobs where id=$1',[next.id])).rows[0]).toEqual({status:'failed',retryable:false})
+ expect((await db.query('select status,metadata_status from public.import_items where batch_id=(select batch_id from public.metadata_jobs where id=$1)',[next.id])).rows[0]).toEqual({status:'failed',metadata_status:'failed'})
+ await db.exec('set role anon');try {await expect(db.query('select public.claim_extension_job()')).rejects.toThrow('permission denied')}finally{await db.exec('reset role')}
+ await clearJobs();await db.exec('delete from public.metadata_preferences')
+})

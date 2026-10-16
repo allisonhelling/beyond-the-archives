@@ -11,10 +11,11 @@ const idle: Feedback = { status: 'idle', message: '', busy: false }
 
 function jobFeedback(job: Job): Feedback {
   switch (job.status) {
-    case 'pending': return { status: 'pending', busy: true, message: job.error_message
+    case 'pending': return { status: 'pending', busy: true, message: job.retrieval_mode === 'extension'
+      ? (job.error_message || 'Waiting for the browser extension. Connect it in Settings.') : job.error_message
       ? `Metadata refresh waiting to retry: ${job.error_message} Next eligible: ${new Date(job.next_attempt_at).toLocaleString()}.`
       : 'Metadata refresh queued. Waiting for the worker.' }
-    case 'processing': return { status: 'processing', busy: true, message: 'Refreshing metadata from AO3…' }
+    case 'processing': return { status: 'processing', busy: true, message: job.retrieval_mode === 'extension' ? (job.error_message || 'Waiting for the browser extension to load the requested AO3 work…') : 'Refreshing metadata from AO3…' }
     case 'completed': return job.error_category
       ? { status: 'partial', busy: false, message: `Metadata partially refreshed. ${job.error_message || 'Some metadata could not be retrieved. See import history for details.'}` }
       : { status: 'completed', busy: false, message: 'Metadata refreshed successfully.' }

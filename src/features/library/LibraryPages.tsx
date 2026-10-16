@@ -151,7 +151,7 @@ function LibraryContent() {
   return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Your Library</h1><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
     <div className="library-toolbar">
       <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
-      <NewCollectionButton label="New Shelf" className="button secondary library-create-action" disabled={busy} />
+      <NewCollectionButton label="New Collection" className="button secondary library-create-action" disabled={busy} />
       <Link className="button secondary" to="/imports">Import History from AO3</Link>
     </div>
     <nav className="shelf-tabs" aria-label="Library shelves">{shelves.map(([key, label]) => <button className={selected === key ? 'selected' : ''} aria-pressed={selected === key} key={key} onClick={() => { if ((key === 'currently_reading' || key === 'to_read')) navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }}>{label}</button>)}{collections.filter(c => !c.default_key).map(c => <button key={c.id} className={selected === c.id ? 'selected' : ''} aria-pressed={selected === c.id} onClick={() => setParams({ shelf: c.id })}>{c.name}</button>)}</nav>

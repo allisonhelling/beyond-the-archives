@@ -26,6 +26,15 @@ it('reports load failures instead of displaying an empty or partially loaded lib
   await expect(loadLibrary()).rejects.toThrow('Could not load your library')
 })
 
+it('overlays private extension metadata consistently while preserving manual corrections and shared data', async () => {
+  state.data.library_entries = [{ id: 'entry', work_id: 'work', metadata_overrides: { title: 'My correction' }, extension_metadata: { title: 'Browser title', authors: ['Browser author'], published_chapters: 6, is_complete: false, ao3_updated_at: '2026-10-16T00:00:00Z', additional_tags: ['Zulu', 'Alpha'] }, extension_chapters: { 2: '920' } }]
+  state.data.works = [{ id: 'work', title: 'Shared title', published_chapters: 3, is_complete: true, verified_chapters: {} }]
+  const { stories } = await loadLibrary()
+  expect(stories[0].metadata).toMatchObject({ title: 'My correction', authors: ['Browser author'], publication_status: 'in_progress', published_chapters: 6, additional_tags: ['Zulu', 'Alpha'] })
+  expect(stories[0].work).toMatchObject({ ao3_updated_at: '2026-10-16T00:00:00Z', verified_chapters: { 2: '920' } })
+  expect(state.data.works[0].title).toBe('Shared title')
+})
+
 it('loads AO3 tag categories per work and preserves private category overrides', async () => {
   state.data.library_entries = [{ id: 'entry', work_id: 'work', metadata_overrides: { ...blankMetadata, title: 'A story', additional_tags: ['Private freeform'] } }]
   state.data.works = [{ id: 'work' }]

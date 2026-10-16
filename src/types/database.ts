@@ -214,6 +214,8 @@ export type Database = {
           update_dismissed_at: string | null
           created_at: string
           updated_at: string
+          extension_metadata: Json
+          extension_chapters: Json
         }
         Insert: {
           id?: string
@@ -232,6 +234,8 @@ export type Database = {
           update_dismissed_at?: string | null
           created_at?: string
           updated_at?: string
+          extension_metadata?: Json
+          extension_chapters?: Json
         }
         Update: {
           id?: string
@@ -250,6 +254,8 @@ export type Database = {
           update_dismissed_at?: string | null
           created_at?: string
           updated_at?: string
+          extension_metadata?: Json
+          extension_chapters?: Json
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -298,6 +304,7 @@ export type Database = {
           error_category: string | null
           error_message: string | null
           created_at: string
+          retrieval_mode: string
         }
         Insert: {
           id?: string
@@ -317,6 +324,7 @@ export type Database = {
           error_category?: string | null
           error_message?: string | null
           created_at?: string
+          retrieval_mode?: string
         }
         Update: {
           id?: string
@@ -336,11 +344,28 @@ export type Database = {
           error_category?: string | null
           error_message?: string | null
           created_at?: string
+          retrieval_mode?: string
         }
         Relationships: [
           { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
           { foreignKeyName: 'metadata_jobs_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
           { foreignKeyName: 'metadata_jobs_batch_id_user_id_fkey'; columns: ['batch_id', 'user_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
+      metadata_preferences: {
+        Row: {
+          user_id: string
+          retrieval_mode: string
+        }
+        Insert: {
+          user_id?: string
+          retrieval_mode?: string
+        }
+        Update: {
+          user_id?: string
+          retrieval_mode?: string
+        }
+        Relationships: [
         ]
       }
       metadata_worker_state: {
@@ -583,6 +608,7 @@ export type Database = {
       submit_import_urls: { Args: { p_urls: string[] }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
+      claim_extension_job: { Args: Record<string, never>; Returns: Json }
       approve_import_progress: { Args: { p_item: string }; Returns: undefined }
       clear_metadata_override: { Args: { p_entry: string; p_field: string }; Returns: undefined }
       restore_library_story: { Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }; Returns: string }

@@ -59,10 +59,10 @@ async function library(page: Page, mobile: boolean) { if (mobile) await page.get
 test('manual library workflow persists through refresh and sign-out, on desktop and mobile', async ({ page }, info) => {
   const tables = await fixture(page); await page.goto('/library'); await login(page)
   for (const name of ['Comfort reads', 'Long fics']) {
-    page.once('dialog', d => d.accept(name)); await page.getByRole('button', { name: 'New Shelf' }).click(); await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
+    page.once('dialog', d => d.accept(name)); await page.getByRole('button', { name: 'New Collection' }).click(); await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
   }
   const addStory = page.getByRole('link', { name: 'Add Story', exact: true })
-  const addBounds = await addStory.boundingBox(), shelfBounds = await page.getByRole('button', { name: 'New Shelf', exact: true }).boundingBox()
+  const addBounds = await addStory.boundingBox(), shelfBounds = await page.getByRole('button', { name: 'New Collection', exact: true }).boundingBox()
   expect(Math.abs(addBounds!.y - shelfBounds!.y)).toBeLessThan(1)
   await expect(addStory).toHaveAttribute('href', '/add?mode=finished')
   await addStory.click()

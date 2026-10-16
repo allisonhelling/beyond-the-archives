@@ -12,7 +12,7 @@ for (const file of await files('src')) {
   if (/SUPABASE_(SERVICE_ROLE_KEY|SECRET_KEY)|sb_secret_|auth\.admin|from\s+['"][^'"]*server\//.test(text)) errors.push(`${file}: privileged frontend reference`)
   if (/dangerouslySetInnerHTML|eval\(/.test(text)) errors.push(`${file}: unsafe script or HTML execution`)
   for (const match of text.matchAll(/import\.meta\.env\.(VITE_\w+)/g)) {
-    if (!['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SAMPLE_DATA'].includes(match[1])) errors.push(`${file}: unexpected browser environment variable`)
+    if (!['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SAMPLE_DATA', 'VITE_AO3_EXTENSION_ID'].includes(match[1])) errors.push(`${file}: unexpected browser environment variable`)
   }
 }
 // A synthetic privileged credential must not survive a real production build.
