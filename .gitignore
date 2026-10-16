@@ -1,3 +1,4 @@
+.gitignore
 node_modules/
 dist/
 .env
@@ -13,3 +14,4 @@ supabase/.temp/
 supabase/.branches/
 .DS_Store
 .Rhistory
+AGENTS.md

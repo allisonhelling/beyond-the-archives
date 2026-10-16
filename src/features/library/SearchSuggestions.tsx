@@ -36,7 +36,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
     setFocused(keepOpen)
   }
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
-    <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'visually-hidden' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
+    <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'sr-only' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
     {focused && <div className="search-suggestions menu-surface" id={id} aria-label={`${label} suggestions`}>
       {suggestions.map(group => <section key={group.label} aria-label={`${group.label} suggestions`}>{!hideHeadings && <strong>{group.label}</strong>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
     </div>}

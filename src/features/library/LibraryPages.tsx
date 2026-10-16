@@ -2,7 +2,7 @@ import { useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, LockKeyhole, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, chapterUrl, nextUnread, savedWorkUrl, statuses, tagNames, validateProgress, type Status, type Story } from './model'
+import { active, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Status, type Story } from './model'
 import { deleteCollection, saveCollection, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -11,6 +11,7 @@ import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
 import { AuthorNames } from './AuthorNames'
 import { StoryForm } from './StoryForm'
+import { CollectionChoices } from './CollectionChoices'
 import { ReadingDashboard } from './ReadingDashboard'
 import { publicationStatuses } from './publication-status'
 
@@ -20,7 +21,6 @@ function LibraryBoundary({ children }: { children: ReactNode }) {
   if (error) return <div role="alert" className="error-message">{error}<button className="button secondary" onClick={() => void refresh().catch(() => {})}>Retry loading</button></div>
   return children
 }
-function publication(story: Story) { return publicationStatuses[story.metadata.publication_status].label }
 function ExternalUrl({ url, fallback = 'Unverified' }: { url: string | null; fallback?: string }) {
   let clickable = false
   try {
@@ -30,8 +30,7 @@ function ExternalUrl({ url, fallback = 'Unverified' }: { url: string | null; fal
   return clickable ? <a className="metadata-link" href={url!} target="_blank" rel="noreferrer">{url}</a> : <>{fallback}</>
 }
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode }
-function StoryControls({ story, children, variant = 'card' }: { story: Story; children: (controls: CardControls) => ReactNode; variant?: 'card' | 'details' }) {
-  const compact = variant === 'card'
+function StoryControls({ story, children }: { story: Story; children: (controls: CardControls) => ReactNode }) {
   const { refresh, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(String(story.last_read_chapter))
   const [progressOpen, setProgressOpen] = useState(false)
@@ -63,12 +62,11 @@ function StoryControls({ story, children, variant = 'card' }: { story: Story; ch
   function closeRemoval() { setRemoveOpen(false); menuRef.current?.querySelector('summary')?.focus() }
   function closeProgress() { setProgressOpen(false); setError(''); progressTrigger.current?.focus() }
   const editProgress = <div className="progress-editor" ref={progressRef} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeProgress() } }}>
-    <button ref={progressTrigger} className="chapter-progress-button" title="Edit chapter progress" aria-label={`Chapter ${story.last_read_chapter} of ${story.metadata.total_chapters ?? '?'} — edit progress`} aria-haspopup="dialog" aria-expanded={progressOpen} aria-controls={progressOpen ? progressId : undefined} disabled={busy} onClick={() => { setProgress(String(story.last_read_chapter)); setError(''); setProgressOpen(!progressOpen) }}><strong>{compact ? <>Ch. {story.last_read_chapter} / {story.metadata.total_chapters ?? '?'}</> : <>Chapter {story.last_read_chapter} of {story.metadata.total_chapters ?? '?'}</>}</strong></button>
+    <button ref={progressTrigger} className="chapter-progress-button" title="Edit chapter progress" aria-label={`Chapter ${story.last_read_chapter} of ${story.metadata.total_chapters ?? '?'} — edit progress`} aria-haspopup="dialog" aria-expanded={progressOpen} aria-controls={progressOpen ? progressId : undefined} disabled={busy} onClick={() => { setProgress(String(story.last_read_chapter)); setError(''); setProgressOpen(!progressOpen) }}><strong>Ch. {story.last_read_chapter} / {story.metadata.total_chapters ?? '?'}</strong></button>
     {progressOpen && <div id={progressId} role="dialog" aria-modal="false" className="progress-popover" aria-label="Edit chapter progress"><form onSubmit={event => { event.preventDefault(); try { if (!progress.trim()) throw new Error('Enter chapters read.'); validateProgress(Number(progress), story.metadata); void change({ last_read_chapter: Number(progress) }).then(saved => { if (saved) closeProgress() }) } catch (e) { setError((e as Error).message) } }}><h2>Edit chapter progress</h2><label>Last fully read chapter<input type="number" autoFocus required min="0" step="1" value={progress} onChange={e => setProgress(e.target.value)} /></label><p>of {story.metadata.total_chapters ?? '?'} · {story.metadata.published_chapters ?? '?'} published</p>{error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={busy}>Save progress</button><button className="button secondary" disabled={busy} type="button" onClick={closeProgress}>Cancel</button></div></form></div>}
   </div>
   const caughtUpDescription = story.metadata.published_chapters === null ? 'Enter published chapter count in details first' : `Mark all chapters as read`
-  const caughtUpButton = (descriptionId?: string) => <button className={compact ? 'spine-action caught-up-action' : 'button caught-up-action'} aria-label="Mark as Caught Up" aria-describedby={descriptionId} disabled={busy || story.metadata.published_chapters === null} title={compact ? undefined : caughtUpDescription} onClick={() => void markRead()}>{compact ? <Check size={14} aria-hidden="true" /> : 'Mark as Caught Up'}</button>
-  const caughtUp = compact ? <Tooltip description={caughtUpDescription}>{descriptionId => caughtUpButton(descriptionId)}</Tooltip> : caughtUpButton()
+  const caughtUp = <Tooltip description={caughtUpDescription}>{descriptionId => <button className="spine-action caught-up-action" aria-label="Mark as Caught Up" aria-describedby={descriptionId} disabled={busy || story.metadata.published_chapters === null} onClick={() => void markRead()}><Check size={14} aria-hidden="true" /></button>}</Tooltip>
   const favorite = <FavoriteButton selected={story.is_favorite} disabled={busy} onChange={selected => void change({ is_favorite: selected })} />
   const readingStatus = <label className="status-select">Reading status<select aria-label={`Reading status for ${story.metadata.title}`} disabled={busy} value={story.reading_status} onChange={e => void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
   const actions = <div className="story-quick-actions">{favorite}
@@ -176,7 +174,7 @@ function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | '
     setBusy(true); setError('')
     try {
       if (field === 'notes') await updateEntry(story.id, { notes: text })
-      else await saveStory({ id: story.id, url: savedWorkUrl(story), metadata: story.metadata, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections: field === 'collections' ? collections : story.collectionIds, tags: field === 'tags' ? [...new Set(text.split('\n').map(tag => tag.trim()).filter(Boolean))] : story.personalTags })
+      else await saveStory({ id: story.id, url: savedWorkUrl(story), metadata: story.metadata, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections: field === 'collections' ? collections : story.collectionIds, tags: field === 'tags' ? parseLines(text) : story.personalTags })
       await library.refresh(); close()
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save changes.') }
     finally { setBusy(false) }
@@ -185,7 +183,7 @@ function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | '
   return <div className={note ? `inline-personal-field note-panel ${story.notes || editing ? 'note-panel-filled' : ''}` : 'inline-personal-field'}>
     {note ? <div className="note-heading">{(story.notes || editing) && <><span><NotebookPen size={18} aria-hidden="true" />Your note</span><span className="note-private"><LockKeyhole size={14} aria-hidden="true" />private</span></>}{!editing && <button ref={trigger} type="button" className="text-button inline-edit" onClick={open} aria-label={story.notes ? 'Edit note' : 'Add a note'}>{story.notes ? <Pencil size={16} aria-hidden="true" /> : <NotebookPen size={18} aria-hidden="true" />}{story.notes ? 'Edit' : 'Add a note'}</button>}</div> : !editing && <button ref={trigger} type="button" className="icon-button inline-edit-icon" aria-label={`Edit ${field === 'tags' ? 'personal tags' : 'collections'}`} onClick={open}><Pencil size={12} aria-hidden="true" /></button>}
     {editing ? <form className="inline-personal-form" onSubmit={event => { event.preventDefault(); void save() }}><fieldset disabled={busy}>
-      {field === 'collections' ? <><legend>Custom collections</legend>{library.collections.filter(c => !c.default_key).map(c => <label className="check-label" key={c.id}><input type="checkbox" checked={collections.includes(c.id)} onChange={event => setCollections(event.target.checked ? [...collections, c.id] : collections.filter(id => id !== c.id))} />{c.name}</label>)}</> : <label className={note ? 'note-input-label' : undefined}><span className={note ? 'sr-only' : undefined}>{label}</span><textarea autoFocus rows={note ? 4 : 3} value={text} placeholder={note ? 'e.g. left off on a cliffhanger — waiting to see what happens next chapter.' : undefined} onChange={event => setText(event.target.value)} /></label>}
+      {field === 'collections' ? <><legend>Custom collections</legend><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} /></> : <label className={note ? 'note-input-label' : undefined}><span className={note ? 'sr-only' : undefined}>{label}</span><textarea autoFocus rows={note ? 4 : 3} value={text} placeholder={note ? 'e.g. left off on a cliffhanger — waiting to see what happens next chapter.' : undefined} onChange={event => setText(event.target.value)} /></label>}
       <div className="form-actions"><button className="button primary" type="submit">{busy ? 'Saving…' : 'Save'}</button><button className="text-button" type="button" onClick={close}>Cancel</button></div>
     </fieldset></form> : note && story.notes && <p className="story-summary">{story.notes}</p>}
     {error && <p className="error-message" role="alert">{error}</p>}
@@ -210,7 +208,7 @@ export function StoryDetailsPage() {
         <dl className="details-story-stats">
           <div><dt>Word count</dt><dd><strong>{story.metadata.word_count?.toLocaleString() ?? '?'}</strong> words</dd></div>
           <div><dt>Published / total chapters</dt><dd><strong>{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'}</strong> chapters</dd></div>
-          <div><dt>Publication status</dt><dd><strong>{publication(story)}</strong></dd></div>
+          <div><dt>Publication status</dt><dd><strong>{publicationStatuses[story.metadata.publication_status].label}</strong></dd></div>
         </dl>
       </>}
     </div></div>

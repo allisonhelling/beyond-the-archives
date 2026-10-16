@@ -53,3 +53,8 @@ export function tagNames(metadata: Metadata, category: 'relationship' | 'charact
   const values = metadata[key[category]]
   return Array.isArray(values) ? values.filter(value => typeof value === 'string') : []
 }
+
+// Multiline metadata and personal tags share trimming and stable deduplication.
+export function parseLines(text: string): string[] {
+  return [...new Set(text.split('\n').map(value => value.trim()).filter(Boolean))]
+}
