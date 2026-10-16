@@ -87,7 +87,9 @@ describe('private app access and navigation', () => {
     auth.session = fakeSession
     const user = userEvent.setup()
     render(<App />)
-    await user.click(await screen.findByRole('button', { name: 'Open navigation' }))
+    // Wait for the initial redirect; changing routes intentionally closes the menu.
+    await screen.findByRole('heading', { name: 'Currently Reading' })
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }))
     expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeInTheDocument()
     await user.click(screen.getAllByRole('link', { name: 'Library' })[1])
     expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument()
