@@ -78,3 +78,31 @@ it('deletes only the owned entry and cascades memberships, preserving the other 
   await user(alice, async () => { await db.query('delete from public.library_entries where id=$1', [entry]); expect((await db.query('select * from public.library_entry_tags')).rows).toHaveLength(0); expect((await db.query('select * from public.collection_works')).rows).toHaveLength(0) })
   await user(bob, async () => { expect((await db.query('select * from public.library_entries')).rows).toHaveLength(1) })
 })
+
+
+it('atomically restores a removed entry, private links and exact saved timestamps with account isolation', async () => {
+  let snapshot: Record<string, unknown>, collections: string[], tags: string[]
+  await user(alice, async () => {
+    const collection = (await db.query<{ id: string }>("insert into public.collections(name) values ('Undo shelf') returning id")).rows[0].id
+    const id = (await save({ url: 'https://archiveofourown.org/works/990', collections: [collection], tags: ['Undo tag'], progress: 2 })).rows[0].id
+    snapshot = (await db.query<Record<string, unknown>>('select * from public.library_entries where id=$1', [id])).rows[0]
+    collections = [collection]; tags = ['Undo tag']
+    await db.query('delete from public.library_entries where id=$1', [id])
+    expect((await db.query('select * from public.library_entry_tags where library_entry_id=$1', [id])).rows).toHaveLength(0)
+    for (const original_url of ['https://evil.example/works/990', 'https://archiveofourown.org/works/991']) {
+      await expect(db.query('select public.restore_library_story($1,$2::uuid[],$3::text[])', [JSON.stringify({ ...snapshot, original_url }), collections, tags])).rejects.toThrow(/identity/)
+      expect((await db.query('select * from public.library_entries where id=$1', [id])).rows).toHaveLength(0)
+    }
+    await db.query('select public.restore_library_story($1,$2::uuid[],$3::text[])', [JSON.stringify(snapshot), collections, tags])
+    expect((await db.query('select * from public.library_entries where id=$1', [id])).rows[0]).toEqual(snapshot)
+    expect((await db.query('select * from public.library_entry_tags where library_entry_id=$1', [id])).rows).toHaveLength(1)
+    expect((await db.query('select * from public.collection_works where library_entry_id=$1', [id])).rows).toHaveLength(1)
+    await expect(db.query('select public.restore_library_story($1,$2::uuid[],$3::text[])', [JSON.stringify(snapshot), collections, tags])).rejects.toThrow(/unique/)
+    await db.query('delete from public.library_entries where id=$1', [id])
+  })
+  await user(bob, async () => {
+    await expect(db.query('select public.restore_library_story($1,$2::uuid[],$3::text[])', [JSON.stringify(snapshot), collections, tags])).rejects.toThrow(/unavailable/)
+  })
+  await db.exec('set role anon')
+  try { await expect(db.query('select public.restore_library_story($1,$2::uuid[],$3::text[])', [JSON.stringify(snapshot!), collections!, tags!])).rejects.toThrow(/permission denied/) } finally { await db.exec('reset role') }
+})

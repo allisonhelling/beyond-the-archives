@@ -370,6 +370,10 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      restore_library_story: {
+        Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }
+        Returns: string
+      }
       save_library_story: {
         Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
         Returns: string

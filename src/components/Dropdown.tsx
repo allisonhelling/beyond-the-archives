@@ -32,7 +32,7 @@ export function Dropdown({ label, value, options, onChange }: {
     <button className="filter-input dropdown-trigger" type="button" aria-label={label} aria-describedby={`${id}-value`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
       <span id={`${id}-value`}>{selected?.label ?? 'Select an option'}</span><ChevronDown size={16} />
     </button>
-    {open && <div className="dropdown-panel" id={id} role="listbox" aria-labelledby={labelId}>
+    {open && <div className="dropdown-panel menu-surface" id={id} role="listbox" aria-labelledby={labelId}>
       {options.map(option => <button type="button" role="option" key={option.value} aria-selected={value === option.value} onClick={() => {
         onChange(option.value)
       }}><span>{option.label}</span>{value === option.value && <Check size={16} />}</button>)}

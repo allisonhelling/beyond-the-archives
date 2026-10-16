@@ -90,3 +90,12 @@ it('keeps Characters and Additional Tags filters scoped to their saved AO3 categ
   expect(filterReading([classified], { ...defaultReadingFilters, within: 'Legacy unclassified' })).toEqual([classified])
   expect(filterReading([classified], { ...defaultReadingFilters, within: 'dean slow' })).toEqual([classified])
 })
+
+
+it('sorts date added newest first using saved dates, with alphabetical ties and unknown dates last', () => {
+  const older = story('Older', { created_at: '2026-10-14T12:00:00Z', updated_at: '2026-10-20T12:00:00Z' })
+  const newestZ = story('Z newest', { created_at: '2026-10-16T12:00:00Z' })
+  const newestA = story('A newest', { created_at: '2026-10-16T12:00:00Z' })
+  const unknown = story('Unknown', { created_at: 'invalid' })
+  expect(filterReading([older, newestZ, unknown, newestA], { ...defaultReadingFilters, sort: 'added' })).toEqual([newestA, newestZ, older, unknown])
+})

@@ -114,6 +114,12 @@ export async function deleteSampleStory(id: string) {
   data.stories = data.stories.filter(story => story.id !== id)
   write(data)
 }
+export async function restoreSampleStory(story: Story) {
+  const data = read()
+  if (data.stories.some(item => item.work.ao3_work_id === story.work.ao3_work_id)) throw new Error('This story is already in your library.')
+  data.stories.push({ ...story, collectionIds: story.collectionIds.filter(id => data.collections.some(collection => collection.id === id)) })
+  write(data)
+}
 export async function saveSampleCollection(name: string, id?: string) {
   const data = read(), trimmed = name.trim()
   if (!trimmed) throw new Error('A collection name is required.')

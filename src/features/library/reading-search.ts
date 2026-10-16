@@ -1,6 +1,6 @@
 import { active, statuses, tagNames, type Story } from './model'
 
-export type SortOrder = 'updated' | 'ready' | 'alpha'
+export type SortOrder = 'updated' | 'added' | 'ready' | 'alpha'
 export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
@@ -110,6 +110,10 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
   }).sort((a, b) => {
     const alpha = a.metadata.title.localeCompare(b.metadata.title)
     if (filters.sort === 'alpha') return alpha
+    if (filters.sort === 'added') {
+      const added = (story: Story) => { const timestamp = Date.parse(story.created_at); return Number.isFinite(timestamp) ? timestamp : -Infinity }
+      return added(b) - added(a) || alpha
+    }
     if (filters.sort === 'ready') {
       const ready = (s: Story) => s.metadata.published_chapters === null ? -1 : Math.max(0, s.metadata.published_chapters - s.last_read_chapter)
       return ready(b) - ready(a) || alpha

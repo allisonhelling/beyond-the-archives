@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection } from './repository'
+import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory } from './repository'
 import { parseWorkUrl, validateProgress } from '../model'
 
 beforeEach(() => {
@@ -62,4 +62,17 @@ it('adds verified categories to older sample storage without replacing reading e
   expect(reloaded.last_read_chapter).toBe(1)
   expect(reloaded.metadata.additional_tags).toContain('Time Travel')
   expect(reloaded.metadata.character_tags).not.toContain(removed)
+})
+
+
+it('restores a removed sample story with all private data and original timestamps', async () => {
+  const story = (await loadSampleLibrary()).stories[0]
+  await saveSampleCollection('Keep')
+  const collection = (await loadSampleLibrary()).collections[0]
+  const snapshot = { ...story, notes: 'Private note', personalTags: ['Comfort'], collectionIds: [collection.id], personal_rating: 4, is_favorite: true }
+  await deleteSampleStory(story.id)
+  expect((await loadSampleLibrary()).stories.some(item => item.id === story.id)).toBe(false)
+  await restoreSampleStory(snapshot)
+  expect((await loadSampleLibrary()).stories.find(item => item.id === story.id)).toEqual(snapshot)
+  await expect(restoreSampleStory(snapshot)).rejects.toThrow('already in your library')
 })

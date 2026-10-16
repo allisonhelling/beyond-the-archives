@@ -56,6 +56,14 @@ export async function deleteStory(id: string) {
   if (sampleMode) return (await import('./sample/repository')).deleteSampleStory(id)
   const { error } = await client().from('library_entries').delete().eq('id', id); failure(error)
 }
+export async function restoreStory(story: Story) {
+  if (sampleMode) return (await import('./sample/repository')).restoreSampleStory(story)
+  const { work: _work, metadata: _metadata, collectionIds, personalTags, ...entry } = story
+  // Restore only the private entry; shared work metadata never changes during Undo.
+  void _work; void _metadata
+  const { error } = await client().rpc('restore_library_story', { p_entry: entry, p_collections: collectionIds, p_tags: personalTags })
+  failure(error)
+}
 export async function saveCollection(name: string, id?: string) {
   if (!name.trim()) throw new Error('A collection name is required.')
   if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id)
