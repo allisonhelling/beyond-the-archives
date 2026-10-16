@@ -2,7 +2,7 @@ import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
-export type Metadata = { manual_url?: string; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { manual_url?: string; series?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Database['public']['Tables']['collections']['Row']

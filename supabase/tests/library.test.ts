@@ -8,7 +8,7 @@ const alice = '10000000-0000-0000-0000-000000000001', bob = '10000000-0000-0000-
 let entry: string
 async function user(id: string, action: () => Promise<void>) { await db.exec(`set role authenticated; set request.jwt.claim.sub='${id}';`); try { await action() } finally { await db.exec('reset role; reset request.jwt.claim.sub;') } }
 async function save(options: { url?: string; metadata?: object; status?: string; progress?: number; id?: string; collections?: string[]; tags?: string[] } = {}) {
-  return db.query<{ id: string }>('select public.save_library_story($1,$2,$3,$4,$5,$6::smallint,$7,$8::uuid[],$9::text[],$10::uuid) as id', [options.url ?? 'https://archiveofourown.org/works/123/chapters/999?view_adult=true', JSON.stringify(options.metadata ?? { title: 'Private title', authors: ['A', 'B'], fandoms: ['F'], ao3_tags: ['AO3 tag'], total_chapters: null, published_chapters: null }), options.status ?? 'reading', options.progress ?? 0, 'Private notes', 4, true, options.collections ?? [], options.tags ?? ['Comfort', 'Revisit'], options.id ?? null])
+  return db.query<{ id: string }>('select public.save_library_story($1,$2,$3,$4,$5,$6::smallint,$7,$8::uuid[],$9::text[],$10::uuid) as id', [options.url ?? 'https://archiveofourown.org/works/123/chapters/999?view_adult=true', JSON.stringify(options.metadata ?? { title: 'Private title', authors: ['A', 'B'], series: ['Manual series'], fandoms: ['F'], ao3_tags: ['AO3 tag'], total_chapters: null, published_chapters: null }), options.status ?? 'reading', options.progress ?? 0, 'Private notes', 4, true, options.collections ?? [], options.tags ?? ['Comfort', 'Revisit'], options.id ?? null])
 }
 beforeAll(async () => { db = await createTestDatabase(); await db.exec(`insert into auth.users values ('${alice}'),('${bob}')`) }, 30000)
 afterAll(async () => { await db?.close() })
@@ -17,7 +17,7 @@ it('saves manually without retrieval, preserving unknown counts, original URL an
     entry = (await save()).rows[0].id
     const row = (await db.query<{ original_url: string; metadata_overrides: object }>('select * from public.library_entries where id=$1', [entry])).rows[0]
     expect(row.original_url).toContain('/chapters/999?view_adult=true')
-    expect(row.metadata_overrides).toMatchObject({ title: 'Private title', authors: ['A', 'B'], total_chapters: null })
+    expect(row.metadata_overrides).toMatchObject({ title: 'Private title', authors: ['A', 'B'], series: ['Manual series'], total_chapters: null })
     expect((await db.query('select canonical_url,last_metadata_check,title from public.works')).rows[0]).toEqual({ canonical_url: null, last_metadata_check: null, title: null })
     expect((await db.query('select * from public.library_entry_tags')).rows).toHaveLength(2)
   })

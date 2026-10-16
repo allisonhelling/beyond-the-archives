@@ -40,6 +40,20 @@ npm run test:integration
 
 Hosted projects require reviewing and applying the migrations through the normal `supabase db push --dry-run` / `supabase db push` workflow. Never run `db:reset` against an established database to upgrade it.
 
+Account settings and Log out are available in the profile-icon menu, which shows the account’s saved display name or an email-based fallback. Settings no longer occupies a main navigation tab. In Add/Edit Story, select a personal rating with one of five stars; choosing the third fills three stars and saves the numeric rating 3/5. Clear rating removes it. Favorites sit beside the rating, and Save/Cancel are equal-size actions on one row.
+
+## Currently Reading search and filters
+
+Currently Reading has a sort/search/fandom toolbar and an expandable Filters panel. Fandom selection supports multiple fandoms, searchable names, per-fandom fic counts, and removable chips. Filters include publication status, waiting for updates, AO3 rating, favorites, relationship tags, AO3 tags, and an inclusive AO3 last-updated date range in UTC. Dates and chapter counts use saved metadata; unknown values are not invented. The toolbar is a separate tile; sort, title/author search, and fandom selection appear once. Dashboard selects use custom menus with keyboard navigation and remain open while selecting options. Menus close on outside clicks, outside focus, or Escape. The toolbar uses Sort By and the publication filter is labeled Work Completion Status. Fandom choices stay open while selecting multiple values and close when clicking away.
+
+View All shows Reading, Waiting for Updates, and Re-reading entries. To Read shows saved-for-later entries. Complete on AO3 uses publication status. New Chapter requires a saved, undismissed notification plus a verified unread chapter destination and published count; this update does not fetch metadata or create notifications.
+
+Title/author, relationship, and AO3-tag suggestions open on focus, even for an empty query. Suggestions use saved metadata; relationship suggestions use tags containing `/` or `&`. AO3-tag suggestions preserve earlier comma-separated tags. Search scope and Search within results share one row. The icon at the right edge of the results input opens search help. Relationship and AO3-tag panels omit repeated headings and remain open as choices are selected.
+
+Search within results supports `*` wildcards, spaces for AND, `||` for OR, quoted phrases, and leading `-` for NOT. AND/NOT bind before OR. Backslash escapes the next character, including literal operators. Matching ignores case and accents; ordinary terms also match partial words. Choose Any field, Summary, or Notes to set the search scope. Invalid syntax displays an error instead of silently changing the query. Filters combine with the selected tile; multiple selected fandoms match any selected fandom, while comma-separated AO3 tags must each match. Clear all filters resets the filter panel, search, sort, and grouping.
+
+Grouping supports fandom, author, and manually saved series names. Edit series names in story details; this is private manual metadata, not automated series retrieval or a series navigation system. Works with several authors, fandoms, or series appear in each relevant group. Missing group metadata is labeled explicitly. Filters are held in page state and are reset after leaving/reloading the page.
+
 ## Set up Supabase
 
 Choose either a hosted project or a local Docker stack. Database changes always use versioned migrations under `supabase/migrations/`.
