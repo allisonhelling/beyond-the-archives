@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { blankMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress } from './model'
+import { authorPageUrl, blankMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress } from './model'
 describe('manual AO3 identity and progress', () => {
+  it('accepts AO3 author and pseud pages and rejects unrelated or unsafe destinations', () => {
+    for (const url of ['https://archiveofourown.org/users/Author', 'https://archiveofourown.org/users/Author/pseuds/PenName', 'https://archiveofourown.org/users/Author/profile', 'https://archiveofourown.org/users/Author/works']) expect(authorPageUrl(` ${url} `)).toBe(url)
+    for (const url of [undefined, '', 'javascript:alert(1)', 'https://example.com/users/Author', 'https://archiveofourown.org.evil.test/users/Author', 'https://name@archiveofourown.org/users/Author', 'https://archiveofourown.org/works/123', 'https://archiveofourown.org/users/']) expect(authorPageUrl(url)).toBeNull()
+  })
   it('recognizes supported URLs and preserves the exact submission', () => {
     const original = ' https://archiveofourown.org/works/123/chapters/998?view_adult=true#main '
     expect(parseWorkUrl(original)).toEqual({ workId: 123, chapterId: '998', original })

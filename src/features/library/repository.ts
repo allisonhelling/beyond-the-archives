@@ -51,7 +51,7 @@ export async function updateEntry(id: string, changes: EntryUpdate) {
   const { data, error } = await client().from('library_entries').update(changes).eq('id', id).select('id').single()
   failure(error); if (!data) throw new Error('Story no longer available.')
 }
-type EntryUpdate = Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite'>
+type EntryUpdate = Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'notes' | 'personal_rating'>
 export async function deleteStory(id: string) {
   if (sampleMode) return (await import('./sample/repository')).deleteSampleStory(id)
   const { error } = await client().from('library_entries').delete().eq('id', id); failure(error)

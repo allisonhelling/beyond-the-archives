@@ -2,12 +2,15 @@ import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
-export type Metadata = { manual_url?: string; series?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { manual_url?: string; author_links?: Record<string, string>; series?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Database['public']['Tables']['collections']['Row']
 export type Story = Entry & { work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 export const blankMetadata: Metadata = { title: '', authors: [], fandoms: [], ao3_tags: [], summary: '', rating: '', publication_status: 'unknown', published_chapters: null, total_chapters: null, word_count: null }
+export function authorPageUrl(value: unknown): string | null {
+  return typeof value === 'string' && /^https?:\/\/(?:www\.)?archiveofourown\.org\/users\/[^/?#\s]+(?:\/pseuds\/[^/?#\s]+)?(?:\/(?:profile|works))?\/?(?:[?#][^\s]*)?$/.test(value.trim()) ? value.trim() : null
+}
 export function parseWorkUrl(original: string) {
   const match = original.trim().match(/^https?:\/\/(?:www\.)?archiveofourown\.org\/works\/([1-9]\d*)(?:\/chapters\/([1-9]\d*))?\/?(?:[?#][^\s]*)?$/)
   if (!match || !Number.isSafeInteger(Number(match[1]))) throw new Error('Enter a supported AO3 work URL, such as https://archiveofourown.org/works/123.')

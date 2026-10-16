@@ -1,14 +1,18 @@
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, Heart, MoreHorizontal, Trash2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, LockKeyhole, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
 import { active, chapterUrl, nextUnread, savedWorkUrl, statuses, tagNames, validateProgress, type Status, type Story } from './model'
-import { deleteCollection, saveCollection, updateEntry } from './repository'
+import { deleteCollection, saveCollection, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { Tooltip } from '../../components/Tooltip'
+import { StarRating } from './StarRating'
+import { FavoriteButton } from './FavoriteButton'
+import { AuthorNames } from './AuthorNames'
 import { StoryForm } from './StoryForm'
 import { ReadingDashboard } from './ReadingDashboard'
+import { publicationStatuses } from './publication-status'
 
 function LibraryBoundary({ children }: { children: ReactNode }) {
   const { loading, error, refresh } = useLibrary()
@@ -16,7 +20,7 @@ function LibraryBoundary({ children }: { children: ReactNode }) {
   if (error) return <div role="alert" className="error-message">{error}<button className="button secondary" onClick={() => void refresh().catch(() => {})}>Retry loading</button></div>
   return children
 }
-function publication(story: Story) { return { complete: 'Complete on AO3', in_progress: 'In Progress on AO3', unknown: 'AO3 publication status unknown' }[story.metadata.publication_status] }
+function publication(story: Story) { return publicationStatuses[story.metadata.publication_status].label }
 function ExternalUrl({ url, fallback = 'Unverified' }: { url: string | null; fallback?: string }) {
   let clickable = false
   try {
@@ -25,12 +29,9 @@ function ExternalUrl({ url, fallback = 'Unverified' }: { url: string | null; fal
   } catch { /* Missing or invalid legacy URLs remain plain text. */ }
   return clickable ? <a className="metadata-link" href={url!} target="_blank" rel="noreferrer">{url}</a> : <>{fallback}</>
 }
-function updateState(story: Story) {
-  const published = story.metadata.published_chapters
-  return published === null ? 'Update status unknown' : published > story.last_read_chapter ? `${published - story.last_read_chapter} chapters unread (saved count)` : 'Caught up with saved chapter count'
-}
-type CardControls = { actions: ReactNode; caughtUp: ReactNode; editProgress: ReactNode }
-function StoryControls({ story, children }: { story: Story; children?: (controls: CardControls) => ReactNode }) {
+type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode }
+function StoryControls({ story, children, variant = 'card' }: { story: Story; children: (controls: CardControls) => ReactNode; variant?: 'card' | 'details' }) {
+  const compact = variant === 'card'
   const { refresh, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(String(story.last_read_chapter))
   const [progressOpen, setProgressOpen] = useState(false)
@@ -62,13 +63,15 @@ function StoryControls({ story, children }: { story: Story; children?: (controls
   function closeRemoval() { setRemoveOpen(false); menuRef.current?.querySelector('summary')?.focus() }
   function closeProgress() { setProgressOpen(false); setError(''); progressTrigger.current?.focus() }
   const editProgress = <div className="progress-editor" ref={progressRef} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeProgress() } }}>
-    <button ref={progressTrigger} className="chapter-progress-button" title="Edit chapter progress" aria-label={`Chapter ${story.last_read_chapter} of ${story.metadata.total_chapters ?? '?'} — edit progress`} aria-haspopup="dialog" aria-expanded={progressOpen} aria-controls={progressOpen ? progressId : undefined} disabled={busy} onClick={() => { setProgress(String(story.last_read_chapter)); setError(''); setProgressOpen(!progressOpen) }}><strong>{children ? <>Ch. {story.last_read_chapter} / {story.metadata.total_chapters ?? '?'}</> : <>Chapter {story.last_read_chapter} of {story.metadata.total_chapters ?? '?'}</>}</strong></button>
+    <button ref={progressTrigger} className="chapter-progress-button" title="Edit chapter progress" aria-label={`Chapter ${story.last_read_chapter} of ${story.metadata.total_chapters ?? '?'} — edit progress`} aria-haspopup="dialog" aria-expanded={progressOpen} aria-controls={progressOpen ? progressId : undefined} disabled={busy} onClick={() => { setProgress(String(story.last_read_chapter)); setError(''); setProgressOpen(!progressOpen) }}><strong>{compact ? <>Ch. {story.last_read_chapter} / {story.metadata.total_chapters ?? '?'}</> : <>Chapter {story.last_read_chapter} of {story.metadata.total_chapters ?? '?'}</>}</strong></button>
     {progressOpen && <div id={progressId} role="dialog" aria-modal="false" className="progress-popover" aria-label="Edit chapter progress"><form onSubmit={event => { event.preventDefault(); try { if (!progress.trim()) throw new Error('Enter chapters read.'); validateProgress(Number(progress), story.metadata); void change({ last_read_chapter: Number(progress) }).then(saved => { if (saved) closeProgress() }) } catch (e) { setError((e as Error).message) } }}><h2>Edit chapter progress</h2><label>Last fully read chapter<input type="number" autoFocus required min="0" step="1" value={progress} onChange={e => setProgress(e.target.value)} /></label><p>of {story.metadata.total_chapters ?? '?'} · {story.metadata.published_chapters ?? '?'} published</p>{error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={busy}>Save progress</button><button className="button secondary" disabled={busy} type="button" onClick={closeProgress}>Cancel</button></div></form></div>}
   </div>
   const caughtUpDescription = story.metadata.published_chapters === null ? 'Enter published chapter count in details first' : `Mark all chapters as read`
-  const caughtUpButton = (descriptionId?: string) => <button className={children ? 'spine-action caught-up-action' : 'button caught-up-action'} aria-label="Mark as Caught Up" aria-describedby={descriptionId} disabled={busy || story.metadata.published_chapters === null} title={children ? undefined : caughtUpDescription} onClick={() => void markRead()}>{children ? <Check size={14} aria-hidden="true" /> : 'Mark as Caught Up'}</button>
-  const caughtUp = children ? <Tooltip description={caughtUpDescription}>{descriptionId => caughtUpButton(descriptionId)}</Tooltip> : caughtUpButton()
-  const actions = <div className="story-quick-actions"><Tooltip description="Favorite">{descriptionId => <button className={`icon-button favorite ${story.is_favorite ? 'selected' : ''}`} aria-label={story.is_favorite ? 'Unmark favorite' : 'Mark favorite'} aria-describedby={descriptionId} aria-pressed={story.is_favorite} disabled={busy} onClick={() => void change({ is_favorite: !story.is_favorite })}><Heart size={20} fill={story.is_favorite ? 'currentColor' : 'none'} /></button>}</Tooltip>
+  const caughtUpButton = (descriptionId?: string) => <button className={compact ? 'spine-action caught-up-action' : 'button caught-up-action'} aria-label="Mark as Caught Up" aria-describedby={descriptionId} disabled={busy || story.metadata.published_chapters === null} title={compact ? undefined : caughtUpDescription} onClick={() => void markRead()}>{compact ? <Check size={14} aria-hidden="true" /> : 'Mark as Caught Up'}</button>
+  const caughtUp = compact ? <Tooltip description={caughtUpDescription}>{descriptionId => caughtUpButton(descriptionId)}</Tooltip> : caughtUpButton()
+  const favorite = <FavoriteButton selected={story.is_favorite} disabled={busy} onChange={selected => void change({ is_favorite: selected })} />
+  const readingStatus = <label className="status-select">Reading status<select aria-label={`Reading status for ${story.metadata.title}`} disabled={busy} value={story.reading_status} onChange={e => void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+  const actions = <div className="story-quick-actions">{favorite}
     <details className="story-menu" ref={menuRef} open={menuOpen} onToggle={event => setMenuOpen(event.currentTarget.open)}>
       <summary aria-label={`Story actions for ${story.metadata.title}`}><MoreHorizontal size={22} /></summary>
       <div className="menu-surface">
@@ -80,7 +83,7 @@ function StoryControls({ story, children }: { story: Story; children?: (controls
         <button className="menu-item" disabled={busy} onClick={() => { setMenuOpen(false); setRemoveOpen(true) }}><Trash2 size={16} aria-hidden="true" />Remove from Library</button>
       </div>
     </details></div>
-  return <>{children ? children({ actions, caughtUp, editProgress }) : <><div className="story-controls">{actions}<label className="status-select">Reading status<select aria-label={`Reading status for ${story.metadata.title}`} disabled={busy} value={story.reading_status} onChange={e => void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label></div><div className="story-actions">{editProgress}{caughtUp}</div></>}
+  return <>{children({ actions, favorite, readingStatus, caughtUp, editProgress, rating: <StarRating value={story.personal_rating} disabled={busy} onSave={value => change({ personal_rating: value })} /> })}
     {removeOpen && <ConfirmationDialog title="Remove from Library?" confirmLabel="Remove from Library" onConfirm={remove} onClose={closeRemoval}><p>Remove “{story.metadata.title}” from your library?</p><p>You can undo this for two minutes.</p></ConfirmationDialog>}
     {!progressOpen && error && <p className="error-message" role="alert">{error}</p>}
   </>
@@ -106,12 +109,12 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
   </footer>
 }
 function StoryCard({ story }: { story: Story }) {
-  const first = chapterUrl(story, 1), location = useLocation()
+  const location = useLocation()
   const origin = { returnTo: location.pathname + location.search }
+  const { label: publicationLabel, Icon: PublicationIcon } = publicationStatuses[story.metadata.publication_status]
   return <article className="story-card"><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
-    <div className="story-labels"><span className="publication-status">{publication(story)}</span>{actions}</div>
-    <h2>{first ? <a href={first} target="_blank" rel="noreferrer">{story.metadata.title}</a> : <Link to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}</h2>
-    <p className="authors">By {story.metadata.authors.join(', ') || 'Author unknown'}</p>
+    <div className="story-card-title"><h2><Link to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link></h2><Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip>{actions}</div>
+    <p className="authors">By <AuthorNames metadata={story.metadata} /></p>
     <p className="muted">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'}</p>
     <p className="story-facts">{story.metadata.rating || 'Rating unknown'} · {story.metadata.word_count?.toLocaleString() ?? '?'} words</p>
     <hr className="story-summary-divider" />
@@ -144,8 +147,12 @@ function LibraryContent() {
     if (collection) return story.collectionIds.includes(collection.id)
     return true
   })
-  return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Your Library</h1><p>A home for all the worlds you want to keep.</p></div><Link className="button primary" to="/add">Add Story</Link></div><LibraryBoundary>
-    <div className="library-toolbar"><><button className="button secondary" disabled title="Phase 3">Import History from AO3 · Phase 3</button><button className="button secondary" disabled={busy} onClick={() => { const name = window.prompt('New collection name'); if (name !== null) void collectionAction(() => saveCollection(name)) }}>New Shelf</button></></div>
+  return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Your Library</h1><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
+    <div className="library-toolbar">
+      <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
+      <button className="button secondary library-create-action" disabled={busy} onClick={() => { const name = window.prompt('New collection name'); if (name !== null) void collectionAction(() => saveCollection(name)) }}>New Shelf</button>
+      <button className="button secondary" disabled title="Phase 3">Import History from AO3 · Phase 3</button>
+    </div>
     <nav className="shelf-tabs" aria-label="Library shelves">{shelves.map(([key, label]) => <button className={selected === key ? 'selected' : ''} aria-pressed={selected === key} key={key} onClick={() => { if ((key === 'currently_reading' || key === 'to_read')) navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }}>{label}</button>)}{collections.filter(c => !c.default_key).map(c => <button key={c.id} className={selected === c.id ? 'selected' : ''} aria-pressed={selected === c.id} onClick={() => setParams({ shelf: c.id })}>{c.name}</button>)}</nav>
     {collection && <div className="collection-heading"><h2>{collection.name}</h2><button disabled={busy} className="text-button" onClick={() => { const name = window.prompt('Rename collection', collection.name); if (name !== null) void collectionAction(() => saveCollection(name, collection.id)) }}>Rename collection</button><button disabled={busy} className="text-button" onClick={() => setDeleteCollectionOpen(true)}>Delete collection</button></div>}
     {collection && deleteCollectionOpen && <ConfirmationDialog title="Delete collection?" confirmLabel="Delete collection" onClose={() => setDeleteCollectionOpen(false)} onConfirm={async () => { await deleteCollection(collection.id); await refresh(); setParams({ shelf: 'all' }) }}><p>Delete “{collection.name}”?</p><p>Stories will stay in your library.</p></ConfirmationDialog>}
@@ -154,11 +161,92 @@ function LibraryContent() {
   </LibraryBoundary></>
 }
 export function AddStoryPage() { return <><div className="page-heading"><div><h1>Add Story</h1><p>Save a fic by hand, even when metadata is unavailable.</p></div></div><LibraryBoundary><StoryForm /></LibraryBoundary></> }
+function MetadataTags({ values }: { values: string[] }) {
+  return values.length ? <span className="metadata-tags">{values.map(value => <span className="metadata-tag" key={value}>{value}</span>)}</span> : <>None saved</>
+}
+function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | 'tags' | 'collections' }) {
+  const library = useLibrary()
+  const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [text, setText] = useState(''), [collections, setCollections] = useState<string[]>([])
+  const trigger = useRef<HTMLButtonElement>(null)
+  const label = { notes: 'Private notes', tags: 'Personal tags (one per line)', collections: 'Custom collections' }[field]
+  function open() { setText(field === 'notes' ? story.notes : story.personalTags.join('\n')); setCollections(story.collectionIds); setError(''); setEditing(true) }
+  function close() { setEditing(false); trigger.current?.focus() }
+  async function save() {
+    setBusy(true); setError('')
+    try {
+      if (field === 'notes') await updateEntry(story.id, { notes: text })
+      else await saveStory({ id: story.id, url: savedWorkUrl(story), metadata: story.metadata, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections: field === 'collections' ? collections : story.collectionIds, tags: field === 'tags' ? [...new Set(text.split('\n').map(tag => tag.trim()).filter(Boolean))] : story.personalTags })
+      await library.refresh(); close()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save changes.') }
+    finally { setBusy(false) }
+  }
+  const note = field === 'notes'
+  return <div className={note ? `inline-personal-field note-panel ${story.notes || editing ? 'note-panel-filled' : ''}` : 'inline-personal-field'}>
+    {note ? <div className="note-heading">{(story.notes || editing) && <><span><NotebookPen size={18} aria-hidden="true" />Your note</span><span className="note-private"><LockKeyhole size={14} aria-hidden="true" />private</span></>}{!editing && <button ref={trigger} type="button" className="text-button inline-edit" onClick={open} aria-label={story.notes ? 'Edit note' : 'Add a note'}>{story.notes ? <Pencil size={16} aria-hidden="true" /> : <NotebookPen size={18} aria-hidden="true" />}{story.notes ? 'Edit' : 'Add a note'}</button>}</div> : !editing && <button ref={trigger} type="button" className="icon-button inline-edit-icon" aria-label={`Edit ${field === 'tags' ? 'personal tags' : 'collections'}`} onClick={open}><Pencil size={12} aria-hidden="true" /></button>}
+    {editing ? <form className="inline-personal-form" onSubmit={event => { event.preventDefault(); void save() }}><fieldset disabled={busy}>
+      {field === 'collections' ? <><legend>Custom collections</legend>{library.collections.filter(c => !c.default_key).map(c => <label className="check-label" key={c.id}><input type="checkbox" checked={collections.includes(c.id)} onChange={event => setCollections(event.target.checked ? [...collections, c.id] : collections.filter(id => id !== c.id))} />{c.name}</label>)}</> : <label className={note ? 'note-input-label' : undefined}><span className={note ? 'sr-only' : undefined}>{label}</span><textarea autoFocus rows={note ? 4 : 3} value={text} placeholder={note ? 'e.g. left off on a cliffhanger — waiting to see what happens next chapter.' : undefined} onChange={event => setText(event.target.value)} /></label>}
+      <div className="form-actions"><button className="button primary" type="submit">{busy ? 'Saving…' : 'Save'}</button><button className="text-button" type="button" onClick={close}>Cancel</button></div>
+    </fieldset></form> : note && story.notes && <p className="story-summary">{story.notes}</p>}
+    {error && <p className="error-message" role="alert">{error}</p>}
+  </div>
+}
 export function StoryDetailsPage() {
-  const { id } = useParams(), library = useLibrary(), [editing, setEditing] = useState(false), location = useLocation()
+  const { id } = useParams(), library = useLibrary(), location = useLocation(), [params, setParams] = useSearchParams()
+  const edit = params.get('edit'), editing = edit === 'metadata' || edit === 'reading' ? edit : null
+  function editSection(section: 'metadata' | 'reading' | null) { setParams(section ? { edit: section } : {}, { state: location.state }) }
   const candidate = location.state?.returnTo
   const returnTo = typeof candidate === 'string' && /^\/(?:reading|library)(?:\?[^#]*)?$/.test(candidate) ? candidate : '/library'
   const returnLabel = returnTo.startsWith('/reading') ? 'Currently Reading' : 'Library'
   const story = library.stories.find(s => s.id === id)
-  return <LibraryBoundary>{story ? <><div className="page-heading"><div><Link className="story-return-link" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={14} aria-hidden="true" />{returnLabel}</Link><h1>{story.metadata.title}</h1><p className="story-details-authors">By {story.metadata.authors.join(', ') || 'Author unknown'}</p></div><button className="button secondary" onClick={() => setEditing(!editing)}>{editing ? 'Close editor' : 'Edit story'}</button></div>{editing ? <StoryForm key={story.id} story={story} onCancel={() => setEditing(false)} /> : <><section className="settings-card"><h2>AO3 metadata</h2><p className="muted">Manually entered values are private field-level overrides.</p><dl className="metadata-list"><div><dt>AO3 work ID</dt><dd>{story.work.ao3_work_id}</dd></div><div><dt>Authors</dt><dd>{story.metadata.authors.join(', ') || 'Unknown'}</dd></div><div><dt>Fandoms</dt><dd>{story.metadata.fandoms.join(', ') || 'Unknown'}</dd></div><div><dt>AO3 rating</dt><dd>{story.metadata.rating || 'Unknown'}</dd></div><div><dt>Publication status</dt><dd>{publication(story)}</dd></div><div><dt>Published / total chapters</dt><dd>{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'}</dd></div><div><dt>Word count</dt><dd>{story.metadata.word_count?.toLocaleString() ?? '?'}</dd></div><div><dt>AO3 tags</dt><dd>{story.metadata.ao3_tags.join(', ') || 'None saved'}</dd></div><div><dt>Relationships</dt><dd>{tagNames(story.metadata, 'relationship').join(', ') || 'None saved'}</dd></div><div><dt>Characters</dt><dd>{tagNames(story.metadata, 'character').join(', ') || 'None saved'}</dd></div><div><dt>Additional Tags</dt><dd>{tagNames(story.metadata, 'freeform').join(', ') || 'None saved'}</dd></div><div><dt>Series (manually saved)</dt><dd>{story.metadata.series?.join(', ') || 'None saved'}</dd></div><div><dt>AO3 last updated</dt><dd>{story.work.ao3_updated_at ? new Date(story.work.ao3_updated_at).toLocaleString() : 'Unknown'}</dd></div><div><dt>Metadata last checked</dt><dd>{story.work.last_metadata_check ? new Date(story.work.last_metadata_check).toLocaleString() : 'Never'}</dd></div><div><dt>Verified canonical URL</dt><dd><ExternalUrl url={story.work.canonical_url} /></dd></div><div><dt>Original provided URL</dt><dd><ExternalUrl url={story.original_url} fallback="Unavailable" /></dd></div>{savedWorkUrl(story) !== story.original_url && <div><dt>Updated provided URL</dt><dd><ExternalUrl url={savedWorkUrl(story)} /></dd></div>}</dl><h3>Summary</h3><p className="story-summary">{story.metadata.summary || 'No summary saved.'}</p>{chapterUrl(story) && <a className="chapter-text-link" href={chapterUrl(story)!} target="_blank" rel="noreferrer">Read Chapter {nextUnread(story.last_read_chapter)}</a>}</section><section className="settings-card"><h2>Your reading</h2><p>{updateState(story)}</p><StoryControls story={story} /><dl className="metadata-list"><div><dt>Personal rating</dt><dd>{story.personal_rating ? `${story.personal_rating} / 5` : 'Unrated'}</dd></div><div><dt>Custom collections</dt><dd>{library.collections.filter(c => story.collectionIds.includes(c.id)).map(c => c.name).join(', ') || 'None'}</dd></div><div><dt>Personal tags</dt><dd>{story.personalTags.join(', ') || 'None'}</dd></div><div><dt>Saved</dt><dd>{new Date(story.created_at).toLocaleString()}</dd></div><div><dt>Last edited</dt><dd>{new Date(story.updated_at).toLocaleString()}</dd></div></dl><h3>Private notes</h3><p className="story-summary">{story.notes || 'No notes saved.'}</p><button className="button secondary" onClick={() => setEditing(true)}>Edit notes, rating & collections</button></section></>}</> : <p>Story unavailable. <Link to={returnTo}>Return to {returnLabel}</Link></p>}</LibraryBoundary>
+  return <LibraryBoundary>{story ? <StoryControls story={story}>{({ favorite, readingStatus, caughtUp, editProgress, rating }) => <div className="story-details-page">
+    <div className="page-heading story-details-heading"><div>
+      <Link className="story-return-link" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
+      {!editing && !!story.metadata.series?.length && <p className="story-series-eyebrow">Series: {story.metadata.series.join(' · ')}</p>}
+      <div className="story-title-row"><h1><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a></h1>{!editing && <>{favorite}<button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></>}</div>
+      <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>
+      {!editing && <>
+        <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {story.metadata.rating || 'Rating unknown'}</p>
+        <dl className="details-story-stats">
+          <div><dt>Word count</dt><dd><strong>{story.metadata.word_count?.toLocaleString() ?? '?'}</strong> words</dd></div>
+          <div><dt>Published / total chapters</dt><dd><strong>{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'}</strong> chapters</dd></div>
+          <div><dt>Publication status</dt><dd><strong>{publication(story)}</strong></dd></div>
+        </dl>
+      </>}
+    </div></div>
+    {editing ? <StoryForm key={`${story.id}-${editing}`} story={story} section={editing} onCancel={() => editSection(null)} /> : <>
+      <section className="settings-card details-progress-panel" aria-label="Reading and organization">
+        <div className="story-section-heading"><h2>Your progress</h2></div>
+        <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />
+        <div className="details-reading-controls">{readingStatus}{rating}</div>
+      </section>
+      <section className="details-private-notes" aria-label="Private notes"><PersonalStoryField key={story.id} story={story} field="notes" /></section>
+      <section className="settings-card details-fic-panel" aria-label="Story information">
+        <dl className="metadata-list details-fic-fields">
+          <div><dt>Summary</dt><dd className="story-summary story-details-summary">{story.metadata.summary || 'No summary saved.'}</dd></div>
+          <div><dt>Fandoms</dt><dd><MetadataTags values={story.metadata.fandoms} /></dd></div>
+          <div><dt>Relationships</dt><dd><MetadataTags values={tagNames(story.metadata, 'relationship')} /></dd></div>
+          <div><dt>Characters</dt><dd><MetadataTags values={tagNames(story.metadata, 'character')} /></dd></div>
+          <div><dt>Additional Tags</dt><dd><MetadataTags values={tagNames(story.metadata, 'freeform')} /></dd></div>
+          <div><dt className="sr-only">All tags</dt><dd><details className="details-disclosure"><summary>All tags</summary><MetadataTags values={story.metadata.ao3_tags} /></details></dd></div>
+          <div><dt className="editable-field-heading">Custom collections<PersonalStoryField key={story.id} story={story} field="collections" /></dt><dd>{library.collections.filter(c => story.collectionIds.includes(c.id)).map(c => c.name).join(', ') || 'None'}</dd></div>
+          <div><dt className="editable-field-heading">Personal tags<PersonalStoryField key={story.id} story={story} field="tags" /></dt><dd>{story.personalTags.join(', ') || 'None'}</dd></div>
+          <div><dt>Saved</dt><dd>{new Date(story.created_at).toLocaleString()}</dd></div>
+          <div><dt>Last edited</dt><dd>{new Date(story.updated_at).toLocaleString()}</dd></div>
+          <div><dt>Series (manually saved)</dt><dd>{story.metadata.series?.join(', ') || 'None saved'}</dd></div>
+        </dl>
+        <details className="details-disclosure"><summary>Other metadata</summary><p className="muted">Manually entered values are private field-level overrides.</p>
+        <dl className="metadata-list">
+          <div><dt>AO3 work ID</dt><dd>{story.work.ao3_work_id}</dd></div>
+          <div><dt>Authors</dt><dd><AuthorNames metadata={story.metadata} /></dd></div>
+          <div><dt>AO3 rating</dt><dd>{story.metadata.rating || 'Unknown'}</dd></div>
+          <div><dt>AO3 last updated</dt><dd>{story.work.ao3_updated_at ? new Date(story.work.ao3_updated_at).toLocaleString() : 'Unknown'}</dd></div>
+          <div><dt>Metadata last checked</dt><dd>{story.work.last_metadata_check ? new Date(story.work.last_metadata_check).toLocaleString() : 'Never'}</dd></div>
+          <div><dt>Verified canonical URL</dt><dd><ExternalUrl url={story.work.canonical_url} /></dd></div>
+          <div><dt>Original provided URL</dt><dd><ExternalUrl url={story.original_url} fallback="Unavailable" /></dd></div>
+          {savedWorkUrl(story) !== story.original_url && <div><dt>Updated provided URL</dt><dd><ExternalUrl url={savedWorkUrl(story)} /></dd></div>}
+        </dl></details>
+      </section>
+    </>}
+  </div>}</StoryControls> : <p>Story unavailable. <Link to={returnTo}>Return to {returnLabel}</Link></p>}</LibraryBoundary>
 }
