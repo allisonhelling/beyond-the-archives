@@ -19,6 +19,20 @@ npm run dev
 
 Open the URL printed by Vite, normally `http://127.0.0.1:5173`. Without environment configuration, the app shows a setup screen and makes no Supabase requests. The only browser configuration is the Supabase project URL and **publishable** key, or a legacy **anon** key. Never put a secret/service-role key, database password, or connection string in a `VITE_` variable. Build-time validation rejects privileged keys, even if mislabeled as public.
 
+## Preview with sample stories
+
+```sh
+npm run dev:sample
+```
+
+Open the URL printed by Vite. This development-only mode opens a populated library immediately, without Supabase configuration or sign-in. Your 13 AO3 links become 14 stories: the series **of bards and witches and witchers** contains two works. The library has six Finished, two Waiting for Updates, two Reading, one Re-reading, and three To Read entries.
+
+Search, filters, story details, chapter progress, favorites, ratings, notes, and collections work in the preview. Changes persist in this browser's local storage under `between-chapters:sample-library:v1`. **Reset sample data** restores the original examples. Preview mode makes no Supabase requests, and is disabled in production builds. Use `npm run dev` for the normal authenticated app. The sample mode flag comes from the committed `.env.sample`; do not set `VITE_SAMPLE_DATA=true` in `.env.local` if you want normal development mode.
+
+Metadata in `src/features/library/sample/stories.json` was captured on October 15, 2026 from the supplied AO3 links (using AO3's official `secure.ao3.org` address when the main address returned errors). It is a static snapshot; starting the app does not fetch AO3. AO3 publication status stays independent from your requested reading status. Finished entries use their published chapter count; waiting entries use it when available. Reading and re-reading progress uses the chapter immediately before your saved link only where AO3's chapter index verified the position. Other progress starts at zero. These values illustrate the preview, rather than recording actual reading history. Notes, personal ratings, and favorites start empty.
+
+Two works require AO3 sign-in: **On My Love** (8577016) and **Something’s Different About You Lately** (24973237). Their title, author, and fandom come from [a public reference for On My Love](https://fanfics.me/ftf213074) and [a public recommendation listing Something’s Different About You Lately](https://www.tumgik.com/tag/reset%20rewind%20rewrite). Their summary, tags, rating, dates, chapter counts, and publication status remain unknown. Their original chapter links are preserved, and you can fill in details in preview. No AO3 account credentials are used.
+
 ## Use the manual library
 
 1. Sign in with your invited account. Choose **Library → Add Story**, or **Add → Save for Later / Starting a Fic**.

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from './config'
 import type { Database } from '../types/database'
+import { sampleMode } from './sample-mode'
 
 const config = readPublicConfig({
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
@@ -9,7 +10,7 @@ const config = readPublicConfig({
 // Capture invitation/recovery intent before the SDK consumes callback parameters.
 export const initialAuthType = new URLSearchParams(window.location.search).get('type')
   || new URLSearchParams(window.location.hash.slice(1)).get('type')
-export const supabase = config ? createClient<Database>(config.url, config.key, {
+export const supabase = config && !sampleMode ? createClient<Database>(config.url, config.key, {
   auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 }) : null
 

@@ -9,6 +9,7 @@ import { AuthProvider } from '../features/auth/AuthProvider'
 import { useAuth } from '../features/auth/auth-context'
 import { AuthScreen } from '../features/auth/AuthScreen'
 import { authRedirectUrl, supabase } from '../lib/supabase'
+import { sampleMode } from '../lib/sample-mode'
 
 const navigation = [
   { to: '/reading', label: 'Currently Reading', icon: BookOpen },
@@ -42,7 +43,7 @@ function SettingsPage() {
     } catch { setMessage('Could not send a recovery email. Please try again.') }
     finally { setBusy(false) }
   }
-  return <><div className="page-heading"><div><span className="eyebrow accent">MAKE YOURSELF AT HOME</span><h1>Settings</h1><p>Your account, your space.</p></div></div><section className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{message && <p role="status" className="muted">{message}</p>}</section><section className="settings-card"><h2>More in a later chapter</h2><p className="muted">Importer settings arrive in Phase 3, email forwarding in Phase 5, and complete backup and restore in Phase 6.</p></section></>
+  return <><div className="page-heading"><div><span className="eyebrow accent">MAKE YOURSELF AT HOME</span><h1>Settings</h1><p>Your account, your space.</p></div></div><section className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section><section className="settings-card"><h2>More in a later chapter</h2><p className="muted">Importer settings arrive in Phase 3, email forwarding in Phase 5, and complete backup and restore in Phase 6.</p></section></>
 }
 
 function FeaturesPage() {
@@ -64,7 +65,7 @@ function Shell() {
   const addRef = useDismissible<HTMLDivElement>(addOpen, () => setAddOpen(false))
   const [profileOpen, setProfileOpen] = useState(false)
   const profileRef = useDismissible<HTMLDivElement>(profileOpen, () => setProfileOpen(false))
-  const profileName = [session?.user.user_metadata?.display_name, session?.user.user_metadata?.full_name, session?.user.user_metadata?.name].find(value => typeof value === 'string' && value.trim()) || session?.user.email?.split('@')[0] || 'Reader'
+  const profileName = sampleMode ? 'Sample Reader' : [session?.user.user_metadata?.display_name, session?.user.user_metadata?.full_name, session?.user.user_metadata?.name].find(value => typeof value === 'string' && value.trim()) || session?.user.email?.split('@')[0] || 'Reader'
   const [error, setError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
   const mobileOpen = openPath === location.pathname
@@ -77,7 +78,7 @@ function Shell() {
     } catch { setError('Could not sign out. Please try again.') }
     finally { setSigningOut(false) }
   }
-  return <div className="app-shell"><a className="skip-link" href="#main">Skip to content</a><header className="app-header"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{navigation.map(({ to, label }) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav><div className="header-actions"><div className="add-wrapper" ref={addRef}><button className="button primary compact" aria-expanded={addOpen} aria-controls="add-options" onClick={() => setAddOpen(!addOpen)}><Plus size={16} /> Add <ChevronDown size={14} /></button>{addOpen && <div id="add-options" className="add-menu"><strong>Add to your library</strong><button onClick={() => { setAddOpen(false); navigate('/add?mode=later') }}><span className="add-option-label"><BookmarkPlus size={19} aria-hidden="true" />Save for Later</span></button><button onClick={() => { setAddOpen(false); navigate('/add?mode=starting') }}><span className="add-option-label"><BookOpen size={19} aria-hidden="true" />Starting a Fic</span></button><button disabled><span className="add-option-label"><History size={19} aria-hidden="true" />Import History from AO3</span><small>Phase 3</small></button></div>}</div><button className="icon-button mobile-toggle" aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setOpenPath(mobileOpen ? null : location.pathname)}>{mobileOpen ? <X size={21} /> : <Menu size={21} />}</button><div className="profile-wrapper" ref={profileRef}><button className="avatar profile-trigger" aria-label="Profile menu" aria-expanded={profileOpen} aria-controls="profile-options" title={session?.user.email} onClick={() => setProfileOpen(!profileOpen)}>{String(profileName).slice(0, 1).toUpperCase()}</button>{profileOpen && <section className="profile-menu" id="profile-options" aria-label="Profile menu"><div className="profile-identity"><strong>{profileName}</strong><p>{session?.user.email}</p></div><NavLink className="profile-action" to="/settings" onClick={() => { setProfileOpen(false); setOpenPath(null) }}><Settings size={17} />Settings</NavLink><button className="profile-action" disabled={signingOut} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? 'Logging out…' : 'Log out'}</button></section>}</div></div></header>
+  return <div className="app-shell"><a className="skip-link" href="#main">Skip to content</a><header className="app-header"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{navigation.map(({ to, label }) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav><div className="header-actions"><div className="add-wrapper" ref={addRef}><button className="button primary compact" aria-expanded={addOpen} aria-controls="add-options" onClick={() => setAddOpen(!addOpen)}><Plus size={16} /> Add <ChevronDown size={14} /></button>{addOpen && <div id="add-options" className="add-menu"><strong>Add to your library</strong><button onClick={() => { setAddOpen(false); navigate('/add?mode=later') }}><span className="add-option-label"><BookmarkPlus size={19} aria-hidden="true" />Save for Later</span></button><button onClick={() => { setAddOpen(false); navigate('/add?mode=starting') }}><span className="add-option-label"><BookOpen size={19} aria-hidden="true" />Starting a Fic</span></button><button disabled><span className="add-option-label"><History size={19} aria-hidden="true" />Import History from AO3</span><small>Phase 3</small></button></div>}</div><button className="icon-button mobile-toggle" aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setOpenPath(mobileOpen ? null : location.pathname)}>{mobileOpen ? <X size={21} /> : <Menu size={21} />}</button><div className="profile-wrapper" ref={profileRef}><button className="avatar profile-trigger" aria-label="Profile menu" aria-expanded={profileOpen} aria-controls="profile-options" title={session?.user.email} onClick={() => setProfileOpen(!profileOpen)}>{String(profileName).slice(0, 1).toUpperCase()}</button>{profileOpen && <section className="profile-menu" id="profile-options" aria-label="Profile menu"><div className="profile-identity"><strong>{profileName}</strong><p>{session?.user.email}</p></div><NavLink className="profile-action" to="/settings" onClick={() => { setProfileOpen(false); setOpenPath(null) }}><Settings size={17} />Settings</NavLink><button className="profile-action" disabled={signingOut || sampleMode} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? 'Logging out…' : 'Log out'}</button></section>}</div></div></header>
     {mobileOpen && <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">{navigation.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setOpenPath(null)}><Icon size={17} />{label}</NavLink>)}</nav>}
 
     <main id="main" className="app-main" tabIndex={-1}>{error && <p role="alert" className="error-message">{error}</p>}<Routes><Route path="/reading" element={<LibraryPage reading />} /><Route path="/library" element={<LibraryPage />} /><Route path="/add" element={<AddStoryPage />} /><Route path="/stories/:id" element={<StoryDetailsPage />} /><Route path="/stats" element={<FoundationPage kind="stats" />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/features" element={<FeaturesPage />} /><Route path="*" element={<Navigate to="/reading" replace />} /></Routes></main><footer className="app-footer"><span>For the stories you can’t put down.</span><span><LockKeyhole size={12} /> A private AO3 reading companion</span></footer>
@@ -86,9 +87,24 @@ function Shell() {
 
 function AuthGate() {
   const { session, loading, needsPassword } = useAuth()
+  if (sampleMode) return <LibraryProvider><SamplePreview /><Shell /></LibraryProvider>
   if (loading) return <div className="loading-state" role="status"><BookOpen size={32} strokeWidth={1.4} /><p>Opening your reading space…</p></div>
   if (!session || needsPassword) return <AuthScreen />
   return <LibraryProvider key={session.user.id}><Shell /></LibraryProvider>
+}
+
+function SamplePreview() {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function reset() {
+    setBusy(true)
+    try {
+      const { resetSampleLibrary } = await import('../features/library/sample/repository')
+      resetSampleLibrary()
+      window.location.assign('/reading')
+    } catch { setError('Could not reset the sample library. Check browser storage permissions.'); setBusy(false) }
+  }
+  return <aside className="sample-preview" aria-label="Local sample preview"><span><strong>Sample library</strong> · Changes stay in this browser. Reading progress is for preview.</span><button className="button secondary compact" disabled={busy} onClick={() => void reset()}>{busy ? 'Resetting…' : 'Reset sample data'}</button>{error && <p role="alert">{error}</p>}</aside>
 }
 
 export default function App() {
