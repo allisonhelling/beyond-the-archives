@@ -2,7 +2,7 @@ import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
-export type Metadata = { manual_url?: string; series?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { manual_url?: string; series?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Database['public']['Tables']['collections']['Row']
@@ -31,9 +31,9 @@ export function chapterUrl(story: Story, position = nextUnread(story.last_read_c
   return typeof chapter === 'string' && /^[1-9]\d*$/.test(chapter) ? `https://archiveofourown.org/works/${story.work.ao3_work_id}/chapters/${chapter}` : null
 }
 export function active(story: Story) { return ['reading', 'waiting_for_updates', 're_reading'].includes(story.reading_status) }
-export function effectiveMetadata(work: Work, overrides: Json): Metadata {
+export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Database['public']['Tables']['tags']['Row'], 'name' | 'category'>[] = []): Metadata {
   const manual = overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {}
-  return { ...blankMetadata, title: work.title ?? '', summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', ...manual } as Metadata
+  return { ...blankMetadata, title: work.title ?? '', summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...manual } as Metadata
 }
 export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string }
 
@@ -43,4 +43,10 @@ export function savedWorkUrl(story: Story) {
     if (typeof url === 'string' && parseWorkUrl(url).workId === story.work.ao3_work_id) return url
   } catch { /* Invalid legacy overrides cannot become clickable destinations. */ }
   return story.original_url
+}
+
+export function tagNames(metadata: Metadata, category: 'relationship' | 'character' | 'freeform'): string[] {
+  const key = { relationship: 'relationship_tags', character: 'character_tags', freeform: 'additional_tags' } as const
+  const values = metadata[key[category]]
+  return Array.isArray(values) ? values.filter(value => typeof value === 'string') : []
 }

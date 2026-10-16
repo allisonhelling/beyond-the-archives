@@ -1,19 +1,23 @@
 import { useId, useState, type KeyboardEvent } from 'react'
 import { useDismissible } from '../../components/useDismissible'
 import { normalize } from './reading-search'
+import { X } from 'lucide-react'
 
 export type SuggestionGroup = { label: string; values: string[] }
-export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, help }: {
+export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help }: {
   label: string; placeholder: string; value: string; onChange: (value: string) => void;
-  groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; help?: string
+  groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; hideLabel?: boolean; chips?: boolean; help?: string
 }) {
   const [focused, setFocused] = useState(false), id = useId()
   const [appendSuggestion, setAppendSuggestion] = useState(false)
+  const [draft, setDraft] = useState('')
+  const selected = chips ? value.split(',').map(text => text.trim()).filter(Boolean) : []
   const ref = useDismissible<HTMLDivElement>(focused, () => setFocused(false))
-  const term = normalize((multiple && appendSuggestion ? '' : multiple ? value.split(',').at(-1) ?? '' : value).trim())
-  const chosen = multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(text => normalize(text.trim())) : []
+  const term = normalize((chips ? draft : multiple && appendSuggestion ? '' : multiple ? value.split(',').at(-1) ?? '' : value).trim())
+  const chosen = chips ? selected.map(normalize) : multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(text => normalize(text.trim())) : []
   const suggestions = groups.map(group => ({ ...group, values: [...new Set(group.values)].filter(text => !chosen.includes(normalize(text)) && normalize(text).includes(term)).sort((a, b) => a.localeCompare(b)).slice(0, 8) }))
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (chips && event.key === 'Enter' && event.target instanceof HTMLInputElement && draft.trim()) { event.preventDefault(); choose(draft.trim()); return }
     if (event.key === 'Escape') { setFocused(false); return }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     event.preventDefault()
@@ -24,17 +28,19 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
     buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus()
   }
   function choose(text: string) {
-    const previous = multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(part => part.trim()).filter(Boolean) : []
-    onChange([...previous, text].join(', '))
+    const previous = chips ? selected : multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(part => part.trim()).filter(Boolean) : []
+    onChange([...previous, ...(!previous.some(item => normalize(item) === normalize(text)) ? [text] : [])].join(', '))
+    setDraft('')
     setAppendSuggestion(multiple && keepOpen)
     ref.current?.querySelector<HTMLInputElement>('input')?.focus()
     setFocused(keepOpen)
   }
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
-    <label>{label}<input type="search" placeholder={placeholder} value={value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
+    <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'visually-hidden' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
     {focused && <div className="search-suggestions" id={id} aria-label={`${label} suggestions`}>
       {suggestions.map(group => <section key={group.label} aria-label={`${group.label} suggestions`}>{!hideHeadings && <strong>{group.label}</strong>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
     </div>}
+    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} selected filters`}>{selected.map(text => <button type="button" key={text} aria-label={`Remove ${label} filter ${text}`} onClick={() => onChange(selected.filter(item => item !== text).join(', '))}>{text}<X size={14} /></button>)}</div>}
     {help && <small className="suggestion-help">{help}</small>}
   </div>
 }

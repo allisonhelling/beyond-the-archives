@@ -23,7 +23,7 @@ describe('within-results query syntax', () => {
 })
 it('handles many wildcards on long summaries without regex backtracking', () => { expect(compileSearch('a*'.repeat(80) + 'z')('a'.repeat(30000))).toBe(false) })
 describe('reading filters and sections', () => {
-  const alpha = story('Alpha', { metadata: { ...blankMetadata, title: 'Alpha', authors: ['Jane'], fandoms: ['Fandom A', 'Fandom B'], ao3_tags: ['Castiel/Dean', 'Slow Burn'], rating: 'Mature', publication_status: 'complete', published_chapters: 10, summary: 'A secret garden', series: ['First series'] }, last_read_chapter: 2, notes: 'My private reminder', is_favorite: true, work: { ao3_updated_at: '2026-10-15T22:00:00Z', verified_chapters: { 3: '999' } } as unknown as Story['work'] })
+  const alpha = story('Alpha', { metadata: { ...blankMetadata, title: 'Alpha', authors: ['Jane'], fandoms: ['Fandom A', 'Fandom B'], ao3_tags: ['Castiel/Dean', 'Slow Burn'], relationship_tags: ['Castiel/Dean'], character_tags: ['Dean Winchester'], additional_tags: ['Slow Burn', 'Action/Adventure'], rating: 'Mature', publication_status: 'complete', published_chapters: 10, summary: 'A secret garden', series: ['First series'] }, last_read_chapter: 2, notes: 'My private reminder', is_favorite: true, work: { ao3_updated_at: '2026-10-15T22:00:00Z', verified_chapters: { 3: '999' } } as unknown as Story['work'] })
   const beta = story('Beta', { metadata: { ...blankMetadata, title: 'Beta', authors: ['Sam'], fandoms: ['Fandom C'], published_chapters: 3 }, reading_status: 'waiting_for_updates' })
   const later = story('Later', { reading_status: 'to_read' })
   it('separates active reading, saved for later, publication and waiting states', () => {
@@ -39,7 +39,7 @@ describe('reading filters and sections', () => {
   it('combines publication, favorite, rating, relationship, AO3 tags and any-selected fandom', () => {
     const result = filterReading([alpha, beta], { ...defaultReadingFilters, publication: 'complete', favorites: true, rating: 'Mature', relationship: 'castiel/dean', tags: 'slow, burn', fandoms: ['Fandom B', 'Fandom C'] })
     expect(result).toEqual([alpha])
-    expect(filterReading([alpha, beta], { ...defaultReadingFilters, waiting: true })).toEqual([beta])
+    expect(filterReading([alpha], { ...defaultReadingFilters, relationship: 'Castiel/Dean, Missing relationship' })).toEqual([])
   })
   it('keeps notes and summary search scopes separate and combines any-field terms across fields', () => {
     expect(filterReading([alpha], { ...defaultReadingFilters, within: 'garden', scope: 'notes' })).toEqual([])
@@ -59,4 +59,34 @@ describe('reading filters and sections', () => {
     expect(readingGroups([alpha], 'author')[0][0]).toBe('Jane')
     expect(readingGroups([alpha, beta], 'series').map(([name]) => name)).toEqual(['First series', 'No series information saved'])
   })
+})
+
+it.each(['reading', 're_reading', 'waiting_for_updates', 'to_read', 'finished', 'did_not_finish'] as const)('publication tiles include only actively read works (%s)', status => {
+  for (const publication of ['complete', 'in_progress', 'unknown'] as const) {
+    const entry = story('Publication rules', { reading_status: status, metadata: { ...blankMetadata, title: 'Publication rules', publication_status: publication } })
+    const activelyReading = status === 'reading' || status === 're_reading'
+    expect(inReadingSection(entry, 'in_progress')).toBe(activelyReading && publication === 'in_progress')
+    expect(inReadingSection(entry, 'complete')).toBe(activelyReading && publication === 'complete')
+  }
+})
+it('moves an unfinished story from In Progress to Waiting when its reading status changes', () => {
+  const entry = story('Ongoing', { metadata: { ...blankMetadata, title: 'Ongoing', publication_status: 'in_progress' } })
+  expect(inReadingSection(entry, 'in_progress')).toBe(true)
+  expect(inReadingSection(entry, 'waiting')).toBe(false)
+  entry.reading_status = 'waiting_for_updates'
+  expect(inReadingSection(entry, 'in_progress')).toBe(false)
+  expect(inReadingSection(entry, 'waiting')).toBe(true)
+})
+
+it('keeps Characters and Additional Tags filters scoped to their saved AO3 categories', () => {
+  const classified = story('Classified', { metadata: { ...blankMetadata, title: 'Classified', ao3_tags: ['No Archive Warnings Apply', 'Legacy unclassified'], relationship_tags: ['Castiel/Dean Winchester'], character_tags: ['Dean Winchester'], additional_tags: ['Action/Adventure', 'Slow Burn'] } })
+  expect(filterReading([classified], { ...defaultReadingFilters, characters: 'dean' })).toEqual([classified])
+  expect(filterReading([classified], { ...defaultReadingFilters, characters: 'Slow Burn' })).toEqual([])
+  expect(filterReading([classified], { ...defaultReadingFilters, tags: 'dean' })).toEqual([])
+  expect(filterReading([classified], { ...defaultReadingFilters, relationship: 'Action/Adventure' })).toEqual([])
+  expect(filterReading([classified], { ...defaultReadingFilters, tags: 'Action/Adventure, slow', characters: 'Dean' })).toEqual([classified])
+  expect(filterReading([classified], { ...defaultReadingFilters, tags: 'No Archive Warnings Apply' })).toEqual([])
+  expect(filterReading([classified], { ...defaultReadingFilters, tags: 'Legacy unclassified' })).toEqual([])
+  expect(filterReading([classified], { ...defaultReadingFilters, within: 'Legacy unclassified' })).toEqual([classified])
+  expect(filterReading([classified], { ...defaultReadingFilters, within: 'dean slow' })).toEqual([classified])
 })

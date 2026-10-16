@@ -25,3 +25,13 @@ it('reports load failures instead of displaying an empty or partially loaded lib
   state.fail = true
   await expect(loadLibrary()).rejects.toThrow('Could not load your library')
 })
+
+it('loads AO3 tag categories per work and preserves private category overrides', async () => {
+  state.data.library_entries = [{ id: 'entry', work_id: 'work', metadata_overrides: { ...blankMetadata, title: 'A story', additional_tags: ['Private freeform'] } }]
+  state.data.works = [{ id: 'work' }]
+  state.data.tags = [{ id: 'relationship', name: 'A/B', category: 'relationship' }, { id: 'character', name: 'A', category: 'character' }, { id: 'freeform', name: 'Adventure/Action', category: 'freeform' }, { id: 'other', name: 'Other work character', category: 'character' }]
+  state.data.work_tags = [{ work_id: 'work', tag_id: 'relationship' }, { work_id: 'work', tag_id: 'character' }, { work_id: 'work', tag_id: 'freeform' }, { work_id: 'another-work', tag_id: 'other' }]
+  const { stories } = await loadLibrary()
+  expect(stories[0].metadata).toMatchObject({ relationship_tags: ['A/B'], character_tags: ['A'], additional_tags: ['Private freeform'] })
+  expect(state.calls).toContain('work_tags:0')
+})

@@ -48,3 +48,18 @@ it('supports editing sample notes and collections, preserving the original link'
   await deleteSampleCollection(collections[0].id)
   expect((await loadSampleLibrary()).stories.find(item => item.id === story.id)?.collectionIds).toEqual([])
 })
+
+it('adds verified categories to older sample storage without replacing reading edits', async () => {
+  const library = await loadSampleLibrary()
+  const story = library.stories.find(item => item.work.ao3_work_id === 40090614)!
+  const removed = story.metadata.character_tags![0]
+  story.metadata.ao3_tags = story.metadata.ao3_tags.filter(tag => tag !== removed)
+  delete story.metadata.relationship_tags; delete story.metadata.character_tags; delete story.metadata.additional_tags
+  story.notes = 'Keep this note'; story.last_read_chapter = 1
+  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+  const reloaded = (await loadSampleLibrary()).stories.find(item => item.id === story.id)!
+  expect(reloaded.notes).toBe('Keep this note')
+  expect(reloaded.last_read_chapter).toBe(1)
+  expect(reloaded.metadata.additional_tags).toContain('Time Travel')
+  expect(reloaded.metadata.character_tags).not.toContain(removed)
+})

@@ -1,17 +1,17 @@
-import { active, statuses, type Story } from './model'
+import { active, statuses, tagNames, type Story } from './model'
 
 export type SortOrder = 'updated' | 'ready' | 'alpha'
 export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
-  query: string; fandoms: string[]; publication: string; waiting: boolean;
-  rating: string; favorites: boolean; relationship: string; tags: string;
+  query: string; fandoms: string[]; publication: string;
+  rating: string; favorites: boolean; relationship: string; characters: string; tags: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  query: '', fandoms: [], publication: 'all', waiting: false, rating: '', favorites: false,
-  relationship: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
+  query: '', fandoms: [], publication: 'all', rating: '', favorites: false,
+  relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'updated', groupBy: 'none',
 }
 export const normalize = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
@@ -72,7 +72,9 @@ export function hasNewChapter(story: Story) {
 }
 export function inReadingSection(story: Story, section: string) {
   if (section === 'to_read') return story.reading_status === 'to_read'
-  if (section === 'complete') return story.metadata.publication_status === 'complete'
+  const reading = story.reading_status === 'reading' || story.reading_status === 're_reading'
+  if (section === 'complete') return reading && story.metadata.publication_status === 'complete'
+  if (section === 'in_progress') return reading && story.metadata.publication_status === 'in_progress'
   if (section === 'waiting') return story.reading_status === 'waiting_for_updates'
   if (section === 'new') return hasNewChapter(story)
   return active(story)
@@ -80,7 +82,7 @@ export function inReadingSection(story: Story, section: string) {
 export function searchText(story: Story, scope: SearchScope) {
   if (scope === 'summary') return story.metadata.summary
   if (scope === 'notes') return story.notes
-  return [story.metadata.title, ...story.metadata.authors, ...story.metadata.fandoms, ...story.metadata.ao3_tags,
+  return [story.metadata.title, ...story.metadata.authors, ...story.metadata.fandoms, ...story.metadata.ao3_tags, ...tagNames(story.metadata, 'relationship'), ...tagNames(story.metadata, 'character'), ...tagNames(story.metadata, 'freeform'),
     ...story.personalTags, ...(story.metadata.series ?? []), story.metadata.summary, story.notes, story.metadata.rating,
     story.metadata.publication_status, story.reading_status, statuses[story.reading_status],
     story.metadata.publication_status === 'complete' ? 'Complete on AO3' : story.metadata.publication_status === 'in_progress' ? 'In progress' : 'Unknown',
@@ -88,7 +90,9 @@ export function searchText(story: Story, scope: SearchScope) {
 }
 export function filterReading(stories: Story[], filters: ReadingFilters) {
   const within = compileSearch(filters.within)
-  const query = normalize(filters.query.trim()), relationship = normalize(filters.relationship.trim())
+  const query = normalize(filters.query.trim())
+  const relationships = normalize(filters.relationship).split(',').map(term => term.trim()).filter(Boolean)
+  const characters = normalize(filters.characters).split(',').map(term => term.trim()).filter(Boolean)
   const tags = normalize(filters.tags).split(',').map(t => t.trim()).filter(Boolean)
   const after = filters.updatedAfter ? Date.parse(`${filters.updatedAfter}T00:00:00Z`) : null
   const before = filters.updatedBefore ? Date.parse(`${filters.updatedBefore}T00:00:00Z`) + 86400000 : null
@@ -97,10 +101,10 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
     return (!query || normalize([s.metadata.title, ...s.metadata.authors].join('\n')).includes(query)) &&
       (!filters.fandoms.length || s.metadata.fandoms.some(f => filters.fandoms.includes(f))) &&
       (filters.publication === 'all' || s.metadata.publication_status === filters.publication) &&
-      (!filters.waiting || s.reading_status === 'waiting_for_updates') &&
       (!filters.rating || s.metadata.rating === filters.rating) && (!filters.favorites || s.is_favorite) &&
-      (!relationship || s.metadata.ao3_tags.some(t => normalize(t).includes(relationship))) &&
-      tags.every(term => s.metadata.ao3_tags.some(t => normalize(t).includes(term))) &&
+      relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
+      characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&
+      tags.every(term => tagNames(s.metadata, 'freeform').some(t => normalize(t).includes(term))) &&
       (after === null || (updated !== null && updated >= after)) &&
       (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))
   }).sort((a, b) => {

@@ -53,7 +53,17 @@ function read(): Library {
   if (!saved) return seedLibrary()
   try {
     const data = JSON.parse(saved) as Library
-    if (Array.isArray(data.stories) && Array.isArray(data.collections)) return data
+    if (Array.isArray(data.stories) && Array.isArray(data.collections)) {
+      // Fill only missing categories on older preview entries; preserve edits and removals.
+      for (const story of data.stories) {
+        const snapshot = snapshots.find(sample => sample.id === story.work.ao3_work_id)
+        if (!snapshot) continue
+        for (const key of ['relationship_tags', 'character_tags', 'additional_tags'] as const) {
+          if (story.metadata[key] === undefined) story.metadata[key] = snapshot.metadata[key].filter(tag => story.metadata.ao3_tags.includes(tag))
+        }
+      }
+      return data
+    }
   } catch { /* Fall back to the original samples if local preview storage is invalid. */ }
   return seedLibrary()
 }
