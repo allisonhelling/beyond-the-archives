@@ -94,7 +94,7 @@ describe('private app access and navigation', () => {
     await user.click(screen.getAllByRole('link', { name: 'Library' })[1])
     expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add' }))
-    expect(screen.getByRole('button', { name: /Save for Later/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add Story', exact: true })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
   })
   it('removes protected content when the session expires', async () => {

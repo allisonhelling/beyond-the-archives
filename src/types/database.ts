@@ -305,6 +305,7 @@ export type Database = {
           error_message: string | null
           created_at: string
           retrieval_mode: string
+          update_reading_location: boolean
         }
         Insert: {
           id?: string
@@ -325,6 +326,7 @@ export type Database = {
           error_message?: string | null
           created_at?: string
           retrieval_mode?: string
+          update_reading_location?: boolean
         }
         Update: {
           id?: string
@@ -345,6 +347,7 @@ export type Database = {
           error_message?: string | null
           created_at?: string
           retrieval_mode?: string
+          update_reading_location?: boolean
         }
         Relationships: [
           { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -605,7 +608,7 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
-      submit_import_urls: { Args: { p_urls: string[] }; Returns: string | null }
+      submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
       claim_extension_job: { Args: Record<string, never>; Returns: Json }

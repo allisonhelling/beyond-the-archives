@@ -2,7 +2,7 @@ import { chromium, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { createServer } from 'node:http'
 
 test('built extension captures only an app-requested loaded AO3 work', async ({ browserName }, info) => {
@@ -32,9 +32,9 @@ test('built extension captures only an app-requested loaded AO3 work', async ({ 
  const address = server.address()
  if (!address || typeof address === 'string') throw new Error('Test backend did not start.')
  const backend = `http://127.0.0.1:${address.port}`
- execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs'], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
  const profile = await mkdtemp(join(tmpdir(), 'ao3-extension-test-'))
- const extension = resolve('extension/dist')
+ const extension = join(profile, 'extension')
+ execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
  try {
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')

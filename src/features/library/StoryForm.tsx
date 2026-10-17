@@ -6,6 +6,7 @@ import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
 import { useLibrary } from './LibraryProvider'
 import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
+import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
 export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story; onCancel?: () => void; section?: 'all' | 'metadata' | 'reading' }) {
   const library = useLibrary(), navigate = useNavigate(), [params] = useSearchParams(), location = useLocation()
   const [metadata, setMetadata] = useState<Metadata>(story?.metadata ?? { ...blankMetadata })
@@ -17,7 +18,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   const [personalRating, setPersonalRating] = useState<number | null>(story?.personal_rating ?? null)
   const [favorite, setFavorite] = useState(story?.is_favorite ?? false)
   const [collections, setCollections] = useState(story?.collectionIds ?? [])
-  const [tags, setTags] = useState(story?.personalTags.join('\n') ?? '')
+  const [tags, setTags] = useState(story?.personalTags ?? [])
   const [authors, setAuthors] = useState(metadata.authors.join('\n')), [fandoms, setFandoms] = useState(metadata.fandoms.join('\n')), [otherTags, setOtherTags] = useState(metadata.ao3_tags.filter(tag => ![...tagNames(metadata, 'relationship'), ...tagNames(metadata, 'character'), ...tagNames(metadata, 'freeform')].includes(tag)).join('\n'))
   const [relationships, setRelationships] = useState(tagNames(metadata, 'relationship').join('\n'))
   const [characters, setCharacters] = useState(tagNames(metadata, 'character').join('\n'))
@@ -52,7 +53,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
       }
       setBusy(true)
       const nextMetadata: Metadata = section === 'reading' && story ? story.metadata : { ...metadata, manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), author_links: authorLinks, fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
-      const id = await saveStory({ id: story?.id, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(story.metadata, nextMetadata) : undefined, status, progress: Number(progress), notes, personalRating, favorite, collections, tags: section === 'metadata' && story ? story.personalTags : parseLines(tags) })
+      const id = await saveStory({ id: story?.id, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(story.metadata, nextMetadata) : undefined, status, progress: Number(progress), notes, personalRating, favorite, collections, tags: section === 'metadata' && story ? story.personalTags : tags })
       await library.refresh().catch(() => {})
       if (onCancel) onCancel()
       else navigate(`/stories/${id}`, { state: location.state })
@@ -74,8 +75,8 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     {section !== 'metadata' && <fieldset disabled={busy}><legend>Your reading & organization</legend><div className="form-grid reading-progress-row"><label>Reading status<select aria-label="Reading status" value={status} onChange={e => { setStatus(e.target.value as Status); setStatusTouched(true) }}>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label>Last fully read chapter<input type="number" required min="0" step="1" value={progress} onChange={e => { setProgress(e.target.value); setStatusTouched(true) }} /><small>of {metadata.total_chapters ?? '?'} · next unread: {Number(progress) + 1}</small></label></div>
     <div className="rating-favorite-row"><StarRating value={personalRating} onChange={setPersonalRating} /><div className="favorite-choice"><FavoriteButton selected={favorite} disabled={busy} onChange={setFavorite} /></div></div>
     <label>Private notes<textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)} /></label>
-    <label>Personal tags (one per line)<textarea rows={3} value={tags} onChange={e => setTags(e.target.value)} /></label>
-    <div className="collection-choices"><div className="collection-heading"><strong>Custom collections</strong><NewCollectionButton disabled={busy} /></div><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} />{!library.collections.length && <p className="muted">Create a collection above to organize this story.</p>}</div></fieldset>}
+    <div><span className="filter-name editable-field-heading">Personal tags<PersonalTagHelp /></span><PersonalTagInput value={tags} onChange={setTags} /></div>
+    <div className="collection-choices"><div className="collection-heading"><strong>Custom collections</strong><NewCollectionButton iconOnly disabled={busy} onCreated={id => setCollections(current => [...current, id])} /></div><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} />{!library.collections.length && <p className="muted">Create a collection above to organize this story.</p>}</div></fieldset>}
     {error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={busy} type="submit">{busy ? 'Saving…' : 'Save story'}</button>{onCancel ? <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button> : <Link className="button secondary" to="/library">Cancel</Link>}</div>
   </form>
 }

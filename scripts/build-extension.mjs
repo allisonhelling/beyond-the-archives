@@ -1,7 +1,11 @@
 import { build, loadEnv } from 'vite'
 import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { parseArgs } from 'node:util'
 import { readPublicConfig } from '../src/lib/config.ts'
 
+const { values } = parseArgs({ options: { outDir: { type: 'string', default: 'extension/dist' } } })
+const outDir = values.outDir
 const env = { ...loadEnv('production', process.cwd(), ''), ...process.env }
 const config = readPublicConfig(env)
 if (!config) throw new Error('Set the public Supabase URL and publishable/anon key; never use a server key.')
@@ -14,9 +18,9 @@ for (const url of [app, backend]) {
 await build({
  configFile: false,
  define: { __APP_ORIGIN__: JSON.stringify(app.origin), __SUPABASE_URL__: JSON.stringify(backend.origin), __SUPABASE_KEY__: JSON.stringify(config.key) },
- build: { outDir: 'extension/dist', emptyOutDir: true, minify: false, lib: { entry: 'extension/background.js', formats: ['es'], fileName: () => 'background.js' } },
+ build: { outDir, emptyOutDir: true, minify: false, lib: { entry: 'extension/background.js', formats: ['es'], fileName: () => 'background.js' } },
 })
-await writeFile('extension/dist/manifest.json', JSON.stringify({
+await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  manifest_version: 3, name: 'AO3 Library Companion', version: '0.1.0', minimum_chrome_version: '120',
  description: 'Loads AO3 metadata only for imports and refreshes requested by your connected library.',
  permissions: ['storage', 'alarms', 'scripting'],
@@ -25,4 +29,4 @@ await writeFile('extension/dist/manifest.json', JSON.stringify({
  background: { service_worker: 'background.js', type: 'module' },
  action: { default_title: 'Open library extension settings' },
 }, null, 2) + '\n')
-console.log(`Extension built in extension/dist for ${app.origin}.`)
+console.log(`Extension built in ${outDir} for ${app.origin}.`)

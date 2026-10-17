@@ -76,8 +76,9 @@ export async function restoreStory(story: Story) {
 export async function saveCollection(name: string, id?: string) {
   if (!name.trim()) throw new Error('A collection name is required.')
   if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id)
-  const result = id ? await client().from('collections').update({ name: name.trim() }).eq('id', id) : await client().from('collections').insert({ name: name.trim() })
+  const result = await (id ? client().from('collections').update({ name: name.trim() }).eq('id', id) : client().from('collections').insert({ name: name.trim() })).select('id').single()
   failure(result.error)
+  return result.data!.id
 }
 export async function deleteCollection(id: string) {
   if (sampleMode) return (await import('./sample/repository')).deleteSampleCollection(id)

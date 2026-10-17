@@ -8,16 +8,114 @@ The additive Phase 2 migration was applied to the local development Supabase sta
 
 ## Run locally
 
-Requires Node **22.12+** (Node 22 LTS recommended) and npm.
+Run commands from `FanficTrackerLibrary/`. Requires Node **22.12+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
+
+### First-time setup and database upgrades
 
 ```sh
 npm ci
-cp .env.example .env.local
-# Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local.
-npm run dev
+npx supabase start
+npx supabase migration up --local
+npx supabase status
 ```
 
-Open the URL printed by Vite, normally `http://127.0.0.1:5173`. Without environment configuration, the app shows a setup screen and makes no Supabase requests. The only browser configuration is the Supabase project URL and **publishable** key, or a legacy **anon** key. Never put a secret/service-role key, database password, or connection string in a `VITE_` variable. Build-time validation rejects privileged keys, even if mislabeled as public.
+Run each command after the previous one succeeds. `supabase start` starts the Docker services in the background; leave Docker running. Apply migrations again after pulling database changes. Use migration upgrades for an existing database; resetting it is optional and destructive, as described below.
+
+On a fresh checkout only, create the browser configuration:
+
+```sh
+cp .env.example .env.local
+```
+
+Keep an existing `.env.local` rather than copying over it. Set these values using the local URL and **publishable/anon** key shown by `npx supabase status`:
+
+```dotenv
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_LOCAL_PUBLISHABLE_OR_ANON_KEY
+EXTENSION_APP_ORIGIN=http://127.0.0.1:5173
+```
+
+Without valid public configuration, the app shows a setup screen. Server secret/service-role keys belong only in server configuration, never in `VITE_` variables. Restart Vite after changing `.env.local`.
+
+Open local Studio at `http://127.0.0.1:54323` to invite a development user. Invitation and recovery emails appear at `http://127.0.0.1:54324`. Follow the invitation to set a password; public registration is disabled. The [Supabase setup section](#set-up-supabase) covers Auth configuration and operator invitations.
+
+### Start each local session
+
+Start Docker Desktop, then ensure Supabase is running:
+
+```sh
+npx supabase start
+```
+
+Run the following long-running commands in **separate terminals**. Leave each required process running while using the app.
+
+| Terminal | Command | When needed |
+| --- | --- | --- |
+| 1 | `npm run dev` | Normal authenticated website at `http://127.0.0.1:5173` |
+| 2 | `npx supabase functions serve extension-metadata` | Browser-extension imports and metadata refreshes |
+| 3 | `npm run worker` | Direct retrieval mode; requires `.env.worker` below |
+
+Use the URL printed by Vite. For extension mode, it must match `EXTENSION_APP_ORIGIN` exactly, including the port and `127.0.0.1` versus `localhost`. The extension and app must target the same Supabase instance.
+
+**Extension mode needs both the website and the Edge Function handler.** A successful “Extension connected” message confirms authentication but does not prove the handler is running. If it is stopped, metadata uploads fail and older requests can hold up the queue. A `503` with `name resolution failed` from `/functions/v1/extension-metadata` means the local function runtime is unavailable; start terminal 2 and reconnect in Settings.
+
+### Build and connect the local browser extension
+
+With `.env.local` pointing to local Supabase, build into the local directory so the hosted extension build is preserved:
+
+```sh
+EXTENSION_APP_ORIGIN=http://127.0.0.1:5173 npm run build:extension -- --outDir extension/local/dist
+```
+
+In Chrome/Edge, open `chrome://extensions` or `edge://extensions`, enable Developer mode, and **Load unpacked → `extension/local/dist`**. After rebuilding, click **Reload** on that extension's card. In the local app's **Settings → AO3 metadata retrieval**, select **Browser extension**, paste this installed extension's ID, and click **Save metadata mode**. Use **Reconnect extension** after a browser restart. Complete any AO3 sign-in or adult-content confirmation in the requested AO3 tab.
+
+Import one work with **Add → Add Story**, which opens **Add Story → Import from link**, or use **Add → Import History from AO3** for batches. Importing a verified chapter link opens the existing fic when already saved and sets its reading location: chapter 10 means chapters 1–9 read. This also supports returning to an earlier chapter. Metadata-only refreshes preserve reading location; edits made while retrieval is pending take precedence. Existing queued requests keep their original retrieval mode. See [the extension guide](extension/README.md) for hosted builds and detailed behavior.
+
+### Configure the direct metadata worker
+
+For **Direct retrieval** in Settings, create the ignored `.env.worker` with these server-only values from local Supabase status:
+
+```dotenv
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SECRET_KEY=YOUR_LOCAL_SECRET_OR_SERVICE_ROLE_KEY
+```
+
+`npm run worker` loads this file automatically and polls continuously. To process at most one eligible job and exit:
+
+```sh
+npm run worker -- --once
+```
+
+The worker processes direct jobs; the extension and Edge Function handler process extension jobs. Run the service for the mode being tested. Neither service changes the mode of already queued requests.
+
+### Test a production build locally
+
+```sh
+npm run build
+npm run preview
+```
+
+Open the preview URL printed by Vite, normally `http://127.0.0.1:4173`. Preview serves the built frontend; Supabase and the selected metadata service must still be running. To test extension imports there, build an extension for that exact preview origin and enter its ID in that origin's Settings. Settings stored under port 5173 do not carry over to port 4173.
+
+### Stop local services
+
+Press **Ctrl+C** in the Vite, function-handler, preview, and worker terminals that you started. When finished with the local database:
+
+```sh
+npx supabase stop
+```
+
+The default stop keeps a database backup for the next start. Avoid `--no-backup` when keeping development data.
+
+### Optional: reset disposable local data
+
+Only when you deliberately want to erase and recreate the local database:
+
+```sh
+npx supabase db reset --local
+```
+
+This deletes local library entries and test accounts and reapplies migrations. Use `npx supabase migration up --local` for normal upgrades instead.
 
 ## Preview with sample stories
 
@@ -35,7 +133,7 @@ Two works require AO3 sign-in: **On My Love** (8577016) and **Something’s Diff
 
 ## Use the manual library
 
-1. Sign in with your invited account. Choose **Library → Add Story**, or **Add → Save for Later / Starting a Fic**.
+1. Sign in with your invited account. Choose **Library → Add Story**, or **Add → Add Story**. Add Story opens with link import selected; choose **Enter manually** to use the manual form.
 2. Enter an AO3 work URL and title. Enter optional authors, fandoms, tags, summary, rating, and chapter counts by hand. Each entered author has an optional AO3 author-page URL field; saved links make their name clickable on work cards and story details. These links are private manual metadata and can also be edited with the story's metadata. Leave unknown counts blank.
 3. Choose reading status, fully read chapter count, favorites, private notes, personal tags, and any custom collections, then **Save story**.
 4. Open **See Full Details** and use the pencil beside Personal rating to edit its stars, then the checkmark to save, add or edit a private note, and use the pencil icons to edit personal tags or collections inline. Note, tag, and collection editors offer Save and Cancel. **All tags** and **Other metadata** start collapsed; use **Edit** with the pencil icon at the right of the story title to edit metadata. The story title links to its saved AO3 URL. Click **Chapter # of #** to edit progress in an anchored menu, then save or cancel. Escape, outside clicks, and outside focus dismiss unsaved edits. **Mark as Caught Up** uses the saved published count and sets complete works to Finished or ongoing works to Waiting for Updates; unknown publication status preserves the current reading status. A dismissible two-minute Undo notice restores both progress and status.
@@ -44,13 +142,7 @@ Two works require AO3 sign-in: **On My Love** (8577016) and **Something’s Diff
 
 No AO3 request is required to save. Chapter IDs do not identify chapter positions. An unverified chapter link preserves its full original URL and leaves inferred progress at zero. Enter progress manually. Only trusted, verified chapter mappings can produce a next-chapter destination; The Phase 3 background worker verifies mappings only when public AO3 metadata provides explicit positions. Unknown totals display as `?`.
 
-For an existing local Phase 1 database, apply the additive migration without resetting data:
-
-```sh
-npx supabase migration up --local
-npm run db:lint
-npm run test:integration
-```
+For local database upgrades and checks, follow [Run locally](#run-locally) and [Verify](#verify).
 
 Hosted projects require reviewing and applying the migrations through the normal `supabase db push --dry-run` / `supabase db push` workflow. Never run `db:reset` against an established database to upgrade it.
 
@@ -110,18 +202,9 @@ For operator invitations, `npm run invite` is an alternative to the Dashboard. S
 
 ### Local stack
 
-Install and start Docker Desktop or a compatible Docker engine, then:
+Follow [Run locally](#run-locally) for the complete startup, environment, extension, worker, preview, and shutdown commands. Use [Verify](#verify) for automated checks. Local Studio is at port 54323; the email inbox is at port 54324.
 
-Run these commands one at a time. Continue only after the previous command succeeds. If startup reports a failed health check, the database may still be running while Auth and the API are unavailable; a successful reset/lint alone does not confirm the full stack is ready.
-
-```sh
-npm run db:start
-npm run db:reset
-npm run db:lint
-npm run test:integration
-```
-
-`db:reset` **erases the local development database** and reapplies migrations. It is not a production rollback command. Copy the local API URL and **anon** key from `npx supabase status` into the two frontend variables; do not copy the service-role key. Local Studio is at port 54323; the local email inbox is at port 54324. Use Studio to invite a development user. Local public signup is disabled in `supabase/config.toml`.
+If startup reports a failed health check, the database may still be running while Auth and the API are unavailable; a successful migration or lint alone does not confirm the full stack is ready.
 
 Keep `[auth].enable_signup = false` and `[auth.email].enable_signup = true`. Despite its name, the latter setting also controls whether the Email provider is available for existing/invited accounts to sign in. Global signup remains disabled. After changing Auth config, use the normal `npx supabase stop` and `npm run db:start` to apply it; a database reset is unnecessary.
 
@@ -195,16 +278,39 @@ docs/                  phase scope, verification, and changed-file inventory
 
 ## Verify
 
+Run these from the project directory. `npm run check` runs lint, TypeScript/build, all Vitest tests, integration-configuration tests, and security checks. Browser tests, live Supabase integration, database lint, and dependency audit are separate checks.
+
 ```sh
-npm run check                 # lint, TypeScript, production build, unit/SQL tests, security checks
-npm run test:unit             # frontend, auth, config, server-boundary tests
-npm run test:db               # real embedded PostgreSQL migrations/RLS; no Docker required
-npx playwright install chromium
-npm run test:e2e              # desktop and mobile Chromium, mocked Auth/REST contracts; real PostgreSQL and live local Supabase tested separately
+npm run check
+npx playwright install chromium  # first time, or after Playwright browser upgrades
+npm run test:e2e
+npx supabase db lint --local --level warning
+npm run test:integration
 npm audit --audit-level=moderate
-npm run db:lint               # requires full local Supabase stack
-npm run test:integration      # requires full local Supabase stack; real Auth and REST
-npm run test:integration:config # status parsing and private email-sign-in config; no Docker needed
+```
+
+Database lint and live integration require the local Docker stack from [Run locally](#run-locally). The integration runner creates temporary users/data and cleans them up; it refuses non-loopback endpoints. Browser tests start their own Vite server on port **4173** with mocked Auth/REST; stop any preview or other server using that port first. The normal development server on 5173 can stay running.
+
+For focused checks and debugging:
+
+| Command | What it checks |
+| --- | --- |
+| `npm run lint` | ESLint |
+| `npx tsc -b` | TypeScript |
+| `npm run build` | TypeScript and production frontend build |
+| `npm test` | All Vitest tests, including embedded SQL and extension tests |
+| `npm run test:unit` | Frontend and server tests |
+| `npm run test:db` | Embedded PostgreSQL migrations, grants and RLS; no Docker required |
+| `npm run test:integration:config` | Local status parsing and Auth configuration; no Docker required |
+| `npm run check:security` | Frontend/server boundaries and build artifact checks |
+| `npx vitest run src/features/imports/MetadataSettings.test.tsx` | Example: one test file |
+| `npm run test:e2e -- --project=desktop --workers=1` | Desktop browser tests with one worker |
+
+After schema changes, regenerate database types with one of the existing commands:
+
+```sh
+npm run db:types           # running local Supabase; requires the CLI on PATH
+npm run db:types:embedded  # embedded migrated database; no Docker required
 ```
 
 PGlite runs the actual PostgreSQL engine, SQL migration, grants, constraints, and RLS. Its `auth.users`, `auth.uid()`, and roles are a minimal test contract, **not** the full Supabase Auth service. Component/browser tests simulate authentication responses. The live integration script and Docker CI job cover the actual Auth/PostgREST layer when that infrastructure is available. The implementation environment had no Docker or connected Supabase project; those limits are recorded in `docs/PHASE_1_REPORT.md`. The Edge Function passed `npx --yes deno check supabase/functions/account-status/index.ts`; a deployed invocation still needs your Supabase project.
@@ -231,4 +337,4 @@ See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cance
 
 ## Browser extension mode
 
-Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes only jobs created by Import URLs or Refresh metadata, keeps browser results private, and preserves manual corrections and reading progress. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).
+Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes only jobs created by Import URLs or Refresh metadata, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).

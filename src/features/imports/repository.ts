@@ -14,11 +14,11 @@ export async function importHistory(batchId?: string) {
  ])
  return {batches,items,jobs}
 }
-export async function submitImport(text:string) {
+export async function submitImport(text:string, updateReadingLocation = true) {
  const urls=extractUrls(text)
  if(!urls.length) throw new Error('Paste at least one http or https URL.')
  if(urls.length>2000) throw new Error('Use at most 2,000 URLs per submission.')
- const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls})
+ const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls,p_update_reading_location:updateReadingLocation})
  if(error) {
   if(error.code==='PGRST202') throw new Error('The connected Supabase database is missing the Phase 3 importer. Apply the Phase 3 migration to the database used by VITE_SUPABASE_URL, then try again.')
   if(error.code==='42501') throw new Error('Import access was denied. Sign in again; if it continues, check the Phase 3 database permissions.')

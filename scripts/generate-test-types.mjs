@@ -34,7 +34,7 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
-      submit_import_urls: { Args: { p_urls: string[] }; Returns: string | null }
+      submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
       claim_extension_job: { Args: Record<string, never>; Returns: Json }

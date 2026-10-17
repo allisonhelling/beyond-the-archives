@@ -14,6 +14,8 @@ import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
 import { AuthorNames } from './AuthorNames'
 import { StoryForm } from './StoryForm'
+import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
+import { ImportLinkForm } from '../imports/ImportLinkForm'
 import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
 import { ReadingDashboard } from './ReadingDashboard'
 import { publicationStatuses } from './publication-status'
@@ -127,7 +129,7 @@ function StoryCard({ story }: { story: Story }) {
 const shelves = [['all', 'All works'], ['currently_reading', 'Currently Reading'], ['to_read', 'To Read'], ['favorites', 'Favorites'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish']] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
-  if (reading) return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Currently Reading</h1><p>A little escape, one chapter at a time.</p></div></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={story => <StoryCard key={story.id} story={story} />} /></LibraryBoundary></>
+  if (reading) return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Currently Reading</h1><p>A little escape, one chapter at a time.</p></div><Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={story => <StoryCard key={story.id} story={story} />} /></LibraryBoundary></>
   return <LibraryContent />
 }
 function LibraryContent() {
@@ -136,7 +138,7 @@ function LibraryContent() {
   const selected = params.get('shelf') ?? 'all'
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [deleteCollectionOpen, setDeleteCollectionOpen] = useState(false)
-  async function collectionAction(action: () => Promise<void>) { setBusy(true); setError(''); try { await action(); await refresh() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
+  async function collectionAction(action: () => Promise<unknown>) { setBusy(true); setError(''); try { await action(); await refresh() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   const collection = collections.find(c => c.id === selected)
   const shelfStories = stories.filter(story => {
     if (selected === 'currently_reading') return active(story)
@@ -161,7 +163,14 @@ function LibraryContent() {
     <ReadingDashboard mode="library" stories={shelfStories} renderStory={story => <StoryCard key={story.id} story={story} />} />
   </LibraryBoundary></>
 }
-export function AddStoryPage() { return <><div className="page-heading"><div><h1>Add Story</h1><p>Save a fic by hand, even when metadata is unavailable.</p></div></div><LibraryBoundary><StoryForm /></LibraryBoundary></> }
+export function AddStoryPage() {
+  const [params, setParams] = useSearchParams()
+  const importing = params.get('import') !== 'manual'
+  return <><div className="page-heading"><div><h1>Add Story</h1><p>Import metadata from an AO3 link or enter information by hand.</p></div></div><LibraryBoundary>
+    <div className="library-toolbar"><button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', importing ? 'manual' : 'link'); return next })}>{importing ? 'Enter manually' : 'Import from link'}</button></div>
+    {importing ? <ImportLinkForm /> : <StoryForm />}
+  </LibraryBoundary></>
+}
 function MetadataTags({ values }: { values: string[] }) {
   return values.length ? <span className="metadata-tags">{values.map(value => <span className="metadata-tag" key={value}>{value}</span>)}</span> : <>None saved</>
 }
@@ -170,7 +179,7 @@ function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | '
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [text, setText] = useState(''), [collections, setCollections] = useState<string[]>([])
   const trigger = useRef<HTMLButtonElement>(null)
-  const label = { notes: 'Private notes', tags: 'Personal tags (one per line)', collections: 'Custom collections' }[field]
+  const label = { notes: 'Private notes', tags: 'Personal tags', collections: 'Custom collections' }[field]
   function open() { setText(field === 'notes' ? story.notes : story.personalTags.join('\n')); setCollections(story.collectionIds); setError(''); setEditing(true) }
   function close() { setEditing(false); trigger.current?.focus() }
   async function save() {
@@ -183,14 +192,19 @@ function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | '
     finally { setBusy(false) }
   }
   const note = field === 'notes'
-  return <div className={note ? `inline-personal-field note-panel ${story.notes || editing ? 'note-panel-filled' : ''}` : 'inline-personal-field'}>
-    {note ? <div className="note-heading">{(story.notes || editing) && <><span><NotebookPen size={18} aria-hidden="true" />Your note</span><span className="note-private"><LockKeyhole size={14} aria-hidden="true" />private</span></>}{!editing && <button ref={trigger} type="button" className={`text-button inline-edit${story.notes ? '' : ' clickable-text'}`} onClick={open} aria-label={story.notes ? 'Edit note' : 'Add a note'}>{story.notes ? <Pencil size={16} aria-hidden="true" /> : <NotebookPen size={18} aria-hidden="true" />}{story.notes ? 'Edit' : 'Add a note'}</button>}</div> : !editing && <button ref={trigger} type="button" className="icon-button inline-edit-icon" aria-label={`Edit ${field === 'tags' ? 'personal tags' : 'collections'}`} onClick={open}><Pencil size={12} aria-hidden="true" /></button>}
+  const heading = note ? <div className="note-heading">{(story.notes || editing) && <><span><NotebookPen size={18} aria-hidden="true" />Your note</span><span className="note-private"><LockKeyhole size={14} aria-hidden="true" />private</span></>}{!editing && <button ref={trigger} type="button" className={`text-button inline-edit${story.notes ? '' : ' clickable-text'}`} onClick={open} aria-label={story.notes ? 'Edit note' : 'Add a note'}>{story.notes ? <Pencil size={16} aria-hidden="true" /> : <NotebookPen size={18} aria-hidden="true" />}{story.notes ? 'Edit' : 'Add a note'}</button>}</div> : <>
+    {!editing && <button ref={trigger} type="button" className="icon-button inline-edit-icon" aria-label={`Edit ${field === 'tags' ? 'personal tags' : 'collections'}`} onClick={open}><Pencil size={12} aria-hidden="true" /></button>}
+    {editing && field === 'collections' && <NewCollectionButton iconOnly disabled={busy} onCreated={id => setCollections(current => [...current, id])} />}
+  </>
+  const content = <>
     {editing ? <form className="inline-personal-form" onSubmit={event => { event.preventDefault(); void save() }}><fieldset disabled={busy}>
-      {field === 'collections' ? <><legend>Custom collections</legend><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} /></> : <label className={note ? 'note-input-label' : undefined}><span className={note ? 'sr-only' : undefined}>{label}</span><textarea autoFocus rows={note ? 4 : 3} value={text} placeholder={note ? 'e.g. left off on a cliffhanger — waiting to see what happens next chapter.' : undefined} onChange={event => setText(event.target.value)} /></label>}
+      {field === 'collections' ? <CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} /> : field === 'tags' ? <PersonalTagInput value={parseLines(text)} onChange={tags => setText(tags.join('\n'))} /> : <label className="note-input-label"><span className="sr-only">{label}</span><textarea autoFocus rows={4} value={text} placeholder="e.g. left off on a cliffhanger — waiting to see what happens next chapter." onChange={event => setText(event.target.value)} /></label>}
       <div className="form-actions"><button className="button primary" type="submit">{busy ? 'Saving…' : 'Save'}</button><button className="text-button" type="button" onClick={close}>Cancel</button></div>
-    </fieldset></form> : note && story.notes && <p className="story-summary">{story.notes}</p>}
+    </fieldset></form> : note ? story.notes && <p className="story-summary">{story.notes}</p> : field === 'tags' ? <MetadataTags values={story.personalTags} /> : library.collections.filter(c => story.collectionIds.includes(c.id)).map(c => c.name).join(', ') || 'None'}
     {error && <p className="error-message" role="alert">{error}</p>}
-  </div>
+  </>
+  return note ? <div className={`inline-personal-field note-panel ${story.notes || editing ? 'note-panel-filled' : ''}`}>{heading}{content}</div> : <><dt className="editable-field-heading">{label}{field === 'tags' && <PersonalTagHelp />}{heading}</dt><dd className="inline-personal-field">{content}</dd></>
+
 }
 export function StoryDetailsPage() {
   const { id } = useParams(), library = useLibrary(), location = useLocation(), [params, setParams] = useSearchParams()
@@ -232,8 +246,8 @@ export function StoryDetailsPage() {
           <div><dt>Characters</dt><dd><MetadataTags values={tagNames(story.metadata, 'character')} /></dd></div>
           <div><dt>Additional Tags</dt><dd><MetadataTags values={tagNames(story.metadata, 'freeform')} /></dd></div>
           <div><dt className="sr-only">All tags</dt><dd><details className="details-disclosure"><summary>All tags</summary><MetadataTags values={story.metadata.ao3_tags} /></details></dd></div>
-          <div><dt className="editable-field-heading">Custom collections<PersonalStoryField key={story.id} story={story} field="collections" /></dt><dd>{library.collections.filter(c => story.collectionIds.includes(c.id)).map(c => c.name).join(', ') || 'None'}</dd></div>
-          <div><dt className="editable-field-heading">Personal tags<PersonalStoryField key={story.id} story={story} field="tags" /></dt><dd>{story.personalTags.join(', ') || 'None'}</dd></div>
+          <div><PersonalStoryField key={story.id} story={story} field="collections" /></div>
+          <div><PersonalStoryField key={story.id} story={story} field="tags" /></div>
           <div><dt>Saved</dt><dd>{new Date(story.created_at).toLocaleString()}</dd></div>
           <div><dt>Last edited</dt><dd>{new Date(story.updated_at).toLocaleString()}</dd></div>
           <div><dt>Series</dt><dd><SeriesNames metadata={story.metadata} /></dd></div>

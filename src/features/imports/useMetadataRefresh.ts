@@ -34,6 +34,12 @@ export function useMetadataRefresh(story: Story | undefined) {
   const current = feedback && feedback.entryId === entryId ? feedback : idle
 
   useEffect(() => {
+    if (!entryId || current.status !== 'completed') return
+    const timer = setTimeout(() => setFeedback(previous => previous?.entryId === entryId && previous.status === 'completed' ? { ...idle, entryId } : previous), 60000)
+    return () => clearTimeout(timer)
+  }, [current.status, entryId])
+
+  useEffect(() => {
     if (!entryId || sampleMode) return
     let active = true
     const version = generation.current
@@ -70,7 +76,7 @@ export function useMetadataRefresh(story: Story | undefined) {
     generation.current += 1
     setFeedback({ entryId: story.id, status: 'submitting', busy: true, message: 'Requesting metadata refresh…' })
     try {
-      const batchId = await submitImport(story.original_url)
+      const batchId = await submitImport(story.original_url, false)
       if (!batchId) throw new Error('Could not confirm the metadata refresh. Check import history before trying again.')
       setFeedback({ entryId: story.id, status: 'pending', busy: true, message: 'Metadata refresh queued. Waiting for the worker.' })
       setRequest({ entryId: story.id, batchId })

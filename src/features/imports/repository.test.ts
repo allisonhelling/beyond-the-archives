@@ -23,5 +23,11 @@ it('returns the saved batch ID and retains the submitted URLs',async()=>{
  rpc.mockResolvedValue({data:'batch',error:null})
  const original='https://archiveofourown.org/works/123/chapters/456?view_adult=true#main'
  await expect(submitImport(original)).resolves.toBe('batch')
- expect(rpc).toHaveBeenCalledWith('submit_import_urls',{p_urls:[original]})
+ expect(rpc).toHaveBeenCalledWith('submit_import_urls',{p_urls:[original],p_update_reading_location:true})
+})
+
+it('can request metadata without changing an existing reading location',async()=>{
+ rpc.mockResolvedValue({data:'batch',error:null})
+ await submitImport('https://archiveofourown.org/works/123/chapters/456',false)
+ expect(rpc).toHaveBeenCalledWith('submit_import_urls',{p_urls:['https://archiveofourown.org/works/123/chapters/456'],p_update_reading_location:false})
 })

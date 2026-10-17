@@ -122,6 +122,7 @@ export async function restoreSampleStory(story: Story) {
 }
 export async function saveSampleCollection(name: string, id?: string) {
   const data = read(), trimmed = name.trim()
+  const collectionId = id ?? crypto.randomUUID()
   if (!trimmed) throw new Error('A collection name is required.')
   if (data.collections.some(item => item.id !== id && item.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase())) throw new Error('That collection name already exists.')
   const now = new Date().toISOString()
@@ -129,9 +130,10 @@ export async function saveSampleCollection(name: string, id?: string) {
     const collection = data.collections.find(item => item.id === id)
     if (!collection) throw new Error('Collection no longer available.')
     collection.name = trimmed; collection.updated_at = now
-  } else data.collections.push({ id: crypto.randomUUID(), user_id: userId, name: trimmed, description: null, default_key: null, created_at: now, updated_at: now })
+  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: null, default_key: null, created_at: now, updated_at: now })
   data.collections.sort((a, b) => a.name.localeCompare(b.name))
   write(data)
+  return collectionId
 }
 export async function deleteSampleCollection(id: string) {
   const data = read()
