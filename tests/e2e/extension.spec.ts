@@ -35,7 +35,13 @@ test('built extension captures requested metadata before full load without dupli
  const profile = await mkdtemp(join(tmpdir(), 'ao3-extension-test-'))
  const extension = join(profile, 'extension')
  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
- const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
+ const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [
+  `--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
+  // Extension-created tabs can navigate before Playwright attaches its routes.
+  // Fail those unmocked AO3 requests immediately so the page event cannot hang
+  // on the live site; the explicit navigation below uses the fixture route.
+  '--host-resolver-rules=MAP archiveofourown.org ~NOTFOUND', '--no-proxy-server',
+ ] })
  let releaseImage: (() => void) | undefined
  try {
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')

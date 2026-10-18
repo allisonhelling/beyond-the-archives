@@ -301,8 +301,11 @@ export function StoryDetailsPage() {
     <div className="page-heading story-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
       {!editing && !!story.metadata.series?.length && <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p>}
-      <div className="story-title-row"><h1><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a></h1>{!editing && <>{favorite}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}</div>
-      <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>
+      <div className="story-title-row">
+        <h1><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a></h1>
+        <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>
+        {!editing && <>{favorite}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+      </div>
       {!editing && <>
         <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {story.metadata.rating || 'Rating unknown'}</p>
         <dl className="details-story-stats">

@@ -217,13 +217,17 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const ficBounds = await ficSection.boundingBox()
   const summaryBounds = await ficSection.getByText('Summary', { exact: true }).boundingBox()
   expect(summaryBounds!.y - ficBounds!.y).toBeLessThan(32)
-  const metadataEdit = await page.locator('.story-title-row').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).boundingBox()
-  const titleRefresh = await page.locator('.story-title-row').getByRole('button', { name: 'Retry / Update Metadata', exact: true }).boundingBox()
+  const metadataEdit = await page.locator('.story-metadata-actions').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).boundingBox()
+  const titleRefresh = await page.locator('.story-metadata-actions').getByRole('button', { name: 'Retry / Update Metadata', exact: true }).boundingBox()
+  await expect(page.locator('.story-metadata-actions').getByRole('button', { name: 'Retry / Update Metadata', exact: true })).toHaveText('Metadata')
+  if (info.project.name === 'mobile') expect(titleRefresh!.height).toBe(34)
+  else expect(titleRefresh!.height).toBeGreaterThanOrEqual(44)
+  await expect(page.locator('.story-metadata-label')).toBeVisible({ visible: info.project.name === 'mobile' })
   expect(metadataEdit!.x - titleRefresh!.x - titleRefresh!.width).toBeLessThan(16)
   expect(metadataEdit!.x).toBeGreaterThan(titleRefresh!.x + titleRefresh!.width)
   for (const property of ['height', 'padding', 'border', 'borderRadius', 'backgroundColor'] as const) {
     const editButton = page.getByRole('button', { name: 'Edit AO3 metadata', exact: true })
-    const refreshButton = page.locator('.story-title-row').getByRole('button', { name: 'Retry / Update Metadata', exact: true })
+    const refreshButton = page.locator('.story-metadata-actions').getByRole('button', { name: 'Retry / Update Metadata', exact: true })
     expect(await refreshButton.evaluate((el, key) => getComputedStyle(el)[key], property)).toBe(await editButton.evaluate((el, key) => getComputedStyle(el)[key], property))
   }
   const automaticBounds = await automaticMetadata.boundingBox()
@@ -232,10 +236,27 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
     const expected = await ficSection.getByText('Summary', { exact: true }).evaluate((el, key) => getComputedStyle(el)[key], property)
     expect(await automaticMetadata.getByRole('heading', { name: 'Automatic metadata', exact: true }).evaluate((el, key) => getComputedStyle(el)[key], property)).toBe(expected)
   }
-  const summaryFontSize = await page.locator('.story-details-summary').evaluate(el => getComputedStyle(el).fontSize)
-  for (const element of await automaticMetadata.locator('p, label, select, .button, a').all()) expect(await element.evaluate(el => getComputedStyle(el).fontSize)).toBe(summaryFontSize)
-  const titleRow = await page.locator('.story-title-row').boundingBox()
-  expect(Math.abs(metadataEdit!.x + metadataEdit!.width - titleRow!.x - titleRow!.width)).toBeLessThan(2)
+  const metadataFontSize = await automaticMetadata.evaluate(el => getComputedStyle(el).fontSize)
+  for (const element of await automaticMetadata.locator('p, label, select, .button, a').all()) expect(await element.evaluate(el => getComputedStyle(el).fontSize)).toBe(metadataFontSize)
+  const authorLine = await page.locator('.story-details-authors').boundingBox()
+  const metadataActions = await page.locator('.story-metadata-actions').boundingBox()
+  if (info.project.name === 'mobile') {
+    expect(metadataActions!.y).toBeGreaterThanOrEqual(authorLine!.y + authorLine!.height)
+    const title = await page.locator('.story-title-row h1').boundingBox()
+    const fandoms = await page.locator('.details-fandom-rating').boundingBox()
+    expect(authorLine!.y - title!.y - title!.height).toBeLessThanOrEqual(2)
+    const header = (await page.locator('.story-title-row').boundingBox())!
+    expect(fandoms!.y - header.y - header.height).toBe(8)
+    await expect(page.locator('.details-story-stats')).toHaveCSS('column-gap', '40px')
+  } else {
+    const title = (await page.locator('.story-title-row h1').boundingBox())!
+    expect(metadataActions!.y).toBeLessThan(title.y + title.height)
+    expect(metadataActions!.y + metadataActions!.height).toBeGreaterThan(title.y)
+    expect(metadataActions!.x).toBeGreaterThanOrEqual(title.x + title.width)
+    expect(metadataActions!.y + metadataActions!.height).toBeLessThanOrEqual(authorLine!.y)
+  }
+  const favoriteBounds = await page.locator('.story-title-row > .action-tooltip .favorite').boundingBox()
+  expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
   await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Fandoms', 'Relationships', 'Characters', 'Additional Tags', 'All tags', 'Custom collections', /^Personal tags/, 'Saved', 'Last edited', 'Series'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
@@ -268,7 +289,8 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(readingSection.locator('.spine-actions').getByRole('button', { name: 'Mark as Caught Up', exact: true })).toBeVisible()
   const summarySize = await page.locator('.story-details-summary').evaluate(el => getComputedStyle(el).fontSize)
   const noteSize = await page.locator('.note-panel .story-summary').evaluate(el => getComputedStyle(el).fontSize)
-  expect(noteSize).toBe(summarySize)
+  expect(noteSize).toBe(metadataFontSize)
+  expect(summarySize).toBe(info.project.name === 'mobile' ? '12px' : metadataFontSize)
   const progressHeadingSize = await readingSection.getByRole('heading', { name: 'Your progress' }).evaluate(el => getComputedStyle(el).fontSize)
   expect(await page.locator('.note-heading > span').first().evaluate(el => getComputedStyle(el).fontSize)).toBe(progressHeadingSize)
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
@@ -376,7 +398,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.reload()
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   await expect(page.locator('.details-fic-fields .metadata-tag').filter({ hasText: /^(Comfort|Revisit)$/ })).toHaveCount(2)
-  await page.locator('.story-title-row').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).click()
+  await page.locator('.story-metadata-actions').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).click()
   await expect(page.getByLabel('Private notes', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Reading status', { exact: true })).toHaveCount(0)
   await page.getByLabel('Title', { exact: true }).fill('My corrected title')
@@ -505,6 +527,23 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     await expect(page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Add', exact: true })).toHaveAttribute('href', '/add')
   }
   await expect(cards).toHaveCount(2)
+  await expect(cards.first().getByRole('heading')).toHaveCSS('font-size', info.project.name === 'mobile' ? '20px' : '22px')
+  for (const tile of await page.locator('.reading-tiles button').all()) {
+    const icon = (await tile.locator('.tile-icon').boundingBox())!
+    const title = (await tile.locator('strong').boundingBox())!
+    const count = (await tile.locator('.tile-count').boundingBox())!
+    const description = (await tile.locator('.tile-description').boundingBox())!
+    if (info.project.name === 'mobile') {
+      expect(Math.abs(icon.x + icon.width / 2 - count.x - count.width / 2)).toBeLessThan(1)
+      expect(Math.abs(icon.y + icon.height / 2 - title.y - title.height / 2)).toBeLessThan(1)
+      expect(Math.abs(count.y + count.height / 2 - description.y - description.height / 2)).toBeLessThan(1)
+      expect(count.y).toBeGreaterThanOrEqual(icon.y + icon.height)
+    } else {
+      expect(count.x).toBeGreaterThanOrEqual(title.x + title.width)
+      expect(Math.abs(icon.y + icon.height / 2 - count.y - count.height / 2)).toBeLessThan(1)
+    }
+    await expect(tile.locator('.tile-count')).toHaveCSS('font-size', info.project.name === 'mobile' ? '18px' : '32px')
+  }
   const toolbar = page.locator('.reading-toolbar')
   await expect(toolbar.locator('.filter-name')).toHaveCount(0)
   await expect(toolbar.getByLabel('Search title or author', { exact: true })).toBeVisible()
@@ -600,7 +639,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await panel.getByRole('button', { name: 'Favorites only' }).click()
   await expect(cards).toHaveCount(1)
   await clear()
-  await page.getByRole('button', { name: 'Waiting for Updates', exact: true }).click()
+  await page.getByRole('button', { name: info.project.name === 'mobile' ? 'Waiting' : 'Waiting for Updates', exact: true }).click()
   await expect(cards.getByRole('heading', { name: 'Beta voyage' })).toBeVisible()
   await page.getByRole('button', { name: 'View All', exact: true }).click()
   await clear()
@@ -667,7 +706,7 @@ test('publication tiles exclude waiting and unknown works and update after chang
   })
   await page.goto('/reading'); await login(page)
   const tiles = page.getByRole('navigation', { name: 'Dashboard sections' })
-  await expect(tiles.getByRole('button').locator('strong')).toHaveText(['Complete on AO3', 'In Progress on AO3', 'New Chapter', 'View All', 'Waiting for Updates', 'To Read'])
+  await expect(tiles.getByRole('button').locator('strong')).toHaveText(info.project.name === 'mobile' ? ['Complete on AO3', 'In Progress on AO3', 'New Chapter', 'To Read', 'Waiting', 'View All'] : ['Complete on AO3', 'In Progress on AO3', 'New Chapter', 'View All', 'Waiting for Updates', 'To Read'])
   if (info.project.name === 'desktop') {
     const bounds = await Promise.all((await tiles.getByRole('button').all()).map(button => button.boundingBox()))
     for (const box of bounds.slice(0, 3)) expect(box!.y).toBe(bounds[0]!.y)
@@ -726,7 +765,7 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await back.click()
   await expect(ongoing.locator('.tile-count')).toHaveText('1')
   await expect(page.locator('.story-card')).toHaveCount(1)
-  await tiles.getByRole('button', { name: 'Waiting for Updates', exact: true }).click()
+  await tiles.getByRole('button', { name: info.project.name === 'mobile' ? 'Waiting' : 'Waiting for Updates', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Unfinished read', exact: true })).toBeVisible()
   await tiles.getByRole('button', { name: 'Complete on AO3', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
@@ -899,7 +938,7 @@ test('invalid saved display preferences fall back to defaults', async ({ page })
 })
 
 
-test('library reuses filters across all statuses and scopes them to the selected shelf', async ({ page }) => {
+test('library reuses filters across all statuses and scopes them to the selected shelf', async ({ page }, info) => {
   const tables = await fixture(page)
   for (const [index, status, publication, fandom] of [[1, 'finished', 'complete', 'Fandom A'], [2, 'reading', 'in_progress', 'Fandom B'], [3, 'did_not_finish', 'unknown', 'Fandom A'], [4, 'to_read', 'in_progress', 'Fandom C']] as const) {
     tables.works.push({ id: `library-work-${index}`, ao3_work_id: index, verified_chapters: {}, published_chapters: null, total_chapters: null, word_count: null, ao3_updated_at: index === 1 ? '2026-10-15T12:00:00Z' : null })
@@ -909,6 +948,7 @@ test('library reuses filters across all statuses and scopes them to the selected
   const cards = page.locator('.story-card')
   const toolbar = page.getByRole('region', { name: 'Library toolbar' })
   await expect(cards).toHaveCount(4)
+  await expect(cards.first().getByRole('heading')).toHaveCSS('font-size', info.project.name === 'mobile' ? '20px' : '22px')
   const initialEntry = tables.library_entries[0]
   const originalMetadata = structuredClone(initialEntry.metadata_overrides)
   await cards.getByRole('heading', { name: 'Library story 1', exact: true }).getByRole('link').click()
@@ -933,7 +973,7 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(page.getByText('New private note', { exact: true })).toBeVisible()
   expect(initialEntry.metadata_overrides).toMatchObject(originalMetadata)
   expect(initialEntry.personal_rating).toBe(4)
-  await page.locator('.story-title-row').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).click()
+  await page.locator('.story-metadata-actions').getByRole('button', { name: 'Edit AO3 metadata', exact: true }).click()
   await expect(page).toHaveURL(/edit=metadata/)
   await expect(page.getByLabel('Private notes', { exact: true })).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Summary', exact: true }).fill('Updated AO3 summary')

@@ -51,14 +51,25 @@ function initialReadingFilters(): ReadingFilters {
 function SortSelect({ value, onChange }: { value: SortOrder; onChange: (value: SortOrder) => void }) {
   return <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
 }
+const mobileQuery = '(max-width: 650px)'
+const mobileSectionOrder: Partial<Record<string, number>> = { to_read: 3, view_all: 5 }
 const sections = [
   ['complete', publicationStatuses.complete.label, 'All chapters out', publicationStatuses.complete.Icon], ['in_progress', publicationStatuses.in_progress.label, 'Still being written, still catching up.', publicationStatuses.in_progress.Icon],
-  ['new', 'New Chapter', 'Verified chapter updates', Bell], ['view_all', 'View All', 'Currently reading', Library],
+  ['new', 'New Chapter', 'Caught up stories', Bell], ['view_all', 'View All', 'Currently reading', Library],
   ['waiting', 'Waiting for Updates', 'Following ongoing stories', Clock],
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
 export function ReadingDashboard({ stories, renderStory, mode = 'reading' }: { stories: Story[]; renderStory: (story: Story) => ReactNode; mode?: 'reading' | 'library' }) {
+  const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
+  useEffect(() => {
+    const query = window.matchMedia?.(mobileQuery)
+    if (!query) return
+    const update = () => setMobile(query.matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+  const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
   const [filters, setFilters] = useState<ReadingFilters>(initialReadingFilters)
   useEffect(() => {
     try { window.localStorage.setItem(preferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
@@ -110,7 +121,10 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading' }: { s
       <Dropdown label="Search in" value={filters.scope} onChange={value => change('scope', value as ReadingFilters['scope'])} options={[{ value: 'any', label: 'Any field' }, { value: 'summary', label: 'Summary' }, { value: 'notes', label: 'Notes' }]} />
     </div></div><div className="form-actions"><button className="button secondary" onClick={clearFilters}>Clear all filters</button><button className="button secondary" onClick={() => setExpanded(false)}>Hide</button></div></section>}
     {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active filters"><div className="filter-chips">{activeFilters.map(text => <span key={String(text)}>{text}</span>)}</div><button className="text-button" onClick={clearFilters}>Clear all filters</button></div>}
-    {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard sections">{sections.map(([key, title, description, Icon]) => <button key={key} aria-label={title} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => setParams({ shelf: key })}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{title}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : filtered.filter(story => inReadingSection(story, key)).length}</span></button>)}</nav>}
+    {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard sections">{displayedSections.map(([key, title, description, Icon]) => {
+      const label = mobile && key === 'waiting' ? 'Waiting' : title
+      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => setParams({ shelf: key })}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : filtered.filter(story => inReadingSection(story, key)).length}</span></button>
+    })}</nav>}
     <p className="results-count" role="status">{shown.length} {shown.length === 1 ? 'story' : 'stories'} shown</p>
     {error && <p role="alert" className="error-message">{error}</p>}
     {!error && (shown.length ? readingGroups(shown, filters.groupBy).map(([name, group]) => <section key={name} className="reading-group">{name && <h2>{name} <span>({group.length})</span></h2>}<div className="story-grid">{group.map(story => renderStory(story))}</div></section>) : <section className="library-empty"><h2>{selected === 'new' ? 'No verified chapter updates' : 'No stories here yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : activeFilters.length ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
