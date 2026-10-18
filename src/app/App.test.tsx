@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
@@ -75,7 +75,7 @@ describe('private app access and navigation', () => {
     await screen.findByRole('heading', { name: 'Currently Reading' })
     for (const [label, title] of [['Library', 'Your Library'], ['Stats', 'Reading Stats'], ['Settings', 'Settings'], ['Features', 'The next chapters']]) {
       if (label === 'Settings') await user.click(screen.getByRole('button', { name: 'Profile menu' }))
-      await user.click(screen.getByRole('link', { name: label }))
+      await user.click(within(screen.getByRole(label === 'Settings' ? 'region' : 'navigation', { name: label === 'Settings' ? 'Profile menu' : 'Main navigation' })).getByRole('link', { name: label }))
       expect(await screen.findByRole('heading', { name: title })).toBeVisible()
     }
     await user.click(screen.getByRole('button', { name: 'Profile menu' }))
@@ -87,12 +87,14 @@ describe('private app access and navigation', () => {
     auth.session = fakeSession
     const user = userEvent.setup()
     render(<App />)
-    // Wait for the initial redirect; changing routes intentionally closes the menu.
+    // Wait for the initial redirect before navigating.
     await screen.findByRole('heading', { name: 'Currently Reading' })
-    await user.click(screen.getByRole('button', { name: 'Open navigation' }))
     expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeInTheDocument()
-    await user.click(screen.getAllByRole('link', { name: 'Library' })[1])
-    expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument()
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
+    expect(within(mobileNav).getAllByRole('link').map(link => link.textContent)).toEqual(['Reading', 'Library', 'Stats', 'Settings'])
+    await user.click(within(mobileNav).getByRole('link', { name: 'Library' }))
+    expect(await screen.findByRole('heading', { name: 'Your Library' })).toBeVisible()
+    expect(mobileNav).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add' }))
     expect(screen.getByRole('button', { name: 'Add Story' })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()

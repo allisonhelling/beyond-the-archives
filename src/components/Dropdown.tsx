@@ -1,10 +1,10 @@
 import { useId, useState, type KeyboardEvent } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, type LucideIcon } from 'lucide-react'
 import { useDismissible } from './useDismissible'
 
 export type DropdownOption = { value: string; label: string }
-export function Dropdown({ label, value, options, onChange }: {
-  label: string; value: string; options: DropdownOption[]; onChange: (value: string) => void
+export function Dropdown({ label, value, options, onChange, disabled = false, closeOnSelect = false, icon: Icon, compact = false }: {
+  label: string; value: string; options: DropdownOption[]; onChange: (value: string) => void; disabled?: boolean; closeOnSelect?: boolean; icon?: LucideIcon; compact?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const id = useId(), labelId = `${id}-label`
@@ -16,6 +16,7 @@ export function Dropdown({ label, value, options, onChange }: {
     buttons[(index + buttons.length) % buttons.length].focus()
   }
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (disabled) return
     const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>('[role=option]') ?? [])]
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
     if (event.key === 'Escape') { setOpen(false); ref.current?.querySelector<HTMLButtonElement>('.dropdown-trigger')?.focus() }
@@ -27,14 +28,16 @@ export function Dropdown({ label, value, options, onChange }: {
       } else focusOption(event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : index + (event.key === 'ArrowUp' ? -1 : 1))
     }
   }
-  return <div className="custom-dropdown" ref={ref} onKeyDown={keyboard}>
-    <span className="filter-label" id={labelId}>{label}</span>
-    <button className="filter-input dropdown-trigger" type="button" aria-label={label} aria-describedby={`${id}-value`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
-      <span id={`${id}-value`}>{selected?.label ?? 'Select an option'}</span><ChevronDown size={16} />
+  return <div className={`custom-dropdown${compact ? ' dropdown-compact' : ''}`} ref={ref} onKeyDown={keyboard}>
+    <span className={compact ? 'sr-only' : 'filter-label'} id={labelId}><span className="dropdown-label">{Icon && <Icon size={16} aria-hidden="true" />}{label}</span></span>
+    <button className={`${compact ? 'button secondary' : 'filter-input'} dropdown-trigger`} type="button" disabled={disabled} aria-label={label} aria-describedby={`${id}-value`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
+      {compact && <span className="dropdown-label">{Icon && <Icon size={16} aria-hidden="true" />}{label}</span>}
+      <span id={`${id}-value`} className={compact ? 'sr-only' : undefined}>{selected?.label ?? 'Select an option'}</span><ChevronDown size={16} />
     </button>
     {open && <div className="dropdown-panel menu-surface" id={id} role="listbox" aria-labelledby={labelId}>
-      {options.map(option => <button type="button" role="option" key={option.value} aria-selected={value === option.value} onClick={() => {
+      {options.map(option => <button type="button" role="option" disabled={disabled} key={option.value} aria-selected={value === option.value} onClick={() => {
         onChange(option.value)
+        if (closeOnSelect) { setOpen(false); ref.current?.querySelector<HTMLButtonElement>('.dropdown-trigger')?.focus() }
       }}><span>{option.label}</span>{value === option.value && <Check size={16} />}</button>)}
     </div>}
   </div>

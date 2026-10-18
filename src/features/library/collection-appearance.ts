@@ -1,3 +1,4 @@
+import type { Collection, Story } from './model'
 import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feather, Flame, FlaskConical, Flower2, Gem, Heart, KeyRound, Leaf, Library, Moon, Music, Sun, Telescope, X } from 'lucide-react'
 
 export const collectionColors = [
@@ -22,9 +23,54 @@ export const collectionSymbols = [
 ] as const
 
 export type CollectionAppearance = { color: string; symbol: string }
+export type CollectionChanges = Partial<CollectionAppearance> & { description?: string | null }
 
-export function compareCollections(a: { name: string; sort_position?: number | null }, b: { name: string; sort_position?: number | null }) {
-  return (a.sort_position ?? Number.MAX_SAFE_INTEGER) - (b.sort_position ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name)
+export function normalizeCollectionChanges(changes: CollectionChanges): CollectionChanges {
+  validateCollectionAppearance({ color: changes.color ?? collectionColors[0].value, symbol: changes.symbol ?? collectionSymbols[0].value })
+  return {
+    ...(changes.color !== undefined && { color: changes.color }),
+    ...(changes.symbol !== undefined && { symbol: changes.symbol }),
+    ...(changes.description !== undefined && { description: changes.description?.trim() || null }),
+  }
+}
+
+export function compareCollections(a: { created_at?: string; sort_position?: number | null }, b: { created_at?: string; sort_position?: number | null }) {
+  return (a.sort_position ?? Number.MAX_SAFE_INTEGER) - (b.sort_position ?? Number.MAX_SAFE_INTEGER) || (a.created_at ?? '').localeCompare(b.created_at ?? '')
+}
+
+export const collectionOrderOptions = [
+  { value: 'manual', label: 'Manual order' },
+  { value: 'alphabetical', label: 'Alphabetical (A–Z)' },
+  { value: 'created', label: 'Date created (oldest first)' },
+  { value: 'created_newest', label: 'Date created (newest first)' },
+  { value: 'edited', label: 'Last edited (story added)' },
+  { value: 'updated', label: 'Last story updated (newest first)' },
+] as const
+export type CollectionOrder = typeof collectionOrderOptions[number]['value']
+
+export function orderCollections(collections: Collection[], stories: Pick<Story, 'collectionIds' | 'updated_at'>[], order: CollectionOrder) {
+  const latest = new Map<string, number>()
+  if (order === 'updated') for (const story of stories) {
+    for (const id of story.collectionIds) latest.set(id, Math.max(latest.get(id) ?? 0, Date.parse(story.updated_at) || 0))
+  }
+  return [...collections].sort((a, b) => {
+    if (order === 'alphabetical') return a.name.localeCompare(b.name) || compareCollections(a, b)
+    if (order === 'created') return a.created_at.localeCompare(b.created_at) || compareCollections(a, b)
+    if (order === 'created_newest') return b.created_at.localeCompare(a.created_at) || compareCollections(a, b)
+    if (order === 'edited') return (Date.parse(b.last_story_added_at ?? '') || 0) - (Date.parse(a.last_story_added_at ?? '') || 0) || compareCollections(a, b)
+    if (order === 'updated') return (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0) || compareCollections(a, b)
+    return compareCollections(a, b)
+  })
+}
+
+export function moveCollectionIds(ids: string[], sourceId: string, targetId: string, selectedIds: string[] = []) {
+  const source = ids.indexOf(sourceId), target = ids.indexOf(targetId)
+  if (source < 0 || target < 0) return ids
+  const moving = selectedIds.includes(sourceId) ? ids.filter(id => selectedIds.includes(id)) : [sourceId]
+  if (moving.includes(targetId)) return ids
+  const remaining = ids.filter(id => !moving.includes(id))
+  remaining.splice(remaining.indexOf(targetId) + (source < target ? 1 : 0), 0, ...moving)
+  return remaining
 }
 
 export const collectionColorPattern = '^#[0-9a-fA-F]{6}$'

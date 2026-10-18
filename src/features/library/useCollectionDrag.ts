@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState, type MouseEvent, type RefObject } from 'react'
 
-type Drag = { id: string; target: string | null; x: number; y: number }
+type Drag = { id: string; ids: string[]; target: string | null; x: number; y: number }
 
-export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, enabled: boolean, onMove?: (id: string, target: string) => void) {
+export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, enabled: boolean, onMove?: (id: string, target: string) => void, selection?: { selectedIds: string[]; onChange: (ids: string[]) => void }) {
   const [drag, setDrag] = useState<Drag | null>(null)
   const suppressClick = useRef(false)
+  const keyboardFocus = useRef<string | null>(null)
+  const handlers = useRef({ onMove, selection })
+  useEffect(() => {
+    if (!enabled || !keyboardFocus.current) return
+    shelfRef.current?.querySelector<HTMLButtonElement>(`[data-collection-id="${CSS.escape(keyboardFocus.current)}"] .collection-spine`)?.focus()
+    keyboardFocus.current = null
+  }, [enabled, shelfRef])
+  useEffect(() => { handlers.current = { onMove, selection } }, [onMove, selection])
   useEffect(() => {
     const shelf = shelfRef.current
     if (!shelf || !enabled) return
-    let pending: { id: string; pointerId: number; slot: HTMLElement; startX: number; startY: number; grabX: number; grabY: number; active: boolean } | null = null
+    let pending: { id: string; pointerId: number; slot: HTMLElement; startX: number; startY: number; grabX: number; grabY: number; active: boolean; selecting: boolean; deselecting: boolean; initialSelection: string[]; lastSelection: string[]; ids: string[] } | null = null
     let pointer = { x: 0, y: 0 }, target: string | null = null
     let hold: ReturnType<typeof setTimeout> | undefined, frame = 0
 
@@ -24,8 +32,20 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
         }
       }
       target = nearest?.dataset.collectionId ?? null
+      if (pending.selecting) {
+        if (!target) return
+        const ids = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].map(slot => slot.dataset.collectionId!)
+        const from = ids.indexOf(pending.id), to = ids.indexOf(target)
+        const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1)
+        const next = pending.deselecting ? pending.initialSelection.filter(id => !range.includes(id)) : [...new Set([...pending.initialSelection, ...range])]
+        if (next.length !== pending.lastSelection.length || next.some((id, index) => id !== pending!.lastSelection[index])) {
+          pending.lastSelection = next
+          handlers.current.selection?.onChange(next)
+        }
+        return
+      }
       const source = pending.slot.getBoundingClientRect()
-      const next = { id: pending.id, target, x: pointer.x - pending.grabX - source.left, y: pointer.y - pending.grabY - source.top }
+      const next = { id: pending.id, ids: pending.ids, target, x: pointer.x - pending.grabX - source.left, y: pointer.y - pending.grabY - source.top }
       setDrag(previous => previous?.id === next.id && previous.target === next.target && previous.x === next.x && previous.y === next.y ? previous : next)
     }
     function scroll() {
@@ -42,29 +62,34 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       shelf!.setPointerCapture(pending.pointerId)
       update(); frame = requestAnimationFrame(scroll)
     }
-    function finish(commit: boolean) {
+    function finish(commit: boolean, notify = true) {
       clearTimeout(hold); cancelAnimationFrame(frame)
       if (!pending) return
-      const { id, active, pointerId } = pending
+      const { id, active, pointerId, selecting, initialSelection } = pending
       pending = null
       if (shelf!.hasPointerCapture(pointerId)) shelf!.releasePointerCapture(pointerId)
       if (active) {
         suppressClick.current = true
         setTimeout(() => { suppressClick.current = false }, 0)
         setDrag(null)
-        if (commit && target && target !== id) onMove?.(id, target)
+        if (selecting) {
+          if (!commit && notify) handlers.current.selection?.onChange(initialSelection)
+        } else if (commit && target && target !== id) handlers.current.onMove?.(id, target)
       }
     }
     function down(event: PointerEvent) {
       if (!event.isPrimary || event.button !== 0 || pending) return
       const button = (event.target as Element).closest<HTMLButtonElement>('.collection-spine')
       const slot = button?.closest<HTMLElement>('[data-collection-id]')
-      if (!button || button.disabled || !slot) return
+      if (!button || button.disabled || !slot || (event.shiftKey && !handlers.current.selection)) return
       suppressClick.current = false
       const rect = button.getBoundingClientRect()
       pointer = { x: event.clientX, y: event.clientY }
-      pending = { id: slot.dataset.collectionId!, pointerId: event.pointerId, slot, startX: pointer.x, startY: pointer.y, grabX: pointer.x - rect.left, grabY: pointer.y - rect.top, active: false }
-      hold = setTimeout(activate, 180)
+      const initialSelection = handlers.current.selection?.selectedIds ?? []
+      const orderedIds = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].map(slot => slot.dataset.collectionId!)
+      const ids = initialSelection.includes(slot.dataset.collectionId!) ? orderedIds.filter(id => initialSelection.includes(id)) : [slot.dataset.collectionId!]
+      pending = { selecting: event.shiftKey, deselecting: initialSelection.includes(slot.dataset.collectionId!), initialSelection, lastSelection: initialSelection, ids, id: slot.dataset.collectionId!, pointerId: event.pointerId, slot, startX: pointer.x, startY: pointer.y, grabX: pointer.x - rect.left, grabY: pointer.y - rect.top, active: false }
+      if (!pending.selecting) hold = setTimeout(activate, 180)
     }
     function move(event: PointerEvent) {
       if (!pending || event.pointerId !== pending.pointerId) return
@@ -82,8 +107,17 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       if (!slot || !shelf!.contains(slot)) return
       event.preventDefault()
       const slots = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')]
-      const destination = slots[slots.indexOf(slot) + (event.key === 'ArrowLeft' ? -1 : 1)]
-      if (destination) onMove?.(slot.dataset.collectionId!, destination.dataset.collectionId!)
+      const selected = handlers.current.selection?.selectedIds ?? []
+      const moving = selected.includes(slot.dataset.collectionId!) ? selected : [slot.dataset.collectionId!]
+      const direction = event.key === 'ArrowLeft' ? -1 : 1
+      const movingSlots = slots.filter(item => moving.includes(item.dataset.collectionId!))
+      const edge = direction < 0 ? movingSlots[0] : movingSlots[movingSlots.length - 1]
+      const index = slots.indexOf(edge) + direction
+      const destination = slots[index]
+      if (destination && handlers.current.onMove) {
+        keyboardFocus.current = slot.dataset.collectionId!
+        handlers.current.onMove(slot.dataset.collectionId!, destination.dataset.collectionId!)
+      }
     }
     shelf.addEventListener('pointerdown', down)
     shelf.addEventListener('lostpointercapture', cancel)
@@ -94,7 +128,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
     window.addEventListener('blur', blur)
     function blur() { finish(false) }
     return () => {
-      finish(false)
+      finish(false, false)
       shelf.removeEventListener('pointerdown', down)
       shelf.removeEventListener('lostpointercapture', cancel)
       window.removeEventListener('pointermove', move)
@@ -103,7 +137,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       window.removeEventListener('keydown', key)
       window.removeEventListener('blur', blur)
     }
-  }, [enabled, onMove, shelfRef])
+  }, [enabled, shelfRef])
   function preventDragClick(event: MouseEvent) {
     if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false }
   }

@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
 import { effectiveMetadata } from './model'
-import { compareCollections, validateCollectionAppearance, type CollectionAppearance } from './collection-appearance'
+import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
 function failure(error: { code?: string } | null) {
@@ -23,7 +23,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
   const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms] = await Promise.all([
     allRows((from, to) => db.from('library_entries').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('works').select('*').order('id').range(from, to)),
-    allRows((from, to) => db.from('collections').select('*').order('id').range(from, to)),
+    allRows((from, to) => db.from('collections').select('*').order('created_at').order('id').range(from, to)),
     allRows((from, to) => db.from('collection_works').select('*').order('library_entry_id').order('collection_id').range(from, to)),
     allRows((from, to) => db.from('personal_tags').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('library_entry_tags').select('*').order('library_entry_id').order('personal_tag_id').range(from, to)),
@@ -74,18 +74,25 @@ export async function restoreStory(story: Story) {
   const { error } = await client().rpc('restore_library_story', { p_entry: entry, p_collections: collectionIds, p_tags: personalTags })
   failure(error)
 }
-export async function saveCollection(name: string, id?: string, appearance?: CollectionAppearance) {
+export async function saveCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string) {
   if (!name.trim()) throw new Error('A collection name is required.')
-  if (appearance) validateCollectionAppearance(appearance)
-  if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id, appearance)
-  const changes = { name: name.trim(), ...appearance }
+  const changes = { name: name.trim(), ...normalizeCollectionChanges({ ...appearance, ...(description !== undefined && { description }) }) }
+  if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id, appearance, description)
   const result = await (id ? client().from('collections').update(changes).eq('id', id) : client().from('collections').insert(changes)).select('id').single()
   failure(result.error)
   return result.data!.id
 }
-export async function deleteCollection(id: string) {
-  if (sampleMode) return (await import('./sample/repository')).deleteSampleCollection(id)
-  const { error } = await client().from('collections').delete().eq('id', id); failure(error)
+export async function updateCollections(ids: string[], changes: Partial<CollectionAppearance>) {
+  const patch = normalizeCollectionChanges({ color: changes.color, symbol: changes.symbol })
+  if (!ids.length || !Object.keys(patch).length) throw new Error('Choose collections and at least one field to change.')
+  if (sampleMode) return (await import('./sample/repository')).updateSampleCollections(ids, patch)
+  const { error } = await client().from('collections').update(patch).in('id', ids).is('default_key', null)
+  failure(error)
+}
+export async function deleteCollection(id: string) { return deleteCollections([id]) }
+export async function deleteCollections(ids: string[]) {
+  if (sampleMode) return (await import('./sample/repository')).deleteSampleCollections(ids)
+  const { error } = await client().from('collections').delete().in('id', ids).is('default_key', null); failure(error)
 }
 
 export async function reorderCollections(ids: string[]) {

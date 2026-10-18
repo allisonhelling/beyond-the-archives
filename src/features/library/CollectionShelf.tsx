@@ -13,15 +13,15 @@ const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-fram
 
 const heightOrder = [0, 1, 2, 1]
 
-export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove }: {
-  items: { id: string; name: string; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance) => void; onMove?: (id: string, target: string) => void
+export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange }: {
+  items: { id: string; name: string; count: number; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
   const shelfRef = useRef<HTMLDivElement>(null)
   const shelfId = useId()
   const dragInstructionsId = useId()
-  const { drag, preventDragClick } = useCollectionDrag(shelfRef, editing && !disabled, onMove)
+  const { drag, preventDragClick } = useCollectionDrag(shelfRef, editing && !disabled, onMove, onSelectionChange ? { selectedIds, onChange: onSelectionChange } : undefined)
   useEffect(() => {
     const shelf = shelfRef.current!
     function measure() {
@@ -49,8 +49,8 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing && customIndex >= 0
-    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${selected === item.id ? ' selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-pressed={editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editable ? 'dialog' : undefined} disabled={disabled || (editing && !editable)} title={editable ? `Edit ${item.name}` : item.name} onClick={() => editable ? onEdit?.(item.id, { color, symbol }) : onSelect(item.id)}>{selected === item.id && <SpineBookmark />}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} /></button>
-    return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.id === item.id || undefined} data-drop-target={drag?.target === item.id || undefined} key={item.id} style={drag?.id === item.id ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.count} ${item.count === 1 ? 'story' : 'stories'}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editable && !selecting ? 'dialog' : undefined} disabled={disabled || (editing && !editable)} title={editable ? `Edit ${item.name}` : item.name} onClick={event => customIndex >= 0 && (editing || event.shiftKey) ? onEdit?.(item.id, { color, symbol }, event.shiftKey) : onSelect(item.id)}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
+    return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
   }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
   const rows = Array.from({ length: Math.ceil(spines.length / capacity) }, (_, index) => spines.slice(index * capacity, (index + 1) * capacity))
   const expandable = !editing && items.length + 1 > capacity
@@ -61,17 +61,17 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
       <path d="M24 107.523V45.993C24 24.387 45.667 10.884 63 21.686 71.044 26.701 76 35.966 76 45.993V107.523" strokeWidth="1.2" />
       <circle cx="50" cy="49" r="21" fill="var(--bookend-plate)" strokeWidth="1.7" />
       <circle cx="50" cy="49" r="16" strokeWidth="2" />
-      {expandable && <path d={expanded ? 'm42 52 8-8 8 8' : 'm42 46 8 8 8-8'} stroke="var(--bookend-wood)" strokeWidth="3" />}
+      {expandable && <path d={expanded ? 'm42 52 8-8 8 8' : 'm42 46 8 8 8-8'} stroke="var(--bookend-ink)" strokeWidth="3" />}
       <path d="M32 101h36" strokeWidth="2" />
       <rect x="8" y="109" width="84" height="8" rx="2" fill="var(--bookend-wood)" strokeWidth="2" />
       <rect x="27.902" y="78.358" width="44" height="16" rx="2" fill="var(--bookend-plate)" strokeWidth="1.5" />
-      {expandable && <text x="49.902" y="89.358" textAnchor="middle" fontFamily="Georgia, serif" fontSize={expanded ? 9 : 10} fill="var(--bookend-wood)" stroke="none">{expanded ? 'SEE LESS' : 'SEE ALL'}</text>}
+      {expandable && <text x="49.902" y="89.358" textAnchor="middle" fontFamily="Georgia, serif" fontSize={expanded ? 9 : 10} fill="var(--bookend-ink)" stroke="none">{expanded ? 'SEE LESS' : 'SEE ALL'}</text>}
     </svg>
   const bookend = expandable
     ? <button type="button" className="collection-shelf-toggle" aria-label={expanded ? 'Show fewer collections' : 'Show all collections'} title={expanded ? 'Show fewer collections' : 'Show all collections'} aria-expanded={expanded} aria-controls={shelfId} onClick={() => setExpanded(!expanded)}>{bookendArtwork}</button>
     : <div className="collection-shelf-toggle" aria-hidden="true">{bookendArtwork}</div>
   return <nav className={`collection-shelves${editing ? ' collection-shelves-editing' : ''}`} aria-label="Library shelves" style={{ '--collection-shelf-capacity': capacity } as CSSProperties} onClickCapture={preventDragClick}>
-    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder custom collections. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging.</span>}
+    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder custom collections. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging. Shift-click or Shift-drag to select collections for bulk editing. Start Shift-drag on a selected collection to deselect a range. Drag a selected collection to move the selected group.</span>}
     <div id={shelfId} className="collection-shelf-rows" ref={shelfRef}>{rows.map((row, index) => <div className="collection-shelf-row" key={index}>{row}{index === 0 && bookend}</div>)}</div>
   </nav>
 }

@@ -5,9 +5,9 @@ import { NewCollectionButton } from './CollectionChoices'
 import { NewCollectionDialog } from './NewCollectionDialog'
 import type { Collection } from './model'
 
-const state = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn(), remove: vi.fn(), collections: [] as Collection[] }))
-vi.mock('./repository', () => ({ saveCollection: state.save, deleteCollection: state.remove }))
-vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ refresh: state.refresh, collections: state.collections }) }))
+const state = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn(), remove: vi.fn(), updateMany: vi.fn(), removeMany: vi.fn(), stories: [] as { collectionIds: string[] }[], collections: [] as Collection[] }))
+vi.mock('./repository', () => ({ saveCollection: state.save, deleteCollection: state.remove, updateCollections: state.updateMany, deleteCollections: state.removeMany }))
+vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ refresh: state.refresh, collections: state.collections, stories: state.stories }) }))
 
 const showModal = HTMLDialogElement.prototype.showModal, close = HTMLDialogElement.prototype.close
 beforeAll(() => {
@@ -15,9 +15,9 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
 })
 afterAll(() => { HTMLDialogElement.prototype.showModal = showModal; HTMLDialogElement.prototype.close = close })
-beforeEach(() => { vi.clearAllMocks(); state.collections = []; state.save.mockResolvedValue('new-collection'); state.refresh.mockResolvedValue(undefined) })
+beforeEach(() => { vi.clearAllMocks(); state.collections = []; state.stories = []; state.save.mockResolvedValue('new-collection'); state.refresh.mockResolvedValue(undefined) })
 
-const collection: Collection = { id: 'existing', name: 'Night reads', color: '#123456', symbol: 'moon', default_key: null, sort_position: 0, user_id: 'reader', description: null, created_at: '', updated_at: '' }
+const collection: Collection = { last_story_added_at: null, id: 'existing', name: 'Night reads', color: '#123456', symbol: 'moon', default_key: null, sort_position: 0, user_id: 'reader', description: null, created_at: '', updated_at: '' }
 
 it('reuses saved custom colors as swatches without duplicates or default-collection colors', async () => {
   state.collections = [collection,
@@ -42,7 +42,7 @@ it('reuses saved custom colors as swatches without duplicates or default-collect
   expect(screen.getByLabelText('Collection preview').querySelector('.collection-spine')).toHaveStyle('--cover-color: #abcdef')
   await user.click(screen.getByRole('button', { name: 'Create collection' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  expect(state.save).toHaveBeenCalledWith('Shared color', undefined, { color: '#abcdef', symbol: 'flask' })
+  expect(state.save).toHaveBeenCalledWith('Shared color', undefined, { color: '#abcdef', symbol: 'flask' }, '')
 })
 
 it('edits an existing collection using the shared appearance form and retries save failures', async () => {
@@ -60,10 +60,11 @@ it('edits an existing collection using the shared appearance form and retries sa
   expect(onClose).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-  expect(state.save).toHaveBeenLastCalledWith('New name', 'existing', { color: '#123456', symbol: 'moon' })
+  expect(state.save).toHaveBeenLastCalledWith('New name', 'existing', { color: '#123456', symbol: 'moon' }, '')
 })
 
 it('confirms deletion and retries a reload failure without deleting twice', async () => {
+  state.stories = [{ collectionIds: ['existing'] }]
   const user = userEvent.setup(), onClose = vi.fn(), onDeleted = vi.fn()
   state.refresh.mockRejectedValueOnce(new Error('Reload failed.'))
   render(<NewCollectionDialog collection={collection} onClose={onClose} onDeleted={onDeleted} />)
@@ -95,7 +96,7 @@ it('previews and saves the chosen name, color, and symbol, then restores trigger
   expect(preview.querySelector('.lucide-moon')).not.toBeNull()
   await user.click(within(dialog).getByRole('button', { name: 'Create collection' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  expect(state.save).toHaveBeenCalledWith('Night reads', undefined, { color: '#2e415c', symbol: 'moon' })
+  expect(state.save).toHaveBeenCalledWith('Night reads', undefined, { color: '#2e415c', symbol: 'moon' }, '')
   expect(state.refresh).toHaveBeenCalledOnce()
   expect(onCreated).toHaveBeenCalledWith('new-collection')
   expect(trigger).toHaveFocus()
@@ -150,4 +151,41 @@ it('creates collections from a story form without nesting or submitting that for
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(state.save).toHaveBeenCalledOnce()
   expect(submitStory).not.toHaveBeenCalled()
+})
+
+it('deletes empty collections directly and retries reload without repeating deletion', async () => {
+  state.refresh.mockRejectedValueOnce(new Error('Reload failed.'))
+  const onClose = vi.fn(), onDeleted = vi.fn(), user = userEvent.setup()
+  render(<NewCollectionDialog collection={collection} onClose={onClose} onDeleted={onDeleted} />)
+  await user.click(screen.getByRole('button', { name: 'Delete' }))
+  expect(screen.queryByRole('dialog', { name: 'Delete collection?' })).not.toBeInTheDocument()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Reload failed')
+  expect(onClose).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'Delete' }))
+  await waitFor(() => expect(onDeleted).toHaveBeenCalledOnce())
+  expect(state.remove).toHaveBeenCalledOnce()
+})
+
+it('edits and clears a single collection summary', async () => {
+  const onClose = vi.fn(), user = userEvent.setup()
+  render(<NewCollectionDialog collection={{ ...collection, description: 'Existing summary' }} onClose={onClose} />)
+  expect(screen.getByRole('textbox', { name: 'Summary' })).toHaveValue('Existing summary')
+  await user.clear(screen.getByRole('textbox', { name: 'Summary' }))
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+  expect(state.save).toHaveBeenCalledWith('Night reads', 'existing', { color: '#123456', symbol: 'moon' }, '')
+})
+
+it('bulk edits only chosen appearance fields and excludes names and summaries', async () => {
+  const onClose = vi.fn(), user = userEvent.setup()
+  render(<NewCollectionDialog selectedCollections={[collection, { ...collection, id: 'second', name: 'Other', description: 'Keep this' }]} onClose={onClose} />)
+  expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Summary' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  await user.click(screen.getByRole('checkbox', { name: 'Change symbol' }))
+  await user.click(screen.getByRole('radio', { name: 'Leaf' }))
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+  expect(state.updateMany).toHaveBeenCalledWith(['existing', 'second'], { symbol: 'leaf' })
+  expect(state.save).not.toHaveBeenCalled()
 })

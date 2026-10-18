@@ -56,15 +56,17 @@ it('keeps queued and processing requests busy until the worker succeeds and relo
 })
 
 it.each([
+  [job('completed'), 'completed', 'Metadata refreshed'],
   [job('failed', { error_message: 'AO3 is unavailable.' }), 'failed', 'AO3 is unavailable.'],
   [job('completed', { error_category: 'partial', error_message: 'Chapter list unavailable.' }), 'partial', 'Chapter list unavailable.'],
   [job('cancelled'), 'cancelled', 'cancelled'],
-])('restores terminal job feedback on a return visit: %s', async (latest, status, message) => {
+])('resets terminal job feedback on a return visit: %s', async (latest) => {
   mocks.read.mockResolvedValue(latest)
   const { result } = await mount()
-  expect(result.current.status).toBe(status)
-  expect(result.current.message).toContain(message)
+  expect(result.current.status).toBe('idle')
+  expect(result.current.message).toBe('')
   expect(result.current.busy).toBe(false)
+  expect(mocks.reload).not.toHaveBeenCalled()
 })
 
 it('shows retry timing and stops checking when the page unmounts', async () => {
@@ -93,7 +95,7 @@ it('recovers from status read failures without treating them as worker failures'
   expect(result.current.status).toBe('unknown')
   mocks.read.mockResolvedValue(job('completed'))
   await tick()
-  expect(result.current.status).toBe('completed')
+  expect(result.current.status).toBe('idle')
 })
 
 it('ignores an older status response after a new refresh is requested', async () => {
@@ -110,21 +112,51 @@ it('ignores an older status response after a new refresh is requested', async ()
 it('clears success feedback after one minute without requesting metadata again', async () => {
   mocks.read.mockResolvedValue(job('completed'))
   const { result } = await mount()
+  await act(async () => { await result.current.refresh() })
   await act(async () => { await vi.advanceTimersByTimeAsync(59999) })
   expect(result.current.status).toBe('completed')
   await act(async () => { await vi.advanceTimersByTimeAsync(1) })
   expect(result.current.status).toBe('idle')
   expect(result.current.message).toBe('')
-  expect(mocks.read).toHaveBeenCalledTimes(1)
+  expect(mocks.read).toHaveBeenCalledTimes(2)
 })
 
 it('does not clear a new pending request when the previous success timer expires', async () => {
   mocks.read.mockResolvedValue(job('completed'))
   const { result } = await mount()
+  await act(async () => { await result.current.refresh() })
   await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
   mocks.read.mockResolvedValue(job('pending'))
   await act(async () => { await result.current.refresh() })
   await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
   expect(result.current.status).toBe('pending')
   expect(result.current.busy).toBe(true)
+})
+
+it('forgets completed feedback after leaving and reopening the story', async () => {
+  const hook = renderHook(({ selected }) => useMetadataRefresh(selected), { initialProps: { selected: story } })
+  await act(async () => {})
+  mocks.read.mockResolvedValue(job('completed'))
+  await act(async () => { await hook.result.current.refresh() })
+  expect(hook.result.current.status).toBe('completed')
+  hook.rerender({ selected: { ...story, id: 'entry-2' } })
+  await act(async () => {})
+  expect(hook.result.current.status).toBe('idle')
+  hook.rerender({ selected: story })
+  await act(async () => {})
+  expect(hook.result.current.status).toBe('idle')
+})
+
+it('ignores a submission result that arrives after leaving the story', async () => {
+  let resolve!: (batch: string) => void
+  mocks.submit.mockReturnValue(new Promise(done => { resolve = done }))
+  const hook = renderHook(({ selected }) => useMetadataRefresh(selected), { initialProps: { selected: story } })
+  await act(async () => {})
+  let request!: Promise<void>
+  act(() => { request = hook.result.current.refresh() })
+  hook.rerender({ selected: { ...story, id: 'entry-2' } })
+  await act(async () => { resolve('batch-1'); await request })
+  hook.rerender({ selected: story })
+  await act(async () => {})
+  expect(hook.result.current.status).toBe('idle')
 })

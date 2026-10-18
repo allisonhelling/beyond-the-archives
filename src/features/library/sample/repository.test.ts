@@ -1,5 +1,6 @@
+import { orderCollections, moveCollectionIds } from '../collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, reorderSampleCollections } from './repository'
+import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
 import { parseWorkUrl, validateProgress } from '../model'
 
 beforeEach(() => {
@@ -15,7 +16,8 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 it('keeps custom order through reload, rename, creation, and deletion', async () => {
-  const alpha = await saveSampleCollection('Alpha'), beta = await saveSampleCollection('Beta')
+  const alpha = await saveSampleCollection('Zebra'), beta = await saveSampleCollection('Apple')
+  expect((await loadSampleLibrary()).collections.map(collection => collection.id)).toEqual([alpha, beta])
   await reorderSampleCollections([beta, alpha])
   await saveSampleCollection('Zed', beta)
   const extra = await saveSampleCollection('A new shelf')
@@ -97,4 +99,76 @@ it('restores a removed sample story with all private data and original timestamp
   await restoreSampleStory(snapshot)
   expect((await loadSampleLibrary()).stories.find(item => item.id === story.id)).toEqual(snapshot)
   await expect(restoreSampleStory(snapshot)).rejects.toThrow('already in your library')
+})
+
+it('organizes existing collections by name, creation, story activity, or their saved positions', async () => {
+  const ids = []
+  for (const name of ['Zebra', 'Apple', 'Middle', 'Empty']) ids.push(await saveSampleCollection(name))
+  const collections = (await loadSampleLibrary()).collections.map((collection, index) => ({ ...collection, created_at: `2026-10-${10 + index}T00:00:00Z` }))
+  const stories = [
+    { collectionIds: [ids[0], ids[1]], updated_at: '2026-10-14T00:00:00Z' },
+    { collectionIds: [ids[1]], updated_at: '2026-10-16T00:00:00Z' },
+    { collectionIds: [ids[2]], updated_at: '2026-10-15T00:00:00Z' },
+  ]
+  const names = (order: Parameters<typeof orderCollections>[2]) => orderCollections(collections, stories, order).map(collection => collection.name)
+  expect(names('alphabetical')).toEqual(['Apple', 'Empty', 'Middle', 'Zebra'])
+  expect(names('created')).toEqual(['Zebra', 'Apple', 'Middle', 'Empty'])
+  expect(names('created_newest')).toEqual(['Empty', 'Middle', 'Apple', 'Zebra'])
+  expect(names('updated')).toEqual(['Apple', 'Middle', 'Zebra', 'Empty'])
+  await reorderSampleCollections(orderCollections(collections, stories, 'alphabetical').map(collection => collection.id))
+  const extra = await saveSampleCollection('A new last book')
+  const reloaded = (await loadSampleLibrary()).collections
+  expect(reloaded.map(collection => collection.id)).toEqual([ids[1], ids[3], ids[2], ids[0], extra])
+  expect(orderCollections(reloaded, stories, 'manual').map(collection => collection.id)).toEqual(reloaded.map(collection => collection.id))
+})
+
+it('tracks collection additions separately from story edits, removals, and collection renames', async () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date('2026-10-17T01:00:00Z'))
+    const first = await saveSampleCollection('First'), second = await saveSampleCollection('Second')
+    const story = (await loadSampleLibrary()).stories[0]
+    const input = { id: story.id, url: story.original_url, metadata: story.metadata, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, tags: story.personalTags, collections: [first] }
+    await saveSampleStory(input)
+    const firstAdded = (await loadSampleLibrary()).collections.find(collection => collection.id === first)!.last_story_added_at
+    vi.setSystemTime(new Date('2026-10-17T02:00:00Z'))
+    await saveSampleStory({ ...input, notes: 'An ordinary story edit' })
+    expect((await loadSampleLibrary()).collections.find(collection => collection.id === first)!.last_story_added_at).toBe(firstAdded)
+    await saveSampleStory({ ...input, collections: [first, second] })
+    let library = await loadSampleLibrary()
+    expect(orderCollections(library.collections, library.stories, 'edited').map(collection => collection.id)).toEqual([second, first])
+    vi.setSystemTime(new Date('2026-10-17T03:00:00Z'))
+    await saveSampleStory({ ...input, collections: [second] })
+    await saveSampleCollection('Renamed first', first)
+    library = await loadSampleLibrary()
+    expect(library.collections.find(collection => collection.id === first)!.last_story_added_at).toBe(firstAdded)
+    expect(orderCollections(library.collections, library.stories, 'edited').map(collection => collection.id)).toEqual([second, first])
+    await saveSampleStory({ ...input, collections: [first, second] })
+    library = await loadSampleLibrary()
+    expect(orderCollections(library.collections, library.stories, 'edited').map(collection => collection.id)).toEqual([first, second])
+  } finally { vi.useRealTimers() }
+})
+
+it('saves individual summaries and preserves them during bulk appearance updates', async () => {
+  const first = await saveSampleCollection('First', undefined, { color: '#123456', symbol: 'moon' }, '  First summary  ')
+  const second = await saveSampleCollection('Second', undefined, { color: '#654321', symbol: 'leaf' }, 'Second summary')
+  await updateSampleCollections([first, second], { symbol: 'heart' })
+  let collections = (await loadSampleLibrary()).collections
+  expect(collections.find(item => item.id === first)).toMatchObject({ name: 'First', color: '#123456', symbol: 'heart', description: 'First summary' })
+  expect(collections.find(item => item.id === second)).toMatchObject({ name: 'Second', color: '#654321', symbol: 'heart', description: 'Second summary' })
+  await saveSampleCollection('First', first, undefined, '')
+  collections = (await loadSampleLibrary()).collections
+  expect(collections.find(item => item.id === first)?.description).toBeNull()
+  await deleteSampleCollections([first, second])
+  expect((await loadSampleLibrary()).collections).toHaveLength(0)
+})
+
+it('moves selected collections as an ordered group while leaving other books in order', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e']
+  expect(moveCollectionIds(ids, 'c', 'a', ['b', 'c', 'd'])).toEqual(['b', 'c', 'd', 'a', 'e'])
+  expect(moveCollectionIds(ids, 'b', 'e', ['b', 'c', 'd'])).toEqual(['a', 'e', 'b', 'c', 'd'])
+  expect(moveCollectionIds(ids, 'd', 'a', ['b', 'd'])).toEqual(['b', 'd', 'a', 'c', 'e'])
+  expect(moveCollectionIds(ids, 'b', 'c', ['b', 'c'])).toBe(ids)
+  expect(moveCollectionIds(ids, 'e', 'b', ['a', 'c'])).toEqual(['a', 'e', 'b', 'c', 'd'])
+  expect(ids).toEqual(['a', 'b', 'c', 'd', 'e'])
 })

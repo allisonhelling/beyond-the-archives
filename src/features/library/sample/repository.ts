@@ -1,4 +1,4 @@
-import { compareCollections, validateCollectionAppearance, type CollectionAppearance } from '../collection-appearance'
+import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collection-appearance'
 import snapshots from './stories.json'
 import { blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
@@ -99,6 +99,9 @@ export async function saveSampleStory(input: StoryInput) {
     last_update_notification_at: existing?.last_update_notification_at ?? null,
     update_dismissed_at: existing?.update_dismissed_at ?? null,
   }
+  for (const collection of data.collections) {
+    if (input.collections.includes(collection.id) && !existing?.collectionIds.includes(collection.id)) collection.last_story_added_at = now
+  }
   data.stories = [...data.stories.filter(item => item.id !== story.id), story]
   write(data)
   return story.id
@@ -118,11 +121,14 @@ export async function deleteSampleStory(id: string) {
 export async function restoreSampleStory(story: Story) {
   const data = read()
   if (data.stories.some(item => item.work.ao3_work_id === story.work.ao3_work_id)) throw new Error('This story is already in your library.')
+  for (const collection of data.collections) {
+    if (story.collectionIds.includes(collection.id)) collection.last_story_added_at = new Date().toISOString()
+  }
   data.stories.push({ ...story, collectionIds: story.collectionIds.filter(id => data.collections.some(collection => collection.id === id)) })
   write(data)
 }
-export async function saveSampleCollection(name: string, id?: string, appearance?: CollectionAppearance) {
-  if (appearance) validateCollectionAppearance(appearance)
+export async function saveSampleCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string) {
+  const changes = normalizeCollectionChanges({ ...appearance, ...(description !== undefined && { description }) })
   const data = read(), trimmed = name.trim()
   const collectionId = id ?? crypto.randomUUID()
   if (!trimmed) throw new Error('A collection name is required.')
@@ -131,16 +137,25 @@ export async function saveSampleCollection(name: string, id?: string, appearance
   if (id) {
     const collection = data.collections.find(item => item.id === id)
     if (!collection) throw new Error('Collection no longer available.')
-    Object.assign(collection, { name: trimmed, updated_at: now, ...appearance })
-  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: null, default_key: null, created_at: now, updated_at: now, color: appearance?.color ?? null, symbol: appearance?.symbol ?? null, sort_position: null })
+    Object.assign(collection, { name: trimmed, updated_at: now, ...changes })
+  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: changes.description ?? null, default_key: null, created_at: now, updated_at: now, color: changes.color ?? null, symbol: changes.symbol ?? null, sort_position: null, last_story_added_at: null })
   data.collections.sort(compareCollections)
   write(data)
   return collectionId
 }
-export async function deleteSampleCollection(id: string) {
-  const data = read()
-  data.collections = data.collections.filter(item => item.id !== id)
-  data.stories.forEach(story => { story.collectionIds = story.collectionIds.filter(item => item !== id) })
+export async function updateSampleCollections(ids: string[], changes: Partial<CollectionAppearance>) {
+  const data = read(), patch = normalizeCollectionChanges({ color: changes.color, symbol: changes.symbol })
+  if (!ids.length || !Object.keys(patch).length) throw new Error('Choose collections and at least one field to change.')
+  for (const collection of data.collections) {
+    if (ids.includes(collection.id) && !collection.default_key) Object.assign(collection, patch, { updated_at: new Date().toISOString() })
+  }
+  write(data)
+}
+export async function deleteSampleCollection(id: string) { return deleteSampleCollections([id]) }
+export async function deleteSampleCollections(ids: string[]) {
+  const data = read(), removable = new Set(data.collections.filter(item => ids.includes(item.id) && !item.default_key).map(item => item.id))
+  data.collections = data.collections.filter(item => !removable.has(item.id))
+  data.stories.forEach(story => { story.collectionIds = story.collectionIds.filter(id => !removable.has(id)) })
   write(data)
 }
 

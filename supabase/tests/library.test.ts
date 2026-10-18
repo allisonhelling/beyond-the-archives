@@ -106,3 +106,30 @@ it('atomically restores a removed entry, private links and exact saved timestamp
   await db.exec('set role anon')
   try { await expect(db.query('select public.restore_library_story($1,$2::uuid[],$3::text[])', [JSON.stringify(snapshot!), collections!, tags!])).rejects.toThrow(/permission denied/) } finally { await db.exec('reset role') }
 })
+
+it('records only new collection memberships as addition activity and retains that activity after removal', async () => {
+  await user(alice, async () => {
+    const ids = (await db.query<{ id: string }>("insert into public.collections(name) values ('Activity first'),('Activity second') returning id")).rows.map(row => row.id)
+    const id = (await save({ url: 'https://archiveofourown.org/works/7777', collections: [ids[0]] })).rows[0].id
+    // Use a past timestamp so a reset during the next save cannot pass by coincidence.
+    await db.query("update public.collection_works set created_at='2026-01-01T00:00:00Z' where library_entry_id=$1", [id])
+    await db.query("update public.collections set last_story_added_at='2026-01-01T00:00:00Z' where id=$1", [ids[0]])
+    const memberships = () => db.query<{ collection_id: string; created_at: Date }>('select collection_id,created_at from public.collection_works where library_entry_id=$1 order by collection_id', [id])
+    const activity = () => db.query<{ id: string; last_story_added_at: Date }>('select id,last_story_added_at from public.collections where id=any($1::uuid[]) order by id', [ids])
+    const originalMemberships = (await memberships()).rows
+    const originalActivity = (await activity()).rows
+    await save({ id, url: 'https://archiveofourown.org/works/7777', collections: [ids[0]], progress: 1 })
+    expect((await memberships()).rows).toEqual(originalMemberships)
+    expect((await activity()).rows).toEqual(originalActivity)
+    await save({ id, url: 'https://archiveofourown.org/works/7777', collections: ids })
+    const added = (await activity()).rows
+    expect(added.find(row => row.id === ids[0])).toEqual(originalActivity.find(row => row.id === ids[0]))
+    expect(added.find(row => row.id === ids[1])!.last_story_added_at).not.toBeNull()
+    await save({ id, url: 'https://archiveofourown.org/works/7777', collections: [] })
+    await db.query("update public.collections set name='Activity renamed' where id=$1", [ids[0]])
+    expect((await memberships()).rows).toHaveLength(0)
+    expect((await activity()).rows).toEqual(added)
+    await save({ id, url: 'https://archiveofourown.org/works/7777', collections: [ids[0]] })
+    expect((await activity()).rows.find(row => row.id === ids[0])!.last_story_added_at).not.toEqual(originalActivity.find(row => row.id === ids[0])!.last_story_added_at)
+  })
+})

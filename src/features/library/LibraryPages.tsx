@@ -1,9 +1,11 @@
+import { Dropdown } from '../../components/Dropdown'
+import { collectionOrderOptions, orderCollections, moveCollectionIds, type CollectionOrder, type CollectionAppearance } from './collection-appearance'
 import { SeriesNames } from './SeriesNames'
 import { MetadataControls, MetadataRefreshButton } from '../imports/MetadataControls'
 import { useMetadataRefresh } from '../imports/useMetadataRefresh'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, LockKeyhole, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, Info, LockKeyhole, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
 import { active, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
@@ -135,45 +137,112 @@ export function LibraryPage({ reading = false }: { reading?: boolean }) {
   if (reading) return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Currently Reading</h1><p>A little escape, one chapter at a time.</p></div><Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={story => <StoryCard key={story.id} story={story} />} /></LibraryBoundary></>
   return <LibraryContent />
 }
+const collectionControlHelp = 'Select collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
+
+const collectionSortKey = 'between-chapters:collection-sort:v1'
+type CollectionSort = { order: CollectionOrder }
+function initialCollectionSort(): CollectionSort {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(collectionSortKey) ?? 'null')
+    if (collectionOrderOptions.some(option => option.value === saved?.order)) return { order: saved.order }
+  } catch { /* Sorting still works when browser storage is unavailable. */ }
+  return { order: 'manual' }
+}
+
 function LibraryContent() {
   const { stories, collections, refresh } = useLibrary(), navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'all'
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  const [collectionSort, setCollectionSort] = useState(initialCollectionSort)
+  useEffect(() => {
+    try { window.localStorage.setItem(collectionSortKey, JSON.stringify(collectionSort)) }
+    catch { /* Keep the current sort when browser storage is unavailable. */ }
+  }, [collectionSort])
   const [editingCollections, setEditingCollections] = useState(false)
+  const [selectingCollections, setSelectingCollections] = useState(false)
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([])
+  const [bulkCollections, setBulkCollections] = useState<Collection[] | null>(null)
+  const selectionAnchor = useRef<string | null>(null)
+  function clearCollectionSelection() { setSelectingCollections(false); setSelectedCollectionIds([]); selectionAnchor.current = null }
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
   const editTrigger = useRef<HTMLElement | null>(null)
   const editButton = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (!editingCollection && editTrigger.current) { (editTrigger.current.isConnected ? editTrigger.current : editButton.current)?.focus(); editTrigger.current = null } }, [editingCollection])
+  const customCollections = collections.filter(item => !item.default_key)
+  function changeCollectionSort(order: CollectionOrder) {
+    setCollectionSort({ order })
+    setEditingCollections(false)
+    clearCollectionSelection()
+  }
+  // Display sorts never change the saved manual positions.
+  const displayedCollections = orderCollections(customCollections, stories, collectionSort.order)
+  function toggleCollectionEditing() {
+    if (!editingCollections) setCollectionSort({ order: 'manual' })
+    setEditingCollections(!editingCollections)
+    clearCollectionSelection()
+  }
+  function editCollection(id: string, appearance: CollectionAppearance, shiftKey: boolean) {
+    const item = customCollections.find(item => item.id === id)
+    if (!item) return
+    if (shiftKey || selectingCollections) {
+      if (!editingCollections) { setEditingCollections(true); setCollectionSort({ order: 'manual' }) }
+      setSelectingCollections(true)
+      const anchor = selectionAnchor.current
+      setSelectedCollectionIds(previous => {
+        if (shiftKey && anchor && anchor !== id) {
+          const ids = displayedCollections.map(item => item.id), from = ids.indexOf(anchor), to = ids.indexOf(id)
+          if (from >= 0 && to >= 0) return [...new Set([...previous, ...ids.slice(Math.min(from, to), Math.max(from, to) + 1)])]
+        }
+        return previous.includes(id) ? previous.filter(selectedId => selectedId !== id) : [...previous, id]
+      })
+      selectionAnchor.current = id
+      return
+    }
+    editTrigger.current = document.activeElement as HTMLElement
+    setEditingCollection({ ...item, ...appearance })
+  }
   async function moveCollection(id: string, targetId: string) {
     const ids = collections.filter(item => !item.default_key).map(item => item.id)
-    const index = ids.indexOf(id), target = ids.indexOf(targetId)
-    if (index < 0 || target < 0 || target >= ids.length) return
-    const [moved] = ids.splice(index, 1)
-    ids.splice(target, 0, moved)
-    await collectionAction(() => reorderCollections(ids))
+    const ordered = moveCollectionIds(ids, id, targetId, selectedCollectionIds)
+    if (ordered === ids) return
+    await collectionAction(() => reorderCollections(ordered))
   }
   async function collectionAction(action: () => Promise<unknown>) { setBusy(true); setError(''); try { await action(); await refresh() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   const collection = collections.find(c => c.id === selected)
-  const shelfStories = stories.filter(story => {
-    if (selected === 'currently_reading') return active(story)
-    if (selected === 'complete') return story.metadata.publication_status === 'complete'
-    if (selected === 'new') return false // No verified update events are ingested during Phase 2.
-    if (selected === 'waiting') return story.reading_status === 'waiting_for_updates'
-    if (selected === 'to_read' || selected === 'finished' || selected === 'did_not_finish') return story.reading_status === selected
-    if (selected === 'favorites') return story.is_favorite
-    if (collection) return story.collectionIds.includes(collection.id)
-    return true
-  })
-  return <><div className="page-heading library-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><div className="library-title-row"><h1>Your Library</h1><div className="library-heading-actions">
+  function storiesForShelf(key: string) {
+    const custom = collections.some(item => item.id === key)
+    return stories.filter(story => {
+      if (key === 'currently_reading') return active(story)
+      if (key === 'complete') return story.metadata.publication_status === 'complete'
+      if (key === 'new') return false // No verified update events are ingested during Phase 2.
+      if (key === 'waiting') return story.reading_status === 'waiting_for_updates'
+      if (key === 'to_read' || key === 'finished' || key === 'did_not_finish') return story.reading_status === key
+      if (key === 'favorites') return story.is_favorite
+      if (custom) return story.collectionIds.includes(key)
+      return true
+    })
+  }
+  const shelfStories = storiesForShelf(selected)
+  const shelfItems = [...shelves.map(([id, name]) => ({ id, name })), ...displayedCollections]
+    .map(item => ({ ...item, count: storiesForShelf(item.id).length }))
+
+  return <><div className="page-heading library-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><div className="library-title-row"><h1>Your Library</h1>
+    {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection selection">
+      <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel selection' : 'Select collections'}</button>
+      <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip description={collectionControlHelp}>{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
+      {selectingCollections && <button type="button" className="button secondary" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(customCollections.filter(item => selectedCollectionIds.includes(item.id)))}>Edit selected</button>}
+    </div>}
+    <div className="library-heading-actions">
       <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
-      <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={() => setEditingCollections(!editingCollections)}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
+      <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
+      <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
     </div></div><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
-    <CollectionShelf editing={editingCollections} onEdit={(id, appearance) => { const item = collections.find(item => item.id === id && !item.default_key); if (item) { editTrigger.current = document.activeElement as HTMLElement; setEditingCollection({ ...item, ...appearance }) } }} onMove={(id, target) => void moveCollection(id, target)} items={[...shelves.map(([id, name]) => ({ id, name })), ...collections.filter(c => !c.default_key)]} selected={selected} disabled={busy} onSelect={key => { if (key === 'currently_reading' || key === 'to_read') navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }} />
-    {collection && <div className="collection-heading"><h2>{collection.name}</h2></div>}
+    <CollectionShelf editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy} onSelect={key => { if (key === 'currently_reading' || key === 'to_read') navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }} />
+    {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.description && <p className="collection-summary">{collection.description}</p>}</div>}
     {error && <p role="alert" className="error-message">{error}</p>}
     <ReadingDashboard mode="library" stories={shelfStories} renderStory={story => <StoryCard key={story.id} story={story} />} />
-  </LibraryBoundary>{editingCollection && <NewCollectionDialog collection={editingCollection} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
+  </LibraryBoundary>{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
 }
 export function AddStoryPage() {
   const [params, setParams] = useSearchParams()

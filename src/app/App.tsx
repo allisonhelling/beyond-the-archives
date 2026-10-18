@@ -1,8 +1,8 @@
 import { ImportPage } from '../features/imports/ImportPage'
 import { ExtensionConnection, MetadataSettings } from '../features/imports/MetadataSettings'
 import { useState } from 'react'
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, BookOpen, BookMarked, ChartNoAxesCombined, ChevronDown, CircleCheck, History, Layers, LockKeyhole, LogOut, Menu, Plus, Settings, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { ArrowRight, BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, Layers, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
 import { LibraryProvider } from '../features/library/LibraryProvider'
 import { AddStoryPage, LibraryPage, StoryDetailsPage } from '../features/library/LibraryPages'
 import { useDismissible } from '../components/useDismissible'
@@ -14,11 +14,12 @@ import { authRedirectUrl, supabase } from '../lib/supabase'
 import { sampleMode } from '../lib/sample-mode'
 
 const navigation = [
-  { to: '/reading', label: 'Currently Reading', icon: BookOpen },
-  { to: '/library', label: 'Library', icon: BookMarked },
+  { to: '/reading', label: 'Currently Reading', mobileLabel: 'Reading', icon: BookOpen },
+  { to: '/library', label: 'Library', mobileLabel: 'Library', icon: BookMarked },
   { to: '/imports', label: 'Import', icon: History },
-  { to: '/stats', label: 'Stats', icon: ChartNoAxesCombined },
+  { to: '/stats', label: 'Stats', mobileLabel: 'Stats', icon: ChartNoAxesCombined },
   { to: '/features', label: 'Features', icon: Sparkles },
+  { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings },
 ]
 
 function FoundationPage({ kind }: { kind: 'stats' }) {
@@ -61,9 +62,7 @@ function FeaturesPage() {
 
 function Shell() {
   const { session } = useAuth()
-  const location = useLocation()
   const navigate = useNavigate()
-  const [openPath, setOpenPath] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const addRef = useDismissible<HTMLDivElement>(addOpen, () => setAddOpen(false))
   const [profileOpen, setProfileOpen] = useState(false)
@@ -71,7 +70,6 @@ function Shell() {
   const profileName = sampleMode ? 'Sample Reader' : [session?.user.user_metadata?.display_name, session?.user.user_metadata?.full_name, session?.user.user_metadata?.name].find(value => typeof value === 'string' && value.trim()) || session?.user.email?.split('@')[0] || 'Reader'
   const [error, setError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
-  const mobileOpen = openPath === location.pathname
   async function signOut() {
     if (!supabase || signingOut) return
     setSigningOut(true); setError('')
@@ -81,8 +79,8 @@ function Shell() {
     } catch { setError('Could not sign out. Please try again.') }
     finally { setSigningOut(false) }
   }
-  return <div className="app-shell"><a className="skip-link" href="#main">Skip to content</a><header className="app-header"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{navigation.map(({ to, label }) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav><div className="header-actions"><div className="add-wrapper" ref={addRef}><button className="button primary compact" aria-expanded={addOpen} aria-controls="add-options" onClick={() => setAddOpen(!addOpen)}><Plus size={16} /> Add <ChevronDown size={14} /></button>{addOpen && <div id="add-options" className="add-menu menu-surface"><strong>Add to your library</strong><button onClick={() => { setAddOpen(false); navigate('/add') }}><span className="add-option-label"><Plus size={19} aria-hidden="true" />Add Story</span></button><button onClick={() => { setAddOpen(false); navigate('/imports') }}><span className="add-option-label"><History size={19} aria-hidden="true" />Import History from AO3</span></button></div>}</div><button className="icon-button mobile-toggle" aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setOpenPath(mobileOpen ? null : location.pathname)}>{mobileOpen ? <X size={21} /> : <Menu size={21} />}</button><div className="profile-wrapper" ref={profileRef}><button className="avatar profile-trigger" aria-label="Profile menu" aria-expanded={profileOpen} aria-controls="profile-options" title={session?.user.email} onClick={() => setProfileOpen(!profileOpen)}>{String(profileName).slice(0, 1).toUpperCase()}</button>{profileOpen && <section className="profile-menu menu-surface" id="profile-options" aria-label="Profile menu"><div className="profile-identity"><strong>{profileName}</strong><p>{session?.user.email}</p></div><NavLink className="profile-action" to="/settings" onClick={() => { setProfileOpen(false); setOpenPath(null) }}><Settings size={17} />Settings</NavLink><button className="profile-action" disabled={signingOut || sampleMode} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? 'Logging out…' : 'Log out'}</button></section>}</div></div></header>
-    {mobileOpen && <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">{navigation.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setOpenPath(null)}><Icon size={17} />{label}</NavLink>)}</nav>}
+  return <div className="app-shell"><a className="skip-link" href="#main">Skip to content</a><header className="app-header"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{navigation.filter(item => item.to !== '/settings').map(({ to, label }) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav><div className="header-actions"><div className="add-wrapper" ref={addRef}><button className="button primary compact" aria-expanded={addOpen} aria-controls="add-options" onClick={() => setAddOpen(!addOpen)}><Plus size={16} /> Add</button>{addOpen && <div id="add-options" className="add-menu menu-surface"><strong>Add to your library</strong><button onClick={() => { setAddOpen(false); navigate('/add') }}><span className="add-option-label"><Plus size={19} aria-hidden="true" />Add Story</span></button><button onClick={() => { setAddOpen(false); navigate('/imports') }}><span className="add-option-label"><History size={19} aria-hidden="true" />Import History from AO3</span></button></div>}</div><div className="profile-wrapper" ref={profileRef}><button className="avatar profile-trigger" aria-label="Profile menu" aria-expanded={profileOpen} aria-controls="profile-options" title={session?.user.email} onClick={() => setProfileOpen(!profileOpen)}>{String(profileName).slice(0, 1).toUpperCase()}</button>{profileOpen && <section className="profile-menu menu-surface" id="profile-options" aria-label="Profile menu"><div className="profile-identity"><strong>{profileName}</strong><p>{session?.user.email}</p></div><NavLink className="profile-action mobile-profile-action" to="/features" onClick={() => setProfileOpen(false)}><Sparkles size={17} />Features</NavLink><NavLink className="profile-action" to="/settings" onClick={() => setProfileOpen(false)}><Settings size={17} />Settings</NavLink><button className="profile-action" disabled={signingOut || sampleMode} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? 'Logging out…' : 'Log out'}</button></section>}</div></div></header>
+    <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">{navigation.filter(item => item.mobileLabel).map(({ to, mobileLabel, icon: Icon }) => <NavLink key={to} to={to} onClick={() => { setAddOpen(false); setProfileOpen(false) }}><Icon size={21} aria-hidden="true" />{mobileLabel}</NavLink>)}</nav>
 
     <main id="main" className="app-main" tabIndex={-1}>{error && <p role="alert" className="error-message">{error}</p>}<Routes><Route path="/reading" element={<LibraryPage reading />} /><Route path="/library" element={<LibraryPage />} /><Route path="/imports" element={<ImportPage />} /><Route path="/import-fic" element={<Navigate to="/add?import=link" replace />} /><Route path="/add" element={<AddStoryPage />} /><Route path="/stories/:id" element={<StoryDetailsPage />} /><Route path="/stats" element={<FoundationPage kind="stats" />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/features" element={<FeaturesPage />} /><Route path="*" element={<Navigate to="/reading" replace />} /></Routes></main><footer className="app-footer"><span>For the stories you can’t put down.</span><span><LockKeyhole size={12} /> A private AO3 reading companion</span></footer>
   </div>

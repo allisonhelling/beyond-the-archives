@@ -69,6 +69,7 @@ export type Database = {
           color: string | null
           symbol: string | null
           sort_position: number | null
+          last_story_added_at: string | null
         }
         Insert: {
           id?: string
@@ -81,6 +82,7 @@ export type Database = {
           color?: string | null
           symbol?: string | null
           sort_position?: number | null
+          last_story_added_at?: string | null
         }
         Update: {
           id?: string
@@ -93,6 +95,7 @@ export type Database = {
           color?: string | null
           symbol?: string | null
           sort_position?: number | null
+          last_story_added_at?: string | null
         }
         Relationships: [
         ]

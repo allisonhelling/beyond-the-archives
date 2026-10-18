@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Bell, Bookmark, ChevronDown, Clock, Heart, Info, Library, SlidersHorizontal, X } from 'lucide-react'
+import { Bell, Bookmark, ChevronDown, Clock, Heart, Info, Library, Layers3, SlidersHorizontal, ArrowDownWideNarrow, X } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import { ratings, tagNames, type Story } from './model'
 import { Dropdown } from '../../components/Dropdown'
@@ -49,7 +49,7 @@ function initialReadingFilters(): ReadingFilters {
   } catch { return { ...defaultReadingFilters } }
 }
 function SortSelect({ value, onChange }: { value: SortOrder; onChange: (value: SortOrder) => void }) {
-  return <Dropdown label="Sort By" value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
+  return <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
 }
 const sections = [
   ['complete', publicationStatuses.complete.label, 'All chapters out', publicationStatuses.complete.Icon], ['in_progress', publicationStatuses.in_progress.label, 'Still being written, still catching up.', publicationStatuses.in_progress.Icon],
@@ -64,6 +64,14 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading' }: { s
     try { window.localStorage.setItem(preferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
   }, [filters.sort, filters.groupBy])
+  const [mobile, setMobile] = useState(() => window.matchMedia?.('(max-width: 650px)').matches ?? false)
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 650px)')
+    if (!media) return
+    const update = () => setMobile(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const [expanded, setExpanded] = useState(false)
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'view_all'
@@ -84,15 +92,19 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading' }: { s
     filters.rating && `Rating: ${filters.rating}`, filters.favorites && 'Favorites',
     filters.relationship && `Relationships: ${filters.relationship}`, filters.characters && `Characters: ${filters.characters}`, filters.tags && `Tags: ${filters.tags}`, filters.within && `Within ${filters.scope}: ${filters.within}`,
     filters.updatedAfter && `Updated from ${filters.updatedAfter}`, filters.updatedBefore && `Updated through ${filters.updatedBefore}`].filter(Boolean)
+  const orderingControls = <>
+    <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
+    <Dropdown label="Group" icon={Layers3} compact value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
+  </>
   return <>
     <section className="reading-toolbar" aria-label={mode === 'library' ? 'Library toolbar' : 'Reading toolbar'}>
-      <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
-      <Dropdown label="Group by" value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
+      {!mobile && orderingControls}
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={pool} />
       <FandomSelect options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       <button className={`button ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls="reading-filters" onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>
     </section>
     {expanded && <section className="reading-filters" id="reading-filters" aria-label={mode === 'library' ? 'Library filters' : 'Reading filters'}><div className="filter-grid">
+      {mobile && orderingControls}
       <SearchSuggestions label="Relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />

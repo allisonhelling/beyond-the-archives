@@ -42,11 +42,16 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await page.getByRole('button', { name: 'Profile menu', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Profile menu', exact: true }).getByText('reader', { exact: true })).toBeVisible()
   await expect(page.locator('.profile-identity').getByText('Name', { exact: true })).toHaveCount(0)
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page.getByRole('region', { name: 'Profile menu', exact: true }).getByRole('link', { name: 'Settings', exact: true }).click()
   await expect(page.getByText('reader@example.com')).toBeVisible()
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
-  if (mobile) await page.getByRole('button', { name: 'Open navigation' }).click()
+  if (mobile) {
+    const nav = page.getByRole('navigation', { name: 'Mobile navigation' })
+    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Stats', 'Settings'])
+    await expect(nav).toHaveCSS('position', 'fixed')
+    await page.getByRole('button', { name: 'Profile menu' }).click()
+  }
   await page.getByRole('link', { name: 'Features', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'The next chapters' })).toBeVisible()
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))

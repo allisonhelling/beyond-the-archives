@@ -29,9 +29,17 @@ export function useMetadataRefresh(story: Story | undefined) {
   const entryId = story?.id
   const [feedback, setFeedback] = useState<Feedback & { entryId: string }>()
   const [request, setRequest] = useState<{ entryId: string; batchId: string }>()
+  const [visitEntryId, setVisitEntryId] = useState(entryId)
+  if (visitEntryId !== entryId) {
+    setVisitEntryId(entryId)
+    setFeedback(undefined)
+    setRequest(undefined)
+  }
   const submitting = useRef(false)
   const generation = useRef(0)
   const current = feedback && feedback.entryId === entryId ? feedback : idle
+
+  useEffect(() => () => { generation.current += 1; submitting.current = false }, [entryId])
 
   useEffect(() => {
     if (!entryId || current.status !== 'completed') return
@@ -42,6 +50,7 @@ export function useMetadataRefresh(story: Story | undefined) {
   useEffect(() => {
     if (!entryId || sampleMode) return
     let active = true
+    let observing = request?.entryId === entryId
     const version = generation.current
     let timer: ReturnType<typeof setTimeout> | undefined
     async function poll() {
@@ -52,8 +61,11 @@ export function useMetadataRefresh(story: Story | undefined) {
         if (!job && request?.entryId === entryId) throw new Error('Waiting for metadata refresh status. Check import history for details.')
         const result = job ? jobFeedback(job) : idle
         again = result.busy
-        setFeedback({ ...result, entryId: entryId! })
-        if (job && !again) {
+        if (again) observing = true
+        // Past terminal jobs belong to a previous visit; only show results observed here.
+        const visible = observing ? result : idle
+        setFeedback({ ...visible, entryId: entryId! })
+        if (job && !again && observing) {
           try { await refreshLibrary() }
           catch {
             if (active && version === generation.current) setFeedback({ ...result, entryId: entryId!, message: `${result.message} Could not reload your library. Reload the page to see the latest saved data.` })
@@ -74,15 +86,18 @@ export function useMetadataRefresh(story: Story | undefined) {
     if (!story || current.busy || submitting.current || sampleMode) return
     submitting.current = true
     generation.current += 1
+    const version = generation.current
     setFeedback({ entryId: story.id, status: 'submitting', busy: true, message: 'Requesting metadata refresh…' })
     try {
       const batchId = await submitImport(story.original_url, false)
+      if (version !== generation.current) return
       if (!batchId) throw new Error('Could not confirm the metadata refresh. Check import history before trying again.')
       setFeedback({ entryId: story.id, status: 'pending', busy: true, message: 'Metadata refresh queued. Waiting for the worker.' })
       setRequest({ entryId: story.id, batchId })
     } catch (error) {
+      if (version !== generation.current) return
       setFeedback({ entryId: story.id, status: 'failed', busy: false, message: error instanceof Error ? error.message : 'Could not request metadata refresh.' })
-    } finally { submitting.current = false }
+    } finally { if (version === generation.current) submitting.current = false }
   }
   return { ...current, refresh }
 }
