@@ -1,6 +1,5 @@
-import { useState } from 'react'
-import { useLibrary } from './LibraryProvider'
-import { saveCollection } from './repository'
+import { useRef, useState, type ReactNode } from 'react'
+import { NewCollectionDialog } from './NewCollectionDialog'
 import type { Collection } from './model'
 import { Plus } from 'lucide-react'
 
@@ -15,16 +14,9 @@ export function CollectionChoices({ collections, selected, onChange }: {
   </label>)}{!choices.length && <p className="muted">No matching collections.</p>}</div></div>
 }
 
-export function NewCollectionButton({ label = 'New collection', disabled = false, className = 'button secondary', iconOnly = false, onCreated }: { label?: string; disabled?: boolean; className?: string; iconOnly?: boolean; onCreated?: (id: string) => void }) {
-  const { refresh } = useLibrary()
-  const [busy, setBusy] = useState(false), [error, setError] = useState('')
-  async function create() {
-    const name = window.prompt('New collection name')
-    if (name === null) return
-    setBusy(true); setError('')
-    try { const id = await saveCollection(name); await refresh(); onCreated?.(id) }
-    catch (error) { setError(error instanceof Error ? error.message : 'Could not create collection.') }
-    finally { setBusy(false) }
-  }
-  return <><button type="button" className={iconOnly ? 'icon-button inline-edit-icon' : className} aria-label={iconOnly ? 'New collection' : undefined} title={iconOnly ? 'New collection' : undefined} disabled={disabled || busy} onClick={() => void create()}>{iconOnly ? <Plus size={16} aria-hidden="true" /> : busy ? 'Creating…' : label}</button>{error && <p role="alert" className="error-message">{error}</p>}</>
+export function NewCollectionButton({ label = 'New collection', disabled = false, className = 'button secondary', iconOnly = false, onCreated }: { label?: ReactNode; disabled?: boolean; className?: string; iconOnly?: boolean; onCreated?: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  function close() { setOpen(false); trigger.current?.focus() }
+  return <><button ref={trigger} type="button" className={iconOnly ? 'icon-button inline-edit-icon' : className} aria-label={iconOnly ? 'New collection' : undefined} title={iconOnly ? 'New collection' : undefined} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>{iconOnly ? <Plus size={16} aria-hidden="true" /> : label}</button>{open && <NewCollectionDialog onClose={close} onCreated={onCreated} />}</>
 }

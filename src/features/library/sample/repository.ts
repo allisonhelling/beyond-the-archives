@@ -1,3 +1,4 @@
+import { compareCollections, validateCollectionAppearance, type CollectionAppearance } from '../collection-appearance'
 import snapshots from './stories.json'
 import { blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
@@ -74,7 +75,7 @@ function find(data: Library, id: string) {
   return story
 }
 
-export async function loadSampleLibrary() { return read() }
+export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return data }
 export function resetSampleLibrary() { window.localStorage.removeItem(storageKey) }
 
 export async function saveSampleStory(input: StoryInput) {
@@ -120,7 +121,8 @@ export async function restoreSampleStory(story: Story) {
   data.stories.push({ ...story, collectionIds: story.collectionIds.filter(id => data.collections.some(collection => collection.id === id)) })
   write(data)
 }
-export async function saveSampleCollection(name: string, id?: string) {
+export async function saveSampleCollection(name: string, id?: string, appearance?: CollectionAppearance) {
+  if (appearance) validateCollectionAppearance(appearance)
   const data = read(), trimmed = name.trim()
   const collectionId = id ?? crypto.randomUUID()
   if (!trimmed) throw new Error('A collection name is required.')
@@ -129,9 +131,9 @@ export async function saveSampleCollection(name: string, id?: string) {
   if (id) {
     const collection = data.collections.find(item => item.id === id)
     if (!collection) throw new Error('Collection no longer available.')
-    collection.name = trimmed; collection.updated_at = now
-  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: null, default_key: null, created_at: now, updated_at: now })
-  data.collections.sort((a, b) => a.name.localeCompare(b.name))
+    Object.assign(collection, { name: trimmed, updated_at: now, ...appearance })
+  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: null, default_key: null, created_at: now, updated_at: now, color: appearance?.color ?? null, symbol: appearance?.symbol ?? null, sort_position: null })
+  data.collections.sort(compareCollections)
   write(data)
   return collectionId
 }
@@ -139,5 +141,12 @@ export async function deleteSampleCollection(id: string) {
   const data = read()
   data.collections = data.collections.filter(item => item.id !== id)
   data.stories.forEach(story => { story.collectionIds = story.collectionIds.filter(item => item !== id) })
+  write(data)
+}
+
+export async function reorderSampleCollections(ids: string[]) {
+  const data = read(), custom = data.collections.filter(collection => !collection.default_key)
+  if (ids.length !== custom.length || new Set(ids).size !== ids.length || ids.some(id => !custom.some(collection => collection.id === id))) throw new Error('Collections changed. Reload your library and try again.')
+  for (const collection of custom) collection.sort_position = ids.indexOf(collection.id)
   write(data)
 }

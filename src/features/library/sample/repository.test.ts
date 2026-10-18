@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory } from './repository'
+import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, reorderSampleCollections } from './repository'
 import { parseWorkUrl, validateProgress } from '../model'
 
 beforeEach(() => {
@@ -13,6 +13,19 @@ beforeEach(() => {
   })
 })
 afterEach(() => vi.unstubAllGlobals())
+
+it('keeps custom order through reload, rename, creation, and deletion', async () => {
+  const alpha = await saveSampleCollection('Alpha'), beta = await saveSampleCollection('Beta')
+  await reorderSampleCollections([beta, alpha])
+  await saveSampleCollection('Zed', beta)
+  const extra = await saveSampleCollection('A new shelf')
+  expect((await loadSampleLibrary()).collections.map(collection => collection.id)).toEqual([beta, alpha, extra])
+  await expect(reorderSampleCollections([beta, beta, extra])).rejects.toThrow('Collections changed')
+  await expect(reorderSampleCollections([alpha])).rejects.toThrow('Collections changed')
+  await expect(reorderSampleCollections([alpha, beta, 'unknown'])).rejects.toThrow('Collections changed')
+  await deleteSampleCollection(beta)
+  expect((await loadSampleLibrary()).collections.map(collection => collection.id)).toEqual([alpha, extra])
+})
 
 it('includes all supplied works and both series members in the requested reading groups', async () => {
   const { stories } = await loadSampleLibrary()
@@ -47,6 +60,15 @@ it('supports editing sample notes and collections, preserving the original link'
   expect((await loadSampleLibrary()).stories.find(item => item.id === story.id)).toMatchObject({ original_url: story.original_url, notes: 'Preview note', personal_rating: 4, collectionIds: [collections[0].id] })
   await deleteSampleCollection(collections[0].id)
   expect((await loadSampleLibrary()).stories.find(item => item.id === story.id)?.collectionIds).toEqual([])
+})
+
+it('persists collection appearance through reload and rename', async () => {
+  const id = await saveSampleCollection('Night reads', undefined, { color: '#123456', symbol: 'moon' })
+  expect((await loadSampleLibrary()).collections.find(collection => collection.id === id)).toMatchObject({ color: '#123456', symbol: 'moon' })
+  await saveSampleCollection('Bedtime reads', id)
+  expect((await loadSampleLibrary()).collections.find(collection => collection.id === id)).toMatchObject({ name: 'Bedtime reads', color: '#123456', symbol: 'moon' })
+  await expect(saveSampleCollection('Invalid', undefined, { color: 'red', symbol: 'moon' })).rejects.toThrow('valid collection color')
+  await expect(saveSampleCollection('Invalid', undefined, { color: '#123456', symbol: 'unknown' })).rejects.toThrow('collection symbol')
 })
 
 it('adds verified categories to older sample storage without replacing reading edits', async () => {

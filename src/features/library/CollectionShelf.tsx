@@ -1,0 +1,77 @@
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
+import { BookOpenText, Bookmark, Check, Heart, Library, Plus, X, type LucideIcon } from 'lucide-react'
+import { NewCollectionButton } from './CollectionChoices'
+import { CollectionSpineLabel } from './CollectionSpineLabel'
+import { useCollectionDrag } from './useCollectionDrag'
+import { SpineBookmark } from './SpineBookmark'
+import type { SpineDesign } from './SpineDetails'
+import { collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
+
+const shelfSymbols: Partial<Record<string, LucideIcon>> = { all: Library, currently_reading: BookOpenText, to_read: Bookmark, favorites: Heart, finished: Check, did_not_finish: X }
+
+const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', currently_reading: 'art-deco', to_read: 'library-label', favorites: 'sunburst-fans', finished:'arched', did_not_finish: 'raised-bands' }
+
+const heightOrder = [0, 1, 2, 1]
+
+export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove }: {
+  items: { id: string; name: string; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance) => void; onMove?: (id: string, target: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [capacity, setCapacity] = useState(1)
+  const shelfRef = useRef<HTMLDivElement>(null)
+  const shelfId = useId()
+  const dragInstructionsId = useId()
+  const { drag, preventDragClick } = useCollectionDrag(shelfRef, editing && !disabled, onMove)
+  useEffect(() => {
+    const shelf = shelfRef.current!
+    function measure() {
+      const styles = getComputedStyle(shelf)
+      const width = parseFloat(styles.getPropertyValue('--collection-spine-width'))
+      const gap = parseFloat(styles.getPropertyValue('--collection-spine-gap'))
+      if (!Number.isFinite(width) || !Number.isFinite(gap)) return
+      setCapacity(Math.max(1, Math.floor((shelf.clientWidth + gap) / (width + gap))))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(shelf)
+    return () => observer.disconnect()
+  }, [])
+  const showAll = editing || expanded
+  const visible = showAll ? items : items.slice(0, capacity - 1)
+  // Reserve the final slot for creation, in both the single and multiple shelf views.
+  const customItems = items.filter(item => !shelfSymbols[item.id])
+  const appearanceItems = [...customItems].sort((a, b) => a.name.localeCompare(b.name))
+  const spines = [...visible.map((item, index) => {
+    const customIndex = customItems.findIndex(custom => custom.id === item.id)
+    const appearanceIndex = appearanceItems.findIndex(custom => custom.id === item.id)
+    const colorIndex = customIndex < 0 ? index : items.length - customItems.length + appearanceIndex
+    const color = item.color ?? collectionColors[colorIndex % collectionColors.length].value
+    const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
+    const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
+    const editable = editing && customIndex >= 0
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${selected === item.id ? ' selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-pressed={editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editable ? 'dialog' : undefined} disabled={disabled || (editing && !editable)} title={editable ? `Edit ${item.name}` : item.name} onClick={() => editable ? onEdit?.(item.id, { color, symbol }) : onSelect(item.id)}>{selected === item.id && <SpineBookmark />}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} /></button>
+    return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.id === item.id || undefined} data-drop-target={drag?.target === item.id || undefined} key={item.id} style={drag?.id === item.id ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
+  }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
+  const rows = Array.from({ length: Math.ceil(spines.length / capacity) }, (_, index) => spines.slice(index * capacity, (index + 1) * capacity))
+  const expandable = !editing && items.length + 1 > capacity
+  const bookendArtwork =
+    <svg viewBox="6 0 88 118" aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 114V43.834C12 12.257 43.667-7.479 69 8.309 80.757 15.637 88 29.179 88 43.834V114Z" fill="var(--bookend-wood)" stroke="none" />
+      <path d="M19 108.603V44.913C19 19.153 44.833 3.052 65.5 15.933 75.091 21.911 81 32.958 81 44.913V108.603" strokeWidth="2" />
+      <path d="M24 107.523V45.993C24 24.387 45.667 10.884 63 21.686 71.044 26.701 76 35.966 76 45.993V107.523" strokeWidth="1.2" />
+      <circle cx="50" cy="49" r="21" fill="var(--bookend-plate)" strokeWidth="1.7" />
+      <circle cx="50" cy="49" r="16" strokeWidth="2" />
+      {expandable && <path d={expanded ? 'm42 52 8-8 8 8' : 'm42 46 8 8 8-8'} stroke="var(--bookend-wood)" strokeWidth="3" />}
+      <path d="M32 101h36" strokeWidth="2" />
+      <rect x="8" y="109" width="84" height="8" rx="2" fill="var(--bookend-wood)" strokeWidth="2" />
+      <rect x="27.902" y="78.358" width="44" height="16" rx="2" fill="var(--bookend-plate)" strokeWidth="1.5" />
+      {expandable && <text x="49.902" y="89.358" textAnchor="middle" fontFamily="Georgia, serif" fontSize={expanded ? 9 : 10} fill="var(--bookend-wood)" stroke="none">{expanded ? 'SEE LESS' : 'SEE ALL'}</text>}
+    </svg>
+  const bookend = expandable
+    ? <button type="button" className="collection-shelf-toggle" aria-label={expanded ? 'Show fewer collections' : 'Show all collections'} title={expanded ? 'Show fewer collections' : 'Show all collections'} aria-expanded={expanded} aria-controls={shelfId} onClick={() => setExpanded(!expanded)}>{bookendArtwork}</button>
+    : <div className="collection-shelf-toggle" aria-hidden="true">{bookendArtwork}</div>
+  return <nav className={`collection-shelves${editing ? ' collection-shelves-editing' : ''}`} aria-label="Library shelves" style={{ '--collection-shelf-capacity': capacity } as CSSProperties} onClickCapture={preventDragClick}>
+    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder custom collections. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging.</span>}
+    <div id={shelfId} className="collection-shelf-rows" ref={shelfRef}>{rows.map((row, index) => <div className="collection-shelf-row" key={index}>{row}{index === 0 && bookend}</div>)}</div>
+  </nav>
+}

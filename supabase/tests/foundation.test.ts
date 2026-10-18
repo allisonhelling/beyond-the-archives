@@ -49,6 +49,40 @@ describe('migration structure', () => {
   })
 })
 
+describe('collection appearance', () => {
+  it('atomically saves custom order and rejects foreign, default, duplicate, or incomplete lists', async () => {
+    await asUser(alice, async () => {
+      await db.exec(`insert into public.collections(id,user_id,name,default_key) values ('${id(7, 3)}','${alice}','Second custom',null), ('${id(7, 4)}','${alice}','Default shelf','favorites')`)
+      try {
+        await db.query('select public.reorder_collections($1::uuid[])', [[id(7, 3), id(7)]])
+        const order = () => db.query<{ id: string }>('select id from public.collections where default_key is null order by sort_position')
+        expect((await order()).rows.map(row => row.id)).toEqual([id(7, 3), id(7)])
+        for (const ids of [[id(7)], [id(7), id(7)], [id(7), id(7, 2)], [id(7), id(7, 4)]]) {
+          await expect(db.query('select public.reorder_collections($1::uuid[])', [ids])).rejects.toThrow('Collections changed')
+          expect((await order()).rows.map(row => row.id)).toEqual([id(7, 3), id(7)])
+        }
+      } finally {
+        await db.exec(`delete from public.collections where id in ('${id(7, 3)}','${id(7, 4)}'); update public.collections set sort_position = null;`)
+      }
+    })
+    await asUser(bob, async () => {
+      expect((await db.query('select sort_position from public.collections')).rows).toEqual([{ sort_position: null }])
+    })
+  })
+  it('persists private colors and symbols, and rejects invalid values', async () => {
+    await asUser(alice, async () => {
+      await db.query(`update public.collections set color = '#123456', symbol = 'moon' where id = $1`, [id(7)])
+      const result = await db.query(`select color, symbol from public.collections where id = $1`, [id(7)])
+      expect(result.rows[0]).toMatchObject({ color: '#123456', symbol: 'moon' })
+      await expect(db.query(`update public.collections set color = 'red' where id = $1`, [id(7)])).rejects.toThrow(/check constraint/)
+      await expect(db.query(`update public.collections set symbol = 'unknown' where id = $1`, [id(7)])).rejects.toThrow(/check constraint/)
+    })
+    await asUser(bob, async () => {
+      expect((await db.query(`select * from public.collections where id = $1`, [id(7)])).rows).toHaveLength(0)
+    })
+  })
+})
+
 describe('anonymous access', () => {
   for (const table of tables) {
     it(`rejects anonymous SELECT and DELETE on ${table}`, async () => {

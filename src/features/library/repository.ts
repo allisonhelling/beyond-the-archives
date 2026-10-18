@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
 import { effectiveMetadata } from './model'
+import { compareCollections, validateCollectionAppearance, type CollectionAppearance } from './collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
 function failure(error: { code?: string } | null) {
@@ -39,7 +40,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const tag = tagsById.get(link.tag_id)
     if (tag) { const linked = tagsByWork.get(link.work_id) ?? []; linked.push(tag); tagsByWork.set(link.work_id, linked) }
   }
-  return { collections: collections.sort((a, b) => a.name.localeCompare(b.name)), stories: entries.map((entry: Entry) => {
+  return { collections: collections.sort(compareCollections), stories: entries.map((entry: Entry) => {
     const sharedWork = works.find((w: Work) => w.id === entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     // Overlay private automatic metadata before the existing manual-override merge.
@@ -73,14 +74,21 @@ export async function restoreStory(story: Story) {
   const { error } = await client().rpc('restore_library_story', { p_entry: entry, p_collections: collectionIds, p_tags: personalTags })
   failure(error)
 }
-export async function saveCollection(name: string, id?: string) {
+export async function saveCollection(name: string, id?: string, appearance?: CollectionAppearance) {
   if (!name.trim()) throw new Error('A collection name is required.')
-  if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id)
-  const result = await (id ? client().from('collections').update({ name: name.trim() }).eq('id', id) : client().from('collections').insert({ name: name.trim() })).select('id').single()
+  if (appearance) validateCollectionAppearance(appearance)
+  if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id, appearance)
+  const changes = { name: name.trim(), ...appearance }
+  const result = await (id ? client().from('collections').update(changes).eq('id', id) : client().from('collections').insert(changes)).select('id').single()
   failure(result.error)
   return result.data!.id
 }
 export async function deleteCollection(id: string) {
   if (sampleMode) return (await import('./sample/repository')).deleteSampleCollection(id)
   const { error } = await client().from('collections').delete().eq('id', id); failure(error)
+}
+
+export async function reorderCollections(ids: string[]) {
+  if (sampleMode) return (await import('./sample/repository')).reorderSampleCollections(ids)
+  const { error } = await client().rpc('reorder_collections', { p_ids: ids }); failure(error)
 }

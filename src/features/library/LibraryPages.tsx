@@ -1,12 +1,12 @@
 import { SeriesNames } from './SeriesNames'
 import { MetadataControls, MetadataRefreshButton } from '../imports/MetadataControls'
 import { useMetadataRefresh } from '../imports/useMetadataRefresh'
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BookOpen, BookX, Check, FileText, FolderPlus, LockKeyhole, MoreHorizontal, NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Status, type Story } from './model'
-import { deleteCollection, saveCollection, saveStory, updateEntry } from './repository'
+import { active, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Collection, type Status, type Story } from './model'
+import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { Tooltip } from '../../components/Tooltip'
@@ -17,6 +17,9 @@ import { StoryForm } from './StoryForm'
 import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
 import { ImportLinkForm } from '../imports/ImportLinkForm'
 import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
+import { NewCollectionDialog } from './NewCollectionDialog'
+import { CollectionShelf } from './CollectionShelf'
+import { SpineOrnament } from './SpineOrnament'
 import { ReadingDashboard } from './ReadingDashboard'
 import { publicationStatuses } from './publication-status'
 
@@ -104,7 +107,7 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
         <span className="spine-progress-fill" style={{ width: `${knownTotal ? Math.min(100, read / total * 100) : 0}%` }} />
       </div>
     </div>
-    <span className="spine-divider" aria-hidden="true"><svg viewBox="0 0 12 40" width="12" height="40" preserveAspectRatio="none" focusable="false"><path d="M5.4 0H6.6C6.6 16 6.6 18 12 20C6.6 22 6.6 24 6.6 40H5.4C5.4 24 5.4 22 0 20C5.4 18 5.4 16 5.4 0Z" fill="currentColor" /></svg></span>
+    <span className="spine-divider" aria-hidden="true"><SpineOrnament /></span>
     <div className="spine-actions">
       <Tooltip description={`Read chapter ${nextUnread(story.last_read_chapter)}`}>{descriptionId => <a className="spine-action" href={next ?? savedWorkUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
       {caughtUp}
@@ -126,7 +129,7 @@ function StoryCard({ story }: { story: Story }) {
     <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />
   </>}</StoryControls></article>
 }
-const shelves = [['all', 'All works'], ['currently_reading', 'Currently Reading'], ['to_read', 'To Read'], ['favorites', 'Favorites'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish']] as const
+const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['to_read', 'To Read'], ['favorites', 'Favorites'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish']] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
   if (reading) return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Currently Reading</h1><p>A little escape, one chapter at a time.</p></div><Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={story => <StoryCard key={story.id} story={story} />} /></LibraryBoundary></>
@@ -137,7 +140,19 @@ function LibraryContent() {
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'all'
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
-  const [deleteCollectionOpen, setDeleteCollectionOpen] = useState(false)
+  const [editingCollections, setEditingCollections] = useState(false)
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+  const editTrigger = useRef<HTMLElement | null>(null)
+  const editButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (!editingCollection && editTrigger.current) { (editTrigger.current.isConnected ? editTrigger.current : editButton.current)?.focus(); editTrigger.current = null } }, [editingCollection])
+  async function moveCollection(id: string, targetId: string) {
+    const ids = collections.filter(item => !item.default_key).map(item => item.id)
+    const index = ids.indexOf(id), target = ids.indexOf(targetId)
+    if (index < 0 || target < 0 || target >= ids.length) return
+    const [moved] = ids.splice(index, 1)
+    ids.splice(target, 0, moved)
+    await collectionAction(() => reorderCollections(ids))
+  }
   async function collectionAction(action: () => Promise<unknown>) { setBusy(true); setError(''); try { await action(); await refresh() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   const collection = collections.find(c => c.id === selected)
   const shelfStories = stories.filter(story => {
@@ -150,18 +165,15 @@ function LibraryContent() {
     if (collection) return story.collectionIds.includes(collection.id)
     return true
   })
-  return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Your Library</h1><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
-    <div className="library-toolbar">
+  return <><div className="page-heading library-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><div className="library-title-row"><h1>Your Library</h1><div className="library-heading-actions">
       <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
-      <NewCollectionButton label="New Collection" className="button secondary library-create-action" disabled={busy} />
-      <Link className="button secondary" to="/imports">Import History from AO3</Link>
-    </div>
-    <nav className="shelf-tabs" aria-label="Library shelves">{shelves.map(([key, label]) => <button className={selected === key ? 'selected' : ''} aria-pressed={selected === key} key={key} onClick={() => { if ((key === 'currently_reading' || key === 'to_read')) navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }}>{label}</button>)}{collections.filter(c => !c.default_key).map(c => <button key={c.id} className={selected === c.id ? 'selected' : ''} aria-pressed={selected === c.id} onClick={() => setParams({ shelf: c.id })}>{c.name}</button>)}</nav>
-    {collection && <div className="collection-heading"><h2>{collection.name}</h2><button disabled={busy} className="text-button clickable-text" onClick={() => { const name = window.prompt('Rename collection', collection.name); if (name !== null) void collectionAction(() => saveCollection(name, collection.id)) }}>Rename collection</button><button disabled={busy} className="text-button clickable-text" onClick={() => setDeleteCollectionOpen(true)}>Delete collection</button></div>}
-    {collection && deleteCollectionOpen && <ConfirmationDialog title="Delete collection?" confirmLabel="Delete collection" onClose={() => setDeleteCollectionOpen(false)} onConfirm={async () => { await deleteCollection(collection.id); await refresh(); setParams({ shelf: 'all' }) }}><p>Delete “{collection.name}”?</p><p>Stories will stay in your library.</p></ConfirmationDialog>}
+      <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={() => setEditingCollections(!editingCollections)}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
+    </div></div><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
+    <CollectionShelf editing={editingCollections} onEdit={(id, appearance) => { const item = collections.find(item => item.id === id && !item.default_key); if (item) { editTrigger.current = document.activeElement as HTMLElement; setEditingCollection({ ...item, ...appearance }) } }} onMove={(id, target) => void moveCollection(id, target)} items={[...shelves.map(([id, name]) => ({ id, name })), ...collections.filter(c => !c.default_key)]} selected={selected} disabled={busy} onSelect={key => { if (key === 'currently_reading' || key === 'to_read') navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }} />
+    {collection && <div className="collection-heading"><h2>{collection.name}</h2></div>}
     {error && <p role="alert" className="error-message">{error}</p>}
     <ReadingDashboard mode="library" stories={shelfStories} renderStory={story => <StoryCard key={story.id} story={story} />} />
-  </LibraryBoundary></>
+  </LibraryBoundary>{editingCollection && <NewCollectionDialog collection={editingCollection} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
 }
 export function AddStoryPage() {
   const [params, setParams] = useSearchParams()
