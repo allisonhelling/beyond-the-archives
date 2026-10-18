@@ -1,5 +1,7 @@
 # AO3 Library Companion (Chrome / Edge)
 
+For the inline library controls in iOS Safari's free Userscripts app, see [the userscript companion](../userscript/README.md). Build its installable file with `npm run build:userscript`.
+
 This Manifest V3 extension is part of the hosted library project. It captures metadata only for requests explicitly created by **Import URLs** or **Refresh metadata** on the connected website. It does not install an AO3 content script, watch browsing history, or import works just because you visit them.
 
 ## Deploy the hosted boundary

@@ -1,3 +1,4 @@
+import { UserscriptSettings } from '../features/imports/UserscriptSettings'
 import { ImportPage } from '../features/imports/ImportPage'
 import { ExtensionConnection, MetadataSettings } from '../features/imports/MetadataSettings'
 import { useState } from 'react'
@@ -48,7 +49,7 @@ function SettingsPage() {
     } catch { setMessage('Could not send a recovery email. Please try again.') }
     finally { setBusy(false) }
   }
-  return <><div className="page-heading"><div><span className="eyebrow accent">MAKE YOURSELF AT HOME</span><h1>Settings</h1><p>Your account, your space.</p></div></div><section className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section><MetadataSettings /><section className="settings-card"><h2>More in a later chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5, and complete backup and restore in Phase 6.</p></section></>
+  return <><div className="page-heading"><div><span className="eyebrow accent">MAKE YOURSELF AT HOME</span><h1>Settings</h1><p>Your account, your space.</p></div></div><section className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section><MetadataSettings /><UserscriptSettings /><section className="settings-card"><h2>More in a later chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5, and complete backup and restore in Phase 6.</p></section></>
 }
 
 function FeaturesPage() {

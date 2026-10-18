@@ -484,6 +484,37 @@ export type Database = {
         Relationships: [
         ]
       }
+      userscript_devices: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          secret_hash: string
+          paired: boolean
+          expires_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          secret_hash: string
+          paired?: boolean
+          expires_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          secret_hash?: string
+          paired?: boolean
+          expires_at?: string
+          created_at?: string
+        }
+        Relationships: [
+        ]
+      }
       work_authors: {
         Row: {
           work_id: string
@@ -620,6 +651,8 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
+      userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }

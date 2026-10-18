@@ -16,7 +16,7 @@ const auth = vi.hoisted(() => ({
 vi.mock('../lib/supabase', () => ({
   initialAuthType: null,
   authRedirectUrl: () => 'http://localhost:3000/auth/callback',
-  supabase: { auth: {
+  supabase: { rpc: async () => ({ data: [], error: null }), auth: {
     getSession: auth.getSession,
     onAuthStateChange: (cb: typeof auth.listener) => { auth.listener = cb; return { data: { subscription: { unsubscribe: auth.unsubscribe } } } },
     signInWithPassword: auth.signInWithPassword, signOut: auth.signOut,
