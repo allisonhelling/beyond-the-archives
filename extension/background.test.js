@@ -27,7 +27,8 @@ beforeEach(async () => {
   } },
   action: { setBadgeText: vi.fn().mockResolvedValue(undefined), onClicked: event() },
   alarms: { create: vi.fn().mockResolvedValue(undefined), onAlarm: event() },
-  tabs: { query: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 7, status: 'loading', url: workUrl }), get: vi.fn().mockResolvedValue({ id: 7, status: 'complete', url: workUrl }), onUpdated: event() },
+  webNavigation: { onDOMContentLoaded: event() },
+  tabs: { query: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 7, status: 'loading', url: '' }), get: vi.fn().mockResolvedValue({ id: 7, status: 'complete', url: workUrl }), onUpdated: event() },
   scripting: { executeScript: vi.fn().mockResolvedValue([{ result: { url: workUrl, html: '<h2 class="title">Loaded</h2>' } }]) },
  }
  fetcher = vi.fn(async url => {
@@ -40,9 +41,16 @@ beforeEach(async () => {
  vi.stubGlobal('__APP_ORIGIN__', origin); vi.stubGlobal('__SUPABASE_URL__', 'https://project.supabase.co'); vi.stubGlobal('__SUPABASE_KEY__', 'sb_publishable_test')
  await import('./background.js')
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(async () => {
+ for (const [listener] of chrome.runtime.onMessageExternal.addListener.mock.calls) {
+  await new Promise(resolve => listener({ type: 'AO3_LIBRARY_DISCONNECT' }, { url: origin }, resolve))
+ }
+ vi.useRealTimers()
+ vi.unstubAllGlobals()
+})
 it('does not read ordinary AO3 tabs or accept connection messages from other sites', async () => {
  chrome.tabs.onUpdated.addListener.mock.calls[0][0](7, { status: 'complete' })
+ chrome.webNavigation.onDOMContentLoaded.addListener.mock.calls[0][0]({ tabId: 7, frameId: 0 })
  await alarm()
  const respond = await connect({ url: 'https://evil.example/imports' })
  expect(respond).not.toHaveBeenCalled()
@@ -104,5 +112,107 @@ it('does not reconnect after sign-out while an authentication request is in flig
  finishAuthentication(Response.json({ id: 'alice' }))
  await vi.waitFor(() => expect(connectReply).toHaveBeenCalledWith({ ok: false }))
  expect(state.auth).toBeUndefined()
+ expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
+})
+
+it('opens the next queued work after three seconds without waiting for the alarm', async () => {
+ await connect(); await tick()
+ const next = { ...job, id: 'next-job', workId: 456 }
+ fetcher.mockImplementation(async url => {
+  if (url.endsWith('/claim_extension_job')) return Response.json(next)
+  if (url.includes('/metadata_jobs?')) return Response.json([{ status: 'processing', lease_token: job.token }])
+  return Response.json({ committed: true })
+ })
+ vi.useFakeTimers()
+ chrome.tabs.onUpdated.addListener.mock.calls[0][0](7, { status: 'complete' })
+ await vi.waitFor(() => expect(chrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: 'OK' }))
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ await vi.advanceTimersByTimeAsync(3000)
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(2)
+ expect(chrome.tabs.create).toHaveBeenLastCalledWith({ url: 'https://archiveofourown.org/works/456', active: false })
+ expect(state.active.id).toBe('next-job')
+})
+
+it('cancels the next queued open when the library disconnects', async () => {
+ await connect(); await tick()
+ vi.useFakeTimers()
+ chrome.tabs.onUpdated.addListener.mock.calls[0][0](7, { status: 'complete' })
+ await vi.waitFor(() => expect(chrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: 'OK' }))
+ chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_DISCONNECT' }, { url: origin }, vi.fn())
+ await vi.advanceTimersByTimeAsync(3000)
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(state.auth).toBeUndefined()
+})
+
+it('captures a loading requested tab once even when full-load and alarm events overlap', async () => {
+ await connect(); await tick()
+ chrome.tabs.get.mockResolvedValue({ id: 7, status: 'loading', url: workUrl })
+ let finishCapture
+ chrome.scripting.executeScript.mockImplementation(() => new Promise(resolve => { finishCapture = resolve }))
+ const updated = chrome.tabs.onUpdated.addListener.mock.calls[0][0]
+ chrome.webNavigation.onDOMContentLoaded.addListener.mock.calls[0][0]({ tabId: 7, frameId: 0 })
+ await vi.waitFor(() => expect(finishCapture).toBeTypeOf('function'))
+ expect(chrome.scripting.executeScript).toHaveBeenLastCalledWith(expect.objectContaining({ args: [true], injectImmediately: true }))
+ updated(7, { status: 'complete' })
+ chrome.alarms.onAlarm.addListener.mock.calls[0][0]({ name: 'requested-imports' })
+ finishCapture([{ result: { url: workUrl, html: '<h2 class="title">Ready</h2>' } }])
+ await vi.waitFor(() => expect(state.active).toBeUndefined())
+ expect(chrome.scripting.executeScript).toHaveBeenCalledTimes(1)
+ expect(fetcher.mock.calls.filter(([url]) => url.endsWith('/functions/v1/extension-metadata'))).toHaveLength(1)
+})
+
+it('retries at full load after an early miss and rejects a redirected snapshot', async () => {
+ await connect(); await tick()
+ chrome.tabs.get.mockResolvedValue({ id: 7, status: 'loading', url: workUrl })
+ chrome.scripting.executeScript.mockResolvedValueOnce([{ result: null }])
+ const updated = chrome.tabs.onUpdated.addListener.mock.calls[0][0]
+ chrome.webNavigation.onDOMContentLoaded.addListener.mock.calls[0][0]({ tabId: 7, frameId: 0 })
+ await vi.waitFor(() => expect(chrome.scripting.executeScript).toHaveBeenCalledTimes(1))
+ await tick()
+ expect(state.active.id).toBe('job')
+ chrome.tabs.get.mockResolvedValue({ id: 7, status: 'complete', url: workUrl })
+ chrome.scripting.executeScript.mockResolvedValueOnce([{ result: { url: 'https://archiveofourown.org/works/456', html: '<h2 class="title">Wrong work</h2>' } }])
+ updated(7, { status: 'complete' })
+ await vi.waitFor(() => expect(chrome.scripting.executeScript).toHaveBeenCalledTimes(2))
+ await tick()
+ expect(fetcher.mock.calls.filter(([url]) => url.endsWith('/functions/v1/extension-metadata'))).toHaveLength(0)
+ updated(7, { status: 'complete' })
+ await vi.waitFor(() => expect(state.active).toBeUndefined())
+ expect(chrome.scripting.executeScript).toHaveBeenLastCalledWith(expect.objectContaining({ args: [false] }))
+})
+
+it('ignores DOM-ready events from unrelated tabs and child frames', async () => {
+ await connect(); await tick()
+ const ready = chrome.webNavigation.onDOMContentLoaded.addListener.mock.calls[0][0]
+ ready({ tabId: 99, frameId: 0 })
+ ready({ tabId: 7, frameId: 1 })
+ await tick()
+ expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
+})
+
+it('previews only a specifically requested series from the trusted library without claiming works', async () => {
+ state.auth = { token: 'session', userId: 'alice', expiresAt: Math.floor(Date.now() / 1000) + 3600 }
+ const url = 'https://archiveofourown.org/series/77'
+ chrome.tabs.query.mockResolvedValue([{ id: 8, status: 'complete', url }])
+ chrome.tabs.get.mockResolvedValue({ id: 8, status: 'complete', url })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url, html: '<h2 class="heading">Series</h2>' } }])
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, { url: origin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2 class="heading">Series</h2>' } }))
+ expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 8 }, args: [false, 'series'] }))
+ expect(chrome.tabs.create).not.toHaveBeenCalled()
+ expect(fetcher).not.toHaveBeenCalled()
+})
+it('rejects series previews from unrelated sites, invalid URLs and disconnected sessions', async () => {
+ const listener = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]
+ const respond = vi.fn()
+ listener({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url: 'https://archiveofourown.org/series/77' }, { url: 'https://evil.example' }, respond)
+ expect(respond).not.toHaveBeenCalled()
+ listener({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url: 'https://evil.example/series/77' }, { url: origin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false })))
+ respond.mockClear()
+ listener({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url: 'https://archiveofourown.org/series/77' }, { url: origin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false })))
+ expect(chrome.tabs.query).not.toHaveBeenCalled()
  expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
 })

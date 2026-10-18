@@ -53,3 +53,6 @@ verify_jwt = false # Dedicated IMPORT_WORKER_TOKEN is checked inside the handler
 
 [functions.extension-metadata]
 verify_jwt = false # Handler verifies each user bearer token through Supabase Auth.
+
+[functions.series-preview]
+verify_jwt = false # Handler verifies each bearer token with Supabase Auth.

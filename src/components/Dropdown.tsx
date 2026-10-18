@@ -3,8 +3,8 @@ import { Check, ChevronDown, type LucideIcon } from 'lucide-react'
 import { useDismissible } from './useDismissible'
 
 export type DropdownOption = { value: string; label: string }
-export function Dropdown({ label, value, options, onChange, disabled = false, closeOnSelect = false, icon: Icon, compact = false }: {
-  label: string; value: string; options: DropdownOption[]; onChange: (value: string) => void; disabled?: boolean; closeOnSelect?: boolean; icon?: LucideIcon; compact?: boolean
+export function Dropdown({ label, value, options, onChange, disabled = false, closeOnSelect = false, icon: Icon, compact = false, mobileIconOnly = false }: {
+  label: string; value: string; options: DropdownOption[]; onChange: (value: string) => void; disabled?: boolean; closeOnSelect?: boolean; icon?: LucideIcon; compact?: boolean; mobileIconOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const id = useId(), labelId = `${id}-label`
@@ -28,10 +28,10 @@ export function Dropdown({ label, value, options, onChange, disabled = false, cl
       } else focusOption(event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : index + (event.key === 'ArrowUp' ? -1 : 1))
     }
   }
-  return <div className={`custom-dropdown${compact ? ' dropdown-compact' : ''}`} ref={ref} onKeyDown={keyboard}>
+  return <div className={`custom-dropdown${compact ? ' dropdown-compact' : ''}${mobileIconOnly ? ' dropdown-mobile-icon-only' : ''}`} ref={ref} onKeyDown={keyboard}>
     <span className={compact ? 'sr-only' : 'filter-label'} id={labelId}><span className="dropdown-label">{Icon && <Icon size={16} aria-hidden="true" />}{label}</span></span>
-    <button className={`${compact ? 'button secondary' : 'filter-input'} dropdown-trigger`} type="button" disabled={disabled} aria-label={label} aria-describedby={`${id}-value`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
-      {compact && <span className="dropdown-label">{Icon && <Icon size={16} aria-hidden="true" />}{label}</span>}
+    <button className={`${compact ? 'button secondary' : 'filter-input'} dropdown-trigger`} type="button" disabled={disabled} aria-label={label} title={mobileIconOnly ? label : undefined} aria-describedby={`${id}-value`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
+      {compact && <span className="dropdown-label">{Icon && <Icon size={16} aria-hidden="true" />}<span className="dropdown-label-text">{label}</span></span>}
       <span id={`${id}-value`} className={compact ? 'sr-only' : undefined}>{selected?.label ?? 'Select an option'}</span><ChevronDown size={16} />
     </button>
     {open && <div className="dropdown-panel menu-surface" id={id} role="listbox" aria-labelledby={labelId}>

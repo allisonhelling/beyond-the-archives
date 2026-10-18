@@ -342,3 +342,9 @@ See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cance
 ## Browser extension mode
 
 Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes only jobs created by Import URLs or Refresh metadata, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).
+
+## Series import previews
+
+Paste AO3 `/series/…` links into the single-link form or bulk importer. Series links open a review step; **Load works** retrieves just the listing using your metadata mode. Choose individual works, use Select all/Clear selection, or skip a series. Nothing from a series is saved before confirmation. Already-saved works are marked, overlapping selections are deduplicated, and directly pasted chapter links retain their progress-verification behavior. Summaries/tags help distinguish stories from extras without automatically excluding art or short works. A work's existing series metadata never triggers expansion.
+
+For deployment, apply migrations through `20261018000100_series_previews.sql` and deploy the `series-preview` Edge Function alongside the existing functions. Rebuild/reload the browser extension for series snapshot support. Hosted previews share the worker's request pacing and global pauses; retry a busy preview shortly. Extension previews allow two minutes for AO3 sign-in/confirmation and leave the AO3 tab available for retry. Listings that require pagination are reported as unavailable rather than silently importing a partial list. Series bookmarks, notes, reading status and future installments are not automatically copied or tracked.

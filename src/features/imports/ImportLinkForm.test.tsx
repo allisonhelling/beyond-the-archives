@@ -10,11 +10,12 @@ import { ImportLinkForm } from './ImportLinkForm'
 function show() {
   return render(<MemoryRouter><Routes>
     <Route path="/" element={<ImportLinkForm />} />
+    <Route path="/imports" element={<h1>Choose series works</h1>} />
     <Route path="/stories/entry" element={<h1>Saved fic metadata</h1>} />
   </Routes></MemoryRouter>)
 }
 async function submit() {
-  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work link' }), { target: { value: 'https://archiveofourown.org/works/123' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work or series link' }), { target: { value: 'https://archiveofourown.org/works/123' } })
   fireEvent.click(screen.getByRole('button', { name: 'Import from link' }))
 }
 beforeEach(() => {
@@ -26,19 +27,19 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 it('validates a single AO3 link and retains it if submission fails', async () => {
   show()
-  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work link' }), { target: { value: 'https://example.com/works/123' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work or series link' }), { target: { value: 'https://example.com/works/123' } })
   fireEvent.click(screen.getByRole('button', { name: 'Import from link' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Enter a supported AO3 work URL')
   expect(mocks.submit).not.toHaveBeenCalled()
   mocks.submit.mockRejectedValue(new Error('Import unavailable'))
   await submit()
   expect(await screen.findByRole('alert')).toHaveTextContent('Import unavailable')
-  expect(screen.getByRole('textbox', { name: 'AO3 work link' })).toHaveValue('https://archiveofourown.org/works/123')
+  expect(screen.getByRole('textbox', { name: 'AO3 work or series link' })).toHaveValue('https://archiveofourown.org/works/123')
 })
 it('submits the complete chapter URL so retrieval can verify reading progress', async () => {
   show()
   const url = 'https://archiveofourown.org/works/123/chapters/960?view_adult=true'
-  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work link' }), { target: { value: url } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work or series link' }), { target: { value: url } })
   fireEvent.click(screen.getByRole('button', { name: 'Import from link' }))
   await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith(url))
 })
@@ -75,4 +76,12 @@ it('shows an unsuccessful import without a saved entry', async () => {
   show(); await submit()
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No saved fic was available'))
   expect(screen.getByText('Invalid work.')).toBeVisible()
+})
+
+it('routes a series link into shared review without creating a work',async()=>{
+ show()
+ fireEvent.change(screen.getByRole('textbox',{name:'AO3 work or series link'}),{target:{value:'https://archiveofourown.org/series/77'}})
+ fireEvent.click(screen.getByRole('button',{name:'Import from link'}))
+ expect(await screen.findByRole('heading',{name:'Choose series works'})).toBeVisible()
+ expect(mocks.submit).not.toHaveBeenCalled()
 })

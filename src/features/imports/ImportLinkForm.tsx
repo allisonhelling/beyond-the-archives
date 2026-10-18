@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLibrary } from '../library/LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
-import { parseWorkUrl } from './urls'
+import { classifyUrl, parseWorkUrl } from './urls'
 import { importHistory, submitImport } from './repository'
 
 type ImportItem = Awaited<ReturnType<typeof importHistory>>['items'][number]
@@ -39,6 +39,7 @@ export function ImportLinkForm() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true)
     try {
+      if (classifyUrl(url).kind === 'series') { navigate('/imports', { state: { seriesUrl: url.trim() } }); return }
       parseWorkUrl(url)
       const id = await submitImport(url.trim())
       if (!id) throw new Error('No AO3 work was found in that link.')
@@ -48,7 +49,7 @@ export function ImportLinkForm() {
   }
   return <>
     {sampleMode ? <section className="settings-card"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a story manually</Link></section> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
-      <label>AO3 work link<input type="url" required value={url} disabled={busy} onChange={event => setUrl(event.target.value)} placeholder="https://archiveofourown.org/works/123" /></label>
+      <label>AO3 work or series link<input type="url" required value={url} disabled={busy} onChange={event => setUrl(event.target.value)} placeholder="https://archiveofourown.org/works/123" /></label>
       <button className="button primary" disabled={busy}>{busy ? 'Importing…' : 'Import from link'}</button>
     </form> : <>
       {!complete ? <section className="settings-card"><p role="status">Retrieving metadata… Your fic is saved; this may take a few minutes. If using the extension, keep your browser running and complete any AO3 confirmation in its requested tab.</p><Link className="clickable-text" to="/imports">View import history</Link></section> : <section className="settings-card" aria-label="Import result">

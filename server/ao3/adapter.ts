@@ -1,4 +1,5 @@
 import { load } from 'cheerio'
+import { readBoundedBody } from './read-body.ts'
 import { parseWorkUrl } from '../../src/features/imports/urls.ts'
 export type AutomaticMetadata = {
  title?: string; summary?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
@@ -64,6 +65,11 @@ export function parseMetadata(html: string, workId: number, sourceUrl: string): 
 export async function retrieveMetadata(input: { workId: number; normalizedUrl: string }, fetcher: typeof fetch = fetch): Promise<RetrievalResult> {
  const expected=`https://archiveofourown.org/works/${input.workId}`
  if (!Number.isSafeInteger(input.workId) || input.workId<1 || input.normalizedUrl!==expected) return failure('invalid_identity','Invalid metadata identity.')
+ const result = await retrieveAo3Document(expected, url => parseWorkUrl(url).workId === input.workId, fetcher)
+ return 'html' in result ? parseMetadata(result.html, input.workId, result.sourceUrl) : result
+}
+/** Shared bounded AO3 retrieval. Callers supply an allowlisted URL and identity check. */
+export async function retrieveAo3Document(expected: string, matches: (url: string) => boolean, fetcher: typeof fetch = fetch, followRedirects = true): Promise<RetrievalResult | { html: string; sourceUrl: string }> {
  let target=expected
  try {
   for(let redirects=0;redirects<3;redirects++) {
@@ -75,25 +81,24 @@ export async function retrieveMetadata(input: { workId: number; normalizedUrl: s
    if([404,410].includes(response.status)) return failure('unavailable','AO3 work is deleted or unavailable. The saved work remains editable.')
    if(response.status>=500) return failure('temporary_unavailable','AO3 is temporarily unavailable.',true)
    if(response.status>=300 && response.status<400) {
+    if (!followRedirects) return failure('redirect','AO3 redirected the preview. Use the browser extension or retry later.')
     const location=response.headers.get('location'); if(!location) return failure('redirect','AO3 returned an unverifiable redirect.')
     const next=new URL(location,target)
     if(next.origin!=='https://archiveofourown.org') return failure('redirect','AO3 redirected outside the allowed origin.')
     if(next.pathname.startsWith('/users/login')) return failure('restricted','AO3 sign-in is required. Use manual metadata.')
-    try { if(parseWorkUrl(next.href).workId!==input.workId) return failure('changed_identity','AO3 redirected to a different work. The saved identity was preserved.') } catch { return failure('redirect','AO3 redirected to an unsupported page.') }
+    try { if(!matches(next.href)) return failure('changed_identity','AO3 redirected to a different work. The saved identity was preserved.') } catch { return failure('redirect','AO3 redirected to an unsupported page.') }
     if(next.searchParams.has('view_adult')) return failure('restricted','AO3 requires an adult-content confirmation. Use manual metadata.')
     await new Promise(resolve=>setTimeout(resolve,15000))
     target=next.href; continue
    }
    if(!response.ok) return failure('http_error',`AO3 returned HTTP ${response.status}.`)
    if(!response.headers.get('content-type')?.includes('text/html')) return failure('parser_failure','AO3 did not return an HTML metadata page.')
-   // Read a bounded body, even when Content-Length is absent or untrustworthy.
-   const reader=response.body?.getReader(); if(!reader) return failure('parser_failure','Empty AO3 response.')
-   const decoder=new TextDecoder(); let html='',bytes=0
-   for(;;) { const part=await reader.read(); if(part.done) break; bytes+=part.value.length; if(bytes>4_000_000) { await reader.cancel(); return failure('parser_failure','AO3 response exceeded the metadata size limit.') }; html+=decoder.decode(part.value,{stream:true}) }
-   html+=decoder.decode()
+   const body = await readBoundedBody(response.body, 4_000_000)
+   if ('error' in body) return failure('parser_failure', body.error === 'missing' ? 'Empty AO3 response.' : 'AO3 response exceeded the metadata size limit.')
+   const html = body.text
    if(/retry later|rate limit exceeded/i.test(html) && !html.includes('class="title')) return failure('rate_limited','AO3 requested that retrieval stop.',true,3600)
    if(/captcha|cf-chl-|checking your browser/i.test(html)) return failure('blocked','AO3 returned a blocking challenge. Retrieval is paused.',true,86400)
-   return parseMetadata(html,input.workId,target)
+   return { html, sourceUrl: target }
   }
   return failure('redirect','Too many AO3 redirects.')
  } catch(error) { return failure(error instanceof Error && /timeout|abort/i.test(error.name)?'timeout':'network_error','Could not retrieve AO3 metadata. The work is saved and can be edited manually.',true) }

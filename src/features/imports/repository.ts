@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import { allRows } from '../library/repository'
-import { extractUrls } from './urls'
-import { connectExtension } from './extension'
+import { classifyUrl, extractUrls, parseSeriesUrl, type SeriesPreview } from './urls'
+import { connectExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
 export async function importHistory(batchId?: string) {
  const db=client()
@@ -16,6 +16,7 @@ export async function importHistory(batchId?: string) {
 }
 export async function submitImport(text:string, updateReadingLocation = true) {
  const urls=extractUrls(text)
+ if(urls.some(url=>classifyUrl(url).kind==='series')) throw new Error('Review series and choose works before importing.')
  if(!urls.length) throw new Error('Paste at least one http or https URL.')
  if(urls.length>2000) throw new Error('Use at most 2,000 URLs per submission.')
  const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls,p_update_reading_location:updateReadingLocation})
@@ -38,4 +39,23 @@ export async function metadataRefreshJob(entryId: string, batchId?: string) {
  const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle()
  if (error) throw new Error('Could not check metadata refresh status. Check your connection or view import history.')
  return data
+}
+
+export async function previewSeries(url: string): Promise<SeriesPreview> {
+ const db = client()
+ const identity = parseSeriesUrl(url)
+ const { data: session } = await db.auth.getSession()
+ if (!session.session) throw new Error('Sign in to preview series.')
+ const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode').eq('user_id', session.session.user.id).maybeSingle()
+ if (settingsError) throw new Error('Could not load metadata settings. Retry the preview.')
+ let body: { url: string; html?: string } = { url: identity.normalizedUrl }
+ if (preferences?.retrieval_mode === 'extension') body = await previewSeriesWithExtension(identity.normalizedUrl)
+ const { data, error } = await db.functions.invoke('series-preview', { body })
+ if (error) {
+  let message = 'Could not preview this series. Check the series-preview function is deployed, then retry or skip it.'
+  try { const response = error.context as Response; const detail = await response.json(); if (typeof detail.error === 'string') message = detail.error } catch { /* Use the connection guidance. */ }
+  throw new Error(message)
+ }
+ if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
+ return data.preview as SeriesPreview
 }

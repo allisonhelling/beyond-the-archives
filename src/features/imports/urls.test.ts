@@ -25,3 +25,13 @@ describe('AO3 identities', () => {
     expect(groupWorks(urls).size).toBe(110)
   })
 })
+
+it('recognizes and normalizes series while rejecting malformed identities and lookalike hosts', async () => {
+ const { parseSeriesUrl } = await import('./urls')
+ expect(classifyUrl('http://www.archiveofourown.org/series/77/?x=1#end')).toEqual({ kind: 'series', identity: { seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77' } })
+ for (const url of ['https://archiveofourown.org/series/0', 'https://archiveofourown.org/series/9007199254740992', 'https://user@archiveofourown.org/series/77', 'https://archiveofourown.org.evil.test/series/77']) expect(() => parseSeriesUrl(url)).toThrow()
+})
+it('expands only selected series works, deduplicating overlaps without losing chapter links', async () => {
+ const { selectedImportText } = await import('./urls')
+ expect(selectedImportText('https://archiveofourown.org/series/77\nhttps://archiveofourown.org/works/101/chapters/999', [{ workId: 101, url: 'https://archiveofourown.org/works/101' }, { workId: 102, url: 'https://archiveofourown.org/works/102' }, { workId: 102, url: 'https://archiveofourown.org/works/102' }] as never)).toBe('https://archiveofourown.org/works/101/chapters/999\nhttps://archiveofourown.org/works/102')
+})

@@ -121,7 +121,7 @@ function StoryCard({ story }: { story: Story }) {
   const origin = { returnTo: location.pathname + location.search }
   const { label: publicationLabel, Icon: PublicationIcon } = publicationStatuses[story.metadata.publication_status]
   return <article className="story-card"><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
-    <div className="story-card-title"><h2><Link to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link></h2><Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip>{actions}</div>
+    <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></h2>{actions}</div>
     <p className="authors">By <AuthorNames metadata={story.metadata} /></p>
     <p className="muted">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'}</p>
     <p className="story-facts">{story.metadata.rating || 'Rating unknown'} · {story.metadata.word_count?.toLocaleString() ?? '?'} words</p>

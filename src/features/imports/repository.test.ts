@@ -31,3 +31,8 @@ it('can request metadata without changing an existing reading location',async()=
  await submitImport('https://archiveofourown.org/works/123/chapters/456',false)
  expect(rpc).toHaveBeenCalledWith('submit_import_urls',{p_urls:['https://archiveofourown.org/works/123/chapters/456'],p_update_reading_location:false})
 })
+
+it('requires series review before any database import is created', async()=>{
+ await expect(submitImport('https://archiveofourown.org/series/77')).rejects.toThrow('Review series')
+ expect(rpc).not.toHaveBeenCalled()
+})

@@ -1,4 +1,4 @@
-import { parseWorkUrl } from '../src/features/imports/urls.ts'
+import { parseSeriesUrl, parseWorkUrl } from '../src/features/imports/urls.ts'
 import { captureMetadataPage } from './capture.js'
 
 const appOrigin = __APP_ORIGIN__
@@ -7,6 +7,8 @@ const publicKey = __SUPABASE_KEY__
 let running = false
 let rerun = false
 let connectionVersion = 0
+const nextJobDelayMs = 3000
+let nextJobTimer
 
 async function api(auth, path, body) {
  const response = await fetch(`${backend}${path}`, {
@@ -30,8 +32,10 @@ function matchingWork(url, workId) {
 }
 async function pump() {
  if (running) { rerun = true; return }
+ clearTimeout(nextJobTimer)
  running = true
  const version = connectionVersion
+ let completed = false
  try {
   const state = await chrome.storage.session.get(['auth', 'active'])
   if (version !== connectionVersion) return
@@ -74,7 +78,7 @@ async function pump() {
    await chrome.storage.session.set({ active })
   }
   await chrome.action.setBadgeText({ text: 'WAIT' })
-  if (tab.status !== 'complete' || !matchingWork(tab.url, active.workId)) return
+  if (!matchingWork(tab.url, active.workId)) return
   const jobs = await api(auth, `/rest/v1/metadata_jobs?id=eq.${encodeURIComponent(active.id)}&select=status,lease_token`)
   if (jobs[0]?.status !== 'processing' || jobs[0]?.lease_token !== active.token) {
    await chrome.storage.session.remove('active')
@@ -83,13 +87,14 @@ async function pump() {
   const latest = await chrome.storage.session.get(['auth', 'active'])
   if (version !== connectionVersion || latest.auth?.userId !== auth.userId || latest.active?.token !== active.token) return
   // No content script runs on ordinary visits. Injection requires a claimed job.
-  const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage })
+  const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: [tab.status !== 'complete'] })
   const page = results[0]?.result
   if (version !== connectionVersion || !page || !matchingWork(page.url, active.workId)) return
   const result = await api(auth, '/functions/v1/extension-metadata', { ...payload, ...page })
   if (result.committed) {
    await chrome.storage.session.remove('active')
    await chrome.action.setBadgeText({ text: 'OK' })
+   completed = true
   }
  } catch {
   // Session storage and the server lease survive worker suspension and outages.
@@ -97,16 +102,56 @@ async function pump() {
   if (current.auth) await chrome.action.setBadgeText({ text: '!' })
  } finally {
   running = false
-  if (rerun) { rerun = false; void pump() }
+  if (completed && version === connectionVersion) {
+   rerun = false
+   nextJobTimer = setTimeout(() => {
+    if (version === connectionVersion) void pump()
+   }, nextJobDelayMs)
+  } else if (rerun) { rerun = false; void pump() }
  }
+}
+
+let previewRunning = false
+async function previewSeries(url) {
+ if (previewRunning) throw new Error('Another series preview is loading. Retry shortly.')
+ previewRunning = true
+ try {
+  const identity = parseSeriesUrl(url)
+  const version = connectionVersion
+  const { auth } = await chrome.storage.session.get('auth')
+  if (!auth || auth.expiresAt * 1000 <= Date.now()) throw new Error('Reconnect the extension in Settings, then retry.')
+  const matches = candidate => {
+   try { return new URL(candidate).origin === 'https://archiveofourown.org' && parseSeriesUrl(candidate).seriesId === identity.seriesId } catch { return false }
+  }
+  const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
+  if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
+  const tab = tabs.find(candidate => matches(candidate.url)) ?? await chrome.tabs.create({ url: identity.normalizedUrl, active: false })
+  for (let attempt = 0; attempt < 120; attempt++) {
+   if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
+   const current = await chrome.tabs.get(tab.id)
+   if (current.status === 'complete' && matches(current.url)) {
+    const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, args: [false, 'series'] })
+    const page = results[0]?.result
+    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
+    if (page && matches(page.url)) return page
+   }
+   await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+  throw new Error('Series preview timed out. Complete AO3 sign-in or confirmation in its tab, then retry, or skip this series.')
+ } finally { previewRunning = false }
 }
 
 chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
  let trusted = false
  try { trusted = new URL(sender.url).origin === appOrigin && !sender.id } catch { /* No trusted website sender. */ }
  if (!trusted) return
+ if (message?.type === 'AO3_LIBRARY_PREVIEW_SERIES') {
+  void previewSeries(message.url).then(page => respond({ ok: true, page })).catch(error => respond({ ok: false, error: error.message }))
+  return true
+ }
  if (message?.type === 'AO3_LIBRARY_DISCONNECT') {
   connectionVersion += 1
+  clearTimeout(nextJobTimer)
   void chrome.storage.session.clear().then(() => chrome.action.setBadgeText({ text: '' })).then(() => respond({ ok: true }))
   return true
  }
@@ -128,9 +173,14 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
  return true
 })
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'requested-imports') void pump() })
-chrome.tabs.onUpdated.addListener((tabId, change) => {
- if (change.status !== 'complete') return
+function checkRequestedTab(tabId) {
  void chrome.storage.session.get('active').then(({ active }) => { if (active?.tabId === tabId) void pump() })
+}
+chrome.webNavigation.onDOMContentLoaded.addListener(({ tabId, frameId }) => {
+ if (frameId === 0) checkRequestedTab(tabId)
+}, { url: [{ schemes: ['https'], hostEquals: 'archiveofourown.org' }] })
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+ if (change.status === 'complete') checkRequestedTab(tabId)
 })
 chrome.action.onClicked.addListener(() => { void chrome.tabs.create({ url: `${appOrigin}/settings` }) })
 // Recreate alarms if Chrome discarded them; credentials stay session-only.

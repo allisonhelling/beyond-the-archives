@@ -63,7 +63,7 @@ export function SpineDetails({ variant }: { variant: SpineDesign }) {
       </g>)}
     </g>}
     {variant === 'sunburst-fans' && <g {...stroke} strokeLinecap="round" strokeLinejoin="round">
-      {['', 'translate(0 360) scale(1 -1)'].map(transform => <g key={transform} transform={transform || undefined}>
+      {['translate(0 -16)', 'translate(0 376) scale(1 -1)'].map(transform => <g key={transform} transform={transform || undefined}>
         <path d="M31 100A44 50 0 0 1 119 100Z" strokeWidth="1.3" />
         <path d="M38 100A37 42 0 0 1 112 100" strokeWidth=".7" opacity=".7" />
         <path d="M75 100L34 82M75 100L44 65M75 100L58 54M75 100V50M75 100L92 54M75 100L106 65M75 100L116 82" strokeWidth="1" />

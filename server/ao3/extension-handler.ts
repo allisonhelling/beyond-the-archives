@@ -1,3 +1,4 @@
+import { readBoundedBody } from './read-body.ts'
 import { failure, parseMetadata, type RetrievalResult } from './adapter.ts'
 import { validateMetadata } from './metadata-service.ts'
 import { parseWorkUrl } from '../../src/features/imports/urls.ts'
@@ -20,21 +21,10 @@ export function extensionHandler(deps: Dependencies) {
    const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1]
    const user = token ? await deps.authenticate(token) : null
    if (!user) return reply({ error: 'Sign in to your library again.' }, 401)
-   // Bound streamed input even without a trustworthy Content-Length.
-   const reader = request.body?.getReader()
-   if (!reader) return reply({ error: 'Missing request.' }, 400)
-   const decoder = new TextDecoder()
-   let body = '', bytes = 0
-   for (;;) {
-    const part = await reader.read()
-    if (part.done) break
-    bytes += part.value.byteLength
-    if (bytes > 1_000_000) { await reader.cancel(); return reply({ error: 'Snapshot too large.' }, 413) }
-    body += decoder.decode(part.value, { stream: true })
-   }
-   body += decoder.decode()
+   const body = await readBoundedBody(request.body, 1_000_000)
+   if ('error' in body) return reply({ error: body.error === 'missing' ? 'Missing request.' : 'Snapshot too large.' }, body.error === 'missing' ? 400 : 413)
    let input: { jobId?: unknown; token?: unknown; url?: unknown; html?: unknown; timedOut?: unknown }
-   try { input = JSON.parse(body) } catch { return reply({ error: 'Invalid request.' }, 400) }
+   try { input = JSON.parse(body.text) } catch { return reply({ error: 'Invalid request.' }, 400) }
    if (!input || typeof input.jobId !== 'string' || typeof input.token !== 'string') return reply({ error: 'Invalid request.' }, 400)
    const job = await deps.job(input.jobId)
    if (!job || job.userId !== user || job.mode !== 'extension' || job.status !== 'processing' || job.token !== input.token || Date.parse(job.expiresAt) <= Date.now()) return reply({ error: 'Request expired, cancelled, or unavailable.' }, 409)

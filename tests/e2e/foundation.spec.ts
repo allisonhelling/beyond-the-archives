@@ -48,8 +48,14 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
   if (mobile) {
     const nav = page.getByRole('navigation', { name: 'Mobile navigation' })
-    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Stats', 'Settings'])
+    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Add', 'Stats', 'Settings'])
     await expect(nav).toHaveCSS('position', 'fixed')
+    expect((await nav.boundingBox())!.height).toBeLessThanOrEqual(56)
+    const active=nav.getByRole('link',{name:'Settings',exact:true})
+    await expect(active).toHaveCSS('background-color','rgba(0, 0, 0, 0)')
+    await expect(active).toHaveCSS('color','rgb(151, 0, 0)')
+    expect(await active.evaluate(link=>getComputedStyle(link,'::before').backgroundColor)).toBe('rgb(151, 0, 0)')
+
     await page.getByRole('button', { name: 'Profile menu' }).click()
   }
   await page.getByRole('link', { name: 'Features', exact: true }).click()
@@ -67,13 +73,21 @@ test('Add controls are available and layouts fit the viewport', async ({ page })
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
   await page.screenshot({ path: `test-results/sign-in-${test.info().project.name}.png`, fullPage: true })
   await signIn(page)
-  await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toBeEnabled()
-  await expect(page.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
-  await expect(page.locator('.add-menu button')).toHaveCount(2)
-  await expect(page.locator('.add-option-label svg')).toHaveCount(2)
-  await page.locator('.app-header .brand').click()
-  await expect(page.locator('.add-menu')).toHaveCount(0)
+  if (test.info().project.name === 'mobile') {
+    await expect(page.locator('.app-header .add-wrapper')).toBeHidden()
+    const add = page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Add', exact: true })
+    await expect(add.locator('svg')).toHaveCount(1)
+    await add.click()
+    await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
+  } else {
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
+    await expect(page.locator('.add-menu button')).toHaveCount(2)
+    await expect(page.locator('.add-option-label svg')).toHaveCount(2)
+    await page.locator('.app-header .brand').click()
+    await expect(page.locator('.add-menu')).toHaveCount(0)
+  }
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
   await page.screenshot({ path: `test-results/reading-${test.info().project.name}.png`, fullPage: true })
 })
@@ -97,14 +111,30 @@ test('large imports show persisted results and fit the viewport after returning 
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/import_items*', route => route.fulfill({ json: originals.filter(url => url.includes('archiveofourown.org')).map((url, i) => ({ id: `item-${i}`, batch_id: batch.id, original_url: url, ao3_work_id: Number(url.match(/works\/(\d+)/)?.[1]), chapter_id: null, status: 'completed', result: 'imported', metadata_status: 'completed', error_category: null, entry_id: `entry-${i}`, last_attempt_at: batch.created_at })) }))
   await page.goto('/')
   await signIn(page)
-  await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await page.getByRole('button', { name: 'Import History from AO3', exact: true }).click()
+  if (test.info().project.name === 'mobile') {
+    await page.getByRole('button', { name: 'Profile menu', exact: true }).click()
+    await page.getByRole('link', { name: 'Import History from AO3', exact: true }).click()
+  } else {
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await page.getByRole('button', { name: 'Import History from AO3', exact: true }).click()
+  }
   await expect(page.getByRole('heading', { name: 'Import History from AO3', exact: true })).toBeVisible()
   await page.getByLabel('AO3 URLs', { exact: true }).fill(Array.from({ length: 110 }, (_, n) => `https://archiveofourown.org/works/${n + 1}`).join('\n') + '\nhttps://example.com')
   await expect(page.getByText(/111 links found · 1 unrelated/)).toBeVisible()
   await page.getByRole('button', { name: 'Import URLs', exact: true }).click()
   await expect(page.getByText(/110 tracked URLs/)).toBeVisible()
+  await expect(page.getByRole('button',{name:'Review results: 0',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(page.getByText('Batch finished. No failed, skipped, or cancelled results to review.')).toBeVisible()
+  await page.getByRole('button',{name:'All results: 110',exact:true}).click()
   await expect(page.getByRole('link', { name: 'Edit metadata', exact: true })).toHaveCount(110)
+  const results=page.locator('.import-results')
+  await page.getByRole('button',{name:'failed: 0',exact:true}).click()
+  await expect(results.getByText('No failed results in this batch.')).toBeVisible()
+  await expect(page.getByRole('button',{name:'completed: 110',exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'completed: 110',exact:true}).click()
+  await expect(results.locator('tbody tr')).toHaveCount(110)
+  await page.getByRole('button',{name:'All results: 110',exact:true}).click()
+
   for (const name of ['View saved work', 'Edit metadata']) {
     const link = page.getByRole('link', { name, exact: true }).first()
     await page.mouse.move(0, 0)
@@ -125,5 +155,40 @@ test('large imports show persisted results and fit the viewport after returning 
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
   await page.reload()
   await expect(page.getByText(/110 tracked URLs/)).toBeVisible()
+  await expect(page.getByRole('button',{name:'Review results: 0',exact:true})).toHaveAttribute('aria-pressed','true')
+  await page.getByRole('button',{name:'All results: 110',exact:true}).click()
   await expect(page.getByRole('link', { name: 'View saved work', exact: true })).toHaveCount(110)
+})
+
+test('series imports require explicit work selection and fit desktop and mobile', async ({ page }) => {
+ let submitted: string[] = []
+ await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: {
+  seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Stories and art', description: 'Choose the works you want.',
+  works: [
+   { workId: 101, url: 'https://archiveofourown.org/works/101', position: 1, title: 'The story', authors: ['Author'], summary: 'An adventure.', tags: ['Adventure'], wordCount: 12000, chapters: '2/2', complete: true },
+   { workId: 102, url: 'https://archiveofourown.org/works/102', position: 4, title: 'Art extras', authors: ['Author'], summary: 'Drawings.', tags: ['Fanart'], wordCount: 0, chapters: '1/1', complete: true },
+  ],
+ } } }))
+ await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', async route => {
+  submitted = route.request().postDataJSON().p_urls
+  await route.fulfill({ json: 'series-batch' })
+ })
+ await page.goto('/')
+ await signIn(page)
+ await page.goto('/imports')
+ await page.getByLabel('AO3 URLs').fill('https://archiveofourown.org/series/77')
+ await page.getByRole('button', { name: 'Review series', exact: true }).click()
+ expect(submitted).toEqual([])
+ await page.getByRole('button', { name: 'Load works' }).click()
+ const story = page.getByRole('checkbox', { name: 'Part 1: The story' })
+ await expect(story).not.toBeChecked()
+ await expect(page.getByRole('checkbox', { name: 'Part 4: Art extras' })).not.toBeChecked()
+ await page.getByText('Summary and tags', { exact: true }).first().click()
+ await expect(page.getByText('An adventure.', { exact: true })).toBeVisible()
+ await story.check()
+ expect(submitted).toEqual([])
+ await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
+ await page.getByRole('button', { name: 'Import 1 selected works', exact: true }).click()
+ await expect(page.getByText(/Batch saved\./)).toBeVisible()
+ expect(submitted).toEqual(['https://archiveofourown.org/works/101'])
 })

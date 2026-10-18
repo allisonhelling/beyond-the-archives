@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NewCollectionDialog } from './NewCollectionDialog'
 import type { Collection } from './model'
 import { Plus } from 'lucide-react'
@@ -17,6 +17,11 @@ export function CollectionChoices({ collections, selected, onChange }: {
 export function NewCollectionButton({ label = 'New collection', disabled = false, className = 'button secondary', iconOnly = false, onCreated }: { label?: ReactNode; disabled?: boolean; className?: string; iconOnly?: boolean; onCreated?: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
-  function close() { setOpen(false); trigger.current?.focus() }
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (wasOpen.current && !open) trigger.current?.focus()
+    wasOpen.current = open
+  }, [open])
+  function close() { setOpen(false) }
   return <><button ref={trigger} type="button" className={iconOnly ? 'icon-button inline-edit-icon' : className} aria-label={iconOnly ? 'New collection' : undefined} title={iconOnly ? 'New collection' : undefined} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>{iconOnly ? <Plus size={16} aria-hidden="true" /> : label}</button>{open && <NewCollectionDialog onClose={close} onCreated={onCreated} />}</>
 }

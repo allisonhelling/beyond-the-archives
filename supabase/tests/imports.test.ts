@@ -266,3 +266,23 @@ it.each(['direct','extension'])('updates existing reading locations only for exp
  }
  await db.exec('delete from public.metadata_preferences')
 })
+
+it('paces series previews with hosted jobs and restricts reservations to the service role',async()=>{
+ await clearJobs()
+ await asUser(alice,async()=>{await expect(db.query('select public.reserve_series_preview()')).rejects.toThrow(/permission denied/)})
+ const reserve=async()=> (await db.query<{ok:boolean}>('select public.reserve_series_preview() ok')).rows[0].ok
+ expect(await reserve()).toBe(true)
+ expect(await reserve()).toBe(false)
+ await submit(['https://archiveofourown.org/works/998877'])
+ expect(await claim()).toBeNull()
+ await ready()
+ const j=(await claim())!
+ expect(await reserve()).toBe(false)
+ await finish(j)
+ await clearJobs()
+ await db.query("select public.pause_series_preview(3600,'rate_limited')")
+ expect(await reserve()).toBe(false)
+ await db.query("select public.pause_series_preview(30,'shorter_pause')")
+ expect((await db.query<{ok:boolean}>("select paused_until>now()+interval '59 minutes' ok from public.metadata_worker_state")).rows[0].ok).toBe(true)
+ await clearJobs()
+})

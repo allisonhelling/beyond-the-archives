@@ -80,10 +80,16 @@ async function openFilters(page: Page) {
   const button = page.locator('.reading-toolbar').getByRole('button', { name: 'Filters', exact: true })
   if (await button.count()) await button.click()
 }
+async function openAddStory(page: Page) {
+  if ((page.viewportSize()?.width ?? 1280) <= 1100) {
+    await page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Add', exact: true }).click()
+  } else {
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await page.getByRole('button', { name: 'Add Story', exact: true }).click()
+  }
+}
 async function ordering(page: Page) {
-  const mobile = (page.viewportSize()?.width ?? 1280) <= 650
-  if (mobile) await openFilters(page)
-  return page.locator(mobile ? '.reading-filters' : '.reading-toolbar')
+  return page.locator('.reading-toolbar')
 }
 
 async function completeCollectionDialog(page: Page, name: string) {
@@ -102,21 +108,23 @@ async function selectLibraryShelf(page: Page, name: string) {
 test('manual library workflow persists through refresh and sign-out, on desktop and mobile', async ({ page }, info) => {
   const tables = await fixture(page); await page.goto('/library'); await login(page)
   for (const name of ['Comfort reads', 'Long fics']) {
-    await page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'New collection', exact: true }).click(); await completeCollectionDialog(page, name); await expect.poll(() => tables.collections.some(collection => collection.name === name)).toBe(true)
+    await page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'New collection', exact: true }).last().click(); await completeCollectionDialog(page, name); await expect.poll(() => tables.collections.some(collection => collection.name === name)).toBe(true)
   }
-  const addStory = page.getByRole('link', { name: 'Add Story', exact: true })
+  const addStory = page.locator('.library-heading-actions a.library-create-action')
   const addBounds = await addStory.boundingBox(), shelfBounds = await page.locator('.library-heading-actions').getByRole('button', { name: 'Edit Collections', exact: true }).boundingBox()
   if (info.project.name === 'desktop') expect(Math.abs(addBounds!.y - shelfBounds!.y)).toBeLessThan(1)
   await expect(addStory).toHaveAttribute('href', '/add?mode=finished')
-  await addStory.click()
+  if (info.project.name === 'mobile') await openAddStory(page)
+  else await addStory.click()
   await page.getByRole('button', { name: 'Enter manually', exact: true }).click()
+  if (info.project.name === 'mobile') await page.getByLabel('Reading status', { exact: true }).selectOption('finished')
   await expect(page.getByLabel('Reading status', { exact: true })).toHaveValue('finished')
-  await page.getByRole('button', { name: 'New collection', exact: true }).click()
+  await page.getByRole('button', { name: 'New collection', exact: true }).last().click()
   await completeCollectionDialog(page, 'Created while adding')
   const createdCollection = page.getByRole('checkbox', { name: 'Created while adding', exact: true })
   await expect(createdCollection).toBeVisible()
   await expect(createdCollection).toBeChecked()
-  await expect(page.getByRole('button', { name: 'New collection', exact: true })).toHaveAttribute('title', 'New collection')
+  await expect(page.getByRole('button', { name: 'New collection', exact: true }).last()).toHaveAttribute('title', 'New collection')
   await expect(page.getByText('Custom collections', { exact: true })).toBeVisible()
   await expect(page.getByText('Custom collections (choose any)', { exact: true })).toHaveCount(0)
   const collectionLabel = page.locator('.collection-choices .check-label').filter({ has: createdCollection })
@@ -356,7 +364,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.getByRole('searchbox', { name: 'Search collections' }).fill('Comfort')
   await expect(collectionEditor.getByRole('checkbox')).toHaveCount(1)
   await page.getByRole('searchbox', { name: 'Search collections' }).fill('')
-  await page.getByRole('button', { name: 'New collection', exact: true }).click()
+  await page.getByRole('button', { name: 'New collection', exact: true }).last().click()
   await completeCollectionDialog(page, 'Created while editing')
   await expect(page.getByRole('checkbox', { name: 'Created while editing', exact: true })).toBeChecked()
   await page.screenshot({ path: `test-results/collection-editor-${info.project.name}.png`, fullPage: true })
@@ -440,15 +448,13 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
 
 test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the library', async ({ page }, info) => {
   await fixture(page); await page.goto('/library'); await login(page)
-  await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await page.getByRole('button', { name: 'Add Story', exact: true }).click()
+  await openAddStory(page)
   await page.getByRole('button', { name: 'Enter manually', exact: true }).click()
   await expect(page.getByLabel('Reading status', { exact: true })).toHaveValue('to_read')
   await page.getByLabel('Reading status', { exact: true }).selectOption('reading')
   await page.getByRole('link', { name: 'Cancel', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'No stories here yet' })).toBeVisible()
-  await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await page.getByRole('button', { name: 'Add Story', exact: true }).click()
+  await openAddStory(page)
   await page.getByRole('button', { name: 'Enter manually', exact: true }).click()
   await expect(page.getByLabel('Reading status', { exact: true })).toHaveValue('to_read')
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://example.com/works/123')
@@ -459,7 +465,7 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await page.getByRole('button', { name: 'Save story', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Chapter 0 of ? — edit progress', exact: true })).toBeVisible()
   await library(page, info.project.name === 'mobile')
-  await page.getByRole('link', { name: 'Add Story', exact: true }).click()
+  await openAddStory(page)
   await page.getByRole('button', { name: 'Enter manually', exact: true }).click()
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/123')
   await page.getByLabel('Title', { exact: true }).fill('Duplicate')
@@ -489,17 +495,25 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await page.goto('/reading'); await login(page)
   const cards = page.locator('.story-card')
   await expect(page.locator('main').getByRole('link', { name: 'Add Story', exact: true })).toHaveAttribute('href', '/add?mode=finished')
-  await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toBeVisible()
-  await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-  await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toHaveCount(0)
+  if (info.project.name === 'desktop') {
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toBeVisible()
+    await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
+    await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toHaveCount(0)
+  } else {
+    await expect(page.locator('.app-header .add-wrapper')).toBeHidden()
+    await expect(page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Add', exact: true })).toHaveAttribute('href', '/add')
+  }
   await expect(cards).toHaveCount(2)
   const toolbar = page.locator('.reading-toolbar')
   await expect(toolbar.locator('.filter-name')).toHaveCount(0)
   await expect(toolbar.getByLabel('Search title or author', { exact: true })).toBeVisible()
   if (info.project.name === 'mobile') {
-    await expect(toolbar.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
-    await expect(toolbar.getByRole('button', { name: 'Group', exact: true })).toHaveCount(0)
+    await expect(toolbar.getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+    await expect(toolbar.getByRole('button', { name: 'Group', exact: true })).toBeVisible()
+    await expect(toolbar.getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
+    await expect(toolbar.getByRole('button',{name:'Group',exact:true})).toHaveAttribute('title','Group')
+
     await expect(page.locator('.reading-tiles strong').first()).toHaveCSS('font-size', '13px')
     await expect(page.locator('.tile-description').first()).toHaveCSS('font-size', '11px')
   }
@@ -549,7 +563,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await panel.getByLabel('Search syntax and modes').click()
   const clear = () => panel.getByRole('button', { name: 'Clear all filters', exact: true }).click()
   await expect(panel.getByPlaceholder('Search title or author')).toHaveCount(0)
-  await expect(panel.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(info.project.name === 'mobile' ? 1 : 0)
+  await expect(panel.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /Select fandoms/ })).toHaveCount(0)
   await expect(panel.locator('select')).toHaveCount(0)
   await expect(panel.locator('.updated-filter-row + .field-help')).toContainText('Last updated uses saved AO3 dates in UTC')
@@ -865,7 +879,7 @@ test('sort and grouping preferences persist across navigation and refresh', asyn
   await openFilters(page)
   const panel = page.getByRole('region', { name: 'Reading filters' })
   await expect(panel.getByRole('button', { name: 'Work Status', exact: true })).toBeVisible()
-  await expect(panel.getByRole('button', { name: 'Group', exact: true })).toHaveCount(info.project.name === 'mobile' ? 1 : 0)
+  await expect(panel.getByRole('button', { name: 'Group', exact: true })).toHaveCount(0)
   await panel.getByRole('button', { name: 'Clear all filters', exact: true }).click()
   await library(page, info.project.name === 'mobile')
   await page.getByRole('navigation', { name: info.project.name === 'mobile' ? 'Mobile navigation' : 'Main navigation' }).getByRole('link', { name: info.project.name === 'mobile' ? 'Reading' : 'Currently Reading', exact: true }).click()
@@ -936,7 +950,7 @@ test('library reuses filters across all statuses and scopes them to the selected
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
   await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Date added', exact: true }).click()
   await page.keyboard.press('Escape')
-  await expect(cards.locator('h2')).toHaveText(['Library story 4', 'Library story 3', 'Library story 2', 'Library story 1'])
+  await expect(cards.locator('h2 a')).toHaveText(['Library story 4', 'Library story 3', 'Library story 2', 'Library story 1'])
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
   await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
@@ -947,7 +961,7 @@ test('library reuses filters across all statuses and scopes them to the selected
   await panel.getByRole('option', { name: 'Complete on AO3', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(cards).toHaveCount(1)
-  await expect(cards.locator('h2')).toHaveText('Library story 1')
+  await expect(cards.locator('h2 a')).toHaveText('Library story 1')
   for (const [label, option] of [['Relationships', 'A/B'], ['Characters', 'Character A'], ['Tags', 'Slow Burn']]) {
     await panel.getByLabel(label, { exact: true }).click()
     await page.getByRole('region', { name: `${label} suggestions` }).getByRole('button', { name: option, exact: true }).click()
@@ -1044,12 +1058,11 @@ test(`Add Story opens the saved work and displays retrieved metadata from ${sour
     await expect(page.getByRole('button', { name: 'Enter manually', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
   } else {
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await page.getByRole('button', { name: 'Add Story', exact: true }).click()
+    await openAddStory(page)
   }
   await expect(page).toHaveURL(/\/add(?:\?import=link)?$/)
   await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
-  await page.getByRole('textbox', { name: 'AO3 work link' }).fill('https://archiveofourown.org/works/456')
+  await page.getByRole('textbox', { name: 'AO3 work or series link' }).fill('https://archiveofourown.org/works/456')
   await page.getByRole('button', { name: 'Import from link', exact: true }).click()
   await expect(page).toHaveURL(/\/stories\/entry$/)
   await expect(page.getByRole('heading', { name: 'AO3 work 456', exact: true })).toBeVisible()
@@ -1072,28 +1085,36 @@ test(`Add Story opens the saved work and displays retrieved metadata from ${sour
 
 
 test('collection bookspines expand into shelves and keep creation last at every width', async ({ page }) => {
+  const mobile = () => page.viewportSize()!.width <= 650
   const tables = await fixture(page)
   tables.collections = Array.from({ length: 24 }, (_, index) => ({ id: `collection-${index}`, name: `Collection ${index + 1}`, default_key: null }))
   await page.goto('/library'); await login(page)
   const shelf = page.getByRole('navigation', { name: 'Library shelves', exact: true })
   const rows = shelf.locator('.collection-shelf-row')
-  const creation = shelf.getByRole('button', { name: 'New collection', exact: true })
+  const creation = shelf.getByRole('button', { name: 'New collection', exact: true }).last()
   await expect(rows).toHaveCount(1)
   await expect(creation).toBeVisible()
+  if (mobile()) await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollLeft = 0)
   await expect(rows.last().locator('.collection-spine').last()).toHaveText('New collection')
   await expect(page.getByRole('main').getByRole('link', { name: 'Import History from AO3', exact: true })).toHaveCount(0)
   const heading = page.getByRole('heading', { name: 'Your Library', exact: true })
-  const firstSpine = shelf.locator('.collection-spine').first()
-  expect((await firstSpine.boundingBox())!.x).toBe((await heading.boundingBox())!.x)
+  const firstSpine = shelf.locator('.collection-spine:not(.collection-spine-mini)').first()
+  if ((page.viewportSize()?.width ?? 1280) <= 650) {
+    for (const spine of await shelf.locator('.collection-spine:not(.collection-spine-mini)').all()) {
+      await expect(spine).toHaveCSS('height', '176px')
+      await expect(spine).toHaveCSS('width', '72px')
+    }
+  }
+  if (!mobile()) expect((await firstSpine.boundingBox())!.x).toBe((await heading.boundingBox())!.x)
   async function checkShelfEdges() {
     const board = await rows.first().evaluate(row => {
       const styles = getComputedStyle(row, '::after'), bounds = row.getBoundingClientRect()
       return { left: bounds.left + parseFloat(styles.left), right: bounds.right - parseFloat(styles.right), radius: styles.borderRadius }
     })
     const filters = (await page.getByRole('region', { name: 'Library toolbar', exact: true }).boundingBox())!
-    expect(filters.x - board.left).toBeCloseTo(8, 1)
+    expect(filters.x - board.left).toBeCloseTo(mobile() ? 0 : 8, 1)
     const rowBounds = (await rows.first().boundingBox())!
-    expect(board.right - rowBounds.x - rowBounds.width).toBeCloseTo(8, 1)
+    expect(board.right - rowBounds.x - rowBounds.width).toBeCloseTo(mobile() ? 0 : 8, 1)
     expect(board.radius).toBe('0px')
   }
   await checkShelfEdges()
@@ -1112,13 +1133,37 @@ test('collection bookspines expand into shelves and keep creation last at every 
     await expect(rows.first().locator('.collection-shelf-toggle')).toHaveCount(1)
     await expect(shelf.locator('.collection-shelf-toggle')).toHaveCount(1)
     const lastBook = (await rows.first().locator('.collection-spine').last().boundingBox())!
+    const firstBook = (await firstSpine.boundingBox())!
     const end = (await shelf.locator('.collection-shelf-toggle').boundingBox())!
-    expect(end.x - lastBook.x - lastBook.width).toBeCloseTo(8, 1)
+    const slot = mobile() ? (await shelf.locator('.collection-shelf-bookend').boundingBox())! : end
+    if (mobile()) expect(firstBook.x - slot.x - slot.width).toBeCloseTo(8, 1)
+    else expect(end.x - lastBook.x - lastBook.width).toBeCloseTo(8, 1)
     const row = (await rows.first().boundingBox())!
-    expect(end.x + end.width).toBeCloseTo(row.x + row.width, 1)
+    if (mobile()) expect(slot.x).toBeCloseTo(row.x, 1)
+    else expect(end.x + end.width).toBeCloseTo(row.x + row.width, 1)
     expect(end.y + end.height).toBeCloseTo(row.y + row.height - 12, 1)
   }
   await checkBookendPosition()
+  if (mobile()) {
+    await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(31)
+    const quickCreate = shelf.locator('.collection-shelf-bookend').getByRole('button', { name: 'New collection', exact: true }).last()
+    const quickBounds = (await quickCreate.boundingBox())!, stopBounds = (await bookend.boundingBox())!
+    expect(quickBounds.y + quickBounds.height).toBeLessThan(stopBounds.y)
+    await quickCreate.focus()
+    await quickCreate.press('Enter')
+    const createDialog = page.getByRole('dialog', { name: 'New collection', exact: true })
+    await expect(createDialog).toBeVisible()
+    await createDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(quickCreate).toBeFocused()
+    const carousel = shelf.locator('.collection-shelf-rows')
+    expect(await carousel.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+    await shelf.getByRole('button', { name: 'Collection 24', exact: true }).scrollIntoViewIfNeeded()
+    expect(await carousel.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
+    await carousel.evaluate(element => element.scrollLeft = 0)
+    await expect(page.locator('.library-heading-actions').getByRole('link', { name: 'Add Story', exact: true })).toBeHidden()
+    const controls = page.locator('.library-heading-actions')
+    expect((await controls.getByRole('button', { name: 'Sort', exact: true }).boundingBox())!.x).toBeLessThan((await controls.getByRole('button', { name: 'Edit Collections', exact: true }).boundingBox())!.x)
+  }
   await shelf.screenshot({ path: `test-results/medallion-bookend-${page.viewportSize()!.width}.png` })
   const add = page.getByRole('link', { name: 'Add Story', exact: true })
   if (page.viewportSize()!.width > 650) {
@@ -1129,10 +1174,10 @@ test('collection bookspines expand into shelves and keep creation last at every 
   await expect(shelf.getByRole('button', { name: 'Show fewer collections', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await expect(rows.first().getByRole('button', { name: 'Show fewer collections', exact: true })).toHaveText('SEE LESS')
   await checkBookendPosition()
-  await expect(shelf.locator('.collection-spine')).toHaveCount(31)
-  await expect(shelf.locator('.collection-spine-details')).toHaveCount(31)
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(31)
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-details')).toHaveCount(31)
   for (const name of ['Collection 1', 'New collection']) {
-    await expect(shelf.getByRole('button', { name, exact: true }).locator('.collection-spine-details')).toHaveCount(1)
+    await expect(shelf.getByRole('button', { name, exact: true }).last().locator('.collection-spine-details')).toHaveCount(1)
   }
   await rows.first().screenshot({ path: `test-results/default-spines-${page.viewportSize()!.width}.png` })
   expect(await rows.count()).toBeGreaterThan(1)
@@ -1144,11 +1189,12 @@ test('collection bookspines expand into shelves and keep creation last at every 
   await page.setViewportSize({ width: 320, height: 800 })
   await expect(rows).toHaveCount(1)
   await expect(creation).toBeVisible()
+  if (mobile()) await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollLeft = 0)
   await expect(rows.last().locator('.collection-spine').last()).toHaveText('New collection')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   await checkShelfEdges()
   await checkBookendPosition()
-  expect((await firstSpine.boundingBox())!.x).toBe((await heading.boundingBox())!.x)
+  if (!mobile()) expect((await firstSpine.boundingBox())!.x).toBe((await heading.boundingBox())!.x)
   await creation.click()
   await completeCollectionDialog(page, 'Created from spine')
   await expect.poll(() => tables.collections.some(collection => collection.name === 'Created from spine')).toBe(true)
@@ -1176,7 +1222,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
 test('collection popup previews and persists name, color, and symbol', async ({ page }) => {
   const tables = await fixture(page)
   await page.goto('/library'); await login(page)
-  const trigger = page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'New collection', exact: true })
+  const trigger = page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'New collection', exact: true }).last()
   await trigger.click()
   const dialog = page.getByRole('dialog', { name: 'New collection', exact: true })
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toBeFocused()
@@ -1266,7 +1312,7 @@ test('edits, reorders, and deletes custom collections without moving default she
   await expect(editor).toHaveCount(0)
   await expect(shelf.getByRole('button', { name: 'Zed', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Done Editing', exact: true })).toBeFocused()
-  await expect(shelf.getByRole('button', { name: 'New collection', exact: true })).toBeVisible()
+  await expect(shelf.getByRole('button', { name: 'New collection', exact: true }).last()).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width)
   await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
   await expect(shelf.locator('.collection-spine-editor')).toHaveCount(0)
@@ -1309,7 +1355,7 @@ test('custom collection dragging can be canceled and keyboard reordering remains
 test('custom colors offer a shade picker, hue slider, and synchronized hex input', async ({ page }) => {
   const tables = await fixture(page)
   await page.goto('/library'); await login(page)
-  await page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'New collection', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'New collection', exact: true }).last().click()
   const dialog = page.getByRole('dialog', { name: 'New collection', exact: true })
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Color study')
   const trigger = dialog.getByRole('button', { name: 'Custom color', exact: true })
@@ -1360,7 +1406,7 @@ test('saved custom colors can be reused when creating and editing other collecti
   ]
   await page.goto('/library'); await login(page)
   const shelf = page.getByRole('navigation', { name: 'Library shelves', exact: true })
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   const create = page.getByRole('dialog', { name: 'New collection', exact: true })
   await create.getByRole('textbox', { name: 'Name', exact: true }).fill('Same color')
   await create.getByRole('radio', { name: '#abcdef', exact: true }).check()
@@ -1405,7 +1451,7 @@ test('shared custom swatches disappear only after their last collection changes 
   await edit.getByRole('radio', { name: 'Navy', exact: true }).check()
   await edit.getByRole('button', { name: 'Save changes', exact: true }).click()
   await expect(edit).toHaveCount(0)
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   const create = page.getByRole('dialog', { name: 'New collection', exact: true })
   await expect(create.getByRole('radio', { name: /^#12abcd(?: ✓)?$/ })).toHaveCount(0)
   await expect(create.getByRole('radio', { name: '#654321', exact: true })).toHaveCount(1)
@@ -1413,12 +1459,12 @@ test('shared custom swatches disappear only after their last collection changes 
   await shelf.getByRole('button', { name: 'Third', exact: true }).click()
   await edit.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(edit).toHaveCount(0)
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   await expect(create.getByRole('radio', { name: '#654321', exact: true })).toHaveCount(0)
   await expect(create.getByRole('radio', { name: /^Burgundy(?: ✓)?$/ })).toHaveCount(1)
   await create.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.reload()
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   await expect(create.getByRole('radio', { name: /^#12abcd(?: ✓)?$/ })).toHaveCount(0)
   await expect(create.getByRole('radio', { name: '#654321', exact: true })).toHaveCount(0)
 })
@@ -1471,11 +1517,11 @@ test('collection sort modes preserve manual order across switches, creation, and
   await choose('Manual order')
   await expect(titles).toHaveText(['Zebra', 'Middle', 'Apple'])
   await choose('Alphabetical (A–Z)')
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   await completeCollectionDialog(page, 'Collection B')
   await expand()
   await expect(titles).toHaveText(['Apple', 'Collection B', 'Middle', 'Zebra'])
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   await completeCollectionDialog(page, 'Collection A')
   await expand()
   await expect(titles).toHaveText(['Apple', 'Collection A', 'Collection B', 'Middle', 'Zebra'])
@@ -1517,7 +1563,7 @@ test('collection spines show total story counts independently of search filters'
     await expect(spine.locator('.collection-spine-count')).toHaveText(String(count))
     await expect(spine).toHaveAttribute('aria-description', `${count} ${count === 1 ? 'story' : 'stories'}`)
   }
-  await expect(shelf.getByRole('button', { name: 'New collection', exact: true }).locator('.collection-spine-count')).toHaveCount(0)
+  await expect(shelf.getByRole('button', { name: 'New collection', exact: true }).last().locator('.collection-spine-count')).toHaveCount(0)
   await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
   await selectLibraryShelf(page, 'Shared reads')
   await expect(page.locator('.story-card')).toHaveCount(2)
@@ -1536,7 +1582,7 @@ test('creates and edits individual collection summaries', async ({ page }) => {
   const tables = await fixture(page)
   await page.goto('/library'); await login(page)
   const shelf = page.getByRole('navigation', { name: 'Library shelves', exact: true })
-  await shelf.getByRole('button', { name: 'New collection', exact: true }).click()
+  await shelf.getByRole('button', { name: 'New collection', exact: true }).last().click()
   const create = page.getByRole('dialog', { name: 'New collection', exact: true })
   await create.getByRole('textbox', { name: 'Name', exact: true }).fill('Comfort reads')
   await create.getByRole('textbox', { name: 'Summary', exact: true }).fill('Stories for a quiet evening.\nSaved favorites.')
@@ -1618,11 +1664,15 @@ test('Shift-drag selects a range and selected collections move together without 
   const shelf = page.getByRole('navigation', { name: 'Library shelves', exact: true })
   const book = (name: string) => shelf.getByRole('button', { name, exact: true })
   const titles = shelf.locator('.collection-spine-editor .collection-spine-title')
-  await page.getByRole('button', { name: 'Collection controls', exact: true }).focus()
-  await expect(page.getByRole('tooltip')).toContainText('Shift + click or drag: select a range.')
-  await expect(page.getByRole('tooltip')).toContainText('Drag a selected book: move the selected group.')
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  const help = page.locator('.collection-selection-trigger button[aria-label="Collection controls"]')
+  if (page.viewportSize()!.width <= 650) await expect(help).toBeHidden()
+  else {
+    await help.focus()
+    await expect(page.getByRole('tooltip')).toContainText('Shift + click or drag: select a range.')
+    await expect(page.getByRole('tooltip')).toContainText('Drag a selected book: move the selected group.')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('tooltip')).toHaveCount(0)
+  }
   await book('Beta').evaluate(element => element.scrollIntoView({ block: 'center' }))
   const source = (await book('Beta').boundingBox())!, end = (await book('Delta').boundingBox())!
   await page.keyboard.down('Shift')
@@ -1637,7 +1687,8 @@ test('Shift-drag selects a range and selected collections move together without 
   await expect(titles).toHaveText(['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'])
   for (const name of ['Beta', 'Gamma', 'Delta']) await expect(book(name)).toHaveAttribute('aria-pressed', 'true')
   const count = page.getByText('3 selected', { exact: true })
-  await expect(count.locator('..').getByRole('button', { name: 'Collection controls', exact: true })).toBeVisible()
+  if (page.viewportSize()!.width <= 650) await expect(help).toBeHidden()
+  else await expect(count.locator('..').getByRole('button', { name: 'Collection controls', exact: true })).toBeVisible()
   async function shiftDrag(fromName: string, toName: string, expected: number, cancel = false) {
     await book(fromName).evaluate(element => element.scrollIntoView({ block: 'center' }))
     const start = (await book(fromName).boundingBox())!, end = (await book(toName).boundingBox())!

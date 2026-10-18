@@ -1,9 +1,10 @@
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 
+type ExtensionReply = { ok?: boolean; page?: { url: string; html: string }; error?: string }
 type ExtensionRuntime = {
  lastError?: { message?: string }
- sendMessage(id: string, message: object, callback: (reply?: { ok?: boolean }) => void): void
+ sendMessage(id: string, message: object, callback: (reply?: ExtensionReply) => void): void
 }
 function runtime(): ExtensionRuntime | undefined {
  return (window as Window & { chrome?: { runtime?: ExtensionRuntime } }).chrome?.runtime
@@ -32,3 +33,18 @@ export async function connectExtension(session?: Session): Promise<boolean> {
  return message({ type: 'AO3_LIBRARY_CONNECT', token: current.access_token, expiresAt: current.expires_at })
 }
 export function disconnectExtension() { return message({ type: 'AO3_LIBRARY_DISCONNECT' }) }
+
+export function previewSeriesWithExtension(url: string): Promise<{ url: string; html: string }> {
+ const api = runtime(), id = extensionId()
+ if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) throw new Error('Connect the updated extension in Settings to preview series.')
+ return new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error('Series preview timed out. Complete AO3 sign-in in its tab, then retry.')), 125000)
+  try {
+   api.sendMessage(id, { type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, reply => {
+    clearTimeout(timer)
+    if (api.lastError || !reply?.ok || !reply.page) reject(new Error(reply?.error ?? 'Could not preview the series. Rebuild and reconnect the extension in Settings, then retry.'))
+    else resolve(reply.page)
+   })
+  } catch { clearTimeout(timer); reject(new Error('Could not contact the extension. Reconnect in Settings.')) }
+ })
+}
