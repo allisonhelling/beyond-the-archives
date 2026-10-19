@@ -233,3 +233,21 @@ describe('foundation integrity', () => {
     expect((await db.query<Record<string, unknown>>('select * from public.works where ao3_work_id=2')).rows).toHaveLength(1)
   })
 })
+
+it('persists private one-shot corrections, validates their type, and restores automatic detection', async () => {
+  let entry = ''
+  await asUser(alice, async () => {
+    const result = await db.query<{ id: string }>("select public.save_library_story('https://archiveofourown.org/works/803', '{\"title\":\"With art\",\"one_shot\":true,\"published_chapters\":3,\"total_chapters\":3}'::jsonb, 'to_read', 0, '', null, false, '{}'::uuid[], '{}'::text[]) as id")
+    entry = result.rows[0].id
+    expect((await db.query<{ metadata_overrides: object }>('select metadata_overrides from public.library_entries where id=$1', [entry])).rows[0].metadata_overrides).toMatchObject({ one_shot: true })
+  })
+  // Browser metadata refreshes merge under private corrections.
+  await db.query("update public.library_entries set extension_metadata='{\"published_chapters\":4}' where id=$1", [entry])
+  await asUser(alice, async () => {
+    expect((await db.query<{ metadata_overrides: object }>('select metadata_overrides from public.library_entries where id=$1', [entry])).rows[0].metadata_overrides).toMatchObject({ one_shot: true })
+    await expect(db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{one_shot}','\"yes\"') where id=$1", [entry])).rejects.toThrow(/boolean one-shot/)
+    await db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{one_shot}','false') where id=$1", [entry])
+    await db.query("select public.clear_metadata_override($1,'one_shot')", [entry])
+    expect((await db.query<{ metadata_overrides: object }>('select metadata_overrides from public.library_entries where id=$1', [entry])).rows[0].metadata_overrides).not.toHaveProperty('one_shot')
+  })
+})

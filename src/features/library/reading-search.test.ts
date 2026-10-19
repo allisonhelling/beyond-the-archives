@@ -37,7 +37,7 @@ describe('reading filters and sections', () => {
     expect(inReadingSection({ ...alpha, last_update_notification_at: '2026-10-15T23:00:00Z', update_dismissed_at: '2026-10-16T00:00:00Z' }, 'new')).toBe(false)
   })
   it('combines publication, favorite, rating, relationship, AO3 tags and any-selected fandom', () => {
-    const result = filterReading([alpha, beta], { ...defaultReadingFilters, publication: 'complete', favorites: true, rating: 'Mature', relationship: 'castiel/dean', tags: 'slow, burn', fandoms: ['Fandom B', 'Fandom C'] })
+    const result = filterReading([alpha, beta], { ...defaultReadingFilters, publication: ['complete'], favorites: true, rating: 'Mature', relationship: 'castiel/dean', tags: 'slow, burn', fandoms: ['Fandom B', 'Fandom C'] })
     expect(result).toEqual([alpha])
     expect(filterReading([alpha], { ...defaultReadingFilters, relationship: 'Castiel/Dean, Missing relationship' })).toEqual([])
   })
@@ -105,8 +105,8 @@ it('includes or excludes abandoned fics independently of their reading status', 
     reading_status: reading_status as Story['reading_status'], metadata: { ...blankMetadata, publication_status: 'abandoned' },
   }))
   const ongoing = story('Ongoing')
-  expect(filterReading([...abandoned, ongoing], { ...defaultReadingFilters, publication: 'abandoned' })).toHaveLength(4)
-  expect(filterReading([...abandoned, ongoing], { ...defaultReadingFilters, publication: 'exclude_abandoned' })).toEqual([ongoing])
+  expect(filterReading([...abandoned, ongoing], { ...defaultReadingFilters, publication: ['abandoned'] })).toHaveLength(4)
+  expect(filterReading([...abandoned, ongoing], { ...defaultReadingFilters, publication: ['complete', 'in_progress', 'unknown'] })).toEqual([ongoing])
   expect(filterReading(abandoned, { ...defaultReadingFilters, within: 'abandoned' })).toHaveLength(4)
 })
 
@@ -119,4 +119,30 @@ it('combines selected publication statuses with OR and treats an empty selection
   expect(filterReading(entries, { ...defaultReadingFilters, publication: ['complete', 'in_progress', 'unknown'] })).toHaveLength(3)
   expect(filterReading(entries, { ...defaultReadingFilters, publication: ['unknown'] })).toEqual([entries[3]])
   expect(filterReading(entries, { ...defaultReadingFilters, publication: ['abandoned', 'complete'], query: 'complete' })).toEqual([entries[0]])
+})
+
+it('allows, includes only, or excludes the same inferred and manually marked one-shots', () => {
+  const stories = [
+    story('Single chapter', { metadata: { ...blankMetadata, title: 'Single chapter', publication_status: 'complete', published_chapters: 1 } }),
+    story('Tagged', { personalTags: ['One shot'] }),
+    story('AO3 tag', { metadata: { ...blankMetadata, title: 'AO3 tag', ao3_tags: ['Oneshot'] } }),
+    story('With art', { metadata: { ...blankMetadata, title: 'With art', published_chapters: 3, one_shot: true } }),
+    story('Ongoing', { metadata: { ...blankMetadata, title: 'Ongoing', publication_status: 'in_progress', published_chapters: 1 } }),
+    story('Long fic'),
+  ]
+  expect(filterReading(stories, defaultReadingFilters)).toHaveLength(6)
+  expect(filterReading(stories, { ...defaultReadingFilters, oneShot: 'only', sort: 'alpha' }).map(story => story.metadata.title)).toEqual(['AO3 tag', 'Single chapter', 'Tagged', 'With art'])
+  expect(filterReading(stories, { ...defaultReadingFilters, oneShot: 'exclude', sort: 'alpha' }).map(story => story.metadata.title)).toEqual(['Long fic', 'Ongoing'])
+})
+
+it('reverses each fic sort and keeps unknown counts and dates last', () => {
+  const stories = [
+    story('Alpha', { created_at: '2026-01-01', metadata: { ...blankMetadata, title: 'Alpha', published_chapters: 2 }, work: { ao3_updated_at: '2026-01-01' } as Story['work'] }),
+    story('Beta', { created_at: '2026-02-01', metadata: { ...blankMetadata, title: 'Beta', published_chapters: 6 }, work: { ao3_updated_at: '2026-02-01' } as Story['work'] }),
+    story('Unknown'),
+  ]
+  for (const sort of ['added_reverse', 'updated_reverse', 'ready_reverse'] as const) {
+    expect(filterReading(stories, { ...defaultReadingFilters, sort }).map(story => story.metadata.title)).toEqual(['Alpha', 'Beta', 'Unknown'])
+  }
+  expect(filterReading(stories, { ...defaultReadingFilters, sort: 'alpha_reverse' }).map(story => story.metadata.title)).toEqual(['Unknown', 'Beta', 'Alpha'])
 })

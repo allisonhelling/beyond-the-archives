@@ -1,17 +1,18 @@
 import { publicationStatuses } from './publication-status'
-import { active, statuses, tagNames, type Story } from './model'
+import { active, isOneShot, statuses, tagNames, type Story } from './model'
 
-export type SortOrder = 'updated' | 'added' | 'ready' | 'alpha'
+type BaseSortOrder = 'updated' | 'added' | 'ready' | 'alpha'
+export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse`
 export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
-  query: string; fandoms: string[]; publication: string | string[];
-  rating: string; favorites: boolean; relationship: string; characters: string; tags: string;
+  query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
+  oneShot: 'allowed' | 'only' | 'exclude'; rating: string; favorites: boolean; relationship: string; characters: string; tags: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  query: '', fandoms: [], publication: 'all', rating: '', favorites: false,
+  query: '', fandoms: [], publication: [], oneShot: 'allowed', rating: '', favorites: false,
   relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
@@ -86,7 +87,7 @@ export function searchText(story: Story, scope: SearchScope) {
   return [story.metadata.title, ...story.metadata.authors, ...story.metadata.fandoms, ...story.metadata.ao3_tags, ...tagNames(story.metadata, 'relationship'), ...tagNames(story.metadata, 'character'), ...tagNames(story.metadata, 'freeform'),
     ...story.personalTags, ...(story.metadata.series ?? []), story.metadata.summary, story.notes, story.metadata.rating,
     story.metadata.publication_status, story.reading_status, statuses[story.reading_status],
-    publicationStatuses[story.metadata.publication_status].label,
+    publicationStatuses[story.metadata.publication_status].label, isOneShot(story.metadata, story.personalTags) ? 'One-shot' : '',
     story.work.ao3_updated_at ?? '', story.original_url].join('\n')
 }
 export function filterReading(stories: Story[], filters: ReadingFilters) {
@@ -101,7 +102,8 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
     const updated = s.work.ao3_updated_at ? Date.parse(s.work.ao3_updated_at) : null
     return (!query || normalize([s.metadata.title, ...s.metadata.authors].join('\n')).includes(query)) &&
       (!filters.fandoms.length || s.metadata.fandoms.some(f => filters.fandoms.includes(f))) &&
-      (Array.isArray(filters.publication) ? !filters.publication.length || filters.publication.includes(s.metadata.publication_status) : filters.publication === 'all' || (filters.publication === 'exclude_abandoned' ? s.metadata.publication_status !== 'abandoned' : s.metadata.publication_status === filters.publication)) &&
+      (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
+      (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
       (!filters.rating || s.metadata.rating === filters.rating) && (!filters.favorites || s.is_favorite) &&
       relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
       characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&
@@ -109,17 +111,23 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
       (after === null || (updated !== null && updated >= after)) &&
       (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))
   }).sort((a, b) => {
+    const reverse = filters.sort.endsWith('_reverse')
+    const order = filters.sort.replace(/_reverse$/, '')
+    const direction = reverse ? -1 : 1
     const alpha = a.metadata.title.localeCompare(b.metadata.title)
-    if (filters.sort === 'alpha') return alpha
-    if (filters.sort === 'added') {
+    if (order === 'alpha') return direction * alpha
+    if (order === 'added') {
       const added = (story: Story) => { const timestamp = Date.parse(story.created_at); return Number.isFinite(timestamp) ? timestamp : -Infinity }
-      return added(b) - added(a) || alpha
+      const missing = Number(!Number.isFinite(added(a))) - Number(!Number.isFinite(added(b)))
+      return missing || direction * (added(b) - added(a)) || alpha
     }
-    if (filters.sort === 'ready') {
+    if (order === 'ready') {
       const ready = (s: Story) => s.metadata.published_chapters === null ? -1 : Math.max(0, s.metadata.published_chapters - s.last_read_chapter)
-      return ready(b) - ready(a) || alpha
+      const missing = Number(a.metadata.published_chapters === null) - Number(b.metadata.published_chapters === null)
+      return missing || direction * (ready(b) - ready(a)) || alpha
     }
-    return (b.work.ao3_updated_at ? Date.parse(b.work.ao3_updated_at) : 0) - (a.work.ao3_updated_at ? Date.parse(a.work.ao3_updated_at) : 0) || alpha
+    const missing = Number(!a.work.ao3_updated_at) - Number(!b.work.ao3_updated_at)
+    return missing || direction * ((b.work.ao3_updated_at ? Date.parse(b.work.ao3_updated_at) : 0) - (a.work.ao3_updated_at ? Date.parse(a.work.ao3_updated_at) : 0)) || alpha
   })
 }
 export function readingGroups(stories: Story[], group: GroupBy) {

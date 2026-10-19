@@ -10,7 +10,7 @@ type Draft = { tags: string; rating: number | '' }
 function PersonalControls({ draft, onChange }: { draft: Draft; onChange: () => void }) {
   const [tags, setTags] = useState(parseLines(draft.tags)), [rating, setRating] = useState<number | null>(draft.rating === '' ? null : Number(draft.rating))
   return <div className="companion-personal-controls">
-    <div className="personal-tags-field"><p>Personal tags</p><PersonalTagInput value={tags} onChange={value => { setTags(value); draft.tags = value.join('\n'); onChange() }} /><small>Press Enter to add a tag. Use arrow keys to move between tags; Backspace selects, then deletes the previous tag.</small></div>
+    <div className="personal-tags-field"><p>Personal tags</p><PersonalTagInput inlineHelp value={tags} onChange={value => { setTags(value); draft.tags = value.join('\n'); onChange() }} /></div>
     <StarRating value={rating} onChange={value => { setRating(value); draft.rating = value ?? ''; onChange() }} />
   </div>
 }

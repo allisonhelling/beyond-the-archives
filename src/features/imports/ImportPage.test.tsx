@@ -52,7 +52,7 @@ it('filters batch results by status, keeps totals, and resets when selecting ano
  expect(within(table).getAllByRole('row')).toHaveLength(7)
  fireEvent.click(screen.getByRole('button',{name:'failed: 1'}))
  fireEvent.change(screen.getByLabelText('Batch'),{target:{value:'second'}})
- await waitFor(()=>expect(screen.getByRole('button',{name:'Review results: 0'})).toHaveAttribute('aria-pressed','true'))
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Review: 0'})).toHaveAttribute('aria-pressed','true'))
  expect(screen.getByRole('status')).toHaveTextContent('Batch finished. No failed, skipped, or cancelled results to review.')
  fireEvent.click(screen.getByRole('button',{name:'All results: 1'}))
  expect(within(table).getByText('https://archiveofourown.org/works/99')).toBeVisible()
@@ -71,14 +71,14 @@ it('automatically shows review results on completion without overriding later ma
   show()
   await act(async()=>{})
   expect(screen.getByRole('button',{name:'All results: 4'})).toHaveAttribute('aria-pressed','true')
-  expect(screen.queryByRole('button',{name:'Review results: 3'})).not.toBeInTheDocument()
+  expect(screen.queryByRole('button',{name:'Review: 3'})).not.toBeInTheDocument()
   jobs=[]
   items[2].metadata_status='processing'
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
-  expect(screen.queryByRole('button',{name:'Review results: 3'})).not.toBeInTheDocument()
+  expect(screen.queryByRole('button',{name:'Review: 3'})).not.toBeInTheDocument()
   items[2].metadata_status='completed'
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
-  expect(screen.getByRole('button',{name:'Review results: 3'})).toHaveAttribute('aria-pressed','true')
+  expect(screen.getByRole('button',{name:'Review: 3'})).toHaveAttribute('aria-pressed','true')
   const table=screen.getByRole('table')
   expect(within(table).getAllByRole('row')).toHaveLength(4)
   expect(within(table).queryByText(items[0].original_url)).not.toBeInTheDocument()
@@ -93,7 +93,7 @@ it('automatically shows review results on completion without overriding later ma
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
   jobs=[]
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
-  expect(screen.getByRole('button',{name:'Review results: 3'})).toHaveAttribute('aria-pressed','true')
+  expect(screen.getByRole('button',{name:'Review: 3'})).toHaveAttribute('aria-pressed','true')
  }finally{vi.useRealTimers()}
 })
 

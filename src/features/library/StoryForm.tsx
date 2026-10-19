@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { authorPageUrl, blankMetadata, changedMetadata, initialProgress, parseLines, parseWorkUrl, ratings, savedWorkUrl, statuses, tagNames, validateProgress, type Metadata, type Status, type Story } from './model'
+import { authorPageUrl, blankMetadata, changedMetadata, initialProgress, isOneShot, parseLines, parseWorkUrl, ratings, savedWorkUrl, statuses, tagNames, validateProgress, type Metadata, type Status, type Story } from './model'
 import { saveStory } from './repository'
 import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
 import { useLibrary } from './LibraryProvider'
 import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
-import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
+import { PersonalTagInput } from './PersonalTagInput'
 export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story; onCancel?: () => void; section?: 'all' | 'metadata' | 'reading' }) {
   const library = useLibrary(), navigate = useNavigate(), [params] = useSearchParams(), location = useLocation()
   const [metadata, setMetadata] = useState<Metadata>(story?.metadata ?? { ...blankMetadata })
@@ -70,13 +70,15 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     <div className="form-grid"><label>AO3 rating<select aria-label="AO3 rating" value={metadata.rating} onChange={e => field('rating', e.target.value)}><option value="">Unknown</option>{ratings.map(r => <option key={r}>{r}</option>)}</select></label><label>AO3 publication status<select aria-label="AO3 publication status" value={metadata.publication_status} onChange={e => field('publication_status', e.target.value as Metadata['publication_status'])}><option value="unknown">Unknown</option><option value="in_progress">In Progress</option><option value="complete">Complete</option><option value="abandoned">Abandoned</option></select></label></div>
     <p className="field-help">Abandoned means the author has discontinued the fic. Reading all published chapters moves it to Finished.</p>
     <div className="form-grid">{([['published_chapters', 'Published chapters'], ['total_chapters', 'Total chapters'], ['word_count', 'Word count']] as const).map(([key, label]) => <label key={key}>{label}<input type="number" min={key === 'total_chapters' ? 1 : 0} step="1" placeholder="Unknown (?)" value={metadata[key] ?? ''} onChange={e => field(key, e.target.value === '' ? null : Number(e.target.value))} /></label>)}</div>
+    <label className="check-label"><input type="checkbox" checked={isOneShot({ ...metadata, ao3_tags: [...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)], additional_tags: parseLines(additionalTags) }, section === 'metadata' && story ? story.personalTags : tags)} onChange={event => field('one_shot', event.target.checked)} />One-shot</label>
+    <p className="field-help">Automatically marked for complete one-chapter works or One-shot, One shot, or Oneshot tags. You can correct this label, including works with extra art or author-note chapters.</p>
     <label>Series names (one per line, manually entered)<textarea rows={2} value={series} onChange={e => setSeries(e.target.value)} /></label>
     <div className="form-grid"><label>Relationship tags (one per line)<textarea rows={3} value={relationships} onChange={e => setRelationships(e.target.value)} /></label><label>Characters (one per line)<textarea rows={3} value={characters} onChange={e => setCharacters(e.target.value)} /></label><label>Additional tags (one per line)<textarea rows={3} value={additionalTags} onChange={e => setAdditionalTags(e.target.value)} /></label></div>
     {otherTags && <label>Other or uncategorized AO3 tags (one per line)<textarea rows={3} value={otherTags} onChange={e => setOtherTags(e.target.value)} /></label>}</fieldset>}
     {section !== 'metadata' && <fieldset disabled={busy}><legend>Your reading & organization</legend><div className="form-grid reading-progress-row"><label>Reading status<select aria-label="Reading status" value={status} onChange={e => { setStatus(e.target.value as Status); setStatusTouched(true) }}>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label>Last fully read chapter<input type="number" required min="0" step="1" value={progress} onChange={e => { setProgress(e.target.value); setStatusTouched(true) }} /><small>of {metadata.total_chapters ?? '?'} · next unread: {Number(progress) + 1}</small></label></div>
     <div className="rating-favorite-row"><StarRating value={personalRating} onChange={setPersonalRating} /><div className="favorite-choice"><FavoriteButton selected={favorite} disabled={busy} onChange={setFavorite} /></div></div>
     <label>Private notes<textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)} /></label>
-    <div><span className="filter-name editable-field-heading">Personal tags<PersonalTagHelp /></span><PersonalTagInput value={tags} onChange={setTags} /></div>
+    <div><span className="filter-name editable-field-heading">Personal tags</span><PersonalTagInput value={tags} onChange={setTags} /></div>
     <div className="collection-choices"><div className="collection-heading"><strong>Custom collections</strong><NewCollectionButton iconOnly disabled={busy} onCreated={id => setCollections(current => [...current, id])} /></div><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} />{!library.collections.length && <p className="muted">Create a collection above to organize this story.</p>}</div></fieldset>}
     {error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={busy} type="submit">{busy ? 'Saving…' : 'Save story'}</button>{onCancel ? <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button> : <Link className="button secondary" to="/library">Cancel</Link>}</div>
   </form>

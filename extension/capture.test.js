@@ -12,7 +12,7 @@ it('captures parser-compatible metadata without chapter text or account controls
  document.body.insertAdjacentHTML('beforeend', '<div id="chapters">PRIVATE CHAPTER TEXT</div><input value="PRIVATE CSRF"><div class="notes">PRIVATE NOTE</div>')
  const captured = await captureMetadataPage()
  expect(captured.html).not.toMatch(/PRIVATE CHAPTER|PRIVATE CSRF|PRIVATE NOTE/)
- expect(parseMetadata(captured.html, 123, captured.url).metadata).toMatchObject({ title: 'A & B', published_chapters: 6 })
+ expect(parseMetadata(captured.html, 123, captured.url)).toEqual(parseMetadata(fixture, 123, captured.url))
 })
 it('skips unloaded, unrelated and oversized pages', async () => {
  expect(await captureMetadataPage()).toBeNull()

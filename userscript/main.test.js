@@ -45,19 +45,13 @@ it('keeps failed notes across reload, confirms only after success, and stores no
  expect(body.p_input).toMatchObject({ status: 'reading', progress: 3, notes: 'Keep these notes' })
  expect(storage.has('draft:https://backend.test:alice:123')).toBe(false)
 })
-it('marks this chapter finished and rereads without transmitting or replacing personal fields', async () => {
+it('marks this chapter finished without transmitting or replacing personal fields', async () => {
  entry = { version: 'v1', status: 'reading', progress: 1, notes: 'Private', rating: 4, tags: ['Tag'], collections: [] }
  await mount()
  fireEvent.click(findButton('✓ Through Ch. 4'))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', progress: 4, status: 'reading' })
- document.getElementById('ao3-library-companion').remove()
- entry = { ...entry, status: 'finished', progress: 10 }
- await mount()
- await toggle('Connection', true)
- fireEvent.click(findButton('Reread?'))
- await waitFor(() => expect(JSON.parse(network.mock.lastCall[0].data).p_action).toBe('progress'))
- expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', progress: 0, status: 're_reading' })
+
 })
 it('offers reconnection on expired authorization without showing a false save confirmation', async () => {
  network.mockResolvedValue({ status: 401, responseText: JSON.stringify({ code: '28000' }) })
@@ -185,8 +179,8 @@ it('searches custom collections without clearing selected or hidden memberships'
  expect(fields.getByLabelText('Weekend reads')).toBeChecked()
  expect(fields.getByLabelText('Night reads')).toBeChecked()
 })
-it('uses the selected chapter for the finish action and synchronizes an open draft without losing notes', async () => {
- entry = { version: 'v1', status: 'reading', progress: 8, notes: '', rating: null, tags: [], collections: [] }
+it('synchronizes an editor draft from the reading bar and keeps progress controls out of pairing', async () => {
+ entry = { version: 'v1', status: 'reading', progress: 1, notes: '', rating: null, tags: [], collections: [] }
  network.mockImplementation(async request => {
   const { p_action, p_input } = JSON.parse(request.data)
   if (p_action === 'progress') entry = { ...entry, ...p_input, version: 'v2' }
@@ -196,22 +190,19 @@ it('uses the selected chapter for the finish action and synchronizes an open dra
  await toggle('Edit', true)
  const fields = within(root)
  fireEvent.input(fields.getByLabelText('Private notes'), { target: { value: 'Keep my draft' } })
- expect(fields.getByText('Ch. 8 / 10')).toBeInTheDocument()
  await toggle('Connection', true)
- fireEvent.click(findButton('Next chapter'))
- await waitFor(() => expect(fields.getByText('Ch. 9 / 10')).toBeInTheDocument())
- expect(findButton('Mark all chapters read and finish work')).toBeInTheDocument()
- expect(fields.getByLabelText('Current chapter')).toHaveValue(10)
+ const pairing = root.getElementById('library-connection')
+ expect(within(pairing).getAllByRole('button').map(button => button.textContent)).toEqual(['Connect', 'Disconnect device', 'Close'])
+ expect(within(pairing).queryByLabelText('Adjust reading progress')).not.toBeInTheDocument()
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: '✓ Through Ch. 4' }))
+ await waitFor(() => expect(fields.getByText('Ch. 4 / 10')).toBeInTheDocument())
+ await toggle('Edit', true)
+ expect(fields.getByLabelText('Current chapter')).toHaveValue(5)
  expect(fields.getByLabelText('Private notes')).toHaveValue('Keep my draft')
- await waitFor(() => expect(findButton('Previous chapter')).toBeEnabled())
- fireEvent.click(findButton('Previous chapter'))
- await waitFor(() => expect(fields.getByLabelText('Current chapter')).toHaveValue(9))
- expect(fields.queryByRole('button', { name: 'Mark all chapters read and finish work' })).not.toBeInTheDocument()
- expect(findButton('Next chapter')).toBeInTheDocument()
- expect(storage.get('draft:https://backend.test:alice:123')).toMatchObject({ chapter: 9, chapterFinished: false, version: 'v2', notes: 'Keep my draft' })
+ expect(storage.get('draft:https://backend.test:alice:123')).toMatchObject({ chapter: 5, chapterFinished: false, version: 'v2', notes: 'Keep my draft' })
 })
 it('offers Finish Fic on the actual final AO3 chapter even when tracked progress is earlier', async () => {
- document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}</option>`).join('')
+ document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}. Chapter</option>`).join('')
  entry = { version: 'v1', status: 'reading', progress: 1, notes: '', rating: null, tags: [], collections: [] }
  network.mockImplementation(async request => {
   const { p_action, p_input } = JSON.parse(request.data)
@@ -224,22 +215,37 @@ it('offers Finish Fic on the actual final AO3 chapter even when tracked progress
  await waitFor(() => expect(entry).toMatchObject({ status: 'finished', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Read through Ch. 10')).toBeInTheDocument()
+  expect(within(surface).getByText('Finished', { exact: true })).toBeInTheDocument()
   expect(within(surface).queryByRole('button', { name: '✓ Finish Fic' })).not.toBeInTheDocument()
  }
 })
-it('shows the version footer only while connected panels are open and always includes the logo', async () => {
+it.each([false, true])('keeps one logo in the main bar when panels open (saved entry: %s)', async saved => {
+ if (saved) entry = { id: 'fic-entry', version: 'v1', status: 'reading', progress: 1, notes: '', rating: null, tags: [], collections: [] }
  await mount()
  const footer = within(root).getByText(/AO3 Library v/)
+ expect(footer.querySelector('a')).toHaveAttribute('href', 'https://library.test/settings#ios-safari-userscript')
  expect(footer.hidden).toBe(true)
- expect(within(root).getByRole('link', { name: 'between chapters library' })).toHaveAttribute('href', 'https://library.test')
+ expect(within(root).getByRole('link', { name: 'View in between chapters library' })).toHaveAttribute('href', saved ? 'https://library.test/stories/fic-entry' : 'https://library.test/library')
+ const toolbar = root.querySelector('.library-link').parentElement
+ if (saved) {
+  const summary = root.querySelector('.reading-summary')
+  expect([...summary.children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10'])
+  expect([...bottomRoot.querySelector('.reading-summary').children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10'])
+  expect(summary.querySelector('.status-bullet')).toHaveAttribute('aria-hidden', 'true')
+  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('✓ Through Ch. 4'))
+  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Edit'))
+  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Connection'))
+ }
  await toggle('Connection', true)
+ expect(root.querySelectorAll('.brand-icon')).toHaveLength(1)
+ expect(root.querySelector('.library-link').parentElement).toBe(toolbar)
  expect(footer.hidden).toBe(false)
  await toggle('Connection', false)
  expect(footer.hidden).toBe(true)
 })
 it('marks the latest WIP chapter read without finishing the fic', async () => {
  document.querySelector('dd.chapters').textContent = '10/?'
- document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}</option>`).join('')
+ document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}. Chapter</option>`).join('')
  entry = { version: 'v1', status: 'reading', progress: 9, notes: '', rating: null, tags: [], collections: [] }
  network.mockImplementation(async request => {
   const { p_action, p_input } = JSON.parse(request.data)
@@ -297,4 +303,52 @@ it('hides the bottom bar for unsaved works and omits completion actions for ambi
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).queryByRole('button', { name: /Through Ch|Finish Fic/ })).not.toBeInTheDocument()
  }
+})
+
+it.each(['reading', 'finished'])('shows only connection actions in pairing for %s fics', async status => {
+ entry = { version: 'v1', status, progress: status === 'finished' ? 10 : 9, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ await toggle('Connection', true)
+ const pairing = root.getElementById('library-connection')
+ expect(within(pairing).getAllByRole('button').map(button => button.textContent)).toEqual(['Connect', 'Disconnect device', 'Close'])
+})
+
+it('recollects current page metadata without saving personal edits or discarding the editor draft', async () => {
+ entry = { id: 'entry', version: 'v1', status: 'reading', progress: 1, notes: 'Saved note', rating: 4, tags: ['Saved tag'], collections: [] }
+ await mount()
+ fireEvent.click(findButton('Edit'))
+ const notes = await within(root).findByLabelText('Private notes')
+ fireEvent.input(notes, { target: { value: 'Unsaved note' } })
+ document.querySelector('h2.title').textContent = 'New title'
+ document.querySelector('dd.chapters').textContent = '12/12'
+ network.mockImplementation(async () => ({ status: 200, responseText: JSON.stringify({ entry, collections: [] }) }))
+ fireEvent.click(within(root).getByRole('button', { name: 'Recollect metadata' }))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Metadata recollected'))
+ const request = JSON.parse(network.mock.lastCall[0].data)
+ expect(request).toMatchObject({ p_action: 'refresh_metadata', p_input: { version: 'v1', metadata: { title: 'New title', published_chapters: 12, total_chapters: 12 }, chapters: { '4': '104' } } })
+ expect(request.p_input).not.toHaveProperty('notes')
+ expect(request.p_input).not.toHaveProperty('progress')
+ expect(notes.value).toBe('Unsaved note')
+ expect(storage.get('draft:https://backend.test:alice:123').notes).toBe('Unsaved note')
+ expect(within(root).getByLabelText('Current chapter')).toHaveAttribute('max', '12')
+ expect(within(root).getByText('Ch. 1 / 12')).toBeInTheDocument()
+ expect(within(bottomRoot).getByText('Ch. 1 / 12')).toBeInTheDocument()
+})
+
+it('retains the previous metadata and draft when recollection fails and allows retry', async () => {
+ entry = { id: 'entry', version: 'v1', status: 'reading', progress: 1, notes: 'Saved note', rating: null, tags: [], collections: [] }
+ await mount()
+ fireEvent.click(findButton('Edit'))
+ const notes = await within(root).findByLabelText('Private notes')
+ fireEvent.input(notes, { target: { value: 'Keep draft' } })
+ document.querySelector('dd.chapters').textContent = '12/12'
+ network.mockResolvedValueOnce({ status: 503, responseText: '{}' })
+ fireEvent.click(within(root).getByRole('button', { name: 'Recollect metadata' }))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save or load'))
+ expect(within(root).getByText('Ch. 1 / 10')).toBeInTheDocument()
+ expect(notes.value).toBe('Keep draft')
+ expect(within(root).getByRole('button', { name: 'Recollect metadata' })).toBeEnabled()
+ fireEvent.click(within(root).getByRole('button', { name: 'Recollect metadata' }))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Metadata recollected'))
+ expect(within(root).getByText('Ch. 1 / 12')).toBeInTheDocument()
 })

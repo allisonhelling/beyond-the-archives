@@ -40,27 +40,34 @@ export function compareCollections(a: { created_at?: string; sort_position?: num
 
 export const collectionOrderOptions = [
   { value: 'manual', label: 'Manual order' },
+  { value: 'manual_reverse', label: 'Manual order (reversed)' },
   { value: 'alphabetical', label: 'Alphabetical (A–Z)' },
+  { value: 'alphabetical_reverse', label: 'Alphabetical (Z–A)' },
   { value: 'created', label: 'Date created (oldest first)' },
   { value: 'created_newest', label: 'Date added' },
   { value: 'edited', label: 'Last edited (story added)' },
+  { value: 'edited_reverse', label: 'Last edited (oldest first)' },
   { value: 'updated', label: 'Last story updated (newest first)' },
+  { value: 'updated_reverse', label: 'Last story updated (oldest first)' },
 ] as const
 export type CollectionOrder = typeof collectionOrderOptions[number]['value']
 
 export function orderCollections(collections: Collection[], stories: Pick<Story, 'collectionIds' | 'updated_at'>[], order: CollectionOrder) {
+  const reverse = order.endsWith('_reverse')
+  const baseOrder = order.replace(/_reverse$/, '')
   const latest = new Map<string, number>()
-  if (order === 'updated') for (const story of stories) {
+  if (baseOrder === 'updated') for (const story of stories) {
     for (const id of story.collectionIds) latest.set(id, Math.max(latest.get(id) ?? 0, Date.parse(story.updated_at) || 0))
   }
-  return [...collections].sort((a, b) => {
-    if (order === 'alphabetical') return a.name.localeCompare(b.name) || compareCollections(a, b)
-    if (order === 'created') return (a.created_at ?? '').localeCompare(b.created_at ?? '') || compareCollections(a, b)
-    if (order === 'created_newest') return (b.created_at ?? '').localeCompare(a.created_at ?? '') || compareCollections(a, b)
-    if (order === 'edited') return (Date.parse(b.last_story_added_at ?? '') || 0) - (Date.parse(a.last_story_added_at ?? '') || 0) || compareCollections(a, b)
-    if (order === 'updated') return (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0) || compareCollections(a, b)
+  const sorted = [...collections].sort((a, b) => {
+    if (baseOrder === 'alphabetical') return a.name.localeCompare(b.name) || compareCollections(a, b)
+    if (baseOrder === 'created') return (a.created_at ?? '').localeCompare(b.created_at ?? '') || compareCollections(a, b)
+    if (baseOrder === 'created_newest') return (b.created_at ?? '').localeCompare(a.created_at ?? '') || compareCollections(a, b)
+    if (baseOrder === 'edited') return (Date.parse(b.last_story_added_at ?? '') || 0) - (Date.parse(a.last_story_added_at ?? '') || 0) || compareCollections(a, b)
+    if (baseOrder === 'updated') return (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0) || compareCollections(a, b)
     return compareCollections(a, b)
   })
+  return reverse ? sorted.reverse() : sorted
 }
 
 export function moveCollectionIds(ids: string[], sourceId: string, targetId: string, selectedIds: string[] = []) {

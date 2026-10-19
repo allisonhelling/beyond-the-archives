@@ -31,8 +31,10 @@ function TitleAuthorSearch({ value, onChange, stories }: { value: string; onChan
   ]} />
 }
 const sortOptions: { value: SortOrder; label: string }[] = [
-  { value: 'added', label: 'Date added' }, { value: 'updated', label: 'Last updated' },
-  { value: 'ready', label: 'Most chapters ready' }, { value: 'alpha', label: 'Alphabetical' },
+  { value: 'added', label: 'Date added' }, { value: 'added_reverse', label: 'Date added (oldest first)' },
+  { value: 'updated', label: 'Last updated' }, { value: 'updated_reverse', label: 'Last updated (oldest first)' },
+  { value: 'ready', label: 'Most chapters ready' }, { value: 'ready_reverse', label: 'Fewest chapters ready' },
+  { value: 'alpha', label: 'Alphabetical' }, { value: 'alpha_reverse', label: 'Alphabetical (Z–A)' },
 ]
 const groupOptions: { value: ReadingFilters['groupBy']; label: string }[] = [
   { value: 'none', label: 'None' }, { value: 'fandom', label: 'Fandom' },
@@ -70,7 +72,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     return () => query.removeEventListener('change', update)
   }, [])
   const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
-  const [filters, setFilters] = useState<ReadingFilters>(() => ({ ...initialReadingFilters(), ...(mode === 'library' && { publication: [] }) }))
+  const [filters, setFilters] = useState<ReadingFilters>(initialReadingFilters)
   useEffect(() => {
     try { window.localStorage.setItem(preferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
@@ -85,13 +87,14 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const characters = pool.flatMap(story => tagNames(story.metadata, 'character'))
   const additionalTags = pool.flatMap(story => tagNames(story.metadata, 'freeform'))
   const fandoms = [...fandomCounts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
-  function clearFilters() { setFilters(previous => ({ ...defaultReadingFilters, publication: mode === 'library' ? [] : 'all', sort: previous.sort, groupBy: previous.groupBy })) }
+  function clearFilters() { setFilters(previous => ({ ...defaultReadingFilters, sort: previous.sort, groupBy: previous.groupBy })) }
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { setFilters(previous => ({ ...previous, [key]: value })) }
   let error = '', filtered: Story[] = []
   if (filters.updatedAfter && filters.updatedBefore && filters.updatedAfter > filters.updatedBefore) error = 'The last-updated start date must be before the end date.'
   try { filtered = filterReading(pool, filters) } catch (e) { error = (e as Error).message }
   const shown = error ? [] : filtered.filter(s => mode === 'library' || inReadingSection(s, selected))
-  const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...(Array.isArray(filters.publication) ? filters.publication.map(status => `Publication status: ${publicationStatuses[status as keyof typeof publicationStatuses].label}`) : [filters.publication !== 'all' && `Work Status: ${filters.publication === 'exclude_abandoned' ? 'Exclude abandoned' : publicationStatuses[filters.publication as keyof typeof publicationStatuses]?.label}`]),
+  const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationStatuses[status].label}`),
+    filters.oneShot !== 'allowed' && `One-shot: ${filters.oneShot === 'only' ? 'Only' : 'Exclude'}`,
     filters.rating && `Rating: ${filters.rating}`, filters.favorites && 'Favorites',
     filters.relationship && `Relationships: ${filters.relationship}`, filters.characters && `Characters: ${filters.characters}`, filters.tags && `Tags: ${filters.tags}`, filters.within && `Within ${filters.scope}: ${filters.within}`,
     filters.updatedAfter && `Updated from ${filters.updatedAfter}`, filters.updatedBefore && `Updated through ${filters.updatedBefore}`].filter(Boolean)
@@ -111,9 +114,12 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
       <SearchSuggestions label="Characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
 
-      <Dropdown label="Rating" value={filters.rating} onChange={value => change('rating', value)} options={[{ value: '', label: 'All ratings' }, ...ratings.map(rating => ({ value: rating, label: rating }))]} />
-      {mode === 'library' ? <Dropdown label="Publication status" multiple value={Array.isArray(filters.publication) ? filters.publication : []} onChange={value => change('publication', value)} options={Object.entries(publicationStatuses).map(([value, status]) => ({ value, label: status.label }))} /> : <Dropdown label="Work Status" value={typeof filters.publication === 'string' ? filters.publication : 'all'} onChange={value => change('publication', value)} options={[{ value: 'all', label: 'All' }, { value: 'complete', label: 'Complete on AO3' }, { value: 'in_progress', label: 'In progress' }, { value: 'abandoned', label: 'Only abandoned' }, { value: 'exclude_abandoned', label: 'Exclude abandoned' }]} />}
+      <div className="filter-choice-row">
+      <Dropdown fitContent label="Rating" value={filters.rating} onChange={value => change('rating', value)} options={[{ value: '', label: 'All ratings' }, ...ratings.map(rating => ({ value: rating, label: rating }))]} />
+      <Dropdown fitContent label={mode === 'library' ? 'Publication status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).map(([value, status]) => ({ value, label: status.label }))} />
+      <Dropdown fitContent label="One-shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
       <button className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Heart size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites only</button>
+      </div>
       <div className="updated-filter-section"><div className="updated-filter-row"><span className="filter-label" id="updated-filter-label">Last updated on AO3</span><div className="updated-filter" role="group" aria-labelledby="updated-filter-label"><label><span className="filter-name">From</span><input type="date" value={filters.updatedAfter} onChange={e => change('updatedAfter', e.target.value)} /></label><label><span className="filter-name">Through</span><input type="date" value={filters.updatedBefore} onChange={e => change('updatedBefore', e.target.value)} /></label></div></div><p className="field-help">Last updated uses saved AO3 dates in UTC; stories without an AO3 date are excluded by date filters. Chapter counts are saved snapshots; unknown counts sort last.</p></div>
     </div><div className="within-search"><div className="within-search-row"><div className="within-search-field"><label><span className="filter-name">Search within results</span><input type="search" placeholder="Search within results" aria-describedby="search-mode-description" value={filters.within} onChange={e => change('within', e.target.value)} /></label>
 

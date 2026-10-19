@@ -1,4 +1,7 @@
-import { expect, it } from 'vitest'
+import fixture from '../server/ao3/fixtures/work.html?raw'
+import { parseMetadata } from '../server/ao3/adapter.ts'
+import { captureMetadataPage } from '../extension/capture.js'
+import { expect, it, vi } from 'vitest'
 import { readPage } from './page'
 
 function page(chapter, total = '10', full = false) {
@@ -16,4 +19,33 @@ it('uses navigation positions rather than chapter IDs for first, middle and fina
 it('does not mount on unrelated origins, chapter-only links, or blocked pages', () => {
  for (const url of ['https://evil.test/works/123', 'https://archiveofourown.org/chapters/123', 'https://archiveofourown.org/works/0']) expect(readPage(document, url)).toBeNull()
  expect(readPage(document, 'https://archiveofourown.org/works/123')).toBeNull()
+})
+
+it('captures every website import field through the shared extractor', async () => {
+ const href = 'https://archiveofourown.org/works/123'
+ const html = fixture.replace('<dl>', '<dl class="work meta">').replace('<p>A summary &amp; more.</p>', '<p>First paragraph.</p><p>Next<br>line.</p>')
+ document.documentElement.innerHTML = html
+ document.body.insertAdjacentHTML('beforeend', '<div id="chapters">PRIVATE CHAPTER TEXT</div><input value="PRIVATE TOKEN"><div class="notes">PRIVATE NOTE</div>')
+ vi.stubGlobal('location', new URL(href))
+ const captured = await captureMetadataPage()
+ const imported = parseMetadata(captured.html, 123, href)
+ const page = readPage(document, href)
+ expect(page.metadata).toMatchObject(imported.metadata)
+ expect(page.metadata).toMatchObject({
+  summary: 'First paragraph.\n\nNext\nline.',
+  author_links: { One: 'https://archiveofourown.org/users/One/pseuds/One', Two: 'https://archiveofourown.org/users/Two/pseuds/Two' },
+  character_tags: ['A', 'B'], additional_tags: ['Zulu tag', 'Adventure', 'Middle tag'], categories: ['M/M'],
+  archive_warnings: ['No Archive Warnings Apply'], word_count: 12345,
+  ao3_published_at: '2024-01-01T00:00:00Z', ao3_updated_at: '2024-02-02T00:00:00Z',
+  series: ['The Series'], series_memberships: [{ id: 77, name: 'The Series', url: 'https://archiveofourown.org/series/77', position: 2 }],
+ })
+ expect(JSON.stringify(page)).not.toMatch(/PRIVATE CHAPTER|PRIVATE TOKEN|PRIVATE NOTE/)
+})
+
+it('keeps absent metadata unknown and verifies chapter positions from numbered labels', () => {
+ const doc = new DOMParser().parseFromString('<h2 class="title">Sparse</h2>', 'text/html')
+ expect(readPage(doc, 'https://archiveofourown.org/works/123').metadata).toMatchObject({ publication_status: 'unknown', word_count: null, published_chapters: null, total_chapters: null })
+ doc.body.insertAdjacentHTML('beforeend', '<dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="910">Choose a chapter</option><option value="940">4. Fourth</option></select>')
+ expect(readPage(doc, 'https://archiveofourown.org/works/123/chapters/940').current).toBe(4)
+ expect(readPage(doc, 'https://archiveofourown.org/works/123/chapters/910').current).toBeNull()
 })

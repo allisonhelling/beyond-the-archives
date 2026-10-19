@@ -52,3 +52,19 @@ it('only changed metadata fields become manual overrides', async () => {
   expect(changedMetadata(automatic, { ...automatic })).toEqual({})
   expect(changedMetadata(automatic, { ...automatic, title: 'My title' })).toEqual({ title: 'My title' })
 })
+
+it('detects one-shots from completion and exact AO3 or personal tags, with manual corrections', async () => {
+  const { isOneShot } = await import('./model')
+  expect(isOneShot({ ...blankMetadata, publication_status: 'complete', published_chapters: 1 })).toBe(true)
+  expect(isOneShot({ ...blankMetadata, publication_status: 'in_progress', published_chapters: 1 })).toBe(false)
+  expect(isOneShot({ ...blankMetadata, publication_status: 'complete', published_chapters: 2 })).toBe(false)
+  expect(isOneShot({ ...blankMetadata, publication_status: 'complete' })).toBe(false)
+  for (const tag of ['One-shot', 'One shot', 'Oneshot', ' ONE-SHOT ']) {
+    expect(isOneShot({ ...blankMetadata, ao3_tags: [tag] })).toBe(true)
+    expect(isOneShot({ ...blankMetadata, additional_tags: [tag] })).toBe(true)
+    expect(isOneShot(blankMetadata, [tag])).toBe(true)
+  }
+  for (const tag of ['Not a one-shot', 'One-shot collection', 'Multiple oneshots', 'One--shot']) expect(isOneShot(blankMetadata, [tag])).toBe(false)
+  expect(isOneShot({ ...blankMetadata, one_shot: true, published_chapters: 6 })).toBe(true)
+  expect(isOneShot({ ...blankMetadata, one_shot: false, publication_status: 'complete', published_chapters: 1 }, ['Oneshot'])).toBe(false)
+})

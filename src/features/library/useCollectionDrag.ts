@@ -124,7 +124,8 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
     window.addEventListener('pointermove', move, { passive: false })
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', cancel)
-    window.addEventListener('keydown', key)
+    // Active drags consume Escape before the surrounding collection editor.
+    window.addEventListener('keydown', key, true)
     window.addEventListener('blur', blur)
     function blur() { finish(false) }
     return () => {
@@ -134,7 +135,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', cancel)
-      window.removeEventListener('keydown', key)
+      window.removeEventListener('keydown', key, true)
       window.removeEventListener('blur', blur)
     }
   }, [enabled, shelfRef])

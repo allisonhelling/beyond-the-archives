@@ -99,6 +99,21 @@ describe('private app access and navigation', () => {
     expect(screen.getByRole('button', { name: 'Add Story' })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
   })
+  it('backs out of collection selection and then editing with successive Escape presses', async () => {
+    auth.session = fakeSession
+    window.history.replaceState(null, '', '/library')
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Edit Collections' }))
+    await user.click(screen.getByRole('button', { name: 'Select collections' }))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('button', { name: 'Cancel selection' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Select collections' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Done Editing' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('button', { name: 'Select collections' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit Collections' })).toHaveFocus()
+  })
   it('removes protected content when the session expires', async () => {
     auth.session = fakeSession
     render(<App />)
@@ -168,4 +183,17 @@ describe('private app access and navigation', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not send a recovery link')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Send recovery link' })).toBeEnabled())
   })
+})
+
+it('scrolls the Safari settings deep link into view after authentication resolves', async () => {
+  const scroll = vi.fn()
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll })
+  try {
+    auth.session = fakeSession
+    window.history.replaceState(null, '', '/settings#ios-safari-userscript')
+    render(<App />)
+    const heading = await screen.findByRole('heading', { name: 'iOS Safari userscript' })
+    await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' }))
+    expect(scroll.mock.contexts).toContain(heading.closest('section'))
+  } finally { delete (HTMLElement.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView }
 })

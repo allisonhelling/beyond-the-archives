@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
+import { useLocation } from 'react-router-dom'
 
 type Device = { id: string; name: string; paired: boolean; expires_at: string }
 export function UserscriptSettings() {
+ const section = useRef<HTMLElement>(null)
+ const { hash } = useLocation()
+ useEffect(() => {
+  if (hash === '#ios-safari-userscript') section.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+ }, [hash])
  const [devices, setDevices] = useState<Device[]>([])
  const [name, setName] = useState('Safari on iPhone')
  const [code, setCode] = useState('')
@@ -31,7 +37,7 @@ export function UserscriptSettings() {
   } catch { setMessage('Could not update devices. Check your connection, sign-in, and userscript migration.') }
   finally { setBusy(false) }
  }
- return <section className="settings-card"><h2>iOS Safari userscript</h2>
+ return <section id="ios-safari-userscript" ref={section} className="settings-card"><h2>iOS Safari userscript</h2>
   <p className="muted">Install the built AO3 Library userscript in the free Userscripts app. Pair it here to save and edit your library while reading on AO3.</p>
   <p className="muted">To install or update, run <code>npm run build:userscript</code> in the project, then copy <code>userscript/dist/ao3-library.user.js</code> into the directory selected in Userscripts. Replace the existing file, open the Userscripts Safari popup, and reload AO3. Check the visible version at the bottom of the AO3 panel. Updates are manual; this script does not assume automatic updates.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void manage('create') }}>

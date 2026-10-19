@@ -1,3 +1,4 @@
+import { CollectionVisibilityButton } from './CollectionVisibility'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -11,7 +12,7 @@ import { deleteCollection, deleteCollections, saveCollection, updateCollections 
 
 const deleteLabel = <><Trash2 size={16} aria-hidden="true" />Delete</>
 
-export function NewCollectionDialog({ onClose, onCreated, collection, selectedCollections, onDeleted }: { onClose: () => void; onCreated?: (id: string) => void; collection?: Collection; selectedCollections?: Collection[]; onDeleted?: () => void }) {
+export function NewCollectionDialog({ onClose, onCreated, collection, selectedCollections, onDeleted, hidden = false, onVisibilityChange }: { onClose: () => void; onCreated?: (id: string) => void; collection?: Collection; selectedCollections?: Collection[]; onDeleted?: () => void; hidden?: boolean; onVisibilityChange?: () => void }) {
   const { refresh, collections, stories } = useLibrary()
   const bulk = selectedCollections !== undefined
   const targets = selectedCollections ?? (collection ? [collection] : [])
@@ -69,7 +70,7 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
     catch (error) { setError(error instanceof Error ? error.message : 'Could not delete collection.') }
     finally { setBusy(false) }
   }
-  return <><Dialog title={bulk ? `Edit ${targets.length} collections` : collection ? 'Edit collection' : 'New collection'} className="collection-dialog" busy={busy} onClose={closeEditor} initialFocusRef={nameRef}>
+  return <><Dialog title={bulk ? `Edit ${targets.length} collections` : collection ? 'Edit collection' : 'New collection'} className="collection-dialog" titleAction={collection && onVisibilityChange ? <CollectionVisibilityButton hidden={hidden} disabled={busy || createdId !== null} onClick={onVisibilityChange} /> : undefined} busy={busy} onClose={closeEditor} initialFocusRef={nameRef}>
     <form onSubmit={event => void create(event)}>
       <div className="collection-dialog-content">
         <fieldset className="collection-dialog-fields" disabled={busy || createdId !== null || removed}>

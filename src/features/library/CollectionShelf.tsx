@@ -22,8 +22,8 @@ const shelfColors: Partial<Record<string, string>> = {
 
 const heightOrder = [0, 1, 2, 1]
 
-export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange }: {
-  items: { id: string; name: string; count: number; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void
+export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange, onAutomaticEdit, showHidden = false }: {
+  items: { id: string; name: string; count: number; hidden?: boolean; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
@@ -48,18 +48,20 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     return () => observer.disconnect()
   }, [])
   const showAll = editing || expanded
-  const visible = showAll || mobile ? items : items.slice(0, capacity - 1)
+  const displayedItems = items.filter(item => !item.hidden || editing && showHidden)
+  const visible = showAll || mobile ? displayedItems : displayedItems.slice(0, capacity - 1)
   // Reserve the final slot for creation, in both the single and multiple shelf views.
   const customItems = items.filter(item => !shelfSymbols[item.id])
   const appearanceItems = [...customItems].sort((a, b) => a.name.localeCompare(b.name))
   const spines = [...visible.map((item, index) => {
     const customIndex = customItems.findIndex(custom => custom.id === item.id)
     const appearanceIndex = appearanceItems.findIndex(custom => custom.id === item.id)
-    const color = shelfColors[item.id] ?? item.color ?? collectionColors[(items.length - customItems.length + appearanceIndex) % collectionColors.length].value
+    const color = shelfColors[item.id] ?? item.color ?? collectionColors[(Object.keys(shelfSymbols).length + appearanceIndex) % collectionColors.length].value
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing && customIndex >= 0
-    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.count} ${item.count === 1 ? 'story' : 'stories'}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editable && !selecting ? 'dialog' : undefined} disabled={disabled || (editing && !editable)} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.count} ${item.count === 1 ? 'story' : 'stories'}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+      if (editing && customIndex < 0 && onAutomaticEdit) { onAutomaticEdit(item.id); return }
       const direct = event.metaKey || event.ctrlKey
       if (customIndex >= 0 && onEdit && (editing || event.shiftKey || direct)) {
         event.preventDefault()
@@ -68,7 +70,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     }}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
     return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
   }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
-  const expandable = !editing && (mobile || items.length + 1 > capacity)
+  const expandable = !editing && (mobile || displayedItems.length + 1 > capacity)
   const bookendArtwork =
     <svg viewBox="6 0 88 118" aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 114V43.834C12 12.257 43.667-7.479 69 8.309 80.757 15.637 88 29.179 88 43.834V114Z" fill="var(--bookend-wood)" stroke="none" />
