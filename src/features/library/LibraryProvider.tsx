@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { UndoNotice } from '../../components/UndoNotice'
-import type { Collection, Story } from './model'
+import { abandonedReadingStatus, type Collection, type Story } from './model'
 import { deleteStory, loadLibrary, restoreStory, updateEntry } from './repository'
 type ReadingUndo = { id: string; storyId: string; title: string; message: string; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
 type LibraryState = { stories: Story[]; collections: Collection[]; loading: boolean; error: string; refresh: () => Promise<void>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
@@ -26,7 +26,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }
   async function markAllRead(story: Story) {
     if (story.metadata.published_chapters === null) return
-    const status = story.metadata.publication_status === 'complete' ? 'finished' : story.metadata.publication_status === 'in_progress' ? 'waiting_for_updates' : story.reading_status
+    const status = abandonedReadingStatus(story.metadata.publication_status === 'complete' ? 'finished' : story.metadata.publication_status === 'in_progress' ? 'waiting_for_updates' : story.reading_status, story.metadata.published_chapters, story.metadata)
     await updateReadingWithUndo(story, status, story.metadata.published_chapters, `Marked all chapters of “${story.metadata.title}” as read${status === 'finished' ? ' and fic as finished.' : status === 'waiting_for_updates' ? '. Waiting for updates.' : '.'}`)
   }
   async function removeStory(story: Story) {

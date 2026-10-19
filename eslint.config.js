@@ -10,7 +10,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
   { files: ['extension/**/*.js'], languageOptions: { globals: { chrome: 'readonly', __APP_ORIGIN__: 'readonly', __SUPABASE_URL__: 'readonly', __SUPABASE_KEY__: 'readonly' } } },
-  { files: ['userscript/**/*.js'], languageOptions: { globals: { GM: 'readonly', __APP_ORIGIN__: 'readonly', __SUPABASE_URL__: 'readonly', __SUPABASE_KEY__: 'readonly', __SCRIPT_VERSION__: 'readonly' } } },
+  { files: ['userscript/**/*.js'], languageOptions: { globals: { GM: 'readonly', __APP_ORIGIN__: 'readonly', __SUPABASE_URL__: 'readonly', __SUPABASE_KEY__: 'readonly', __SCRIPT_VERSION__: 'readonly', __BRAND_ICON__: 'readonly' } } },
   { files: ['src/**/*.{ts,tsx}'], plugins: { 'react-hooks': hooks, 'react-refresh': refresh },
     rules: { ...hooks.configs.recommended.rules, 'react-refresh/only-export-components': ['error', { allowConstantExport: true }] } },
 )

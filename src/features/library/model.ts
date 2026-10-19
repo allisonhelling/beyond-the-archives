@@ -3,7 +3,7 @@ import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
-export type Metadata = { manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Database['public']['Tables']['collections']['Row']
@@ -18,6 +18,9 @@ export function initialProgress(url: string, verifiedChapters: Record<string, st
   const position = parsed.chapterId ? Number(Object.keys(verifiedChapters).find(key => verifiedChapters[key] === parsed.chapterId)) : 1
   const verified = Number.isInteger(position) && position > 0
   return { status: (verified && position > 1 ? 'reading' : 'to_read') as Status, lastRead: verified ? position - 1 : 0, chapterVerified: verified }
+}
+export function abandonedReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
+  return metadata.publication_status === 'abandoned' && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters ? 'finished' : status
 }
 export function nextUnread(lastRead: number) { return lastRead + 1 }
 export function validateProgress(value: number, metadata: Metadata) {

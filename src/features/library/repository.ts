@@ -56,6 +56,13 @@ export async function saveStory(input: StoryInput) {
   const { data, error } = await client().rpc('save_library_story', { p_url: input.url, p_metadata: input.metadataChanges ?? input.metadata, p_status: input.status, p_progress: input.progress, p_notes: input.notes, p_rating: input.personalRating, p_favorite: input.favorite, p_collections: input.collections, p_tags: input.tags, p_id: input.id ?? null })
   failure(error); return data!
 }
+export async function addStoriesToCollections(storyIds: string[], collectionIds: string[]) {
+  if (!storyIds.length || !collectionIds.length) return
+  if (sampleMode) return (await import('./sample/repository')).addSampleStoriesToCollections(storyIds, collectionIds)
+  const rows = [...new Set(storyIds)].flatMap(library_entry_id => [...new Set(collectionIds)].map(collection_id => ({ library_entry_id, collection_id })))
+  const { error } = await client().from('collection_works').upsert(rows, { onConflict: 'collection_id,library_entry_id', ignoreDuplicates: true })
+  failure(error)
+}
 export async function updateEntry(id: string, changes: EntryUpdate) {
   if (sampleMode) return (await import('./sample/repository')).updateSampleEntry(id, changes)
   const { data, error } = await client().from('library_entries').update(changes).eq('id', id).select('id').single()

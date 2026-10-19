@@ -78,7 +78,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       }
     }
     function down(event: PointerEvent) {
-      if (!event.isPrimary || event.button !== 0 || pending) return
+      if (!event.isPrimary || event.button !== 0 || event.metaKey || event.ctrlKey || pending) return
       const button = (event.target as Element).closest<HTMLButtonElement>('.collection-spine')
       const slot = button?.closest<HTMLElement>('[data-collection-id]')
       if (!button || button.disabled || !slot || (event.shiftKey && !handlers.current.selection)) return

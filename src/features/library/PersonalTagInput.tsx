@@ -47,7 +47,7 @@ export function PersonalTagInput({ value, onChange }: { value: string[]; onChang
     <div className="metadata-tags tag-input" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) { add(false); setSelected(null) } }}>
       {Array.from({ length: value.length + 1 }, (_, index) => <Fragment key={index}>
         {cursor === index ? <input ref={input} aria-label="Personal tags" placeholder="Type a tag…" value={draft} onChange={event => { setDraft(event.target.value); setSelected(null) }} onKeyDown={keyboard} /> : <button type="button" className="tag-insertion-point" aria-label={`Insert tag ${index === 0 ? 'at start' : `after ${value[index - 1]}`}`} onClick={() => move(index)} />}
-        {index < value.length && <button type="button" className={`metadata-tag removable-tag${selected === index ? ' tag-selected' : ''}`} aria-label={`Delete personal tag ${value[index]}`} onClick={() => remove(index)}><span>{value[index]}</span><X size={13} aria-hidden="true" /></button>}
+        {index < value.length && <button type="button" className={`metadata-tag removable-tag${selected === index ? ' tag-selected' : ''}`} aria-label={`Delete personal tag ${value[index]}`} onClick={() => remove(index)}><span className="tag-label">{value[index]}</span><span className="tag-remove-cap"><X size={13} aria-hidden="true" /></span></button>}
       </Fragment>)}
     </div>
   </div>

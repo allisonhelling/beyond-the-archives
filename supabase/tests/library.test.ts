@@ -133,3 +133,26 @@ it('records only new collection memberships as addition activity and retains tha
     expect((await activity()).rows.find(row => row.id === ids[0])!.last_story_added_at).not.toEqual(originalActivity.find(row => row.id === ids[0])!.last_story_added_at)
   })
 })
+
+it('keeps abandonment private and independent of reading status, finishing when published chapters are read', async () => {
+  await user(alice, async () => {
+    const url = 'https://archiveofourown.org/works/88888'
+    const metadata = { title: 'Discontinued fic', publication_status: 'abandoned', published_chapters: 3, total_chapters: 8 }
+    const id = (await save({ url, metadata, status: 'to_read' })).rows[0].id
+    const row = async () => (await db.query<{ reading_status: string; metadata_overrides: object }>('select reading_status,metadata_overrides from public.library_entries where id=$1', [id])).rows[0]
+    for (const status of ['to_read', 'reading', 'waiting_for_updates', 're_reading', 'did_not_finish']) {
+      await save({ id, url, metadata, status, progress: 2 })
+      expect((await row()).reading_status).toBe(status)
+    }
+    await db.query('update public.library_entries set last_read_chapter=3 where id=$1', [id])
+    expect((await row()).reading_status).toBe('finished')
+    expect((await row()).metadata_overrides).toMatchObject({ publication_status: 'abandoned' })
+    await save({ id, url, metadata, status: 'reading', progress: 3 })
+    expect((await row()).reading_status).toBe('finished')
+    await save({ id, url, metadata: { ...metadata, published_chapters: null }, status: 'reading', progress: 3 })
+    expect((await row()).reading_status).toBe('reading')
+    await save({ id, url, metadata: { ...metadata, published_chapters: 0 }, status: 'to_read' })
+    expect((await row()).reading_status).toBe('to_read')
+    expect((await db.query('select is_complete from public.works where ao3_work_id=88888')).rows[0]).toEqual({ is_complete: null })
+  })
+})

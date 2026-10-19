@@ -1,6 +1,6 @@
 import { orderCollections, moveCollectionIds } from '../collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
+import { addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
 import { parseWorkUrl, validateProgress } from '../model'
 
 beforeEach(() => {
@@ -171,4 +171,36 @@ it('moves selected collections as an ordered group while leaving other books in 
   expect(moveCollectionIds(ids, 'b', 'c', ['b', 'c'])).toBe(ids)
   expect(moveCollectionIds(ids, 'e', 'b', ['a', 'c'])).toEqual(['a', 'e', 'b', 'c', 'd'])
   expect(ids).toEqual(['a', 'b', 'c', 'd', 'e'])
+})
+
+it('finishes abandoned fics only after all known published chapters are read', async () => {
+  const original = (await loadSampleLibrary()).stories[0]
+  const input = { id: original.id, url: original.original_url, metadata: { ...original.metadata, publication_status: 'abandoned' as const, published_chapters: 3, total_chapters: 8 }, status: 'to_read' as const, progress: 0, notes: '', personalRating: null, favorite: false, collections: [], tags: [] }
+  await saveSampleStory(input)
+  const saved = async () => (await loadSampleLibrary()).stories.find(story => story.id === original.id)!
+  expect((await saved()).reading_status).toBe('to_read')
+  await updateSampleEntry(original.id, { last_read_chapter: 2, reading_status: 'reading' })
+  expect((await saved()).reading_status).toBe('reading')
+  await updateSampleEntry(original.id, { last_read_chapter: 3 })
+  expect((await saved()).reading_status).toBe('finished')
+  await saveSampleStory({ ...input, progress: 3 })
+  expect((await saved()).reading_status).toBe('finished')
+  await saveSampleStory({ ...input, metadata: { ...input.metadata, published_chapters: null } })
+  expect((await saved()).reading_status).toBe('to_read')
+})
+
+it('adds memberships in either direction without replacing personal fields or changing existing activity timestamps', async () => {
+  const initial = await loadSampleLibrary(), [first, second] = initial.stories
+  const collection = await saveSampleCollection('Night reads'), other = await saveSampleCollection('Weekend reads')
+  await addSampleStoriesToCollections([first.id], [collection, other])
+  const added = await loadSampleLibrary(), firstSaved = added.stories.find(story => story.id === first.id)!
+  expect(firstSaved).toEqual({ ...first, collectionIds: [...first.collectionIds, collection, other] })
+  const activity = added.collections.find(item => item.id === collection)!.last_story_added_at
+  await addSampleStoriesToCollections([first.id, first.id], [collection])
+  expect((await loadSampleLibrary()).collections.find(item => item.id === collection)!.last_story_added_at).toBe(activity)
+  await addSampleStoriesToCollections([second.id], [collection])
+  const final = await loadSampleLibrary()
+  expect(final.stories.find(story => story.id === first.id)).toEqual(firstSaved)
+  expect(final.stories.find(story => story.id === second.id)).toEqual({ ...second, collectionIds: [...second.collectionIds, collection] })
+  await expect(addSampleStoriesToCollections([first.id], ['missing'])).rejects.toThrow('Collection no longer available')
 })

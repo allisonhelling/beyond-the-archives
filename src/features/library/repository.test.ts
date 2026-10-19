@@ -1,13 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { blankMetadata } from './model'
-const state = vi.hoisted(() => ({ data: {} as Record<string, Record<string, unknown>[]>, calls: [] as string[], fail: false }))
-vi.mock('../../lib/supabase', () => ({ supabase: { from: (table: string) => ({ select: () => {
+const state = vi.hoisted(() => ({ data: {} as Record<string, Record<string, unknown>[]>, calls: [] as string[], fail: false, upsert: vi.fn() }))
+vi.mock('../../lib/supabase', () => ({ supabase: { from: (table: string) => ({ upsert: state.upsert, select: () => {
   const query = { order: () => query, range: async (from: number, to: number) => {
     state.calls.push(`${table}:${from}`)
     return { data: (state.data[table] ?? []).slice(from, to + 1), error: state.fail ? { code: 'offline' } : null }
   } }; return query
 } }) } }))
-import { loadLibrary } from './repository'
+import { addStoriesToCollections, loadLibrary } from './repository'
 beforeEach(() => { state.data = {}; state.calls = []; state.fail = false })
 it('loads beyond the API response cap without losing private tags and memberships', async () => {
   state.data.library_entries = Array.from({ length: 1001 }, (_, n) => ({ id: `entry-${n}`, work_id: `work-${n}`, metadata_overrides: { ...blankMetadata, title: `Story ${n}`, authors: ['Manual author'] } }))
@@ -43,4 +43,15 @@ it('loads AO3 tag categories per work and preserves private category overrides',
   const { stories } = await loadLibrary()
   expect(stories[0].metadata).toMatchObject({ relationship_tags: ['A/B'], character_tags: ['A'], additional_tags: ['Private freeform'] })
   expect(state.calls).toContain('work_tags:0')
+})
+
+it('adds only memberships and ignores duplicate pairs without rewriting stories', async () => {
+  state.upsert.mockResolvedValue({ error: null })
+  await addStoriesToCollections(['first', 'second', 'first'], ['night', 'weekend', 'night'])
+  expect(state.upsert).toHaveBeenCalledWith([
+    { library_entry_id: 'first', collection_id: 'night' }, { library_entry_id: 'first', collection_id: 'weekend' },
+    { library_entry_id: 'second', collection_id: 'night' }, { library_entry_id: 'second', collection_id: 'weekend' },
+  ], { onConflict: 'collection_id,library_entry_id', ignoreDuplicates: true })
+  state.upsert.mockResolvedValueOnce({ error: { code: 'offline' } })
+  await expect(addStoriesToCollections(['first'], ['night'])).rejects.toThrow('Could not save')
 })

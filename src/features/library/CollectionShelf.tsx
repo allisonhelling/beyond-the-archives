@@ -11,10 +11,19 @@ const shelfSymbols: Partial<Record<string, LucideIcon>> = { all: Library, curren
 
 const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', currently_reading: 'art-deco', to_read: 'library-label', favorites: 'sunburst-fans', finished:'arched', did_not_finish: 'raised-bands' }
 
+const shelfColors: Partial<Record<string, string>> = {
+  all: '#970000',
+  currently_reading: '#214921',
+  to_read: '#243c5e',
+  favorites: '#54254b',
+  finished: '#4a1b0f',
+  did_not_finish: '#25211f',
+}
+
 const heightOrder = [0, 1, 2, 1]
 
 export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange }: {
-  items: { id: string; name: string; count: number; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void
+  items: { id: string; name: string; count: number; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
@@ -46,12 +55,17 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   const spines = [...visible.map((item, index) => {
     const customIndex = customItems.findIndex(custom => custom.id === item.id)
     const appearanceIndex = appearanceItems.findIndex(custom => custom.id === item.id)
-    const colorIndex = customIndex < 0 ? index : items.length - customItems.length + appearanceIndex
-    const color = item.color ?? collectionColors[colorIndex % collectionColors.length].value
+    const color = shelfColors[item.id] ?? item.color ?? collectionColors[(items.length - customItems.length + appearanceIndex) % collectionColors.length].value
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing && customIndex >= 0
-    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.count} ${item.count === 1 ? 'story' : 'stories'}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editable && !selecting ? 'dialog' : undefined} disabled={disabled || (editing && !editable)} title={editable ? `Edit ${item.name}` : item.name} onClick={event => customIndex >= 0 && (editing || event.shiftKey) ? onEdit?.(item.id, { color, symbol }, event.shiftKey) : onSelect(item.id)}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.count} ${item.count === 1 ? 'story' : 'stories'}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editable && !selecting ? 'dialog' : undefined} disabled={disabled || (editing && !editable)} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+      const direct = event.metaKey || event.ctrlKey
+      if (customIndex >= 0 && onEdit && (editing || event.shiftKey || direct)) {
+        event.preventDefault()
+        onEdit(item.id, { color, symbol }, event.shiftKey, direct)
+      } else onSelect(item.id)
+    }}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
     return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
   }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
   const expandable = !editing && (mobile || items.length + 1 > capacity)

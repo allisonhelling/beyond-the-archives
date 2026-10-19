@@ -16,8 +16,10 @@ it('builds a standalone installable file with a leading Userscripts header and p
   expect(script).toContain('// @match https://archiveofourown.org/works/*')
   expect(script).toContain('// @grant GM.xmlHttpRequest')
   expect(script).not.toMatch(/__SUPABASE_|__APP_ORIGIN__|do_not_embed_this_canary|@require|@match \*/)
+  expect(script).not.toContain('process.env.NODE_ENV')
   expect(script).toContain('https://userscript-test.supabase.co')
   expect(script).toContain('/rest/v1/rpc/userscript_library')
+  expect(script).toContain('lucide-book-open')
   expect(() => execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'rejected')], { env: { ...env, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_never_embed' }, stdio: 'pipe' })).toThrow()
  } finally { await rm(directory, { recursive: true, force: true }) }
 }, 15000)

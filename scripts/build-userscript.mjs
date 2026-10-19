@@ -1,4 +1,7 @@
 import { build, loadEnv } from 'vite'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { BookOpen } from 'lucide-react'
 import { readFile, writeFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 import { join } from 'node:path'
@@ -30,7 +33,9 @@ const metadata = `// ==UserScript==
 // ==/UserScript==
 `
 await build({ configFile: false, define: {
+ 'process.env.NODE_ENV': JSON.stringify('production'),
  __SUPABASE_URL__: JSON.stringify(backend.origin), __SUPABASE_KEY__: JSON.stringify(config.key),
+ __BRAND_ICON__: JSON.stringify(renderToStaticMarkup(createElement(BookOpen, { size: 23, strokeWidth: 1.6, 'aria-hidden': true }))),
  __APP_ORIGIN__: JSON.stringify(app.origin), __SCRIPT_VERSION__: JSON.stringify(version),
 }, build: { outDir: values.outDir, emptyOutDir: true, minify: false,
  lib: { entry: 'userscript/main.js', name: 'AO3Library', formats: ['iife'], fileName: () => 'ao3-library.user.js' },

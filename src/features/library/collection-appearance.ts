@@ -42,7 +42,7 @@ export const collectionOrderOptions = [
   { value: 'manual', label: 'Manual order' },
   { value: 'alphabetical', label: 'Alphabetical (A–Z)' },
   { value: 'created', label: 'Date created (oldest first)' },
-  { value: 'created_newest', label: 'Date created (newest first)' },
+  { value: 'created_newest', label: 'Date added' },
   { value: 'edited', label: 'Last edited (story added)' },
   { value: 'updated', label: 'Last story updated (newest first)' },
 ] as const
@@ -55,8 +55,8 @@ export function orderCollections(collections: Collection[], stories: Pick<Story,
   }
   return [...collections].sort((a, b) => {
     if (order === 'alphabetical') return a.name.localeCompare(b.name) || compareCollections(a, b)
-    if (order === 'created') return a.created_at.localeCompare(b.created_at) || compareCollections(a, b)
-    if (order === 'created_newest') return b.created_at.localeCompare(a.created_at) || compareCollections(a, b)
+    if (order === 'created') return (a.created_at ?? '').localeCompare(b.created_at ?? '') || compareCollections(a, b)
+    if (order === 'created_newest') return (b.created_at ?? '').localeCompare(a.created_at ?? '') || compareCollections(a, b)
     if (order === 'edited') return (Date.parse(b.last_story_added_at ?? '') || 0) - (Date.parse(a.last_story_added_at ?? '') || 0) || compareCollections(a, b)
     if (order === 'updated') return (latest.get(b.id) ?? 0) - (latest.get(a.id) ?? 0) || compareCollections(a, b)
     return compareCollections(a, b)

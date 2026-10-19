@@ -1,4 +1,4 @@
-import { BookCheck, NotebookPen, createLucideIcon } from 'lucide-react'
+import { BookCheck, BookX, NotebookPen, createLucideIcon } from 'lucide-react'
 
 // Keep Lucide's book silhouette and stroke styling, without interior page lines.
 const BookQuestion = createLucideIcon('BookQuestion', [
@@ -10,5 +10,6 @@ const BookQuestion = createLucideIcon('BookQuestion', [
 export const publicationStatuses = {
   complete: { label: 'Complete on AO3', Icon: BookCheck },
   in_progress: { label: 'In Progress on AO3', Icon: NotebookPen },
+  abandoned: { label: 'Abandoned', Icon: BookX },
   unknown: { label: 'AO3 publication status unknown', Icon: BookQuestion },
 } as const

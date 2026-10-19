@@ -19,6 +19,7 @@ import { StoryForm } from './StoryForm'
 import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
 import { ImportLinkForm } from '../imports/ImportLinkForm'
 import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
+import { CollectionMembershipDialog } from './CollectionMembershipDialog'
 import { NewCollectionDialog } from './NewCollectionDialog'
 import { CollectionShelf } from './CollectionShelf'
 import { SpineOrnament } from './SpineOrnament'
@@ -45,6 +46,7 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(String(story.last_read_chapter))
   const [progressOpen, setProgressOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [collectionOpen, setCollectionOpen] = useState(false)
   const progressId = useId()
   const progressTrigger = useRef<HTMLButtonElement>(null)
   const progressRef = useDismissible<HTMLDivElement>(progressOpen, () => { setProgressOpen(false); setError('') })
@@ -85,13 +87,14 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
       <div className="menu-surface">
         <Link className="menu-item" to={`/stories/${story.id}`} state={location.pathname.startsWith('/stories/') ? location.state : { returnTo: location.pathname + location.search }}><FileText size={16} aria-hidden="true" />View/Edit Details</Link>
         <button className="menu-item" disabled={busy} onClick={() => void finishStory()}><Check size={16} aria-hidden="true" />Mark as Finished</button>
-        <button className="menu-item" disabled title="Available when custom collections are implemented"><FolderPlus size={16} aria-hidden="true" />Add to collection</button>
+        <button className="menu-item" disabled={busy} onClick={() => { setMenuOpen(false); setCollectionOpen(true) }}><FolderPlus size={16} aria-hidden="true" />Add to collection</button>
         <button className="menu-item" disabled={busy} onClick={() => void change({ reading_status: 'did_not_finish' })}><BookX size={16} aria-hidden="true" />Mark as DNF</button>
         <hr className="menu-divider" />
         <button className="menu-item" disabled={busy} onClick={() => { setMenuOpen(false); setRemoveOpen(true) }}><Trash2 size={16} aria-hidden="true" />Remove from Library</button>
       </div>
     </details></div>
   return <>{children({ actions, favorite, readingStatus, caughtUp, editProgress, rating: <StarRating value={story.personal_rating} disabled={busy} onSave={value => change({ personal_rating: value })} /> })}
+    {collectionOpen && <CollectionMembershipDialog story={story} onClose={() => { setCollectionOpen(false); menuRef.current?.querySelector('summary')?.focus() }} />}
     {removeOpen && <ConfirmationDialog title="Remove from Library?" confirmLabel="Remove from Library" onConfirm={remove} onClose={closeRemoval}><p>Remove “{story.metadata.title}” from your library?</p><p>You can undo this for two minutes.</p></ConfirmationDialog>}
     {!progressOpen && error && <p className="error-message" role="alert">{error}</p>}
   </>
@@ -137,7 +140,7 @@ export function LibraryPage({ reading = false }: { reading?: boolean }) {
   if (reading) return <><div className="page-heading"><div><span className="eyebrow accent">YOUR PRIVATE READING SPACE</span><h1>Currently Reading</h1><p>A little escape, one chapter at a time.</p></div><Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={story => <StoryCard key={story.id} story={story} />} /></LibraryBoundary></>
   return <LibraryContent />
 }
-const collectionControlHelp = 'Select collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
+const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
 
 const collectionSortKey = 'between-chapters:collection-sort:v1'
 type CollectionSort = { order: CollectionOrder }
@@ -146,11 +149,11 @@ function initialCollectionSort(): CollectionSort {
     const saved = JSON.parse(window.localStorage.getItem(collectionSortKey) ?? 'null')
     if (collectionOrderOptions.some(option => option.value === saved?.order)) return { order: saved.order }
   } catch { /* Sorting still works when browser storage is unavailable. */ }
-  return { order: 'manual' }
+  return { order: 'created_newest' }
 }
 
 function LibraryContent() {
-  const { stories, collections, refresh } = useLibrary(), navigate = useNavigate()
+  const { stories, collections, refresh } = useLibrary()
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'all'
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
@@ -166,10 +169,13 @@ function LibraryContent() {
   const selectionAnchor = useRef<string | null>(null)
   function clearCollectionSelection() { setSelectingCollections(false); setSelectedCollectionIds([]); selectionAnchor.current = null }
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+  const [addingToCollection, setAddingToCollection] = useState<Collection | null>(null)
+  const addStoriesTrigger = useRef<HTMLButtonElement>(null)
   const editTrigger = useRef<HTMLElement | null>(null)
   const editButton = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (!editingCollection && editTrigger.current) { (editTrigger.current.isConnected ? editTrigger.current : editButton.current)?.focus(); editTrigger.current = null } }, [editingCollection])
   const customCollections = collections.filter(item => !item.default_key)
+  const selectedCollections = customCollections.filter(item => selectedCollectionIds.includes(item.id))
   function changeCollectionSort(order: CollectionOrder) {
     setCollectionSort({ order })
     setEditingCollections(false)
@@ -182,10 +188,11 @@ function LibraryContent() {
     setEditingCollections(!editingCollections)
     clearCollectionSelection()
   }
-  function editCollection(id: string, appearance: CollectionAppearance, shiftKey: boolean) {
+  function editCollection(id: string, appearance: CollectionAppearance, shiftKey: boolean, direct = false) {
     const item = customCollections.find(item => item.id === id)
     if (!item) return
-    if (shiftKey || selectingCollections) {
+    if (direct && selectedCollections.length > 1) { setBulkCollections(selectedCollections); return }
+    if (!direct && (shiftKey || selectingCollections)) {
       if (!editingCollections) { setEditingCollections(true); setCollectionSort({ order: 'manual' }) }
       setSelectingCollections(true)
       const anchor = selectionAnchor.current
@@ -231,18 +238,18 @@ function LibraryContent() {
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection selection">
       <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel selection' : 'Select collections'}</button>
       <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip description={collectionControlHelp}>{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
-      {selectingCollections && <button type="button" className="button secondary" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(customCollections.filter(item => selectedCollectionIds.includes(item.id)))}>Edit selected</button>}
+      {selectingCollections && <button type="button" className="button secondary" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit selected</button>}
     </div>}
     <div className="library-heading-actions">
       <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
       <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
       <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
     </div></div><p>A home for all the worlds you want to keep.</p></div></div><LibraryBoundary>
-    <CollectionShelf editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy} onSelect={key => { if (key === 'currently_reading' || key === 'to_read') navigate(key === 'currently_reading' ? '/reading' : `/reading?shelf=${key}`); else setParams({ shelf: key }) }} />
+    <CollectionShelf editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy} onSelect={key => setParams({ shelf: key })} />
     {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.description && <p className="collection-summary">{collection.description}</p>}</div>}
     {error && <p role="alert" className="error-message">{error}</p>}
-    <ReadingDashboard mode="library" stories={shelfStories} renderStory={story => <StoryCard key={story.id} story={story} />} />
-  </LibraryBoundary>{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
+    <ReadingDashboard mode="library" stories={shelfStories} renderStory={story => <StoryCard key={story.id} story={story} />} resultsActions={collection && !collection.default_key && <button ref={addStoriesTrigger} type="button" className="button secondary button-small" onClick={() => setAddingToCollection(collection)}>Add Story</button>} />
+  </LibraryBoundary>{addingToCollection && <CollectionMembershipDialog collection={addingToCollection} onClose={() => { setAddingToCollection(null); addStoriesTrigger.current?.focus() }} />}{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
 }
 export function AddStoryPage() {
   const [params, setParams] = useSearchParams()
@@ -281,7 +288,7 @@ function PersonalStoryField({ story, field }: { story: Story; field: 'notes' | '
     {editing ? <form className="inline-personal-form" onSubmit={event => { event.preventDefault(); void save() }}><fieldset disabled={busy}>
       {field === 'collections' ? <CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} /> : field === 'tags' ? <PersonalTagInput value={parseLines(text)} onChange={tags => setText(tags.join('\n'))} /> : <label className="note-input-label"><span className="sr-only">{label}</span><textarea autoFocus rows={4} value={text} placeholder="e.g. left off on a cliffhanger — waiting to see what happens next chapter." onChange={event => setText(event.target.value)} /></label>}
       <div className="form-actions"><button className="button primary" type="submit">{busy ? 'Saving…' : 'Save'}</button><button className="text-button" type="button" onClick={close}>Cancel</button></div>
-    </fieldset></form> : note ? story.notes && <p className="story-summary">{story.notes}</p> : field === 'tags' ? <MetadataTags values={story.personalTags} /> : library.collections.filter(c => story.collectionIds.includes(c.id)).map(c => c.name).join(', ') || 'None'}
+    </fieldset></form> : note ? story.notes && <p className="story-summary">{story.notes}</p> : field === 'tags' ? <MetadataTags values={story.personalTags} /> : <MetadataTags values={library.collections.filter(c => story.collectionIds.includes(c.id)).map(c => c.name)} />}
     {error && <p className="error-message" role="alert">{error}</p>}
   </>
   return note ? <div className={`inline-personal-field note-panel ${story.notes || editing ? 'note-panel-filled' : ''}`}>{heading}{content}</div> : <><dt className="editable-field-heading">{label}{field === 'tags' && <PersonalTagHelp />}{heading}</dt><dd className="inline-personal-field">{content}</dd></>

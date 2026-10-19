@@ -92,10 +92,31 @@ it('keeps Characters and Additional Tags filters scoped to their saved AO3 categ
 })
 
 
-it('sorts date added newest first using saved dates, with alphabetical ties and unknown dates last', () => {
+it('defaults to date added newest first using saved dates, with alphabetical ties and unknown dates last', () => {
   const older = story('Older', { created_at: '2026-10-14T12:00:00Z', updated_at: '2026-10-20T12:00:00Z' })
   const newestZ = story('Z newest', { created_at: '2026-10-16T12:00:00Z' })
   const newestA = story('A newest', { created_at: '2026-10-16T12:00:00Z' })
   const unknown = story('Unknown', { created_at: 'invalid' })
-  expect(filterReading([older, newestZ, unknown, newestA], { ...defaultReadingFilters, sort: 'added' })).toEqual([newestA, newestZ, older, unknown])
+  expect(filterReading([older, newestZ, unknown, newestA], defaultReadingFilters)).toEqual([newestA, newestZ, older, unknown])
+})
+
+it('includes or excludes abandoned fics independently of their reading status', () => {
+  const abandoned = ['to_read', 'reading', 'finished', 'did_not_finish'].map(reading_status => story(reading_status, {
+    reading_status: reading_status as Story['reading_status'], metadata: { ...blankMetadata, publication_status: 'abandoned' },
+  }))
+  const ongoing = story('Ongoing')
+  expect(filterReading([...abandoned, ongoing], { ...defaultReadingFilters, publication: 'abandoned' })).toHaveLength(4)
+  expect(filterReading([...abandoned, ongoing], { ...defaultReadingFilters, publication: 'exclude_abandoned' })).toEqual([ongoing])
+  expect(filterReading(abandoned, { ...defaultReadingFilters, within: 'abandoned' })).toHaveLength(4)
+})
+
+it('combines selected publication statuses with OR and treats an empty selection as all statuses', () => {
+  const entries = ['complete', 'in_progress', 'abandoned', 'unknown'].map(publication => story(publication, {
+    metadata: { ...blankMetadata, title: publication, publication_status: publication as Story['metadata']['publication_status'] },
+  }))
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: [] })).toHaveLength(4)
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: ['abandoned', 'complete'] }).map(story => story.id).sort()).toEqual(['abandoned', 'complete'])
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: ['complete', 'in_progress', 'unknown'] })).toHaveLength(3)
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: ['unknown'] })).toEqual([entries[3]])
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: ['abandoned', 'complete'], query: 'complete' })).toEqual([entries[0]])
 })

@@ -1,6 +1,6 @@
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collection-appearance'
 import snapshots from './stories.json'
-import { blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
+import { abandonedReadingStatus, blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
@@ -90,7 +90,7 @@ export async function saveSampleStory(input: StoryInput) {
   const story: Story = {
     id: input.id ?? crypto.randomUUID(), user_id: userId, work_id: work.id,
     original_url: existing?.original_url ?? input.url, work,
-    reading_status: input.status, last_read_chapter: input.progress, notes: input.notes,
+    reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, personal_rating: input.personalRating,
     metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: input.metadata, extension_metadata: {}, extension_chapters: {},
     collectionIds: input.collections, personalTags: input.tags,
@@ -107,10 +107,27 @@ export async function saveSampleStory(input: StoryInput) {
   return story.id
 }
 
+export async function addSampleStoriesToCollections(storyIds: string[], collectionIds: string[]) {
+  const data = read(), stories = storyIds.map(id => find(data, id)), now = new Date().toISOString()
+  const collections = collectionIds.map(id => {
+    const collection = data.collections.find(item => item.id === id && !item.default_key)
+    if (!collection) throw new Error('Collection no longer available.')
+    return collection
+  })
+  for (const story of stories) for (const collection of collections) {
+    if (!story.collectionIds.includes(collection.id)) {
+      story.collectionIds.push(collection.id)
+      collection.last_story_added_at = now
+    }
+  }
+  write(data)
+}
+
 export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite'>) {
   const data = read(), story = find(data, id)
   if (changes.last_read_chapter !== undefined) validateProgress(changes.last_read_chapter, story.metadata)
   Object.assign(story, changes, { updated_at: new Date().toISOString() })
+  story.reading_status = abandonedReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
   write(data)
 }
 export async function deleteSampleStory(id: string) {
