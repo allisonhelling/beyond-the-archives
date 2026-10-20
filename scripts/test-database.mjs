@@ -4,6 +4,13 @@ import { readFile, readdir } from 'node:fs/promises'
 // Actual embedded PostgreSQL, with a minimal Supabase Auth contract for local SQL tests.
 // This does not emulate GoTrue, PostgREST, Edge Functions, or the Docker stack.
 export async function createTestDatabase() {
+  const migrations = (await readdir(new URL('../supabase/migrations/', import.meta.url))).filter(name => name.endsWith('.sql')).sort()
+  const versions = new Set()
+  for (const name of migrations) {
+    const version = name.split('_')[0]
+    if (versions.has(version)) throw new Error(`Duplicate migration version ${version}: ${name}`)
+    versions.add(version)
+  }
   const db = new PGlite()
   await db.exec(`
     create role anon nologin;
@@ -16,7 +23,6 @@ export async function createTestDatabase() {
     grant usage on schema public, auth to anon, authenticated, service_role;
     grant execute on function auth.uid() to anon, authenticated, service_role;
   `)
-  const migrations = (await readdir(new URL('../supabase/migrations/', import.meta.url))).filter(name => name.endsWith('.sql')).sort()
   for (const name of migrations) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
   }

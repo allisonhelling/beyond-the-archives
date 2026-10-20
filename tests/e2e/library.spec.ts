@@ -823,7 +823,8 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await workFilters.getByRole('button', { name: 'Work Status', exact: true }).click()
   await workFilters.getByRole('checkbox', { name: 'In progress on AO3', exact: true }).check()
   await workFilters.getByRole('checkbox', { name: 'Complete on AO3', exact: true }).check()
-  await expect(page.locator('.story-card')).toHaveCount(4)
+  // View All includes waiting works; only the publication tiles exclude them.
+  await expect(page.locator('.story-card').getByRole('heading').getByRole('link')).toHaveText(['Complete read', 'Complete waiting', 'Unfinished read', 'Unfinished reread', 'Waiting fic'])
   await expect(workFilters.getByRole('checkbox', { name: 'Abandoned', exact: true })).toBeVisible()
   await expect(workFilters.getByText('Only abandoned', { exact: true })).toHaveCount(0)
   await expect(workFilters.getByText('Exclude abandoned', { exact: true })).toHaveCount(0)

@@ -118,7 +118,7 @@ test('large imports show persisted results and fit the viewport after returning 
     await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.getByRole('button', { name: 'Import History from AO3', exact: true }).click()
   }
-  await expect(page.getByRole('heading', { name: 'Import History from AO3', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Mass Import from AO3', exact: true })).toBeVisible()
   await page.getByLabel('AO3 URLs', { exact: true }).fill(Array.from({ length: 110 }, (_, n) => `https://archiveofourown.org/works/${n + 1}`).join('\n') + '\nhttps://example.com')
   await expect(page.getByText(/111 links found · 1 unrelated/)).toBeVisible()
   await page.getByRole('button', { name: 'Import URLs', exact: true }).click()
