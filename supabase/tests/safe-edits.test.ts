@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeAll, afterAll, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
+import { readFile } from 'node:fs/promises'
 // @ts-expect-error Shared JS database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
 import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
@@ -31,6 +32,17 @@ beforeAll(async () => {
  secret = (await db.query<{ value: { secret: string } }>("select public.userscript_library($1,'claim') value", [code])).rows[0].value.secret
 }, 30000)
 afterAll(async () => { await db?.close() })
+it('retries the migration after its SQL committed without losing data or duplicating the Safari merge', async () => {
+ const { id } = await seed(), before = await snapshot(id)
+ const definition = async () => (await db.query<{ sql: string }>("select pg_get_functiondef('public.userscript_library(text,text,bigint,jsonb)'::regprocedure) sql")).rows[0].sql
+ const original = await definition()
+ const migration = await readFile(new URL('../migrations/20261019000201_safe_library_edits.sql', import.meta.url), 'utf8')
+ for (let attempt = 0; attempt < 2; attempt++) {
+  await db.exec(migration)
+  expect(await snapshot(id)).toEqual(before)
+  expect(await definition()).toBe(original)
+ }
+})
 it('protects unrelated changes in both directions between Safari and the website', async () => {
  const { number, id, base, entry } = await seed()
  await device('save', number, { ...entry, base, notes: 'Safari notes' })
