@@ -379,6 +379,7 @@ export type Database = {
           created_at: string
           retrieval_mode: string
           update_reading_location: boolean
+          requested_reading_status: Database['public']['Enums']['reading_status'] | null
         }
         Insert: {
           id?: string
@@ -400,6 +401,7 @@ export type Database = {
           created_at?: string
           retrieval_mode?: string
           update_reading_location?: boolean
+          requested_reading_status?: Database['public']['Enums']['reading_status'] | null
         }
         Update: {
           id?: string
@@ -421,6 +423,7 @@ export type Database = {
           created_at?: string
           retrieval_mode?: string
           update_reading_location?: boolean
+          requested_reading_status?: Database['public']['Enums']['reading_status'] | null
         }
         Relationships: [
           { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -718,7 +721,7 @@ export type Database = {
       save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
-      submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean }; Returns: string | null }
+      submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean; p_reading_status?: Database['public']['Enums']['reading_status']; p_series_ids?: number[] }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
       claim_extension_job: { Args: Record<string, never>; Returns: Json }

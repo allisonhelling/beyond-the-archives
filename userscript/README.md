@@ -6,7 +6,7 @@ This companion runs in the free [Userscripts app](https://github.com/quoid/users
 
 Apply migrations through `20261019000100_userscript_metadata_refresh.sql` to the intended Supabase project (`supabase db push` using your normal linked-project workflow), then deploy the website. No additional Edge Function is required. Local builds do not deploy these changes.
 
-Use the same public project configuration as the website in `.env.local`:
+For an iPhone, put the same hosted public project configuration as the deployed website in `.env.local.hosted`:
 
 ```dotenv
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -18,7 +18,7 @@ EXTENSION_APP_ORIGIN=https://your-library.example.com
 npm run build:userscript
 ```
 
-Output: `userscript/dist/ao3-library.user.js` and a metadata file. Only the public configuration is embedded. For a separate hosted configuration, use `node --env-file=.env.local.hosted --experimental-strip-types scripts/build-userscript.mjs`. A script built for local Supabase cannot reach your Mac's localhost from an iPhone. Build with the hosted project's public settings for actual iOS use.
+Output: `userscript/dist/ao3-library.user.js` and a metadata file. Every userscript build loads `.env.local.hosted` and requires hosted HTTPS backend and app origins. Localhost builds are rejected before writing files. Explicit environment variables can supply hosted public settings in CI. `npm run build:userscript:hosted` is an alias of the same build command; there is no local userscript build mode.
 
 ## Install and connect
 
@@ -29,12 +29,18 @@ Output: `userscript/dist/ao3-library.user.js` and a metadata file. Only the publ
 5. Sign into your library website and open **Settings → iOS Safari userscript**. Name the device and create a code. Copy the full code into **Connect Library** on AO3 within five minutes. Codes are single-use and creating another replaces unused codes. Never paste a password, AO3 credential, or Supabase session token.
 6. Refresh devices in Settings to see the paired device. Disconnect there to revoke access remotely, or use **Connection → Disconnect device** on AO3. Local disconnect requires backend confirmation; if offline, revoke from Settings on a connected device. Device authorization expires after 90 days; create another code to reconnect. Website sign-out does not revoke paired devices.
 
+## Connection troubleshooting
+
+If the AO3 panel cannot reach the backend, rebuild with `npm run build:userscript` and replace the installed file. Open the Userscripts popup, then reload AO3. Old development builds may point at localhost and cannot connect to your Mac from an iPhone. All new builds require the hosted backend. If switching from a development build, create a fresh pairing code on the hosted library website; device connections are scoped to each backend. Never share the code.
+
+For a hosted build, check the phone's connection and Userscripts' network permission for the configured Supabase host. Rebuilds do not update the file already installed in Userscripts.
+
 ## Reading controls
 
 - Chapter 1 defaults to To Read, a middle chapter to Currently Reading with the preceding chapters completed, and a known final chapter of a complete multi-chapter work to Finished. A one-shot remains To Read when first opened; the latest published chapter of an unfinished work remains Reading. Defaults are editable.
 - The toolbar and editor use the same current chapter, separate from completed chapters: chapter 4 means three fully read chapters, or four when **This chapter is finished** is checked. To Read saves zero completed chapters; Finished saves all published chapters. These two statuses hide the chapter fields. Currently Reading and Re-reading show the current chapter and its finished checkbox; Re-reading indicates a previous read while tracking the new one. Tap the info icons beside Reading status and Current chapter for these rules. For chapter URLs, position comes from AO3's chapter selector, never the numeric chapter ID. When position is unavailable or full-work view is ambiguous, enter the current chapter explicitly.
 - Saved works show reading status, saved chapters read (`Ch. # / #`), **✓ Through Ch. #**, **Edit**, and a slider icon at the top. A second bar before kudos contains only progress and the completion control. Both update together. An already-read AO3 chapter shows a green, non-clickable **Read** indicator whenever saved progress is at or beyond that chapter, including revisits. On the known final chapter, **✓ Finished** also changes reading status to Finished. The latest published chapter of an unfinished work marks progress without finishing the fic. Ambiguous full-work views omit the chapter completion action.
-- **Connection → Color mode** selects Light or Dark for both reading bars, the editor, and help panels. The choice is saved on this device, independently of pairing or account changes. Until you choose, the initial mode follows your device preference. Dark mode uses a `#333333` background with light text and accents.
+- **Connection → Dark Mode / Light Mode** uses a moon or sun button to switch themes for both reading bars, the editor, and help panels. The choice is saved on this device, independently of pairing or account changes. Until you choose, the initial mode follows your device preference. Dark mode uses a `#333333` background with light text and accents.
 - The slider icon opens connection settings only. Change reading status or current chapter through **Edit**, which includes a pencil icon. The pairing panel has no chapter-adjustment or Finish Fic buttons. A failed progress save restores both reading bars and shows an error beside the bottom bar as well as at the top.
 - Click **Add to Library**, **Edit**, or **Connection** again to collapse its open panel. Reopening or switching panels retains the fields you filled in, including a pairing code until you connect or disconnect. Collapsing does not save to the library; **Cancel** discards the library draft.
 - The editor supports private notes, personal tag chips, a visual 1–5 star rating, and membership in existing custom collections. The typing field starts at the width of its placeholder and grows with your text. On mobile, hold the grip beside it, drag to a gap between tags, and release to move the typing position without changing your draft or reordering tags. The Personal tags info icon sits to the right of the tag box and explains touch controls on mobile, with keyboard instructions shown only on desktop. Type a personal tag and press Enter to add it; duplicate tags are ignored. On mobile, tap a chip to select it with a red outline and stronger red background, then tap the same chip again to delete it. The selected label remains fully visible without an X or fade. On desktop, click a chip to remove it, use arrow keys to insert between chips, or press Backspace twice to delete the preceding chip. Select a star or use Clear rating to return to Unrated. The notes text area grows while typing; Collapse and Expand sit to the right of the notes box; Collapse returns a long note to its default height and Expand shows its full length. Open **Add to custom collection** to search and select collections. Create new collections in the tracker. **Reload saved entry** appears only for saved works.

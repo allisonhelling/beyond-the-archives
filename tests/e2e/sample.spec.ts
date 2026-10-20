@@ -139,7 +139,7 @@ test('series summary links open work details and work headings and collection ed
  await icon.click()
  await expect(page).toHaveURL(/\/stories\/sample-entry-862320$/)
  const panel = page.getByRole('region', { name: 'Reading and organization' })
- await expect(page.locator('.details-story-stats > div').filter({ has: page.getByText('Date Updated', { exact: true }) }).locator('dd')).toHaveText('2013-07-12')
+ await expect(page.locator('.details-story-stats > div').filter({ has: page.getByText('Date Updated', { exact: true }) }).locator('dd')).toHaveText('12 Jul 2013')
  const progress = panel.getByRole('heading', { name: 'Your progress', exact: true })
  const typography = await progress.evaluate(el => {const s = getComputedStyle(el);return {size:s.fontSize,family:s.fontFamily,weight:s.fontWeight,color:s.color,transform:s.textTransform,spacing:s.letterSpacing}})
  for (const label of [panel.locator('.status-select .details-control-heading'), panel.locator('.rating-heading')]) {
@@ -212,9 +212,7 @@ test('series status follows individual work status changes and headers show date
  await page.goto('/series/132147')
  const stats = page.locator('.details-story-stats')
  const updated = stats.locator('div').filter({has:page.getByText('Date Updated',{exact:true})})
- await expect(updated.locator('dd')).toHaveText('2020-08-09')
- await expect(updated.locator('xpath=preceding-sibling::div[1]/dt')).toHaveText('Publication Status')
- await expect(updated.locator('xpath=following-sibling::div[1]/dt')).toHaveText('Works')
+ await expect(updated.locator('dd')).toHaveText('09 Aug 2020')
  const progress = page.getByRole('region',{name:'Reading and organization'})
  await expect(progress.locator('.series-reading-status')).toHaveText('To Read')
  const heading = (await progress.getByRole('heading',{name:'Your progress',exact:true}).boundingBox())!

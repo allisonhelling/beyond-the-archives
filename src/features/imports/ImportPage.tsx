@@ -4,6 +4,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { useLibrary } from '../library/LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
 import { approveProgress, cancelBatch, importHistory, retryJob, submitImport } from './repository'
+import type { Status } from '../library/model'
+import { ImportReadingStatus } from './ImportReadingStatus'
 import { SeriesImportReview } from './SeriesImportReview'
 import { importFinished, classifyUrl, extractUrls, selectedImportText, type SeriesPreview } from './urls'
 type History = Awaited<ReturnType<typeof importHistory>>
@@ -11,6 +13,7 @@ const activeStatuses=['pending','processing']
 const reviewStatuses=['failed','skipped','cancelled']
 export function ImportPage() {
  const location=useLocation()
+ const [readingStatus,setReadingStatus]=useState<Status>('to_read')
  const [reviewing,setReviewing]=useState(false)
  const library=useLibrary(), {refresh}=library
  const completedSignature=useRef('')
@@ -28,15 +31,17 @@ export function ImportPage() {
  const reviewItems=data.items.filter(item=>reviewStatuses.includes(item.status))
  const urls=extractUrls(text), ignored=urls.filter(url=>classifyUrl(url).kind==='unrelated').length
  const seriesCount=new Set(urls.flatMap(url=>{const result=classifyUrl(url);return result.kind==='series'?[result.identity.seriesId]:[]})).size
- function saveImport(works?:SeriesPreview['works']) {
-  void action(async()=>{const id=await submitImport(works?selectedImportText(text,works):text);setMessage(id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.');if(id){setSelected(id);setText('');setReviewing(false)}})
+ function saveImport(works?:SeriesPreview['works'], status:Status=readingStatus, seriesIds:number[]=[]) {
+  void action(async()=>{const id=await submitImport(works?selectedImportText(text,works):text,true,status,seriesIds);setMessage(id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.');if(id){setSelected(id);setText('');setReviewing(false)}})
  }
  const visibleItems=statusFilter==='review'?reviewItems:data.items.filter(item=>statusFilter==='all'||item.status===statusFilter)
  const counts=Object.fromEntries(['pending','processing','completed','failed','skipped','cancelled'].map(status=>[status,data.items.filter(i=>i.status===status).length]))
  return <><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Paste work or series links. Choose which series works to import. Valid work identities are saved immediately; metadata arrives gradually.</p></div></div>
  {sampleMode ? <p className="settings-card">Persistent imports require the connected application. Sample mode has no background worker.</p> : <>
- {reviewing ? <SeriesImportReview text={text} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
+ {reviewing ? <SeriesImportReview text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
  <label>AO3 URLs<textarea rows={10} value={text} onChange={event=>setText(event.target.value)} placeholder="https://archiveofourown.org/works/123" disabled={busy} /></label>
+ <ImportReadingStatus value={readingStatus} onChange={setReadingStatus} disabled={busy} />
+ <p className="field-help">Applies to all links imported.</p>
  <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; review and select their works before importing.`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
  <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount?'Review series':'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
  </form>}

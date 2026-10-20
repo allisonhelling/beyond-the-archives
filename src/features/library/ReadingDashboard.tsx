@@ -2,7 +2,8 @@ import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Bell, Bookmark, ChevronDown, Clock, Heart, Info, Library, Layers3, SlidersHorizontal, ArrowDownWideNarrow, X } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
-import { ratings, tagNames, type Story } from './model'
+import { filterDateText, ratings, tagNames, type Story } from './model'
+import { DateFilterField } from './DateFilterField'
 import { Dropdown } from '../../components/Dropdown'
 import { useDismissible } from '../../components/useDismissible'
 import { SearchSuggestions } from './SearchSuggestions'
@@ -96,9 +97,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const publicationLabel = (value: keyof typeof publicationStatuses) => mode === 'series' ? value === 'complete' ? 'Complete' : value === 'in_progress' ? 'Incomplete' : 'Completion unknown' : publicationStatuses[value].label
   const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationLabel(status)}`),
     filters.oneShot !== 'allowed' && `One-shot: ${filters.oneShot === 'only' ? 'Only' : 'Exclude'}`,
-    filters.inSeries && 'In a series', filters.rating && `Rating: ${filters.rating}`, filters.favorites && 'Favorites',
+    filters.inSeries && 'In a series', ...filters.rating.map(rating => `Rating: ${rating}`), filters.favorites && 'Favorites',
     filters.relationship && `Relationships: ${filters.relationship}`, filters.characters && `Characters: ${filters.characters}`, filters.tags && `Tags: ${filters.tags}`, filters.within && `Within ${filters.scope}: ${filters.within}`,
-    filters.updatedAfter && `Updated from ${filters.updatedAfter}`, filters.updatedBefore && `Updated through ${filters.updatedBefore}`].filter(Boolean)
+    filters.updatedAfter && `Updated from ${filterDateText(filters.updatedAfter)}`, filters.updatedBefore && `Updated through ${filterDateText(filters.updatedBefore)}`].filter(Boolean)
   const orderingControls = <>
     <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
     <Dropdown label="Group" icon={Layers3} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
@@ -116,13 +117,13 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
       <SearchSuggestions label="Tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
 
       <div className="filter-choice-row">
-      <Dropdown fitContent label="Rating" value={filters.rating} onChange={value => change('rating', value)} options={[{ value: '', label: 'All ratings' }, ...ratings.map(rating => ({ value: rating, label: rating }))]} />
+      <Dropdown fitContent label="Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: rating }))} />
       <Dropdown fitContent label={mode !== 'reading' ? 'Publication status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
       <Dropdown fitContent label="One-shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
       <button className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a series</button>
-      <button className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Heart size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites only</button>
+      <button className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Heart size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites</button>
       </div>
-      <div className="updated-filter-section"><div className="updated-filter-row"><span className="filter-label" id="updated-filter-label">Last updated on AO3</span><div className="updated-filter" role="group" aria-labelledby="updated-filter-label"><label><span className="filter-name">From</span><input type="date" value={filters.updatedAfter} onChange={e => change('updatedAfter', e.target.value)} /></label><label><span className="filter-name">Through</span><input type="date" value={filters.updatedBefore} onChange={e => change('updatedBefore', e.target.value)} /></label></div></div><p className="field-help">Last updated uses saved AO3 dates in UTC; stories without an AO3 date are excluded by date filters. Chapter counts are saved snapshots; unknown counts sort last.</p></div>
+      <div className="updated-filter-section"><div className="updated-filter-row"><div className="updated-filter-heading"><span className="filter-label" id="updated-filter-label">Last updated on AO3</span><details className="search-help updated-filter-help"><summary aria-label="Last updated on AO3 help"><Info size={18} /></summary><div>Last updated uses saved AO3 dates in UTC; stories without an AO3 date are excluded by date filters.</div></details></div><div className="updated-filter" role="group" aria-labelledby="updated-filter-label"><DateFilterField label="From" value={filters.updatedAfter} onChange={value => change('updatedAfter', value)} /><DateFilterField label="Through" value={filters.updatedBefore} onChange={value => change('updatedBefore', value)} /></div></div></div>
     </div><div className="within-search"><div className="within-search-row"><div className="within-search-field"><label><span className="filter-name">Search within results</span><input type="search" placeholder="Search within results" aria-describedby="search-mode-description" value={filters.within} onChange={e => change('within', e.target.value)} /></label>
 
       <details className="search-help"><summary aria-label="Search syntax and modes"><Info size={18} /></summary><div id="search-mode-description"><p><strong>Any field</strong> combines saved titles, authors, fandoms, AO3 tags, personal tags, summaries, notes, ratings, statuses, and URLs. <strong>Summary</strong> searches only the fic’s summary. <strong>Notes</strong> searches only your private notes.</p><ul><li><code>book*</code> — any characters: book, books, booking.</li><li><code>Harry Potter</code> — AND: both terms must occur.</li><li><code>Harry || Potter</code> — OR: either or both terms.</li><li><code>"Harry Lockhart"</code> — words in exact sequence.</li><li><code>Harry -Lockhart</code> — include Harry, exclude Lockhart.</li></ul><p>AND and NOT apply before OR. Use a backslash to escape literal symbols, such as <code>\*</code>, <code>\-</code>, <code>\"</code>, <code>\|</code>, or <code>\\</code>. Matching ignores case and accents. Searches stay within the selected {mode === 'library' ? 'shelf' : 'tile'} and filters.</p></div></details></div>

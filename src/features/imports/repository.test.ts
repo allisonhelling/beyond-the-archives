@@ -36,3 +36,14 @@ it('requires series review before any database import is created', async()=>{
  await expect(submitImport('https://archiveofourown.org/series/77')).rejects.toThrow('Review series')
  expect(rpc).not.toHaveBeenCalled()
 })
+
+it('submits the chosen status and reviewed series with the work URLs atomically',async()=>{
+ rpc.mockResolvedValue({data:'batch',error:null})
+ await submitImport('https://archiveofourown.org/works/123',true,'finished',[77])
+ expect(rpc).toHaveBeenCalledWith('submit_import_urls',{p_urls:['https://archiveofourown.org/works/123'],p_update_reading_location:true,p_reading_status:'finished',p_series_ids:[77]})
+})
+
+it('explains the required migration when import status support is missing',async()=>{
+ rpc.mockResolvedValue({data:null,error:{code:'PGRST202'}})
+ await expect(submitImport('https://archiveofourown.org/works/123',true,'to_read')).rejects.toThrow('Apply the latest database migrations')
+})

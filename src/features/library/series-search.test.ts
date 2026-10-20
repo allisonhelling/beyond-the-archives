@@ -9,7 +9,7 @@ const metadata = { seriesId:77,normalizedUrl:'https://archiveofourown.org/series
 const series = librarySeries([], [{ao3_series_id:77,metadata,notes:'Private series reminder',is_favorite:true,reading_status:'finished',collectionIds:['collection'],created_at:'2026-10-19T12:00:00Z'} as unknown as SeriesRecord])
 const pool = series.map(seriesSearchStory)
 it('searches all preview works, including unsaved fics, using the shared filter toolbar contract', () => {
- for (const patch of [{query:'Other fic'},{query:'Author B'},{fandoms:['Second fandom']},{relationship:'A/B, C/D'},{characters:'Character B'},{tags:'Adventure'},{rating:'Mature'},{favorites:true},{within:'garden ship'},{within:'"Other fic"'},{within:'flying',scope:'summary' as const},{within:'reminder',scope:'notes' as const}]) {
+ for (const patch of [{query:'Other fic'},{query:'Author B'},{fandoms:['Second fandom']},{relationship:'A/B, C/D'},{characters:'Character B'},{tags:'Adventure'},{rating:['Mature','Explicit']},{favorites:true},{within:'garden ship'},{within:'"Other fic"'},{within:'flying',scope:'summary' as const},{within:'reminder',scope:'notes' as const}]) {
   expect(filterLibraryItems(pool,{...defaultReadingFilters,...patch},series)).toEqual(pool)
  }
  expect(filterLibraryItems(pool,{...defaultReadingFilters,within:'garden -ship'},series)).toEqual([])

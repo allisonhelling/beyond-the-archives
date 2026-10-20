@@ -1,3 +1,4 @@
+import type { Status } from '../library/model'
 import { rememberSeries } from '../library/series-repository'
 import { supabase } from '../../lib/supabase'
 import { allRows } from '../library/repository'
@@ -15,13 +16,14 @@ export async function importHistory(batchId?: string) {
  ])
  return {batches,items,jobs}
 }
-export async function submitImport(text:string, updateReadingLocation = true) {
+export async function submitImport(text:string, updateReadingLocation = true, readingStatus?: Status, seriesIds: number[] = []) {
  const urls=extractUrls(text)
  if(urls.some(url=>classifyUrl(url).kind==='series')) throw new Error('Review series and choose works before importing.')
  if(!urls.length) throw new Error('Paste at least one http or https URL.')
  if(urls.length>2000) throw new Error('Use at most 2,000 URLs per submission.')
- const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls,p_update_reading_location:updateReadingLocation})
+ const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls,p_update_reading_location:updateReadingLocation,...(readingStatus ? {p_reading_status:readingStatus,p_series_ids:seriesIds} : {})})
  if(error) {
+  if(error.code==='PGRST202' && readingStatus) throw new Error('The connected database is missing import reading-status support. Apply the latest database migrations, then try again.')
   if(error.code==='PGRST202') throw new Error('The connected Supabase database is missing the Phase 3 importer. Apply the Phase 3 migration to the database used by VITE_SUPABASE_URL, then try again.')
   if(error.code==='42501') throw new Error('Import access was denied. Sign in again; if it continues, check the Phase 3 database permissions.')
   throw new Error('Could not confirm the import. Check your connection and import history before trying again.')

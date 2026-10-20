@@ -37,34 +37,33 @@ export function SeriesPage() {
  const series: LibrarySeries = saved ?? { ...details, seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: details?.title ?? `Series ${seriesId}`, description: details?.description ?? '', works: details?.works ?? [], savedStories: [], fandoms: [...new Set(details?.works.flatMap(work => work.fandoms ?? []) ?? [])], detailsLoaded: Boolean(details), record }
  const StatusIcon = readingStatusIcons[seriesReadingStatus(series)]
  if (!valid) return <p role="alert">This series identifier is invalid.</p>
- return <LibraryBoundary><SeriesControls series={series}>{({ favorite, collectionsField, finishButton }) => <div className="story-details-page">
+ return <LibraryBoundary><SeriesControls series={series}>{({ favorite, collectionsField, finishButton }) => <div className="story-details-page series-details-page">
   <div className="page-heading story-details-heading"><div>
    <Link className="story-return-link clickable-text" to="/library?shelf=series" aria-label="Back to Series"><ArrowLeft size={16} aria-hidden="true" />Series</Link>
    <div className="story-title-row"><h1><a href={series.normalizedUrl} target="_blank" rel="noreferrer">{series.title}</a></h1>
     <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p>{favorite}
-    <div className="story-metadata-actions"><button className="button secondary" disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading series…' : series.detailsLoaded ? 'Refresh series details' : 'Load series details'}</button></div>
+    <div className="story-metadata-actions"><button className="button secondary" disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading series…' : series.detailsLoaded ? 'Refresh' : 'Load series details'}</button></div>
    </div>
    <p className="details-fandom-rating">{series.fandoms.join(' · ') || 'Fandom unknown'}</p>
    <dl className="details-story-stats"><div><dt>Word count</dt><dd><strong>{series.wordCount?.toLocaleString() ?? '?'}</strong> words</dd></div><div><dt>Publication Status</dt><dd><strong>{seriesCompletionLabel(series)}</strong></dd></div><div><dt>Date Updated</dt><dd><strong>{ao3Date(series.updated)}</strong></dd></div><div><dt>Works</dt><dd><strong>{series.workCount ?? '?'}</strong> works total · {series.savedStories.length} in your library</dd></div></dl>
   </div></div>
-  <section className="settings-card details-progress-panel" aria-label="Reading and organization"><div className="series-progress-controls"><div className="series-progress-state"><div className="story-section-heading"><h2>Your progress</h2></div><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div>{collectionsField}</div></section>
+  <section className="settings-card details-progress-panel" aria-label="Reading and organization"><div className="series-progress-controls"><div className="series-progress-columns"><div className="series-progress-state"><div className="story-section-heading"><h2>Your progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}</div><div className="series-import-actions"><button className="button secondary" disabled={busy || sampleMode} onClick={() => setReview(!review)}>Choose Works to Import</button></div></div></section>
+  {error && <p className="error-message" role="alert">{error}</p>}
   <section className="details-private-notes" aria-label="Private notes"><PersonalNote key={seriesId} notes={record?.notes ?? ''} disabled={!record && !details} onSave={(notes, base) => saveSeriesNote(seriesId, notes, base)} onRefresh={library.refresh} /></section>
-  <section className="settings-card details-fic-panel" aria-label="Series information"><dl className="metadata-list details-fic-fields">
-   <div><dt>Creator</dt><dd><AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></dd></div>
-   <div><dt>Series Begun</dt><dd>{series.begun || 'Unknown'}</dd></div><div><dt>Series Updated</dt><dd>{series.updated || 'Unknown'}</dd></div>
-   {series.description && <div><dt>Description</dt><dd className="story-summary story-details-summary">{series.description}</dd></div>}
-   {series.creatorNotes && <div><dt>Creator Notes</dt><dd className="story-summary">{series.creatorNotes}</dd></div>}
-   <div><dt>Publication Status</dt><dd>{seriesCompletionLabel(series)}</dd></div>
-   <div><dt>Saved</dt><dd>{record ? new Date(record.created_at).toLocaleString() : 'Not saved yet'}</dd></div>
-   <div><dt>Last edited</dt><dd>{record ? new Date(record.updated_at).toLocaleString() : 'Not saved yet'}</dd></div>
-  </dl><div className="form-actions"><button className="button secondary" disabled={busy || sampleMode} onClick={() => setReview(!review)}>Choose works to import</button></div>{error && <p className="error-message" role="alert">{error}</p>}</section>
-  {review && <SeriesImportReview key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} autoLoad busy={busy} onConfirm={async works => {
+  {review && <SeriesImportReview key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} autoLoad busy={busy} onConfirm={async (works, status, seriesIds) => {
    setBusy(true); setError('')
-   try { await submitImport(works.map(work => work.url).join('\n'), false); await refresh(); setReview(false) } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') } finally { setBusy(false) }
+   try { await submitImport(works.map(work => work.url).join('\n'), false, status, seriesIds); await refresh(); setReview(false) } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') } finally { setBusy(false) }
   }} onCancel={() => setReview(false)} />}
   <section aria-label="Works in series"><h2>Works in this series</h2><div className="story-grid">{series.works.map(work => {
    const saved = series.savedStories.find(story => story.work.ao3_work_id === work.workId)
    return saved ? <StoryCard key={work.workId} story={saved} /> : <article className="story-card" key={work.workId}><h2><a href={work.url} target="_blank" rel="noreferrer">{work.position ? `Part ${work.position}: ` : ''}{work.title}</a></h2><p className="authors">By <AuthorNames metadata={{ authors: work.authors }} /></p><p className="muted">{work.fandoms?.join(' · ') || 'Fandom unknown'}</p><p className="story-facts">{work.wordCount?.toLocaleString() ?? '?'} words · {work.chapters || 'Chapters unknown'}</p>{work.summary && <p className="story-summary">{work.summary}</p>}<Link className="story-details-link clickable-text" to="/add" state={{ workUrl: work.url }}>Add to Library</Link></article>
   })}</div>{!series.works.length && <p>{busy ? 'Loading the series work list…' : 'No available works saved for this series.'}</p>}</section>
+  <section className="settings-card details-fic-panel" aria-label="Series information"><dl className="metadata-list details-fic-fields">
+   <div><dt>Series Begun</dt><dd>{series.begun || 'Unknown'}</dd></div>
+   {series.description && <div><dt>Description</dt><dd className="story-summary story-details-summary">{series.description}</dd></div>}
+   {series.creatorNotes && <div><dt>Creator Notes</dt><dd className="story-summary">{series.creatorNotes}</dd></div>}
+   <div><dt>Saved</dt><dd>{record ? new Date(record.created_at).toLocaleString() : 'Not saved yet'}</dd></div>
+   <div><dt>Last edited</dt><dd>{record ? new Date(record.updated_at).toLocaleString() : 'Not saved yet'}</dd></div>
+  </dl></section>
  </div>}</SeriesControls></LibraryBoundary>
 }

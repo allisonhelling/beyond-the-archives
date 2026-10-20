@@ -25,11 +25,11 @@ export function filterLibraryItems(pool: Story[], filters: ReadingFilters, serie
   const sources = item.works.map(work => seriesWorkMetadata(work, item))
   const query = normalize(filters.query.trim())
   if (query && !normalize([item.title, ...(item.creators ?? []), ...sources.flatMap(source => [source.title, ...source.authors])].join('\n')).includes(query)) return false
-  if (filters.rating && !sources.some(source => source.rating === filters.rating)) return false
+  if (filters.rating.length && !sources.some(source => filters.rating.includes(source.rating))) return false
   if (filters.oneShot !== 'allowed' && !sources.some(source => isOneShot(source) === (filters.oneShot === 'only'))) return false
   const withinText = searchText(story, filters.scope) + (filters.scope === 'any' ? '\n' + item.works.map(work => [work.title, work.url, work.rating, work.chapters, work.updated].join('\n')).join('\n') : '')
   if (!compileSearch(filters.within)(withinText)) return false
-  return filterReading([story], { ...filters, query: '', rating: '', oneShot: 'allowed', within: '' }).length > 0
+  return filterReading([story], { ...filters, query: '', rating: [], oneShot: 'allowed', within: '' }).length > 0
  })
  return filterReading([...works, ...matches], { ...defaultReadingFilters, sort: filters.sort })
 }

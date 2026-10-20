@@ -7,7 +7,7 @@ let db:PGlite
 const alice='10000000-0000-0000-0000-000000000001',bob='10000000-0000-0000-0000-000000000002'
 type Claim={id:string;token:string;workId:number;attempt:number}
 async function asUser<T>(id:string,fn:()=>Promise<T>) {await db.exec(`set role authenticated; set request.jwt.claim.sub='${id}'`);try{return await fn()}finally{await db.exec('reset role; reset request.jwt.claim.sub')}}
-async function submit(urls:string[],owner=alice,updateReadingLocation=false) {return asUser(owner,async()=>(await db.query<{id:string}>('select public.submit_import_urls($1::text[],$2) id',[urls,updateReadingLocation])).rows[0].id)}
+async function submit(urls:string[],owner=alice,updateReadingLocation=false,readingStatus:string|null=null,seriesIds:number[]=[]) {return asUser(owner,async()=>(await db.query<{id:string}>('select public.submit_import_urls($1::text[],$2,$3::public.reading_status,$4::bigint[]) id',[urls,updateReadingLocation,readingStatus,seriesIds])).rows[0].id)}
 async function ready() {await db.exec("update public.metadata_worker_state set next_request_at=now()-interval '1 second',paused_until=null;update public.metadata_jobs set next_attempt_at=now()-interval '1 second' where status='pending'")}
 async function claim() {return (await db.query<{job:Claim|null}>('select public.claim_metadata_job() job')).rows[0].job}
 async function finish(j:Claim,metadata:object|null={title:'Automatic',authors:['One','Two'],author_links:{One:'https://archiveofourown.org/users/One'},fandoms:['F'],relationship_tags:['A/B'],published_chapters:6},chapters:object={'1':'910','2':'920','6':'960'},category:string|null=null,retry=false,pause=0) {return (await db.query<{ok:boolean}>('select public.finish_metadata_job($1,$2,$3,$4,$5,$6,$7,$8) ok',[j.id,j.token,metadata===null?null:JSON.stringify(metadata),JSON.stringify(chapters),category,category,retry,pause])).rows[0].ok}
@@ -285,4 +285,31 @@ it('paces series previews with hosted jobs and restricts reservations to the ser
  await db.query("select public.pause_series_preview(30,'shorter_pause')")
  expect((await db.query<{ok:boolean}>("select paused_until>now()+interval '59 minutes' ok from public.metadata_worker_state")).rows[0].ok).toBe(true)
  await clearJobs()
+})
+
+it('persists every explicit reading status through chapter metadata and scopes series changes to the owner',async()=>{
+ await clearJobs()
+ const preview={seriesId:8088,normalizedUrl:'https://archiveofourown.org/series/8088',title:'Status import',works:[]}
+ for(const owner of [alice,bob]) await asUser(owner,()=>db.query('select public.remember_library_series($1)',[JSON.stringify(preview)]))
+ for(const [index,status] of ['to_read','reading','waiting_for_updates','re_reading','finished','did_not_finish'].entries()) {
+  const workId=88000+index
+  await submit([`https://archiveofourown.org/works/${workId}/chapters/960`],alice,true,status,[8088])
+  await ready();const job=(await claim())!;expect(job.workId).toBe(workId)
+  expect(await finish(job)).toBe(true)
+  expect((await asUser(alice,()=>db.query('select reading_status,last_read_chapter from public.library_entries e join public.works w on e.work_id=w.id where w.ao3_work_id=$1',[workId]))).rows).toEqual([{reading_status:status,last_read_chapter:5}])
+  expect((await asUser(alice,()=>db.query('select reading_status from public.library_series where ao3_series_id=8088'))).rows).toEqual([{reading_status:status}])
+  expect((await asUser(bob,()=>db.query('select reading_status from public.library_series where ao3_series_id=8088'))).rows).toEqual([{reading_status:'to_read'}])
+ }
+ // Reimporting an owned work applies the new batch choice without changing another owner's copy.
+ await submit(['https://archiveofourown.org/works/88000'],bob,false,'reading')
+ await submit(['https://archiveofourown.org/works/88000'],alice,false,'finished')
+ expect((await asUser(alice,()=>db.query('select reading_status from public.library_entries e join public.works w on e.work_id=w.id where w.ao3_work_id=88000'))).rows).toEqual([{reading_status:'finished'}])
+ expect((await asUser(bob,()=>db.query('select reading_status from public.library_entries e join public.works w on e.work_id=w.id where w.ao3_work_id=88000'))).rows).toEqual([{reading_status:'reading'}])
+})
+it('keeps edits made after an explicit import status was selected',async()=>{
+ await clearJobs()
+ await submit(['https://archiveofourown.org/works/88999/chapters/960'],alice,true,'to_read')
+ await asUser(alice,()=>db.exec("update public.library_entries set reading_status='did_not_finish' where work_id=(select id from public.works where ao3_work_id=88999)"))
+ await ready();expect(await finish((await claim())!)).toBe(true)
+ expect((await asUser(alice,()=>db.query('select reading_status from public.library_entries e join public.works w on e.work_id=w.id where w.ao3_work_id=88999'))).rows).toEqual([{reading_status:'did_not_finish'}])
 })

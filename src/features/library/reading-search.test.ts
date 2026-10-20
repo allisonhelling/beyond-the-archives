@@ -37,7 +37,7 @@ describe('reading filters and sections', () => {
     expect(inReadingSection({ ...alpha, last_update_notification_at: '2026-10-15T23:00:00Z', update_dismissed_at: '2026-10-16T00:00:00Z' }, 'new')).toBe(false)
   })
   it('combines publication, favorite, rating, relationship, AO3 tags and any-selected fandom', () => {
-    const result = filterReading([alpha, beta], { ...defaultReadingFilters, publication: ['complete'], favorites: true, rating: 'Mature', relationship: 'castiel/dean', tags: 'slow, burn', fandoms: ['Fandom B', 'Fandom C'] })
+    const result = filterReading([alpha, beta], { ...defaultReadingFilters, publication: ['complete'], favorites: true, rating: ['Mature'], relationship: 'castiel/dean', tags: 'slow, burn', fandoms: ['Fandom B', 'Fandom C'] })
     expect(result).toEqual([alpha])
     expect(filterReading([alpha], { ...defaultReadingFilters, relationship: 'Castiel/Dean, Missing relationship' })).toEqual([])
   })
@@ -149,4 +149,13 @@ it('reverses each fic sort and keeps unknown counts and dates last', () => {
     expect(filterReading(stories, { ...defaultReadingFilters, sort }).map(story => story.metadata.title)).toEqual(['Alpha', 'Beta', 'Unknown'])
   }
   expect(filterReading(stories, { ...defaultReadingFilters, sort: 'alpha_reverse' }).map(story => story.metadata.title)).toEqual(['Unknown', 'Beta', 'Alpha'])
+})
+
+it('matches any selected AO3 rating, while an empty selection includes every rating',()=>{
+ const works=['Mature','Explicit','General Audiences',''].map((rating,index)=>story(String(index),{metadata:{...blankMetadata,title:String(index),rating}}))
+ expect(filterReading(works,{...defaultReadingFilters,rating:['Mature','Explicit']})).toEqual(works.slice(0,2))
+ expect(filterReading(works,{...defaultReadingFilters,rating:[]})).toHaveLength(4)
+})
+it('rejects invalid or partially typed calendar dates rather than silently filtering everything out',()=>{
+ for(const date of ['2026-','2026-02-30','2026-13-01']) expect(()=>filterReading([],{...defaultReadingFilters,updatedAfter:date})).toThrow('Enter a valid From date')
 })

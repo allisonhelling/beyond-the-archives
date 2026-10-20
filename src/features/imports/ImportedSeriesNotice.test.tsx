@@ -25,6 +25,6 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()
  expect(mocks.submit).not.toHaveBeenCalled()
  fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import 1 selected works' })) })
- expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false)
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import selected' })) })
+ expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false, 'to_read', [77])
 })

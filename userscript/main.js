@@ -102,11 +102,17 @@ export async function mountLibrary(doc = document, href = location.href) {
   finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); bottomMessage.textContent = message.textContent === 'Saved' ? '' : message.textContent }
  }
  async function rpc(action, input = {}, secret = connection?.secret) {
-  const response = await GM.xmlHttpRequest({
+  const backend = new URL(__SUPABASE_URL__)
+  const networkMessage = ['localhost', '127.0.0.1', '[::1]'].includes(backend.hostname)
+   ? 'This script points to a local development server. Install the hosted Safari userscript to connect from an iPhone. Your draft is preserved.'
+   : `Cannot reach the library backend. Check your connection and Userscripts network access to ${backend.hostname}, then retry. Your draft is preserved.`
+  let response
+  try { response = await GM.xmlHttpRequest({
    method: 'POST', url: `${__SUPABASE_URL__}/rest/v1/rpc/userscript_library`, timeout: 20000,
    headers: { apikey: __SUPABASE_KEY__, 'Content-Type': 'application/json' },
    data: JSON.stringify({ p_secret: secret, p_action: action, p_work: page.work, p_input: input }),
-  })
+  }) } catch { throw new Error(networkMessage) }
+  if (!response?.status) throw new Error(networkMessage)
   let data
   try { data = JSON.parse(response.responseText) } catch { throw new Error('Backend unavailable. Your draft is preserved; try again.') }
   if (response.status < 200 || response.status >= 300) {
@@ -220,16 +226,19 @@ export async function mountLibrary(doc = document, href = location.href) {
   if (activePanel === 'connection') { showPanel(null); return }
   showPanel('connection')
   if (connectionPanel.childNodes.length) return
-  const themeLabel = node('label', 'Color mode', connectionPanel), themeSelect = node('select', '', themeLabel)
-  themeSelect.setAttribute('aria-label', 'Color mode')
-  for (const [value, title] of [['light', 'Light'], ['dark', 'Dark']]) { const option = node('option', title, themeSelect); option.value = value }
-  themeSelect.value = theme
-  themeSelect.addEventListener('change', async () => {
-   themeSelect.disabled = true
-   try { await GM.setValue(themeKey, themeSelect.value); theme = themeSelect.value; applyTheme() }
-   catch { themeSelect.value = theme; message.textContent = 'Could not save your color mode. Try again.' }
-   finally { themeSelect.disabled = false }
-  })
+  const themeToggle = button('', async () => {
+   const next = theme === 'light' ? 'dark' : 'light'
+   try { await GM.setValue(themeKey, next) }
+   catch { throw new Error('Could not save your color mode. Try again.') }
+   theme = next; applyTheme(); renderThemeToggle()
+  }, connectionPanel)
+  themeToggle.className = 'theme-toggle'
+  function renderThemeToggle() {
+   themeToggle.replaceChildren()
+   icon(theme === 'light' ? ['M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z'] : ['M16 12a4 4 0 1 1-8 0 4 4 0 1 1 8 0', 'M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42'], themeToggle)
+   node('span', theme === 'light' ? 'Dark Mode' : 'Light Mode', themeToggle)
+  }
+  renderThemeToggle()
   node('p', 'In Library Settings → iOS Safari userscript, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
   const label = node('label', 'One-time pairing code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false

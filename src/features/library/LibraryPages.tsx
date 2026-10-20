@@ -144,14 +144,13 @@ export function StoryCard({ story }: { story: Story }) {
   const location = useLocation()
   const origin = { returnTo: location.pathname + location.search }
   const { label: publicationLabel, Icon: PublicationIcon } = publicationStatuses[story.metadata.publication_status]
-  return <article className="story-card"><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
+  return <article className="story-card work-card"><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
     <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip><OneShotIndicator story={story} /></h2>{actions}</div>
     <p className="authors">By <AuthorNames metadata={story.metadata} /></p>
     <p className="muted">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'}</p>
-    <p className="story-facts">{story.metadata.rating || 'Rating unknown'} · {story.metadata.word_count?.toLocaleString() ?? '?'} words</p>
+    <p className="story-facts">{!!story.metadata.series?.length && <span className="story-card-series"><SeriesNames metadata={story.metadata} /><span className="story-card-series-separator"> · </span></span>}<span>{story.metadata.rating || 'Rating unknown'} · {story.metadata.word_count?.toLocaleString() ?? '?'} words</span></p>
     <hr className="story-summary-divider" />
     {story.metadata.summary && <p className="story-summary">{story.metadata.summary}</p>}
-    <Link className="story-details-link clickable-text" to={`/stories/${story.id}`} state={origin}>See Full Details…</Link>
     <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />
   </>}</StoryControls></article>
 }
@@ -382,16 +381,16 @@ export function StoryDetailsPage() {
   const metadataRefresh = useMetadataRefresh(story)
   const metadataRefreshProps = { ...metadataRefresh, onRefresh: () => void metadataRefresh.refresh() }
   return <LibraryBoundary>{story ? <StoryControls story={story}>{({ favorite, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
-    <div className="page-heading story-details-heading"><div>
+    <div className="page-heading story-details-heading work-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
       {!editing && !!story.metadata.series?.length && <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p>}
       <div className="story-title-row">
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /></h1>
         <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>
         {!editing && <>{favorite}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+        {!editing && <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {story.metadata.rating || 'Rating unknown'}</p>}
       </div>
       {!editing && <>
-        <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {story.metadata.rating || 'Rating unknown'}</p>
         <dl className="details-story-stats">
           <div><dt>Word Count</dt><dd><strong>{story.metadata.word_count?.toLocaleString() ?? '?'}</strong> words</dd></div>
           <div><dt>Published / Total Chapters</dt><dd><strong>{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'}</strong> chapters</dd></div>

@@ -233,7 +233,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   }
   await expect(refreshMetadata.locator('svg')).toHaveCSS('height', await automaticMetadata.getByRole('heading', { name: 'Automatic metadata', exact: true }).evaluate(el => getComputedStyle(el).fontSize))
   await refreshMetadata.hover()
-  await expect(page.getByRole('tooltip', { name: 'Retry / Update Metadata', exact: true })).toBeVisible()
+  await expect(page.getByRole('tooltip', { name: 'Update Metadata', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   const importHistory = automaticMetadata.getByRole('link', { name: 'View import history', exact: true })
   await expect(importHistory).toHaveCSS('color', 'rgb(128, 0, 32)')
@@ -281,9 +281,14 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
     const title = await page.locator('.story-title-row h1').boundingBox()
     const fandoms = await page.locator('.details-fandom-rating').boundingBox()
     expect(authorLine!.y - title!.y - title!.height).toBeLessThanOrEqual(2)
-    const header = (await page.locator('.story-title-row').boundingBox())!
-    expect(fandoms!.y - header.y - header.height).toBe(8)
-    await expect(page.locator('.details-story-stats')).toHaveCSS('column-gap', '40px')
+    expect(metadataActions!.y).toBeGreaterThanOrEqual(fandoms!.y + fandoms!.height)
+    const favorite = (await page.locator('.story-title-row > .action-tooltip .favorite').boundingBox())!
+    expect(favorite.y).toBeGreaterThanOrEqual(fandoms!.y + fandoms!.height)
+    const stats = page.locator('.details-story-stats')
+    const chapters = (await stats.getByText('Published / Total Chapters', { exact: true }).boundingBox())!
+    const updated = (await stats.getByText('Date Updated', { exact: true }).boundingBox())!
+    expect(Math.abs(chapters.x - updated.x)).toBeLessThan(1)
+    await expect(stats).toHaveCSS('column-gap', '24px')
   } else {
     const title = (await page.locator('.story-title-row h1').boundingBox())!
     expect(metadataActions!.y).toBeLessThan(title.y + title.height)
@@ -499,7 +504,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(removalNotice).toContainText('Removed “My corrected title” from your library.')
   await removalNotice.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'My corrected title', exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'See Full Details…', exact: true }).click()
+  await page.locator('.work-card h2').getByRole('link').click()
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   await expect(page.locator('.details-fic-fields .metadata-tag').filter({ hasText: /^(Comfort|Revisit)$/ })).toHaveCount(2)
   await expect(page.getByRole('region', { name: 'Collections', exact: true }).locator('.collection-name-list li').filter({ hasText: /^(Long fics|Created while adding)$/ })).toHaveCount(2)
@@ -652,7 +657,10 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(panel.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /Select fandoms/ })).toHaveCount(0)
   await expect(panel.locator('select')).toHaveCount(0)
-  await expect(panel.locator('.updated-filter-row + .field-help')).toContainText('Last updated uses saved AO3 dates in UTC')
+  await panel.getByLabel('Last updated on AO3 help', { exact: true }).click()
+  await expect(panel.locator('.updated-filter-help > div')).toContainText('Last updated uses saved AO3 dates in UTC')
+  await expect(panel).not.toContainText('Chapter counts are saved snapshots')
+  await panel.getByLabel('Last updated on AO3 help', { exact: true }).click()
   await clear()
   await toolbar.getByRole('button', { name: 'Select fandoms', exact: true }).click()
   await toolbar.getByPlaceholder('Search fandoms').fill('Fandom A')
@@ -675,15 +683,18 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(cards).toHaveCount(1)
   await clear()
   await panel.getByRole('button', { name: 'Rating', exact: true }).click()
-  await panel.getByRole('option', { name: 'Mature', exact: true }).click()
-  await expect(panel.getByRole('listbox')).toBeVisible()
+  await panel.getByRole('checkbox', { name: 'Mature', exact: true }).check()
+  await expect(panel.getByRole('dialog', { name: 'Rating', exact: true })).toBeVisible()
+  await panel.getByRole('checkbox', { name: 'Teen And Up Audiences', exact: true }).check()
+  await expect(cards).toHaveCount(2)
+  await panel.getByRole('checkbox', { name: 'Teen And Up Audiences', exact: true }).uncheck()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect(cards).toHaveCount(1)
   await panel.getByRole('button', { name: 'Rating', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-  await expect(panel.getByRole('listbox')).toHaveCount(0)
+  await expect(panel.getByRole('dialog', { name: 'Rating', exact: true })).toHaveCount(0)
   await clear()
-  await panel.getByRole('button', { name: 'Favorites only' }).click()
+  await panel.getByRole('button', { name: 'Favorites' }).click()
   await expect(cards).toHaveCount(1)
   await clear()
   await page.getByRole('button', { name: info.project.name === 'mobile' ? 'Waiting' : 'Waiting for Updates', exact: true }).click()
@@ -692,10 +703,11 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await clear()
   await panel.getByLabel('Relationships', { exact: true }).click()
   await expect(page.getByRole('region', { name: 'Relationships suggestions' }).locator('strong')).toHaveCount(0)
+  for (const name of ['Dean Winchester', 'Slow Burn', 'Action/Adventure']) await expect(page.getByRole('region', { name: 'Relationships suggestions' }).getByRole('button', { name, exact: true })).toHaveCount(0)
   await page.getByRole('region', { name: 'Relationships suggestions' }).getByRole('button', { name: 'Castiel/Dean', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Relationships suggestions' })).toBeVisible()
   await panel.getByLabel('Characters', { exact: true }).click()
-  await expect(page.getByRole('region', { name: 'Characters suggestions' }).getByRole('button', { name: 'Slow Burn', exact: true })).toHaveCount(0)
+  for (const name of ['Castiel/Dean', 'Slow Burn', 'Action/Adventure']) await expect(page.getByRole('region', { name: 'Characters suggestions' }).getByRole('button', { name, exact: true })).toHaveCount(0)
   await page.getByRole('region', { name: 'Characters suggestions' }).getByRole('button', { name: 'Dean Winchester', exact: true }).click()
   await panel.getByLabel('Tags', { exact: true }).click()
   await expect(page.getByRole('region', { name: 'Tags suggestions' }).locator('strong')).toHaveCount(0)
@@ -728,8 +740,29 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Series', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect(page.getByRole('heading', { name: 'Garden series (1)' })).toBeVisible()
-  await panel.getByLabel('From', { exact: true }).fill('2026-10-15')
+  await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('placeholder', 'dd-mm-yyyy')
+  await panel.getByLabel('From', { exact: true }).fill('31-02-2026')
+  await expect(panel.getByLabel('From', { exact: true })).toHaveValue('31-02-2026')
+  await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByRole('alert')).toContainText('dd-mm-yyyy')
+  await panel.getByLabel('From', { exact: true }).fill('15-10-2026')
+  await expect(panel.getByLabel('Choose from date', { exact: true })).toHaveValue('2026-10-15')
+  await expect(page.getByLabel('Active filters', { exact: true })).toContainText('Updated from 15-10-2026')
+  await panel.getByLabel('Choose through date', { exact: true }).fill('2026-10-16')
+  await expect(panel.getByLabel('Through', { exact: true })).toHaveValue('16-10-2026')
   await expect(cards).toHaveCount(1)
+  if (info.project.name === 'mobile') {
+    const dateBox = (await panel.locator('.updated-filter').boundingBox())!
+    for (const label of ['From', 'Through']) {
+      const bounds = (await panel.getByLabel(label, { exact: true }).boundingBox())!
+      expect(bounds.x).toBeGreaterThanOrEqual(dateBox.x)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(dateBox.x + dateBox.width)
+      await expect(panel.getByLabel(label, { exact: true })).toHaveAttribute('type', 'text')
+    }
+    const search = (await panel.getByPlaceholder('Search within results').boundingBox())!
+    const label = (await panel.locator('.within-search-field .filter-name').boundingBox())!
+    expect(search.y).toBeGreaterThanOrEqual(label.y + label.height)
+  }
   await clear()
   await panel.getByRole('button', { name: 'Hide', exact: true }).click()
   await page.getByRole('button', { name: 'To Read', exact: true }).click()
@@ -853,7 +886,7 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await expect(page.locator('.story-card')).toHaveCount(2)
   await page.goto('/library?shelf=finished')
   await expect(page.getByRole('heading', { name: 'Unfinished read', exact: true })).toBeVisible()
-  await page.locator('.story-card').filter({ has: page.getByRole('heading', { name: 'Unfinished read', exact: true }) }).getByRole('link', { name: 'See Full Details…', exact: true }).click()
+  await page.locator('.story-card').filter({ has: page.getByRole('heading', { name: 'Unfinished read', exact: true }) }).locator('h2').getByRole('link').click()
   await expect(page.locator('.story-return-link')).toHaveAttribute('href', '/library?shelf=finished')
   const longTitle = 'A very long work title that continues across several lines without pushing the favorite button or story menu below the first line'
   moved.metadata_overrides.title = longTitle
@@ -1077,9 +1110,30 @@ test('library reuses filters across all statuses and scopes them to the selected
     await page.getByRole('region', { name: `${label} suggestions` }).getByRole('button', { name: option, exact: true }).click()
     await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   }
-  await panel.getByRole('button', { name: 'Favorites only', exact: true }).click()
-  await panel.getByLabel('From', { exact: true }).fill('2026-10-15')
+  await panel.getByRole('button', { name: 'Favorites', exact: true }).click()
+  await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('placeholder', 'dd-mm-yyyy')
+  await panel.getByLabel('From', { exact: true }).fill('31-02-2026')
+  await expect(panel.getByLabel('From', { exact: true })).toHaveValue('31-02-2026')
+  await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByRole('alert')).toContainText('dd-mm-yyyy')
+  await panel.getByLabel('From', { exact: true }).fill('15-10-2026')
+  await expect(panel.getByLabel('Choose from date', { exact: true })).toHaveValue('2026-10-15')
+  await expect(page.getByLabel('Active filters', { exact: true })).toContainText('Updated from 15-10-2026')
+  await panel.getByLabel('Choose through date', { exact: true }).fill('2026-10-16')
+  await expect(panel.getByLabel('Through', { exact: true })).toHaveValue('16-10-2026')
   await expect(cards).toHaveCount(1)
+  if (info.project.name === 'mobile') {
+    const dateBox = (await panel.locator('.updated-filter').boundingBox())!
+    for (const label of ['From', 'Through']) {
+      const bounds = (await panel.getByLabel(label, { exact: true }).boundingBox())!
+      expect(bounds.x).toBeGreaterThanOrEqual(dateBox.x)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(dateBox.x + dateBox.width)
+      await expect(panel.getByLabel(label, { exact: true })).toHaveAttribute('type', 'text')
+    }
+    const search = (await panel.getByPlaceholder('Search within results').boundingBox())!
+    const label = (await panel.locator('.within-search-field .filter-name').boundingBox())!
+    expect(search.y).toBeGreaterThanOrEqual(label.y + label.height)
+  }
   await panel.getByRole('button', { name: 'Clear all filters', exact: true }).click()
   await expect(cards).toHaveCount(4)
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Date added')
@@ -1131,7 +1185,7 @@ for (const outcome of ['completed', 'failed'] as const) {
     }
     await expect(panel.getByRole('status')).toHaveCount(0)
     await page.getByRole('link', { name: 'Back to Library', exact: true }).click()
-    await page.getByRole('link', { name: 'See Full Details…', exact: true }).click()
+    await page.locator('.work-card h2').getByRole('link').click()
     await page.waitForLoadState('networkidle')
     for (const button of await buttons.all()) {
       await expect(button).toHaveAttribute('data-refresh-status', 'idle')
@@ -2227,7 +2281,7 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   const filter = page.getByRole('button', { name: 'One-shot', exact: true })
   await expect(filter).toContainText('Allowed')
   const choices = page.locator('.filter-choice-row')
-  const bounds = await Promise.all(['Rating', 'Publication status', 'One-shot', 'Favorites only'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
+  const bounds = await Promise.all(['Rating', 'Publication status', 'One-shot', 'Favorites'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
   if (info.project.name === 'desktop') {
     for (const box of bounds) expect(Math.abs(box!.y - bounds[0]!.y)).toBeLessThan(2)
     const labels = await choices.locator('.filter-label').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().y))
@@ -2238,7 +2292,13 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
     expect(await value.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await filter.click(); await page.getByRole('option', { name: 'Only', exact: true }).click()
+  await filter.click()
+  for (const name of ['Allowed', 'Only', 'Exclude']) {
+    const option = page.getByRole('option', { name, exact: true })
+    await expect(option.locator('span')).toHaveCSS('white-space', 'nowrap')
+    expect(await option.locator('span').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+  }
+  await page.getByRole('option', { name: 'Only', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(4)
   await expect(page.locator('.story-card').filter({ hasText: 'Ongoing single' })).toHaveCount(0)
   await filter.click(); await page.getByRole('option', { name: 'Exclude', exact: true }).click()
@@ -2354,7 +2414,10 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  const tables = await fixture(page), submitted: string[][] = []
  await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: seriesPreview } }))
  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
-  const urls = route.request().postDataJSON().p_urls as string[]; submitted.push(urls)
+  const body = route.request().postDataJSON()
+  expect(body.p_reading_status).toBe('finished')
+  expect(body.p_series_ids).toEqual([77])
+  const urls = body.p_urls as string[]; submitted.push(urls)
   for (const url of urls) seedSeriesWork(tables, Number(url.split('/').pop()))
   tables.import_batches.push({ id: 'batch-series', created_at: '2026-10-19T12:00:00Z' })
   tables.import_items.push({ id: 'item-series', batch_id: 'batch-series', entry_id: 'entry-101', status: 'completed', metadata_status: 'completed' })
@@ -2366,11 +2429,14 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  const picker = page.getByRole('region', { name: 'Review series imports' })
  await expect(picker.getByRole('checkbox', { name: 'Part 1: The story' })).not.toBeChecked()
  await expect(page).toHaveURL(/\/add$/)
- await expect(picker.getByRole('link', { name: '77', exact: true })).toHaveAttribute('href', seriesPreview.normalizedUrl)
+ await expect(picker.getByRole('link', { name: 'Stories and art', exact: true })).toHaveAttribute('href', seriesPreview.normalizedUrl)
  expect(submitted).toEqual([])
+ await expect(picker.getByRole('combobox', { name: 'Reading Status', exact: true })).toHaveValue('to_read')
+ await picker.getByRole('combobox', { name: 'Reading Status', exact: true }).selectOption('finished')
  await picker.getByRole('checkbox', { name: 'Part 1: The story' }).check()
- await picker.getByRole('button', { name: 'Import 1 selected works', exact: true }).click()
- await expect(page.getByRole('heading', { name: 'Series import finished' })).toBeVisible()
+ await picker.getByRole('button', { name: 'Import selected', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Series Import Finished' })).toBeVisible()
+ await expect(page.getByRole('status').filter({ hasText: 'Your selected works have finished processing.' })).toHaveCSS('padding-bottom', '24px')
  await expect(page).toHaveURL(/\/add$/)
  expect(submitted).toEqual([['https://archiveofourown.org/works/101']])
  await page.getByRole('link', { name: 'View Series collection', exact: true }).click()
@@ -2382,18 +2448,66 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  await expect(page.locator('.series-card').getByText('Drawings.', { exact: true })).toBeVisible()
  await page.getByRole('link', { name: 'View series details', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Stories and art', exact: true })).toBeVisible()
+ const organization = page.getByRole('region', { name: 'Reading and organization', exact: true })
+ const chooseWorks = organization.getByRole('button', { name: 'Choose Works to Import', exact: true })
+ const finishSeries = organization.getByRole('button', { name: 'Mark as Finished', exact: true })
+ const addCollection = organization.getByRole('button', { name: 'Add to Collection', exact: true })
+ await expect(chooseWorks).toBeVisible()
+ await expect(finishSeries).toBeVisible()
+ const importColumnBefore = (await chooseWorks.boundingBox())!
+ if (page.viewportSize()!.width > 600) {
+  const finishBounds = (await finishSeries.boundingBox())!, addBounds = (await addCollection.boundingBox())!, chooseBounds = (await chooseWorks.boundingBox())!
+  const statusBounds = (await organization.locator('.series-reading-status').boundingBox())!
+  expect(Math.abs(statusBounds.y + statusBounds.height / 2 - addBounds.y - addBounds.height / 2)).toBeLessThan(1)
+  expect(Math.abs(chooseBounds.y - addBounds.y)).toBeLessThan(1)
+  expect(Math.abs(finishBounds.y + finishBounds.height / 2 - statusBounds.y - statusBounds.height / 2)).toBeLessThan(1)
+  expect(finishBounds.x).toBeGreaterThan(statusBounds.x + statusBounds.width)
+  const columns = await organization.locator('.series-progress-columns > *').evaluateAll(elements => elements.map(element => ({x: element.getBoundingClientRect().x, width: element.getBoundingClientRect().width})))
+  expect(Math.abs(columns[0].width - columns[1].width)).toBeLessThan(1)
+  const collectionsHeading = (await organization.getByRole('heading', { name: 'Collections', exact: true }).boundingBox())!
+  expect(Math.abs(collectionsHeading.x - columns[1].x - columns[1].width / 3)).toBeLessThan(1)
+  const importSpace = (await organization.locator('.series-import-actions').boundingBox())!
+  expect(Math.abs(chooseBounds.x + chooseBounds.width / 2 - importSpace.x - importSpace.width / 2)).toBeLessThan(1)
+  expect(Math.abs((await organization.locator('.series-progress-row').boundingBox())!.height - finishBounds.height)).toBeLessThan(1)
+ }
+ await chooseWorks.click()
+ await expect(page.getByRole('region', { name: 'Review series imports', exact: true })).toBeVisible()
+ await page.getByRole('button', { name: 'Back to links', exact: true }).click()
  const info = page.getByRole('region', { name: 'Series information' })
  await expect(info.getByRole('link', { name: 'Series creator', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/users/Creator')
  for (const text of ['2020-01-02', '2026-10-19', 'A complete series description.', 'Creator notes for the series.']) await expect(info.getByText(text, { exact: true })).toBeVisible()
  await expect(page.getByRole('region', { name: 'Works in series' }).locator('.story-card')).toHaveCount(2)
+ const worksBounds = (await page.getByRole('region', { name: 'Works in series' }).boundingBox())!
+ expect((await info.boundingBox())!.y - worksBounds.y - worksBounds.height).toBeGreaterThanOrEqual(32)
+ const header = page.locator('.story-details-heading')
+ await expect(header.locator('.story-details-authors')).toHaveText('By Series creator')
+ await expect(header.locator('.details-fandom-rating')).toContainText('First fandom')
+ await expect(header.locator('.details-story-stats')).toContainText('12,000 words')
+ await expect(header.locator('.details-story-stats')).toContainText('2 works total · 1 in your library')
+ await expect(header.locator('.details-story-stats')).toContainText('19 Oct 2026')
+ await expect(header.getByRole('button', { name: 'Refresh', exact: true })).toHaveText('Refresh')
+ await expect(header.getByRole('button', { name: 'Refresh', exact: true }).locator('.lucide-refresh-cw')).toBeVisible()
  await page.getByRole('button', { name: 'Add a note', exact: true }).click()
  await page.getByRole('textbox', { name: 'Private notes', exact: true }).fill('Read these in order.')
  await page.locator('.inline-personal-form').getByRole('button', { name: 'Save', exact: true }).click()
  await expect(page.getByText('Read these in order.', { exact: true })).toBeVisible()
- await page.getByRole('button', { name: 'Refresh series details', exact: true }).click()
- await expect(page.getByRole('button', { name: 'Refresh series details', exact: true })).toBeEnabled()
+ await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+ await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
  await page.reload()
  await expect(page.getByText('Read these in order.', { exact: true })).toBeVisible()
+ tables.collections.push({ id: 'series-collection', name: 'Series to revisit', default_key: null })
+ tables.collection_series.push({ collection_id: 'series-collection', library_series_id: tables.library_series[0].id })
+ await page.reload()
+ const collectionNames = organization.locator('.collection-name-list')
+ await expect(collectionNames).toHaveText('Series to revisit')
+ await expect(collectionNames.locator('svg')).toHaveCSS('stroke-width', '3px')
+ await expect(addCollection).toHaveCount(0)
+ expect(Math.abs((await chooseWorks.boundingBox())!.x - importColumnBefore.x)).toBeLessThan(1)
+ if (page.viewportSize()!.width > 600) {
+  const statusBounds = (await organization.locator('.series-reading-status').boundingBox())!, namesBounds = (await collectionNames.boundingBox())!, chooseBounds = (await chooseWorks.boundingBox())!
+  expect(Math.abs(namesBounds.y + namesBounds.height / 2 - statusBounds.y - statusBounds.height / 2)).toBeLessThan(1)
+  expect(Math.abs(chooseBounds.y + chooseBounds.height / 2 - statusBounds.y - statusBounds.height / 2)).toBeLessThan(1)
+ }
  expect(tables.library_entries).toHaveLength(1)
  expect(tables.library_entries[0].notes).toBe('')
  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
@@ -2407,6 +2521,15 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
   await page.getByRole('button', { name: 'In a series', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.locator('.story-card h2')).toContainText('The story')
+  await expect(page.locator('.story-card .story-facts')).toHaveText('Part 1 of Stories and art · Rating unknown · 12,000 words')
+  await expect(page.locator('.story-card .story-facts').getByRole('link', { name: 'Stories and art', exact: true })).toHaveAttribute('href', '/series/77')
+  await expect(page.getByRole('link', { name: 'See Full Details…', exact: true })).toHaveCount(0)
+  const card = page.locator('.work-card'), seriesLabel = (await card.locator('.story-card-series').boundingBox())!, summary = (await card.locator('.story-summary').boundingBox())!
+  if (page.viewportSize()!.width <= 650) {
+   const footer = (await card.locator('.book-spine-footer').boundingBox())!
+   expect(seriesLabel.y).toBeGreaterThanOrEqual(summary.y + summary.height)
+   expect(seriesLabel.y + seriesLabel.height).toBeLessThanOrEqual(footer.y)
+  } else expect(seriesLabel.y).toBeLessThan(summary.y)
  }
 })
 
@@ -2436,8 +2559,8 @@ test('a completed direct fic import offers its related series and imports only s
  await expect(notice.getByRole('checkbox', { name: 'Part 1: The story' })).toBeDisabled()
  await expect(notice.getByRole('checkbox', { name: 'Part 4: Art extras' })).not.toBeChecked()
  await notice.getByRole('button', { name: 'Select all', exact: true }).click()
- await notice.getByRole('button', { name: 'Import 1 selected works', exact: true }).click()
+ await notice.getByRole('button', { name: 'Import selected', exact: true }).click()
  await expect.poll(() => submissions.length).toBe(2)
- expect(submissions[1]).toEqual({ p_urls: ['https://archiveofourown.org/works/102'], p_update_reading_location: false })
+ expect(submissions[1]).toEqual({ p_urls: ['https://archiveofourown.org/works/102'], p_update_reading_location: false, p_reading_status: 'to_read', p_series_ids: [77] })
  expect(tables.library_entries).toHaveLength(2)
 })
