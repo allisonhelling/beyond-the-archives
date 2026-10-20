@@ -38,7 +38,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     try { const defaults = initialProgress(url); setStatus(defaults.status); setProgress(String(defaults.lastRead)) } catch { /* Submission reports validation. */ }
   }
   async function saved(id: unknown) {
-    await library.refresh().catch(() => {})
+    await library.refreshStory(String(id ?? story?.id)).catch(() => {})
     if (onCancel) onCancel()
     else navigate(`/stories/${String(id)}`, { state: location.state })
   }

@@ -11,7 +11,7 @@ vi.mock('../../lib/sample-mode', () => ({ sampleMode: false }))
 type Job = NonNullable<Awaited<ReturnType<typeof readJob>>>
 const story = { id: 'entry-1', original_url: 'https://archiveofourown.org/works/123' } as Story
 const job = (status: string, extra: Partial<Job> = {}) => ({ status, error_category: null, error_message: null, next_attempt_at: '2026-10-16T12:00:00Z', ...extra }) as Job
-async function tick() { await act(async () => { await vi.advanceTimersByTimeAsync(5000) }) }
+async function tick(ms=5000) { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
 async function mount() {
   const hook = renderHook(() => useMetadataRefresh(story))
   await act(async () => {})
@@ -94,7 +94,7 @@ it('recovers from status read failures without treating them as worker failures'
   const { result } = await mount()
   expect(result.current.status).toBe('unknown')
   mocks.read.mockResolvedValue(job('completed'))
-  await tick()
+  await tick(10000)
   expect(result.current.status).toBe('idle')
 })
 

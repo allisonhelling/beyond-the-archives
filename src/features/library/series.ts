@@ -2,13 +2,14 @@ import type { Database } from '../../types/database'
 import type { SeriesPreview } from '../imports/urls'
 import { active, blankMetadata, type Metadata, type Status, type Story } from './model'
 
-export type SeriesRecord = Database['public']['Tables']['library_series']['Row'] & { collectionIds?: string[] }
+export type SeriesRecord = Database['public']['Tables']['library_series']['Row'] & { collectionIds?: string[]; detailsLoaded?: boolean }
 export type LibrarySeries = SeriesPreview & { record?: SeriesRecord; savedStories: Story[]; fandoms: string[]; detailsLoaded: boolean }
 export function seriesMemberships(story: Story) {
  return (story.metadata.series_memberships ?? []).filter(series => Number.isSafeInteger(series.id) && series.id > 0 && series.url === `https://archiveofourown.org/series/${series.id}`)
 }
 export function inSeries(story: Story) { return seriesMemberships(story).length > 0 || Boolean(story.metadata.series?.some(name => name.trim())) }
 export function librarySeries(stories: Story[], records: SeriesRecord[] = []): LibrarySeries[] {
+ const storiesByAo3Id = new Map(stories.map(story => [story.work.ao3_work_id, story]))
  const groups = new Map<number, { title: string; stories: Story[]; record?: SeriesRecord }>()
  for (const story of stories) for (const membership of seriesMemberships(story)) {
   const group = groups.get(membership.id) ?? { title: membership.name, stories: [] }
@@ -17,7 +18,8 @@ export function librarySeries(stories: Story[], records: SeriesRecord[] = []): L
  }
  for (const record of records) {
   const preview = record.metadata as unknown as SeriesPreview
-  const saved = stories.filter(story => preview.works?.some(work => work.workId === story.work.ao3_work_id))
+  const ids = new Set(preview.works?.map(work => work.workId) ?? [])
+  const saved = [...ids].flatMap(id => { const story = storiesByAo3Id.get(id); return story ? [story] : [] })
   const group = groups.get(record.ao3_series_id)
   if (group || saved.length || record.is_favorite || record.reading_status === 'finished' || record.collectionIds?.length || record.notes) groups.set(record.ao3_series_id, { title: preview.title, stories: [...new Map([...(group?.stories ?? []), ...saved].map(story => [story.id, story])).values()], record })
  }
@@ -28,6 +30,7 @@ export function librarySeries(stories: Story[], records: SeriesRecord[] = []): L
    const id = story.work.ao3_work_id
    if (!id) continue
    const original = works.get(id)
+   if (story.detailsLoaded === false && original) continue
    works.set(id, { ...original, workId: id, url: `https://archiveofourown.org/works/${id}`, position: seriesMemberships(story).find(series => series.id === seriesId)?.position ?? original?.position ?? null, title: story.metadata.title, authors: story.metadata.authors, rating: story.metadata.rating, relationshipTags: story.metadata.relationship_tags, characterTags: story.metadata.character_tags, additionalTags: story.metadata.additional_tags, updated: story.work.ao3_updated_at?.slice(0, 10) ?? original?.updated, fandoms: story.metadata.fandoms, summary: story.metadata.summary, tags: story.metadata.ao3_tags, wordCount: story.metadata.word_count, chapters: `${story.metadata.published_chapters ?? '?'}/${story.metadata.total_chapters ?? '?'}`, complete: story.metadata.publication_status === 'unknown' ? null : story.metadata.publication_status === 'complete' })
   }
   const list = [...works.values()].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))

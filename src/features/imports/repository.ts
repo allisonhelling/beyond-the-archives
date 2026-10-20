@@ -1,3 +1,4 @@
+import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { rememberSeries } from '../library/series-repository'
 import { supabase } from '../../lib/supabase'
@@ -5,7 +6,16 @@ import { allRows } from '../library/repository'
 import { classifyUrl, extractUrls, parseSeriesUrl, type SeriesPreview } from './urls'
 import { connectExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
-export async function importHistory(batchId?: string) {
+type Row<K extends keyof Database['public']['Tables']> = Database['public']['Tables'][K]['Row']
+export type ImportHistory = { batches: Row<'import_batches'>[]; items: Row<'import_items'>[]; jobs: Row<'metadata_jobs'>[];
+ changes?: Pick<Row<'metadata_jobs'>,'id'|'entry_id'|'status'|'completed_at'|'last_attempt_at'>[];
+ summary?: { total: number; filtered: number; page: number; pages: number; historyTotal: number; historyPages: number; active: boolean; counts: Record<string,number>; imported: number; alreadySaved: number; completed: number } }
+export async function importHistory(batchId?: string, options?: { historyPage: number; resultPage: number; status: string }): Promise<ImportHistory> {
+ if (options) {
+  const { data, error } = await client().rpc('paged_import_history', { ...(batchId && { p_batch: batchId }), p_history_page: options.historyPage, p_result_page: options.resultPage, p_status: options.status })
+  if (error) throw new Error('Could not load import history. Apply the latest migrations and check your connection.')
+  return data as unknown as ImportHistory
+ }
  const db=client()
  const batches=await allRows((from,to)=>db.from('import_batches').select('*').order('created_at',{ascending:false}).order('id').range(from,to))
  const selected=batchId??batches[0]?.id

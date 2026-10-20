@@ -1,4 +1,11 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { LibraryResults } from './LibraryResults'
+import { sampleMode } from '../../lib/sample-mode'
+import { SeriesCard } from './SeriesCollection'
+import { useLibraryResults } from './useLibraryResults'
+import { readBrowsing, writeBrowsing } from './browsing'
+import { Pagination } from './pagination'
+import { pageSizes } from './page-size'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Bell, Bookmark, ChevronDown, Clock, Heart, Info, Library, Layers3, SlidersHorizontal, ArrowDownWideNarrow, X } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
@@ -7,7 +14,7 @@ import { DateFilterField } from './DateFilterField'
 import { Dropdown } from '../../components/Dropdown'
 import { useDismissible } from '../../components/useDismissible'
 import { SearchSuggestions } from './SearchSuggestions'
-import { defaultReadingFilters, filterReading, inReadingSection, normalize, readingGroups, tracked, type ReadingFilters, type SortOrder } from './reading-search'
+import { defaultReadingFilters, filterReading, inReadingSection, normalize, tracked, type ReadingFilters, type SortOrder } from './reading-search'
 
 type FandomOption = { name: string; count: number }
 function FandomSelect({ options, selected, onChange }: { options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
@@ -26,10 +33,11 @@ function FandomSelect({ options, selected, onChange }: { options: FandomOption[]
   </div>
 }
 function TitleAuthorSearch({ value, onChange, stories }: { value: string; onChange: (value: string) => void; stories: Story[] }) {
-  return <SearchSuggestions label="Search title or author" placeholder="Search title or author" value={value} onChange={onChange} hideLabel keepOpen groups={[
+  const groups = useMemo(() => [
     { label: 'Titles', values: stories.map(story => story.metadata.title) },
     { label: 'Authors', values: stories.flatMap(story => story.metadata.authors) },
-  ]} />
+  ], [stories])
+  return <SearchSuggestions label="Search title or author" placeholder="Search title or author" value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
 const sortOptions: { value: SortOrder; label: string }[] = [
   { value: 'added', label: 'Date added' }, { value: 'added_reverse', label: 'Date added (oldest first)' },
@@ -63,7 +71,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, filterItems = filterReading, resultKind = mode === 'series' ? 'series' : 'story' }: { stories: Story[]; renderStory: (story: Story) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; resultKind?: 'story' | 'series' | 'item'; filterItems?: typeof filterReading }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, filterItems = filterReading, resultKind = mode === 'series' ? 'series' : 'story' }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; resultKind?: 'story' | 'series' | 'item'; filterItems?: typeof filterReading }) {
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileQuery)
@@ -73,27 +81,60 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     return () => query.removeEventListener('change', update)
   }, [])
   const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
-  const [filters, setFilters] = useState<ReadingFilters>(initialReadingFilters)
+  const [defaults] = useState(initialReadingFilters)
+  const [params, setParams] = useSearchParams()
+  const decoded = readBrowsing(params, defaults)
+  const [draft, setDraft] = useState<{ source: string; filters: ReadingFilters } | null>(null)
+  const currentUrl = params.toString()
+  const filters = draft?.source === currentUrl ? draft.filters : decoded.filters
+  const page = draft?.source === currentUrl ? 1 : decoded.page, size = decoded.size
+  if (draft && draft.source !== currentUrl) setDraft(null)
+  function setFilters(update: (previous: ReadingFilters) => ReadingFilters) { const next = update(filters); setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, size)) }
+  // Make the effective preference explicit so copied links are reproducible.
+  useEffect(() => {
+    if (draft) return
+    const next = writeBrowsing(params, filters, size, page)
+    if (!next.has('shelf')) next.set('shelf', mode === 'reading' ? 'view_all' : 'all')
+    if (next.toString() !== params.toString()) setParams(next, { replace: true })
+  }, [params, setParams, filters, size, page, mode, draft])
   useEffect(() => {
     try { window.localStorage.setItem(preferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
   }, [filters.sort, filters.groupBy])
   const [expanded, setExpanded] = useState(false)
-  const [params, setParams] = useSearchParams()
-  const selected = params.get('shelf') ?? 'view_all'
-  const pool = mode === 'reading' ? tracked(stories) : stories
-  const fandomCounts = new Map<string, number>()
-  for (const story of pool) for (const name of new Set(story.metadata.fandoms)) fandomCounts.set(name, (fandomCounts.get(name) ?? 0) + 1)
-  const relationships = pool.flatMap(story => tagNames(story.metadata, 'relationship'))
-  const characters = pool.flatMap(story => tagNames(story.metadata, 'character'))
-  const additionalTags = pool.flatMap(story => tagNames(story.metadata, 'freeform'))
-  const fandoms = [...fandomCounts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
+  const selected = params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')
+  const pool = useMemo(() => mode === 'reading' ? tracked(stories) : stories, [mode, stories])
+  const { localRelationships, localCharacters, localTags, localFandoms } = useMemo(() => {
+    const fandomCounts = new Map<string, number>()
+    for (const story of pool) for (const name of new Set(story.metadata.fandoms)) fandomCounts.set(name, (fandomCounts.get(name) ?? 0) + 1)
+    return {
+      localRelationships: pool.flatMap(story => tagNames(story.metadata, 'relationship')),
+      localCharacters: pool.flatMap(story => tagNames(story.metadata, 'character')),
+      localTags: pool.flatMap(story => tagNames(story.metadata, 'freeform')),
+      localFandoms: [...fandomCounts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name)),
+    }
+  }, [pool])
   function clearFilters() { setFilters(previous => ({ ...defaultReadingFilters, sort: previous.sort, groupBy: previous.groupBy })) }
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { setFilters(previous => ({ ...previous, [key]: value })) }
   let error = '', filtered: Story[] = []
   if (filters.updatedAfter && filters.updatedBefore && filters.updatedAfter > filters.updatedBefore) error = 'The last-updated start date must be before the end date.'
-  try { filtered = filterItems(pool, filters) } catch (e) { error = (e as Error).message }
-  const shown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
+  try { filtered = filterItems(sampleMode ? pool : [], filters) } catch (e) { error = (e as Error).message }
+  const localShown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
+  const remote = useLibraryResults({ mode, shelf: selected, filters }, page, size, !sampleMode && !error)
+  const relationships = remote.suggestions?.relationships ?? localRelationships
+  const characters = remote.suggestions?.characters ?? localCharacters
+  const additionalTags = remote.suggestions?.tags ?? localTags
+  const total = sampleMode ? localShown.length : remote.result?.total ?? 0
+  const pages = sampleMode ? Math.max(1, Math.ceil(total / size)) : remote.result?.pages ?? 1
+  const currentPage = sampleMode ? Math.min(page, pages) : remote.result?.page ?? page
+  const shown = sampleMode ? localShown.slice((currentPage - 1) * size, currentPage * size) : remote.result?.stories ?? []
+  const fandoms = sampleMode ? localFandoms : remote.result?.fandoms ?? localFandoms
+  const seriesById = new Map(remote.result?.series.map(series => [`series:${series.seriesId}`, series]) ?? [])
+  useEffect(() => {
+    if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, size, currentPage), { replace: true })
+  }, [page, currentPage, remote.result, params, filters, size, setParams])
+  function changePage(value: number) { setParams(writeBrowsing(params, filters, size, value)) }
+  error ||= remote.error ?? ''
   const publicationLabel = (value: keyof typeof publicationStatuses) => mode === 'series' ? value === 'complete' ? 'Complete' : value === 'in_progress' ? 'Incomplete' : 'Completion unknown' : publicationStatuses[value].label
   const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationLabel(status)}`),
     filters.oneShot !== 'allowed' && `One-shot: ${filters.oneShot === 'only' ? 'Only' : 'Exclude'}`,
@@ -132,10 +173,12 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active filters"><div className="filter-chips">{activeFilters.map(text => <span key={String(text)}>{text}</span>)}</div><button className="text-button" onClick={clearFilters}>Clear all filters</button></div>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard sections">{displayedSections.map(([key, title, description, Icon]) => {
       const label = mobile && key === 'waiting' ? 'Waiting' : title
-      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => setParams({ shelf: key })}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : filtered.filter(story => inReadingSection(story, key)).length}</span></button>
+      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, filters, size); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : sampleMode ? filtered.filter(story => inReadingSection(story, key)).length : remote.result?.sections[key] ?? '—'}</span></button>
     })}</nav>}
-    <div className="results-row"><p className="results-count" role="status">{shown.length} {resultKind === 'series' ? 'series' : resultKind === 'item' ? shown.length === 1 ? 'item' : 'items' : shown.length === 1 ? 'story' : 'stories'} shown</p>{resultsActions}</div>
+    <div className="results-row"><p className="results-count" role="status">{total} {resultKind === 'series' ? 'series' : resultKind === 'item' ? total === 1 ? 'item' : 'items' : total === 1 ? 'story' : 'stories'} found</p>{resultsActions}</div>
+    <div className="results-row"><label>Works per page<select value={size} onChange={event => setParams(writeBrowsing(params, filters, Number(event.target.value)))}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label><Pagination page={currentPage} pages={pages} total={total} size={size} onPage={changePage} /></div>
+    {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <p role="alert" className="error-message">{error}</p>}
-    {!error && (shown.length ? readingGroups(shown, filters.groupBy).map(([name, group]) => <section key={name} className="reading-group">{name && <h2>{name} <span>({group.length})</span></h2>}<div className="story-grid">{group.map(story => renderStory(story))}</div></section>) : <section className="library-empty"><h2>{selected === 'new' ? 'No verified chapter updates' : 'No stories here yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : activeFilters.length ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
+    {!error && !remote.loading && (shown.length ? <LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /> : <section className="library-empty"><h2>{selected === 'new' ? 'No verified chapter updates' : 'No stories here yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : activeFilters.length ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
   </>
 }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ submit: vi.fn(), history: vi.fn(), refresh: vi.fn(), preview: vi.fn() }))
 vi.mock('./repository', () => ({ submitImport: mocks.submit, importHistory: mocks.history, previewSeries: mocks.preview }))
-vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refresh: mocks.refresh }) }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refresh: mocks.refresh, refreshSeries: mocks.refresh }) }))
 import { ImportLinkForm } from './ImportLinkForm'
 
 function show() {
@@ -61,7 +61,7 @@ it('retries library loading before opening the saved fic', async () => {
   mocks.refresh.mockRejectedValueOnce(new Error('Offline'))
   show(); await act(async () => { await submit() })
   expect(screen.getByRole('alert')).toHaveTextContent('Could not check this import')
-  await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
   expect(screen.getByRole('heading', { name: 'Saved fic metadata' })).toBeVisible()
 })
 it('keeps checking until the saved entry is available', async () => {

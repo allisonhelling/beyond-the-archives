@@ -321,6 +321,39 @@ export type Database = {
           { foreignKeyName: 'library_entry_tags_personal_tag_id_user_id_fkey'; columns: ['personal_tag_id', 'user_id']; isOneToOne: false; referencedRelation: 'personal_tags'; referencedColumns: ['id', 'user_id'] },
         ]
       }
+      library_search_documents: {
+        Row: {
+          id: string
+          user_id: string
+          work_id: string
+          story: Json
+          search_any: string | null
+          search_summary: string | null
+          search_notes: string | null
+        }
+        Insert: {
+          id: string
+          user_id: string
+          work_id: string
+          story: Json
+          search_any?: string | null
+          search_summary?: string | null
+          search_notes?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          work_id?: string
+          story?: Json
+          search_any?: string | null
+          search_summary?: string | null
+          search_notes?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: 'library_search_documents_id_fkey'; columns: ['id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
+          { foreignKeyName: 'library_search_documents_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
+        ]
+      }
       library_series: {
         Row: {
           id: string
@@ -354,6 +387,28 @@ export type Database = {
           updated_at?: string
           is_favorite?: boolean
           reading_status?: Database['public']['Enums']['reading_status']
+        }
+        Relationships: [
+        ]
+      }
+      library_story_documents: {
+        Row: {
+          id: string | null
+          user_id: string | null
+          work_id: string | null
+          story: Json | null
+        }
+        Insert: {
+          id?: string | null
+          user_id?: string | null
+          work_id?: string | null
+          story?: Json | null
+        }
+        Update: {
+          id?: string | null
+          user_id?: string | null
+          work_id?: string | null
+          story?: Json | null
         }
         Relationships: [
         ]
@@ -445,6 +500,26 @@ export type Database = {
           retrieval_mode?: string
         }
         Relationships: [
+        ]
+      }
+      metadata_queue_turns: {
+        Row: {
+          user_id: string
+          batch_id: string
+          last_claimed_at: string
+        }
+        Insert: {
+          user_id: string
+          batch_id: string
+          last_claimed_at: string
+        }
+        Update: {
+          user_id?: string
+          batch_id?: string
+          last_claimed_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'metadata_queue_turns_batch_id_fkey'; columns: ['batch_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id'] },
         ]
       }
       metadata_worker_state: {
@@ -715,6 +790,10 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
+      library_catalog: { Args: Record<string, never>; Returns: Json }
+      library_story_details: { Args: { p_ids: string[] }; Returns: Json }
+      query_library: { Args: { p_query?: Json; p_page?: number; p_size?: number }; Returns: Json }
       update_library_series: { Args: { p_series: number; p_input: Json; p_base: Json }; Returns: undefined }
       finish_library_series: { Args: { p_series: number }; Returns: number }
       remember_library_series: { Args: { p_metadata: Json }; Returns: string }

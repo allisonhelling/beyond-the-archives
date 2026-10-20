@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom'
 const mocks=vi.hoisted(()=>({history:vi.fn(),submit:vi.fn(),cancel:vi.fn(),retry:vi.fn(),approve:vi.fn(),preview:vi.fn(),refresh:vi.fn()}))
 vi.mock('./repository',()=>({importHistory:mocks.history,submitImport:mocks.submit,cancelBatch:mocks.cancel,retryJob:mocks.retry,approveProgress:mocks.approve,previewSeries:mocks.preview}))
-vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,stories:[{id:'saved-103',metadata:{series:[],series_memberships:[]},work:{ao3_work_id:103}}]})}))
+vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,refreshSeries:mocks.refresh,stories:[{id:'saved-103',metadata:{series:[],series_memberships:[]},work:{ao3_work_id:103}}]})}))
 import { ImportPage } from './ImportPage'
 function show(){return render(<MemoryRouter><ImportPage/></MemoryRouter>)}
 beforeEach(()=>{vi.clearAllMocks();mocks.history.mockResolvedValue({batches:[],items:[],jobs:[]});mocks.refresh.mockResolvedValue(undefined);mocks.submit.mockResolvedValue('batch')})
@@ -88,8 +88,13 @@ it('automatically shows review results on completion without overriding later ma
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
   expect(screen.getByRole('button',{name:'All results: 4'})).toHaveAttribute('aria-pressed','true')
   expect(within(table).getAllByRole('row')).toHaveLength(5)
+  // Completed batches stop polling. An explicit refresh observes external retries.
+  const stoppedCalls=mocks.history.mock.calls.length
+  await act(async()=>{await vi.advanceTimersByTimeAsync(30000)})
+  expect(mocks.history).toHaveBeenCalledTimes(stoppedCalls)
   // Retrying work reopens the batch; finishing again restores review mode.
   jobs=[{id:'job',status:'pending'}]
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Refresh results'}))})
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
   jobs=[]
   await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})

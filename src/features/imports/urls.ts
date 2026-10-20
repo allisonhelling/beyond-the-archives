@@ -42,7 +42,8 @@ export function selectedImportText(text: string, selected: SeriesPreview['works'
 }
 
 /** A batch is finished only after both URL processing and metadata retrieval. */
-export function importFinished(history: { items: { status: string; metadata_status?: string | null }[]; jobs?: { status: string }[] }) {
+export function importFinished(history: { items: { status: string; metadata_status?: string | null }[]; jobs?: { status: string }[]; summary?: { total: number; active: boolean } }) {
+ if (history.summary) return history.summary.total > 0 && !history.summary.active
  const active = ['pending', 'processing']
  return history.items.length > 0 && !history.items.some(item => active.includes(item.status) || active.includes(item.metadata_status ?? '')) && !(history.jobs ?? []).some(job => active.includes(job.status))
 }

@@ -1,115 +1,6 @@
-import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
+import { fixture, login } from './library-fixture'
 import { expect, test, type Page } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
-// Browser contract fixtures persist independently of the page and Auth session.
-// Real PostgreSQL/RLS coverage is in supabase/tests and the local integration runner.
-async function fixture(page: Page) {
-  const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
-  const token = `${btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${btoa(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }))}.test`
-  await page.route('https://ao3-phase1-test.supabase.co/auth/v1/**', route => {
-    const path = new URL(route.request().url()).pathname
-    return route.fulfill({ json: path.endsWith('/token') ? { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } : path.endsWith('/user') ? user : {} })
-  })
-  type Row = Record<string, unknown>
-  const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
-  const snapshot = (entry: Row): EditValues => ({ status: entry.reading_status as string, progress: entry.last_read_chapter as number, notes: entry.notes as string, rating: entry.personal_rating as number | null, favorite: entry.is_favorite as boolean, metadata: entry.metadata_overrides as EditValues, tags: tables.library_entry_tags.filter(link => link.library_entry_id === entry.id).map(link => String(tables.personal_tags.find(tag => tag.id === link.personal_tag_id)?.name)), collections: tables.collection_works.filter(link => link.library_entry_id === entry.id).map(link => String(link.collection_id)) })
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
-    const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
-    const now = new Date().toISOString()
-    if (table === 'remember_library_series' && body) {
-      const metadata = body.p_metadata as Row
-      let series = tables.library_series.find(series => series.ao3_series_id === metadata.seriesId)
-      if (!series) { series = { id: crypto.randomUUID(), user_id: user.id, ao3_series_id: metadata.seriesId, notes: '', is_favorite:false, reading_status:'to_read', created_at: now }; tables.library_series.push(series) }
-      Object.assign(series, { metadata, updated_at: now }); return route.fulfill({ json: series.id })
-    }
-    if (table === 'save_library_series_note' && body) {
-      const series = tables.library_series.find(series => series.ao3_series_id === body.p_series)!
-      const base = { notes: series.notes as string }, review = mergeEdits({ notes: body.p_base as string }, { notes: body.p_notes as string }, base)
-      if (review.conflicts.length) return route.fulfill({ status: 409, json: { code: '40001', details: JSON.stringify({ ...review, base }) } })
-      series.notes = review.merged.notes; return route.fulfill({ status: 204 })
-    }
-    if (['save_library_story_checked', 'update_library_entry_checked'].includes(table) && body) {
-      const entry = tables.library_entries.find(entry => entry.id === body.p_id)
-      let values = body.p_input as EditValues
-      if (entry) {
-        const base = snapshot(entry), review = mergeEdits(body.p_base as EditValues, values, base)
-        if (review.conflicts.length) return route.fulfill({ status: 409, json: { code: '40001', details: JSON.stringify({ ...review, base }) } })
-        values = review.merged
-      }
-      if (table === 'update_library_entry_checked') {
-        Object.assign(entry!, { reading_status: values.status, last_read_chapter: values.progress, notes: values.notes, personal_rating: values.rating, is_favorite: values.favorite, updated_at: now })
-        return route.fulfill({ status: 204 })
-      }
-      Object.assign(body, { p_metadata: values.metadata, p_status: values.status, p_progress: values.progress, p_notes: values.notes, p_rating: values.rating, p_favorite: values.favorite, p_collections: values.collections, p_tags: values.tags })
-    }
-    if (['save_library_story', 'save_library_story_checked'].includes(table) && body) {
-      let entry = tables.library_entries.find(e => e.id === body.p_id)
-      const workId = String(body.p_url).match(/works\/(\d+)/)![1]
-      if (!entry && tables.works.some(w => w.ao3_work_id === Number(workId))) return route.fulfill({ status: 409, json: { code: '23505' } })
-      if (!entry) {
-        const work = { id: crypto.randomUUID(), ao3_work_id: Number(workId), title: null, summary: null, rating: null, word_count: null, total_chapters: null, published_chapters: null, is_complete: null, verified_chapters: {}, ao3_updated_at: null, canonical_url: null, last_metadata_check: null }
-        tables.works.push(work)
-        entry = { id: crypto.randomUUID(), user_id: user.id, work_id: work.id, original_url: body.p_url, created_at: now }
-        tables.library_entries.push(entry)
-      }
-      Object.assign(entry, { metadata_overrides: { ...entry.metadata_overrides as Row, ...body.p_metadata as Row }, reading_status: body.p_status, last_read_chapter: body.p_progress, notes: body.p_notes, is_favorite: body.p_favorite, personal_rating: body.p_rating, updated_at: now })
-      const selected = body.p_collections as string[]
-      tables.collection_works = tables.collection_works.filter(m => m.library_entry_id !== entry.id || selected.includes(String(m.collection_id)))
-      for (const id of selected) if (!tables.collection_works.some(m => m.library_entry_id === entry.id && m.collection_id === id)) {
-        tables.collection_works.push({ collection_id: id, library_entry_id: entry.id, created_at: now })
-        Object.assign(tables.collections.find(collection => collection.id === id)!, { last_story_added_at: now })
-      }
-      tables.library_entry_tags = tables.library_entry_tags.filter(t => t.library_entry_id !== entry.id)
-      for (const name of body.p_tags as string[]) {
-        const tag = { id: crypto.randomUUID(), name }; tables.personal_tags.push(tag); tables.library_entry_tags.push({ library_entry_id: entry.id, personal_tag_id: tag.id })
-      }
-      return route.fulfill({ json: entry.id })
-    }
-    if (table === 'restore_library_story' && body) {
-      const entry = body.p_entry as Row
-      if (tables.library_entries.some(row => row.id === entry.id || row.work_id === entry.work_id)) return route.fulfill({ status: 409, json: { code: '23505' } })
-      tables.library_entries.push(entry)
-      for (const id of body.p_collections as string[]) if (tables.collections.some(c => c.id === id)) tables.collection_works.push({ collection_id: id, library_entry_id: entry.id })
-      for (const name of body.p_tags as string[]) {
-        const tag = tables.personal_tags.find(tag => tag.name === name)
-        if (tag) tables.library_entry_tags.push({ library_entry_id: entry.id, personal_tag_id: tag.id })
-      }
-      return route.fulfill({ json: entry.id })
-    }
-    if (table === 'reorder_collections' && body) {
-      for (const [position, id] of (body.p_ids as string[]).entries()) Object.assign(tables.collections.find(collection => collection.id === id)!, { sort_position: position })
-      return route.fulfill({ status: 204 })
-    }
-    const rows = tables[table]
-    if (!rows) return route.fulfill({ status: 404, json: {} })
-    const id = url.searchParams.get('id')?.replace('eq.', '')
-    if (request.method() === 'POST' && table === 'collection_works' && Array.isArray(body)) {
-      for (const membership of body) if (!rows.some(row => row.collection_id === membership.collection_id && row.library_entry_id === membership.library_entry_id)) {
-        rows.push({ ...membership, created_at: now })
-        Object.assign(tables.collections.find(collection => collection.id === membership.collection_id)!, { last_story_added_at: now })
-      }
-      return route.fulfill({ status: 201, json: null })
-    }
-    if (request.method() === 'POST' && body) { const row = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...body, default_key: null }; rows.push(row); return route.fulfill({ status: 201, json: request.headers().accept?.includes('object') ? row : null }) }
-    const requestedIds = new Set(id?.startsWith('in.(') ? id.slice(4, -1).split(',').map(value => value.replaceAll('"', '')) : [id])
-    const matches = (row: Row) => requestedIds.has(String(row.id)) && (url.searchParams.get('default_key') !== 'is.null' || !row.default_key)
-    if (request.method() === 'PATCH') {
-      const changed = rows.filter(matches)
-      changed.forEach(row => Object.assign(row, body, { updated_at: now }))
-      return route.fulfill({ json: request.headers().accept?.includes('object') ? changed[0] : null })
-    }
-    if (request.method() === 'DELETE') {
-      const removed = new Set(rows.filter(matches).map(row => row.id))
-      tables[table] = rows.filter(row => !removed.has(row.id))
-      if (table === 'library_entries') { tables.collection_works = tables.collection_works.filter(row => !removed.has(row.library_entry_id)); tables.library_entry_tags = tables.library_entry_tags.filter(row => !removed.has(row.library_entry_id)) }
-      if (table === 'collections') tables.collection_works = tables.collection_works.filter(row => !removed.has(row.collection_id))
-      return route.fulfill({ status: 204 })
-    }
-    return route.fulfill({ json: rows })
-  })
-  return tables
-}
-async function login(page: Page) { await page.getByLabel('Email address').fill('reader@example.com'); await page.getByLabel('Password', { exact: true }).fill('Test-password-123!'); await page.getByRole('button', { name: 'Sign in to your library' }).click() }
 async function library(page: Page, mobile: boolean) { await page.getByRole('navigation', { name: mobile ? 'Mobile navigation' : 'Main navigation' }).getByRole('link', { name: 'Library', exact: true }).click() }
 async function openFilters(page: Page) {
   await expect(page.locator('.reading-toolbar')).toBeVisible()
@@ -211,7 +102,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const series = page.locator('.story-series-eyebrow')
   await expect(series).toHaveText('Part 3 of My manual series')
   await expect(series.getByRole('link', { name: 'My manual series' })).toHaveAttribute('href', '/series/77')
-  await expect(series.locator('strong')).toHaveCount(0)
+  await expect(series.locator('strong')).toHaveText('3')
   await expect(series.locator('.series-membership')).toHaveCSS('text-transform', 'uppercase')
   await expect(series).toHaveCSS('padding-top', '12px')
   for (const link of [series.getByRole('link'), page.locator('.story-details-authors').getByRole('link', { name: 'Author One', exact: true })]) {
@@ -298,7 +189,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   }
   const favoriteBounds = await page.locator('.story-title-row > .action-tooltip .favorite').boundingBox()
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Fandoms', 'Relationships', 'Characters', 'Additional Tags', 'All tags', /^Personal tags/i, 'Saved', 'Last edited', 'Series'])
+  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All tags', /^Personal tags/i, 'Saved', 'Last edited'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -829,18 +720,19 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await expect(progressMenu).toHaveCount(0)
   await trigger.click()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  const readingReturnTo = new URL(page.url()).pathname + new URL(page.url()).search
   await card.getByRole('heading', { name: 'Unfinished read', exact: true }).getByRole('link').click()
   const back = page.locator('.story-return-link')
   await expect(page.getByRole('heading', { name: 'Unfinished read', exact: true }).getByRole('link')).toHaveAttribute('href', 'https://archiveofourown.org/works/1')
   await expect(back).toHaveText('Currently Reading')
-  await expect(back).toHaveAttribute('href', '/reading?shelf=in_progress')
+  await expect(back).toHaveAttribute('href', readingReturnTo)
   await page.locator('summary').filter({ hasText: /^Other metadata$/ }).click()
   await expect(page.locator('.metadata-list > div').filter({ has: page.getByText('Verified canonical URL', { exact: true }) }).getByRole('link')).toHaveAttribute('href', 'https://archiveofourown.org/works/1')
   await expect(page.locator('.metadata-list > div').filter({ has: page.getByText('Original provided URL', { exact: true }) }).getByRole('link')).toHaveAttribute('href', 'https://archiveofourown.org/works/1')
   await expect(page.getByRole('link', { name: 'Open original AO3 story URL' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Read Chapter 1', exact: true })).toHaveClass('spine-action')
   await page.reload()
-  await expect(back).toHaveAttribute('href', '/reading?shelf=in_progress')
+  await expect(back).toHaveAttribute('href', readingReturnTo)
   await page.getByLabel('Reading status for Unfinished read', { exact: true }).selectOption('waiting_for_updates')
   await back.click()
   await expect(ongoing.locator('.tile-count')).toHaveText('1')
@@ -886,8 +778,9 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await expect(page.locator('.story-card')).toHaveCount(2)
   await page.goto('/library?shelf=finished')
   await expect(page.getByRole('heading', { name: 'Unfinished read', exact: true })).toBeVisible()
+  const libraryReturnTo = new URL(page.url()).pathname + new URL(page.url()).search
   await page.locator('.story-card').filter({ has: page.getByRole('heading', { name: 'Unfinished read', exact: true }) }).locator('h2').getByRole('link').click()
-  await expect(page.locator('.story-return-link')).toHaveAttribute('href', '/library?shelf=finished')
+  await expect(page.locator('.story-return-link')).toHaveAttribute('href', libraryReturnTo)
   const longTitle = 'A very long work title that continues across several lines without pushing the favorite button or story menu below the first line'
   moved.metadata_overrides.title = longTitle
   await page.goto('/library?shelf=finished')
@@ -1045,7 +938,7 @@ test('library reuses filters across all statuses and scopes them to the selected
     ['Finished', 'finished', 'Library story 1'],
   ] as const) {
     await selectLibraryShelf(page, name)
-    await expect(page).toHaveURL(`/library?shelf=${key}`)
+    await expect(page).toHaveURL(url => url.pathname === '/library' && url.searchParams.get('shelf') === key)
     await expect(page.getByRole('heading', { name: 'Your Library', exact: true })).toBeVisible()
     await expect(cards).toHaveCount(1)
     await expect(cards.getByRole('heading', { name: title, exact: true })).toBeVisible()
@@ -1761,7 +1654,7 @@ test('Command-click and Control-click open a collection editor directly, includi
     if (modifier === 'Control' && process.platform === 'darwin') await first.dispatchEvent('click', { ctrlKey: true })
     else await first.click({ modifiers: [modifier] })
     await expect(edit.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('First')
-    await expect(page).toHaveURL(/\/library$/)
+    await expect(page).toHaveURL(url => url.pathname === '/library')
     await edit.getByRole('button', { name: 'Cancel', exact: true }).click()
   }
   await first.click()
@@ -2159,7 +2052,7 @@ test('automatic collections can be hidden and restored without losing stories', 
   await shelf.getByRole('button', { name: 'To Read', exact: true }).click()
   await hide.getByRole('button', { name: 'Hide', exact: true }).click()
   await expect(shelf.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
-  await expect(page).toHaveURL('/library?shelf=all')
+  await expect(page).toHaveURL(url => url.pathname === '/library' && url.searchParams.get('shelf') === 'all')
   await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await page.reload()
@@ -2474,16 +2367,17 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  await expect(page.getByRole('region', { name: 'Review series imports', exact: true })).toBeVisible()
  await page.getByRole('button', { name: 'Back to links', exact: true }).click()
  const info = page.getByRole('region', { name: 'Series information' })
- await expect(info.getByRole('link', { name: 'Series creator', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/users/Creator')
- for (const text of ['2020-01-02', '2026-10-19', 'A complete series description.', 'Creator notes for the series.']) await expect(info.getByText(text, { exact: true })).toBeVisible()
+ const header = page.locator('.story-details-heading')
+ await expect(header.getByRole('link', { name: 'Series creator', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/users/Creator')
+ for (const text of ['2020-01-02', 'A complete series description.', 'Creator notes for the series.']) await expect(info.getByText(text, { exact: true })).toBeVisible()
  await expect(page.getByRole('region', { name: 'Works in series' }).locator('.story-card')).toHaveCount(2)
  const worksBounds = (await page.getByRole('region', { name: 'Works in series' }).boundingBox())!
  expect((await info.boundingBox())!.y - worksBounds.y - worksBounds.height).toBeGreaterThanOrEqual(32)
- const header = page.locator('.story-details-heading')
  await expect(header.locator('.story-details-authors')).toHaveText('By Series creator')
  await expect(header.locator('.details-fandom-rating')).toContainText('First fandom')
  await expect(header.locator('.details-story-stats')).toContainText('12,000 words')
- await expect(header.locator('.details-story-stats')).toContainText('2 works total · 1 in your library')
+ await expect(header.locator('.details-story-stats')).toContainText('2 works total')
+ await expect(header.locator('.details-story-stats')).toContainText('1 in your library')
  await expect(header.locator('.details-story-stats')).toContainText('19 Oct 2026')
  await expect(header.getByRole('button', { name: 'Refresh', exact: true })).toHaveText('Refresh')
  await expect(header.getByRole('button', { name: 'Refresh', exact: true }).locator('.lucide-refresh-cw')).toBeVisible()

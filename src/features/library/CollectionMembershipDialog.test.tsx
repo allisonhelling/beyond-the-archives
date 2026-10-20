@@ -6,7 +6,7 @@ import { blankMetadata, type Collection, type Story } from './model'
 
 const state = vi.hoisted(() => ({ add: vi.fn(), refresh: vi.fn(), stories: [] as Story[], collections: [] as Collection[] }))
 vi.mock('./repository', () => ({ addStoriesToCollections: state.add }))
-vi.mock('./LibraryProvider', () => ({ useLibrary: () => state }))
+vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({...state, refreshCollections: state.refresh}) }))
 
 const story = { id: 'first', metadata: { ...blankMetadata, title: 'Moonrise', authors: ['Writer'] }, collectionIds: ['existing'] } as Story
 const collection = { id: 'existing', name: 'Night reads', default_key: null } as Collection

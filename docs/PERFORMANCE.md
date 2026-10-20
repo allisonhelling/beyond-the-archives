@@ -1,0 +1,66 @@
+# Large-library performance and regression checks
+
+## Acceptance targets
+
+Local measurements use three libraries of 10,000 works each, 5,000 authors, 100 fandoms, 500 tags, 12 tags per work, variable summaries, 20 collections per user, and 200 series per user. Local targets are: catalog under 1 second; first, last, and broad-search page queries under 2 seconds; series pages under 5 seconds; exact counts under 100 ms. These are local development gates, not hosted service guarantees.
+
+Browser targets are initial results under 8 seconds with the synthetic transport, a 250-work page under 3 seconds including the fixture response, fewer than 100 mounted cards on that page, and preservation of filters, Back/Forward, focus and scroll when returning from details. Rendering above 250 ms warrants virtualization. The first unvirtualized measurements were 935 ms desktop and 660 ms mobile for 250 cards. Pages above 100 results now use measured, variable-height rows with overscan; focused rows remain mounted. Group headings and one/two-column layouts share the normal cards and grid styles. Library search runs over the complete server result set. Browser Find only searches mounted cards.
+
+Hosted release targets remain to be verified: p95 page response under 500 ms, exact count under 100 ms, first display under 2.5 seconds, and no cross-user rows during concurrent reads of representative libraries. Measure network and database time separately. Do not treat the embedded database or mocked browser transport as evidence of hosted latency, concurrent database capacity, AO3 throughput or mobile-device CPU performance.
+
+## Recorded local results (20 October 2026)
+
+The final embedded run used the full fixture described above. Timings are single-run observations, not latency percentiles.
+
+| Operation | Response time | JSON bytes | Exact filtered count |
+| --- | ---: | ---: | ---: |
+| Compact catalog | 717 ms | 5,867,267 | — |
+| First 50 works | 1,173 ms | 125,341 | 630 ms |
+| Last 50 works | 1,081 ms | 132,059 | 629 ms |
+| Broad search, 250 works | 1,448 ms | 639,499 | 876 ms |
+| First 50 series | 1,878 ms | 780,853 | 1,910 ms |
+
+The owner-only entry count was 20 ms. Filtered counts use the actual query pipeline, including series derivation where applicable; they **miss the 100 ms target**. Page and catalog timings meet the local targets. The remaining count cost and the catalog's O(library-size) transfer require further work before claiming that all performance gates pass. Plans for both the inner page query and its filtered-count pipeline are recorded separately in `library.json`. The owner projection scan itself took roughly 16–29 ms; the series plan spent about 1.95 seconds deriving its 200 summaries before pagination. Further count tuning needs to reduce repeated predicate/series computation, rather than adding another owner index.
+
+The deep identity offset took 10 ms versus 20 ms for the cursor plus anchor lookup. The corrected cursor query handles descending timestamps with ascending IDs and asserts that its results equal the deep offset. These timings support retaining numbered offset navigation at this fixture size; they do not establish how either approach scales beyond it.
+
+The connected-mode browser regression run recorded the following mocked-transport observations:
+
+| Chromium viewport | Initial results | 250-result page | Render after response | JS heap at large page |
+| --- | ---: | ---: | ---: | ---: |
+| Desktop | 3,370 ms | 1,312 ms | 161 ms | 50.4 MB |
+| Mobile layout | 2,433 ms | 827 ms | 122 ms | 37.3 MB |
+
+The performance workflow issued three page queries: the initial 50 results, 250 results, and a search across all 10,000 works. Returning from details reused the cached page. On-demand detail reads and per-response transfer sizes are included in the browser reports. These observations meet the local browser targets; the mobile run uses a desktop Chromium process with mobile viewport emulation.
+
+## Commands
+
+- `npm run perf:db`: synthetic PGlite database with actual migrations, three 10,000-work libraries, page/count timings, response sizes, and `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` plans. `PERF_WORKS` changes fixture size. Fixture setup disables only the new projection-maintenance triggers during bulk insertion, then backfills and reenables them. Write throughput is deliberately excluded from this read benchmark.
+- `npm run perf:browser`: desktop and mobile Chromium checks, including large-page rendering, transferred JSON, JavaScript heap (where available), full-library search, page-cache reuse, and navigation/scroll restoration.
+- `npm run perf:hosted`: read-only concurrent queries using explicitly provided `PERF_SUPABASE_URL`, `PERF_PUBLISHABLE_KEY`, and comma-separated `PERF_ACCESS_TOKENS` for at least two test readers. `PERF_ROUNDS` defaults to five. Use dedicated representative test libraries. The runner checks every returned work's owner, measures exact HEAD counts, and reports direct and extension metadata-job throughput separately. It never prints tokens, notes or metadata. No hosted credentials or representative hosted environment were supplied for this change.
+
+Reports go to ignored `artifacts/performance/`. Browser checks use mocked Auth/PostgREST; SQL tests independently exercise actual projections, search parity, source updates, grants, RLS, pagination boundaries and series behavior. Run `npm run check` and the relevant Playwright checks as well.
+
+## Query and cache decisions
+
+The initial live metadata-join implementation took roughly 1.4 seconds for a 1,000-work catalog. A private, transactionally maintained `library_search_documents` table now derives from the existing entry/work/relationship tables. Entry, work, author, fandom, tag and membership changes rebuild only affected documents. The projection has forced RLS, read-only owner access, and no callable authenticated write helper. Browser/extension metadata and manual corrections retain their original precedence. Unchanged tag/fandom imports skip entity updates. Metadata job completion and userscript refreshes collect affected entry IDs and rebuild each final document once per operation; ordinary shared-entity edits still update related works. Unchanged shared entities skip projection rebuilds, and unchanged projected documents skip writes. Normalized search fields are stored once per source change; wildcard, quoting, exclusion and OR behavior use the existing browser parser's literal substring groups.
+
+The application fetches a compact identity/organization catalog for shelves, pickers and duplicate detection, then paged cards. The catalog includes all saved identities and compact series membership information; this is an intentional remaining O(library-size) transfer, not a download of every summary, note, chapter map or tag list. Full work and series metadata load on demand. The results cache retains six pages per mounted user provider; keys include user ID, mode, collection, every filter, grouping, sorting, page and effective size. Sign-out destroys the cache and scroll/measurement state. There is no speculative next-page prefetch. Detail reads preserve cached pages; mutations invalidate page/count results and refresh affected work or series state. Refresh requests serialize, and generation checks reject obsolete results. Full work details share a 100-record retention budget across navigation and targeted refreshes; oldest unprotected records become compact catalog entries. Mounted work editors and visible saved series works remain available. A visible series larger than 100 may exceed the budget until it unmounts, when retention returns to the limit.
+
+Numbered pages use an offset after complete filtering and deterministic ordering, ending with the unique entry/series ID. Empty or invalid pages clamp to the last valid page. The identity-query benchmark compares a deep offset with a cursor plus anchor discovery: they took 10 ms and 20 ms respectively in the final local run at 10,000 works. Cursor anchor discovery still needs an offset or stored anchors for arbitrary numbered jumps. Offset is retained for the requested navigation. A unique tie-breaker stabilizes tied rows; concurrent inserts/deletes can still shift numbered pages between separate requests.
+
+Indexes cover owner/added/identity traversal, import-history ownership/order, and eligible queue work. Existing relationship and source-tag-order indexes are reused. Inspect the recorded inner page-query plans and exact-count plans before tuning further; no speculative full-text or trigram dependency was added. Very large migration backfills and projection write amplification need measurement on the intended hosted database before rollout.
+
+## Retrieval capacity and fairness
+
+The hosted Edge Function handles exactly one job per invocation. The supplied one-minute Cron schedule therefore has a nominal maximum of 60 jobs/hour globally, before retrieval latency, failures, pauses and lease recovery. The global gate also enforces at least 15 seconds between eligible hosted requests; running a more frequent scheduler cannot exceed its nominal 240 requests/hour limit. The continuous Node worker waits 15 seconds after each attempt, in addition to attempt time. These are code-derived upper bounds, not measured AO3 throughput.
+
+The extension processes one leased job per account at a time and waits three seconds after successful completion before another claim. Page loading, confirmation/sign-in, failures and browser suspension reduce actual throughput. Its five-minute lease differs from the hosted worker's two-minute lease. The hosted runner reports observed completions, observation window and attempt durations separately for each retrieval mode; it cannot infer representative capacity from an idle or tiny sample.
+
+Claims now prefer the least recently served eligible account and then the least recently served batch. This prevents an older, large import from draining before another user's small import, and rotates batches within an extension account. The original gates, account locks, cancellation checks, retry limit, recovery and fencing tokens remain in place and retain regression coverage.
+
+Recent shared-metadata reuse was considered and left disabled: explicit metadata refreshes should still retrieve new information, and extension-only metadata must remain private. A future reuse policy should distinguish initial imports from explicit refreshes, define a freshness interval and provenance/completeness requirements, and measure saved AO3 requests without bypassing reading-location verification or the pacing gate.
+
+## Rollout
+
+Apply `20261020000100_library_query.sql`, `20261020000200_import_history_and_fairness.sql`, and `20261020000300_bound_metadata_documents.sql` before deploying the frontend. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.

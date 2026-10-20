@@ -7,7 +7,7 @@ export type Metadata = { one_shot?: boolean; manual_url?: string; author_links?:
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Database['public']['Tables']['collections']['Row']
-export type Story = Entry & { work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
+export type Story = Entry & { detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 export const blankMetadata: Metadata = { title: '', authors: [], fandoms: [], ao3_tags: [], summary: '', rating: '', publication_status: 'unknown', published_chapters: null, total_chapters: null, word_count: null }
 /** Manual corrections take precedence; automatic labels follow current metadata and tags. */
 export function isOneShot(metadata: Metadata, personalTags: string[] = []): boolean {

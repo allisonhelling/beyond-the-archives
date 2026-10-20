@@ -313,3 +313,60 @@ it('keeps edits made after an explicit import status was selected',async()=>{
  await ready();expect(await finish((await claim())!)).toBe(true)
  expect((await asUser(alice,()=>db.query('select reading_status from public.library_entries e join public.works w on e.work_id=w.id where w.ao3_work_id=88999'))).rows).toEqual([{reading_status:'did_not_finish'}])
 })
+
+it('rebuilds each affected document once when imports share common tags and fandoms',async()=>{
+ await clearJobs()
+ await db.exec(`create table public.document_rebuild_audit(id uuid);
+ create table public.entity_update_audit(kind text);
+ create function public.audit_document_rebuild() returns trigger language plpgsql as $$begin insert into public.document_rebuild_audit values(new.id); return new; end$$;
+ create function public.audit_entity_update() returns trigger language plpgsql as $$begin insert into public.entity_update_audit values(tg_table_name); return new; end$$;
+ create trigger audit_rebuild after insert or update on public.library_search_documents for each row execute function public.audit_document_rebuild();
+ create trigger audit_tag_update after update on public.tags for each row execute function public.audit_entity_update();
+ create trigger audit_fandom_update after update on public.fandoms for each row execute function public.audit_entity_update();`)
+ try {
+  for(let i=0;i<8;i++) {
+   const work=89000+i
+   const url=`https://archiveofourown.org/works/${work}`
+   await submit([url]);await submit([url],bob)
+   await ready()
+   const job=(await claim())!
+   expect(job.workId).toBe(work)
+   await db.exec('truncate public.document_rebuild_audit,public.entity_update_audit')
+   if(i===0) {
+    await expect(finish(job,[])).rejects.toThrow('Invalid adapter result')
+    expect((await db.query('select * from public.document_rebuild_audit')).rows).toEqual([])
+   }
+   expect(await finish(job,{title:`Shared metadata ${i}`,summary:'Final summary',authors:['Common author'],fandoms:['Common fandom'],relationship_tags:['Common A/B'],character_tags:['Common A'],additional_tags:['Common tag','Another tag'],published_chapters:6,total_chapters:6,is_complete:true})).toBe(true)
+   const changed=(await db.query<{id:string;count:number}>('select id,count(*)::integer count from public.document_rebuild_audit group by id')).rows
+   const expected=(await db.query<{id:string}>('select id from public.library_entries where work_id=(select id from public.works where ao3_work_id=$1)',[work])).rows.map(row=>row.id)
+   expect(changed.map(row=>row.id).sort()).toEqual(expected.sort())
+   expect(changed.every(row=>row.count===1)).toBe(true)
+   expect((await db.query('select * from public.entity_update_audit')).rows).toEqual([])
+   const documents=(await db.query<{story:{metadata:object}}>('select story from public.library_search_documents where id=any($1::uuid[])',[expected])).rows
+   for(const {story} of documents) expect(story.metadata).toMatchObject({title:`Shared metadata ${i}`,fandoms:['Common fandom'],additional_tags:['Common tag','Another tag'],publication_status:'complete'})
+   await clearJobs()
+  }
+  // Ordinary shared edits still fan out, while unchanged updates do no work.
+  await db.exec("begin; select set_config('app.defer_library_documents','on',true); update public.tags set name=name where name='Common tag'; update public.fandoms set name=name where name='Common fandom'")
+  try {
+   expect((await db.query<{ids:string|null}>("select nullif(current_setting('app.library_document_ids',true),'') ids")).rows[0].ids).toBeNull()
+  } finally {await db.exec('rollback')}
+  await db.exec("truncate public.document_rebuild_audit; update public.tags set name=name where name='Common tag'; update public.fandoms set name=name where name='Common fandom'")
+  expect((await db.query('select * from public.document_rebuild_audit')).rows).toEqual([])
+  await db.exec("update public.tags set name='Renamed common tag' where name='Common tag'")
+  expect((await db.query('select * from public.document_rebuild_audit')).rows).toHaveLength(16)
+  await extensionMode()
+  await submit(['https://archiveofourown.org/works/89000'])
+  const browser=(await claimExtension())!
+  await db.exec('truncate public.document_rebuild_audit')
+  expect(await finish(browser,{title:'Private browser metadata',published_chapters:9,total_chapters:6})).toBe(true)
+  const privateChanges=(await db.query<{id:string}>('select id from public.document_rebuild_audit')).rows
+  expect(privateChanges).toHaveLength(1)
+  expect((await db.query<{story:{metadata:object}}>('select story from public.library_search_documents where id=$1',[privateChanges[0].id])).rows[0].story.metadata).toMatchObject({title:'Private browser metadata',published_chapters:9,total_chapters:null})
+  expect(await finish(browser)).toBe(false)
+  expect((await db.query('select * from public.document_rebuild_audit')).rows).toHaveLength(1)
+ } finally {
+  await db.exec('drop trigger audit_rebuild on public.library_search_documents; drop trigger audit_tag_update on public.tags; drop trigger audit_fandom_update on public.fandoms; drop function public.audit_document_rebuild(),public.audit_entity_update(); drop table public.document_rebuild_audit,public.entity_update_audit')
+  await clearJobs();await db.exec('delete from public.metadata_preferences')
+ }
+})

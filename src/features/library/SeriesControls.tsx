@@ -13,7 +13,8 @@ import { previewSeries } from '../imports/repository'
 
 type Controls = { favorite: ReactNode; actions: ReactNode; collectionsField: ReactNode; finishButton: ReactNode }
 export function SeriesControls({ series, children }: { series: LibrarySeries; children: (controls: Controls) => ReactNode }) {
- const { collections, refresh } = useLibrary()
+ const { collections, refreshSeries, refresh: refreshWorks } = useLibrary()
+ const refresh = () => refreshSeries(series.seriesId)
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [menuOpen, setMenuOpen] = useState(false), [finishing, setFinishing] = useState(false)
  const [conflict, setConflict] = useState<EditConflict | null>(null)
  const menu = useDismissible<HTMLDetailsElement>(menuOpen, () => setMenuOpen(false))
@@ -26,7 +27,7 @@ export function SeriesControls({ series, children }: { series: LibrarySeries; ch
   catch (error) { failed(error) } finally { setBusy(false) }
  }
  const favorite = <FavoriteButton selected={series.record?.is_favorite ?? false} disabled={busy} onChange={favorite => void save({ favorite })} />
- const collectionProps = { selectedIds: series.record?.collectionIds ?? [], disabled: busy, onOpen: () => setMenuOpen(false), description: `Choose collections for “${series.title}”. Individual fics keep their own collections.`, onSave: async (collections: string[], base: string[]) => { await ensureSaved(); await updateSeries(series.seriesId, { collections }, { collections: base }) } }
+ const collectionProps = { onRefresh: refresh, selectedIds: series.record?.collectionIds ?? [], disabled: busy, onOpen: () => setMenuOpen(false), description: `Choose collections for “${series.title}”. Individual fics keep their own collections.`, onSave: async (collections: string[], base: string[]) => { await ensureSaved(); await updateSeries(series.seriesId, { collections }, { collections: base }) } }
  const collectionButton = <EditCollectionsButton {...collectionProps} />
  const collectionsField = <EditCollectionsButton {...collectionProps} variant="field" />
  const finishButton = seriesReadingStatus(series) === 'finished' ? null : <button type="button" className="button secondary" disabled={busy} onClick={() => { setMenuOpen(false); setFinishing(true) }}><Check size={16} aria-hidden="true" />Mark as Finished</button>
@@ -34,7 +35,7 @@ export function SeriesControls({ series, children }: { series: LibrarySeries; ch
  return <>{children({ favorite, actions, collectionsField, finishButton })}
   {error && <p role="alert" className="error-message">{error}</p>}
   {conflict && <EditConflictReview key={JSON.stringify(conflict.review)} conflict={conflict} collections={collections} onSaved={async () => { setConflict(null); await refresh() }} onError={failed} onCancel={() => setConflict(null)} />}
-  {finishing && <ConfirmationDialog title="Finish series?" confirmLabel="Mark as finished" pendingLabel="Finishing…" onClose={() => setFinishing(false)} onConfirm={async () => { await ensureSaved(); await finishSeries(series.seriesId); await refresh() }}>
+  {finishing && <ConfirmationDialog title="Finish series?" confirmLabel="Mark as finished" pendingLabel="Finishing…" onClose={() => setFinishing(false)} onConfirm={async () => { await ensureSaved(); await finishSeries(series.seriesId); await refreshWorks(series.savedStories.map(story => story.id)); await refresh() }}>
    <p>Marks “{series.title}” and all its works in your library as Finished (aka fully read) </p>
   </ConfirmationDialog>}
  </>

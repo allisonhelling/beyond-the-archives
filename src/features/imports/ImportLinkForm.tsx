@@ -19,7 +19,7 @@ export function ImportLinkForm() {
   const complete = !!item && !['pending', 'processing'].includes(item.status)
   useEffect(() => {
     if (!batch) return
-    let alive = true
+    let alive = true, failures = 0
     let timer: ReturnType<typeof setTimeout>
     async function check() {
       let finished = false
@@ -29,16 +29,17 @@ export function ImportLinkForm() {
         const next = history.items[0]
         finished = multiple ? importFinished(history) : !!next && !['pending', 'processing'].includes(next.status)
         if (multiple) {
-          if (finished) await refresh()
+          if (finished) await refresh(history.items.flatMap(item => item.entry_id ? [item.entry_id] : []))
           if (alive) { setFinishedBatch(finished); setEntries(history.items.flatMap(item => item.entry_id ? [item.entry_id] : [])); setItem(next); setError('') }
         } else if (next?.entry_id) {
-          await refresh()
+          await refresh([next.entry_id])
           if (alive) navigate(`/stories/${next.entry_id}`, { replace: true, state: { importBatchId: batch } })
           return
         }
+        failures = 0
         if (alive) { setItem(next); setError('') }
-      } catch { finished = false; if (alive) setError('Could not check this import. Retrying shortly; you can also view it in import history.') }
-      if (alive && !finished) timer = setTimeout(() => void check(), 5000)
+      } catch { failures++; finished = false; if (alive) setError('Could not check this import. Retrying shortly; you can also view it in import history.') }
+      if (alive && !finished) timer = setTimeout(() => void check(), Math.max(document.hidden ? 30000 : 5000, Math.min(60000, 5000 * 2 ** failures)))
     }
     void check()
     return () => { alive = false; clearTimeout(timer) }
@@ -59,6 +60,7 @@ export function ImportLinkForm() {
     try {
       const id = await submitImport(selectedImportText(reviewing, works), true, readingStatus, seriesIds)
       if (!id) throw new Error('No works were selected for import.')
+      for (const seriesId of seriesIds) await library.refreshSeries(seriesId)
       setMultiple(true); setFinishedBatch(false); setBatch(id); setReviewing('')
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') }
     finally { setBusy(false) }

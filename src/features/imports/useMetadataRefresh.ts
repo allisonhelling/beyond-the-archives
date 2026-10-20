@@ -52,6 +52,7 @@ export function useMetadataRefresh(story: Story | undefined) {
     let active = true
     let observing = request?.entryId === entryId
     const version = generation.current
+    let failures = 0
     let timer: ReturnType<typeof setTimeout> | undefined
     async function poll() {
       let again = false
@@ -59,6 +60,7 @@ export function useMetadataRefresh(story: Story | undefined) {
         const job = await metadataRefreshJob(entryId!, request && request.entryId === entryId ? request.batchId : undefined)
         if (!active || version !== generation.current) return
         if (!job && request?.entryId === entryId) throw new Error('Waiting for metadata refresh status. Check import history for details.')
+        failures = 0
         const result = job ? jobFeedback(job) : idle
         again = result.busy
         if (again) observing = true
@@ -66,17 +68,17 @@ export function useMetadataRefresh(story: Story | undefined) {
         const visible = observing ? result : idle
         setFeedback({ ...visible, entryId: entryId! })
         if (job && !again && observing) {
-          try { await refreshLibrary() }
+          try { await refreshLibrary([entryId!]) }
           catch {
             if (active && version === generation.current) setFeedback({ ...result, entryId: entryId!, message: `${result.message} Could not reload your library. Reload the page to see the latest saved data.` })
           }
         }
       } catch (error) {
         if (!active || version !== generation.current) return
-        again = true
+        again = true; failures++
         setFeedback({ entryId: entryId!, status: 'unknown', busy: false, message: error instanceof Error ? error.message : 'Could not check metadata refresh status.' })
       }
-      if (active && version === generation.current && again) timer = setTimeout(() => void poll(), 5000)
+      if (active && version === generation.current && again) timer = setTimeout(() => void poll(), Math.max(document.hidden ? 30000 : 5000, Math.min(60000, 5000 * 2 ** failures)))
     }
     void poll()
     return () => { active = false; clearTimeout(timer) }

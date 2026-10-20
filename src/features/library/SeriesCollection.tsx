@@ -23,17 +23,19 @@ export function SeriesWorkList({ series }: { series: LibrarySeries }) {
    </details></li>
   })}</ol></>
 }
-export function SeriesCard({ series }: { series: LibrarySeries }) {
+export function SeriesCard({ series, linkId }: { series: LibrarySeries; linkId?: string }) {
+ const location = useLocation()
+ const origin = { returnTo: location.pathname + location.search }
  const readingLabel = seriesReadingLabel(series)
  const label = seriesCompletionLabel(series), Icon = publicationStatuses[series.complete === true ? 'complete' : series.complete === false ? 'in_progress' : 'unknown'].Icon
- return <article className="story-card series-card"><SeriesControls series={series}>{({ actions }) => <>
-  <div className="story-card-title"><h2><Link to={`/series/${series.seriesId}`}>{series.title}</Link>{'\u00a0'}<Tooltip description={label}>{id => <span className="publication-icon" role="img" aria-label={label} aria-describedby={id} tabIndex={0}><Icon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></h2>{actions}</div>
+ return <article className="story-card series-card" data-story-id={`series:${series.seriesId}`}><SeriesControls series={series}>{({ actions }) => <>
+  <div className="story-card-title"><h2><Link id={linkId} to={`/series/${series.seriesId}`} state={origin}>{series.title}</Link>{'\u00a0'}<Tooltip description={label}>{id => <span className="publication-icon" role="img" aria-label={label} aria-describedby={id} tabIndex={0}><Icon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></h2>{actions}</div>
   <p className="authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p>
   <p className="muted">{series.fandoms.join(' · ') || 'Fandom unknown'}</p>
   <p className="story-facts"><span className="series-reading-status">{readingLabel === 'Finished' ? 'Finished Reading' : readingLabel}</span> · {series.workCount ?? `${series.savedStories.length} saved`} works · {series.wordCount?.toLocaleString() ?? '?'} words</p>
   <hr className="story-summary-divider" />
   {series.description && <p className="story-summary">{series.description}</p>}
   <SeriesWorkList series={series} />
-  <Link className="story-details-link clickable-text" to={`/series/${series.seriesId}`}>View series details</Link>
+  <Link className="story-details-link clickable-text" to={`/series/${series.seriesId}`} state={origin}>View series details</Link>
  </>}</SeriesControls></article>
 }

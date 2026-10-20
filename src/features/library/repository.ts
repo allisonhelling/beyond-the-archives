@@ -1,8 +1,9 @@
+import { parseSearch, filterReading } from './reading-search'
 import type { SeriesRecord } from './series'
 import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
-import { effectiveMetadata } from './model'
+import { blankMetadata, effectiveMetadata } from './model'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
@@ -18,6 +19,22 @@ export async function allRows<T>(page: (from: number, to: number) => PromiseLike
     data.push(...result.data)
     if (result.data.length < 500) return data
   }
+}
+function groupLinks<T, V>(links: T[], key: (link: T) => string, value: (link: T) => V) {
+  const index = new Map<string, V[]>()
+  for (const link of links) {
+    const id = key(link), values = index.get(id) ?? []
+    values.push(value(link)); index.set(id, values)
+  }
+  return index
+}
+function orderedRelations<T extends { id: string }, L extends { work_id: string }>(entities: T[], links: L[], entityId: (link: L) => string) {
+  const worksByEntity = groupLinks(links, entityId, link => link.work_id)
+  const result = new Map<string, T[]>()
+  for (const entity of entities) for (const workId of new Set(worksByEntity.get(entity.id) ?? [])) {
+    const values = result.get(workId) ?? []; values.push(entity); result.set(workId, values)
+  }
+  return result
 }
 export async function loadLibrary(): Promise<{ stories: Story[]; collections: Collection[]; series: SeriesRecord[] }> {
   if (sampleMode) return (await import('./sample/repository')).loadSampleLibrary()
@@ -38,21 +55,29 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     allRows((from, to) => db.from('library_series').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collection_series').select('*').order('library_series_id').order('collection_id').range(from, to)),
   ])
+  const worksById = new Map(works.map(work => [work.id, work]))
+  const personalTagsById = new Map(tags.map(tag => [tag.id, tag.name]))
+  const membershipsByEntry = groupLinks(memberships, link => link.library_entry_id, link => link.collection_id)
+  const membershipsBySeries = groupLinks(seriesMemberships, link => link.library_series_id, link => link.collection_id)
+  const personalTagsByEntry = groupLinks(links, link => link.library_entry_id, link => personalTagsById.get(link.personal_tag_id) ?? '')
+  // The old author/fandom scans followed entity order, not junction order.
+  const authorsByWork = orderedRelations(authors, workAuthors, link => link.author_id)
+  const fandomsByWork = orderedRelations(fandoms, workFandoms, link => link.fandom_id)
   const tagsById = new Map(ao3Tags.map(tag => [tag.id, tag]))
   const tagsByWork = new Map<string, typeof ao3Tags>()
   for (const link of workTags) {
     const tag = tagsById.get(link.tag_id)
     if (tag) { const linked = tagsByWork.get(link.work_id) ?? []; linked.push(tag); tagsByWork.set(link.work_id, linked) }
   }
-  return { series: series.map(record => ({ ...record, collectionIds: seriesMemberships.filter(link => link.library_series_id === record.id).map(link => link.collection_id) })), collections: collections.sort(compareCollections), stories: entries.map((entry: Entry) => {
-    const sharedWork = works.find((w: Work) => w.id === entry.work_id)
+  return { series: series.map(record => ({ ...record, collectionIds: membershipsBySeries.get(record.id) ?? [] })), collections: collections.sort(compareCollections), stories: entries.map((entry: Entry) => {
+    const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     // Overlay private automatic metadata before the existing manual-override merge.
     // All work consumers (dates, chapter links, search) see the same effective data.
     const browser = entry.extension_metadata && typeof entry.extension_metadata === 'object' && !Array.isArray(entry.extension_metadata) ? entry.extension_metadata : {}
     const fields = Object.fromEntries(Object.entries(browser).filter(([key]) => ['title','summary','rating','word_count','published_chapters','total_chapters','is_complete','ao3_published_at','ao3_updated_at','last_metadata_check','last_metadata_success'].includes(key)))
     const work = { ...sharedWork, ...fields, automatic_metadata: { ...(sharedWork.automatic_metadata as object), ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : sharedWork.verified_chapters } as Work
-    return { ...entry, work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authors.filter(a => workAuthors.some(link => link.work_id === work.id && link.author_id === a.id)), fandoms.filter(f => workFandoms.some(link => link.work_id === work.id && link.fandom_id === f.id))), collectionIds: memberships.filter(m => m.library_entry_id === entry.id).map(m => m.collection_id), personalTags: links.filter(l => l.library_entry_id === entry.id).map(l => tags.find(t => t.id === l.personal_tag_id)?.name ?? '') }
+    return { ...entry, work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id)), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
   }) }
 }
 export async function saveStory(input: StoryInput) {
@@ -97,9 +122,9 @@ export async function deleteStory(id: string) {
 }
 export async function restoreStory(story: Story) {
   if (sampleMode) return (await import('./sample/repository')).restoreSampleStory(story)
-  const { work: _work, metadata: _metadata, collectionIds, personalTags, ...entry } = story
+  const { work: _work, metadata: _metadata, detailsLoaded: _detailsLoaded, collectionIds, personalTags, ...entry } = story
   // Restore only the private entry; shared work metadata never changes during Undo.
-  void _work; void _metadata
+  void _work; void _metadata; void _detailsLoaded
   const { error } = await client().rpc('restore_library_story', { p_entry: entry, p_collections: collectionIds, p_tags: personalTags })
   failure(error)
 }
@@ -127,4 +152,64 @@ export async function deleteCollections(ids: string[]) {
 export async function reorderCollections(ids: string[]) {
   if (sampleMode) return (await import('./sample/repository')).reorderSampleCollections(ids)
   const { error } = await client().rpc('reorder_collections', { p_ids: ids }); failure(error)
+}
+
+export async function loadCatalog() {
+  if (sampleMode) return loadLibrary()
+  const { data, error } = await client().rpc('library_catalog')
+  if (error || !data) throw new Error('Could not load your library. Apply the latest migrations and check your connection.')
+  const result = data as unknown as { stories: Story[]; collections: Collection[]; series: SeriesRecord[] }
+  result.stories = result.stories.map(storyCatalogEntry)
+  result.series = result.series.map(record => ({ ...record, detailsLoaded: false }))
+  result.collections.sort(compareCollections)
+  return result
+}
+export async function loadStories(ids: string[]): Promise<Story[]> {
+  if (!ids.length) return []
+  if (sampleMode) { const wanted = new Set(ids); return (await loadLibrary()).stories.filter(story => wanted.has(story.id)) }
+  if (ids.length > 100) {
+    const stories: Story[] = []
+    for (let from = 0; from < ids.length; from += 100) stories.push(...await loadStories(ids.slice(from, from + 100)))
+    return stories
+  }
+  const { data, error } = await client().rpc('library_story_details', { p_ids: ids })
+  if (error) throw new Error('Could not reload the affected works. Check your connection.')
+  return ((data ?? []) as unknown as Story[]).map(story => ({ ...story, detailsLoaded: true }))
+}
+export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: string; filters: import('./reading-search').ReadingFilters }
+export type LibraryResults = { suggestions?: { relationships: string[]; characters: string[]; tags: string[] }; stories: Story[]; series: import('./series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
+export async function queryLibrary(query: LibraryQuery, page: number, size: number, signal: AbortSignal): Promise<LibraryResults> {
+  // Run the same parser/validation before either transport. Literal substring
+  // groups preserve escaped operators and avoid unsafe SQL/regex interpolation.
+  filterReading([], query.filters)
+  const { data, error } = await client().rpc('query_library', { p_query: { ...query, terms: parseSearch(query.filters.within) }, p_page: page, p_size: size }).abortSignal(signal)
+  if (error) throw new Error('Could not load these results. Check your connection and retry.')
+  return data as unknown as LibraryResults
+}
+export async function loadSeriesRecord(seriesId: number): Promise<SeriesRecord | undefined> {
+  if (sampleMode) return (await loadLibrary()).series.find(record => record.ao3_series_id === seriesId)
+  const { data, error } = await client().from('library_series').select('*').eq('ao3_series_id', seriesId).maybeSingle()
+  if (error) throw new Error('Could not reload this series.')
+  if (!data) return undefined
+  const links = await allRows((from, to) => client().from('collection_series').select('collection_id').eq('library_series_id', data.id).order('collection_id').range(from, to))
+  return { ...data, detailsLoaded: true, collectionIds: links.map(link => link.collection_id) }
+}
+
+export function storyCatalogEntry(story: Story): Story {
+  return { ...story, detailsLoaded: false,
+    metadata: { ...blankMetadata, title: story.metadata.title, authors: story.metadata.authors, fandoms: story.metadata.fandoms, series: story.metadata.series, series_memberships: story.metadata.series_memberships, publication_status: story.metadata.publication_status },
+    work: { id: story.work.id, ao3_work_id: story.work.ao3_work_id } as Work,
+    metadata_overrides: {}, extension_metadata: {}, extension_chapters: {}, notes: '', personalTags: [] }
+}
+
+export async function loadAffectedCollections(ids: string[]): Promise<Collection[]> {
+  if (!ids.length || sampleMode) return []
+  const { data, error } = await client().from('collections').select('*').in('id', ids)
+  if (error) throw new Error('Could not reload affected collections.')
+  return data ?? []
+}
+export async function loadCollections(): Promise<Collection[]> {
+  if (sampleMode) return (await loadLibrary()).collections
+  const rows = await allRows((from,to) => client().from('collections').select('*').order('created_at').order('id').range(from,to))
+  return rows.sort(compareCollections)
 }

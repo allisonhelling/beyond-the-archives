@@ -1,10 +1,11 @@
+import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page } from '@playwright/test'
 
 const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
 const token = () => `${btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${btoa(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }))}.test-signature`
 
 async function mockAuth(page: Page) {
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', route => route.fulfill({ json: [] }))
+  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', route => { const name=new URL(route.request().url()).pathname.split('/').pop()!; return route.fulfill({json:libraryQueryFixture(name,route.request().method()==='POST'?route.request().postDataJSON():{}, {})??[]}) })
   await page.route('https://ao3-phase1-test.supabase.co/auth/v1/**', async route => {
     const path = new URL(route.request().url()).pathname
     if (path.endsWith('/token')) return route.fulfill({ json: { access_token: token(), refresh_token: 'test-only-refresh', expires_in: 3600, token_type: 'bearer', user } })
@@ -109,6 +110,7 @@ test('large imports show persisted results and fit the viewport after returning 
   })
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/import_batches*', route => route.fulfill({ json: originals.length ? [batch] : [] }))
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/import_items*', route => route.fulfill({ json: originals.filter(url => url.includes('archiveofourown.org')).map((url, i) => ({ id: `item-${i}`, batch_id: batch.id, original_url: url, ao3_work_id: Number(url.match(/works\/(\d+)/)?.[1]), chapter_id: null, status: 'completed', result: 'imported', metadata_status: 'completed', error_category: null, entry_id: `entry-${i}`, last_attempt_at: batch.created_at })) }))
+  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/paged_import_history',route=>route.fulfill({json:libraryQueryFixture('paged_import_history',route.request().postDataJSON(),{import_batches:originals.length?[batch]:[],import_items:originals.filter(url => url.includes('archiveofourown.org')).map((url,i)=>({id:`item-${i}`,batch_id:batch.id,original_url:url,ao3_work_id:Number(url.match(/works\/(\d+)/)?.[1]),chapter_id:null,status:'completed',result:'imported',metadata_status:'completed',error_category:null,entry_id:`entry-${i}`,last_attempt_at:batch.created_at}))})}))
   await page.goto('/')
   await signIn(page)
   if (test.info().project.name === 'mobile') {
@@ -126,13 +128,22 @@ test('large imports show persisted results and fit the viewport after returning 
   await expect(page.getByRole('button',{name:'Review: 0',exact:true})).toHaveAttribute('aria-pressed','true')
   await expect(page.getByText('Batch finished. No failed, skipped, or cancelled results to review.')).toBeVisible()
   await page.getByRole('button',{name:'All results: 110',exact:true}).click()
-  await expect(page.getByRole('link', { name: 'Edit metadata', exact: true })).toHaveCount(110)
+  await expect(page.getByRole('link', { name: 'Edit metadata', exact: true })).toHaveCount(50)
   const results=page.locator('.import-results')
+  const resultPages=page.getByRole('navigation',{name:'Result pages'}).last()
+  await expect(resultPages).toContainText('1–50 of 110')
+  await resultPages.getByRole('button',{name:'Next',exact:true}).click()
+  await expect(resultPages).toContainText('51–100 of 110')
+  await resultPages.getByRole('button',{name:'Next',exact:true}).click()
+  await expect(results.locator('tbody tr')).toHaveCount(10)
+  await resultPages.getByRole('button',{name:'Previous',exact:true}).click()
+  await resultPages.getByRole('button',{name:'Previous',exact:true}).click()
+  await expect(results.locator('tbody tr')).toHaveCount(50)
   await page.getByRole('button',{name:'failed: 0',exact:true}).click()
   await expect(results.getByText('No failed results in this batch.')).toBeVisible()
   await expect(page.getByRole('button',{name:'completed: 110',exact:true})).toBeVisible()
   await page.getByRole('button',{name:'completed: 110',exact:true}).click()
-  await expect(results.locator('tbody tr')).toHaveCount(110)
+  await expect(results.locator('tbody tr')).toHaveCount(50)
   await page.getByRole('button',{name:'All results: 110',exact:true}).click()
 
   for (const name of ['View saved work', 'Edit metadata']) {
@@ -157,7 +168,7 @@ test('large imports show persisted results and fit the viewport after returning 
   await expect(page.getByText(/110 tracked URLs/)).toBeVisible()
   await expect(page.getByRole('button',{name:'Review: 0',exact:true})).toHaveAttribute('aria-pressed','true')
   await page.getByRole('button',{name:'All results: 110',exact:true}).click()
-  await expect(page.getByRole('link', { name: 'View saved work', exact: true })).toHaveCount(110)
+  await expect(page.getByRole('link', { name: 'View saved work', exact: true })).toHaveCount(50)
 })
 
 test('series imports require explicit work selection and fit desktop and mobile', async ({ page }) => {

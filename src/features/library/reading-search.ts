@@ -21,8 +21,9 @@ export const normalize = (value: string) => value.normalize('NFKD').replace(/\p{
 
 // OR has lower precedence than space/AND; a leading minus negates one term.
 // Quoted terms keep spaces. Backslash escapes the next character, including operators.
-export function compileSearch(query: string): (text: string) => boolean {
-  if (!query.trim()) return () => true
+export type SearchTerms = { parts: string[]; exclude: boolean }[][]
+export function parseSearch(query: string): SearchTerms {
+  if (!query.trim()) return []
   const groups: { parts: string[]; exclude: boolean }[][] = [[]]
   let i = 0
   while (i < query.length) {
@@ -48,7 +49,12 @@ export function compileSearch(query: string): (text: string) => boolean {
     groups.at(-1)!.push({ parts, exclude })
   }
   if (!groups.at(-1)!.length) throw new Error('Add a search term after ||.')
+  return groups
+}
+export function compileSearch(query: string): (text: string) => boolean {
+  const groups = parseSearch(query)
   return text => {
+    if (!groups.length) return true
     const value = normalize(text)
     return groups.some(group => group.every(term => matchesParts(value, term.parts) !== term.exclude))
   }
@@ -119,8 +125,8 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
     const reverse = filters.sort.endsWith('_reverse')
     const order = filters.sort.replace(/_reverse$/, '')
     const direction = reverse ? -1 : 1
-    const alpha = a.metadata.title.localeCompare(b.metadata.title)
-    if (order === 'alpha') return direction * alpha
+    const alpha = a.metadata.title.localeCompare(b.metadata.title) || a.id.localeCompare(b.id)
+    if (order === 'alpha') return direction * a.metadata.title.localeCompare(b.metadata.title) || a.id.localeCompare(b.id)
     if (order === 'added') {
       const added = (story: Story) => { const timestamp = Date.parse(story.created_at); return Number.isFinite(timestamp) ? timestamp : -Infinity }
       const missing = Number(!Number.isFinite(added(a))) - Number(!Number.isFinite(added(b)))
@@ -141,7 +147,7 @@ export function readingGroups(stories: Story[], group: GroupBy) {
   for (const story of stories) {
     const keys = group === 'fandom' ? story.metadata.fandoms : group === 'author' ? story.metadata.authors : (story.metadata.series ?? [])
     for (const key of new Set(keys.length ? keys : [group === 'series' ? 'No series information saved' : `Unknown ${group}`])) {
-      groups.set(key, [...(groups.get(key) ?? []), story])
+      const values = groups.get(key) ?? []; values.push(story); groups.set(key, values)
     }
   }
   return [...groups].sort(([a], [b]) => a.localeCompare(b))

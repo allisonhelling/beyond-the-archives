@@ -7,7 +7,7 @@ import type { Collection } from './model'
 
 const state = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn(), remove: vi.fn(), updateMany: vi.fn(), removeMany: vi.fn(), stories: [] as { collectionIds: string[] }[], collections: [] as Collection[] }))
 vi.mock('./repository', () => ({ saveCollection: state.save, deleteCollection: state.remove, updateCollections: state.updateMany, deleteCollections: state.removeMany }))
-vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ refresh: state.refresh, collections: state.collections, stories: state.stories }) }))
+vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ refresh: state.refresh, refreshCollections: state.refresh, collections: state.collections, stories: state.stories }) }))
 
 const showModal = HTMLDialogElement.prototype.showModal, close = HTMLDialogElement.prototype.close
 beforeAll(() => {

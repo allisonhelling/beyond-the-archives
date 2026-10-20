@@ -18,7 +18,7 @@ export function CollectionMembershipDialog({ story, collection, onClose }: ({ st
         await addStoriesToCollections(story ? [story.id] : additions, story ? additions : [collection!.id])
         setSaved(true)
       }
-      await refresh(); onClose()
+      await refresh(story ? [story.id] : additions); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not add stories to collections.') }
     finally { setBusy(false) }
   }

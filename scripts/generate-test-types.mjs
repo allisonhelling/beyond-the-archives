@@ -34,6 +34,10 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
+      library_catalog: { Args: Record<string, never>; Returns: Json }
+      library_story_details: { Args: { p_ids: string[] }; Returns: Json }
+      query_library: { Args: { p_query?: Json; p_page?: number; p_size?: number }; Returns: Json }
       update_library_series: { Args: { p_series: number; p_input: Json; p_base: Json }; Returns: undefined }
       finish_library_series: { Args: { p_series: number }; Returns: number }
       remember_library_series: { Args: { p_metadata: Json }; Returns: string }

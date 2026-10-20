@@ -16,7 +16,10 @@ export function ImportedSeriesNotice({ stories, onImported }: { stories: Story[]
   try {
    const batch = await submitImport(selectedImportText(selected, works), false, readingStatus, seriesIds)
    if (!batch) throw new Error('No selected works could be imported.')
-   await library.refresh(); setSelected(''); setMessage('Selected series works saved. Metadata retrieval will continue in the background.'); onImported?.(batch)
+   const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'})
+   await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : []))
+   for (const id of seriesIds) await library.refreshSeries(id)
+   setSelected(''); setMessage('Selected series works saved. Metadata retrieval will continue in the background.'); onImported?.(batch)
   } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected series works.') }
   finally { setBusy(false) }
  }
@@ -32,18 +35,19 @@ export function ImportedSeriesNotice({ stories, onImported }: { stories: Story[]
 export function CompletedImportSeriesNotice({ batchId }: { batchId: string }) {
  const { refresh, stories } = useLibrary(), [currentBatch, setCurrentBatch] = useState(batchId), [entries, setEntries] = useState<string[]>([])
  useEffect(() => {
-  let alive = true, timer: ReturnType<typeof setTimeout>
+  let alive = true, failures = 0, timer: ReturnType<typeof setTimeout>
   async function check() {
    try {
     const history = await importHistory(currentBatch)
     if (!alive) return
     if (importFinished(history)) {
-     await refresh()
+     await refresh(history.items.flatMap(item => item.entry_id ? [item.entry_id] : []))
      if (alive) setEntries(history.items.flatMap(item => item.entry_id ? [item.entry_id] : []))
      return
     }
-   } catch { /* Keep the page usable and retry transient history failures. */ }
-   if (alive) timer = setTimeout(() => void check(), 5000)
+    failures = 0
+   } catch { failures++ }
+   if (alive) timer = setTimeout(() => void check(), Math.max(document.hidden ? 30000 : 5000, Math.min(60000, 5000 * 2 ** failures)))
   }
   void check()
   return () => { alive = false; clearTimeout(timer) }

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ history: vi.fn(), submit: vi.fn(), preview: vi.fn(), refresh: vi.fn(), stories: [{ id: 'saved-101', work: { ao3_work_id: 101 }, metadata: { title: 'Saved fic', series_memberships: [{ id: 77, name: 'Related series', url: 'https://archiveofourown.org/series/77', position: 1 }] } }] }))
 vi.mock('./repository', () => ({ importHistory: mocks.history, submitImport: mocks.submit, previewSeries: mocks.preview }))
-vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ stories: mocks.stories, refresh: mocks.refresh }) }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ stories: mocks.stories, refresh: mocks.refresh, refreshSeries: mocks.refresh }) }))
 import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
 beforeEach(() => {
  vi.resetAllMocks(); vi.useFakeTimers()

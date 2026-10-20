@@ -13,7 +13,7 @@ import { deleteCollection, deleteCollections, saveCollection, updateCollections 
 const deleteLabel = <><Trash2 size={16} aria-hidden="true" />Delete</>
 
 export function NewCollectionDialog({ onClose, onCreated, collection, selectedCollections, onDeleted, hidden = false, onVisibilityChange }: { onClose: () => void; onCreated?: (id: string) => void; collection?: Collection; selectedCollections?: Collection[]; onDeleted?: () => void; hidden?: boolean; onVisibilityChange?: () => void }) {
-  const { refresh, collections, stories, series } = useLibrary()
+  const { refreshCollections: refresh, collections, stories, series } = useLibrary()
   const bulk = selectedCollections !== undefined
   const targets = selectedCollections ?? (collection ? [collection] : [])
   const targetIds = targets.map(item => item.id)
