@@ -1,16 +1,19 @@
+import { SeriesImportReview } from './SeriesImportReview'
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useLibrary } from '../library/LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
-import { classifyUrl, parseWorkUrl } from './urls'
+import { importFinished, classifyUrl, parseWorkUrl, selectedImportText, type SeriesPreview } from './urls'
 import { importHistory, submitImport } from './repository'
 
 type ImportItem = Awaited<ReturnType<typeof importHistory>>['items'][number]
 
 export function ImportLinkForm() {
-  const { refresh } = useLibrary()
+  const library = useLibrary(), { refresh } = library
+  const location = useLocation()
   const navigate = useNavigate()
-  const [url, setUrl] = useState(''), [batch, setBatch] = useState(''), [item, setItem] = useState<ImportItem>()
+  const [url, setUrl] = useState(typeof location.state?.workUrl === 'string' ? location.state.workUrl : ''), [batch, setBatch] = useState(''), [item, setItem] = useState<ImportItem>()
+  const [reviewing, setReviewing] = useState(''), [multiple, setMultiple] = useState(false), [finishedBatch, setFinishedBatch] = useState(false), [entries, setEntries] = useState<string[]>([])
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const complete = !!item && !['pending', 'processing'].includes(item.status)
   useEffect(() => {
@@ -23,10 +26,13 @@ export function ImportLinkForm() {
         const history = await importHistory(batch)
         if (!alive) return
         const next = history.items[0]
-        finished = !!next && !['pending', 'processing'].includes(next.status)
-        if (next?.entry_id) {
+        finished = multiple ? importFinished(history) : !!next && !['pending', 'processing'].includes(next.status)
+        if (multiple) {
+          if (finished) await refresh()
+          if (alive) { setFinishedBatch(finished); setEntries(history.items.flatMap(item => item.entry_id ? [item.entry_id] : [])); setItem(next); setError('') }
+        } else if (next?.entry_id) {
           await refresh()
-          if (alive) navigate(`/stories/${next.entry_id}`, { replace: true })
+          if (alive) navigate(`/stories/${next.entry_id}`, { replace: true, state: { importBatchId: batch } })
           return
         }
         if (alive) { setItem(next); setError('') }
@@ -35,11 +41,11 @@ export function ImportLinkForm() {
     }
     void check()
     return () => { alive = false; clearTimeout(timer) }
-  }, [batch, refresh, navigate])
+  }, [batch, refresh, navigate, multiple])
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true)
     try {
-      if (classifyUrl(url).kind === 'series') { navigate('/imports', { state: { seriesUrl: url.trim() } }); return }
+      if (classifyUrl(url).kind === 'series') { setReviewing(url.trim()); return }
       parseWorkUrl(url)
       const id = await submitImport(url.trim())
       if (!id) throw new Error('No AO3 work was found in that link.')
@@ -47,11 +53,20 @@ export function ImportLinkForm() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not import this fic.') }
     finally { setBusy(false) }
   }
+  async function importSelected(works: SeriesPreview['works']) {
+    setBusy(true); setError('')
+    try {
+      const id = await submitImport(selectedImportText(reviewing, works))
+      if (!id) throw new Error('No works were selected for import.')
+      setMultiple(true); setFinishedBatch(false); setBatch(id); setReviewing('')
+    } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') }
+    finally { setBusy(false) }
+  }
   return <>
-    {sampleMode ? <section className="settings-card"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a story manually</Link></section> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
+    {sampleMode ? <section className="settings-card"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a story manually</Link></section> : reviewing ? <SeriesImportReview key={reviewing} text={reviewing} savedIds={new Set((library.stories ?? []).flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} autoLoad busy={busy} onConfirm={works => void importSelected(works)} onCancel={() => setReviewing('')} /> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
       <label>AO3 work or series link<input type="url" required value={url} disabled={busy} onChange={event => setUrl(event.target.value)} placeholder="https://archiveofourown.org/works/123" /></label>
       <button className="button primary" disabled={busy}>{busy ? 'Importing…' : 'Import from link'}</button>
-    </form> : <>
+    </form> : multiple ? <section className="settings-card" aria-label="Series import result"><h2>{finishedBatch ? 'Series import finished' : 'Importing selected works'}</h2><p role="status">{finishedBatch ? 'Your selected works have finished processing.' : 'Your selected works are saved. Retrieving their metadata…'}</p><ul>{entries.map(id => <li key={id}><Link className="clickable-text" to={`/stories/${id}`} state={{ importBatchId: batch }}>{library.stories?.find(story => story.id === id)?.metadata.title ?? 'View saved work'}</Link></li>)}</ul><div className="form-actions"><Link className="button secondary" to="/library?shelf=series">View Series collection</Link><button className="button secondary" onClick={() => { setBatch(''); setMultiple(false); setItem(undefined); setEntries([]) }}>Add another story</button></div></section> : <>
       {!complete ? <section className="settings-card"><p role="status">Retrieving metadata… Your fic is saved; this may take a few minutes. If using the extension, keep your browser running and complete any AO3 confirmation in its requested tab.</p><Link className="clickable-text" to="/imports">View import history</Link></section> : <section className="settings-card" aria-label="Import result">
         <h2>Import result</h2>
         <p role="status">No saved fic was available for this import.</p>

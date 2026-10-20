@@ -1,18 +1,17 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
-import { BookOpenText, Bookmark, Check, Heart, Library, Plus, X, type LucideIcon } from 'lucide-react'
+import { Check, Library, Plus } from 'lucide-react'
 import { NewCollectionButton } from './CollectionChoices'
 import { CollectionSpineLabel } from './CollectionSpineLabel'
 import { useCollectionDrag } from './useCollectionDrag'
 import { SpineBookmark } from './SpineBookmark'
 import type { SpineDesign } from './SpineDetails'
-import { collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
+import { automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
 
-const shelfSymbols: Partial<Record<string, LucideIcon>> = { all: Library, currently_reading: BookOpenText, to_read: Bookmark, favorites: Heart, finished: Check, did_not_finish: X }
-
-const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', currently_reading: 'art-deco', to_read: 'library-label', favorites: 'sunburst-fans', finished:'arched', did_not_finish: 'raised-bands' }
+const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'art-deco', currently_reading: 'art-deco', to_read: 'library-label', favorites: 'sunburst-fans', finished:'arched', did_not_finish: 'raised-bands' }
 
 const shelfColors: Partial<Record<string, string>> = {
   all: '#970000',
+  series: '#07534a',
   currently_reading: '#214921',
   to_read: '#243c5e',
   favorites: '#54254b',
@@ -23,7 +22,7 @@ const shelfColors: Partial<Record<string, string>> = {
 const heightOrder = [0, 1, 2, 1]
 
 export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange, onAutomaticEdit, showHidden = false }: {
-  items: { id: string; name: string; count: number; hidden?: boolean; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
+  items: { id: string; name: string; count: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
@@ -60,7 +59,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing && customIndex >= 0
-    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.count} ${item.count === 1 ? 'story' : 'stories'}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
       if (editing && customIndex < 0 && onAutomaticEdit) { onAutomaticEdit(item.id); return }
       const direct = event.metaKey || event.ctrlKey
       if (customIndex >= 0 && onEdit && (editing || event.shiftKey || direct)) {

@@ -1,25 +1,25 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { previewSeries } from './repository'
 import { classifyUrl, extractUrls, groupWorks, type SeriesPreview } from './urls'
 
 type Review = { preview?: SeriesPreview; selected: Set<number>; error?: string; skipped?: boolean }
-export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel }: {
- text: string; savedIds: Set<number>; busy: boolean
+export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, autoLoad = false, initialPreviews = [] }: {
+ text: string; autoLoad?: boolean; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
  onConfirm(works: SeriesPreview['works']): void; onCancel(): void
 }) {
- const series = new Map(extractUrls(text).flatMap(url => {
+ const series = useMemo(() => new Map(extractUrls(text).flatMap(url => {
   const result = classifyUrl(url)
   return result.kind === 'series' ? [[result.identity.seriesId, result.identity.normalizedUrl] as const] : []
- }))
+ })), [text])
  const direct = groupWorks(extractUrls(text))
- const [reviews, setReviews] = useState<Record<number, Review>>({})
+ const [reviews, setReviews] = useState<Record<number, Review>>(() => Object.fromEntries(initialPreviews.map(preview => [preview.seriesId, { preview, selected: new Set<number>() }])))
  const [loading, setLoading] = useState<number>()
  const selected = new Map<number, SeriesPreview['works'][number]>()
  for (const review of Object.values(reviews)) if (!review.skipped) for (const work of review.preview?.works ?? []) {
   if (review.selected.has(work.workId) && !direct.has(work.workId) && !savedIds.has(work.workId)) selected.set(work.workId, work)
  }
  const ready = [...series.keys()].every(id => reviews[id]?.preview || reviews[id]?.skipped)
- async function load(id: number, url: string) {
+ const load = useCallback(async (id: number, url: string) => {
   setLoading(id)
   setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(), error: undefined, skipped: false } }))
   try {
@@ -27,7 +27,13 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel }
    setReviews(current => ({ ...current, [id]: { preview, selected: new Set() } }))
   } catch (error) { setReviews(current => ({ ...current, [id]: { selected: new Set(), error: error instanceof Error ? error.message : 'Could not preview series. Retry or skip it.' } })) }
   finally { setLoading(undefined) }
- }
+ }, [])
+ const requested = useRef(new Set(initialPreviews.map(preview => preview.seriesId)))
+ useEffect(() => {
+  if (!autoLoad || series.size !== 1) return
+  const [id, url] = [...series][0]
+  if (!requested.current.has(id)) { requested.current.add(id); void load(id, url) }
+ }, [autoLoad, series, load])
  function select(id: number, ids: number[]) { setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(ids) } })) }
  return <section className="story-form settings-card" aria-label="Review series imports">
   <h2>Choose works from series</h2>
@@ -39,8 +45,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel }
    const available = preview?.works.filter(work => !savedIds.has(work.workId) && !direct.has(work.workId)) ?? []
    const disabled = busy || loading !== undefined
    return <section className="settings-card" key={id} aria-label={preview?.title ?? `Series ${id}`}>
-    <h3>{preview?.title ?? `Series ${id}`}</h3>
-    <a className="clickable-text" href={url} target="_blank" rel="noreferrer">View series on AO3</a>
+    <h3>{preview?.title && <><span>{preview.title}</span> · </>}Series <a className="clickable-text" href={url} target="_blank" rel="noreferrer">{id}</a></h3>
     {preview?.description && <p className="story-summary">{preview.description}</p>}
     {review?.error && <p className="error-message" role="alert">{review.error}</p>}
     {review?.skipped ? <><p>Series skipped.</p><button className="text-button" disabled={disabled} onClick={() => void load(id, url)}>Review series</button></> : <>

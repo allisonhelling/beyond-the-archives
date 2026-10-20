@@ -35,3 +35,11 @@ it('expands only selected series works, deduplicating overlaps without losing ch
  const { selectedImportText } = await import('./urls')
  expect(selectedImportText('https://archiveofourown.org/series/77\nhttps://archiveofourown.org/works/101/chapters/999', [{ workId: 101, url: 'https://archiveofourown.org/works/101' }, { workId: 102, url: 'https://archiveofourown.org/works/102' }, { workId: 102, url: 'https://archiveofourown.org/works/102' }] as never)).toBe('https://archiveofourown.org/works/101/chapters/999\nhttps://archiveofourown.org/works/102')
 })
+
+it('waits for both URL processing and metadata jobs before reporting a finished batch', async () => {
+ const { importFinished } = await import('./urls')
+ expect(importFinished({ items: [] })).toBe(false)
+ expect(importFinished({ items: [{ status: 'completed', metadata_status: 'pending' }] })).toBe(false)
+ expect(importFinished({ items: [{ status: 'completed', metadata_status: 'completed' }], jobs: [{ status: 'processing' }] })).toBe(false)
+ expect(importFinished({ items: [{ status: 'completed', metadata_status: 'completed' }, { status: 'failed' }], jobs: [{ status: 'failed' }] })).toBe(true)
+})

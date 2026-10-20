@@ -1,12 +1,14 @@
+import type { SeriesRecord } from './series'
+import { editSnapshot } from './edit-merge'
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { UndoNotice } from '../../components/UndoNotice'
 import { abandonedReadingStatus, type Collection, type Story } from './model'
 import { deleteStory, loadLibrary, restoreStory, updateEntry } from './repository'
-type ReadingUndo = { id: string; storyId: string; title: string; message: string; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
-type LibraryState = { stories: Story[]; collections: Collection[]; loading: boolean; error: string; refresh: () => Promise<void>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
+type ReadingUndo = { id: string; storyId: string; title: string; message: string; saved?: { status: Story['reading_status']; progress: number }; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
+type LibraryState = { series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; refresh: () => Promise<void>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
 const Context = createContext<LibraryState | null>(null)
 export function LibraryProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<{ stories: Story[]; collections: Collection[] }>({ stories: [], collections: [] })
+  const [data, setData] = useState<{ stories: Story[]; collections: Collection[]; series?: SeriesRecord[] }>({ stories: [], collections: [], series: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [undoNotices, setUndoNotices] = useState<ReadingUndo[]>([])
@@ -17,9 +19,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     finally { setLoading(false) }
   }, [])
   async function updateReadingWithUndo(story: Story, status: Story['reading_status'], chapters: number, message: string) {
-    await updateEntry(story.id, { last_read_chapter: chapters, reading_status: status })
+    await updateEntry(story.id, { last_read_chapter: chapters, reading_status: status }, editSnapshot(story))
     setUndoNotices(notices => [...notices.filter(notice => notice.storyId !== story.id), {
       id: crypto.randomUUID(), storyId: story.id, title: story.metadata.title, message,
+      saved: { status, progress: chapters },
       previous: notices.find(notice => notice.storyId === story.id)?.previous ?? { last_read_chapter: story.last_read_chapter, reading_status: story.reading_status },
     }])
     await refresh()
@@ -39,8 +42,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     await updateReadingWithUndo(story, 'finished', chapters ?? story.last_read_chapter, `Marked “${story.metadata.title}” as finished.${chapters === null ? '' : ' All chapters marked as read.'}`)
   }
   useEffect(() => { let alive = true; loadLibrary().then(next => { if (alive) { setData(next); setError('') } }).catch(e => { if (alive) setError(e instanceof Error ? e.message : 'Could not load library.') }).finally(() => { if (alive) setLoading(false) }); return () => { alive = false } }, [])
-  return <Context.Provider value={{ ...data, loading, error, refresh, markAllRead, markFinished, removeStory }}>
-    {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss undo notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous); await refresh() }} />)}</section>}
+  return <Context.Provider value={{ ...data, series: data.series ?? [], loading, error, refresh, markAllRead, markFinished, removeStory }}>
+    {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss undo notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous, notice.saved ?? {}); await refresh() }} />)}</section>}
     {children}
   </Context.Provider>
 }

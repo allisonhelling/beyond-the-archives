@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom'
 const mocks=vi.hoisted(()=>({history:vi.fn(),submit:vi.fn(),cancel:vi.fn(),retry:vi.fn(),approve:vi.fn(),preview:vi.fn(),refresh:vi.fn()}))
 vi.mock('./repository',()=>({importHistory:mocks.history,submitImport:mocks.submit,cancelBatch:mocks.cancel,retryJob:mocks.retry,approveProgress:mocks.approve,previewSeries:mocks.preview}))
-vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,stories:[{work:{ao3_work_id:103}}]})}))
+vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,stories:[{id:'saved-103',metadata:{series:[],series_memberships:[]},work:{ao3_work_id:103}}]})}))
 import { ImportPage } from './ImportPage'
 function show(){return render(<MemoryRouter><ImportPage/></MemoryRouter>)}
 beforeEach(()=>{vi.clearAllMocks();mocks.history.mockResolvedValue({batches:[],items:[],jobs:[]});mocks.refresh.mockResolvedValue(undefined);mocks.submit.mockResolvedValue('batch')})

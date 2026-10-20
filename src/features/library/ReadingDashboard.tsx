@@ -62,7 +62,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions }: { stories: Story[]; renderStory: (story: Story) => ReactNode; mode?: 'reading' | 'library'; resultsActions?: ReactNode }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, filterItems = filterReading, resultKind = mode === 'series' ? 'series' : 'story' }: { stories: Story[]; renderStory: (story: Story) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; resultKind?: 'story' | 'series' | 'item'; filterItems?: typeof filterReading }) {
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileQuery)
@@ -91,11 +91,12 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { setFilters(previous => ({ ...previous, [key]: value })) }
   let error = '', filtered: Story[] = []
   if (filters.updatedAfter && filters.updatedBefore && filters.updatedAfter > filters.updatedBefore) error = 'The last-updated start date must be before the end date.'
-  try { filtered = filterReading(pool, filters) } catch (e) { error = (e as Error).message }
-  const shown = error ? [] : filtered.filter(s => mode === 'library' || inReadingSection(s, selected))
-  const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationStatuses[status].label}`),
+  try { filtered = filterItems(pool, filters) } catch (e) { error = (e as Error).message }
+  const shown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
+  const publicationLabel = (value: keyof typeof publicationStatuses) => mode === 'series' ? value === 'complete' ? 'Complete' : value === 'in_progress' ? 'Incomplete' : 'Completion unknown' : publicationStatuses[value].label
+  const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationLabel(status)}`),
     filters.oneShot !== 'allowed' && `One-shot: ${filters.oneShot === 'only' ? 'Only' : 'Exclude'}`,
-    filters.rating && `Rating: ${filters.rating}`, filters.favorites && 'Favorites',
+    filters.inSeries && 'In a series', filters.rating && `Rating: ${filters.rating}`, filters.favorites && 'Favorites',
     filters.relationship && `Relationships: ${filters.relationship}`, filters.characters && `Characters: ${filters.characters}`, filters.tags && `Tags: ${filters.tags}`, filters.within && `Within ${filters.scope}: ${filters.within}`,
     filters.updatedAfter && `Updated from ${filters.updatedAfter}`, filters.updatedBefore && `Updated through ${filters.updatedBefore}`].filter(Boolean)
   const orderingControls = <>
@@ -103,21 +104,22 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     <Dropdown label="Group" icon={Layers3} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
   </>
   return <>
-    <section className="reading-toolbar" aria-label={mode === 'library' ? 'Library toolbar' : 'Reading toolbar'}>
+    <section className="reading-toolbar" aria-label={mode === 'series' ? 'Series toolbar' : mode === 'library' ? 'Library toolbar' : 'Reading toolbar'}>
       {orderingControls}
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={pool} />
       <FandomSelect options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       <button className={`button ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls="reading-filters" onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>
     </section>
-    {expanded && <section className="reading-filters" id="reading-filters" aria-label={mode === 'library' ? 'Library filters' : 'Reading filters'}><div className="filter-grid">
+    {expanded && <section className="reading-filters" id="reading-filters" aria-label={mode === 'series' ? 'Series filters' : mode === 'library' ? 'Library filters' : 'Reading filters'}><div className="filter-grid">
       <SearchSuggestions label="Relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
 
       <div className="filter-choice-row">
       <Dropdown fitContent label="Rating" value={filters.rating} onChange={value => change('rating', value)} options={[{ value: '', label: 'All ratings' }, ...ratings.map(rating => ({ value: rating, label: rating }))]} />
-      <Dropdown fitContent label={mode === 'library' ? 'Publication status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).map(([value, status]) => ({ value, label: status.label }))} />
+      <Dropdown fitContent label={mode !== 'reading' ? 'Publication status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
       <Dropdown fitContent label="One-shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
+      <button className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a series</button>
       <button className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Heart size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites only</button>
       </div>
       <div className="updated-filter-section"><div className="updated-filter-row"><span className="filter-label" id="updated-filter-label">Last updated on AO3</span><div className="updated-filter" role="group" aria-labelledby="updated-filter-label"><label><span className="filter-name">From</span><input type="date" value={filters.updatedAfter} onChange={e => change('updatedAfter', e.target.value)} /></label><label><span className="filter-name">Through</span><input type="date" value={filters.updatedBefore} onChange={e => change('updatedBefore', e.target.value)} /></label></div></div><p className="field-help">Last updated uses saved AO3 dates in UTC; stories without an AO3 date are excluded by date filters. Chapter counts are saved snapshots; unknown counts sort last.</p></div>
@@ -131,7 +133,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
       const label = mobile && key === 'waiting' ? 'Waiting' : title
       return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => setParams({ shelf: key })}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : filtered.filter(story => inReadingSection(story, key)).length}</span></button>
     })}</nav>}
-    <div className="results-row"><p className="results-count" role="status">{shown.length} {shown.length === 1 ? 'story' : 'stories'} shown</p>{resultsActions}</div>
+    <div className="results-row"><p className="results-count" role="status">{shown.length} {resultKind === 'series' ? 'series' : resultKind === 'item' ? shown.length === 1 ? 'item' : 'items' : shown.length === 1 ? 'story' : 'stories'} shown</p>{resultsActions}</div>
     {error && <p role="alert" className="error-message">{error}</p>}
     {!error && (shown.length ? readingGroups(shown, filters.groupBy).map(([name, group]) => <section key={name} className="reading-group">{name && <h2>{name} <span>({group.length})</span></h2>}<div className="story-grid">{group.map(story => renderStory(story))}</div></section>) : <section className="library-empty"><h2>{selected === 'new' ? 'No verified chapter updates' : 'No stories here yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : activeFilters.length ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
   </>

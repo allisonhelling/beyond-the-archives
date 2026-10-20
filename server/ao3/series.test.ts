@@ -54,3 +54,17 @@ it('propagates AO3 rate limits into the shared worker pause', async () => {
  expect((await handler(request({ url }))).status).toBe(422)
  expect(deps.pause).toHaveBeenCalledWith(3600, 'rate_limited')
 })
+
+it('extracts creator links, dates, readable notes, series statistics and fandoms', () => {
+ const enriched = html.replace('<dt>Description:</dt>', `<dt>Creator:</dt><dd><a rel="author" href="/users/One">One</a><a rel="author" href="https://evil.example/users/Two">Two</a></dd>
+ <dt>Series Begun:</dt><dd>2020-01-02</dd><dt>Series Updated:</dt><dd>2026-10-19</dd>
+ <dt>Notes:</dt><dd><blockquote><p>First note.</p><p>Second note.</p></blockquote></dd>
+ <dt>Stats:</dt><dd><dl><dd class="words">12,345</dd><dd class="works">2</dd></dl></dd><dt>Description:</dt>`)
+ expect(parseSeries(enriched, url)).toMatchObject({ creators: ['One', 'Two'], creatorLinks: { One: 'https://archiveofourown.org/users/One' }, begun: '2020-01-02', updated: '2026-10-19', creatorNotes: 'First note.\n\nSecond note.', wordCount: 12345, workCount: 2, works: [{ fandoms: ['Fandom'] }, { fandoms: [] }] })
+})
+
+it('tracks the series Complete field independently from the completion of its works', () => {
+ expect(parseSeries(html.replace('<dt>Description:</dt>', '<dt>Complete:</dt><dd>No</dd><dt>Description:</dt>'),url).complete).toBe(false)
+ expect(parseSeries(html.replace('<dt>Description:</dt>', '<dt>Complete:</dt><dd>Yes</dd><dt>Description:</dt>'),url).complete).toBe(true)
+ expect(parseSeries(html,url).complete).toBe(null)
+})

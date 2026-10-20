@@ -13,11 +13,11 @@ import { deleteCollection, deleteCollections, saveCollection, updateCollections 
 const deleteLabel = <><Trash2 size={16} aria-hidden="true" />Delete</>
 
 export function NewCollectionDialog({ onClose, onCreated, collection, selectedCollections, onDeleted, hidden = false, onVisibilityChange }: { onClose: () => void; onCreated?: (id: string) => void; collection?: Collection; selectedCollections?: Collection[]; onDeleted?: () => void; hidden?: boolean; onVisibilityChange?: () => void }) {
-  const { refresh, collections, stories } = useLibrary()
+  const { refresh, collections, stories, series } = useLibrary()
   const bulk = selectedCollections !== undefined
   const targets = selectedCollections ?? (collection ? [collection] : [])
   const targetIds = targets.map(item => item.id)
-  const hasStories = stories.some(story => story.collectionIds.some(id => targetIds.includes(id)))
+  const hasStories = stories.some(story => story.collectionIds.some(id => targetIds.includes(id))) || (series ?? []).some(series => series.collectionIds?.some(id => targetIds.includes(id)))
   const [summary, setSummary] = useState(collection?.description ?? '')
   const [applyColor, setApplyColor] = useState(!bulk), [applySymbol, setApplySymbol] = useState(!bulk)
   const colors = getCollectionColors(collections)

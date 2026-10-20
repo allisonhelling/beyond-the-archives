@@ -1,3 +1,4 @@
+import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
 import { expect, test, type Page } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
 // Browser contract fixtures persist independently of the page and Auth session.
@@ -10,11 +11,38 @@ async function fixture(page: Page) {
     return route.fulfill({ json: path.endsWith('/token') ? { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } : path.endsWith('/user') ? user : {} })
   })
   type Row = Record<string, unknown>
-  const tables: Record<string, Row[]> = { library_entries: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
+  const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
+  const snapshot = (entry: Row): EditValues => ({ status: entry.reading_status as string, progress: entry.last_read_chapter as number, notes: entry.notes as string, rating: entry.personal_rating as number | null, favorite: entry.is_favorite as boolean, metadata: entry.metadata_overrides as EditValues, tags: tables.library_entry_tags.filter(link => link.library_entry_id === entry.id).map(link => String(tables.personal_tags.find(tag => tag.id === link.personal_tag_id)?.name)), collections: tables.collection_works.filter(link => link.library_entry_id === entry.id).map(link => String(link.collection_id)) })
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
-    if (table === 'save_library_story' && body) {
+    if (table === 'remember_library_series' && body) {
+      const metadata = body.p_metadata as Row
+      let series = tables.library_series.find(series => series.ao3_series_id === metadata.seriesId)
+      if (!series) { series = { id: crypto.randomUUID(), user_id: user.id, ao3_series_id: metadata.seriesId, notes: '', is_favorite:false, reading_status:'to_read', created_at: now }; tables.library_series.push(series) }
+      Object.assign(series, { metadata, updated_at: now }); return route.fulfill({ json: series.id })
+    }
+    if (table === 'save_library_series_note' && body) {
+      const series = tables.library_series.find(series => series.ao3_series_id === body.p_series)!
+      const base = { notes: series.notes as string }, review = mergeEdits({ notes: body.p_base as string }, { notes: body.p_notes as string }, base)
+      if (review.conflicts.length) return route.fulfill({ status: 409, json: { code: '40001', details: JSON.stringify({ ...review, base }) } })
+      series.notes = review.merged.notes; return route.fulfill({ status: 204 })
+    }
+    if (['save_library_story_checked', 'update_library_entry_checked'].includes(table) && body) {
+      const entry = tables.library_entries.find(entry => entry.id === body.p_id)
+      let values = body.p_input as EditValues
+      if (entry) {
+        const base = snapshot(entry), review = mergeEdits(body.p_base as EditValues, values, base)
+        if (review.conflicts.length) return route.fulfill({ status: 409, json: { code: '40001', details: JSON.stringify({ ...review, base }) } })
+        values = review.merged
+      }
+      if (table === 'update_library_entry_checked') {
+        Object.assign(entry!, { reading_status: values.status, last_read_chapter: values.progress, notes: values.notes, personal_rating: values.rating, is_favorite: values.favorite, updated_at: now })
+        return route.fulfill({ status: 204 })
+      }
+      Object.assign(body, { p_metadata: values.metadata, p_status: values.status, p_progress: values.progress, p_notes: values.notes, p_rating: values.rating, p_favorite: values.favorite, p_collections: values.collections, p_tags: values.tags })
+    }
+    if (['save_library_story', 'save_library_story_checked'].includes(table) && body) {
       let entry = tables.library_entries.find(e => e.id === body.p_id)
       const workId = String(body.p_url).match(/works\/(\d+)/)![1]
       if (!entry && tables.works.some(w => w.ao3_work_id === Number(workId))) return route.fulfill({ status: 409, json: { code: '23505' } })
@@ -176,13 +204,13 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(page.getByRole('img', { name: '3 out of 5 stars', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Clear rating', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Chapter 3 of ? — edit progress', exact: true })).toBeVisible()
-  await expect(page.locator('.details-fic-fields dd .metadata-tag').filter({ hasText: /^(Comfort reads|Long fics|Created while adding)$/ })).toHaveCount(3)
+  await expect(page.getByRole('region', { name: 'Collections', exact: true }).locator('.collection-name-list li').filter({ hasText: /^(Comfort reads|Long fics|Created while adding)$/ })).toHaveCount(3)
   await expect(page.locator('.story-series-eyebrow')).toHaveText('Part ? of My manual series')
   tables.works[0].automatic_metadata = { series_memberships: [{ id: 77, name: 'My manual series', url: 'https://archiveofourown.org/series/77', position: 3 }] }
   await page.reload(); await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   const series = page.locator('.story-series-eyebrow')
   await expect(series).toHaveText('Part 3 of My manual series')
-  await expect(series.getByRole('link', { name: 'My manual series' })).toHaveAttribute('href', 'https://archiveofourown.org/series/77')
+  await expect(series.getByRole('link', { name: 'My manual series' })).toHaveAttribute('href', '/series/77')
   await expect(series.locator('strong')).toHaveCount(0)
   await expect(series.locator('.series-membership')).toHaveCSS('text-transform', 'uppercase')
   await expect(series).toHaveCSS('padding-top', '12px')
@@ -265,7 +293,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   }
   const favoriteBounds = await page.locator('.story-title-row > .action-tooltip .favorite').boundingBox()
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Fandoms', 'Relationships', 'Characters', 'Additional Tags', 'All tags', 'Custom collections', /^Personal tags/, 'Saved', 'Last edited', 'Series'])
+  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Fandoms', 'Relationships', 'Characters', 'Additional Tags', 'All tags', /^Personal tags/i, 'Saved', 'Last edited', 'Series'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -289,9 +317,16 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect((await readingSection.boundingBox())!.y).toBeLessThan((await metadataSection.boundingBox())!.y)
   const statusBox = await readingSection.locator('.status-select').boundingBox()
   const ratingBox = await readingSection.locator('.personal-rating').boundingBox()
-  expect(statusBox!.x + statusBox!.width).toBeLessThan(ratingBox!.x)
-  expect(statusBox!.width).toBeLessThanOrEqual(180)
-  expect(Math.abs(statusBox!.y - ratingBox!.y)).toBeLessThan(2)
+  if (info.project.name === 'mobile') {
+    expect(statusBox!.y + statusBox!.height).toBeLessThan(ratingBox!.y)
+    const collectionsBox = await readingSection.getByRole('region', { name: 'Collections', exact: true }).boundingBox()
+    expect(ratingBox!.x + ratingBox!.width).toBeLessThan(collectionsBox!.x)
+    expect(Math.abs(ratingBox!.y - collectionsBox!.y)).toBeLessThan(2)
+  } else {
+    expect(statusBox!.x + statusBox!.width).toBeLessThan(ratingBox!.x)
+    expect(statusBox!.width).toBeLessThanOrEqual(180)
+    expect(Math.abs(statusBox!.y - ratingBox!.y)).toBeLessThan(2)
+  }
   await expect(readingSection.locator('.book-spine-footer')).toHaveCount(1)
   await expect(readingSection.getByRole('progressbar', { name: 'Chapters read' })).toHaveAttribute('aria-valuetext', '3 chapters read; total unknown')
   await expect(readingSection.locator('.spine-actions').getByRole('button', { name: 'Mark as Caught Up', exact: true })).toBeVisible()
@@ -376,7 +411,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.getByRole('button', { name: 'Edit personal tags', exact: true }).click()
   await expect(page.locator('.personal-tag-editor .field-help')).toHaveCount(0)
   const tagEditorBounds = await page.locator('.inline-personal-form').boundingBox()
-  const tagsHeadingBounds = await page.locator('dt').filter({ hasText: /^Personal tags/ }).boundingBox()
+  const tagsHeadingBounds = await page.locator('dt').filter({ hasText: /^Personal tags/i }).boundingBox()
   expect(tagEditorBounds!.y).toBeGreaterThan(tagsHeadingBounds!.y + tagsHeadingBounds!.height)
   for (const tag of ['New tag', 'New tag']) { await page.getByRole('textbox', { name: 'Personal tags', exact: true }).fill(tag); await page.keyboard.press('Enter') }
   await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -389,10 +424,10 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   }
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.locator('.details-fic-fields .metadata-tag').filter({ hasText: /^(Comfort|Revisit)$/ })).toHaveCount(2)
-  await page.getByRole('button', { name: 'Edit collections', exact: true }).click()
+  await page.getByRole('region', { name: 'Reading and organization' }).getByRole('button', { name: 'Edit Collections', exact: true }).click()
   await page.getByLabel('Comfort reads', { exact: true }).uncheck()
-  const collectionEditor = page.locator('.inline-personal-form')
-  expect((await collectionEditor.boundingBox())!.y).toBeGreaterThan((await page.locator('dt').filter({ hasText: /^Custom collections$/ }).boundingBox())!.y)
+  const collectionEditor = page.getByRole('dialog', { name: 'Edit Collections', exact: true })
+  await expect(collectionEditor).toBeVisible()
   await expect(collectionEditor.getByText('Custom collections', { exact: true })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Search collections' }).fill('Comfort')
   await expect(collectionEditor.getByRole('checkbox')).toHaveCount(1)
@@ -402,9 +437,9 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(page.getByRole('checkbox', { name: 'Created while editing', exact: true })).toBeChecked()
   await page.screenshot({ path: `test-results/collection-editor-${info.project.name}.png`, fullPage: true })
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await expect(page.locator('.details-fic-fields dd .metadata-tag').filter({ hasText: /^(Comfort reads|Long fics|Created while adding)$/ })).toHaveCount(3)
-  await page.getByRole('button', { name: 'Edit collections', exact: true }).click()
-  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Collections', exact: true }).locator('.collection-name-list li').filter({ hasText: /^(Comfort reads|Long fics|Created while adding)$/ })).toHaveCount(3)
+  await page.getByRole('region', { name: 'Reading and organization' }).getByRole('button', { name: 'Edit Collections', exact: true }).click()
+  await page.getByRole('button', { name: 'Save collections', exact: true }).click()
   await expect(page.getByRole('group', { name: 'Custom collections', exact: true })).toHaveCount(0)
   await page.reload()
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
@@ -467,7 +502,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.getByRole('link', { name: 'See Full Details…', exact: true }).click()
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   await expect(page.locator('.details-fic-fields .metadata-tag').filter({ hasText: /^(Comfort|Revisit)$/ })).toHaveCount(2)
-  await expect(page.locator('.details-fic-fields dd .metadata-tag').filter({ hasText: /^(Long fics|Created while adding)$/ })).toHaveCount(2)
+  await expect(page.getByRole('region', { name: 'Collections', exact: true }).locator('.collection-name-list li').filter({ hasText: /^(Long fics|Created while adding)$/ })).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Chapter 6 of ? — edit progress', exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Back to Library', exact: true }).click()
   await page.getByLabel('Story actions for My corrected title').click()
@@ -1219,7 +1254,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
   }
   await checkBookendPosition()
   if (mobile()) {
-    await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(31)
+    await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(32)
     const quickCreate = shelf.locator('.collection-shelf-bookend').getByRole('button', { name: 'New collection', exact: true }).last()
     const quickBounds = (await quickCreate.boundingBox())!, stopBounds = (await bookend.boundingBox())!
     expect(quickBounds.y + quickBounds.height).toBeLessThan(stopBounds.y)
@@ -1248,8 +1283,8 @@ test('collection bookspines expand into shelves and keep creation last at every 
   await expect(shelf.getByRole('button', { name: 'Show fewer collections', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await expect(rows.first().getByRole('button', { name: 'Show fewer collections', exact: true })).toHaveText('SEE LESS')
   await checkBookendPosition()
-  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(31)
-  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-details')).toHaveCount(31)
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(32)
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-details')).toHaveCount(32)
   for (const name of ['Collection 1', 'New collection']) {
     await expect(shelf.getByRole('button', { name, exact: true }).last().locator('.collection-spine-details')).toHaveCount(1)
   }
@@ -1281,7 +1316,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
   for (const row of await rows.all()) expect((await row.boundingBox())!.width).toBe(fullWidth)
   tables.collections = []
   await page.reload()
-  await expect(shelf.locator('.collection-spine')).toHaveCount(7)
+  await expect(shelf.locator('.collection-spine')).toHaveCount(8)
   await expect(shelf.locator('.collection-shelf-toggle')).toBeVisible()
   await expect(shelf.locator('.collection-shelf-toggle')).toHaveAttribute('aria-hidden', 'true')
   await expect(shelf.locator('.collection-shelf-toggle text')).toHaveCount(0)
@@ -1999,8 +2034,8 @@ test('adds stories to custom collections from story actions and collection pages
   await expect(page.locator('.story-card')).toHaveCount(2)
   expect(tables.library_entries[0]).toMatchObject({ notes: 'Keep my notes', personal_rating: 4, last_read_chapter: 2 })
   await page.goto('/stories/entry-1')
-  const collections = page.locator('.details-fic-fields > div').filter({ has: page.getByRole('button', { name: 'Edit collections', exact: true }) })
-  await expect(collections.locator('.metadata-tag')).toHaveCount(2)
+  const collections = page.getByRole('region', { name: 'Collections', exact: true })
+  await expect(collections.locator('.collection-name-list li')).toHaveCount(2)
   await page.getByRole('button', { name: 'Edit personal tags', exact: true }).click()
   for (const tag of ['A', 'A tag that is much longer than the other chip']) {
     await page.getByRole('textbox', { name: 'Personal tags', exact: true }).fill(tag)
@@ -2230,6 +2265,17 @@ test('manually added works can be marked and corrected as one-shots from fic det
   await page.getByLabel('AO3 publication status', { exact: true }).selectOption('complete')
   await page.getByLabel('Published chapters', { exact: true }).fill('3')
   await page.getByLabel('Total chapters', { exact: true }).fill('3')
+  const help = page.getByRole('button', { name: 'One-shot help', exact: true })
+  const explanation = page.getByRole('tooltip').filter({ hasText: 'Automatically marked for complete one-chapter works' })
+  await expect(explanation).toBeHidden()
+  const labelBounds = (await page.getByRole('checkbox', { name: 'One-shot', exact: true }).locator('..').boundingBox())!, helpBounds = (await help.boundingBox())!
+  expect(helpBounds.x).toBeGreaterThanOrEqual(labelBounds.x + labelBounds.width)
+  expect(Math.abs(helpBounds.y + helpBounds.height / 2 - labelBounds.y - labelBounds.height / 2)).toBeLessThan(2)
+  await help.click()
+  await expect(explanation).toBeVisible()
+  await expect(explanation).toContainText('extra art or other chapters')
+  await expect(page.getByRole('checkbox', { name: 'One-shot', exact: true })).not.toBeChecked()
+  await page.keyboard.press('Escape')
   await page.getByRole('checkbox', { name: 'One-shot', exact: true }).check()
   await page.getByRole('button', { name: 'Save story', exact: true }).click()
   await expect(page.getByRole('img', { name: 'One-shot', exact: true })).toBeVisible()
@@ -2242,4 +2288,155 @@ test('manually added works can be marked and corrected as one-shots from fic det
   await page.getByRole('button', { name: 'Save story', exact: true }).click()
   await expect(page.getByRole('img', { name: 'One-shot', exact: true })).toHaveCount(0)
   expect(tables.library_entries[0].metadata_overrides).toMatchObject({ one_shot: false, published_chapters: 3 })
+})
+
+test('website edits merge other-device changes and require explicit notes conflict resolution', async ({ page }) => {
+ const tables = await fixture(page)
+ tables.collections.push({ id:'conflict-collection',name:'Keep reading',default_key:null })
+ tables.works.push({ id: 'work-conflict', ao3_work_id: 123, word_count: null, automatic_metadata: {}, verified_chapters: {}, published_chapters: 10, total_chapters: 10, is_complete: true })
+ const entry = { id: 'entry-conflict', work_id: 'work-conflict', original_url: 'https://archiveofourown.org/works/123', reading_status: 'reading', last_read_chapter: 2, notes: 'Original notes', personal_rating: 2, is_favorite: false, metadata_overrides: { title: 'Conflict story' }, created_at: '2026-10-19T12:00:00Z', updated_at: '2026-10-19T12:00:00Z' }
+ tables.library_entries.push(entry)
+ await page.goto('/stories/entry-conflict?edit=reading'); await login(page)
+ await page.getByRole('textbox', { name: 'Private notes', exact: true }).fill('Website draft')
+ entry.personal_rating = 5 // A rating saved by Safari while the website editor is open.
+ await page.getByRole('button', { name: 'Save story', exact: true }).click()
+ await expect(page.getByRole('button', { name: 'Save story', exact: true })).toHaveCount(0)
+ await expect(page.getByText('Website draft', { exact: true })).toBeVisible()
+ expect(entry).toMatchObject({ notes: 'Website draft', personal_rating: 5 })
+ await page.getByRole('button', { name: 'Edit note', exact: true }).click()
+ await page.getByRole('textbox', { name: 'Private notes', exact: true }).fill('Second website draft')
+ entry.notes = 'New Safari notes'
+ await page.locator('.inline-personal-form').getByRole('button', { name: 'Save', exact: true }).click()
+ const review = page.getByRole('region', { name: 'Review conflicting edits' })
+ await expect(review.getByText('Second website draft', { exact: true })).toBeVisible()
+ await expect(review.getByText('New Safari notes', { exact: true })).toBeVisible()
+ await expect(review.getByRole('button', { name: 'Save resolved changes' })).toBeDisabled()
+ expect(entry.notes).toBe('New Safari notes')
+ await review.getByLabel('Edit or combine notes', { exact: true }).check()
+ await review.getByLabel('Notes to save', { exact: true }).fill('Website and Safari notes combined')
+ entry.notes = 'Safari changed again during review'
+ await review.getByRole('button', { name: 'Save resolved changes' }).click()
+ await expect(review.getByText('Safari changed again during review', { exact: true })).toBeVisible()
+ expect(entry.notes).toBe('Safari changed again during review')
+ await review.getByLabel('Use saved version', { exact: true }).check()
+ await review.getByRole('button', { name: 'Save resolved changes' }).click()
+ await expect(review).toHaveCount(0)
+ await expect(page.getByText('Safari changed again during review', { exact: true })).toBeVisible()
+ expect(entry.personal_rating).toBe(5)
+ await page.getByRole('region', { name: 'Reading and organization' }).getByRole('button', { name: 'Add to Collection', exact: true }).click()
+ const collectionEditor = page.getByRole('dialog', { name: 'Edit Collections', exact: true })
+ await collectionEditor.getByRole('checkbox', { name: 'Keep reading', exact: true }).check()
+ entry.notes = 'Newest Safari note while collections are open'
+ await collectionEditor.getByRole('button', { name: 'Save collections', exact: true }).click()
+ await expect(collectionEditor).toHaveCount(0)
+ expect(entry.notes).toBe('Newest Safari note while collections are open')
+ expect(entry.personal_rating).toBe(5)
+ expect(tables.collection_works).toContainEqual(expect.objectContaining({collection_id:'conflict-collection',library_entry_id:'entry-conflict'}))
+})
+
+const seriesPreview = {
+ seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Stories and art', description: 'A complete series description.',
+ creators: ['Series creator'], creatorLinks: { 'Series creator': 'https://archiveofourown.org/users/Creator' }, begun: '2020-01-02', updated: '2026-10-19', creatorNotes: 'Creator notes for the series.', wordCount: 12000, workCount: 2,
+ works: [
+  { workId: 101, url: 'https://archiveofourown.org/works/101', position: 1, title: 'The story', authors: ['Series creator'], fandoms: ['First fandom'], summary: 'An adventure.', tags: ['Adventure'], wordCount: 12000, chapters: '2/2', complete: true },
+  { workId: 102, url: 'https://archiveofourown.org/works/102', position: 4, title: 'Art extras', authors: ['Series creator'], fandoms: ['Second fandom'], summary: 'Drawings.', tags: ['Fanart'], wordCount: 0, chapters: '1/1', complete: true },
+ ],
+}
+function seedSeriesWork(tables: Record<string, Record<string, unknown>[]>, number: number) {
+ const item = seriesPreview.works.find(work => work.workId === number)!
+ const now = '2026-10-19T12:00:00Z'
+ tables.works.push({ id: `work-${number}`, ao3_work_id: number, title: item.title, summary: item.summary, word_count: item.wordCount, total_chapters: 2, published_chapters: 2, is_complete: true, verified_chapters: {}, automatic_metadata: { authors: item.authors, fandoms: item.fandoms, series: [seriesPreview.title], series_memberships: [{ id: 77, name: seriesPreview.title, url: seriesPreview.normalizedUrl, position: item.position }] } })
+ tables.library_entries.push({ id: `entry-${number}`, work_id: `work-${number}`, original_url: item.url, reading_status: 'reading', last_read_chapter: 0, notes: '', personal_rating: null, is_favorite: false, metadata_overrides: {}, created_at: now, updated_at: now })
+}
+
+test('Add Story reviews series in place, then shows a Series shelf, details, private notes and series filters', async ({ page }) => {
+ const tables = await fixture(page), submitted: string[][] = []
+ await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: seriesPreview } }))
+ await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+  const urls = route.request().postDataJSON().p_urls as string[]; submitted.push(urls)
+  for (const url of urls) seedSeriesWork(tables, Number(url.split('/').pop()))
+  tables.import_batches.push({ id: 'batch-series', created_at: '2026-10-19T12:00:00Z' })
+  tables.import_items.push({ id: 'item-series', batch_id: 'batch-series', entry_id: 'entry-101', status: 'completed', metadata_status: 'completed' })
+  return route.fulfill({ json: 'batch-series' })
+ })
+ await page.goto('/add'); await login(page)
+ await page.getByRole('textbox', { name: 'AO3 work or series link' }).fill(seriesPreview.normalizedUrl)
+ await page.getByRole('button', { name: 'Import from link', exact: true }).click()
+ const picker = page.getByRole('region', { name: 'Review series imports' })
+ await expect(picker.getByRole('checkbox', { name: 'Part 1: The story' })).not.toBeChecked()
+ await expect(page).toHaveURL(/\/add$/)
+ await expect(picker.getByRole('link', { name: '77', exact: true })).toHaveAttribute('href', seriesPreview.normalizedUrl)
+ expect(submitted).toEqual([])
+ await picker.getByRole('checkbox', { name: 'Part 1: The story' }).check()
+ await picker.getByRole('button', { name: 'Import 1 selected works', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Series import finished' })).toBeVisible()
+ await expect(page).toHaveURL(/\/add$/)
+ expect(submitted).toEqual([['https://archiveofourown.org/works/101']])
+ await page.getByRole('link', { name: 'View Series collection', exact: true }).click()
+ await expect(page.getByRole('navigation', { name: 'Library shelves', exact: true }).getByRole('button', { name: 'Series', exact: true })).toHaveCSS('--cover-color', '#07534a')
+ await expect(page.locator('.series-card')).toHaveCount(1)
+ await expect(page.locator('.reading-group .story-grid')).toBeVisible()
+ await expect(page.locator('.series-card')).toContainText('Second fandom')
+ await expect(page.locator('.series-card')).toContainText('2 works')
+ await expect(page.locator('.series-card').getByText('Drawings.', { exact: true })).toBeVisible()
+ await page.getByRole('link', { name: 'View series details', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Stories and art', exact: true })).toBeVisible()
+ const info = page.getByRole('region', { name: 'Series information' })
+ await expect(info.getByRole('link', { name: 'Series creator', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/users/Creator')
+ for (const text of ['2020-01-02', '2026-10-19', 'A complete series description.', 'Creator notes for the series.']) await expect(info.getByText(text, { exact: true })).toBeVisible()
+ await expect(page.getByRole('region', { name: 'Works in series' }).locator('.story-card')).toHaveCount(2)
+ await page.getByRole('button', { name: 'Add a note', exact: true }).click()
+ await page.getByRole('textbox', { name: 'Private notes', exact: true }).fill('Read these in order.')
+ await page.locator('.inline-personal-form').getByRole('button', { name: 'Save', exact: true }).click()
+ await expect(page.getByText('Read these in order.', { exact: true })).toBeVisible()
+ await page.getByRole('button', { name: 'Refresh series details', exact: true }).click()
+ await expect(page.getByRole('button', { name: 'Refresh series details', exact: true })).toBeEnabled()
+ await page.reload()
+ await expect(page.getByText('Read these in order.', { exact: true })).toBeVisible()
+ expect(tables.library_entries).toHaveLength(1)
+ expect(tables.library_entries[0].notes).toBe('')
+ await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
+ // Both filter boxes reuse the same series predicate.
+ tables.works.push({ id: 'standalone', ao3_work_id: 999, title: 'Standalone', word_count: null, automatic_metadata: {}, verified_chapters: {} })
+ tables.library_entries.push({ ...tables.library_entries[0], id: 'standalone', work_id: 'standalone', original_url: 'https://archiveofourown.org/works/999' })
+ for (const path of ['/library', '/reading']) {
+  await page.goto(path)
+  await expect(page.locator('.story-card')).toHaveCount(2)
+  await openFilters(page)
+  await page.getByRole('button', { name: 'In a series', exact: true }).click()
+  await expect(page.locator('.story-card')).toHaveCount(1)
+  await expect(page.locator('.story-card h2')).toContainText('The story')
+ }
+})
+
+test('a completed direct fic import offers its related series and imports only selected unsaved works', async ({ page }) => {
+ const tables = await fixture(page), submissions: Record<string, unknown>[] = []
+ await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: seriesPreview } }))
+ await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+  const body = route.request().postDataJSON(); submissions.push(body)
+  if (submissions.length === 1) {
+   seedSeriesWork(tables, 101)
+   tables.import_batches.push({ id: 'direct-batch', created_at: '2026-10-19T12:00:00Z' })
+   tables.import_items.push({ id: 'direct-item', batch_id: 'direct-batch', entry_id: 'entry-101', status: 'completed', metadata_status: 'pending' })
+   tables.metadata_jobs.push({ id: 'direct-job', batch_id: 'direct-batch', entry_id: 'entry-101', status: 'pending' })
+  } else seedSeriesWork(tables, 102)
+  return route.fulfill({ json: submissions.length === 1 ? 'direct-batch' : 'related-batch' })
+ })
+ await page.goto('/add'); await login(page)
+ await page.getByRole('textbox', { name: 'AO3 work or series link' }).fill('https://archiveofourown.org/works/101')
+ await page.getByRole('button', { name: 'Import from link', exact: true }).click()
+ await expect(page).toHaveURL(/\/stories\/entry-101$/)
+ const notice = page.getByRole('region', { name: 'Series discovered after import' })
+ await expect(notice).toHaveCount(0)
+ Object.assign(tables.import_items[0], { metadata_status: 'completed' }); Object.assign(tables.metadata_jobs[0], { status: 'completed' })
+ await expect(notice).toBeVisible({ timeout: 12000 })
+ await expect(notice).toContainText('The story is part of the following series')
+ await notice.getByRole('button', { name: 'Stories and art', exact: true }).click()
+ await expect(notice.getByRole('checkbox', { name: 'Part 1: The story' })).toBeDisabled()
+ await expect(notice.getByRole('checkbox', { name: 'Part 4: Art extras' })).not.toBeChecked()
+ await notice.getByRole('button', { name: 'Select all', exact: true }).click()
+ await notice.getByRole('button', { name: 'Import 1 selected works', exact: true }).click()
+ await expect.poll(() => submissions.length).toBe(2)
+ expect(submissions[1]).toEqual({ p_urls: ['https://archiveofourown.org/works/102'], p_update_reading_location: false })
+ expect(tables.library_entries).toHaveLength(2)
 })

@@ -7,7 +7,7 @@ export function parseWorkUrl(original: string): WorkIdentity {
   return { workId: Number(match[1]), chapterId: match[2] ?? null, original, normalizedUrl: `https://archiveofourown.org/works/${match[1]}` }
 }
 export type SeriesIdentity = { seriesId: number; normalizedUrl: string }
-export type SeriesPreview = SeriesIdentity & { title: string; description: string; works: { workId: number; url: string; position: number | null; title: string; authors: string[]; summary: string; tags: string[]; wordCount: number | null; chapters: string; complete: boolean | null }[] }
+export type SeriesPreview = SeriesIdentity & { title: string; description: string; complete?: boolean | null; creators?: string[]; creatorLinks?: Record<string, string>; begun?: string; updated?: string; creatorNotes?: string; wordCount?: number | null; workCount?: number | null; works: { workId: number; url: string; position: number | null; title: string; authors: string[]; fandoms?: string[]; rating?: string; relationshipTags?: string[]; characterTags?: string[]; additionalTags?: string[]; updated?: string; summary: string; tags: string[]; wordCount: number | null; chapters: string; complete: boolean | null }[] }
 export function parseSeriesUrl(original: string): SeriesIdentity {
   const match = original.trim().match(/^https?:\/\/(?:www\.)?archiveofourown\.org\/series\/([1-9]\d*)\/?(?:[?#][^\s]*)?$/)
   if (!match || !Number.isSafeInteger(Number(match[1]))) throw new Error('Enter a valid AO3 series URL.')
@@ -39,4 +39,10 @@ export function selectedImportText(text: string, selected: SeriesPreview['works'
     existing.set(work.workId, [])
   }
   return urls.join('\n')
+}
+
+/** A batch is finished only after both URL processing and metadata retrieval. */
+export function importFinished(history: { items: { status: string; metadata_status?: string | null }[]; jobs?: { status: string }[] }) {
+ const active = ['pending', 'processing']
+ return history.items.length > 0 && !history.items.some(item => active.includes(item.status) || active.includes(item.metadata_status ?? '')) && !(history.jobs ?? []).some(job => active.includes(job.status))
 }

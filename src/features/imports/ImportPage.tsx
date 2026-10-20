@@ -1,10 +1,11 @@
+import { ImportedSeriesNotice } from './ImportedSeriesNotice'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useLibrary } from '../library/LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
 import { approveProgress, cancelBatch, importHistory, retryJob, submitImport } from './repository'
 import { SeriesImportReview } from './SeriesImportReview'
-import { classifyUrl, extractUrls, selectedImportText, type SeriesPreview } from './urls'
+import { importFinished, classifyUrl, extractUrls, selectedImportText, type SeriesPreview } from './urls'
 type History = Awaited<ReturnType<typeof importHistory>>
 const activeStatuses=['pending','processing']
 const reviewStatuses=['failed','skipped','cancelled']
@@ -20,7 +21,7 @@ export function ImportPage() {
  useEffect(()=>{let alive=true; const load=async()=>{try {const next=await importHistory(selected);if(alive){setData(next);setLoading(false);const signature=JSON.stringify(next.jobs.map(j=>[j.id,j.completed_at]));if(signature!==completedSignature.current){completedSignature.current=signature;void refresh().catch(()=>{})}}}catch {if(alive){setError('Import history is unavailable. Check your connection and apply the Phase 3 migration.');setLoading(false)}}}; if(!sampleMode) {void load();const timer=setInterval(()=>void load(),5000);return()=>{alive=false;clearInterval(timer)}}},[selected,refresh])
  async function action(fn:()=>Promise<unknown>) {setBusy(true);setError('');try {await fn();await reload();await library.refresh()}catch(e){setError(e instanceof Error?e.message:'Import operation failed.')}finally{setBusy(false)}}
  const batch=data.batches.find(b=>b.id===selected)??data.batches[0]
- const finished=data.items.length>0&&!data.items.some(item=>activeStatuses.includes(item.status)||activeStatuses.includes(item.metadata_status))&&!data.jobs.some(job=>activeStatuses.includes(job.status))
+ const finished=importFinished(data)
  if(resultView.batchId!==batch?.id||resultView.finished!==finished) setResultView({batchId:batch?.id,finished,status:finished?'review':'all'})
  const statusFilter=resultView.status
  function setStatusFilter(status:string){setResultView({batchId:batch?.id,finished,status})}
@@ -41,6 +42,7 @@ export function ImportPage() {
  </form>}
  <p className="muted">Processing uses the metadata mode selected in Settings: the hosted worker or the connected browser extension. For extension requests, keep your browser running and complete any AO3 confirmation in the requested tab. This page checks persisted progress every five seconds. Closing it does not cancel jobs.</p>
  {message&&<p role="status">{message}</p>}{error&&<p className="error-message" role="alert">{error}</p>}
+ {finished && <ImportedSeriesNotice stories={(library.stories ?? []).filter(story => data.items.some(item => item.entry_id === story.id))} onImported={setSelected} />}
  <section className="settings-card"><h2>Previous batches</h2>{loading?<p role="status">Loading import history…</p>:!data.batches.length?<p>No imports yet. Paste your first batch above.</p>:<label>Batch<select value={batch?.id??''} onChange={event=>setSelected(event.target.value)}>{data.batches.map(b=><option key={b.id} value={b.id}>{new Date(b.created_at).toLocaleString()}{b.cancelled_at?' · Cancelled':''}</option>)}</select></label>}
  {batch&&<><p>{data.items.length} tracked URLs · {data.items.filter(i=>i.result==='imported'&&i.status==='completed').length} imported with metadata · {data.items.filter(i=>i.result==='already_saved').length} already saved</p><div className="import-status-filters" role="group" aria-label="Filter import results by status"><button className="text-button" aria-pressed={statusFilter==='all'} aria-controls="import-result-table" onClick={()=>setStatusFilter('all')}>All results: {data.items.length}</button>{finished&&<button className="text-button" aria-pressed={statusFilter==='review'} aria-controls="import-result-table" onClick={()=>setStatusFilter('review')}>Review: {reviewItems.length}</button>}{Object.entries(counts).map(([name,n])=><button key={name} className="text-button" aria-pressed={statusFilter===name} aria-controls="import-result-table" onClick={()=>setStatusFilter(name)}>{name}: {n}</button>)}</div>
  <p className="muted" role="status">{statusFilter==='review'?(reviewItems.length?`Batch finished. Showing failed, skipped, and cancelled results for your review. ${visibleItems.length} of ${data.items.length} results.`:'Batch finished. No failed, skipped, or cancelled results to review.'):`Showing ${visibleItems.length} of ${data.items.length} results${statusFilter!=='all'?` · ${statusFilter}`:''}`}</p>

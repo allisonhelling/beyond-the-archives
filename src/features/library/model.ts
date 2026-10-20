@@ -44,7 +44,7 @@ export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Databa
   const manual = overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {}
   return { ...blankMetadata, authors: authors.map(a => a.name), author_links: Object.fromEntries(authors.filter(a => a.ao3_url).map(a => [a.name, a.ao3_url!])), fandoms: fandoms.map(f => f.name), title: work.title ?? `AO3 work ${work.ao3_work_id}`, summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', archive_warnings: tags.filter(tag => tag.category === 'warning').map(tag => tag.name), categories: tags.filter(tag => tag.category === 'category').map(tag => tag.name), ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...(work.automatic_metadata as Partial<Metadata>), ...manual } as Metadata
 }
-export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata> }
+export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata>; base?: import('./edit-merge').EditValues }
 
 export function savedWorkUrl(story: Story) {
   try {
@@ -68,4 +68,10 @@ export function parseLines(text: string): string[] {
 /** Editing personal fields must not turn automatic metadata into manual overrides. */
 export function changedMetadata(current: Metadata, next: Metadata): Partial<Metadata> {
   return Object.fromEntries(Object.entries(next).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(current[key as keyof Metadata])))
+}
+
+/** AO3 dates are calendar dates; avoid shifting them into the reader's timezone. */
+export function ao3Date(value: string | null | undefined): string {
+ const date = value?.slice(0, 10)
+ return date && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) ? date : 'Unknown'
 }

@@ -1,11 +1,17 @@
+import type { SeriesPreview } from '../../imports/urls'
+import { librarySeries, type SeriesRecord } from '../series'
+import type { Json } from '../../../types/database'
+import { applyStoryEdits, editSnapshot, EditConflict, mergeEdits, resolveEdits, storyEdits, type EditValues } from '../edit-merge'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collection-appearance'
 import snapshots from './stories.json'
+import seriesSnapshots from './series.json'
 import { abandonedReadingStatus, blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
 const capturedAt = '2026-10-15T12:00:00.000Z'
-type Library = { stories: Story[]; collections: Collection[] }
+const sampleVersion = 2
+type Library = { stories: Story[]; collections: Collection[]; series?: SeriesRecord[]; sampleVersion?: number }
 
 function makeWork(id: number): Work {
   return {
@@ -19,34 +25,39 @@ function makeWork(id: number): Work {
 }
 
 function seedLibrary(): Library {
-  return {
-    collections: [],
-    stories: snapshots.map(sample => {
-      const work: Work = {
-        ...makeWork(sample.id), ...{
-          title: sample.metadata.title, summary: sample.metadata.summary, rating: sample.metadata.rating,
-          word_count: sample.metadata.word_count, published_chapters: sample.metadata.published_chapters,
-          total_chapters: sample.metadata.total_chapters, is_complete: sample.metadata.publication_status === 'unknown' ? null : sample.metadata.publication_status === 'complete',
-          canonical_url: sample.metadata_available ? `https://archiveofourown.org/works/${sample.id}` : null,
-          canonical_verified_at: sample.metadata_available ? capturedAt : null,
-          ao3_published_at: sample.published_at ? `${sample.published_at}T00:00:00Z` : null,
-          ao3_updated_at: sample.updated_at ? `${sample.updated_at}T00:00:00Z` : null,
-          last_metadata_check: sample.metadata_available ? capturedAt : null, verified_chapters: sample.verified_chapters,
-          metadata_source: sample.metadata_available ? 'ao3' : 'unknown',
-          field_provenance: { sample_source: sample.source_url, source_series: sample.source_series, captured_at: capturedAt, metadata_available: sample.metadata_available },
-        },
-      }
-      return {
-        id: `sample-entry-${sample.id}`, user_id: userId, work_id: work.id, original_url: sample.url,
-        reading_status: sample.status as Entry['reading_status'], last_read_chapter: sample.progress,
-        personal_rating: null, is_favorite: false, notes: '', metadata_overrides: {}, extension_metadata: {}, extension_chapters: {},
-        started_at: null, finished_at: null, last_update_notification_at: null, update_dismissed_at: null,
-        created_at: capturedAt, updated_at: capturedAt, work,
-        metadata: { ...sample.metadata, publication_status: sample.metadata.publication_status as Story['metadata']['publication_status'] },
-        collectionIds: [], personalTags: [],
-      }
-    }),
-  }
+  const stories: Story[] = snapshots.map(sample => {
+    const snapshotAt = sample.captured_at ?? capturedAt
+    const work: Work = {
+      ...makeWork(sample.id), ...{
+        title: sample.metadata.title, summary: sample.metadata.summary, rating: sample.metadata.rating,
+        word_count: sample.metadata.word_count, published_chapters: sample.metadata.published_chapters,
+        total_chapters: sample.metadata.total_chapters, is_complete: sample.metadata.publication_status === 'unknown' ? null : sample.metadata.publication_status === 'complete',
+        canonical_url: sample.metadata_available ? `https://archiveofourown.org/works/${sample.id}` : null,
+        canonical_verified_at: sample.metadata_available ? snapshotAt : null,
+        ao3_published_at: sample.published_at ? `${sample.published_at}T00:00:00Z` : null,
+        ao3_updated_at: sample.updated_at ? `${sample.updated_at}T00:00:00Z` : null,
+        last_metadata_check: sample.metadata_available ? snapshotAt : null, verified_chapters: sample.verified_chapters,
+        metadata_source: sample.metadata_available ? 'ao3' : 'unknown',
+        field_provenance: { sample_source: sample.source_url, source_series: sample.source_series, captured_at: snapshotAt, metadata_available: sample.metadata_available },
+      },
+    }
+    return {
+      id: `sample-entry-${sample.id}`, user_id: userId, work_id: work.id, original_url: sample.url,
+      reading_status: sample.status as Entry['reading_status'], last_read_chapter: sample.progress,
+      personal_rating: null, is_favorite: false, notes: '', metadata_overrides: {}, extension_metadata: {}, extension_chapters: {},
+      started_at: null, finished_at: null, last_update_notification_at: null, update_dismissed_at: null,
+      created_at: snapshotAt, updated_at: snapshotAt, work,
+      metadata: { ...sample.metadata, publication_status: sample.metadata.publication_status as Story['metadata']['publication_status'] },
+      collectionIds: [], personalTags: [],
+    }
+  })
+  const groups = librarySeries(stories)
+  const series: SeriesRecord[] = seriesSnapshots.map(snapshot => ({
+    id: `sample-series-${snapshot.seriesId}`, user_id: userId, ao3_series_id: snapshot.seriesId,
+    metadata: { ...snapshot, works: groups.find(series => series.seriesId === snapshot.seriesId)?.works ?? [] } as unknown as Json,
+    notes: '', is_favorite: false, reading_status: 'to_read', collectionIds: [], created_at: '2026-10-19T12:00:00.000Z', updated_at: '2026-10-19T12:00:00.000Z',
+  }))
+  return { stories, collections: [], series, sampleVersion }
 }
 
 function read(): Library {
@@ -55,6 +66,28 @@ function read(): Library {
   try {
     const data = JSON.parse(saved) as Library
     if (Array.isArray(data.stories) && Array.isArray(data.collections)) {
+      if ((data.sampleVersion ?? 1) < sampleVersion) {
+        const seed = seedLibrary(), seriesIds = new Set(seriesSnapshots.map(series => series.seriesId))
+        // Add this new series once, without restoring previously removed samples
+        // or replacing edits to an already-saved work or series note.
+        for (const story of seed.stories.filter(story => story.metadata.series_memberships?.some(series => seriesIds.has(series.id)))) {
+          const existing = data.stories.find(saved => saved.work.ao3_work_id === story.work.ao3_work_id)
+          if (!existing) data.stories.push(story)
+          else if (existing.metadata.series_memberships === undefined) {
+            existing.metadata.series_memberships = story.metadata.series_memberships
+            existing.metadata.series ??= story.metadata.series
+          }
+        }
+        data.series ??= []
+        for (const series of seed.series ?? []) if (!data.series.some(saved => saved.ao3_series_id === series.ao3_series_id)) data.series.push(series)
+        data.sampleVersion = sampleVersion
+        write(data)
+      }
+      for (const series of data.series ?? []) {
+        const snapshot = seriesSnapshots.find(snapshot => snapshot.seriesId === series.ao3_series_id)
+        const metadata = series.metadata as unknown as SeriesPreview
+        if (snapshot && metadata.complete === undefined) metadata.complete = snapshot.complete
+      }
       // Fill only missing categories on older preview entries; preserve edits and removals.
       for (const story of data.stories) {
         const snapshot = snapshots.find(sample => sample.id === story.work.ao3_work_id)
@@ -75,7 +108,7 @@ function find(data: Library, id: string) {
   return story
 }
 
-export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return data }
+export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, series: data.series ?? [] } }
 export function resetSampleLibrary() { window.localStorage.removeItem(storageKey) }
 
 export async function saveSampleStory(input: StoryInput) {
@@ -85,6 +118,11 @@ export async function saveSampleStory(input: StoryInput) {
   if (data.stories.some(story => story.work.ao3_work_id === workId && story.id !== input.id)) throw new Error('This story is already in your library.')
   const existing = input.id ? find(data, input.id) : null
   if (existing && existing.work.ao3_work_id !== workId) throw new Error('The AO3 work identity cannot be changed.')
+  if (existing && input.base) {
+    const base = editSnapshot(existing), review = mergeEdits(input.base, storyEdits(input), base)
+    if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => saveSampleStory(applyStoryEdits(input, resolveEdits(review.merged, choices), base)))
+    input = applyStoryEdits(input, review.merged, base)
+  }
   const now = new Date().toISOString()
   const work = existing?.work ?? makeWork(workId)
   const story: Story = {
@@ -123,12 +161,18 @@ export async function addSampleStoriesToCollections(storyIds: string[], collecti
   write(data)
 }
 
-export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite'>) {
+export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'notes' | 'personal_rating'>) {
   const data = read(), story = find(data, id)
   if (changes.last_read_chapter !== undefined) validateProgress(changes.last_read_chapter, story.metadata)
   Object.assign(story, changes, { updated_at: new Date().toISOString() })
   story.reading_status = abandonedReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
   write(data)
+}
+export async function updateSampleEntryChecked(id: string, values: EditValues, baseline: EditValues): Promise<void> {
+  const data = read(), story = find(data, id), base = editSnapshot(story), review = mergeEdits(baseline, values, base)
+  if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => updateSampleEntryChecked(id, resolveEdits(review.merged, choices), base))
+  const merged = review.merged
+  await updateSampleEntry(id, { reading_status: merged.status as Entry['reading_status'], last_read_chapter: merged.progress as number, notes: merged.notes as string, personal_rating: merged.rating as number | null, is_favorite: merged.favorite as boolean })
 }
 export async function deleteSampleStory(id: string) {
   const data = read()
@@ -173,6 +217,7 @@ export async function deleteSampleCollections(ids: string[]) {
   const data = read(), removable = new Set(data.collections.filter(item => ids.includes(item.id) && !item.default_key).map(item => item.id))
   data.collections = data.collections.filter(item => !removable.has(item.id))
   data.stories.forEach(story => { story.collectionIds = story.collectionIds.filter(id => !removable.has(id)) })
+  data.series?.forEach(series => { series.collectionIds = series.collectionIds?.filter(id => !removable.has(id)) })
   write(data)
 }
 
@@ -181,4 +226,39 @@ export async function reorderSampleCollections(ids: string[]) {
   if (ids.length !== custom.length || new Set(ids).size !== ids.length || ids.some(id => !custom.some(collection => collection.id === id))) throw new Error('Collections changed. Reload your library and try again.')
   for (const collection of custom) collection.sort_position = ids.indexOf(collection.id)
   write(data)
+}
+
+export async function rememberSampleSeries(preview: SeriesPreview) {
+ const data = read(), existing = data.series?.find(series => series.ao3_series_id === preview.seriesId), now = new Date().toISOString()
+ const record: SeriesRecord = { id: existing?.id ?? crypto.randomUUID(), user_id: userId, ao3_series_id: preview.seriesId, metadata: preview as unknown as Json, notes: existing?.notes ?? '', is_favorite: existing?.is_favorite ?? false, reading_status: existing?.reading_status ?? 'to_read', collectionIds: existing?.collectionIds ?? [], created_at: existing?.created_at ?? now, updated_at: now }
+ data.series = [...(data.series ?? []).filter(series => series.id !== record.id), record]; write(data); return record.id
+}
+export async function saveSampleSeriesNote(seriesId: number, notes: string, baseline: string): Promise<void> {
+ const data = read(), record = data.series?.find(series => series.ao3_series_id === seriesId)
+ if (!record) throw new Error('Load the series details before adding a note.')
+ const base = { notes: record.notes }, review = mergeEdits({ notes: baseline }, { notes }, base)
+ if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => saveSampleSeriesNote(seriesId, String(choices.notes ?? ''), record.notes))
+ record.notes = String(review.merged.notes ?? ''); record.updated_at = new Date().toISOString(); write(data)
+}
+
+export async function updateSampleSeries(seriesId: number, values: EditValues, baseline: EditValues): Promise<void> {
+ const data = read(), record = data.series?.find(series => series.ao3_series_id === seriesId)
+ if (!record) throw new Error('Load the series details first.')
+ const base = { favorite: record.is_favorite ?? false, collections: record.collectionIds ?? [] }, review = mergeEdits(baseline, values, base)
+ if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => updateSampleSeries(seriesId, resolveEdits(review.merged, choices), base))
+ const ids = review.merged.collections as string[]
+ if (ids.some(id => !data.collections.some(collection => collection.id === id && !collection.default_key))) throw new Error('Collection unavailable.')
+ const now = new Date().toISOString()
+ for (const collection of data.collections) if (ids.includes(collection.id) && !record.collectionIds?.includes(collection.id)) collection.last_story_added_at = now
+ Object.assign(record, { is_favorite: review.merged.favorite, collectionIds: ids, updated_at: now }); write(data)
+}
+export async function finishSampleSeries(seriesId: number) {
+ const data = read()
+ const record = data.series?.find(series => series.ao3_series_id === seriesId)
+ if (!record) throw new Error('Load the series details first.')
+ Object.assign(record, { reading_status: 'finished', updated_at: new Date().toISOString() })
+ const series = librarySeries(data.stories, data.series).find(series => series.seriesId === seriesId)!
+ for (const story of series.savedStories) Object.assign(story, { reading_status: 'finished', last_read_chapter: Math.max(story.last_read_chapter, story.metadata.published_chapters ?? story.metadata.total_chapters ?? 0), updated_at: new Date().toISOString() })
+ write(data)
+ return series.savedStories.length
 }

@@ -1,3 +1,4 @@
+import { rememberSeries } from '../library/series-repository'
 import { supabase } from '../../lib/supabase'
 import { allRows } from '../library/repository'
 import { classifyUrl, extractUrls, parseSeriesUrl, type SeriesPreview } from './urls'
@@ -57,5 +58,7 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
   throw new Error(message)
  }
  if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
- return data.preview as SeriesPreview
+ const preview = data.preview as SeriesPreview
+ await rememberSeries(preview)
+ return preview
 }

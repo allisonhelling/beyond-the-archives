@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authorPageUrl, blankMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress } from './model'
+import { ao3Date, authorPageUrl, blankMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress } from './model'
 describe('manual AO3 identity and progress', () => {
   it('accepts AO3 author and pseud pages and rejects unrelated or unsafe destinations', () => {
     for (const url of ['https://archiveofourown.org/users/Author', 'https://archiveofourown.org/users/Author/pseuds/PenName', 'https://archiveofourown.org/users/Author/profile', 'https://archiveofourown.org/users/Author/works']) expect(authorPageUrl(` ${url} `)).toBe(url)
@@ -67,4 +67,10 @@ it('detects one-shots from completion and exact AO3 or personal tags, with manua
   for (const tag of ['Not a one-shot', 'One-shot collection', 'Multiple oneshots', 'One--shot']) expect(isOneShot(blankMetadata, [tag])).toBe(false)
   expect(isOneShot({ ...blankMetadata, one_shot: true, published_chapters: 6 })).toBe(true)
   expect(isOneShot({ ...blankMetadata, one_shot: false, publication_status: 'complete', published_chapters: 1 }, ['Oneshot'])).toBe(false)
+})
+
+it('shows only the AO3 calendar date without converting timezones or inventing unknown dates', () => {
+ expect(ao3Date('2026-10-15T00:00:00Z')).toBe('2026-10-15')
+ expect(ao3Date('2020-08-09')).toBe('2020-08-09')
+ for (const value of [null,undefined,'','invalid','2026-99-99']) expect(ao3Date(value)).toBe('Unknown')
 })

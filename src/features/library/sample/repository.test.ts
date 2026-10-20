@@ -1,6 +1,7 @@
 import { orderCollections, moveCollectionIds } from '../collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
+import { addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
+import { librarySeries, seriesReadingStatus } from '../series'
 import { parseWorkUrl, validateProgress } from '../model'
 
 beforeEach(() => {
@@ -31,9 +32,9 @@ it('keeps custom order through reload, rename, creation, and deletion', async ()
 
 it('includes all supplied works and both series members in the requested reading groups', async () => {
   const { stories } = await loadSampleLibrary()
-  expect(stories).toHaveLength(14)
+  expect(stories).toHaveLength(16)
   const counts = Object.fromEntries(['finished', 'waiting_for_updates', 'reading', 're_reading', 'to_read'].map(status => [status, stories.filter(story => story.reading_status === status).length]))
-  expect(counts).toEqual({ finished: 6, waiting_for_updates: 2, reading: 2, re_reading: 1, to_read: 3 })
+  expect(counts).toEqual({ finished: 6, waiting_for_updates: 2, reading: 2, re_reading: 1, to_read: 5 })
   for (const story of stories) {
     expect(parseWorkUrl(story.original_url).workId).toBe(story.work.ao3_work_id)
     expect(() => validateProgress(story.last_read_chapter, story.metadata)).not.toThrow()
@@ -203,4 +204,80 @@ it('adds memberships in either direction without replacing personal fields or ch
   expect(final.stories.find(story => story.id === first.id)).toEqual(firstSaved)
   expect(final.stories.find(story => story.id === second.id)).toEqual({ ...second, collectionIds: [...second.collectionIds, collection] })
   await expect(addSampleStoriesToCollections([first.id], ['missing'])).rejects.toThrow('Collection no longer available')
+})
+
+it('merges other-tab personal edits and requires review when both tabs edit notes', async () => {
+  const { editSnapshot, EditConflict } = await import('../edit-merge')
+  const { updateSampleEntryChecked } = await import('./repository')
+  const original = (await loadSampleLibrary()).stories[0], base = editSnapshot(original)
+  await updateSampleEntryChecked(original.id, { notes: 'Other tab notes' }, base)
+  await updateSampleEntryChecked(original.id, { rating: 5 }, base)
+  expect((await loadSampleLibrary()).stories[0]).toMatchObject({ notes: 'Other tab notes', personal_rating: 5 })
+  const error = await updateSampleEntryChecked(original.id, { notes: 'My notes' }, base).catch(error => error)
+  expect(error).toBeInstanceOf(EditConflict)
+  await error.retry({ notes: 'Both notes' })
+  expect((await loadSampleLibrary()).stories[0]).toMatchObject({ notes: 'Both notes', personal_rating: 5 })
+})
+
+it('seeds the first two play it again works and reuses their metadata for the series page', async () => {
+  const { librarySeries } = await import('../series')
+  const library = await loadSampleLibrary()
+  const series = librarySeries(library.stories, library.series).find(series => series.seriesId === 132147)!
+  expect(series).toMatchObject({ title: 'play it again', creators: ['metisket'], begun: '2013-06-29', updated: '2020-08-09', wordCount: 74696, workCount: 3, fandoms: ['Teen Wolf (TV)'] })
+  expect(series.works.map(work => [work.workId, work.position, work.title])).toEqual([[862320, 1, 'Play It Again'], [2034597, 2, "This Doesn't Hurt"]])
+  expect(series.savedStories).toHaveLength(2)
+  expect(series.savedStories.every(story => story.reading_status === 'to_read' && story.last_read_chapter === 0)).toBe(true)
+  await saveSampleSeriesNote(132147, 'Read these next.', '')
+  expect((await loadSampleLibrary()).series.find(series => series.ao3_series_id === 132147)?.notes).toBe('Read these next.')
+})
+
+it('adds the new series to older previews once, preserving edits and removed stories', async () => {
+  const library = await loadSampleLibrary(), removed = library.stories[0]
+  const edited = library.stories.find(story => story.work.ao3_work_id === 862320)!
+  edited.notes = 'Keep my draft'; edited.metadata.title = 'My title'; edited.last_read_chapter = 1
+  library.stories = library.stories.filter(story => story.id !== removed.id && story.work.ao3_work_id !== 2034597)
+  library.series[0].notes = 'Existing series note'
+  delete library.sampleVersion
+  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+  const upgraded = await loadSampleLibrary()
+  expect(upgraded.stories.some(story => story.id === removed.id)).toBe(false)
+  expect(upgraded.stories.find(story => story.id === edited.id)).toMatchObject({ notes: 'Keep my draft', last_read_chapter: 1, metadata: { title: 'My title' } })
+  expect(upgraded.stories.filter(story => story.work.ao3_work_id === 2034597)).toHaveLength(1)
+  expect(upgraded.series).toHaveLength(1)
+  expect(upgraded.series[0].notes).toBe('Existing series note')
+  await deleteSampleStory('sample-entry-2034597')
+  expect((await loadSampleLibrary()).stories.some(story => story.work.ao3_work_id === 2034597)).toBe(false)
+})
+
+it('organizes a series independently and finishes its works without replacing private fic data', async () => {
+ const collection = await saveSampleCollection('Series shelf')
+ const initial = await loadSampleLibrary()
+ const original = initial.stories.find(story=>story.work.ao3_work_id===862320)!
+ const missing = initial.stories.find(story=>story.work.ao3_work_id===2034597)!
+ await updateSampleEntry(original.id,{notes:'Keep fic notes',is_favorite:true,personal_rating:4,last_read_chapter:1})
+ await updateSampleSeries(132147,{favorite:true,collections:[collection]},{favorite:false,collections:[]})
+ expect((await loadSampleLibrary()).stories.find(story=>story.id===original.id)?.collectionIds).toEqual([])
+ await deleteSampleStory('sample-entry-2034597')
+ expect(await finishSampleSeries(132147)).toBe(1)
+ const library = await loadSampleLibrary()
+ expect(library.series[0]).toMatchObject({is_favorite:true,reading_status:'finished',collectionIds:[collection]})
+ expect(library.stories.find(story=>story.id===original.id)).toMatchObject({reading_status:'finished',last_read_chapter:3,notes:'Keep fic notes',personal_rating:4,is_favorite:true})
+ expect(library.stories.find(story=>story.work.ao3_work_id===2034597)).toBeUndefined()
+ expect(seriesReadingStatus(librarySeries(library.stories,library.series)[0])).toBe('finished')
+ await saveSampleStory({url:'https://archiveofourown.org/works/2034597',metadata:missing.metadata,status:'to_read',progress:0,notes:'New notes',personalRating:null,favorite:false,collections:[],tags:[]})
+ const updated = await loadSampleLibrary()
+ expect(seriesReadingStatus(librarySeries(updated.stories,updated.series)[0])).toBe('reading')
+ expect(updated.stories.find(story=>story.work.ao3_work_id===2034597)?.reading_status).toBe('to_read')
+ await deleteSampleCollection(collection)
+ expect((await loadSampleLibrary()).series[0].collectionIds).toEqual([])
+})
+
+it('finishes an empty series without adding preview works', async () => {
+ await loadSampleLibrary()
+ await deleteSampleStory('sample-entry-862320')
+ await deleteSampleStory('sample-entry-2034597')
+ expect(await finishSampleSeries(132147)).toBe(0)
+ const library = await loadSampleLibrary()
+ expect(library.stories.some(story => [862320,2034597].includes(story.work.ao3_work_id!))).toBe(false)
+ expect(seriesReadingStatus(librarySeries(library.stories,library.series)[0])).toBe('finished')
 })

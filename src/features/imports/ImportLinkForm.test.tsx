@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ submit: vi.fn(), history: vi.fn(), refresh: vi.fn() }))
-vi.mock('./repository', () => ({ submitImport: mocks.submit, importHistory: mocks.history }))
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), history: vi.fn(), refresh: vi.fn(), preview: vi.fn() }))
+vi.mock('./repository', () => ({ submitImport: mocks.submit, importHistory: mocks.history, previewSeries: mocks.preview }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refresh: mocks.refresh }) }))
 import { ImportLinkForm } from './ImportLinkForm'
 
@@ -23,6 +23,7 @@ beforeEach(() => {
   mocks.submit.mockResolvedValue('batch')
   mocks.refresh.mockResolvedValue(undefined)
   mocks.history.mockResolvedValue({ items: [] })
+  mocks.preview.mockResolvedValue({ seriesId:77, normalizedUrl:'https://archiveofourown.org/series/77', title:'Series title', description:'', works:[{workId:101,url:'https://archiveofourown.org/works/101',position:1,title:'First fic',authors:['Author'],summary:'A summary',tags:[],wordCount:1,chapters:'1/1',complete:true}] })
 })
 afterEach(() => { vi.useRealTimers() })
 it('validates a single AO3 link and retains it if submission fails', async () => {
@@ -78,10 +79,16 @@ it('shows an unsuccessful import without a saved entry', async () => {
   expect(screen.getByText('Invalid work.')).toBeVisible()
 })
 
-it('routes a series link into shared review without creating a work',async()=>{
+it('reviews a series in place without creating a work',async()=>{
  show()
  fireEvent.change(screen.getByRole('textbox',{name:'AO3 work or series link'}),{target:{value:'https://archiveofourown.org/series/77'}})
  fireEvent.click(screen.getByRole('button',{name:'Import from link'}))
- expect(await screen.findByRole('heading',{name:'Choose series works'})).toBeVisible()
+ expect(await screen.findByRole('heading',{name:'Choose works from series'})).toBeVisible()
  expect(mocks.submit).not.toHaveBeenCalled()
+ expect(screen.queryByRole('heading',{name:'Choose series works'})).not.toBeInTheDocument()
+ expect(await screen.findByRole('checkbox',{name:'Part 1: First fic'})).not.toBeChecked()
+ fireEvent.click(screen.getByRole('checkbox',{name:'Part 1: First fic'}))
+ fireEvent.click(screen.getByRole('button',{name:'Import 1 selected works'}))
+ await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/101'))
+ expect(screen.getByRole('heading',{name:'Importing selected works'})).toBeVisible()
 })

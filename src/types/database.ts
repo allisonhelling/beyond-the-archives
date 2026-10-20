@@ -33,6 +33,30 @@ export type Database = {
         Relationships: [
         ]
       }
+      collection_series: {
+        Row: {
+          user_id: string
+          collection_id: string
+          library_series_id: string
+          created_at: string
+        }
+        Insert: {
+          user_id?: string
+          collection_id: string
+          library_series_id: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          collection_id?: string
+          library_series_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'collection_series_collection_id_user_id_fkey'; columns: ['collection_id', 'user_id']; isOneToOne: false; referencedRelation: 'collections'; referencedColumns: ['id', 'user_id'] },
+          { foreignKeyName: 'collection_series_library_series_id_user_id_fkey'; columns: ['library_series_id', 'user_id']; isOneToOne: false; referencedRelation: 'library_series'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
       collection_works: {
         Row: {
           user_id: string
@@ -295,6 +319,43 @@ export type Database = {
         Relationships: [
           { foreignKeyName: 'library_entry_tags_library_entry_id_user_id_fkey'; columns: ['library_entry_id', 'user_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id', 'user_id'] },
           { foreignKeyName: 'library_entry_tags_personal_tag_id_user_id_fkey'; columns: ['personal_tag_id', 'user_id']; isOneToOne: false; referencedRelation: 'personal_tags'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
+      library_series: {
+        Row: {
+          id: string
+          user_id: string
+          ao3_series_id: number
+          metadata: Json
+          notes: string
+          created_at: string
+          updated_at: string
+          is_favorite: boolean
+          reading_status: Database['public']['Enums']['reading_status']
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          ao3_series_id: number
+          metadata: Json
+          notes?: string
+          created_at?: string
+          updated_at?: string
+          is_favorite?: boolean
+          reading_status?: Database['public']['Enums']['reading_status']
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          ao3_series_id?: number
+          metadata?: Json
+          notes?: string
+          created_at?: string
+          updated_at?: string
+          is_favorite?: boolean
+          reading_status?: Database['public']['Enums']['reading_status']
+        }
+        Relationships: [
         ]
       }
       metadata_jobs: {
@@ -651,6 +712,10 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      update_library_series: { Args: { p_series: number; p_input: Json; p_base: Json }; Returns: undefined }
+      finish_library_series: { Args: { p_series: number }; Returns: number }
+      remember_library_series: { Args: { p_metadata: Json }; Returns: string }
+      save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean }; Returns: string | null }
@@ -662,6 +727,8 @@ export type Database = {
       reorder_collections: { Args: { p_ids: string[] }; Returns: undefined }
       restore_library_story: { Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }; Returns: string }
 
+      save_library_story_checked: { Args: { p_id: string | null; p_url: string; p_input: Json; p_base: Json | null }; Returns: string }
+      update_library_entry_checked: { Args: { p_id: string; p_input: Json; p_base: Json }; Returns: undefined }
       save_library_story: {
         Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
         Returns: string

@@ -42,10 +42,10 @@ afterAll(async () => { await db?.close() })
 describe('migration structure', () => {
   it('creates the core and import tables with forced RLS and private read policies', async () => {
     const result = await db.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(`select relname, relrowsecurity, relforcerowsecurity from pg_class join pg_namespace n on n.oid=relnamespace where n.nspname='public' and relkind='r'`)
-    expect(result.rows.map(r => r.relname).sort()).toEqual([...tables, 'import_batches', 'import_items', 'metadata_jobs', 'metadata_preferences', 'processing_logs', 'metadata_worker_state', 'userscript_devices'].sort())
+    expect(result.rows.map(r => r.relname).sort()).toEqual([...tables, 'library_series', 'collection_series', 'import_batches', 'import_items', 'metadata_jobs', 'metadata_preferences', 'processing_logs', 'metadata_worker_state', 'userscript_devices'].sort())
     expect(result.rows.every(r => r.relrowsecurity && r.relforcerowsecurity)).toBe(true)
     const policies = await db.query<{ tablename: string }>("select tablename from pg_policies where schemaname='public'")
-    expect(policies.rows.map(r => r.tablename).sort()).toEqual([...tables, 'import_batches', 'import_items', 'metadata_jobs', 'metadata_preferences', 'processing_logs'].sort())
+    expect(policies.rows.map(r => r.tablename).sort()).toEqual([...tables, 'library_series', 'collection_series', 'import_batches', 'import_items', 'metadata_jobs', 'metadata_preferences', 'processing_logs'].sort())
   })
 })
 

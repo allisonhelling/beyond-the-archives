@@ -1,11 +1,14 @@
-import type { Collection, Story } from './model'
-import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feather, Flame, FlaskConical, Flower2, Gem, Heart, KeyRound, Leaf, Library, Moon, Music, Sun, Telescope, X } from 'lucide-react'
+import type { Collection, Status, Story } from './model'
+import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feather, Flame, FlaskConical, Flower2, Gem, Heart, KeyRound, Leaf, Library, Layers3, Moon, Music, Sun, Telescope, X, type LucideIcon } from 'lucide-react'
+
+export const readingStatusIcons: Record<Status, LucideIcon> = { to_read: Bookmark, reading: BookOpenText, re_reading: BookOpenText, waiting_for_updates: BookOpenText, finished: Check, did_not_finish: X }
+export const automaticCollectionIcons: Partial<Record<string, LucideIcon>> = { all: Library, series: Layers3, currently_reading: readingStatusIcons.reading, to_read: readingStatusIcons.to_read, favorites: Heart, finished: readingStatusIcons.finished, did_not_finish: readingStatusIcons.did_not_finish }
 
 export const collectionColors = [
   { label: 'Burgundy', value: '#970000' }, { label: 'Forest', value: '#354a35' },
   { label: 'Navy', value: '#2e415c' }, { label: 'Amber', value: '#8b491e' },
   { label: 'Plum', value: '#56324f' }, { label: 'Charcoal', value: '#37312f' },
-  { label: 'Rose', value: '#92504e' },
+  { label: 'Rose', value: '#92504e' }, { label: 'Teal', value: '#07534a' },
 ] as const
 
 export const collectionSymbols = [

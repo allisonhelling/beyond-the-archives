@@ -1,0 +1,30 @@
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+const mocks = vi.hoisted(() => ({ history: vi.fn(), submit: vi.fn(), preview: vi.fn(), refresh: vi.fn(), stories: [{ id: 'saved-101', work: { ao3_work_id: 101 }, metadata: { title: 'Saved fic', series_memberships: [{ id: 77, name: 'Related series', url: 'https://archiveofourown.org/series/77', position: 1 }] } }] }))
+vi.mock('./repository', () => ({ importHistory: mocks.history, submitImport: mocks.submit, previewSeries: mocks.preview }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ stories: mocks.stories, refresh: mocks.refresh }) }))
+import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
+beforeEach(() => {
+ vi.resetAllMocks(); vi.useFakeTimers()
+ mocks.refresh.mockResolvedValue(undefined); mocks.submit.mockResolvedValue('related-batch')
+ mocks.history.mockResolvedValue({ items: [{ entry_id: 'saved-101', status: 'completed', metadata_status: 'pending' }], jobs: [{ status: 'pending' }] })
+ mocks.preview.mockResolvedValue({ seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Related series', works: [101, 102].map(id => ({ workId: id, url: `https://archiveofourown.org/works/${id}`, position: id - 100, title: `Fic ${id}`, authors: [], wordCount: 0, chapters: '1/1', complete: true, summary: '', tags: [] })) })
+})
+afterEach(() => vi.useRealTimers())
+it('waits for completed metadata, then offers an explicit picker that excludes saved works', async () => {
+ await act(async () => { render(<CompletedImportSeriesNotice batchId="original-batch" />) })
+ expect(screen.queryByRole('region', { name: 'Series discovered after import' })).not.toBeInTheDocument()
+ expect(mocks.preview).not.toHaveBeenCalled(); expect(mocks.refresh).not.toHaveBeenCalled()
+ mocks.history.mockResolvedValue({ items: [{ entry_id: 'saved-101', status: 'completed', metadata_status: 'completed' }], jobs: [{ status: 'completed' }] })
+ await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+ expect(screen.getByText('Saved fic')).toBeVisible()
+ expect(mocks.refresh).toHaveBeenCalledOnce(); expect(mocks.preview).not.toHaveBeenCalled()
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Related series' })) })
+ expect(mocks.preview).toHaveBeenCalledWith('https://archiveofourown.org/series/77')
+ expect(screen.getByRole('checkbox', { name: 'Part 1: Fic 101' })).toBeDisabled()
+ expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()
+ expect(mocks.submit).not.toHaveBeenCalled()
+ fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import 1 selected works' })) })
+ expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false)
+})

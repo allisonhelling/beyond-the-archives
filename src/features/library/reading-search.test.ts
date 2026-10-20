@@ -41,6 +41,10 @@ describe('reading filters and sections', () => {
     expect(result).toEqual([alpha])
     expect(filterReading([alpha], { ...defaultReadingFilters, relationship: 'Castiel/Dean, Missing relationship' })).toEqual([])
   })
+  it('filters works with linked or manually entered series', () => {
+    expect(filterReading([alpha, beta], { ...defaultReadingFilters, inSeries: true })).toEqual([alpha])
+    expect(filterReading([alpha, beta], defaultReadingFilters)).toHaveLength(2)
+  })
   it('keeps notes and summary search scopes separate and combines any-field terms across fields', () => {
     expect(filterReading([alpha], { ...defaultReadingFilters, within: 'garden', scope: 'notes' })).toEqual([])
     expect(filterReading([alpha], { ...defaultReadingFilters, within: 'garden', scope: 'summary' })).toEqual([alpha])

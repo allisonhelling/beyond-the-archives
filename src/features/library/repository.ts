@@ -1,3 +1,5 @@
+import type { SeriesRecord } from './series'
+import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
 import { effectiveMetadata } from './model'
@@ -17,10 +19,10 @@ export async function allRows<T>(page: (from: number, to: number) => PromiseLike
     if (result.data.length < 500) return data
   }
 }
-export async function loadLibrary(): Promise<{ stories: Story[]; collections: Collection[] }> {
+export async function loadLibrary(): Promise<{ stories: Story[]; collections: Collection[]; series: SeriesRecord[] }> {
   if (sampleMode) return (await import('./sample/repository')).loadSampleLibrary()
   const db = client()
-  const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms] = await Promise.all([
+  const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms, series, seriesMemberships] = await Promise.all([
     allRows((from, to) => db.from('library_entries').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('works').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collections').select('*').order('created_at').order('id').range(from, to)),
@@ -33,6 +35,8 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     allRows((from, to) => db.from('work_authors').select('*').order('work_id').order('author_id').range(from, to)),
     allRows((from, to) => db.from('fandoms').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('work_fandoms').select('*').order('work_id').order('fandom_id').range(from, to)),
+    allRows((from, to) => db.from('library_series').select('*').order('id').range(from, to)),
+    allRows((from, to) => db.from('collection_series').select('*').order('library_series_id').order('collection_id').range(from, to)),
   ])
   const tagsById = new Map(ao3Tags.map(tag => [tag.id, tag]))
   const tagsByWork = new Map<string, typeof ao3Tags>()
@@ -40,7 +44,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const tag = tagsById.get(link.tag_id)
     if (tag) { const linked = tagsByWork.get(link.work_id) ?? []; linked.push(tag); tagsByWork.set(link.work_id, linked) }
   }
-  return { collections: collections.sort(compareCollections), stories: entries.map((entry: Entry) => {
+  return { series: series.map(record => ({ ...record, collectionIds: seriesMemberships.filter(link => link.library_series_id === record.id).map(link => link.collection_id) })), collections: collections.sort(compareCollections), stories: entries.map((entry: Entry) => {
     const sharedWork = works.find((w: Work) => w.id === entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     // Overlay private automatic metadata before the existing manual-override merge.
@@ -53,9 +57,16 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
 }
 export async function saveStory(input: StoryInput) {
   if (sampleMode) return (await import('./sample/repository')).saveSampleStory(input)
-  const { data, error } = await client().rpc('save_library_story', { p_url: input.url, p_metadata: input.metadataChanges ?? input.metadata, p_status: input.status, p_progress: input.progress, p_notes: input.notes, p_rating: input.personalRating, p_favorite: input.favorite, p_collections: input.collections, p_tags: input.tags, p_id: input.id ?? null })
-  failure(error); return data!
+  const edits = storyEdits(input)
+  async function save(values: EditValues, base: EditValues | null): Promise<string> {
+    const { data, error } = await client().rpc('save_library_story_checked', { p_id: input.id ?? null, p_url: input.url, p_input: values, p_base: base })
+    const conflict = conflictFromError(error, save)
+    if (conflict) throw conflict
+    failure(error); return data!
+  }
+  return save(edits, input.base ?? null)
 }
+
 export async function addStoriesToCollections(storyIds: string[], collectionIds: string[]) {
   if (!storyIds.length || !collectionIds.length) return
   if (sampleMode) return (await import('./sample/repository')).addSampleStoriesToCollections(storyIds, collectionIds)
@@ -63,11 +74,22 @@ export async function addStoriesToCollections(storyIds: string[], collectionIds:
   const { error } = await client().from('collection_works').upsert(rows, { onConflict: 'collection_id,library_entry_id', ignoreDuplicates: true })
   failure(error)
 }
-export async function updateEntry(id: string, changes: EntryUpdate) {
-  if (sampleMode) return (await import('./sample/repository')).updateSampleEntry(id, changes)
-  const { data, error } = await client().from('library_entries').update(changes).eq('id', id).select('id').single()
-  failure(error); if (!data) throw new Error('Story no longer available.')
+export async function updateEntry(id: string, changes: EntryUpdate, base: EditValues) {
+  const keys = { reading_status: 'status', last_read_chapter: 'progress', notes: 'notes', personal_rating: 'rating', is_favorite: 'favorite' } as const
+  const edits: EditValues = Object.fromEntries(Object.entries(changes).map(([key, value]) => [keys[key as keyof EntryUpdate], value]))
+  async function save(values: EditValues, baseline: EditValues): Promise<void> {
+    if (sampleMode) return (await import('./sample/repository')).updateSampleEntryChecked(id, values, baseline)
+    // Retries also contain the full saved snapshot; this boundary accepts only
+    // entry columns and preserves tags, collections and metadata separately.
+    const patch = Object.fromEntries(Object.entries(values).filter(([key]) => Object.values(keys).includes(key as typeof keys[keyof typeof keys])))
+    const { error } = await client().rpc('update_library_entry_checked', { p_id: id, p_input: patch, p_base: baseline })
+    const conflict = conflictFromError(error, save)
+    if (conflict) throw conflict
+    failure(error)
+  }
+  return save(edits, base)
 }
+
 type EntryUpdate = Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'notes' | 'personal_rating'>
 export async function deleteStory(id: string) {
   if (sampleMode) return (await import('./sample/repository')).deleteSampleStory(id)

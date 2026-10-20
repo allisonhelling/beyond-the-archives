@@ -1,3 +1,4 @@
+import { inSeries } from './series'
 import { publicationStatuses } from './publication-status'
 import { active, isOneShot, statuses, tagNames, type Story } from './model'
 
@@ -7,12 +8,12 @@ export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
-  oneShot: 'allowed' | 'only' | 'exclude'; rating: string; favorites: boolean; relationship: string; characters: string; tags: string;
+  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; rating: string; favorites: boolean; relationship: string; characters: string; tags: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  query: '', fandoms: [], publication: [], oneShot: 'allowed', rating: '', favorites: false,
+  query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, rating: '', favorites: false,
   relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
@@ -104,6 +105,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
       (!filters.fandoms.length || s.metadata.fandoms.some(f => filters.fandoms.includes(f))) &&
       (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
+      (!filters.inSeries || inSeries(s)) &&
       (!filters.rating || s.metadata.rating === filters.rating) && (!filters.favorites || s.is_favorite) &&
       relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
       characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&

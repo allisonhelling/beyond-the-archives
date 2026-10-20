@@ -180,6 +180,8 @@ test('series imports require explicit work selection and fit desktop and mobile'
  await page.getByRole('button', { name: 'Review series', exact: true }).click()
  expect(submitted).toEqual([])
  await page.getByRole('button', { name: 'Load works' }).click()
+ await expect(page.getByRole('link', { name: '77', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/series/77')
+ await expect(page.getByRole('link', { name: 'View series on AO3', exact: true })).toHaveCount(0)
  const story = page.getByRole('checkbox', { name: 'Part 1: The story' })
  await expect(story).not.toBeChecked()
  await expect(page.getByRole('checkbox', { name: 'Part 4: Art extras' })).not.toBeChecked()

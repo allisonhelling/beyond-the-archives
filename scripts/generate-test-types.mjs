@@ -34,6 +34,10 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      update_library_series: { Args: { p_series: number; p_input: Json; p_base: Json }; Returns: undefined }
+      finish_library_series: { Args: { p_series: number }; Returns: number }
+      remember_library_series: { Args: { p_metadata: Json }; Returns: string }
+      save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean }; Returns: string | null }
@@ -45,6 +49,8 @@ try {
       reorder_collections: { Args: { p_ids: string[] }; Returns: undefined }
       restore_library_story: { Args: { p_entry: Json; p_collections: string[]; p_tags: string[] }; Returns: string }
 
+      save_library_story_checked: { Args: { p_id: string | null; p_url: string; p_input: Json; p_base: Json | null }; Returns: string }
+      update_library_entry_checked: { Args: { p_id: string; p_input: Json; p_base: Json }; Returns: undefined }
       save_library_story: {
         Args: { p_url: string; p_metadata: Json; p_status: Database['public']['Enums']['reading_status']; p_progress: number; p_notes: string; p_rating: number | null; p_favorite: boolean; p_collections: string[]; p_tags: string[]; p_id?: string | null }
         Returns: string

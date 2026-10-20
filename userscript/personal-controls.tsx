@@ -1,3 +1,5 @@
+import { EditConflictReview } from '../src/features/library/EditConflictReview'
+import type { EditConflict } from '../src/features/library/edit-merge'
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
@@ -18,5 +20,11 @@ function PersonalControls({ draft, onChange }: { draft: Draft; onChange: () => v
 export function mountPersonalControls(container: HTMLElement, draft: Draft, onChange: () => void) {
   const root = createRoot(container)
   flushSync(() => root.render(<PersonalControls draft={draft} onChange={onChange} />))
+  return () => root.unmount()
+}
+
+export function mountConflictReview(container: HTMLElement, props: { conflict: EditConflict; collections: { id: string; name: string }[]; onSaved: (result: unknown) => Promise<void>; onError: (error: unknown) => void; onCancel: () => void }) {
+  const root = createRoot(container)
+  flushSync(() => root.render(<EditConflictReview {...props} />))
   return () => root.unmount()
 }

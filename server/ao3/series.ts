@@ -1,5 +1,6 @@
 import { load } from 'cheerio'
 import { parseSeriesUrl, parseWorkUrl, type SeriesPreview } from '../../src/features/imports/urls.ts'
+import { plainText } from '../../src/features/imports/ao3-metadata.ts'
 import { retrieveAo3Document } from './adapter.ts'
 
 /** Read only the series listing. Never fetch or create its individual works. */
@@ -12,7 +13,15 @@ export function parseSeries(html: string, sourceUrl: string): SeriesPreview {
  const canonical = $('link[rel="canonical"]').attr('href')
  if (canonical && parseSeriesUrl(new URL(canonical, sourceUrl).href).seriesId !== identity.seriesId) throw new Error('AO3 returned a different series.')
  if ($('.pagination a[rel="next"], .pagination li.next a').length) throw new Error('This series listing has more pages. Import individual work links to avoid an incomplete preview.')
- const description = $('dl.series.meta dt').filter((_, node) => $(node).text().trim().replace(/:$/, '') === 'Description').first().next('dd').text().trim()
+ const field = (name: string) => $('dl.series.meta dt').filter((_, node) => $(node).text().trim().replace(/:$/, '').toLowerCase() === name.toLowerCase()).first().next('dd')
+ const description = plainText(field('Description'))
+ const creators = field('Creator').find('a[rel="author"]')
+ const creatorNames = creators.toArray().map(node => $(node).text().trim()).filter(Boolean)
+ const creatorLinks: Record<string, string> = {}
+ creators.each((_, node) => { try { const link = new URL($(node).attr('href') ?? '', sourceUrl); if (link.origin === 'https://archiveofourown.org' && /^\/users\//.test(link.pathname)) creatorLinks[$(node).text().trim()] = link.href } catch { /* Preserve names without unsafe links. */ } })
+ const count = (text: string) => { const value = text.replaceAll(',', '').trim(); return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null }
+ const completeText = field('Complete').text().trim().toLowerCase()
+ const complete = completeText === 'yes' ? true : completeText === 'no' ? false : null
  const seen = new Set<number>()
  const works: SeriesPreview['works'] = []
  list.find('li.work.blurb').each((_, node) => {
@@ -33,9 +42,11 @@ export function parseSeries(html: string, sourceUrl: string): SeriesPreview {
   const words = row.find('dd.words').text().trim().replaceAll(',', '')
   const chapters = row.find('dd.chapters').text().trim()
   const chapterCounts = chapters.match(/^(\d+)\/(\d+|\?)$/)
-  works.push({ workId, url, position, title: heading.text().trim() || `AO3 work ${workId}`, authors: row.find('a[rel="author"]').toArray().map(author => $(author).text().trim()), summary: row.find('blockquote.summary').text().trim(), tags: row.find('.tags a.tag, .fandoms a.tag').toArray().map(tag => $(tag).text().trim()), wordCount: /^\d+$/.test(words) && Number.isSafeInteger(Number(words)) ? Number(words) : null, chapters, complete: chapterCounts ? chapterCounts[2] !== '?' && chapterCounts[1] === chapterCounts[2] : null })
+  const names = (selector: string) => row.find(selector).toArray().map(tag => $(tag).text().trim()).filter(Boolean)
+  const updated = Date.parse(row.find('p.datetime').text().trim())
+  works.push({ workId, url, position, rating: row.find('.required-tags .rating').attr('title') ?? '', relationshipTags: names('.tags .relationships a.tag'), characterTags: names('.tags .characters a.tag'), additionalTags: names('.tags .freeforms a.tag'), updated: Number.isFinite(updated) ? new Date(updated).toISOString().slice(0, 10) : '', title: heading.text().trim() || `AO3 work ${workId}`, authors: row.find('a[rel="author"]').toArray().map(author => $(author).text().trim()), summary: plainText(row.find('blockquote.summary')), fandoms: row.find('.fandoms a.tag').toArray().map(tag => $(tag).text().trim()).filter(Boolean), tags: row.find('.tags a.tag, .fandoms a.tag').toArray().map(tag => $(tag).text().trim()), wordCount: /^\d+$/.test(words) && Number.isSafeInteger(Number(words)) ? Number(words) : null, chapters, complete: chapterCounts ? chapterCounts[2] !== '?' && chapterCounts[1] === chapterCounts[2] : null })
  })
- return { ...identity, title, description, works }
+ return { ...identity, title, description, complete, creators: creatorNames.length ? creatorNames : [...new Set(works.flatMap(work => work.authors))], creatorLinks, begun: field('Series Begun').text().trim(), updated: field('Series Updated').text().trim(), creatorNotes: plainText(field('Notes')), wordCount: count($('dl.series.meta dd.words').first().text()), workCount: count($('dl.series.meta dd.works').first().text()) ?? works.length, works }
 }
 export async function retrieveSeries(url: string, fetcher: typeof fetch = fetch) {
  const identity = parseSeriesUrl(url)
