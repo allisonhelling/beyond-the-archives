@@ -10,7 +10,8 @@ import { abandonedReadingStatus, blankMetadata, parseWorkUrl, validateProgress, 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
 const capturedAt = '2026-10-15T12:00:00.000Z'
-const sampleVersion = 2
+const sampleVersion = 3
+const seriesVersions: Record<number, number> = { 132147: 2, 1030529: 3, 2404765: 3, 2888871: 3 }
 type Library = { stories: Story[]; collections: Collection[]; series?: SeriesRecord[]; sampleVersion?: number }
 
 function makeWork(id: number): Work {
@@ -47,16 +48,20 @@ function seedLibrary(): Library {
       personal_rating: null, is_favorite: false, notes: '', metadata_overrides: {}, extension_metadata: {}, extension_chapters: {},
       started_at: null, finished_at: null, last_update_notification_at: null, update_dismissed_at: null,
       created_at: snapshotAt, updated_at: snapshotAt, work,
-      metadata: { ...sample.metadata, publication_status: sample.metadata.publication_status as Story['metadata']['publication_status'] },
+      metadata: { ...sample.metadata } as Story['metadata'],
       collectionIds: [], personalTags: [],
     }
   })
   const groups = librarySeries(stories)
-  const series: SeriesRecord[] = seriesSnapshots.map(snapshot => ({
-    id: `sample-series-${snapshot.seriesId}`, user_id: userId, ao3_series_id: snapshot.seriesId,
-    metadata: { ...snapshot, works: groups.find(series => series.seriesId === snapshot.seriesId)?.works ?? [] } as unknown as Json,
-    notes: '', is_favorite: false, reading_status: 'to_read', collectionIds: [], created_at: '2026-10-19T12:00:00.000Z', updated_at: '2026-10-19T12:00:00.000Z',
-  }))
+  const series: SeriesRecord[] = seriesSnapshots.map(snapshot => {
+    const group = groups.find(series => series.seriesId === snapshot.seriesId)
+    const snapshotAt = snapshot.fetchedAt ?? group?.savedStories[0]?.created_at ?? capturedAt
+    return {
+      id: `sample-series-${snapshot.seriesId}`, user_id: userId, ao3_series_id: snapshot.seriesId,
+      metadata: { ...snapshot, works: snapshot.works ?? group?.works ?? [] } as unknown as Json,
+      notes: '', is_favorite: false, reading_status: 'to_read', collectionIds: [], created_at: snapshotAt, updated_at: snapshotAt,
+    }
+  })
   return { stories, collections: [], series, sampleVersion }
 }
 
@@ -67,8 +72,8 @@ function read(): Library {
     const data = JSON.parse(saved) as Library
     if (Array.isArray(data.stories) && Array.isArray(data.collections)) {
       if ((data.sampleVersion ?? 1) < sampleVersion) {
-        const seed = seedLibrary(), seriesIds = new Set(seriesSnapshots.map(series => series.seriesId))
-        // Add this new series once, without restoring previously removed samples
+        const seed = seedLibrary(), seriesIds = new Set(seriesSnapshots.filter(series => seriesVersions[series.seriesId] > (data.sampleVersion ?? 1)).map(series => series.seriesId))
+        // Add newly introduced series once, without restoring older removed samples
         // or replacing edits to an already-saved work or series note.
         for (const story of seed.stories.filter(story => story.metadata.series_memberships?.some(series => seriesIds.has(series.id)))) {
           const existing = data.stories.find(saved => saved.work.ao3_work_id === story.work.ao3_work_id)
@@ -79,14 +84,14 @@ function read(): Library {
           }
         }
         data.series ??= []
-        for (const series of seed.series ?? []) if (!data.series.some(saved => saved.ao3_series_id === series.ao3_series_id)) data.series.push(series)
+        for (const series of seed.series ?? []) if (seriesIds.has(series.ao3_series_id) && !data.series.some(saved => saved.ao3_series_id === series.ao3_series_id)) data.series.push(series)
         data.sampleVersion = sampleVersion
         write(data)
       }
       for (const series of data.series ?? []) {
         const snapshot = seriesSnapshots.find(snapshot => snapshot.seriesId === series.ao3_series_id)
         const metadata = series.metadata as unknown as SeriesPreview
-        if (snapshot && metadata.complete === undefined) metadata.complete = snapshot.complete
+        if (snapshot && !metadata.basic && metadata.complete === undefined) metadata.complete = snapshot.complete
       }
       // Fill only missing categories on older preview entries; preserve edits and removals.
       for (const story of data.stories) {
@@ -232,6 +237,17 @@ export async function rememberSampleSeries(preview: SeriesPreview) {
  const data = read(), existing = data.series?.find(series => series.ao3_series_id === preview.seriesId), now = new Date().toISOString()
  const record: SeriesRecord = { id: existing?.id ?? crypto.randomUUID(), user_id: userId, ao3_series_id: preview.seriesId, metadata: preview as unknown as Json, notes: existing?.notes ?? '', is_favorite: existing?.is_favorite ?? false, reading_status: existing?.reading_status ?? 'to_read', collectionIds: existing?.collectionIds ?? [], created_at: existing?.created_at ?? now, updated_at: now }
  data.series = [...(data.series ?? []).filter(series => series.id !== record.id), record]; write(data); return record.id
+}
+export async function ensureSampleSeries(series: Pick<SeriesPreview, 'seriesId' | 'title'>) {
+ if (!read().series?.some(record => record.ao3_series_id === series.seriesId)) await rememberSampleSeries({ ...series, normalizedUrl: `https://archiveofourown.org/series/${series.seriesId}`, description: '', works: [], basic: true })
+}
+export async function removeSampleSeriesDetails(seriesId: number) {
+ const data = read(), record = data.series?.find(record => record.ao3_series_id === seriesId)
+ if (!record) return
+ const preview = record.metadata as unknown as SeriesPreview
+ record.metadata = { seriesId, title: preview.title, normalizedUrl: preview.normalizedUrl, description: '', works: [], basic: true }
+ record.updated_at = new Date().toISOString()
+ write(data)
 }
 export async function saveSampleSeriesNote(seriesId: number, notes: string, baseline: string): Promise<void> {
  const data = read(), record = data.series?.find(series => series.ao3_series_id === seriesId)

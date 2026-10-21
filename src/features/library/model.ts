@@ -70,16 +70,4 @@ export function changedMetadata(current: Metadata, next: Metadata): Partial<Meta
   return Object.fromEntries(Object.entries(next).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(current[key as keyof Metadata])))
 }
 
-/** AO3 dates are calendar dates; avoid shifting them into the reader's timezone. */
-export function isCalendarDate(value: string): boolean {
- return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
-}
-/** Preserve incomplete filter edits while displaying calendar values as dd-mm-yyyy. */
-export function filterDateText(value: string): string {
- return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('-') : value
-}
-const ao3DateFormat = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
-export function ao3Date(value: string | null | undefined): string {
- const date = value?.slice(0, 10)
- return date && isCalendarDate(date) ? ao3DateFormat.formatToParts(new Date(date)).map(part => part.type === 'month' ? part.value.slice(0, 3) : part.value).join('') : 'Unknown'
-}
+export { ao3Date, filterDateText, isCalendarDate } from '../../lib/dates'

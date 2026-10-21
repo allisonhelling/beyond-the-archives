@@ -14,11 +14,11 @@ export function LibraryResults({ stories, groupBy, renderStory }: { stories: Sto
  const [measurement,setMeasurement]=useState(0),[focused,setFocused]=useState<string|null>(null)
  const windowed=stories.length>100
  const groups=useMemo(()=>readingGroups(stories,groupBy),[stories,groupBy])
- const rows=useMemo(()=>groups.flatMap(([name,group])=>{
-  const rows:Row[]=name?[{key:`heading:${name}`,heading:name,count:group.length}]:[]
+ const rows=useMemo(()=>groups.flatMap(([name,group,key])=>{
+  const rows:Row[]=name?[{key:`heading:${key}`,heading:name,count:group.length}]:[]
   for(let i=0;i<group.length;i+=viewport.columns) {
    const stories=group.slice(i,i+viewport.columns)
-   rows.push({group:name,key:JSON.stringify([name,stories.map(story=>story.id)]),stories})
+   rows.push({group:key,key:JSON.stringify([key,stories.map(story=>story.id)]),stories})
   }
   return rows
  }),[groups,viewport.columns])
@@ -68,7 +68,7 @@ export function LibraryResults({ stories, groupBy, renderStory }: { stories: Sto
   const element=saved.id?document.getElementById(saved.id):card?.querySelector<HTMLElement>(saved.label?`${saved.tag}[aria-label="${CSS.escape(saved.label)}"]`:saved.tag)
   element?.focus({preventScroll:true})
  },[viewport.columns,windowed])
- if(!windowed)return <>{groups.map(([name,group])=><section key={name} className="reading-group">{name&&<h2>{name} <span>({group.length})</span></h2>}<div className="story-grid">{group.map(story=>renderStory(story,`result-link-${encodeURIComponent(name)}-${story.id}`))}</div></section>)}</>
+ if(!windowed)return <>{groups.map(([name,group,key])=><section key={key} className="reading-group">{name&&<h2>{name} <span>({group.length})</span></h2>}<div className="story-grid">{group.map(story=>renderStory(story,`result-link-${encodeURIComponent(key)}-${story.id}`))}</div></section>)}</>
  const visible:number[]=[]
  const overscan=1000
  for(let i=0;i<rows.length;i++)if(offsets[i+1]>=viewport.top-overscan&&offsets[i]<=viewport.bottom+overscan||rows[i].stories?.some(story=>story.id===focused))visible.push(i)

@@ -1,4 +1,5 @@
-import { inSeries } from './series'
+import { datePlaceholder } from '../../lib/dates'
+import { inSeries, seriesMemberships } from './series'
 import { publicationStatuses } from './publication-status'
 import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
 
@@ -99,7 +100,7 @@ export function searchText(story: Story, scope: SearchScope) {
 }
 export function filterReading(stories: Story[], filters: ReadingFilters) {
   for (const [name, date] of [['From', filters.updatedAfter], ['Through', filters.updatedBefore]]) {
-    if (date && !isCalendarDate(date)) throw new Error(`Enter a valid ${name} date (dd-mm-yyyy).`)
+    if (date && !isCalendarDate(date)) throw new Error(`Enter a valid ${name} date (${datePlaceholder()}).`)
   }
   const within = compileSearch(filters.within)
   const query = normalize(filters.query.trim())
@@ -141,14 +142,34 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
     return missing || direction * ((b.work.ao3_updated_at ? Date.parse(b.work.ao3_updated_at) : 0) - (a.work.ao3_updated_at ? Date.parse(a.work.ao3_updated_at) : 0)) || alpha
   })
 }
-export function readingGroups(stories: Story[], group: GroupBy) {
-  if (group === 'none') return [['', stories]] as [string, Story[]][]
-  const groups = new Map<string, Story[]>()
+type ReadingGroup = [name: string, stories: Story[], key: string]
+export function readingGroups(stories: Story[], group: GroupBy): ReadingGroup[] {
+  if (group === 'none') return [['', stories, '']]
+  const groups = new Map<string, { name: string; stories: Story[] }>()
   for (const story of stories) {
-    const keys = group === 'fandom' ? story.metadata.fandoms : group === 'author' ? story.metadata.authors : (story.metadata.series ?? [])
-    for (const key of new Set(keys.length ? keys : [group === 'series' ? 'No series information saved' : `Unknown ${group}`])) {
-      const values = groups.get(key) ?? []; values.push(story); groups.set(key, values)
+    let keys: [string, string][]
+    if (group === 'series') {
+      const memberships = seriesMemberships(story)
+      // Series cards are search documents whose own identity is already in the ID.
+      if (/^series:[1-9]\d*$/.test(story.id)) keys = [[story.id, story.metadata.title]]
+      else keys = [
+        ...memberships.map(series => [`series:${series.id}`, series.name] as [string, string]),
+        ...(story.metadata.series ?? []).filter(name => !memberships.some(series => series.name === name)).map(name => [`series-name:${name}`, name] as [string, string]),
+      ]
+    } else keys = (group === 'fandom' ? story.metadata.fandoms : story.metadata.authors).map(name => [name, name])
+    if (!keys.length) {
+      const name = group === 'series' ? 'No series information saved' : `Unknown ${group}`
+      keys = [[group === 'series' ? 'missing-series' : name, name]]
+    }
+    for (const [key, name] of new Map(keys)) {
+      const entry = groups.get(key) ?? { name, stories: [] }
+      entry.stories.push(story); groups.set(key, entry)
     }
   }
-  return [...groups].sort(([a], [b]) => a.localeCompare(b))
+  const nameCounts = new Map<string, number>()
+  for (const { name } of groups.values()) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1)
+  return [...groups].sort(([a, left], [b, right]) => left.name.localeCompare(right.name) || a.localeCompare(b)).map(([key, entry]) => [
+    (nameCounts.get(entry.name) ?? 0) > 1 && key.startsWith('series:') ? `${entry.name} (AO3 series ${key.slice(7)})` : entry.name,
+    entry.stories, key,
+  ])
 }

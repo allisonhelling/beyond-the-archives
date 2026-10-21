@@ -22,9 +22,9 @@ test('10,000-work library pages incrementally and restores a large page after de
  const firstDisplayMs=Date.now()-started
  expect(queries).toEqual([{page:1,size:50}])
  expect(queries.every(q=>q.size<=250)).toBe(true)
- await expect(page.getByRole('navigation',{name:'Result pages'})).toContainText('1–50 of 10000')
+ await expect(page.getByRole('navigation',{name:'Result pages'}).first()).toContainText('1–50 of 10000')
  const largeStart=Date.now()
- await page.getByLabel('Works per page').selectOption('250')
+ await page.getByLabel('Works per page').first().selectOption('250')
  await expect(page.locator('[data-virtualized="true"]')).toBeVisible()
  expect(await page.locator('.work-card').count()).toBeLessThan(100)
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))

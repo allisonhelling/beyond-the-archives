@@ -1,13 +1,15 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 // Run with VITE_SAMPLE_DATA=true so the existing Vite server uses local fixtures.
 test.skip(process.env.VITE_SAMPLE_DATA !== 'true', 'Requires the sample preview environment')
+
+const originalSeriesCard = (page: Page) => page.locator('.series-card').filter({ has: page.getByRole('link', { name: 'play it again', exact: true }) })
 
 test('sample Series collection includes only the first two requested works and saves a private series note', async ({ page }) => {
   const remoteRequests: string[] = []
   await page.route(/https:\/\/(?:[^/]+\.)?(?:supabase\.co|archiveofourown\.org|ao3\.org)\//, route => { remoteRequests.push(route.request().url()); return route.abort() })
   await page.goto('/library?shelf=series')
-  const card = page.locator('.series-card')
+  const card = originalSeriesCard(page)
   await expect(card).toHaveCount(1)
   await expect(card.getByRole('link', { name: 'play it again', exact: true })).toBeVisible()
   await expect(card).toContainText('metisket')
@@ -43,7 +45,7 @@ test('sample Series collection includes only the first two requested works and s
 
 test('series share work layouts, search contained fics, organize independently and finish all contained works', async ({ page }) => {
  await page.goto('/library?shelf=series')
- const card = page.locator('.series-card')
+ const card = originalSeriesCard(page)
  await expect(card).toHaveCount(1)
  await expect(card.locator('.metadata-tags')).toHaveCount(0)
  await expect(card).not.toContainText('No description provided.')
@@ -118,7 +120,7 @@ test('series share work layouts, search contained fics, organize independently a
 
 test('series summary links open work details and work headings and collection editors share styles', async ({ page }) => {
  await page.goto('/library?shelf=series')
- const card = page.locator('.series-card'), toggle = card.getByRole('button', { name: 'Collapse All', exact: true })
+ const card = originalSeriesCard(page), toggle = card.getByRole('button', { name: 'Collapse All', exact: true })
  await expect(toggle).toBeVisible()
  await expect(toggle).toHaveCSS('min-height','28px')
  await toggle.hover()
@@ -178,10 +180,10 @@ test('series summary links open work details and work headings and collection ed
 
 test('series status follows individual work status changes and headers show date-only updates', async ({ page }) => {
  await page.goto('/library?shelf=series')
- const status = page.locator('.series-card .series-reading-status')
+ const status = originalSeriesCard(page).locator('.series-reading-status')
  await expect(status).toHaveText('To Read')
- await expect(page.locator('.series-card .story-facts')).toHaveText('To Read · 3 works · 74,696 words')
- await expect(page.locator('.series-card .series-reading-status')).toHaveCount(1)
+ await expect(originalSeriesCard(page).locator('.story-facts')).toHaveText('To Read · 3 works · 74,696 words')
+ await expect(originalSeriesCard(page).locator('.series-reading-status')).toHaveCount(1)
  async function setWork(id: number, value: string) {
   await page.goto(`/stories/sample-entry-${id}`)
   const selector = page.getByRole('region', { name: 'Reading and organization' }).locator('.status-select select')
@@ -201,7 +203,7 @@ test('series status follows individual work status changes and headers show date
  await setWork(2034597,'finished')
  await page.goto('/library?shelf=series')
  await expect(status).toHaveText('Finished Reading')
- await expect(page.locator('.series-card .series-work-link .lucide-check')).toHaveCount(2)
+ await expect(originalSeriesCard(page).locator('.series-work-link .lucide-check')).toHaveCount(2)
  await setWork(862320,'to_read')
  await page.goto('/library?shelf=series')
  await expect(status).toHaveText('Currently Reading')
@@ -212,7 +214,7 @@ test('series status follows individual work status changes and headers show date
  await expect(status).toHaveText('To Read')
  await page.goto('/series/132147')
  const stats = page.locator('.details-story-stats')
- const updated = stats.locator('div').filter({has:page.getByText('Date Updated',{exact:true})})
+ const updated = stats.locator('div').filter({has:page.getByText('AO3 Series Updated',{exact:true})})
  await expect(updated.locator('dd')).toHaveText('09 Aug 2020')
  const progress = page.getByRole('region',{name:'Reading and organization'})
  await expect(progress.locator('.series-reading-status')).toHaveText('To Read')
@@ -228,9 +230,9 @@ test('series status follows individual work status changes and headers show date
 
 test('finishing a series leaves missing works absent and recalculates status when one is added', async ({ page }) => {
  await page.goto('/library?shelf=series')
- await expect(page.locator('.series-card')).toHaveCount(1)
- await page.locator('.series-card').getByRole('button', {name:'Mark favorite',exact:true}).click()
- await expect(page.locator('.series-card').getByRole('button', {name:'Unmark favorite',exact:true})).toBeVisible()
+ await expect(originalSeriesCard(page)).toHaveCount(1)
+ await originalSeriesCard(page).getByRole('button', {name:'Mark favorite',exact:true}).click()
+ await expect(originalSeriesCard(page).getByRole('button', {name:'Unmark favorite',exact:true})).toBeVisible()
  const removed = await page.evaluate(() => {
   const key = 'between-chapters:sample-library:v1', library = JSON.parse(localStorage.getItem(key)!)
   const work = library.stories.find((story: {work:{ao3_work_id:number}}) => story.work.ao3_work_id === 2034597)
@@ -262,5 +264,29 @@ test('finishing a series leaves missing works absent and recalculates status whe
  await expect(panel.getByRole('button', {name:'Mark as Finished',exact:true})).toBeVisible()
  await expect(page.locator('.details-story-stats')).toContainText('2 in your library')
  await page.goto('/library?shelf=currently_reading')
- await expect(page.locator('.series-card .series-reading-status')).toHaveText('Currently Reading')
+ await expect(originalSeriesCard(page).locator('.series-reading-status')).toHaveText('Currently Reading')
+})
+
+test('requested sample series demonstrate full details, basic pages and partial libraries without network access', async ({ page }) => {
+ const requests: string[] = []
+ await page.route(/https:\/\/(?:[^/]+\.)?(?:supabase\.co|archiveofourown\.org|ao3\.org)\//, route => { requests.push(route.request().url()); return route.abort() })
+ await page.goto('/library?shelf=series')
+ await expect(page.locator('.series-card')).toHaveCount(4)
+ for (const [id, title, count, status, full] of [
+  [1030529, 'Point of Divergence', 1, 'Currently Reading', true],
+  [2404765, 'Son of Sea Foam', 4, 'Finished', false],
+  [2888871, 'From the Archives', 6, 'To Read', true],
+ ] as const) {
+  await page.goto(`/series/${id}`)
+  await expect(page.getByRole('heading', {name:title,level:1,exact:true})).toBeVisible()
+  await expect(page.locator('.details-story-stats')).toContainText(`${count} in your library`)
+  await expect(page.getByRole('region', {name:'Reading and organization'}).locator('.series-reading-status')).toHaveText(status)
+  await expect(page.getByRole('heading', {name:full ? 'Works in this series' : 'Works in your library',exact:true})).toBeVisible()
+  if (full) {
+   if (id === 1030529) await expect(page.getByRole('link', {name:'Part 2: Positive Feedback',exact:true})).toBeVisible()
+   else await expect(page.getByRole('region', {name:'Works in series'}).locator('.story-card')).toHaveCount(count)
+   await expect(page.getByRole('button', {name:'Remove',exact:true})).toBeVisible()
+  } else await expect(page.getByRole('button', {name:'Load',exact:true})).toBeDisabled()
+ }
+ expect(requests).toEqual([])
 })

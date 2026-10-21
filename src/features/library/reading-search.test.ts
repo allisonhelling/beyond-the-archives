@@ -159,3 +159,19 @@ it('matches any selected AO3 rating, while an empty selection includes every rat
 it('rejects invalid or partially typed calendar dates rather than silently filtering everything out',()=>{
  for(const date of ['2026-','2026-02-30','2026-13-01']) expect(()=>filterReading([],{...defaultReadingFilters,updatedAfter:date})).toThrow('Enter a valid From date')
 })
+
+it('groups series by AO3 identity, including same-named memberships and series cards', () => {
+ const membership = (id:number) => ({id,name:'Same series',url:`https://archiveofourown.org/series/${id}`,position:1})
+ const first = story('Same fic',{id:'entry-101',metadata:{...blankMetadata,title:'Same fic',series:['Same series'],series_memberships:[membership(77)]}})
+ const second = story('Same fic',{id:'entry-102',metadata:{...blankMetadata,title:'Same fic',series:['Same series'],series_memberships:[membership(88)]}})
+ expect(readingGroups([first,second],'series')).toEqual([
+  ['Same series (AO3 series 77)',[first],'series:77'],
+  ['Same series (AO3 series 88)',[second],'series:88'],
+ ])
+ const both = {...first,metadata:{...first.metadata,series_memberships:[membership(77),membership(88),membership(77)]}}
+ expect(readingGroups([both],'series').map(([,stories])=>stories)).toEqual([[both],[both]])
+ const cards = [77,88].map(id=>story('Same series',{id:`series:${id}`,metadata:{...blankMetadata,title:'Same series',series:['Same series']}}))
+ expect(readingGroups(cards,'series').map(([,stories,key])=>[key,stories.map(story=>story.id)])).toEqual([
+  ['series:77',['series:77']],['series:88',['series:88']],
+ ])
+})

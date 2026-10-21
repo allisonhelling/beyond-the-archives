@@ -4,7 +4,7 @@ import { SeriesCard } from './SeriesCollection'
 import { useLibraryResults } from './useLibraryResults'
 import { readBrowsing, writeBrowsing } from './browsing'
 import { Pagination } from './pagination'
-import { pageSizes } from './page-size'
+import { pageSize, pageSizes } from './page-size'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Bell, Bookmark, ChevronDown, Clock, Heart, Info, Library, Layers3, SlidersHorizontal, ArrowDownWideNarrow, X } from 'lucide-react'
@@ -12,6 +12,7 @@ import { publicationStatuses } from './publication-status'
 import { filterDateText, ratings, tagNames, type Story } from './model'
 import { DateFilterField } from './DateFilterField'
 import { Dropdown } from '../../components/Dropdown'
+import { Tooltip } from '../../components/Tooltip'
 import { useDismissible } from '../../components/useDismissible'
 import { SearchSuggestions } from './SearchSuggestions'
 import { defaultReadingFilters, filterReading, inReadingSection, normalize, tracked, type ReadingFilters, type SortOrder } from './reading-search'
@@ -84,19 +85,21 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const [defaults] = useState(initialReadingFilters)
   const [params, setParams] = useSearchParams()
   const decoded = readBrowsing(params, defaults)
+  const [temporarySize, setTemporarySize] = useState<number>()
   const [draft, setDraft] = useState<{ source: string; filters: ReadingFilters } | null>(null)
   const currentUrl = params.toString()
   const filters = draft?.source === currentUrl ? draft.filters : decoded.filters
-  const page = draft?.source === currentUrl ? 1 : decoded.page, size = decoded.size
+  const page = draft?.source === currentUrl ? 1 : decoded.page, size = temporarySize ?? decoded.size
+  const urlSize = temporarySize === undefined ? pageSize(params.get('size')) : undefined
   if (draft && draft.source !== currentUrl) setDraft(null)
-  function setFilters(update: (previous: ReadingFilters) => ReadingFilters) { const next = update(filters); setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, size)) }
-  // Make the effective preference explicit so copied links are reproducible.
+  function setFilters(update: (previous: ReadingFilters) => ReadingFilters) { const next = update(filters); setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize)) }
+  // Keep filters and explicit links reproducible; local page-size edits stay temporary.
   useEffect(() => {
     if (draft) return
-    const next = writeBrowsing(params, filters, size, page)
+    const next = writeBrowsing(params, filters, urlSize, page)
     if (!next.has('shelf')) next.set('shelf', mode === 'reading' ? 'view_all' : 'all')
     if (next.toString() !== params.toString()) setParams(next, { replace: true })
-  }, [params, setParams, filters, size, page, mode, draft])
+  }, [params, setParams, filters, urlSize, page, mode, draft])
   useEffect(() => {
     try { window.localStorage.setItem(preferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
@@ -131,9 +134,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const fandoms = sampleMode ? localFandoms : remote.result?.fandoms ?? localFandoms
   const seriesById = new Map(remote.result?.series.map(series => [`series:${series.seriesId}`, series]) ?? [])
   useEffect(() => {
-    if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, size, currentPage), { replace: true })
-  }, [page, currentPage, remote.result, params, filters, size, setParams])
-  function changePage(value: number) { setParams(writeBrowsing(params, filters, size, value)) }
+    if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
+  }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
+  function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }
   error ||= remote.error ?? ''
   const publicationLabel = (value: keyof typeof publicationStatuses) => mode === 'series' ? value === 'complete' ? 'Complete' : value === 'in_progress' ? 'Incomplete' : 'Completion unknown' : publicationStatuses[value].label
   const activeFilters = [filters.query && `Title / author: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationLabel(status)}`),
@@ -141,6 +144,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     filters.inSeries && 'In a series', ...filters.rating.map(rating => `Rating: ${rating}`), filters.favorites && 'Favorites',
     filters.relationship && `Relationships: ${filters.relationship}`, filters.characters && `Characters: ${filters.characters}`, filters.tags && `Tags: ${filters.tags}`, filters.within && `Within ${filters.scope}: ${filters.within}`,
     filters.updatedAfter && `Updated from ${filterDateText(filters.updatedAfter)}`, filters.updatedBefore && `Updated through ${filterDateText(filters.updatedBefore)}`].filter(Boolean)
+  const pagination = <Pagination page={currentPage} pages={pages} total={total} size={size} onPage={changePage} trailing={<><label className="pagination-size">Works per page<select className="filter-input select-fit" value={size} onChange={event => { setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label><Tooltip description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per page information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip></>} />
   const orderingControls = <>
     <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
     <Dropdown label="Group" icon={Layers3} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
@@ -173,12 +177,13 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active filters"><div className="filter-chips">{activeFilters.map(text => <span key={String(text)}>{text}</span>)}</div><button className="text-button" onClick={clearFilters}>Clear all filters</button></div>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard sections">{displayedSections.map(([key, title, description, Icon]) => {
       const label = mobile && key === 'waiting' ? 'Waiting' : title
-      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, filters, size); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : sampleMode ? filtered.filter(story => inReadingSection(story, key)).length : remote.result?.sections[key] ?? '—'}</span></button>
+      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, filters, urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : sampleMode ? filtered.filter(story => inReadingSection(story, key)).length : remote.result?.sections[key] ?? '—'}</span></button>
     })}</nav>}
     <div className="results-row"><p className="results-count" role="status">{total} {resultKind === 'series' ? 'series' : resultKind === 'item' ? total === 1 ? 'item' : 'items' : total === 1 ? 'story' : 'stories'} found</p>{resultsActions}</div>
-    <div className="results-row"><label>Works per page<select value={size} onChange={event => setParams(writeBrowsing(params, filters, Number(event.target.value)))}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label><Pagination page={currentPage} pages={pages} total={total} size={size} onPage={changePage} /></div>
+    {pagination}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <p role="alert" className="error-message">{error}</p>}
     {!error && !remote.loading && (shown.length ? <LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /> : <section className="library-empty"><h2>{selected === 'new' ? 'No verified chapter updates' : 'No stories here yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : activeFilters.length ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
+    {!error && !remote.loading && pagination}
   </>
 }

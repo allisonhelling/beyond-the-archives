@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../lib/dates'
 import { useStorySnapshot } from './useStorySnapshot'
 import { browsingReturnTo } from './browsing'
 import { CompletedImportSeriesNotice } from '../imports/ImportedSeriesNotice'
@@ -432,13 +433,13 @@ export function StoryDetailsPage() {
           <div><dt>Additional Tags</dt><dd><MetadataTags values={tagNames(story.metadata, 'freeform')} /></dd></div>
           <div><dt className="sr-only">All tags</dt><dd><details className="details-disclosure"><summary>All tags</summary><MetadataTags values={story.metadata.ao3_tags} /></details></dd></div>
           <div><PersonalStoryField key={story.id} story={story} /></div>
-          <div><dt>Saved</dt><dd>{new Date(story.created_at).toLocaleString()}</dd></div>
-          <div><dt>Last edited</dt><dd>{new Date(story.updated_at).toLocaleString()}</dd></div>
+          <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>
+          <div><dt>Last edited</dt><dd>{formatDateTime(story.updated_at)}</dd></div>
         </dl>
         <details className="details-disclosure"><summary>Other metadata</summary><p className="muted">Manually entered values are private field-level overrides.</p>
         <dl className="metadata-list">
           <div><dt>AO3 work ID</dt><dd>{story.work.ao3_work_id}</dd></div>
-          <div><dt>Metadata last checked</dt><dd>{story.work.last_metadata_check ? new Date(story.work.last_metadata_check).toLocaleString() : 'Never'}</dd></div>
+          <div><dt>Metadata last checked</dt><dd>{story.work.last_metadata_check ? formatDateTime(story.work.last_metadata_check) : 'Never'}</dd></div>
           <div><dt>Verified canonical URL</dt><dd><ExternalUrl url={story.work.canonical_url} /></dd></div>
           <div><dt>Original provided URL</dt><dd><ExternalUrl url={story.original_url} fallback="Unavailable" /></dd></div>
           {savedWorkUrl(story) !== story.original_url && <div><dt>Updated provided URL</dt><dd><ExternalUrl url={savedWorkUrl(story)} /></dd></div>}

@@ -56,10 +56,17 @@ function SettingsPage() {
 }
 
 function FeaturesPage() {
-  return <><div className="page-heading"><div><h1>The next chapters</h1><p>A thoughtful foundation for a lasting library.</p></div><span className="status-pill">PHASE 3</span></div><section className="roadmap-current"><ShieldCheck size={29} /><div><span className="eyebrow accent">PHASE 1 · FOUNDATION</span><h2>Your private library is ready.</h2><p>Invitation-only sign-in, account recovery, manual story entry, reading progress, favorites, private notes, and collections backed by row-level security.</p><span className="complete-label"><CircleCheck size={16} /> Foundation implemented · Phase 2 library, progress, favorites and collections available</span></div></section><div className="roadmap-grid">{[
+  return <><div className="page-heading"><div><h1>The next chapters</h1><p>A thoughtful foundation for a lasting library.</p></div><span className="status-pill">PHASE 3</span></div><section className="settings-card" aria-labelledby="series-features-heading">
+    <h2 id="series-features-heading">Series pages</h2>
+    <p><strong>Default series page.</strong> Works in your library are automatically grouped by their AO3 series, keeping their original part numbers. This page uses your saved works to show authors, fandoms, and word totals. Opening it does not download the full AO3 series. Official series totals and completion stay unknown until you load them.</p>
+    <p><strong>Loaded AO3 details.</strong> Choose <strong>Load</strong> to save the series description, official statistics, and available work listing from AO3, including works outside your library. Saving these details does not add those works to your library.</p>
+    <p><strong>Refresh and Remove.</strong> <strong>Refresh</strong> updates the downloaded series information when you request it; the last-fetched time shows how recent it is. New works are not automatically imported. <strong>Remove</strong> deletes the downloaded details and returns to the default page, keeping your saved works, reading progress, notes, favorites, and collections.</p>
+    <p><strong>Review related works.</strong> After a fic import, the <strong>Related Series</strong> popup lets you review a series temporarily and choose individual works to import. Full details are saved only when you choose <strong>Load</strong>.</p>
+    <p>Your series reading status follows the works saved in your library. It is separate from whether the author has marked the AO3 series complete.</p>
+  </section><section className="roadmap-current"><ShieldCheck size={29} /><div><span className="eyebrow accent">PHASE 1 · FOUNDATION</span><h2>Your private library is ready.</h2><p>Invitation-only sign-in, account recovery, manual story entry, reading progress, favorites, private notes, and collections backed by row-level security.</p><span className="complete-label"><CircleCheck size={16} /> Foundation implemented · Phase 2 library, progress, favorites and collections available</span></div></section><div className="roadmap-grid">{[
 
     ['03', 'Bring your stories along', 'Bulk AO3 links, persistent import jobs, and respectful metadata retrieval.'],
-    ['04', 'Find your next escape', 'Advanced search, series organization, and reading statistics.'],
+    ['04', 'Find your next escape', 'Advanced search refinements and reading statistics.'],
     ['05', 'Stay in the story', 'Email-powered chapter notifications and controlled metadata refreshes.'],
     ['06', 'Keep what matters', 'Complete backups and restore, optional extension, and production hardening.'],
   ].map(([phase, title, text]) => <section className="roadmap-card" key={phase}><span className="phase-number">{phase}</span><span className="eyebrow">{phase === '03' ? 'IMPLEMENTED · WORKER SETUP REQUIRED' : 'PLANNED'}</span><h2>{title}</h2><p>{text}</p></section>)}</div></>

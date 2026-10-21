@@ -8,8 +8,7 @@ import { EditConflictReview } from './EditConflictReview'
 import { EditConflict, type EditValues } from './edit-merge'
 import { useLibrary } from './LibraryProvider'
 import { seriesReadingStatus, type LibrarySeries } from './series'
-import { finishSeries, updateSeries } from './series-repository'
-import { previewSeries } from '../imports/repository'
+import { ensureSeries, finishSeries, updateSeries } from './series-repository'
 
 type Controls = { favorite: ReactNode; actions: ReactNode; collectionsField: ReactNode; finishButton: ReactNode }
 export function SeriesControls({ series, children }: { series: LibrarySeries; children: (controls: Controls) => ReactNode }) {
@@ -19,7 +18,7 @@ export function SeriesControls({ series, children }: { series: LibrarySeries; ch
  const [conflict, setConflict] = useState<EditConflict | null>(null)
  const menu = useDismissible<HTMLDetailsElement>(menuOpen, () => setMenuOpen(false))
  const snapshot = () => ({ favorite: series.record?.is_favorite ?? false, collections: series.record?.collectionIds ?? [] })
- async function ensureSaved() { if (!series.record) await previewSeries(series.normalizedUrl) }
+ async function ensureSaved() { if (!series.record) await ensureSeries(series) }
  function failed(error: unknown) { if (error instanceof EditConflict) setConflict(error); else setError(error instanceof Error ? error.message : 'Could not save series changes.') }
  async function save(values: EditValues, baseline: EditValues = snapshot()) {
   setBusy(true); setError('')

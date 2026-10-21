@@ -4,8 +4,9 @@ import { active, blankMetadata, type Metadata, type Status, type Story } from '.
 
 export type SeriesRecord = Database['public']['Tables']['library_series']['Row'] & { collectionIds?: string[]; detailsLoaded?: boolean }
 export type LibrarySeries = SeriesPreview & { record?: SeriesRecord; savedStories: Story[]; fandoms: string[]; detailsLoaded: boolean }
-export function seriesMemberships(story: Story) {
- return (story.metadata.series_memberships ?? []).filter(series => Number.isSafeInteger(series.id) && series.id > 0 && series.url === `https://archiveofourown.org/series/${series.id}`)
+export function seriesMemberships(story: Pick<Story, 'metadata'>) {
+ const valid = (story.metadata.series_memberships ?? []).filter(series => Number.isSafeInteger(series.id) && series.id > 0 && series.url === `https://archiveofourown.org/series/${series.id}`)
+ return [...new Map(valid.map(series => [series.id, series])).values()]
 }
 export function inSeries(story: Story) { return seriesMemberships(story).length > 0 || Boolean(story.metadata.series?.some(name => name.trim())) }
 export function librarySeries(stories: Story[], records: SeriesRecord[] = []): LibrarySeries[] {
@@ -21,7 +22,7 @@ export function librarySeries(stories: Story[], records: SeriesRecord[] = []): L
   const ids = new Set(preview.works?.map(work => work.workId) ?? [])
   const saved = [...ids].flatMap(id => { const story = storiesByAo3Id.get(id); return story ? [story] : [] })
   const group = groups.get(record.ao3_series_id)
-  if (group || saved.length || record.is_favorite || record.reading_status === 'finished' || record.collectionIds?.length || record.notes) groups.set(record.ao3_series_id, { title: preview.title, stories: [...new Map([...(group?.stories ?? []), ...saved].map(story => [story.id, story])).values()], record })
+  if (group || saved.length || preview.basic === false || record.is_favorite || record.reading_status === 'finished' || record.collectionIds?.length || record.notes) groups.set(record.ao3_series_id, { title: preview.title, stories: [...new Map([...(group?.stories ?? []), ...saved].map(story => [story.id, story])).values()], record })
  }
  return [...groups].map(([seriesId, group]) => {
   const preview = group.record?.metadata as unknown as SeriesPreview | undefined
@@ -34,7 +35,8 @@ export function librarySeries(stories: Story[], records: SeriesRecord[] = []): L
    works.set(id, { ...original, workId: id, url: `https://archiveofourown.org/works/${id}`, position: seriesMemberships(story).find(series => series.id === seriesId)?.position ?? original?.position ?? null, title: story.metadata.title, authors: story.metadata.authors, rating: story.metadata.rating, relationshipTags: story.metadata.relationship_tags, characterTags: story.metadata.character_tags, additionalTags: story.metadata.additional_tags, updated: story.work.ao3_updated_at?.slice(0, 10) ?? original?.updated, fandoms: story.metadata.fandoms, summary: story.metadata.summary, tags: story.metadata.ao3_tags, wordCount: story.metadata.word_count, chapters: `${story.metadata.published_chapters ?? '?'}/${story.metadata.total_chapters ?? '?'}`, complete: story.metadata.publication_status === 'unknown' ? null : story.metadata.publication_status === 'complete' })
   }
   const list = [...works.values()].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))
-  return { ...preview, seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: preview?.title ?? group.title, description: preview?.description ?? '', creators: preview?.creators ?? [...new Set(list.flatMap(work => work.authors))], works: list, record: group.record, savedStories: group.stories, fandoms: [...new Set(list.flatMap(work => work.fandoms ?? []))], detailsLoaded: Boolean(preview) }
+  const wordCount = preview && !preview.basic ? preview.wordCount : list.length && list.every(work => work.wordCount !== null) ? list.reduce((sum, work) => sum + (work.wordCount ?? 0), 0) : null
+  return { ...preview, seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: preview?.title ?? group.title, description: preview?.description ?? '', wordCount, creators: preview?.creators ?? [...new Set(list.flatMap(work => work.authors))], works: list, record: group.record, savedStories: group.stories, fandoms: [...new Set(list.flatMap(work => work.fandoms ?? []))], detailsLoaded: Boolean(preview && !preview.basic) }
  }).sort((a, b) => a.title.localeCompare(b.title))
 }
 

@@ -32,9 +32,9 @@ it('keeps custom order through reload, rename, creation, and deletion', async ()
 
 it('includes all supplied works and both series members in the requested reading groups', async () => {
   const { stories } = await loadSampleLibrary()
-  expect(stories).toHaveLength(16)
+  expect(stories).toHaveLength(27)
   const counts = Object.fromEntries(['finished', 'waiting_for_updates', 'reading', 're_reading', 'to_read'].map(status => [status, stories.filter(story => story.reading_status === status).length]))
-  expect(counts).toEqual({ finished: 6, waiting_for_updates: 2, reading: 2, re_reading: 1, to_read: 5 })
+  expect(counts).toEqual({ finished: 10, waiting_for_updates: 2, reading: 3, re_reading: 1, to_read: 11 })
   for (const story of stories) {
     expect(parseWorkUrl(story.original_url).workId).toBe(story.work.ao3_work_id)
     expect(() => validateProgress(story.last_read_chapter, story.metadata)).not.toThrow()
@@ -243,7 +243,7 @@ it('adds the new series to older previews once, preserving edits and removed sto
   expect(upgraded.stories.some(story => story.id === removed.id)).toBe(false)
   expect(upgraded.stories.find(story => story.id === edited.id)).toMatchObject({ notes: 'Keep my draft', last_read_chapter: 1, metadata: { title: 'My title' } })
   expect(upgraded.stories.filter(story => story.work.ao3_work_id === 2034597)).toHaveLength(1)
-  expect(upgraded.series).toHaveLength(1)
+  expect(upgraded.series).toHaveLength(4)
   expect(upgraded.series[0].notes).toBe('Existing series note')
   await deleteSampleStory('sample-entry-2034597')
   expect((await loadSampleLibrary()).stories.some(story => story.work.ao3_work_id === 2034597)).toBe(false)
@@ -263,10 +263,10 @@ it('organizes a series independently and finishes its works without replacing pr
  expect(library.series[0]).toMatchObject({is_favorite:true,reading_status:'finished',collectionIds:[collection]})
  expect(library.stories.find(story=>story.id===original.id)).toMatchObject({reading_status:'finished',last_read_chapter:3,notes:'Keep fic notes',personal_rating:4,is_favorite:true})
  expect(library.stories.find(story=>story.work.ao3_work_id===2034597)).toBeUndefined()
- expect(seriesReadingStatus(librarySeries(library.stories,library.series)[0])).toBe('finished')
+ expect(seriesReadingStatus(librarySeries(library.stories,library.series).find(series => series.seriesId === 132147)!)).toBe('finished')
  await saveSampleStory({url:'https://archiveofourown.org/works/2034597',metadata:missing.metadata,status:'to_read',progress:0,notes:'New notes',personalRating:null,favorite:false,collections:[],tags:[]})
  const updated = await loadSampleLibrary()
- expect(seriesReadingStatus(librarySeries(updated.stories,updated.series)[0])).toBe('reading')
+ expect(seriesReadingStatus(librarySeries(updated.stories,updated.series).find(series => series.seriesId === 132147)!)).toBe('reading')
  expect(updated.stories.find(story=>story.work.ao3_work_id===2034597)?.reading_status).toBe('to_read')
  await deleteSampleCollection(collection)
  expect((await loadSampleLibrary()).series[0].collectionIds).toEqual([])
@@ -279,5 +279,48 @@ it('finishes an empty series without adding preview works', async () => {
  expect(await finishSampleSeries(132147)).toBe(0)
  const library = await loadSampleLibrary()
  expect(library.stories.some(story => [862320,2034597].includes(story.work.ao3_work_id!))).toBe(false)
- expect(seriesReadingStatus(librarySeries(library.stories,library.series)[0])).toBe('finished')
+ expect(seriesReadingStatus(librarySeries(library.stories,library.series).find(series => series.seriesId === 132147)!)).toBe('finished')
+})
+
+it('seeds full and basic series with different saved-work counts and reading states', async () => {
+ const library = await loadSampleLibrary(), series = librarySeries(library.stories, library.series)
+ const full = series.find(series => series.seriesId === 1030529)!
+ expect(full).toMatchObject({ title: 'Point of Divergence', detailsLoaded: true, workCount: 2, savedStories: [{ last_read_chapter: 6 }] })
+ expect(full.works).toHaveLength(2)
+ expect(full.savedStories).toHaveLength(1)
+ expect(seriesReadingStatus(full)).toBe('reading')
+ expect(full.works.find(work => work.workId === 14745539)?.title).toBe('Positive Feedback')
+ expect(library.stories.some(story => story.work.ao3_work_id === 14745539)).toBe(false)
+ for (const [id, count, status, positions, loaded] of [[2404765, 4, 'finished', [1, 2, 3, 4], false], [2888871, 6, 'to_read', [1, 2, 3, 4, 5, 6], true]] as const) {
+  const basic = series.find(series => series.seriesId === id)!
+  expect(basic.detailsLoaded).toBe(loaded)
+  expect(basic.savedStories).toHaveLength(count)
+  expect(seriesReadingStatus(basic)).toBe(status)
+  expect(basic.works.map(work => work.position)).toEqual(positions)
+  if (loaded) {
+   expect(basic.workCount).toBe(count)
+   expect(basic.works).toHaveLength(count)
+  } else {
+   expect(basic.workCount).toBeUndefined()
+   expect(basic.record?.metadata).toMatchObject({basic:true,works:[]})
+  }
+ }
+})
+it('upgrades version two samples without restoring removed old works or overwriting personal edits', async () => {
+ const library = await loadSampleLibrary(), ids = new Set([1030529, 2404765, 2888871])
+ library.sampleVersion = 2
+ library.stories = library.stories.filter(story => !story.metadata.series_memberships?.some(series => ids.has(series.id)) && story.work.ao3_work_id !== 2034597)
+ library.series = library.series.filter(series => !ids.has(series.ao3_series_id))
+ library.series[0].notes = 'Keep my series note'
+ library.stories[0].notes = 'Keep my work note'
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.sampleVersion).toBe(3)
+ expect(upgraded.series).toHaveLength(4)
+ expect(upgraded.stories.some(story => story.work.ao3_work_id === 2034597)).toBe(false)
+ expect(upgraded.series[0].notes).toBe('Keep my series note')
+ expect(upgraded.stories[0].notes).toBe('Keep my work note')
+ expect(upgraded.stories).toHaveLength(26)
+ await deleteSampleStory('sample-entry-11613168')
+ expect((await loadSampleLibrary()).stories.some(story => story.work.ao3_work_id === 11613168)).toBe(false)
 })

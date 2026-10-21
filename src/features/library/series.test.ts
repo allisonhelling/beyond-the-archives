@@ -55,3 +55,29 @@ it('ignores unsaved previews and recalculates a finished series when another wor
  }
  expect(seriesReadingStatus({...series,savedStories:[{...story(102),reading_status:'to_read'}]})).toBe('to_read')
 })
+
+it('keeps identity-only series basic and derives word totals from saved works', () => {
+ const saved = story(102); saved.metadata.word_count = 123
+ const basic = record({ ...preview, basic: true, description: '', works: [] })
+ expect(librarySeries([saved], [basic])[0]).toMatchObject({ detailsLoaded: false, wordCount: 123, works: [{ workId: 102 }] })
+ saved.metadata.word_count = null
+ expect(librarySeries([saved], [basic])[0].wordCount).toBeNull()
+})
+it('keeps explicitly downloaded series visible even without library works', () => {
+ expect(librarySeries([], [{ ...record({ ...preview, basic: false }), notes: '' }])[0]).toMatchObject({ detailsLoaded: true, savedStories: [], works: preview.works })
+})
+
+it('keeps same-named works and series distinct by their AO3 IDs', () => {
+ const first = story(101), second = story(102)
+ for (const saved of [first,second]) saved.metadata.title = 'Same fic title'
+ first.metadata.series_memberships = [{id:77,name:'Same series title',url,position:1}]
+ second.metadata.series_memberships = [{id:88,name:'Same series title',url:'https://archiveofourown.org/series/88',position:1}]
+ const separate = librarySeries([first,second])
+ expect(separate.map(series => [series.seriesId,series.title,series.works.map(work=>work.workId)])).toEqual([
+  [77,'Same series title',[101]], [88,'Same series title',[102]],
+ ])
+ second.metadata.series_memberships = [{id:77,name:'Same series title',url,position:2}]
+ const shared = librarySeries([first,second])
+ expect(shared).toHaveLength(1)
+ expect(shared[0].works.map(work=>[work.workId,work.title])).toEqual([[101,'Same fic title'],[102,'Same fic title']])
+})

@@ -70,14 +70,14 @@ it('detects one-shots from completion and exact AO3 or personal tags, with manua
 })
 
 it('shows only the AO3 calendar date without converting timezones or inventing unknown dates', () => {
- expect(ao3Date('2026-10-15T00:00:00Z')).toBe('15 Oct 2026')
- expect(ao3Date('2020-08-09')).toBe('09 Aug 2020')
+ expect(ao3Date('2026-10-15T00:00:00Z')).toBe('Oct 15, 2026')
+ expect(ao3Date('2020-08-09')).toBe('Aug 09, 2020')
  for (const value of [null,undefined,'','invalid','2026-99-99']) expect(ao3Date(value)).toBe('Unknown')
 })
 
 it('formats AO3 calendar dates without UTC boundary shifts and rejects impossible dates',()=>{
- expect(ao3Date('2026-01-01T23:59:59-12:00')).toBe('01 Jan 2026')
- expect(ao3Date('2024-02-29')).toBe('29 Feb 2024')
- expect(ao3Date('2026-09-03')).toBe('03 Sep 2026')
+ expect(ao3Date('2026-01-01T23:59:59-12:00')).toBe('Jan 01, 2026')
+ expect(ao3Date('2024-02-29')).toBe('Feb 29, 2024')
+ expect(ao3Date('2026-09-03')).toBe('Sep 03, 2026')
  for(const value of ['2026-02-29','2026-04-31']) expect(ao3Date(value)).toBe('Unknown')
 })

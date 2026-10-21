@@ -17,6 +17,10 @@ export async function fixture(page: Page) {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
     if (['library_catalog','library_story_details','query_library','paged_import_history'].includes(table)) return route.fulfill({ json: libraryQueryFixture(table,body??{},tables) })
+    if (table === 'ensure_library_series' && body) {
+      if (!tables.library_series.some(series => series.ao3_series_id === body.p_series)) tables.library_series.push({id:crypto.randomUUID(),user_id:user.id,ao3_series_id:body.p_series,notes:'',is_favorite:false,reading_status:'to_read',created_at:now,updated_at:now,metadata:{seriesId:body.p_series,title:body.p_title,normalizedUrl:`https://archiveofourown.org/series/${body.p_series}`,description:'',works:[],basic:true}})
+      return route.fulfill({status:204})
+    }
     if (table === 'remember_library_series' && body) {
       const metadata = body.p_metadata as Row
       let series = tables.library_series.find(series => series.ao3_series_id === metadata.seriesId)

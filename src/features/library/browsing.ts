@@ -17,10 +17,11 @@ export function readBrowsing(params: URLSearchParams, defaults = defaultReadingF
   const requested = Number(params.get('page'))
   return { filters, page: Number.isSafeInteger(requested) && requested > 0 && requested <= 2147483647 ? requested : 1, size: pageSize(params.get('size')) ?? savedPageSize() }
 }
-export function writeBrowsing(params: URLSearchParams, filters: ReadingFilters, size: number, page = 1) {
+export function writeBrowsing(params: URLSearchParams, filters: ReadingFilters, size: number | undefined, page = 1) {
   const next = new URLSearchParams(params)
   for (const [key, value] of Object.entries(filters)) next.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value))
-  next.set('size', String(size)); next.set('page', String(page))
+  if (size === undefined) next.delete('size'); else next.set('size', String(size))
+  next.set('page', String(page))
   return next
 }
 

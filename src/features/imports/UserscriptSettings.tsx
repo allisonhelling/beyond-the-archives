@@ -1,3 +1,4 @@
+import { formatDate } from '../../lib/dates'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
@@ -46,7 +47,7 @@ export function UserscriptSettings() {
    {code && <label>One-time pairing code<input readOnly value={code} onFocus={event => event.target.select()} autoComplete="off" spellCheck={false} /></label>}
   </form>
   {message && <p role="status" className="muted">{message}</p>}
-  <ul>{devices.map(device => <li key={device.id}>{device.name} · {device.paired ? 'Connected' : 'Awaiting pairing'} · expires {new Date(device.expires_at).toLocaleDateString()} <button className="button secondary compact" disabled={busy} onClick={() => void manage('revoke', device.id)}>Disconnect {device.name}</button></li>)}</ul>
+  <ul>{devices.map(device => <li key={device.id}>{device.name} · {device.paired ? 'Connected' : 'Awaiting pairing'} · expires {formatDate(device.expires_at)} <button className="button secondary compact" disabled={busy} onClick={() => void manage('revoke', device.id)}>Disconnect {device.name}</button></li>)}</ul>
   <p className="muted">Disconnect here to revoke access even if the device is lost. Signing out of the website leaves paired devices connected until disconnected or expired. New codes replace previous unused codes.</p>
  </section>
 }

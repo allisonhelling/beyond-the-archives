@@ -22,3 +22,10 @@ it('restricts return navigation to internal browsing routes',()=>{
  expect(browsingReturnTo('/series/77')).toBe('/series/77')
  for(const url of ['//evil.test','https://evil.test','/settings','/stories/1',null])expect(browsingReturnTo(url)).toBe('/library')
 })
+it('removes temporary page-size overrides from links so reload uses the saved default',()=>{
+ localStorage.setItem(pageSizeKey,'100')
+ const next=writeBrowsing(new URLSearchParams('shelf=favorites&size=25&page=3'),defaultReadingFilters,undefined,2)
+ expect(next.has('size')).toBe(false)
+ expect(readBrowsing(next)).toMatchObject({size:100,page:2})
+ expect(next.get('shelf')).toBe('favorites')
+})

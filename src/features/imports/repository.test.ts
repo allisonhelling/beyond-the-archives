@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-const rpc=vi.hoisted(()=>vi.fn())
-vi.mock('../../lib/supabase',()=>({supabase:{rpc}}))
+const {rpc,session,settings,invoke}=vi.hoisted(()=>({rpc:vi.fn(),session:vi.fn(),settings:vi.fn(),invoke:vi.fn()}))
+vi.mock('../../lib/supabase',()=>({supabase:{rpc,auth:{getSession:session},from:()=>({select:()=>({eq:()=>({maybeSingle:settings})})}),functions:{invoke}}}))
 vi.mock('../library/repository',()=>({allRows:vi.fn()}))
-import { submitImport } from './repository'
+import { previewSeries, submitImport } from './repository'
 beforeEach(()=>{rpc.mockReset()})
 it('explains a missing Phase 3 migration instead of suggesting a one-link batch is too large',async()=>{
  rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'Internal database details'}})
@@ -46,4 +46,14 @@ it('submits the chosen status and reviewed series with the work URLs atomically'
 it('explains the required migration when import status support is missing',async()=>{
  rpc.mockResolvedValue({data:null,error:{code:'PGRST202'}})
  await expect(submitImport('https://archiveofourown.org/works/123',true,'to_read')).rejects.toThrow('Apply the latest database migrations')
+})
+
+it('fetches a temporary preview without writing any series metadata', async () => {
+ session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
+ settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})
+ const preview = {seriesId:77,normalizedUrl:'https://archiveofourown.org/series/77',title:'Series',works:[]}
+ invoke.mockResolvedValue({data:{preview},error:null})
+ await expect(previewSeries(preview.normalizedUrl)).resolves.toMatchObject(preview)
+ expect(invoke).toHaveBeenCalledWith('series-preview',{body:{url:preview.normalizedUrl}})
+ expect(rpc).not.toHaveBeenCalled()
 })

@@ -16,5 +16,187 @@
     "creatorNotes": "",
     "wordCount": 74696,
     "workCount": 3
+  },
+  {
+    "seriesId": 1030529,
+    "normalizedUrl": "https://archiveofourown.org/series/1030529",
+    "title": "Point of Divergence",
+    "description": "",
+    "complete": false,
+    "creators": [
+      "Frecklefrog"
+    ],
+    "creatorLinks": {
+      "Frecklefrog": "https://archiveofourown.org/users/Frecklefrog/pseuds/Frecklefrog"
+    },
+    "begun": "2017-07-26",
+    "updated": "2019-02-26",
+    "creatorNotes": "",
+    "wordCount": 72826,
+    "workCount": 2,
+    "works": [
+      {
+        "workId": 11613168,
+        "url": "https://archiveofourown.org/works/11613168",
+        "position": 1,
+        "rating": "Teen And Up Audiences",
+        "relationshipTags": [
+          "Hanazawa Teruki & Kageyama \"Mob\" Shigeo",
+          "Hanazawa Teruki & Reigen Arataka",
+          "Kageyama \"Mob\" Shigeo & Reigen Arataka"
+        ],
+        "characterTags": [
+          "Kageyama \"Mob\" Shigeo",
+          "Reigen Arataka",
+          "Hanazawa Teruki",
+          "Kageyama Ritsu"
+        ],
+        "additionalTags": [
+          "AU",
+          "An AU in which Teruki meets Mob and Reigen about six months after he starts living alone",
+          "Give Teruki A Family 2k17",
+          "Other Additional Tags to Be Added",
+          "Fluff",
+          "also teru dyes his hair",
+          "Hurt/Comfort",
+          "Child Neglect",
+          "Alternate Universe - Canon Divergence",
+          "Rating went up to teen bc theres Swearing in chapter eleven aa",
+          "nothing else changes",
+          "Canon-Typical Violence",
+          "Dad reigen"
+        ],
+        "updated": "2019-02-26",
+        "title": "Butterfly Effect",
+        "authors": [
+          "Frecklefrog"
+        ],
+        "summary": "“Go, Mob, melt it!” screeches Reigen, and Mob extends his hand, already coated with the swirling blue discs of his aura. Only-\n\nOnly he can’t exorcise the spirit, because there isn’t one, and the boy is staring at him with wide blue eyes. His hand is glowing the same yellow as the basket.\n\n(in which Teruki meets Mob much, much earlier.)",
+        "fandoms": [
+          "モブサイコ100 | Mob Psycho 100"
+        ],
+        "tags": [
+          "モブサイコ100 | Mob Psycho 100",
+          "Creator Chose Not To Use Archive Warnings",
+          "Hanazawa Teruki & Kageyama \"Mob\" Shigeo",
+          "Hanazawa Teruki & Reigen Arataka",
+          "Kageyama \"Mob\" Shigeo & Reigen Arataka",
+          "Kageyama \"Mob\" Shigeo",
+          "Reigen Arataka",
+          "Hanazawa Teruki",
+          "Kageyama Ritsu",
+          "AU",
+          "An AU in which Teruki meets Mob and Reigen about six months after he starts living alone",
+          "Give Teruki A Family 2k17",
+          "Other Additional Tags to Be Added",
+          "Fluff",
+          "also teru dyes his hair",
+          "Hurt/Comfort",
+          "Child Neglect",
+          "Alternate Universe - Canon Divergence",
+          "Rating went up to teen bc theres Swearing in chapter eleven aa",
+          "nothing else changes",
+          "Canon-Typical Violence",
+          "Dad reigen"
+        ],
+        "wordCount": 69712,
+        "chapters": "17/17",
+        "complete": true
+      },
+      {
+        "workId": 14745539,
+        "url": "https://archiveofourown.org/works/14745539",
+        "position": 2,
+        "rating": "General Audiences",
+        "relationshipTags": [
+          "Hanazawa Teruki & Reigen Arataka",
+          "Hanazawa Teruki & Kageyama \"Mob\" Shigeo",
+          "Kageyama \"Mob\" Shigeo & Reigen Arataka"
+        ],
+        "characterTags": [
+          "Reigen Arataka",
+          "Kageyama \"Mob\" Shigeo",
+          "Hanazawa Teruki"
+        ],
+        "additionalTags": [
+          "Butterfly Effect",
+          "butterfly effect oneshots woohoo",
+          "Fluff",
+          "Sickfic",
+          "Sort Of",
+          "One Shot Collection",
+          "or for now its just",
+          "One Shot",
+          "but it might turn into a collection. we'll see",
+          "summary will change with new chapters probably?",
+          "Child Neglect",
+          "implied - Freeform"
+        ],
+        "updated": "2018-05-24",
+        "title": "Positive Feedback",
+        "authors": [
+          "Frecklefrog"
+        ],
+        "summary": "Teru's sleeping off a fever at the office. Everyone worries.",
+        "fandoms": [
+          "モブサイコ100 | Mob Psycho 100"
+        ],
+        "tags": [
+          "モブサイコ100 | Mob Psycho 100",
+          "No Archive Warnings Apply",
+          "Hanazawa Teruki & Reigen Arataka",
+          "Hanazawa Teruki & Kageyama \"Mob\" Shigeo",
+          "Kageyama \"Mob\" Shigeo & Reigen Arataka",
+          "Reigen Arataka",
+          "Kageyama \"Mob\" Shigeo",
+          "Hanazawa Teruki",
+          "Butterfly Effect",
+          "butterfly effect oneshots woohoo",
+          "Fluff",
+          "Sickfic",
+          "Sort Of",
+          "One Shot Collection",
+          "or for now its just",
+          "One Shot",
+          "but it might turn into a collection. we'll see",
+          "summary will change with new chapters probably?",
+          "Child Neglect",
+          "implied - Freeform"
+        ],
+        "wordCount": 3114,
+        "chapters": "1/2",
+        "complete": false
+      }
+    ],
+    "basic": false,
+    "fetchedAt": "2026-10-20T12:00:00.000Z"
+  },
+  {
+    "seriesId": 2404765,
+    "normalizedUrl": "https://archiveofourown.org/series/2404765",
+    "title": "Son of Sea Foam",
+    "description": "",
+    "basic": true,
+    "works": []
+  },
+  {
+    "seriesId": 2888871,
+    "normalizedUrl": "https://archiveofourown.org/series/2888871",
+    "title": "From the Archives",
+    "description": "A collection of statements from the archives of the Void Institute.\n\nCover illustrations by @chrisriin. My series of character studies and AUs exploring different aspects of this series not part of the main story can be found here, so check that out if you're wanting more content!\n\nALSO, AN OFFICIAL, FULLY-VOICED PODFIC OF THIS SERIES IS NOW CURRENTLY POSTING ON YOUTUBE HERE!!",
+    "complete": true,
+    "creators": [
+      "Sixteenthdays"
+    ],
+    "creatorLinks": {
+      "Sixteenthdays": "https://archiveofourown.org/users/Sixteenthdays/pseuds/Sixteenthdays"
+    },
+    "begun": "2022-05-01",
+    "updated": "2022-11-08",
+    "creatorNotes": "",
+    "wordCount": 12324,
+    "workCount": 6,
+    "basic": false,
+    "fetchedAt": "2026-10-20T12:00:00.000Z"
   }
 ]

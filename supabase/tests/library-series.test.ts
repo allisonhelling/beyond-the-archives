@@ -82,3 +82,44 @@ it('can finish a series without saved works and leaves a later added work at its
   expect((await db.query('select e.reading_status from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=103')).rows).toEqual([{reading_status:'to_read'}])
  })
 })
+
+it('stores a basic identity independently, preserves full details on organization, and removes only downloaded data', async () => {
+ await asUser(alice, async () => {
+  await db.query("select public.ensure_library_series(199,'Basic series')")
+  await db.query("select public.save_library_series_note(199,'Keep this note','')")
+  await db.query("select public.update_library_series(199,'{\"favorite\":true}','{\"favorite\":false}')")
+  const full = { ...preview, seriesId: 199, normalizedUrl: 'https://archiveofourown.org/series/199', basic: false, fetchedAt: '2026-10-20T12:00:00Z' }
+  await remember(full)
+  await db.query("select public.ensure_library_series(199,'Stale title')")
+  expect((await db.query<{metadata:object}>('select metadata from public.library_series where ao3_series_id=199')).rows[0].metadata).toEqual(full)
+ })
+ await asUser(bob, () => db.query('select public.remove_library_series_details(199)'))
+ await asUser(alice, async () => {
+  const full = { ...preview, seriesId: 199, normalizedUrl: 'https://archiveofourown.org/series/199', basic: false, fetchedAt: '2026-10-20T12:00:00Z' }
+  expect((await db.query<{metadata:object}>('select metadata from public.library_series where ao3_series_id=199')).rows[0].metadata).toEqual(full)
+  await db.query('select public.remove_library_series_details(199)')
+  expect((await db.query('select metadata,notes,is_favorite from public.library_series where ao3_series_id=199')).rows[0]).toEqual({ metadata: { seriesId:199,title:'Series',normalizedUrl:full.normalizedUrl,description:'',works:[],basic:true },notes:'Keep this note',is_favorite:true })
+  expect((await db.query('select id from public.works where ao3_work_id=102')).rows).toEqual([])
+ })
+ await db.exec('set role anon')
+ try {
+  await expect(db.query("select public.ensure_library_series(199,'No access')")).rejects.toThrow(/permission denied/)
+  await expect(db.query('select public.remove_library_series_details(199)')).rejects.toThrow(/permission denied/)
+ } finally { await db.exec('reset role') }
+})
+it('projects identity-only series as basic and explicit downloads as full without owned works', async () => {
+ await asUser(alice, async () => {
+  const story = { id:'basic-work', work:{ao3_work_id:201}, metadata:{ title:'A saved work',authors:['Author'],fandoms:[],word_count:123,series_memberships:[{id:199,name:'Series',url:'https://archiveofourown.org/series/199',position:4}],ao3_tags:[],relationship_tags:[],character_tags:[],additional_tags:[] },reading_status:'to_read',personalTags:[],last_read_chapter:0 }
+  const result = (await db.query<{payload:{detailsLoaded:boolean;wordCount:number;works:object[]}}>('select payload from public.library_series_results($1) where payload->>\'seriesId\'=\'199\'', [JSON.stringify([story])])).rows[0].payload
+  expect(result).toMatchObject({detailsLoaded:false,wordCount:123,works:[{workId:201,position:4}]})
+  await remember({...preview,seriesId:299,normalizedUrl:'https://archiveofourown.org/series/299',basic:false})
+  const full = (await db.query<{payload:{detailsLoaded:boolean;savedStories:object[]}}>("select payload from public.library_series_results('[]') where payload->>'seriesId'='299'")).rows[0].payload
+  expect(full).toMatchObject({detailsLoaded:true,savedStories:[]})
+ })
+})
+it('rejects invalid minimal identities', async () => {
+ await asUser(alice, async () => {
+  for (const id of [0,-1,9007199254740992]) await expect(db.query('select public.ensure_library_series($1,$2)',[id,'Series'])).rejects.toThrow(/Invalid series identity/)
+  await expect(db.query("select public.ensure_library_series(399,' ')")).rejects.toThrow(/Invalid series identity/)
+ })
+})
