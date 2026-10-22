@@ -1,6 +1,16 @@
 /** Serialized by chrome.scripting; keep this function self-contained. */
 export async function captureMetadataPage(waitForReady = false, pageType = 'work') {
  if (location.origin !== 'https://archiveofourown.org') return null
+ const navigation = pageType === 'navigation'
+ if (navigation) {
+  if (document.readyState !== 'complete' || !/^\/works\/[1-9]\d*\/navigate$/.test(location.pathname)) return null
+  const index = document.querySelector('#main .chapter.index, #main ol.chapter, #main .chapter-index')
+  if (!index) return null
+  const clone = index.cloneNode(true)
+  clone.querySelectorAll('script, style, iframe, input, button, textarea, img').forEach(node => node.remove())
+  const html = clone.outerHTML
+  return new TextEncoder().encode(html).byteLength <= 400_000 ? { url: location.href, html } : null
+ }
  const series = pageType === 'series'
  if (series && (document.readyState !== 'complete' || !document.querySelector('.series.work.index') || !document.querySelector('dl.series.meta'))) return null
  if (waitForReady && !series) {

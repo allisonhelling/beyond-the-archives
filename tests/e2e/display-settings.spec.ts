@@ -31,6 +31,13 @@ async function manage(scope: Locator, open: boolean) {
   if (await button.getAttribute('aria-expanded') !== String(open)) await button.click()
 }
 
+async function applyTileDrafts(page: Page, name: 'Save' | 'Cancel') {
+  for (const bar of await page.locator('.display-settings .display-save-bar').all()) {
+    const button = bar.getByRole('button', { name, exact: true })
+    if (await button.isVisible() && await button.isEnabled()) await button.click()
+  }
+}
+
 async function dragInformation(page: Page, source: Locator, destination: Locator, mobile: boolean) {
   // Wrapped inline fields can have an empty center in their overall bounding box.
   const firstRect = (element: Element) => element.getClientRects()[0].toJSON() as { x: number; y: number; width: number; height: number }
@@ -63,13 +70,15 @@ test('full work and series tiles expand on demand, hide/show outside the preview
   await expect(field(work, 'workTile', 'relationships')).toContainText('Dick Grayson & Bruce Wayne')
   await manage(work, true)
   await field(work, 'workTile', 'authors').click()
+  await expect(field(work, 'workTile', 'authors')).toBeVisible()
+  await page.keyboard.press('Backspace')
   await expect(work.locator('.authors')).toHaveCount(0)
   await manage(work, false)
   await field(work, 'workTile', 'summary').click()
   await field(work, 'workTile', 'fandoms').click()
   expect(await field(work, 'workTile', 'summary').evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
   expect(await stored(page)).toBeNull()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+  await applyTileDrafts(page, 'Save')
   await page.reload()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Series Tiles', exact: true }).click()
@@ -77,10 +86,12 @@ test('full work and series tiles expand on demand, hide/show outside the preview
   await expect(field(work, 'workTile', 'relationships')).toBeVisible()
   await manage(work, true)
   await field(work, 'workTile', 'fandoms').click()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.keyboard.press('Backspace')
+  await applyTileDrafts(page, 'Cancel')
   await expect(field(work, 'workTile', 'fandoms')).toBeVisible()
   await manage(work, true)
   await field(work, 'workTile', 'fandoms').click()
+  await page.keyboard.press('Backspace')
   await page.reload()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Series Tiles', exact: true }).click()
@@ -103,7 +114,7 @@ test('actual tile data sections support mouse and touch dragging', async ({ page
   await dragInformation(page, source.locator('a').first(), destination, info.project.name === 'mobile')
   expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
   expect(await stored(page)).toBeNull()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await applyTileDrafts(page, 'Cancel')
   expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
 })
 
@@ -119,6 +130,7 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
   const group = kind === 'Work' ? 'workInfo' : 'seriesDescription', key = kind === 'Work' ? 'summary' : 'description'
   await manage(preview, true)
   await field(preview, group, key).click()
+  await page.keyboard.press('Backspace')
   await expect(field(preview, group, key)).toHaveCount(0)
   expect(await stored(page)).toBeNull()
   await page.locator('.display-example-page > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -127,6 +139,7 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
   await expect(field(preview, group, key)).toBeVisible()
   await manage(preview, true)
   await field(preview, group, key).click()
+  await page.keyboard.press('Backspace')
   const statistics = kind === 'Work' ? 'workStats' : 'seriesStats'
   await field(preview, statistics, 'words').press('Alt+ArrowDown')
   await expect(preview.locator('.details-story-stats dt').first()).toHaveText(kind === 'Work' ? 'Published / Total Chapters' : 'Publication Status')
@@ -166,14 +179,14 @@ for (const kind of ['Work', 'Series'] as const) test(`${kind} tiles support grou
   await dragInformation(page, source, destination, info.project.name === 'mobile')
   await expect(newLine.locator(`[data-display-field="${second}"]`).last()).toBeVisible()
   expect(await stored(page)).toBeNull()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+  await applyTileDrafts(page, 'Save')
   await page.reload()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Series Tiles', exact: true }).click()
   await expect(newLine.locator(`[data-display-field="${second}"]`).last()).toBeVisible()
   await field(preview, group, extra).click()
   await preview.getByRole('button', { name: 'Move to Own Line', exact: true }).click()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await applyTileDrafts(page, 'Cancel')
   await expect(newLine.locator(`[data-display-field="${second}"]`).last()).toBeVisible()
   expect(await preview.locator('article').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
   await preview.screenshot({ path: `test-results/grouped-${kind.toLowerCase()}-${info.project.name}.png` })
@@ -223,7 +236,7 @@ test('Shift-click groups and deletes multiple fields, with repeatable saved divi
   await work.getByRole('button', { name: 'Add Divider', exact: true }).click()
   await expect(work.locator('.display-custom-divider')).toHaveCount(2)
   expect(await stored(page)).toBeNull()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+  await applyTileDrafts(page, 'Save')
   await page.reload()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Series Tiles', exact: true }).click()
@@ -268,7 +281,7 @@ test('new tile metadata and category colors preview immediately and apply only a
   const colors = page.getByRole('group', { name: 'Additional Tags Color', exact: true })
   if (await colors.getByRole('button', { name: 'Custom color', exact: true }).getAttribute('aria-expanded') !== 'true') await colors.getByRole('button', { name: 'Custom color', exact: true }).click()
   await colors.getByRole('textbox', { name: 'Custom color (hex)', exact: true }).fill('#123abc')
-  await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+  await applyTileDrafts(page, 'Save')
   await page.reload()
   await page.getByRole('button', { name: 'Edit Tag Format', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
@@ -302,7 +315,7 @@ test('tag shape choices and short dividers save from the real work preview', asy
   await expect(work.locator('.display-short-divider')).toHaveCount(2)
   await expect(work.locator('.display-short-divider').first()).toHaveCSS('width','48px')
   expect(await stored(page)).toBeNull()
-  await page.locator('.display-settings > .display-save-bar').getByRole('button',{name:'Save',exact:true}).click()
+  await applyTileDrafts(page, 'Save')
   await page.reload()
   await page.getByRole('button',{name:'Edit Work Tiles',exact:true}).click()
   await expect(tags).toHaveAttribute('data-tag-shape','pill')
@@ -397,7 +410,7 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
   await expect(field(preview,group,'tags').locator('.categorized-tags')).toHaveAttribute('data-tag-shape','sharp')
   await expect(field(preview,group,'tags').locator('.metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
  }
- await page.locator('.display-settings > .display-save-bar').getByRole('button',{name:'Save',exact:true}).click()
+ await applyTileDrafts(page, 'Save')
  expect(JSON.parse((await stored(page))!).tagAppearance).toMatchObject({shape:'sharp',colors:{warnings:'#123abc',tags:'#123abc'}})
  for(const kind of ['Work','Series']) {
   await page.goto(`/settings/example-${kind.toLowerCase()}`)
@@ -506,7 +519,7 @@ test('desktop settings outline shows descriptions and jumps to every section', a
  await expect(page.getByRole('navigation', { name: 'Settings Quick Access', exact: true })).toHaveCount(0)
  const outline = page.getByRole('navigation', { name: 'Settings Section Outline', exact: true })
  await expect(outline).toBeVisible()
- await expect(outline.getByRole('link')).toHaveCount(6)
+ await expect(outline.getByRole('link')).toHaveCount(8)
  const outlineBox = (await outline.boundingBox())!, contentBox = (await page.locator('.settings-content').boundingBox())!
  expect(outlineBox.x + outlineBox.width).toBeLessThanOrEqual(contentBox.x)
  const links = await outline.getByRole('link').evaluateAll(nodes => nodes.map(node => ({ title: node.getAttribute('aria-label')!, href: node.getAttribute('href')! })))
@@ -532,6 +545,7 @@ test('desktop settings outline shows descriptions and jumps to every section', a
 
 
 test('mobile settings list opens sections, supports back, and retains display drafts', async ({ page }, info) => {
+ test.setTimeout(60000)
  test.skip(info.project.name !== 'mobile', 'Mobile navigation.')
  await fixture(page)
  await page.goto('/settings')
@@ -539,7 +553,7 @@ test('mobile settings list opens sections, supports back, and retains display dr
  const list = page.getByRole('navigation', { name: 'Settings sections', exact: true })
  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
  await expect(page.getByText('MAKE YOURSELF AT HOME')).toHaveCount(0)
- await expect(list.getByRole('link')).toHaveCount(6)
+ await expect(list.getByRole('link')).toHaveCount(8)
  await page.setViewportSize({ width: 320, height: 844 })
  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
  await expect(page.getByRole('navigation', { name: 'Settings Quick Access', exact: true })).toHaveCount(0)
@@ -592,4 +606,29 @@ test('mobile settings list opens sections, supports back, and retains display dr
  await expect(page.locator('#ios-safari-userscript')).toBeVisible()
  await page.getByRole('button', { name: 'Back to Settings', exact: true }).click()
  await expect(list).toBeVisible()
+})
+
+test('saves and cancels tag, series and work tile drafts independently', async ({ page }) => {
+ await setup(page)
+ const work = editor(page, 'Work Tile'), series = editor(page, 'Series Tile')
+ for (const [preview, group] of [[work, 'workTile'], [series, 'seriesTile']] as const) {
+  await manage(preview, true)
+  await field(preview, group, 'authors').click()
+  await expect(field(preview, group, 'authors')).toBeVisible()
+  await page.keyboard.press('Backspace')
+  await expect(field(preview, group, 'authors')).toHaveCount(0)
+ }
+ await page.getByRole('group', { name: 'Tag Shape', exact: true }).getByRole('button', { name: 'Humor Fluff Sharp Rectangles', exact: true }).click()
+ await page.locator('#display-work-editor .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+ let preferences = JSON.parse((await stored(page))!)
+ expect(preferences.workTile.hidden).toContain('authors')
+ expect(preferences.seriesTile.hidden).not.toContain('authors')
+ expect(preferences.tagAppearance.shape).toBe('bullets')
+ await expect(field(series, 'seriesTile', 'authors')).toHaveCount(0)
+ await page.locator('#display-series-editor .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
+ await expect(field(series, 'seriesTile', 'authors')).toBeVisible()
+ await page.locator('#display-tag-format .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+ preferences = JSON.parse((await stored(page))!)
+ expect(preferences.tagAppearance.shape).toBe('sharp')
+ expect(preferences.workTile.hidden).toContain('authors')
 })

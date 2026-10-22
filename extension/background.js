@@ -78,7 +78,8 @@ async function pump() {
    await chrome.storage.session.set({ active })
   }
   await chrome.action.setBadgeText({ text: 'WAIT' })
-  if (!matchingWork(tab.url, active.workId)) return
+  const navigationUrl = `https://archiveofourown.org/works/${active.workId}/navigate`
+  if (active.workPage ? tab.url !== navigationUrl : !matchingWork(tab.url, active.workId)) return
   const jobs = await api(auth, `/rest/v1/metadata_jobs?id=eq.${encodeURIComponent(active.id)}&select=status,lease_token`)
   if (jobs[0]?.status !== 'processing' || jobs[0]?.lease_token !== active.token) {
    await chrome.storage.session.remove('active')
@@ -87,10 +88,18 @@ async function pump() {
   const latest = await chrome.storage.session.get(['auth', 'active'])
   if (version !== connectionVersion || latest.auth?.userId !== auth.userId || latest.active?.token !== active.token) return
   // No content script runs on ordinary visits. Injection requires a claimed job.
-  const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: [tab.status !== 'complete'] })
+  const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: active.workPage ? [tab.status !== 'complete', 'navigation'] : [tab.status !== 'complete'] })
   const page = results[0]?.result
-  if (version !== connectionVersion || !page || !matchingWork(page.url, active.workId)) return
-  const result = await api(auth, '/functions/v1/extension-metadata', { ...payload, ...page })
+  if (version !== connectionVersion || !page) return
+  if (active.workPage ? page.url !== navigationUrl : !matchingWork(page.url, active.workId)) return
+  if (active.chapterDates && !active.workPage) {
+   active.workPage = page
+   await chrome.storage.session.set({ active })
+   await chrome.tabs.update(tab.id, { url: navigationUrl })
+   return
+  }
+  const snapshot = active.workPage ? { ...active.workPage, navigationHtml: page.html, navigationUrl: page.url } : page
+  const result = await api(auth, '/functions/v1/extension-metadata', { ...payload, ...snapshot })
   if (result.committed) {
    await chrome.storage.session.remove('active')
    await chrome.action.setBadgeText({ text: 'OK' })

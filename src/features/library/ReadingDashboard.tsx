@@ -8,7 +8,7 @@ import { Pagination } from './pagination'
 import { pageSize, pageSizes } from './page-size'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Bell, Pause, Bookmark, Clock, Info, Library, Layers3, ArrowDownWideNarrow } from 'lucide-react'
+import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, Layers3, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
 import { Dropdown } from '../../components/Dropdown'
@@ -41,10 +41,10 @@ function SortSelect({ value, onChange }: { value: SortOrder; onChange: (value: S
   return <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
 }
 const mobileQuery = '(max-width: 650px)'
-const mobileSectionOrder: Partial<Record<string, number>> = { to_read: 3, waiting: 4, paused_reading: 5, view_all: 6 }
+const mobileSectionOrder: Partial<Record<string, number>> = { to_read: 4, waiting: 5, paused_reading: 6, view_all: 7 }
 const sections = [
   ['complete', publicationStatuses.complete.label, 'All chapters out', publicationStatuses.complete.Icon], ['in_progress', publicationStatuses.in_progress.label, 'Still being written, still catching up.', publicationStatuses.in_progress.Icon],
-  ['new', 'New Chapter', 'Caught up stories', Bell], ['view_all', 'View All', 'Currently reading', Library],
+  ['new', 'New Chapter', 'Caught up stories', Bell], ['re_reading', 'Re-Reading', 'Reading again', RotateCcw], ['view_all', 'View All', 'Currently reading', Library],
   ['waiting', 'Waiting for Updates', 'Following ongoing stories', Clock],
   ['paused_reading', 'Paused Reading', 'Resume later', Pause],
   ['to_read', 'To Read', 'Saved for later', Bookmark],

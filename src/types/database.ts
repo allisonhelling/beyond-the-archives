@@ -308,6 +308,7 @@ export type Database = {
           updated_at: string
           extension_metadata: Json
           extension_chapters: Json
+          reading_history: Json
         }
         Insert: {
           id?: string
@@ -328,6 +329,7 @@ export type Database = {
           updated_at?: string
           extension_metadata?: Json
           extension_chapters?: Json
+          reading_history?: Json
         }
         Update: {
           id?: string
@@ -348,6 +350,7 @@ export type Database = {
           updated_at?: string
           extension_metadata?: Json
           extension_chapters?: Json
+          reading_history?: Json
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -491,6 +494,7 @@ export type Database = {
           retrieval_mode: string
           update_reading_location: boolean
           requested_reading_status: Database['public']['Enums']['reading_status'] | null
+          bookmark_import: Json | null
         }
         Insert: {
           id?: string
@@ -513,6 +517,7 @@ export type Database = {
           retrieval_mode?: string
           update_reading_location?: boolean
           requested_reading_status?: Database['public']['Enums']['reading_status'] | null
+          bookmark_import?: Json | null
         }
         Update: {
           id?: string
@@ -535,6 +540,7 @@ export type Database = {
           retrieval_mode?: string
           update_reading_location?: boolean
           requested_reading_status?: Database['public']['Enums']['reading_status'] | null
+          bookmark_import?: Json | null
         }
         Relationships: [
           { foreignKeyName: 'metadata_jobs_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
@@ -865,6 +871,8 @@ export type Database = {
       save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
+      preview_ao3_csv_import: { Args: { p_work_ids: number[] }; Returns: Json }
+      submit_ao3_csv_import: { Args: { p_rows: Json }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean; p_reading_status?: Database['public']['Enums']['reading_status']; p_series_ids?: number[] }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }

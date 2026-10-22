@@ -85,3 +85,14 @@ it('captures a requested series listing without scripts or images', async () => 
  expect(result?.html).not.toContain('<img')
  expect(result?.html).not.toContain('<script')
 })
+
+it('captures only the requested chapter release index for bookmark progress', async () => {
+ vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123/navigate'))
+ vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
+ document.body.innerHTML = '<div id="main"><ol class="chapter index"><li><a href="/works/123/chapters/456">1. Chapter</a><span class="datetime">(2026-10-01)</span><script>secret()</script></li></ol><div>Private account details</div></div>'
+ const snapshot = await captureMetadataPage(false, 'navigation')
+ expect(snapshot.html).toContain('2026-10-01')
+ expect(snapshot.html).not.toMatch(/secret|Private account/)
+ vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123'))
+ expect(await captureMetadataPage(false, 'navigation')).toBeNull()
+})

@@ -43,7 +43,7 @@ export function UserscriptSettings() {
   catch { setMessage('Could not copy. Select the code and copy it manually.') }
  }
  return <section id="ios-safari-userscript" tabIndex={-1} ref={section} className="settings-card"><h2>iOS Safari Userscript</h2>
-  <p className="muted">Install the built AO3 Library userscript in the free Userscripts app. Pair it here to save and edit your library while reading on AO3.</p>
+  <p className="userscript-intro">Install the built AO3 Library userscript in the free Userscripts app. Pair it here to save and edit your library while reading on AO3.</p>
   <p className="muted">To install or update, configure <code>.env.local.hosted</code> with the hosted website’s public settings and run <code>npm run build:userscript</code> in the project, then copy <code>userscript/dist/ao3-library.user.js</code> into the directory selected in Userscripts. Replace the existing file, open the Userscripts Safari popup, and reload AO3. Check the visible version at the bottom of the AO3 panel. Updates are manual; this script does not assume automatic updates.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void manage('create') }}>
    <label>Device name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>

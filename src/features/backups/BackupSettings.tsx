@@ -47,7 +47,7 @@ export function BackupSettings() {
   const disabled = Boolean(busy || sampleMode || deleting || restoring)
   return <section id="settings-backup" tabIndex={-1} className="settings-card">
     <div className="section-title"><Download size={21} /><h2>Export Backup</h2></div>
-    <p>Download or save your complete library, including all works and their metadata, reading progress, private notes, ratings, tags, collections, saved series, import history, and settings. Every saved work is included, across all pages.</p>
+    <p className="muted">Download or save your complete library, including all works and their metadata, reading progress, private notes, ratings, tags, collections, saved series, import history, and settings. Every saved work is included, across all pages.</p>
     <p className="muted">Use Restore Backup below to preview a JSON backup and restore your own account. Sign-in credentials and paired devices are excluded. Browser preferences are included from this browser.</p>
     <div className="form-actions">
       <button className="button secondary" disabled={disabled} onClick={() => void run('export', exportBackup, 'Your backup download has started. Keep the file somewhere safe; it includes your private notes.')}><Download size={17} />{busy === 'export' ? 'Preparing backup…' : 'Export Backup'}</button>

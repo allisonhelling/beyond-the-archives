@@ -1,3 +1,4 @@
+import { recordReadingTransition } from '../reading-history'
 import { defaultReadingFilters, filterReading } from '../reading-search'
 import { applyAutomaticCollections, automaticCollectionRules, collectionRules, type AutomaticCollectionRules } from '../automatic-collections'
 import type { SeriesPreview } from '../../imports/urls'
@@ -197,6 +198,7 @@ export async function saveSampleStory(input: StoryInput) {
     last_update_notification_at: existing?.last_update_notification_at ?? null,
     update_dismissed_at: existing?.update_dismissed_at ?? null,
   }
+  recordReadingTransition(story, existing ?? undefined, now)
   for (const collection of data.collections) {
     if (input.collections.includes(collection.id) && !existing?.collectionIds.includes(collection.id)) collection.last_story_added_at = now
   }
@@ -225,8 +227,10 @@ export async function addSampleStoriesToCollections(storyIds: string[], collecti
 export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'notes' | 'personal_rating'>) {
   const data = read(), story = find(data, id)
   if (changes.last_read_chapter !== undefined) validateProgress(changes.last_read_chapter, story.metadata)
+  const previous = { ...story }
   Object.assign(story, changes, { updated_at: new Date().toISOString() })
   story.reading_status = abandonedReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
+  recordReadingTransition(story, previous, story.updated_at)
   write(data)
 }
 export async function updateSampleEntryChecked(id: string, values: EditValues, baseline: EditValues): Promise<void> {
@@ -338,7 +342,11 @@ export async function finishSampleSeries(seriesId: number) {
  if (!record) throw new Error('Load the series details first.')
  Object.assign(record, { reading_status: 'finished', updated_at: new Date().toISOString() })
  const series = librarySeries(data.stories, data.series).find(series => series.seriesId === seriesId)!
- for (const story of series.savedStories) Object.assign(story, { reading_status: 'finished', last_read_chapter: Math.max(story.last_read_chapter, story.metadata.published_chapters ?? story.metadata.total_chapters ?? 0), updated_at: new Date().toISOString() })
+ for (const story of series.savedStories) {
+  const previous = { ...story }, at = new Date().toISOString()
+  Object.assign(story, { reading_status: 'finished', last_read_chapter: Math.max(story.last_read_chapter, story.metadata.published_chapters ?? story.metadata.total_chapters ?? 0), updated_at: at })
+  recordReadingTransition(story, previous, at)
+ }
  write(data)
  return series.savedStories.length
 }

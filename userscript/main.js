@@ -1,3 +1,4 @@
+import { seriesWorkMetadata } from '../src/features/library/series'
 import { parseLines, statuses, validateProgress } from '../src/features/library/model'
 import { readPage } from './page'
 import styles from './styles.css?inline'
@@ -33,7 +34,7 @@ export async function mountLibrary(doc = document, href = location.href) {
  theme = ['light', 'dark'].includes(theme) ? theme : preferredTheme
  const applyTheme = () => [host, bottomHost].forEach(surface => { surface.dataset.theme = theme })
  applyTheme()
- let entry = null, collections = [], loaded = false, busy = false, draft = null, activePanel = null, syncEditorProgress = null, personalControls = null, syncEditorDraft = null, disposeConflict = null, pendingConflict = null
+ let entry = null, collections = [], loaded = false, busy = false, draft = null, activePanel = null, syncEditorProgress = null, personalControls = null, syncEditorDraft = null, disposeConflict = null, pendingConflict = null, savedWorks = [], seriesControls = []
  const toolbar = doc.createElement('div'); toolbar.className = 'toolbar'; section.append(toolbar)
  const message = doc.createElement('p'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite')
  const panel = doc.createElement('div'); section.append(message, panel)
@@ -45,7 +46,7 @@ export async function mountLibrary(doc = document, href = location.href) {
  const update = doc.createElement('a'); update.href = `${__APP_ORIGIN__}/settings#ios-safari-userscript`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & update instructions'
  footer.append(update); section.append(footer)
  showPanel(null)
- const draftKey = () => `draft:${__SUPABASE_URL__}:${connection.userId}:${page.work}`
+ const draftKey = () => `draft:${__SUPABASE_URL__}:${connection.userId}:${page.series ? 'series:' : ''}${page.work}`
  function node(tag, text, parent) { const element = doc.createElement(tag); if (text) element.textContent = text; parent?.append(element); return element }
  function button(label, action, parent = toolbar) {
   const element = node('button', label, parent); element.type = 'button'; element.disabled = busy || Boolean(pendingConflict)
@@ -89,7 +90,7 @@ export async function mountLibrary(doc = document, href = location.href) {
    message.textContent = 'Saved'; renderToolbar()
   } })
  }
- function clearEditor() { personalControls?.unmount(); personalControls = null; syncEditorProgress = null; syncEditorDraft = null; editorPanel.replaceChildren() }
+ function clearEditor() { seriesControls.forEach(control => control.unmount()); seriesControls = []; personalControls?.unmount(); personalControls = null; syncEditorProgress = null; syncEditorDraft = null; editorPanel.replaceChildren() }
  function resetPanels() { clearConflict(); showPanel(null); clearEditor(); connectionPanel.replaceChildren() }
  function panelButton(label, name, action, parent = toolbar) {
   const element = button(label, async () => {
@@ -119,7 +120,7 @@ export async function mountLibrary(doc = document, href = location.href) {
   try { response = await GM.xmlHttpRequest({
    method: 'POST', url: `${__SUPABASE_URL__}/rest/v1/rpc/userscript_library`, timeout: 20000,
    headers: { apikey: __SUPABASE_KEY__, 'Content-Type': 'application/json' },
-   data: JSON.stringify({ p_secret: secret, p_action: action, p_work: page.work, p_input: input }),
+   data: JSON.stringify({ p_secret: secret, p_action: page.series && ['get', 'save'].includes(action) ? `series_${action}` : action, p_work: page.work, p_input: input }),
   }) } catch { throw new Error(networkMessage) }
   if (!response?.status) throw new Error(networkMessage)
   let data
@@ -133,7 +134,7 @@ export async function mountLibrary(doc = document, href = location.href) {
   }
   return data
  }
- function accept(data) { entry = data.entry; collections = data.collections; loaded = true }
+ function accept(data) { savedWorks = data.savedWorks ?? []; entry = data.entry; collections = data.collections; loaded = true }
  function entryPosition() {
   const chapter = Math.min(entry.progress + 1, page.metadata.published_chapters || entry.progress + 1)
   return { chapter, chapterFinished: entry.progress >= chapter }
@@ -207,18 +208,18 @@ export async function mountLibrary(doc = document, href = location.href) {
   }
  }
  function libraryLink(parent) {
-  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? `${__APP_ORIGIN__}/stories/${encodeURIComponent(entry.id)}` : `${__APP_ORIGIN__}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in between chapters library')
+  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${__APP_ORIGIN__}/series/${page.work}` : `${__APP_ORIGIN__}/stories/${encodeURIComponent(entry.id)}` : `${__APP_ORIGIN__}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in between chapters library')
   // Trusted, build-time Lucide logo markup; no page or user content is injected.
   if (entry) node('span', 'View in', logo)
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }
  function renderToolbar() {
   toolbar.replaceChildren(); bottomBar.replaceChildren()
-  bottomHost.hidden = false
+  bottomHost.hidden = Boolean(page.series)
   bottomBar.className = entry ? 'row bottom-bar' : 'toolbar'
   footer.hidden = Boolean(connection && !activePanel)
   renderBar(toolbar)
-  if (entry) renderProgress(bottomBar)
+  if (entry && !page.series) renderProgress(bottomBar)
   else renderBar(bottomBar)
  }
  function renderBar(parent) {
@@ -229,7 +230,8 @@ export async function mountLibrary(doc = document, href = location.href) {
   if (!loaded) button('Load saved entry', load, center)
   else if (!entry) panelButton('Add to Library', 'editor', openEditor, center)
   else {
-   renderProgress(actions, center)
+   if (page.series) node('span', 'Series saved', center)
+   else renderProgress(actions, center)
    const edit = panelButton('Edit', 'editor', openEditor, actions); edit.className = 'edit-button'
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
@@ -271,6 +273,7 @@ export async function mountLibrary(doc = document, href = location.href) {
    catch { throw new Error('Could not save your rating info. Try again.') }
    ratingInfo = next
    personalControls?.updateRatingInfo(ratingInfo)
+   seriesControls.forEach(control => control.updateRatingInfo(ratingInfo))
    message.textContent = 'Rating info saved on this device.'
   }, ratingEditor)
   node('p', 'In Library Settings → iOS Safari userscript, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
@@ -287,10 +290,92 @@ export async function mountLibrary(doc = document, href = location.href) {
   }, actions)
   button('Close', () => showPanel(null), actions)
  }
+ function seriesSaveInput() {
+  const works = page.series.works.flatMap(work => {
+    const detail = draft.works[work.workId]
+    if (!detail?.selected || savedWorks.includes(work.workId)) return []
+    const metadata = seriesWorkMetadata(work, page.series)
+    const progress = detail.status === 'to_read' ? 0 : detail.status === 'finished' ? metadata.published_chapters : detail.progress
+    if (progress === null) throw new Error('Enter the published chapter count before marking this work Finished.')
+    validateProgress(progress, metadata)
+    return [{ workId: work.workId, metadata, ...detail, progress, rating: detail.rating === '' ? null : Number(detail.rating), tags: parseLines(detail.tags) }]
+   })
+  return { version: draft.version, preview: page.series, notes: draft.notes, favorite: draft.favorite, collections: draft.collections, works }
+ }
+ async function openSeriesEditor() {
+  const stored = await GM.getValue(draftKey(), null)
+  draft = draft ?? stored ?? { version: entry?.version ?? null, notes: entry?.notes ?? '', favorite: entry?.favorite ?? false, collections: entry?.collections ?? [], works: {}, base: { notes: entry?.notes ?? '', favorite: entry?.favorite ?? false, collections: entry?.collections ?? [] } }
+  showPanel('editor')
+  node('h3', 'Add Series to Library', editorPanel)
+  const form = node('form', '', editorPanel), fieldset = node('fieldset', '', form)
+  node('p', page.series.title, fieldset)
+  node('p', 'Choose works to add. Already saved works keep their existing progress and details. You can also save the series without adding works.', fieldset)
+  if (page.series.nextUrl) {
+   node('p', 'This listing has more pages. Save this page, then visit the next page to add more works.', fieldset)
+   const next = node('a', 'Next series page', fieldset); next.href = page.series.nextUrl
+  }
+  function input(parent, title, tag, value, onChange, type) {
+   const label = node('label', title, parent), control = node(tag, '', label)
+   control.setAttribute('aria-label', title)
+   if (type) control.type = type
+   if (type === 'checkbox') control.checked = value
+   else control.value = value
+   control.addEventListener('change', () => { onChange(type === 'checkbox' ? control.checked : control.value); void preserveDraft() })
+   return control
+  }
+  input(fieldset, 'Series private notes', 'textarea', draft.notes, value => { draft.notes = value })
+  input(fieldset, 'Favorite series', 'input', draft.favorite, value => { draft.favorite = value }, 'checkbox')
+  const choices = node('details', '', fieldset); node('summary', 'Series collections', choices)
+  for (const collection of collections) input(choices, collection.name, 'input', draft.collections.includes(collection.id), checked => { draft.collections = checked ? [...draft.collections, collection.id] : draft.collections.filter(id => id !== collection.id) }, 'checkbox')
+  const all = button('Select all available works', async () => {
+   for (const checkbox of fieldset.querySelectorAll('input[data-work-choice]')) { checkbox.checked = true; checkbox.dispatchEvent(new Event('change')) }
+  }, fieldset)
+  all.disabled = false
+  for (const work of page.series.works) {
+   const row = node('details', '', fieldset), summary = node('summary', '', row)
+   const saved = savedWorks.includes(work.workId)
+   const details = draft.works[work.workId] ??= { selected: false, status: 'to_read', progress: 0, notes: '', rating: '', tags: '', collections: [] }
+   const checkbox = input(summary, `${work.position ? `Part ${work.position}: ` : ''}${work.title}${saved ? ' (already saved)' : ''}`, 'input', saved || details.selected, value => { details.selected = value }, 'checkbox')
+   checkbox.disabled = saved
+   if (!saved) checkbox.dataset.workChoice = String(work.workId)
+   if (saved) continue
+   node('p', 'Details below apply only to this work when selected.', row)
+   const status = input(row, `Reading status: ${work.title}`, 'select', details.status, value => { details.status = value })
+   for (const [key, title] of Object.entries(statuses)) { const option = node('option', title, status); option.value = key }
+   status.value = details.status
+   const chapter = input(row, `Chapters read: ${work.title}`, 'input', details.progress, value => { details.progress = Number(value) }, 'number'); chapter.min = '0'; chapter.step = '1'
+   input(row, `Private notes: ${work.title}`, 'textarea', details.notes, value => { details.notes = value })
+   seriesControls.push(mountPersonalControls(node('div', '', row), details, () => { void preserveDraft() }, ratingInfo))
+   const workCollections = node('details', '', row); node('summary', 'Work collections', workCollections)
+   for (const collection of collections) input(workCollections, collection.name, 'input', details.collections.includes(collection.id), checked => { details.collections = checked ? [...details.collections, collection.id] : details.collections.filter(id => id !== collection.id) }, 'checkbox')
+  }
+  const actions = node('div', '', form); actions.className = 'row editor-actions'
+  const save = node('button', 'Save series and selected works', actions); save.type = 'submit'
+  button('Cancel', async () => { clearEditor(); draft = null; showPanel(null); await GM.deleteValue(draftKey()) }, actions)
+  if (entry) button('Reload saved series', async () => {
+   await load()
+   const base = { notes: entry.notes, favorite: entry.favorite, collections: entry.collections }
+   const local = { notes: draft.notes, favorite: draft.favorite, collections: draft.collections }
+   const review = mergeEdits(draft.base ?? {}, local, base)
+   Object.assign(draft, review.merged, { version: entry.version, base })
+   await preserveDraft()
+   if (review.conflicts.length) {
+    const conflict = new EditConflict({ ...review, base }, choices => rpc('save', { ...seriesSaveInput(), ...resolveEdits(review.merged, choices) }))
+    conflict.action = 'save'; throw conflict
+   }
+   clearEditor(); await openSeriesEditor()
+   message.textContent = 'Saved series reloaded. Your local work selections and edits are retained.'
+  }, actions)
+  form.addEventListener('submit', event => { event.preventDefault(); void run(async () => {
+   accept(await rpc('save', seriesSaveInput()))
+   clearEditor(); draft = null; showPanel(null); await GM.deleteValue(draftKey()); message.textContent = 'Saved'
+  }) })
+ }
  async function openEditor() {
   if (activePanel === 'editor') { showPanel(null); return }
   if (editorPanel.childNodes.length) { showPanel('editor'); return }
   if (!loaded) await load()
+  if (page.series) { await openSeriesEditor(); return }
   const stored = await GM.getValue(draftKey(), null)
   draft = draft ?? stored ?? (entry ? { version: entry.version, status: entry.status, ...entryPosition(), notes: entry.notes, rating: entry.rating ?? '', tags: entry.tags.join('\n'), collections: entry.collections } : { ...page.defaults, version: null, notes: '', rating: '', tags: '', collections: [] })
   if (!Object.hasOwn(draft, 'base')) draft.base = stored ? {} : entryValues()
@@ -315,7 +400,7 @@ export async function mountLibrary(doc = document, href = location.href) {
   const status = field('Reading Status', 'select', 'status')
   for (const key of [...new Set(['to_read', 'reading', 'paused_reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? 'Currently Reading' : statuses[key], status); option.value = key }
   status.value = draft.status
-  help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-reading marks the fic as previously read (Finished) and still tracks your chapter.')
+  help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
   if (page.metadata.published_chapters) chapter.max = String(page.metadata.published_chapters)
   help(chapter, 'current chapter', 'Current chapter − 1 counts as completed; check finished to include this chapter.')

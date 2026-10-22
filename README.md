@@ -339,6 +339,14 @@ Open **Add → Import History from AO3** or `/imports` to submit batches of up t
 
 See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cancellation behavior, manual override protection, complete setup instructions, validation results and deployment limitations.
 
+## AO3 bookmark and Marked for Later CSV imports
+
+On `/imports`, choose **AO3 CSV files** to review one or more scraper exports (including combined exports with `source_list`, or older separate files). Up to 2,000 unique works and 20 MB can be reviewed per import. Series bookmarks use the same work picker as mass imports: load each series, explicitly select its installments or skip it, then continue to conflict review. No series works are preselected. Bookmark notes, including saved summaries, become personal notes; bookmark tags become personal tags. Work summaries remain separate.
+
+Bookmarks later than the CSV work update date become Finished, with the historical bookmark date as Finished Date. Earlier or same-day bookmarks become Reading. The existing metadata worker or browser extension checks chapter release dates and marks only the verified chapter prefix posted strictly before the bookmark day as read. Missing dates never create guessed progress; retrieval failures appear in import history for retry. Existing Marked for Later entries are skipped; new ones are To Read. Review each bookmark conflict or use **Overwrite all works** / **Keep all works**. Overwriting replaces imported fields while retaining ratings, favorites, and collection memberships. Concurrent edits invalidate an overwrite review, and later personal edits take priority over queued progress inference.
+
+Apply migrations through `20261022000300_ao3_csv_import.sql`, deploy the updated app and `extension-metadata` Edge Function, and restart the metadata worker. Extension users must rebuild and reload the extension for chapter-index snapshots. Imports use scraper CSV files; the app does not fetch authenticated bookmark or Marked for Later lists itself.
+
 ## Browser extension mode
 
 Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes only jobs created by Import URLs or Refresh metadata, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).

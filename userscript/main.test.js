@@ -516,3 +516,28 @@ it('keeps saved rating info on storage failure and allows retry', async () => {
  await waitFor(() => expect(storage.get('rating-info:https://backend.test')).toBe('New explanation'))
  expect(root.querySelector('.rating-info > span')).toHaveTextContent('New explanation')
 })
+
+it('offers series selection and individual work details using the existing connected toolbar', async () => {
+ document.body.innerHTML = (await import('../server/ao3/fixtures/series.html?raw')).default
+ await mountLibrary(document, 'https://archiveofourown.org/series/77')
+ expect(JSON.parse(network.mock.lastCall[0].data).p_action).toBe('series_get')
+ fireEvent.click(findButton('Add to Library'))
+ const notes = await within(root).findByLabelText('Series private notes')
+ fireEvent.change(notes, { target: { value: 'Read on vacation' } })
+ const checkbox = root.querySelector('input[data-work-choice]')
+ const workId = Number(checkbox.dataset.workChoice)
+ fireEvent.click(checkbox)
+ const details = checkbox.closest('details'); details.open = true
+ const workNotes = within(details).getByLabelText(/^Private notes:/)
+ fireEvent.change(workNotes, { target: { value: 'Individual reminder' } })
+ const status = within(details).getByLabelText(/^Reading status:/)
+ fireEvent.change(status, { target: { value: 're_reading' } })
+ fireEvent.submit(notes.closest('form'))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ const body = JSON.parse(network.mock.lastCall[0].data)
+ expect(body.p_action).toBe('series_save')
+ expect(body.p_work).toBe(77)
+ expect(body.p_input).toMatchObject({ notes: 'Read on vacation', works: [{ workId, notes: 'Individual reminder', status: 're_reading' }] })
+ expect(body.p_input.works).toHaveLength(1)
+ expect(storage.has('draft:https://backend.test:alice:series:77')).toBe(false)
+})

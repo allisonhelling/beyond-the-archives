@@ -45,3 +45,13 @@ it('bounds input, supports preflight, and finishes timeout as an explicit retry'
  finish.mockResolvedValue(false)
  expect((await handler(request())).status).toBe(409)
 })
+
+it('requires a matching chapter index for bookmark dates and reports missing release dates', async () => {
+ findJob.mockResolvedValue({ ...job, chapterDates: true })
+ await handler(request())
+ expect(finish).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ category: 'chapter_dates_unavailable', retryable: true }))
+ expect((await handler(request({ navigationUrl: 'https://archiveofourown.org/works/999/navigate', navigationHtml: '<ol></ol>' }))).status).toBe(400)
+ const navigationHtml = `<ol>${Array.from({ length: 6 }, (_, i) => `<li><a href="/works/123/chapters/${910 + i}">${i + 1}. Chapter</a><span class="datetime">(2024-01-01)</span></li>`).join('')}</ol>`
+ await handler(request({ navigationUrl: 'https://archiveofourown.org/works/123/navigate', navigationHtml }))
+ expect(finish).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ metadata: expect.objectContaining({ chapter_dates: expect.objectContaining({ '6': '2024-01-01' }) }) }))
+})

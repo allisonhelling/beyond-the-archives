@@ -8,12 +8,15 @@ import { ImportReadingStatus } from './ImportReadingStatus'
 import { previewSeries } from './repository'
 import { classifyUrl, extractUrls, groupWorks, type SeriesPreview } from './urls'
 
+export type SeriesWorkSelection = { seriesId: number; works: SeriesPreview['works'] }
+
 type Review = { preview?: SeriesPreview; selected: Set<number>; error?: string; skipped?: boolean; closed?: Set<number>; detailsSaved?: boolean }
-export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, autoLoad = false, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange }: {
+export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, autoLoad = false, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, confirmLabel = 'Import selected', cancelLabel = 'Back to links' }: {
+ showReadingStatus?: boolean; confirmLabel?: string; cancelLabel?: string
  onBusyChange?(busy: boolean): void
  initialReadingStatus?: Status; onReadingStatusChange?(status: Status): void
  text: string; autoLoad?: boolean; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
- onConfirm(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[]): void; onCancel(): void
+ onConfirm(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[], selections: SeriesWorkSelection[]): void; onCancel(): void
 }) {
  const { refreshSeries } = useLibrary()
  const [readingStatus, setReadingStatus] = useState<Status>(initialReadingStatus)
@@ -24,10 +27,11 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
  const direct = groupWorks(extractUrls(text))
  const [reviews, setReviews] = useState<Record<number, Review>>(() => Object.fromEntries(initialPreviews.map(preview => [preview.seriesId, { preview, selected: new Set<number>() }])))
  const [loading, setLoading] = useState<number>()
- const selected = new Map<number, SeriesPreview['works'][number]>()
- for (const review of Object.values(reviews)) if (!review.skipped) for (const work of review.preview?.works ?? []) {
-  if (review.selected.has(work.workId) && !direct.has(work.workId) && !savedIds.has(work.workId)) selected.set(work.workId, work)
- }
+ const selections: SeriesWorkSelection[] = [...series.keys()].filter(id => !reviews[id]?.skipped).map(id => ({
+  seriesId: id,
+  works: (reviews[id]?.preview?.works ?? []).filter(work => reviews[id].selected.has(work.workId) && !direct.has(work.workId) && !savedIds.has(work.workId)),
+ }))
+ const selected = new Map(selections.flatMap(selection => selection.works.map(work => [work.workId, work] as const)))
  const ready = [...series.keys()].every(id => reviews[id]?.preview || reviews[id]?.skipped)
  const load = useCallback(async (id: number, url: string) => {
   setLoading(id)
@@ -62,8 +66,8 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
   <h2>Choose works from series</h2>
   <p>{series.size} series detected · {direct.size} directly linked works included.</p>
   <p className="field-help">Only selected works are added to your library. Previews are temporary unless you choose to save full series details. Saving details includes information about unsaved works; it does not add them to your library. For extension previews, keep this page open and complete any AO3 sign-in in the requested tab.</p>
-  <ImportReadingStatus value={readingStatus} disabled={busy} onChange={status => { setReadingStatus(status); onReadingStatusChange?.(status) }} />
-  <p className="field-help">Applies to the reviewed series and all works imported from these links.</p>
+  {showReadingStatus && <><ImportReadingStatus value={readingStatus} disabled={busy} onChange={status => { setReadingStatus(status); onReadingStatusChange?.(status) }} />
+  <p className="field-help">Applies to the reviewed series and all works imported from these links.</p></>}
   {[...series].map(([id, url]) => {
    const review = reviews[id]
    const preview = review?.preview
@@ -101,6 +105,6 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
    </section>
   })}
   <p className="field-help">Overlapping selections are imported once. Original series part numbers are preserved when work metadata loads.</p>
-  <div className="form-actions"><button className="button primary" disabled={busy || loading !== undefined || !ready || direct.size + selected.size === 0} onClick={() => onConfirm([...selected.values()], readingStatus, [...series.keys()].filter(id => reviews[id]?.preview && !reviews[id]?.skipped))}>Import selected</button><button className="button secondary" disabled={busy || loading !== undefined} onClick={onCancel}>Back to links</button></div>
+  <div className="form-actions"><button className="button primary" disabled={busy || loading !== undefined || !ready || direct.size + selected.size === 0} onClick={() => onConfirm([...selected.values()], readingStatus, [...series.keys()].filter(id => reviews[id]?.preview && !reviews[id]?.skipped), selections)}>{confirmLabel}</button><button className="button secondary" disabled={busy || loading !== undefined} onClick={onCancel}>{cancelLabel}</button></div>
  </section>
 }

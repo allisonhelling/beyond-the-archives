@@ -53,3 +53,14 @@ export function parseDateText(value: string, format = savedDateFormat()): string
  return isCalendarDate(iso) ? iso : value
 }
 export function filterDateText(value: string): string { return isCalendarDate(value) ? formatDate(value) : value }
+
+export function scraperDate(value: string): string | null {
+ const text = value.trim()
+ if (!text) return null
+ if (isCalendarDate(text)) return text
+ const match = text.match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4})$/)
+ const month = match && ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(match[2].toLowerCase())
+ const iso = match && month !== null && month >= 0 ? `${match[3]}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}` : ''
+ if (!isCalendarDate(iso)) throw new Error(`Unrecognized AO3 date: ${text}`)
+ return iso
+}

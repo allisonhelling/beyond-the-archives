@@ -1,3 +1,4 @@
+import { CsvImportForm } from './CsvImportForm'
 import { formatDateTime } from '../../lib/dates'
 import { ImportedSeriesNotice } from './ImportedSeriesNotice'
 import { useState } from 'react'
@@ -47,6 +48,7 @@ export function ImportPage() {
  const resultPagination = data.summary&&<Pagination page={data.summary.page} pages={data.summary.pages} total={visibleCount} size={50} onPage={setResultPage}/>
  return <><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Paste work or series links. Choose which series works to import. Valid work identities are saved immediately; metadata arrives gradually.</p></div></div>
  {sampleMode ? <p className="settings-card">Persistent imports require the connected application. Sample mode has no background worker.</p> : <>
+ <CsvImportForm onImported={async id=>{if(id)setSelected(id);await library.refresh();await reload()}} />
  {reviewing ? <SeriesImportReview text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
  <label>AO3 URLs<textarea rows={10} value={text} onChange={event=>setText(event.target.value)} placeholder="https://archiveofourown.org/works/123" disabled={busy} /></label>
  <ImportReadingStatus value={readingStatus} onChange={setReadingStatus} disabled={busy} />

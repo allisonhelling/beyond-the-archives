@@ -1,3 +1,4 @@
+import { isCalendarDate } from '../../src/lib/dates.ts'
 import type { AutomaticMetadata, RetrievalResult } from './adapter.ts'
 const lists=['authors','fandoms','ao3_tags','relationship_tags','character_tags','additional_tags','archive_warnings','categories','series']
 /** Keep only known, correctly typed values. Null/missing/invalid data never erases valid stored metadata. */
@@ -13,6 +14,7 @@ export function validateMetadata(result: RetrievalResult): RetrievalResult {
  if(typeof input.is_complete==='boolean' && output.published_chapters!==undefined) output.is_complete=input.is_complete
  if(input.author_links && typeof input.author_links==='object') output.author_links=Object.fromEntries(Object.entries(input.author_links).filter(([name,url])=>output.authors?.includes(name) && /^https:\/\/archiveofourown\.org\/users\/[^\s?#]+$/.test(url)))
  if(Array.isArray(input.series_memberships)) output.series_memberships=input.series_memberships.filter(s=>Number.isSafeInteger(s.id)&&s.id>0&&s.url===`https://archiveofourown.org/series/${s.id}`&&typeof s.name==='string'&&(s.position===null||Number.isInteger(s.position)&&s.position>0))
+ if (input.chapter_dates && typeof input.chapter_dates === 'object' && !Array.isArray(input.chapter_dates)) output.chapter_dates = Object.fromEntries(Object.entries(input.chapter_dates).filter(([position, date]) => /^[1-9]\d*$/.test(position) && Number(position) <= (output.published_chapters ?? 0) && typeof date === 'string' && isCalendarDate(date)))
  if(!output.title) return {...result,metadata:null,chapters:{},category:'parser_failure',message:'The adapter did not provide a valid title.',retryable:false}
  const chapters=Object.fromEntries(Object.entries(result.chapters).filter(([position,id])=>/^[1-9]\d*$/.test(position)&&/^[1-9]\d*$/.test(id)&&Number(position)<=(output.published_chapters??0)))
  if(new Set(Object.values(chapters)).size!==Object.keys(chapters).length) return {...result,metadata:output,chapters:{},category:'partial',message:'Ambiguous chapter mapping was discarded.'}

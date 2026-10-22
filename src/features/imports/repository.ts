@@ -89,3 +89,21 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
 
  return { ...preview, fetchedAt: new Date().toISOString() }
 }
+
+
+export async function previewCsvImport(works: import('./ao3-csv').CsvWork[]): Promise<import('./ao3-csv').CsvConflict[]> {
+ const { data, error } = await client().rpc('preview_ao3_csv_import', { p_work_ids: works.map(work => work.workId) })
+ if (error) throw new Error('Could not check CSV conflicts. Apply the latest database migrations and retry.')
+ return data as unknown as import('./ao3-csv').CsvConflict[]
+}
+export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conflicts: import('./ao3-csv').CsvConflict[], choices: Record<number, import('./ao3-csv').CsvChoice>) {
+ const saved = new Map(conflicts.map(conflict => [conflict.workId, conflict]))
+ const rows = works.map(work => ({ ...work, choice: choices[work.workId] ?? 'keep', expectedVersion: saved.get(work.workId)?.version ?? null }))
+ const { data, error } = await client().rpc('submit_ao3_csv_import', { p_rows: rows as unknown as import('../../types/database').Json })
+ if (error) {
+  if (error.code === '40001') throw new Error('Your library changed after CSV review. Choose the files again to refresh conflicts before importing.')
+  throw new Error('Could not confirm the CSV import. Check import history and your connection before retrying. Apply the latest database migrations if this feature is new.')
+ }
+ void connectExtension().catch(() => {})
+ return data as unknown as { batch: string | null; imported: number; kept: number }
+}

@@ -84,7 +84,7 @@ export function hasNewChapter(story: Story) {
     typeof map?.[String(next)] === 'string' && /^[1-9]\d*$/.test(map[String(next)] as string))
 }
 export function inReadingSection(story: Story, section: string) {
-  if (section === 'to_read' || section === 'paused_reading') return story.reading_status === section
+  if (section === 'to_read' || section === 'paused_reading' || section === 're_reading') return story.reading_status === section
   const reading = story.reading_status === 'reading' || story.reading_status === 're_reading'
   if (section === 'complete') return reading && story.metadata.publication_status === 'complete'
   if (section === 'in_progress') return reading && story.metadata.publication_status === 'in_progress'

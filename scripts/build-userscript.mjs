@@ -26,6 +26,7 @@ const metadata = `// ==UserScript==
 // @description Save reading progress and private library details on AO3.
 // @version ${version}
 // @match https://archiveofourown.org/works/*
+// @match https://archiveofourown.org/series/*
 // @noframes
 // @inject-into content
 // @run-at document-end

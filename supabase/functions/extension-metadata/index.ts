@@ -9,7 +9,7 @@ Deno.serve(extensionHandler({
  async job(id) {
   const { data, error } = await client.from('metadata_jobs').select('*, works(ao3_work_id)').eq('id', id).maybeSingle()
   if (error) throw error
-  return data ? { id: data.id, userId: data.user_id, token: data.lease_token, workId: data.works.ao3_work_id, expiresAt: data.lease_until, status: data.status, mode: data.retrieval_mode } : null
+  return data ? { id: data.id, userId: data.user_id, token: data.lease_token, workId: data.works.ao3_work_id, expiresAt: data.lease_until, status: data.status, mode: data.retrieval_mode, chapterDates: data.bookmark_import?.status === 'reading' && Boolean(data.bookmark_import?.date) } : null
  },
  async finish(job, result) { return store.finish({ id: job.id, token: job.token, workId: job.workId, attempt: 0 }, result) },
 }))

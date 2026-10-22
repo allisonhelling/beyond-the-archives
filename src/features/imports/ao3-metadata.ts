@@ -1,7 +1,7 @@
 import type { CheerioAPI } from 'cheerio'
 
 export type AutomaticMetadata = {
- title?: string; summary?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
+ chapter_dates?: Record<string, string>; title?: string; summary?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
  ao3_tags?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; archive_warnings?: string[]; categories?: string[];
  rating?: string; kudos?: number; word_count?: number; published_chapters?: number; total_chapters?: number; is_complete?: boolean;
  ao3_published_at?: string; ao3_updated_at?: string; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[];

@@ -1,3 +1,5 @@
+import { recordReadingTransition } from '../../src/features/library/reading-history'
+import type { Story } from '../../src/features/library/model'
 import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
 import type { Page } from '@playwright/test'
 import { libraryQueryFixture } from './library-query-fixture'
@@ -42,7 +44,9 @@ export async function fixture(page: Page) {
         values = review.merged
       }
       if (table === 'update_library_entry_checked') {
+        const previous = { ...entry! } as unknown as Story
         Object.assign(entry!, { reading_status: values.status, last_read_chapter: values.progress, notes: values.notes, personal_rating: values.rating, is_favorite: values.favorite, updated_at: now })
+        recordReadingTransition(entry! as unknown as Story, previous, now)
         return route.fulfill({ status: 204 })
       }
       Object.assign(body, { p_metadata: values.metadata, p_status: values.status, p_progress: values.progress, p_notes: values.notes, p_rating: values.rating, p_favorite: values.favorite, p_collections: values.collections, p_tags: values.tags })

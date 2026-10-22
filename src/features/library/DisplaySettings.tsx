@@ -72,7 +72,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
   function activate(field: DisplayField, shift = false) {
     setLineGroup(field.group)
     if (shift) setSelection(current => current.some(item => same(item, field)) ? current.filter(item => !same(item, field)) : [...current, field])
-    else if (managing) remove(selection.some(item => same(item, field)) ? selection : [field])
+    else if (managing) setSelection([field])
     else if (selection.some(item => same(item, field))) setSelection(selection.length > 1 ? [field] : [])
     else if (selected && selected.group === field.group) move(selected, field)
     else setSelection([field])
@@ -98,7 +98,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
   }
   function toggle(field: DisplayField, shown: boolean) {
     const preference = state.draft[field.group]
-    if (!shown) { remove([field]); return }
+    if (!shown) { setSelection([field]); surface.current?.focus({ preventScroll: true }); return }
     const parent = Object.keys(preference.lines ?? {}).find(line => preference.lines![line].includes(field.field))
     state.change({ ...state.draft, [field.group]: { ...preference, hidden: preference.hidden.filter(key => key !== field.field && key !== parent) } })
   }
@@ -121,7 +121,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
       <button className="button secondary" type="button" onClick={() => addEntry('short-divider')}>Add Short Divider</button>
     </div>
       {groups.length > 1 && <label className="display-group-area">Add Lines and Dividers To<select className="filter-input" value={selected?.group ?? lineGroup} onChange={event => { setLineGroup(event.target.value as DisplayGroup); setSelection([]) }}>{groups.map(group => <option key={group} value={group}>{displayGroups[group].title}</option>)}</select><span className="field-help">Choose the page area for new lines and dividers. Selected elements use their own area; information can move within that area.</span></label>}
-      <p className="field-help" role="status">{selection.length > 1 ? `${selection.length} elements selected. Group, move, hide or delete them together.` : managing ? 'Add or hide information below, or click the preview to remove information. Shift-click to select multiple elements.' : selected ? `${label(selected)} selected. Shift-click to select more; click a destination to move. Delete hides information or removes lines and dividers.` : 'Drag information onto a grouped line or select a field and use Move to Own Line. Shift-click selects multiple elements. Save applies your changes.'}</p>
+      <p className="field-help" role="status">{selection.length > 1 ? `${selection.length} elements selected. Group, move, hide or delete them together.` : managing ? 'Add or hide information below, or select information in the preview and press Backspace to remove it. Shift-click to select multiple elements.' : selected ? `${label(selected)} selected. Shift-click to select more; click a destination to move. Delete hides information or removes lines and dividers.` : 'Drag information onto a grouped line or select a field and use Move to Own Line. Shift-click selects multiple elements. Save applies your changes.'}</p>
       {selected && <div className="form-actions" aria-label="Move Selected Information">
         <button className="button secondary" type="button" onClick={() => remove(selection)}>Hide/Delete Selected</button>
         {selection.some(item => Object.values(state.draft[item.group].lines ?? {}).some(fields => fields.includes(item.field))) && <button className="button secondary" type="button" onClick={() => apply(selection, (preference, fields) => [...fields].reverse().reduce((value, field) => separateDisplayField(value, field), preference))}>Move to Own Line</button>}
@@ -135,7 +135,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
           return <button key={direction} className="button secondary" type="button" disabled={!destination} aria-label={`Move ${selection.length > 1 ? 'selected elements' : label(selected)} ${direction < 0 ? 'up' : 'down'}`} onClick={() => { if (destination) move(selected, { group: selected.group, field: destination }, true) }}>{direction < 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}{direction < 0 ? 'Move Up' : 'Move Down'}</button>
         })}
       </div>}
-      {managing && <div className="display-available"><h4>Hide/Show Information</h4>{[false, true].map(hidden => <div key={String(hidden)}><h5>{hidden ? 'Available Information' : 'Shown Information'}</h5><ul>{managementFields.filter(field => isHidden(field) === hidden).map(item => <li key={`${item.group}:${item.field}`}><button className="button secondary" type="button" onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : displayLine(item.field) || displayDivider(item.field) ? 'Delete' : 'Hide'} {label(item)}<small>{displayGroups[item.group].title}</small></button></li>)}</ul></div>)}</div>}
+      {managing && <div className="display-available"><h4>Hide/Show Information</h4>{[false, true].map(hidden => <div key={String(hidden)}><h5>{hidden ? 'Available Information' : 'Shown Information'}</h5><ul>{managementFields.filter(field => isHidden(field) === hidden).map(item => <li key={`${item.group}:${item.field}`}><button className="button secondary" type="button" onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : 'Select'} {label(item)}<small>{displayGroups[item.group].title}</small></button></li>)}</ul></div>)}</div>}
 
     </div>
       <div ref={surface} tabIndex={-1} className="display-edit-surface" data-hide-information={managing} aria-label={`${title} Preview`} onMouseDownCapture={event => event.preventDefault()} onDragStartCapture={event => event.preventDefault()} onClickCapture={event => {
@@ -194,13 +194,14 @@ function TagAppearanceSettings({ state }: { state: Draft }) {
 }
 
 export function DisplaySettings() {
-  const state = useDisplayDraft(tileGroups, true)
+  const workState = useDisplayDraft(workTileGroups)
+  const seriesState = useDisplayDraft(seriesTileGroups)
+  const tagState = useDisplayDraft([], true)
   const [expanded, setExpanded] = useState({ work: false, series: false, tags: false })
-  return <section id="settings-display" tabIndex={-1} className="settings-card display-settings"><h2>Tile and Page Information</h2><p className="muted">Arrange your tiles directly in the previews. Use Hide/Show Information to add or remove sections. Shift-click to select multiple elements. Save applies your changes; Cancel or reloading discards them.</p>
+  return <section id="settings-display" tabIndex={-1} className="settings-card display-settings"><h2>Tile and Page Information</h2><p className="muted">Arrange your tiles directly in the previews. Use Hide/Show Information to add fields. Select a field and press Backspace to remove it. Shift-click to select multiple elements. Save applies your changes; Cancel or reloading discards them.</p>
     <section className="display-tag-format-section" aria-labelledby="display-tag-format-title"><div className="display-tile-heading"><button type="button" className="button secondary" aria-expanded={expanded.tags} aria-controls="display-tag-format" onClick={() => setExpanded(current => ({ ...current, tags: !current.tags }))}>Edit Tag Format</button><h3 id="display-tag-format-title">Tag Format</h3></div>
-    <div id="display-tag-format" hidden={!expanded.tags}><TagAppearanceSettings key={state.version} state={state} /></div></section>
-    <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <div key={kind} className="display-tile-section"><div className="display-tile-heading"><button type="button" className="button secondary" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}>Edit {kind === 'work' ? 'Work' : 'Series'} Tiles</button><h3>{kind === 'work' ? 'Work' : 'Series'} Tile</h3></div><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><DisplayEditor key={`${kind}:${state.version}`} title={`${kind === 'work' ? 'Work' : 'Series'} Tile`} showTitle={false} groups={kind === 'work' ? workTileGroups : seriesTileGroups} state={state}>{kind === 'work' ? <StoryCard story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor></div></div>)}</div>
-    <SaveControls state={state} />
+    <div id="display-tag-format" hidden={!expanded.tags}><TagAppearanceSettings key={tagState.version} state={tagState} /><SaveControls state={tagState} /></div></section>
+    <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => { const state = kind === 'work' ? workState : seriesState; return <div key={kind} className="display-tile-section"><div className="display-tile-heading"><button type="button" className="button secondary" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}>Edit {kind === 'work' ? 'Work' : 'Series'} Tiles</button><h3>{kind === 'work' ? 'Work' : 'Series'} Tile</h3></div><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><DisplayEditor key={`${kind}:${state.version}`} title={`${kind === 'work' ? 'Work' : 'Series'} Tile`} showTitle={false} groups={kind === 'work' ? workTileGroups : seriesTileGroups} state={{ ...state, draft: { ...state.draft, tagAppearance: tagState.draft.tagAppearance } }}>{kind === 'work' ? <StoryCard story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor><SaveControls state={state} /></div></div> })}</div>
     <div className="display-page-links"><h3>Information Pages</h3><p className="muted">Open a full example page to arrange its information.</p><div className="form-actions"><Link className="button secondary" to="/settings/example-work">Edit Work Info Page</Link><Link className="button secondary" to="/settings/example-series">Edit Series Info Page</Link></div></div>
   </section>
 }

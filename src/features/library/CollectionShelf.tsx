@@ -6,20 +6,9 @@ import { useCollectionDrag } from './useCollectionDrag'
 import { SpineBookmark } from './SpineBookmark'
 import type { Collection } from './model'
 import type { SpineDesign } from './SpineDetails'
-import { automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
+import { defaultShelfColors as shelfColors, automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
 
 const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'book-stack', currently_reading: 'art-deco', paused_reading: 'linked-diamonds', to_read: 'library-deco', favorites: 'star-trails-cascading', finished:'arched', did_not_finish: 'raised-bands' }
-
-const shelfColors: Partial<Record<string, string>> = {
-  all: '#970000',
-  currently_reading: '#214921',
-  paused_reading: '#92504e',
-  to_read: '#243c5e',
-  favorites: '#54254b',
-  finished: '#4a1b0f',
-  did_not_finish: '#25211f',
-  series: '#07534a',
-}
 
 const heightOrder = [0, 1, 2, 1]
 
@@ -57,7 +46,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   const spines = [...visible.map((item, index) => {
     const customIndex = customItems.findIndex(custom => custom.id === item.id)
     const appearanceIndex = appearanceItems.findIndex(custom => custom.id === item.id)
-    const color = shelfColors[item.id] ?? item.color ?? collectionColors[(Object.keys(shelfSymbols).length + appearanceIndex) % collectionColors.length].value
+    const color = shelfColors[item.id as keyof typeof shelfColors] ?? item.color ?? collectionColors[(Object.keys(shelfSymbols).length + appearanceIndex) % collectionColors.length].value
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing && customIndex >= 0

@@ -1,9 +1,9 @@
 import { readBoundedBody } from './read-body.ts'
-import { failure, parseMetadata, type RetrievalResult } from './adapter.ts'
+import { failure, parseMetadata, withChapterDates, type RetrievalResult } from './adapter.ts'
 import { validateMetadata } from './metadata-service.ts'
 import { parseWorkUrl } from '../../src/features/imports/urls.ts'
 
-export type ExtensionJob = { id: string; userId: string; token: string; workId: number; expiresAt: string; status: string; mode: string }
+export type ExtensionJob = { id: string; userId: string; token: string; workId: number; expiresAt: string; status: string; mode: string; chapterDates?: boolean }
 type Dependencies = {
  authenticate(token: string): Promise<string | null>
  job(id: string): Promise<ExtensionJob | null>
@@ -23,7 +23,7 @@ export function extensionHandler(deps: Dependencies) {
    if (!user) return reply({ error: 'Sign in to your library again.' }, 401)
    const body = await readBoundedBody(request.body, 1_000_000)
    if ('error' in body) return reply({ error: body.error === 'missing' ? 'Missing request.' : 'Snapshot too large.' }, body.error === 'missing' ? 400 : 413)
-   let input: { jobId?: unknown; token?: unknown; url?: unknown; html?: unknown; timedOut?: unknown }
+   let input: { jobId?: unknown; token?: unknown; url?: unknown; html?: unknown; timedOut?: unknown; navigationHtml?: unknown; navigationUrl?: unknown }
    try { input = JSON.parse(body.text) } catch { return reply({ error: 'Invalid request.' }, 400) }
    if (!input || typeof input.jobId !== 'string' || typeof input.token !== 'string') return reply({ error: 'Invalid request.' }, 400)
    const job = await deps.job(input.jobId)
@@ -35,6 +35,10 @@ export function extensionHandler(deps: Dependencies) {
     try { if (parseWorkUrl(input.url).workId !== job.workId) return reply({ error: 'Work identity mismatch.' }, 400) }
     catch { return reply({ error: 'Unsupported work URL.' }, 400) }
     result = validateMetadata(parseMetadata(input.html, job.workId, input.url))
+    if (job.chapterDates && result.metadata) {
+     if (input.navigationHtml !== undefined && (typeof input.navigationHtml !== 'string' || input.navigationUrl !== `https://archiveofourown.org/works/${job.workId}/navigate`)) return reply({ error: 'Chapter index identity mismatch.' }, 400)
+     result = validateMetadata(withChapterDates(result, input.navigationHtml as string | undefined, job.workId))
+    }
     if (!result.metadata) return reply({ waiting: true, category: result.category })
    }
    const committed = await deps.finish(job, result)

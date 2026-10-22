@@ -13,13 +13,13 @@ export function CsvExportSettings() {
     catch { setError('Could not export your library. Check your connection and try again.') }
     finally { pending.current = false; setBusy(false) }
   }
-  return <section id="settings-csv-export" tabIndex={-1} className="settings-card">
+  return <section id="settings-csv-export" tabIndex={-1} className="settings-card csv-export-settings">
     <div className="section-title"><Download size={21} /><h2>Export CSV</h2></div>
     <p>Choose the files to include in one ZIP download. Exports include every saved item across all pages, including private notes and ratings.</p>
     <fieldset disabled={busy}>
       <legend>Files to export</legend>
       <label className="check-label"><input type="checkbox" checked={selection.length === csvFiles.length} onChange={event => setSelection(event.target.checked ? csvFiles.map(file => file.name) : [])} />Export all</label>
-      <div className="collection-options">{csvFiles.map(file => <label className="check-label" key={file.name}>
+      <div className="collection-options collection-options-expanded">{csvFiles.map(file => <label className="check-label" key={file.name}>
         <input type="checkbox" checked={selection.includes(file.name)} onChange={event => setSelection(current => event.target.checked ? [...current, file.name] : current.filter(name => name !== file.name))} />
         <span>{file.name}<small className="muted">{file.description}</small></span>
       </label>)}</div>

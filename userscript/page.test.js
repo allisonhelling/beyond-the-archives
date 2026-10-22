@@ -49,3 +49,13 @@ it('keeps absent metadata unknown and verifies chapter positions from numbered l
  expect(readPage(doc, 'https://archiveofourown.org/works/123/chapters/940').current).toBe(4)
  expect(readPage(doc, 'https://archiveofourown.org/works/123/chapters/910').current).toBeNull()
 })
+
+it('reads series listings with the shared parser and excludes unrelated page content', async () => {
+ const html = (await import('../server/ao3/fixtures/series.html?raw')).default
+ const doc = new DOMParser().parseFromString(html + '<div id="chapters">PRIVATE CHAPTER TEXT</div>', 'text/html')
+ const page = readPage(doc, 'https://archiveofourown.org/series/77')
+ expect(page.series.seriesId).toBe(77)
+ expect(page.series.works.length).toBeGreaterThan(0)
+ expect(JSON.stringify(page)).not.toContain('PRIVATE CHAPTER TEXT')
+ expect(readPage(doc, 'https://evil.test/series/77')).toBeNull()
+})

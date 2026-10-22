@@ -230,3 +230,22 @@ it('opens the requested next page instead of reusing another page of the series'
  expect(chrome.tabs.create).toHaveBeenCalledWith({ url: next, active: false })
  expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 9 } }))
 })
+
+it('preserves a bookmark work snapshot while capturing its chapter release index', async () => {
+ const navigationUrl = `${workUrl}/navigate`
+ const originalFetch = fetcher.getMockImplementation()
+ fetcher.mockImplementation((url, options) => url.endsWith('/claim_extension_job') ? Response.json({ ...job, chapterDates: true }) : originalFetch(url, options))
+ chrome.tabs.query.mockResolvedValue([{ id: 7, status: 'complete', url: workUrl }])
+ chrome.tabs.update = vi.fn().mockResolvedValue(undefined)
+ await connect()
+ await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(7, { url: navigationUrl }))
+ expect(state.active.workPage.url).toBe(workUrl)
+ expect(fetcher.mock.calls.filter(([url]) => url.endsWith('/functions/v1/extension-metadata'))).toHaveLength(0)
+ chrome.tabs.get.mockResolvedValue({ id: 7, status: 'complete', url: navigationUrl })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: navigationUrl, html: '<ol class="chapter index">Release dates</ol>' } }])
+ await alarm()
+ await vi.waitFor(() => expect(state.active).toBeUndefined())
+ expect(chrome.scripting.executeScript).toHaveBeenLastCalledWith(expect.objectContaining({ args: [false, 'navigation'] }))
+ const upload = fetcher.mock.calls.find(([url]) => url.endsWith('/functions/v1/extension-metadata'))
+ expect(JSON.parse(upload[1].body)).toMatchObject({ url: workUrl, navigationUrl, navigationHtml: '<ol class="chapter index">Release dates</ol>' })
+})

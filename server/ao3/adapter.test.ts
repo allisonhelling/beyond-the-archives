@@ -81,3 +81,15 @@ it('extracts and validates kudos, including zero, without treating missing metad
   expect(validateMetadata(result).metadata?.kudos).toBeUndefined()
  }
 })
+
+it('reads chapter release dates from the verified work index and leaves incomplete indexes unconfirmed', async () => {
+ const { parseChapterDates } = await import('./chapter-dates')
+ const { withChapterDates } = await import('./adapter')
+ const index = '<ol class="chapter index"><li><a href="/works/123/chapters/910">1. Beginning</a><span class="datetime">(2024-01-01)</span></li><li><a href="/works/123/chapters/920">2. Next</a><span class="datetime">(02 Feb 2024)</span></li><li><a href="/works/999/chapters/930">3. Other work</a><span class="datetime">(2024-03-01)</span></li></ol>'
+ expect(parseChapterDates(index, 123, 2)).toEqual({ '1': '2024-01-01', '2': '2024-02-02' })
+ const result = parse(); result.metadata!.published_chapters = 2
+ expect(withChapterDates(result, index, 123).metadata?.chapter_dates).toEqual({ '1': '2024-01-01', '2': '2024-02-02' })
+ result.metadata!.published_chapters = 3
+ expect(withChapterDates(result, index, 123)).toMatchObject({ category: 'chapter_dates_unavailable', retryable: true })
+ expect(validateMetadata({ ...result, metadata: { ...result.metadata!, chapter_dates: { '1': '2024-01-01', '2': '2024-02-31', '4': '2024-01-01' } } }).metadata?.chapter_dates).toEqual({ '1': '2024-01-01' })
+})

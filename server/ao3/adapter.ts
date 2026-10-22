@@ -1,3 +1,4 @@
+import { parseChapterDates } from './chapter-dates.ts'
 import { load } from 'cheerio'
 import { readBoundedBody } from './read-body.ts'
 import { parseWorkUrl } from '../../src/features/imports/urls.ts'
@@ -24,11 +25,22 @@ export function parseMetadata(html: string, workId: number, sourceUrl: string): 
  return {metadata,chapters,category:partial?'partial':null,message:partial?'Some metadata is unavailable. Unknown fields were preserved.':null,retryable:false,pauseSeconds:0,sourceUrl}
 }
 /** Fetch only an allowlisted normalized work URL. Redirects are inspected before following. No cookies/auth or restriction bypass. */
-export async function retrieveMetadata(input: { workId: number; normalizedUrl: string }, fetcher: typeof fetch = fetch): Promise<RetrievalResult> {
+export async function retrieveMetadata(input: { workId: number; normalizedUrl: string; chapterDates?: boolean }, fetcher: typeof fetch = fetch): Promise<RetrievalResult> {
  const expected=`https://archiveofourown.org/works/${input.workId}`
  if (!Number.isSafeInteger(input.workId) || input.workId<1 || input.normalizedUrl!==expected) return failure('invalid_identity','Invalid metadata identity.')
  const result = await retrieveAo3Document(expected, url => parseWorkUrl(url).workId === input.workId, fetcher)
- return 'html' in result ? parseMetadata(result.html, input.workId, result.sourceUrl) : result
+ if (!('html' in result)) return result
+ const parsed = parseMetadata(result.html, input.workId, result.sourceUrl)
+ if (!input.chapterDates || !parsed.metadata) return parsed
+ if (parsed.metadata.published_chapters === 1 && parsed.metadata.ao3_published_at) {
+  parsed.metadata.chapter_dates = { '1': parsed.metadata.ao3_published_at.slice(0, 10) }; return parsed
+ }
+ // This request stays inside the global worker lease and respects AO3 pacing.
+ await new Promise(resolve => setTimeout(resolve, 15000))
+ const navigationUrl = `${expected}/navigate`
+ const navigation = await retrieveAo3Document(navigationUrl, url => url === navigationUrl, fetcher)
+ if (!('html' in navigation)) return { ...navigation, metadata: parsed.metadata, chapters: parsed.chapters }
+ return withChapterDates(parsed, navigation.html, input.workId)
 }
 /** Shared bounded AO3 retrieval. Callers supply an allowlisted URL and identity check. */
 export async function retrieveAo3Document(expected: string, matches: (url: string) => boolean, fetcher: typeof fetch = fetch, followRedirects = true): Promise<RetrievalResult | { html: string; sourceUrl: string }> {
@@ -64,4 +76,15 @@ export async function retrieveAo3Document(expected: string, matches: (url: strin
   }
   return failure('redirect','Too many AO3 redirects.')
  } catch(error) { return failure(error instanceof Error && /timeout|abort/i.test(error.name)?'timeout':'network_error','Could not retrieve AO3 metadata. The work is saved and can be edited manually.',true) }
+}
+
+
+export function withChapterDates(result: RetrievalResult, html: string | undefined, workId: number): RetrievalResult {
+ if (!result.metadata) return result
+ if (result.metadata.published_chapters === 1 && result.metadata.ao3_published_at) return { ...result, metadata: { ...result.metadata, chapter_dates: { '1': result.metadata.ao3_published_at.slice(0, 10) } } }
+ const published = result.metadata.published_chapters ?? 0
+ let dates: Record<string, string> = {}
+ try { dates = html ? parseChapterDates(html, workId, published) : {} } catch { /* Report an unverifiable index below. */ }
+ if (!published || Object.keys(dates).length !== published) return { ...result, category: 'chapter_dates_unavailable', message: 'Chapter release dates could not be verified. Reading status is saved; chapter progress remains unconfirmed. Update the browser extension if needed, then retry metadata.', retryable: true }
+ return { ...result, metadata: { ...result.metadata, chapter_dates: dates } }
 }

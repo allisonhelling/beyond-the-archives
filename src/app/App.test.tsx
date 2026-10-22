@@ -74,8 +74,8 @@ describe('private app access and navigation', () => {
     render(<App />)
     await screen.findByRole('heading', { name: 'Currently Reading' })
     for (const [label, title] of [['Library', 'Your Library'], ['Stats', 'Reading Stats'], ['Settings', 'Settings'], ['Features', 'The next chapters']]) {
-      if (label === 'Settings') await user.click(screen.getByRole('button', { name: 'Profile menu' }))
-      await user.click(within(screen.getByRole(label === 'Settings' ? 'region' : 'navigation', { name: label === 'Settings' ? 'Profile menu' : 'Main navigation' })).getByRole('link', { name: label }))
+      if (label === 'Features') await user.click(screen.getByRole('button', { name: 'Profile menu' }))
+      await user.click(within(screen.getByRole(label === 'Features' ? 'region' : 'navigation', { name: label === 'Features' ? 'Profile menu' : 'Main navigation' })).getByRole('link', { name: label }))
       expect(await screen.findByRole('heading', { name: title })).toBeVisible()
     }
     await user.click(screen.getByRole('button', { name: 'Profile menu' }))

@@ -1,3 +1,4 @@
+import { readReadingHistory } from './reading-history'
 import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './automatic-collections'
 import type { Json } from '../../types/database'
 import { parseSearch, filterReading } from './reading-search'
@@ -75,7 +76,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     const work = effectiveWork(sharedWork, entry)
-    return { ...entry, work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id)), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
+    return { ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id)), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
   }), collections) }
 }
 export async function saveStory(input: StoryInput) {

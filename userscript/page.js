@@ -1,9 +1,17 @@
+import { parseSeries } from '../src/features/imports/ao3-series'
 import { load } from 'cheerio'
 import { extractWorkMetadata } from '../src/features/imports/ao3-metadata.ts'
 import { blankMetadata, initialProgress, parseWorkUrl } from '../src/features/library/model'
 
 // Read only AO3's work metadata and chapter navigation, never story text/forms.
 export function readPage(doc, href) {
+ if (/^https:\/\/archiveofourown\.org\/series\/[1-9]\d*(?:[/?#]|$)/.test(href)) {
+  try {
+   const html = [...doc.querySelectorAll('#main h2.heading, dl.series.meta, .series.work.index, .pagination, link[rel="canonical"]')].map(node => node.outerHTML).join('')
+   const preview = parseSeries(html, href)
+   return { series: preview, work: preview.seriesId }
+  } catch { return null }
+ }
  let url, identity
  try { url = new URL(href); identity = parseWorkUrl(href) } catch { return null }
  if (url.origin !== 'https://archiveofourown.org' || !url.pathname.startsWith('/works/') || !doc.querySelector('h2.title')) return null

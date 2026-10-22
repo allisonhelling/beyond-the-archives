@@ -1,3 +1,4 @@
+import { resumeReadingStatus, readingDuration } from './reading-history'
 import { automaticCollectionLabels } from './automatic-collections'
 import { MetadataTags } from './MetadataTags'
 import { CustomCollectionNames } from './CustomCollectionNames'
@@ -110,7 +111,8 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
       <summary aria-label={`Story actions for ${story.metadata.title}`}><MoreHorizontal size={22} /></summary>
       <div className="menu-surface">
         <Link className="menu-item" to={`/stories/${story.id}`} state={location.pathname.startsWith('/stories/') ? location.state : { returnTo: location.pathname + location.search }}><FileText size={16} aria-hidden="true" />View/Edit Details</Link>
-        {story.reading_status !== 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'paused_reading' })}><readingStatusIcons.paused_reading size={16} aria-hidden="true" />Pause Reading</button>}
+        {['reading', 're_reading'].includes(story.reading_status) && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'paused_reading' })}><readingStatusIcons.paused_reading size={16} aria-hidden="true" />Pause Reading</button>}
+        {story.reading_status === 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: resumeReadingStatus(story) })}><readingStatusIcons.reading size={16} aria-hidden="true" />Resume Reading</button>}
         <button className="menu-item" disabled={blocked} onClick={() => void finishStory()}><Check size={16} aria-hidden="true" />Mark as Finished</button>
         <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setCollectionOpen(true) }}><FolderPlus size={16} aria-hidden="true" />Add to collection</button>
         <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'did_not_finish' })}><BookX size={16} aria-hidden="true" />Mark as DNF</button>
@@ -311,6 +313,7 @@ function LibraryContent() {
     function add(key: string, story: Story) { const values = index.get(key) ?? []; values.push(story); index.set(key, values) }
     for (const story of stories) {
       if (active(story)) add('currently_reading', story)
+      if (story.reading_status === 're_reading') add('finished', story)
       if (story.metadata.publication_status === 'complete') add('complete', story)
       if (story.reading_status === 'waiting_for_updates') add('waiting', story)
       if (['paused_reading', 'to_read', 'finished', 'did_not_finish'].includes(story.reading_status)) add(story.reading_status, story)
@@ -455,7 +458,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       tags: <> <div><dt>Additional Tags</dt><dd><MetadataTags values={tagNames(story.metadata, 'freeform')} /></dd></div> </>,
       allTags: <> <div><dt className="sr-only">All tags</dt><dd><details className="details-disclosure"><summary>All tags</summary><MetadataTags values={story.metadata.ao3_tags} /></details></dd></div> </>,
       personalTags: <> <div><PersonalStoryField key={story.id} story={story} /></div> </>,
-      saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div> </>,
+      saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>{story.finished_at && <div><dt>Finished</dt><dd>{formatDateTime(story.finished_at)}</dd></div>}<div><dt>Estimated reading time</dt><dd>{readingDuration(story)}</dd></div>{story.reading_history?.filter(event => ['paused_reading', 'resumed'].includes(event.action)).map((event, index) => <div key={index}><dt>{event.action === 'resumed' ? 'Resumed' : 'Paused'}</dt><dd>{formatDateTime(event.at)}</dd></div>)} </>,
       edited: <> <div><dt>Last edited</dt><dd>{formatDateTime(story.updated_at)}</dd></div> </>,
       other: <> <div><dt className="sr-only">Other metadata</dt><dd><details className="details-disclosure"><summary>Other metadata</summary><p className="muted">Manually entered values are private field-level overrides.</p>
         <dl className="metadata-list">
