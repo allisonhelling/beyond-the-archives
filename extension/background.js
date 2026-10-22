@@ -1,5 +1,6 @@
 import { parseSeriesUrl, seriesPageUrl, parseWorkUrl } from '../src/features/imports/urls.ts'
 import { captureMetadataPage } from './capture.js'
+import { createLibrarySync } from './library-sync.js'
 
 const appOrigin = __APP_ORIGIN__
 const backend = __SUPABASE_URL__
@@ -9,6 +10,11 @@ let rerun = false
 let connectionVersion = 0
 const nextJobDelayMs = 3000
 let nextJobTimer
+const librarySync = createLibrarySync({
+ auth: async () => (await chrome.storage.session.get('auth')).auth,
+ available: async () => !running && !previewRunning && !(await chrome.storage.session.get('active')).active,
+ changed: () => { void librarySync.pump(); void pump() },
+})
 
 async function api(auth, path, body) {
  const response = await fetch(`${backend}${path}`, {
@@ -48,6 +54,8 @@ async function pump() {
   }
   let active = state.active
   if (!active) {
+   if (previewRunning || await librarySync.blocksImports()) return
+   if ((await chrome.storage.session.get('ao3RequestAfter')).ao3RequestAfter > Date.now()) return
    const job = await api(auth, '/rest/v1/rpc/claim_extension_job', {})
    if (version !== connectionVersion) return
    if (!job) { await chrome.action.setBadgeText({ text: '' }); return }
@@ -73,7 +81,10 @@ async function pump() {
    const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
    if (version !== connectionVersion) return
    tab = tabs.find(candidate => matchingWork(candidate.url, active.workId))
-   if (!tab) tab = await chrome.tabs.create({ url: `https://archiveofourown.org/works/${active.workId}`, active: false })
+   if (!tab) {
+    await chrome.storage.session.set({ ao3LastNavigation: Date.now() })
+    tab = await chrome.tabs.create({ url: `https://archiveofourown.org/works/${active.workId}`, active: false })
+   }
    active.tabId = tab.id
    await chrome.storage.session.set({ active })
   }
@@ -95,6 +106,7 @@ async function pump() {
   if (active.chapterDates && !active.workPage) {
    active.workPage = page
    await chrome.storage.session.set({ active })
+   await chrome.storage.session.set({ ao3LastNavigation: Date.now() })
    await chrome.tabs.update(tab.id, { url: navigationUrl })
    return
   }
@@ -122,6 +134,8 @@ async function pump() {
 
 let previewRunning = false
 async function previewSeries(url) {
+ if (await librarySync.blocksImports()) throw new Error('Pause the library scan before previewing a series.')
+ if ((await chrome.storage.session.get('ao3RequestAfter')).ao3RequestAfter > Date.now()) throw new Error('AO3 request cooldown is active. Retry shortly.')
  if (previewRunning) throw new Error('Another series preview is loading. Retry shortly.')
  previewRunning = true
  try {
@@ -135,7 +149,11 @@ async function previewSeries(url) {
   }
   const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
   if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
-  const tab = tabs.find(candidate => matches(candidate.url)) ?? await chrome.tabs.create({ url: targetUrl, active: false })
+  let tab = tabs.find(candidate => matches(candidate.url))
+  if (!tab) {
+   await chrome.storage.session.set({ ao3LastNavigation: Date.now() })
+   tab = await chrome.tabs.create({ url: targetUrl, active: false })
+  }
   for (let attempt = 0; attempt < 120; attempt++) {
    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
    const current = await chrome.tabs.get(tab.id)
@@ -155,6 +173,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
  let trusted = false
  try { trusted = new URL(sender.url).origin === appOrigin && !sender.id } catch { /* No trusted website sender. */ }
  if (!trusted) return
+ if (message?.type === 'AO3_LIBRARY_SYNC') {
+  void librarySync.command(message).then(result => respond({ ok: true, ...result })).catch(error => respond({ ok: false, error: error.message }))
+  return true
+ }
  if (message?.type === 'AO3_LIBRARY_PREVIEW_SERIES') {
   void previewSeries(message.url).then(page => respond({ ok: true, page })).catch(error => respond({ ok: false, error: error.message }))
   return true
@@ -182,8 +204,9 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
  })()
  return true
 })
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'requested-imports') void pump() })
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'requested-imports') { void librarySync.pump(); void pump() } })
 function checkRequestedTab(tabId) {
+ void librarySync.pump()
  void chrome.storage.session.get('active').then(({ active }) => { if (active?.tabId === tabId) void pump() })
 }
 chrome.webNavigation.onDOMContentLoaded.addListener(({ tabId, frameId }) => {
@@ -195,3 +218,6 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 chrome.action.onClicked.addListener(() => { void chrome.tabs.create({ url: `${appOrigin}/settings` }) })
 // Recreate alarms if Chrome discarded them; credentials stay session-only.
 void chrome.alarms.create('requested-imports', { periodInMinutes: 0.5 })
+
+// Library checkpoints contain private notes; do not expose them to content scripts.
+void chrome.storage.local.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' })

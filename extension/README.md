@@ -2,7 +2,7 @@
 
 For the inline library controls in iOS Safari's free Userscripts app, see [the userscript companion](../userscript/README.md). Build its installable file with `npm run build:userscript`.
 
-This Manifest V3 extension is part of the hosted library project. It captures metadata only for requests explicitly created by **Import URLs** or **Refresh metadata** on the connected website. It does not install an AO3 content script, watch browsing history, or import works just because you visit them.
+This Manifest V3 extension is part of the hosted library project. It captures metadata for explicitly requested work imports, refreshes, series previews, and library listing scans on the connected website. It does not install an AO3 content script, watch browsing history, or import works just because you visit them.
 
 ## Deploy the hosted boundary
 
@@ -68,3 +68,22 @@ For local use, run `npm run dev` and open `http://127.0.0.1:5173/settings` (use 
 ### Series previews
 
 Rebuild and reload the extension after updating. In the importer, explicitly loading an AO3 series preview reuses or opens the first series page, captures its listing, description and work blurbs, then follows each Next link by opening that page and combining its work previews. It does not open the listed works or create imports. Complete sign-in/confirmation in the AO3 tab within two minutes, or retry/skip the preview. Deploy the `series-preview` function and apply the series-preview migration before using this feature. Selected works use the existing import queue after confirmation.
+
+## Bookmarks and Marked for Later sync
+
+Apply migrations through `20261022000400_library_sync.sql`, deploy the updated website, rebuild with `npm run build:extension`, and reload the unpacked extension in Chrome. Accept the added `unlimitedStorage` permission, used for durable large-library checkpoints. Reconnect in Settings with the extension ID. No new Edge Function or Python installation is required for listing sync.
+
+Open **Mass Import from AO3 → AO3 Library Sync**. Paste an unfiltered URL:
+
+- `https://archiveofourown.org/users/USERNAME/bookmarks`
+- `https://archiveofourown.org/users/USERNAME/readings?show=to-read`
+
+Run **Full library scan** for each list initially, then choose **Import scanned works**. Subsequent **Quick Sync** runs use that list's acknowledged record IDs (bookmark IDs for Bookmarks, work IDs for Later). Bookmark requests explicitly use creation date descending. Quick Sync stops after the first overlapping page, preserving all new works on that page; it cannot detect removals or additions behind the overlap boundary. Use a full scan if list ordering changes. Both modes keep existing library entries, including manual metadata, notes, tags, ratings, and progress. Full scan adds missing works; it does not overwrite existing metadata.
+
+The listing selectors are ported from `ao3_scraper/ao3_export.py`. The existing JavaScript CSV row converter and database importer validate and save new works. Listing sync completes its import jobs in the same transaction without fetching individual work pages. New bookmark notes and tags follow CSV import rules; historical chapter progress cannot be established without chapter release dates and is left unconfirmed. Series bookmarks, deleted works, and external works are counted as skipped. Work and bookmark source rows have separate Quick Sync identities; the library's existing model still has one entry per work, preserving the first saved entry when the work occurs in both lists.
+
+Scans use a separate local checkpoint state and one extension-owned AO3 tab, never redirecting existing browsing tabs. They wait for the current work job or series preview, then hold new work claims until paused or finished. Requests wait at least 15 seconds plus jitter; Chrome's alarm schedule can lengthen waits. Work imports retain their existing three-second queue interval. The request gate prevents imports/previews from opening a new page during a scan's cooldown. This coordinates this extension's traffic only, not other browsers or the hosted worker.
+
+Pause, resume, or discard from the importer. Error, login, redirect, missing-tab, timeout, or restriction pages pause the scan rather than retrying automatically; inspect the AO3 scan tab and resume manually when appropriate. DOM capture cannot read HTTP status or Retry-After headers, so no automatic rate-limit bypass or retry is attempted. Five hundred pages is an incomplete-scan safety stop, never a successful partial import.
+
+Each successful page is saved in extension local storage, scoped to the connected library account. Tokens remain session-only. Checkpoints survive service-worker/browser restarts; reconnect the same account to continue. Saved private notes stay on this device until imported or discarded. Completed baseline IDs remain until extension storage is cleared/uninstalled. Page-sized database transactions permit libraries larger than the CSV form's 2,000-work submission limit. An interrupted upload can be retried safely: existing works are kept, and baseline IDs advance only after all saved pages have been acknowledged. Different website tabs cannot acknowledge a replacement scan by accident. Closing the website does not cancel scanning while the session is valid.

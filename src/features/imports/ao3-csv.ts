@@ -59,7 +59,10 @@ export function csvMetadata(row: Record<string, string>): AutomaticMetadata {
  return metadata
 }
 export function readAo3Csv(text: string): CsvSource[] {
- return parseCsv(text).map((row, index) => {
+ return readAo3Rows(parseCsv(text))
+}
+export function readAo3Rows(rows: Record<string, string>[]): CsvSource[] {
+ return rows.map((row, index) => {
   const identity = classifyUrl(row.link)
   if (identity.kind !== 'valid' && identity.kind !== 'series') throw new Error(`CSV row ${index + 2}: unsupported AO3 link ${row.link}`)
   const source = row.source_list?.trim() || (Object.hasOwn(row, 'bookmark date') ? 'bookmarks' : 'marked_for_later')

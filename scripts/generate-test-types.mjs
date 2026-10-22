@@ -55,6 +55,7 @@ try {
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       preview_ao3_csv_import: { Args: { p_work_ids: number[] }; Returns: Json }
       submit_ao3_csv_import: { Args: { p_rows: Json }; Returns: Json }
+      submit_ao3_library_sync: { Args: { p_rows: Json }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean; p_reading_status?: Database['public']['Enums']['reading_status']; p_series_ids?: number[] }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }

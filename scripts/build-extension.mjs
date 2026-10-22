@@ -21,9 +21,9 @@ await build({
  build: { outDir, emptyOutDir: true, minify: false, lib: { entry: 'extension/background.js', formats: ['es'], fileName: () => 'background.js' } },
 })
 await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
- manifest_version: 3, name: 'AO3 Library Companion', version: '0.1.0', minimum_chrome_version: '120',
- description: 'Loads AO3 metadata only for imports and refreshes requested by your connected library.',
- permissions: ['storage', 'alarms', 'scripting', 'webNavigation'],
+ manifest_version: 3, name: 'AO3 Library Companion', version: '0.2.0', minimum_chrome_version: '120',
+ description: 'Imports requested works and scans AO3 Bookmarks or Marked for Later from your connected library.',
+ permissions: ['storage', 'unlimitedStorage', 'alarms', 'scripting', 'webNavigation'],
  host_permissions: ['https://archiveofourown.org/*', `${backend.origin}/*`],
  externally_connectable: { matches: [`${app.origin}/*`] },
  background: { service_worker: 'background.js', type: 'module' },

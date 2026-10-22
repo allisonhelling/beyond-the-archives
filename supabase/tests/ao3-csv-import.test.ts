@@ -79,3 +79,13 @@ it('denies anonymous CSV reads and writes', async () => {
  await expect(db.query('select public.submit_ao3_csv_import($1)', [JSON.stringify([row(109)])])).rejects.toThrow('permission denied')
  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${alice}'`)
 })
+
+it('imports library listing snapshots without work requests and forces keep even on a malicious overwrite', async () => {
+ const before = await entry(101)
+ const result = (await db.query<{ result: { batch: string; imported: number; kept: number } }>('select public.submit_ao3_library_sync($1) result', [JSON.stringify([row(101, { choice: 'overwrite', notes: 'Must not replace' }), row(901)])])).rows[0].result
+ expect(result).toMatchObject({ imported: 1, kept: 1 })
+ expect(await entry(101)).toEqual(before)
+ expect(await entry(901)).toMatchObject({ extension_metadata: { title: 'Work 901' } })
+ expect((await db.query('select status,attempts from public.metadata_jobs where batch_id=$1', [result.batch])).rows).toEqual([{ status: 'completed', attempts: 0 }])
+ expect((await db.query('select status,metadata_status from public.import_items where batch_id=$1', [result.batch])).rows).toEqual([{ status: 'completed', metadata_status: 'completed' }])
+})

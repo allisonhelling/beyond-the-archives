@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 
-type ExtensionReply = { ok?: boolean; page?: { url: string; html: string }; error?: string }
+type ExtensionReply = { state?: LibrarySyncState | null; rows?: Record<string, string>[]; ok?: boolean; page?: { url: string; html: string }; error?: string }
 type ExtensionRuntime = {
  lastError?: { message?: string }
  sendMessage(id: string, message: object, callback: (reply?: ExtensionReply) => void): void
@@ -46,5 +46,21 @@ export function previewSeriesWithExtension(url: string): Promise<{ url: string; 
     else resolve(reply.page)
    })
   } catch { clearTimeout(timer); reject(new Error('Could not contact the extension. Reconnect in Settings.')) }
+ })
+}
+
+export type LibrarySyncState = { id: string; status: 'running' | 'paused' | 'ready' | 'complete' | 'discarded'; url: string; mode: string; pages: number; count: number; skipped: number; error: string }
+export function librarySyncCommand(action: string, options: { url?: string; mode?: string; page?: number; scanId?: string } = {}): Promise<{ state?: LibrarySyncState | null; rows?: Record<string, string>[] }> {
+ const api = runtime(), id = extensionId()
+ if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) return Promise.reject(new Error('Connect AO3 Library Companion in Settings first.'))
+ return new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error('Extension did not respond. Rebuild, reload, and reconnect it in Settings.')), 25000)
+  try {
+   api.sendMessage(id, { type: 'AO3_LIBRARY_SYNC', action, ...options }, reply => {
+    clearTimeout(timer)
+    if (api.lastError || !reply?.ok) reject(new Error(reply?.error ?? 'Could not contact library sync. Update and reconnect the extension.'))
+    else resolve(reply)
+   })
+  } catch { clearTimeout(timer); reject(new Error('Could not contact the extension.')) }
  })
 }

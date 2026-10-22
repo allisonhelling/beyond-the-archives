@@ -19,7 +19,7 @@ beforeEach(async () => {
  state = {}
  chrome = {
   runtime: { onMessageExternal: event() },
-  storage: { session: {
+  storage: { local: { get: vi.fn(async () => ({})) }, session: {
    get: vi.fn(async keys => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map(key => [key, state[key]]))),
    set: vi.fn(async values => { Object.assign(state, structuredClone(values)) }),
    remove: vi.fn(async key => { delete state[key] }),

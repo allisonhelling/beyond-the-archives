@@ -107,3 +107,9 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  void connectExtension().catch(() => {})
  return data as unknown as { batch: string | null; imported: number; kept: number }
 }
+
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[]) {
+ const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json })
+ if (error) throw new Error('Could not import this scan page. Apply the library sync migration and check your connection; retry safely to keep existing works.')
+ return data as unknown as { batch: string | null; imported: number; kept: number }
+}

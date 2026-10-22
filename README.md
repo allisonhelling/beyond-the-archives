@@ -345,11 +345,19 @@ On `/imports`, choose **AO3 CSV files** to review one or more scraper exports (i
 
 Bookmarks later than the CSV work update date become Finished, with the historical bookmark date as Finished Date. Earlier or same-day bookmarks become Reading. The existing metadata worker or browser extension checks chapter release dates and marks only the verified chapter prefix posted strictly before the bookmark day as read. Missing dates never create guessed progress; retrieval failures appear in import history for retry. Existing Marked for Later entries are skipped; new ones are To Read. Review each bookmark conflict or use **Overwrite all works** / **Keep all works**. Overwriting replaces imported fields while retaining ratings, favorites, and collection memberships. Concurrent edits invalidate an overwrite review, and later personal edits take priority over queued progress inference.
 
-Apply migrations through `20261022000300_ao3_csv_import.sql`, deploy the updated app and `extension-metadata` Edge Function, and restart the metadata worker. Extension users must rebuild and reload the extension for chapter-index snapshots. Imports use scraper CSV files; the app does not fetch authenticated bookmark or Marked for Later lists itself.
+Apply migrations through `20261022000300_ao3_csv_import.sql`, deploy the updated app and `extension-metadata` Edge Function, and restart the metadata worker. Extension users must rebuild and reload the extension for chapter-index snapshots. CSV imports remain available alongside browser-tab library sync described below.
+
+## Browser-tab library sync
+
+On `/imports`, **AO3 Library Sync** scans a complete unfiltered Bookmarks or Marked for Later list using AO3 Library Companion. Run each list separately. Start with **Full library scan**, then **Import scanned works**; later **Quick Sync** runs stop at previously imported record IDs. Existing entries and personal edits are always kept. Quick Sync does not detect removals or additions behind its overlap boundary; full scans add missing works without overwriting saved metadata.
+
+The extension ports the Python scraper’s listing selectors and reuses the CSV metadata conversion and database validation. It saves page checkpoints separately from work-import jobs, uses one scan tab with a minimum 15-second request delay, and pauses on login, restriction, or unexpected pages for manual resume. Imports use saved listing metadata without opening individual work pages. Deleted, external, and series bookmarks are skipped; historical chapter progress unavailable on listing pages remains unconfirmed.
+
+Apply `20261022000400_library_sync.sql`, deploy the updated website, rebuild/reload the extension, and reconnect in Settings. No new Edge Function or Python installation is needed. See [the library sync guide](extension/README.md#bookmarks-and-marked-for-later-sync) for limits, checkpoint privacy, recovery, and installation.
 
 ## Browser extension mode
 
-Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes only jobs created by Import URLs or Refresh metadata, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).
+Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes explicit work imports, metadata refreshes, series previews, and library listing scans, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).
 
 ## Series import previews
 
