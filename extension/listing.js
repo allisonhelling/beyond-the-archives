@@ -3,7 +3,10 @@ export function captureListingPage(kind) {
  if (location.origin !== 'https://archiveofourown.org' || document.readyState !== 'complete') return null
  const main = document.querySelector('#main')
  if (!main?.classList.contains(kind === 'bookmarks' ? 'bookmarks-index' : 'readings-index')) {
-  return { error: 'AO3 returned a login, restriction, error, or unexpected page. Check the scan tab, then resume manually.' }
+  const pageText = `${document.title} ${main?.textContent ?? document.body?.textContent ?? ''}`
+  if (/too many requests|rate[ -]?limit|retry[ -]?after|\b429\b/i.test(pageText)) return { attention: 'rate_limit', error: 'AO3 is limiting requests. Wait for the restriction to clear, then resume manually.' }
+  if (/^\/users\/login/.test(location.pathname) || document.querySelector('input[name="user[login]"], form#new_user')) return { attention: 'login', error: 'AO3 sign-in is required. Sign in in the scan tab, then resume manually.' }
+  return { attention: 'page_error', error: 'AO3 returned a login, restriction, error, or unexpected page. Check the scan tab, then resume manually.' }
  }
  const text = node => node?.textContent.trim().replace(/\s+/g, ' ') ?? ''
  const join = (node, selector) => [...node.querySelectorAll(selector)].map(text).filter(Boolean).join(', ')
@@ -19,8 +22,12 @@ export function captureListingPage(kind) {
  for (const item of main.querySelectorAll('li.work, li.bookmark')) {
   const title = item.querySelector('h4.heading > a')
   const link = title && new URL(title.getAttribute('href'), location.origin)
-  if (item.classList.contains('deleted') || !link || link.origin !== location.origin || !/^\/works\/[1-9]\d*$/.test(link.pathname)) { skipped++; continue }
-  const row = { title: text(title), link: link.origin + link.pathname, source_list: kind,
+  // AO3 renders an explicit direct-child deletion message, with no work link.
+  // Missing links alone can also mean hidden/restricted works and are not evidence.
+  const deleted = kind === 'bookmarks' && (item.classList.contains('deleted') || /^this (?:work |item )?has been deleted[, .!]/i.test(text(item.querySelector(':scope > p.message'))))
+  if (!deleted && (!link || link.origin !== location.origin || !/^\/works\/[1-9]\d*$/.test(link.pathname))) { skipped++; continue }
+  const workLink = link?.origin === location.origin && /^\/works\/[1-9]\d*$/.test(link.pathname) ? link.origin + link.pathname : ''
+  const row = { title: deleted ? '' : text(title), link: workLink, source_list: kind, work_status: deleted ? 'deleted' : 'available',
    author: join(item, 'h4.heading > a[rel="author"]'), fandoms: join(item, '.fandoms a'),
    category: text(item.querySelector('.required-tags .category')), relationships: join(item, '.tags .relationships > a'),
    characters: join(item, '.tags .characters > a'), freeforms: join(item, '.tags .freeforms > a'),
@@ -31,6 +38,7 @@ export function captureListingPage(kind) {
   if (kind === 'bookmarks') {
    const id = item.id.match(/^bookmark_([1-9]\d*)$/)?.[1]
    if (!id) return { error: 'A bookmark has no stable ID. Scan stopped; saved pages are preserved.' }
+   if (!row.link) row.link = `${location.origin}/bookmarks/${id}`
    Object.assign(row, { 'bookmark id': id, 'bookmark status': item.querySelector('.status > a:first-child > span')?.className ?? '',
     'bookmark tags': join(item, '.user .tags a.tag'), 'bookmark notes': lines(item.querySelector('.user .notes')),
     'bookmark user': text(item.querySelector('.user .byline > a')), 'bookmark date': text(item.querySelector('.user .datetime')),

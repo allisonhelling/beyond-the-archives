@@ -1,12 +1,14 @@
+import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-const mocks=vi.hoisted(()=>({history:vi.fn(),submit:vi.fn(),cancel:vi.fn(),retry:vi.fn(),approve:vi.fn(),preview:vi.fn(),refresh:vi.fn()}))
+const mocks=vi.hoisted(()=>({history:vi.fn(),submit:vi.fn(),cancel:vi.fn(),retry:vi.fn(),approve:vi.fn(),preview:vi.fn(),refresh:vi.fn(),sample:false}))
+vi.mock('../../lib/sample-mode',()=>({get sampleMode(){return mocks.sample}}))
 vi.mock('./repository',()=>({importHistory:mocks.history,submitImport:mocks.submit,cancelBatch:mocks.cancel,retryJob:mocks.retry,approveProgress:mocks.approve,previewSeries:mocks.preview}))
 vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,refreshSeries:mocks.refresh,stories:[{id:'saved-103',metadata:{series:[],series_memberships:[]},work:{ao3_work_id:103}}]})}))
 import { ImportPage } from './ImportPage'
-function show(){return render(<MemoryRouter><ImportPage/></MemoryRouter>)}
-beforeEach(()=>{vi.clearAllMocks();mocks.history.mockResolvedValue({batches:[],items:[],jobs:[]});mocks.refresh.mockResolvedValue(undefined);mocks.submit.mockResolvedValue('batch')})
+function show(){return render(<MemoryRouter><LibrarySyncProvider><ImportPage/></LibrarySyncProvider></MemoryRouter>)}
+beforeEach(()=>{vi.clearAllMocks();mocks.sample=false;mocks.history.mockResolvedValue({batches:[],items:[],jobs:[]});mocks.refresh.mockResolvedValue(undefined);mocks.submit.mockResolvedValue('batch')})
 it('submits 100+ links, explains unrelated links and remains usable after navigating back',async()=>{
  show();expect(await screen.findByText('No imports yet. Paste your first batch above.')).toBeVisible()
  const text=Array.from({length:110},(_,i)=>`https://archiveofourown.org/works/${i+1}`).join('\n')+'\nhttps://example.com'
@@ -139,12 +141,12 @@ it('reviews series before saving, excludes unwanted extras, and preserves direct
  expect(screen.getByLabelText('AO3 URLs')).toHaveValue('')
 })
 it('can retry a failed preview or skip it and import the remaining selections',async()=>{
- mocks.preview.mockRejectedValueOnce(new Error('AO3 sign-in required')).mockResolvedValue({seriesId:77,title:'Recovered series',description:'',works:[seriesWork(101,'Recovered story',1)]})
+ mocks.preview.mockRejectedValueOnce(new Error('AO3 Sign-In Required')).mockResolvedValue({seriesId:77,title:'Recovered series',description:'',works:[seriesWork(101,'Recovered story',1)]})
  show();await screen.findByText('No imports yet. Paste your first batch above.')
  fireEvent.change(screen.getByLabelText('AO3 URLs'),{target:{value:'https://archiveofourown.org/series/77\nhttps://archiveofourown.org/series/78'}})
  fireEvent.click(screen.getByRole('button',{name:'Review series'}))
  fireEvent.click(screen.getAllByRole('button',{name:'Load works'})[0])
- expect(await screen.findByRole('alert')).toHaveTextContent('AO3 sign-in required')
+ expect(await screen.findByRole('alert')).toHaveTextContent('AO3 Sign-In Required')
  expect(mocks.submit).not.toHaveBeenCalled()
  fireEvent.click(screen.getByRole('button',{name:'Retry preview'}))
  await screen.findByText('Recovered series')
@@ -187,4 +189,27 @@ it('applies the chosen reading status to a batch of direct work links',async()=>
  fireEvent.change(screen.getByRole('combobox',{name:'Reading Status'}),{target:{value:'did_not_finish'}})
  fireEvent.click(screen.getByRole('button',{name:'Import URLs'}))
  await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith(text,true,'did_not_finish',[]))
+})
+
+it('offers local extension listing imports in sample mode without querying account import history',async()=>{
+ mocks.sample=true
+ show()
+ expect(screen.getByRole('heading',{name:'AO3 Library Sync'})).toBeVisible()
+ expect(screen.queryByText(/Persistent imports require/)).not.toBeInTheDocument()
+ expect(screen.getByLabelText('AO3 List URL')).toBeEnabled()
+ expect(mocks.history).not.toHaveBeenCalled()
+})
+
+it('restores the same pasted work and series form in sample mode and saves without account import history',async()=>{
+ mocks.sample=true
+ show()
+ const links='https://archiveofourown.org/works/101\nhttps://archiveofourown.org/works/102'
+ expect(screen.getByRole('heading',{name:'Import Work or Series Links'})).toBeVisible()
+ fireEvent.change(screen.getByLabelText('AO3 URLs'),{target:{value:links}})
+ fireEvent.click(screen.getByRole('button',{name:'Import URLs'}))
+ await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith(links,true,'to_read',[]))
+ await waitFor(()=>expect(mocks.refresh).toHaveBeenCalled())
+ expect(mocks.history).not.toHaveBeenCalled()
+ expect(screen.queryByText('Previous batches')).not.toBeInTheDocument()
+ expect(screen.getByLabelText('AO3 URLs')).toHaveValue('')
 })

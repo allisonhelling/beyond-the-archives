@@ -1,3 +1,4 @@
+import { isLocalApp } from '../../lib/local-app'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/auth-context'
 import { supabase } from '../../lib/supabase'
@@ -56,6 +57,7 @@ export function MetadataSettings() {
  }
  return <section id="settings-metadata" tabIndex={-1} className="settings-card">
   <h2>AO3 Metadata Retrieval</h2>
+  {isLocalApp() && <p className="muted">This local app uses AO3 Library Companion (Local). Build it with <code>npm run build:extension:local</code>, load <code>extension/local/dist</code> in Chrome, then reconnect. The local extension ID is selected automatically.</p>}
   <form className="story-form" onSubmit={event => void save(event)}>
    <fieldset disabled={!ready || busy || sampleMode}>
     <legend>Retrieval Mode</legend>
@@ -63,7 +65,7 @@ export function MetadataSettings() {
      <option value="direct">Direct retrieval (hosted worker)</option>
      <option value="extension">Browser extension (requested works and series)</option>
     </select></label>
-    {mode === 'extension' && <label>Extension ID<input value={id} onChange={event => setId(event.target.value)} autoComplete="off" spellCheck={false} /><small>Copy the ID from chrome://extensions or edge://extensions after installing AO3 Library Companion. This device setting is stored in this browser.</small></label>}
+    {mode === 'extension' && <label>Extension ID<input readOnly={isLocalApp()} value={id} onChange={event => setId(event.target.value)} autoComplete="off" spellCheck={false} /><small>{isLocalApp() ? 'Selected automatically for the local extension build.' : 'Copy the ID from chrome://extensions or edge://extensions after installing AO3 Library Companion. This device setting is stored in this browser.'}</small></label>}
     <p className="muted">The extension reads only works requested by Import URLs or Refresh metadata and series explicitly requested for import preview. Library listing scans are started separately from Mass Import from AO3. It reuses a matching AO3 tab or opens one, then waits for the work to load. Complete any sign-in or confirmation in that tab. Ordinary browsing sends nothing.</p>
     <p className="muted">Browser metadata stays private and preserves manual corrections and reading progress. Keep this app open for long batches. If you close it, processing continues until the current sign-in token expires. After restarting the browser or signing in again, open this app to reconnect.</p>
     <button className="button secondary" type="submit">{busy ? 'Connecting and saving…' : 'Save metadata mode'}</button>

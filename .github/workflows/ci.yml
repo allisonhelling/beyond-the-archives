@@ -16,7 +16,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check supabase/functions/account-status/index.ts supabase/functions/series-preview/index.ts
+      - run: deno check --config supabase/functions/deno.json supabase/functions/*/index.ts
       - run: npm audit --audit-level=moderate
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

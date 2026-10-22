@@ -1,5 +1,6 @@
 import { parseSeriesUrl, seriesPageUrl, parseWorkUrl } from '../src/features/imports/urls.ts'
 import { captureMetadataPage } from './capture.js'
+import { isLocalHostname } from '../src/lib/local-app.ts'
 import { createLibrarySync } from './library-sync.js'
 
 const appOrigin = __APP_ORIGIN__
@@ -11,7 +12,10 @@ let connectionVersion = 0
 const nextJobDelayMs = 3000
 let nextJobTimer
 const librarySync = createLibrarySync({
- auth: async () => (await chrome.storage.session.get('auth')).auth,
+ auth: async () => {
+  const state = await chrome.storage.session.get(['auth', 'sampleAuth', 'syncSample'])
+  return state.syncSample ? state.sampleAuth : state.auth
+ },
  available: async () => !running && !previewRunning && !(await chrome.storage.session.get('active')).active,
  changed: () => { void librarySync.pump(); void pump() },
 })
@@ -43,8 +47,9 @@ async function pump() {
  const version = connectionVersion
  let completed = false
  try {
-  const state = await chrome.storage.session.get(['auth', 'active'])
+  const state = await chrome.storage.session.get(['auth', 'active', 'syncSample'])
   if (version !== connectionVersion) return
+  if (state.syncSample) return
   const auth = state.auth
   if (!auth) return
   if (auth.expiresAt * 1000 <= Date.now()) {
@@ -96,7 +101,7 @@ async function pump() {
    await chrome.storage.session.remove('active')
    return
   }
-  const latest = await chrome.storage.session.get(['auth', 'active'])
+  const latest = await chrome.storage.session.get(['auth', 'active', 'syncSample'])
   if (version !== connectionVersion || latest.auth?.userId !== auth.userId || latest.active?.token !== active.token) return
   // No content script runs on ordinary visits. Injection requires a claimed job.
   const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: active.workPage ? [tab.status !== 'complete', 'navigation'] : [tab.status !== 'complete'] })
@@ -133,19 +138,22 @@ async function pump() {
 }
 
 let previewRunning = false
-async function previewSeries(url) {
- if (await librarySync.blocksImports()) throw new Error('Pause the library scan before previewing a series.')
+async function previewPage(url, pageType = 'series') {
+ if (await librarySync.blocksImports()) throw new Error('Pause the library scan before opening another AO3 page.')
  if ((await chrome.storage.session.get('ao3RequestAfter')).ao3RequestAfter > Date.now()) throw new Error('AO3 request cooldown is active. Retry shortly.')
- if (previewRunning) throw new Error('Another series preview is loading. Retry shortly.')
+ if (previewRunning) throw new Error('Another AO3 page is loading. Retry shortly.')
  previewRunning = true
  try {
-  const identity = parseSeriesUrl(url)
-  const targetUrl = seriesPageUrl(url, identity.seriesId)
+  const work = pageType === 'work'
+  const identity = work ? parseWorkUrl(url) : parseSeriesUrl(url)
+  const targetUrl = work ? identity.normalizedUrl : seriesPageUrl(url, identity.seriesId)
   const version = connectionVersion
-  const { auth } = await chrome.storage.session.get('auth')
+  const state = await chrome.storage.session.get(['auth', 'sampleAuth', 'syncSample'])
+  if (work && !state.syncSample) throw new Error('Direct work captures are available only in local sample mode.')
+  const auth = state.syncSample ? state.sampleAuth : state.auth
   if (!auth || auth.expiresAt * 1000 <= Date.now()) throw new Error('Reconnect the extension in Settings, then retry.')
   const matches = candidate => {
-   try { return seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
+   try { return work ? matchingWork(candidate, identity.workId) : seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
   }
   const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
   if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
@@ -158,14 +166,14 @@ async function previewSeries(url) {
    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
    const current = await chrome.tabs.get(tab.id)
    if (current.status === 'complete' && matches(current.url)) {
-    const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, args: [false, 'series'] })
+    const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, args: [false, pageType] })
     const page = results[0]?.result
     if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
     if (page && matches(page.url)) return page
    }
    await new Promise(resolve => setTimeout(resolve, 1000))
   }
-  throw new Error('Series preview timed out. Complete AO3 sign-in or confirmation in its tab, then retry, or skip this series.')
+  throw new Error('AO3 page retrieval timed out. Complete sign-in or confirmation in its tab, then retry.')
  } finally { previewRunning = false }
 }
 
@@ -173,12 +181,26 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
  let trusted = false
  try { trusted = new URL(sender.url).origin === appOrigin && !sender.id } catch { /* No trusted website sender. */ }
  if (!trusted) return
+ if (message?.type === 'AO3_LIBRARY_SAMPLE_CONNECT') {
+  if (!isLocalHostname(new URL(appOrigin).hostname)) { respond({ ok: false, error: 'Sample imports require the local extension.' }); return }
+  const version = connectionVersion
+  void (async () => {
+   const state = await chrome.storage.session.get('active')
+   if (running || previewRunning || state.active) throw new Error('Finish the current work import or preview before connecting sample mode.')
+   if (version !== connectionVersion) throw new Error('Connection changed. Retry.')
+   connectionVersion += 1
+   clearTimeout(nextJobTimer)
+   await chrome.storage.session.set({ syncSample: true, sampleAuth: { userId: 'local-sample-reader', sample: true, expiresAt: Date.now() / 1000 + 3600 } })
+   respond({ ok: true })
+  })().catch(error => respond({ ok: false, error: error.message }))
+  return true
+ }
  if (message?.type === 'AO3_LIBRARY_SYNC') {
   void librarySync.command(message).then(result => respond({ ok: true, ...result })).catch(error => respond({ ok: false, error: error.message }))
   return true
  }
- if (message?.type === 'AO3_LIBRARY_PREVIEW_SERIES') {
-  void previewSeries(message.url).then(page => respond({ ok: true, page })).catch(error => respond({ ok: false, error: error.message }))
+ if (message?.type === 'AO3_LIBRARY_PREVIEW_SERIES' || message?.type === 'AO3_LIBRARY_CAPTURE_WORK') {
+  void previewPage(message.url, message.type === 'AO3_LIBRARY_CAPTURE_WORK' ? 'work' : 'series').then(page => respond({ ok: true, page })).catch(error => respond({ ok: false, error: error.message }))
   return true
  }
  if (message?.type === 'AO3_LIBRARY_DISCONNECT') {
@@ -196,7 +218,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
    if (version !== connectionVersion) { respond({ ok: false }); return }
    const previous = await chrome.storage.session.get('auth')
    if (previous.auth?.userId !== user.id) await chrome.storage.session.clear()
-   await chrome.storage.session.set({ auth: { ...auth, userId: user.id } })
+   await chrome.storage.session.set({ syncSample: false, auth: { ...auth, userId: user.id } })
    await chrome.alarms.create('requested-imports', { periodInMinutes: 0.5 })
    respond({ ok: true })
    void pump()

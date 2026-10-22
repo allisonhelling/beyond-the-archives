@@ -1,3 +1,4 @@
+import { WorkStatusBadge } from './WorkStatusBadge'
 import { resumeReadingStatus, readingDuration } from './reading-history'
 import { automaticCollectionLabels } from './automatic-collections'
 import { MetadataTags } from './MetadataTags'
@@ -157,7 +158,7 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
   const origin = { returnTo: location.pathname + location.search }
   const { label: publicationLabel, Icon: PublicationIcon } = publicationStatuses[story.metadata.publication_status]
   return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
-    <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip><OneShotIndicator story={story} /></h2>{actions}</div>
+    <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
 <DisplayInfo group="workTile">{{
       authors: <> <p className="authors">By <AuthorNames metadata={story.metadata} /></p> </>,
       fandoms: <> <p className="muted">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'}</p> </>,
@@ -416,12 +417,12 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   useEffect(() => !example && id ? retainDetails([id]) : undefined, [example, id, retainDetails])
   useEffect(() => { if (!example && id && (!candidateStory || candidateStory.detailsLoaded === false)) void loadDetails([id]).catch(() => {}) }, [example, id, candidateStory, loadDetails])
   const metadataRefresh = useMetadataRefresh(example || story?.detailsLoaded === false ? undefined : story)
-  const metadataRefreshProps = { ...metadataRefresh, onRefresh: () => void metadataRefresh.refresh() }
+  const metadataRefreshProps = { ...metadataRefresh, unavailable: story?.work.ao3_work_id === null, onRefresh: () => void metadataRefresh.refresh() }
   return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story}>{({ favorite, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
     <div className="page-heading story-details-heading work-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
       <div className="story-title-row">
-        <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /></h1>
+        <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing && <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>}
         {!editing && <>{favorite}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>

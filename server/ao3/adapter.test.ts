@@ -93,3 +93,12 @@ it('reads chapter release dates from the verified work index and leaves incomple
  expect(withChapterDates(result, index, 123)).toMatchObject({ category: 'chapter_dates_unavailable', retryable: true })
  expect(validateMetadata({ ...result, metadata: { ...result.metadata!, chapter_dates: { '1': '2024-01-01', '2': '2024-02-31', '4': '2024-01-01' } } }).metadata?.chapter_dates).toEqual({ '1': '2024-01-01' })
 })
+
+it('retains valid AO3 bookmark, comment and hit counts, including zero', () => {
+ const html = fixture('work').replace('<dd class="words">', '<dd class="bookmarks">1,234</dd><dd class="comments">0</dd><dd class="hits">9,999</dd><dd class="words">')
+ expect(validateMetadata(parseMetadata(html, 123, 'https://archiveofourown.org/works/123')).metadata).toMatchObject({ bookmark_count: 1234, comment_count: 0, hits: 9999 })
+ for (const field of ['bookmark_count', 'comment_count', 'hits'] as const) for (const value of [-1, 1.5, 2147483648]) {
+  const result = parse(); result.metadata![field] = value
+  expect(validateMetadata(result).metadata?.[field]).toBeUndefined()
+ }
+})

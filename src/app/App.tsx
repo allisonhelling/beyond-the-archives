@@ -1,3 +1,4 @@
+import { LibrarySyncProvider } from '../features/imports/LibrarySyncProvider'
 import { BackupSettings } from '../features/backups/BackupSettings'
 import { CsvExportSettings } from '../features/backups/CsvExportSettings'
 import { DisplayExamplePage, DisplaySettings } from '../features/library/DisplaySettings'
@@ -169,10 +170,10 @@ function Shell() {
 
 function AuthGate() {
   const { session, loading, needsPassword } = useAuth()
-  if (sampleMode) return <LibraryProvider><SamplePreview /><Shell /></LibraryProvider>
+  if (sampleMode) return <LibraryProvider><LibrarySyncProvider><SamplePreview /><Shell /></LibrarySyncProvider></LibraryProvider>
   if (loading) return <div className="loading-state" role="status"><BookOpen size={32} strokeWidth={1.4} /><p>Opening your reading space…</p></div>
   if (!session || needsPassword) return <AuthScreen />
-  return <LibraryProvider key={session.user.id} userId={session.user.id}><Shell /></LibraryProvider>
+  return <LibraryProvider key={session.user.id} userId={session.user.id}><LibrarySyncProvider><Shell /></LibrarySyncProvider></LibraryProvider>
 }
 
 function SamplePreview() {

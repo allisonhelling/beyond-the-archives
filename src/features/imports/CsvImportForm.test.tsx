@@ -13,7 +13,7 @@ beforeEach(() => {
 })
 it('reviews conflicts, supports per-work and bulk choices, and skips existing Later works', async () => {
  render(<CsvImportForm onImported={mocks.imported} />); upload()
- expect(await screen.findByText('2 unique works · 1 bookmark conflicts · 1 existing Marked for Later works will be skipped.')).toBeVisible()
+ expect(await screen.findByText('2 unique works · 1 bookmark conflicts · 1 existing Marked for Later works will keep personal data.')).toBeVisible()
  expect(screen.getByText('Old notes')).toBeVisible(); expect(screen.getByText('My summary')).toBeVisible()
  const choice = screen.getByRole('combobox', { name: 'Action for Bookmark' })
  expect(choice).toHaveValue('keep')
@@ -100,4 +100,13 @@ it('keeps series choices available when conflict preview fails and can cancel be
  fireEvent.click(screen.getByRole('button', { name: 'Back to CSV files' }))
  expect(screen.queryByRole('region', { name: 'Review series imports' })).not.toBeInTheDocument()
  expect(mocks.submit).not.toHaveBeenCalled()
+})
+
+it('does not ask for bookmark conflict choices when only work metadata differs', async () => {
+ mocks.preview.mockResolvedValue([{ workId: 1, id: 'saved', version: 'v1', title: 'Older title', status: 'finished', progress: 2, notes: 'My summary', tags: ['My tag'], finishedAt: '2026-10-20T00:00:00Z' }])
+ render(<CsvImportForm onImported={mocks.imported} />); upload()
+ expect(await screen.findByText(/2 unique works · 0 bookmark conflicts/)).toBeVisible()
+ expect(screen.queryByRole('combobox', { name: 'Action for Bookmark' })).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button', { name: 'Import CSV works' }))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith(expect.any(Array), expect.any(Array), {}))
 })

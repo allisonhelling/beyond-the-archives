@@ -108,7 +108,7 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .library-toolbar label { flex: 1; min-width: 180px; }
 .collection-name-field input, .collection-name-field textarea, .collection-custom-color input[type=text], .library-toolbar input, .library-toolbar select, .story-form input:not([type=checkbox]), .story-form select, .story-form textarea, .status-select select, .progress-popover input { width: 100%; border: 1px solid #dfcbc5; border-radius: 7px; padding: 10px 12px; color: #382b2b; background: #fff; font: inherit; }
 .collection-name-field, .library-toolbar label, .story-form label, .progress-popover label, .status-select, .browsing-settings > label { display: grid; gap: 7px; font-size: 14px; }
-.filter-input.select-fit { width: max-content; max-width: 100%; }
+.filter-input.select-fit, .story-form select.select-fit { width: max-content; max-width: 100%; }
 .browsing-settings { font-size: 14px; }
 .browsing-settings > label { grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 12px; }
 .date-format-examples { padding-inline-start: 24px; }
@@ -163,6 +163,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .story-card h2 a:hover, .story-card h2 a:focus-visible { color: #800020; }
 .story-card-title { display: flex; align-items: flex-start; gap: 7px; }
 .story-card-title h2 { min-width: 0; }
+.work-status-badge { display: inline-block; margin-inline-start: 8px; padding: 2px 6px; border: 1px solid var(--color-border); border-radius: 5px; font-family: var(--font-sans); font-size: 13px; color: var(--color-brand); vertical-align: middle; }
 .story-card-title h2 > .action-tooltip { vertical-align: middle; }
 .publication-icon { display: inline-flex; color: var(--color-brand); }
 .story-summary { font-size: var(--minimum-text-size); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
@@ -274,7 +275,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .story-title-row h1 a:hover { color: var(--color-brand); }
 .details-disclosure > summary { cursor: pointer; color: #756363; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; padding-block: 10px; }
 .details-disclosure[open] > summary { margin-bottom: 12px; }
-.editable-field-heading { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.editable-field-heading, .input-with-unit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .inline-personal-field { min-width: 0; max-width: 100%; }
 .inline-personal-form { width: 100%; text-transform: none; letter-spacing: normal; color: #382b2b; }
 .inline-personal-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -358,6 +359,16 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 label.check-label { display: flex; align-items: center; gap: 9px; }
 .check-label input { width: 17px; height: 17px; margin: 0; padding: 0; flex-shrink: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 18px; }
+.form-grid-two-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.form-grid-two-columns > label { min-width: 0; }
+.form-controls-row { display: flex; align-items: start; flex-wrap: wrap; column-gap: 32px; }
+.form-controls-row > label { align-content: start; }
+.form-controls-row > .form-control { display: grid; gap: 7px; margin: 16px 0; }
+.form-control .editable-field-heading > label { margin: 0; }
+.form-controls-row .editable-field-heading { min-height: 24px; }
+.story-form input.input-fit { width: 8ch; min-width: 84px; }
+.story-form fieldset.scan-page-limits { padding-top: 8px; }
+.scan-page-limits .form-grid > label { margin-top: 4px; }
 .story-form textarea { resize: vertical; }
 .field-help { font-size: 13px; line-height: 1.6; color: #756363; }
 .collection-choices { margin-top: 20px; }
@@ -609,7 +620,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 /* Aligned reading controls and selectable personal-rating stars. */
 .story-form .reading-progress-row { align-items: start; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .story-form .reading-progress-row label { margin-top: 16px; min-width: 0; }
-.story-form .reading-progress-row input, .story-form .reading-progress-row select { height: 44px; min-height: 44px; margin-top: 0; }
+.story-form .reading-progress-row input, .story-form .reading-progress-row select, .form-controls-row input, .form-controls-row select { height: 44px; min-height: 44px; margin-top: 0; }
 .story-form .reading-progress-row select { align-self: start; }
 .story-form .reading-progress-row small { font-size: 13px; }
 .rating-favorite-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 8px 0 24px; }

@@ -89,3 +89,37 @@ it('imports library listing snapshots without work requests and forces keep even
  expect((await db.query('select status,attempts from public.metadata_jobs where batch_id=$1', [result.batch])).rows).toEqual([{ status: 'completed', attempts: 0 }])
  expect((await db.query('select status,metadata_status from public.import_items where batch_id=$1', [result.batch])).rows).toEqual([{ status: 'completed', metadata_status: 'completed' }])
 })
+
+it('refreshes nonempty work metadata on Keep and Later imports without replacing personal data', async () => {
+ await submit([row(920, { metadata: { title: 'Original', summary: 'Original summary', kudos: 15, bookmark_count: 8, hits: 100, comment_count: 4, authors: ['Original author'], published_chapters: 3, total_chapters: 3, is_complete: true } })])
+ const before = await entry(920)
+ await db.query("update public.library_entries set metadata_overrides='{\"title\":\"My corrected title\"}' where id=$1", [before.id])
+ expect(await submit([row(920, { metadata: { title: 'Updated AO3 title', summary: 'Updated summary', kudos: 0, bookmark_count: 9, hits: 0, comment_count: 0, authors: [], published_chapters: 4, is_complete: false }, notes: 'Different bookmark', tags: ['Different tag'] })])).toMatchObject({ imported: 0, kept: 1, batch: null })
+ const refreshed = await entry(920)
+ expect(refreshed).toMatchObject({ notes: before.notes, reading_status: before.reading_status, last_read_chapter: before.last_read_chapter, finished_at: before.finished_at,
+  metadata_overrides: { title: 'My corrected title' }, extension_metadata: { title: 'Updated AO3 title', summary: 'Updated summary', kudos: 0, bookmark_count: 9, hits: 0, comment_count: 0, authors: ['Original author'], published_chapters: 4, is_complete: false, publication_status: 'in_progress' } })
+ await submit([row(920, { source: 'marked_for_later', metadata: { title: 'Latest title', summary: '   ', kudos: null, bookmark_count: 0, authors: [] } })])
+ expect(await entry(920)).toMatchObject({ notes: before.notes, reading_status: before.reading_status, last_read_chapter: before.last_read_chapter,
+  extension_metadata: { title: 'Latest title', summary: 'Updated summary', kudos: 0, bookmark_count: 0, authors: ['Original author'], publication_status: 'in_progress' } })
+ expect((await db.query('select count(*)::integer n from public.metadata_jobs where entry_id=$1', [before.id])).rows[0]).toEqual({ n: 1 })
+})
+it('refreshes listing metadata during sync while preserving bookmark conflicts and private ownership', async () => {
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(921, { metadata: { title: 'Original', summary: 'Old summary', kudos: 1, bookmark_count: 2 } })])])
+ const before = await entry(921)
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(921, { metadata: { title: 'Newest', summary: 'New summary', kudos: 12, bookmark_count: 0 }, notes: 'Changed notes', tags: ['Changed tag'] })])])
+ expect(await entry(921)).toMatchObject({ notes: before.notes, reading_status: before.reading_status, last_read_chapter: before.last_read_chapter, extension_metadata: { title: 'Newest', summary: 'New summary', kudos: 12, bookmark_count: 0 } })
+ expect((await db.query('select title,automatic_metadata from public.works where ao3_work_id=921')).rows[0]).toEqual({ title: null, automatic_metadata: {} })
+ await db.exec(`set request.jwt.claim.sub='${bob}'`)
+ await submit([row(921, { metadata: { title: 'Bob snapshot', kudos: 99 } })])
+ expect(await entry(921)).toMatchObject({ extension_metadata: { title: 'Bob snapshot', kudos: 99 } })
+ await db.exec(`set request.jwt.claim.sub='${alice}'`)
+ expect(await entry(921)).toMatchObject({ extension_metadata: { title: 'Newest', kudos: 12 } })
+})
+it('overwriting bookmark fields preserves manual corrections and empty automatic fields', async () => {
+ await submit([row(922)])
+ const before = await entry(922)
+ await db.query("update public.library_entries set metadata_overrides='{\"title\":\"Manual title\"}' where id=$1", [before.id])
+ const current = await entry(922)
+ await submit([row(922, { choice: 'overwrite', expectedVersion: current.updated_at, metadata: { title: 'AO3 title', summary: '', kudos: 0 }, notes: 'Approved replacement', tags: ['Approved tag'] })])
+ expect(await entry(922)).toMatchObject({ notes: 'Approved replacement', metadata_overrides: { title: 'Manual title' }, extension_metadata: { title: 'AO3 title', summary: 'Public summary', kudos: 0 } })
+})

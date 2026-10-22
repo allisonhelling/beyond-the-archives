@@ -1,3 +1,6 @@
+import { sampleMode } from '../../lib/sample-mode'
+import { isLocalApp } from '../../lib/local-app'
+import { localExtensionId } from './extension-config'
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 
@@ -10,10 +13,15 @@ function runtime(): ExtensionRuntime | undefined {
  return (window as Window & { chrome?: { runtime?: ExtensionRuntime } }).chrome?.runtime
 }
 export function extensionId() {
+ if (isLocalApp()) return localExtensionId
  try { return window.localStorage.getItem?.('ao3-library-extension-id') ?? import.meta.env.VITE_AO3_EXTENSION_ID ?? '' }
  catch { return import.meta.env.VITE_AO3_EXTENSION_ID ?? '' }
 }
 export function setExtensionId(id: string) {
+ if (isLocalApp()) {
+  if (id !== localExtensionId) throw new Error('The local app uses the local extension. Run npm run build:extension:local and load extension/local/dist in Chrome.')
+  return
+ }
  if (!/^[a-p]{32}$/.test(id)) throw new Error('Enter the 32-letter extension ID from your browser’s Extensions page.')
  window.localStorage.setItem('ao3-library-extension-id', id)
 }
@@ -27,6 +35,7 @@ function message(payload: object): Promise<boolean> {
  })
 }
 export async function connectExtension(session?: Session): Promise<boolean> {
+ if (sampleMode) return isLocalApp() && message({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })
  if (!extensionId() || !supabase) return false
  const current = session ?? (await supabase.auth.getSession()).data.session
  if (!current?.expires_at) return false
@@ -34,23 +43,26 @@ export async function connectExtension(session?: Session): Promise<boolean> {
 }
 export function disconnectExtension() { return message({ type: 'AO3_LIBRARY_DISCONNECT' }) }
 
-export function previewSeriesWithExtension(url: string): Promise<{ url: string; html: string }> {
+function previewPageWithExtension(url: string, type: 'AO3_LIBRARY_PREVIEW_SERIES' | 'AO3_LIBRARY_CAPTURE_WORK'): Promise<{ url: string; html: string }> {
  const api = runtime(), id = extensionId()
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) throw new Error('Connect the updated extension in Settings to preview series.')
  return new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error('Series preview timed out. Complete AO3 sign-in in its tab, then retry.')), 125000)
+  const timer = setTimeout(() => reject(new Error('AO3 page retrieval timed out. Complete sign-in in its tab, then retry.')), 125000)
   try {
-   api.sendMessage(id, { type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, reply => {
+   api.sendMessage(id, { type, url }, reply => {
     clearTimeout(timer)
-    if (api.lastError || !reply?.ok || !reply.page) reject(new Error(reply?.error ?? 'Could not preview the series. Rebuild and reconnect the extension in Settings, then retry.'))
+    if (api.lastError || !reply?.ok || !reply.page) reject(new Error(reply?.error ?? 'Could not read the AO3 page. Rebuild and reconnect the extension, then retry.'))
     else resolve(reply.page)
    })
   } catch { clearTimeout(timer); reject(new Error('Could not contact the extension. Reconnect in Settings.')) }
  })
 }
 
-export type LibrarySyncState = { id: string; status: 'running' | 'paused' | 'ready' | 'complete' | 'discarded'; url: string; mode: string; pages: number; count: number; skipped: number; error: string }
-export function librarySyncCommand(action: string, options: { url?: string; mode?: string; page?: number; scanId?: string } = {}): Promise<{ state?: LibrarySyncState | null; rows?: Record<string, string>[] }> {
+export function previewSeriesWithExtension(url: string) { return previewPageWithExtension(url, 'AO3_LIBRARY_PREVIEW_SERIES') }
+export function captureWorkWithExtension(url: string) { return previewPageWithExtension(url, 'AO3_LIBRARY_CAPTURE_WORK') }
+
+export type LibrarySyncState = { id: string; status: 'running' | 'paused' | 'ready' | 'complete' | 'discarded'; url: string; mode: string; pages: number; count: number; skipped: number; error: string; startPage?: number; endPage?: number; limited?: boolean; partial?: boolean; delaySeconds?: number; updateDeleted?: boolean; attention?: 'login' | 'rate_limit' | 'page_error'; attentionId?: string }
+export function librarySyncCommand(action: string, options: { url?: string; mode?: string; page?: number; scanId?: string; startPage?: number; endPage?: number; delaySeconds?: number; updateDeleted?: boolean } = {}): Promise<{ state?: LibrarySyncState | null; rows?: Record<string, string>[] }> {
  const api = runtime(), id = extensionId()
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) return Promise.reject(new Error('Connect AO3 Library Companion in Settings first.'))
  return new Promise((resolve, reject) => {

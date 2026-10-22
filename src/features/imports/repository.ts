@@ -1,5 +1,7 @@
+import { bookmarkConflicts, csvWorkKey } from './ao3-csv'
 import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
+import { sampleMode } from '../../lib/sample-mode'
 import { supabase } from '../../lib/supabase'
 import { allRows } from '../library/repository'
 import { classifyUrl, extractUrls, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
@@ -30,6 +32,10 @@ export async function submitImport(text:string, updateReadingLocation = true, re
  if(urls.some(url=>classifyUrl(url).kind==='series')) throw new Error('Review series and choose works before importing.')
  if(!urls.length) throw new Error('Paste at least one http or https URL.')
  if(urls.length>2000) throw new Error('Use at most 2,000 URLs per submission.')
+ if (sampleMode) {
+  await (await import('./sample-import')).importSampleWorkUrls(urls, readingStatus ?? 'to_read', seriesIds, updateReadingLocation)
+  return 'sample-import'
+ }
  const {data,error}=await client().rpc('submit_import_urls',{p_urls:urls,p_update_reading_location:updateReadingLocation,...(readingStatus ? {p_reading_status:readingStatus,p_series_ids:seriesIds} : {})})
  if(error) {
   if(error.code==='PGRST202' && readingStatus) throw new Error('The connected database is missing import reading-status support. Apply the latest database migrations, then try again.')
@@ -54,12 +60,18 @@ export async function metadataRefreshJob(entryId: string, batchId?: string) {
 }
 
 export async function previewSeries(url: string): Promise<SeriesPreview> {
- const db = client()
  const identity = parseSeriesUrl(url)
- const { data: session } = await db.auth.getSession()
- if (!session.session) throw new Error('Sign in to preview series.')
- const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode').eq('user_id', session.session.user.id).maybeSingle()
- if (settingsError) throw new Error('Could not load metadata settings. Retry the preview.')
+ let useExtension = sampleMode
+ if (sampleMode) {
+  if (!await connectExtension()) throw new Error('Load or reload the local extension to preview series in sample mode.')
+ } else {
+  const db = client()
+  const { data: session } = await db.auth.getSession()
+  if (!session.session) throw new Error('Sign in to preview series.')
+  const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode').eq('user_id', session.session.user.id).maybeSingle()
+  if (settingsError) throw new Error('Could not load metadata settings. Retry the preview.')
+  useExtension = preferences?.retrieval_mode === 'extension'
+ }
  let nextUrl: string | undefined = identity.normalizedUrl
  let preview: SeriesPreview | undefined
  const visited = new Set<string>(), works = new Map<number, SeriesPreview['works'][number]>()
@@ -68,19 +80,25 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
   if (visited.has(pageUrl)) throw new Error('Series preview returned a repeated page. Retry the preview.')
   visited.add(pageUrl)
   let body: { url: string; html?: string } = { url: pageUrl }
-  if (preferences?.retrieval_mode === 'extension') body = await previewSeriesWithExtension(pageUrl)
-  const { data, error } = await db.functions.invoke('series-preview', { body })
-  if (error) {
-   let message = 'Could not preview this series. Check the series-preview function is deployed, then retry or skip it.'
-   try { const response = error.context as Response; const detail = await response.json(); if (typeof detail.error === 'string') message = detail.error } catch { /* Use the connection guidance. */ }
-   throw new Error(message)
+  if (useExtension) body = await previewSeriesWithExtension(pageUrl)
+  let page: SeriesPreview, nextPageDelayMs: number | undefined
+  if (sampleMode) {
+   const { parseSeries } = await import('./ao3-series')
+   page = parseSeries(body.html ?? '', body.url)
+  } else {
+   const { data, error } = await client().functions.invoke('series-preview', { body })
+   if (error) {
+    let message = 'Could not preview this series. Check the series-preview function is deployed, then retry or skip it.'
+    try { const response = error.context as Response; const detail = await response.json(); if (typeof detail.error === 'string') message = detail.error } catch { /* Use the connection guidance. */ }
+    throw new Error(message)
+   }
+   if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
+   page = data.preview as SeriesPreview; nextPageDelayMs = data.nextPageDelayMs
   }
-  if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
-  const page = data.preview as SeriesPreview
   preview ??= { ...page }
   for (const work of page.works) if (!works.has(work.workId)) works.set(work.workId, work)
   nextUrl = page.nextUrl
-  if (nextUrl && preferences?.retrieval_mode !== 'extension' && data.nextPageDelayMs === 35_000) await new Promise(resolve => setTimeout(resolve, data.nextPageDelayMs))
+  if (nextUrl && !useExtension && nextPageDelayMs === 35_000) await new Promise(resolve => setTimeout(resolve, nextPageDelayMs))
  }
  if (!preview) throw new Error('Series preview is unavailable.')
  delete preview.nextUrl
@@ -92,13 +110,17 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
 
 
 export async function previewCsvImport(works: import('./ao3-csv').CsvWork[]): Promise<import('./ao3-csv').CsvConflict[]> {
- const { data, error } = await client().rpc('preview_ao3_csv_import', { p_work_ids: works.map(work => work.workId) })
+ if (sampleMode) return (await import('../library/sample/repository')).previewSampleCsvImport(works)
+ const { data, error } = await client().rpc('preview_ao3_csv_import', { p_work_ids: works.flatMap(work => work.workId === null ? [] : [work.workId]), p_bookmark_ids: works.flatMap(work => work.bookmarkId ? [work.bookmarkId] : []) })
  if (error) throw new Error('Could not check CSV conflicts. Apply the latest database migrations and retry.')
- return data as unknown as import('./ao3-csv').CsvConflict[]
+ return (data as unknown as import('./ao3-csv').CsvConflict[]).map(conflict => {
+  const incoming = works.find(work => work.workId !== null && work.workId === conflict.workId || work.bookmarkId && work.bookmarkId === conflict.bookmarkId)
+  return incoming ? { ...conflict, workId: incoming.workId } : conflict
+ })
 }
-export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conflicts: import('./ao3-csv').CsvConflict[], choices: Record<number, import('./ao3-csv').CsvChoice>) {
- const saved = new Map(conflicts.map(conflict => [conflict.workId, conflict]))
- const rows = works.map(work => ({ ...work, choice: choices[work.workId] ?? 'keep', expectedVersion: saved.get(work.workId)?.version ?? null }))
+export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conflicts: import('./ao3-csv').CsvConflict[], choices: Record<string, import('./ao3-csv').CsvChoice>) {
+ const saved = new Map(conflicts.map(conflict => [csvWorkKey(conflict), conflict]))
+ const rows = works.map(work => ({ ...work, choice: choices[csvWorkKey(work)] ?? 'keep', expectedVersion: saved.get(csvWorkKey(work))?.version ?? null }))
  const { data, error } = await client().rpc('submit_ao3_csv_import', { p_rows: rows as unknown as import('../../types/database').Json })
  if (error) {
   if (error.code === '40001') throw new Error('Your library changed after CSV review. Choose the files again to refresh conflicts before importing.')
@@ -108,8 +130,15 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  return data as unknown as { batch: string | null; imported: number; kept: number }
 }
 
-export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[]) {
- const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json })
- if (error) throw new Error('Could not import this scan page. Apply the library sync migration and check your connection; retry safely to keep existing works.')
- return data as unknown as { batch: string | null; imported: number; kept: number }
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], options: { mode?: string; updateDeleted?: boolean } = {}) {
+ works = works.map(work => ({ ...work, scanMode: options.mode ?? 'full', updateDeleted: options.updateDeleted ?? true }))
+ const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
+ let result: { batch: string | null; imported: number; kept: number }
+ if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works, options)
+ else {
+  const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json })
+  if (error) throw new Error('Could not import this scan page. Apply the latest database migrations and check your connection; retry safely to preserve personal data.')
+  result = data as unknown as typeof result
+ }
+ return { ...result, ...(conflicts.length ? { bookmarkConflicts: conflicts } : {}) }
 }

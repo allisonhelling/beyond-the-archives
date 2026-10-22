@@ -3,7 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), id: vi.fn(), auth: { session: { user: { id: 'alice' } } as Session | null, loading: false } }))
+const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), id: vi.fn(), local: false, auth: { session: { user: { id: 'alice' } } as Session | null, loading: false } }))
+vi.mock('../../lib/local-app', () => ({ isLocalApp: () => mocks.local }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => mocks.auth }))
 vi.mock('../../lib/supabase', () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.load }) }), upsert: mocks.save }) } }))
 vi.mock('./extension', () => ({ extensionId: () => '', setExtensionId: mocks.id, connectExtension: mocks.connect, disconnectExtension: mocks.disconnect }))
@@ -11,6 +12,7 @@ import { ExtensionConnection, MetadataSettings } from './MetadataSettings'
 
 beforeEach(() => {
  vi.clearAllMocks()
+ mocks.local = false
  mocks.auth = { session: { user: { id: 'alice' } } as Session, loading: false }
  mocks.disconnect.mockResolvedValue(true)
  mocks.load.mockResolvedValue({ data: null, error: null })
@@ -67,4 +69,13 @@ it('waits for auth initialization and disconnects after sign-out', async () => {
  mocks.auth = { session: null, loading: false }
  rerender(<ExtensionConnection />)
  await waitFor(() => expect(mocks.disconnect).toHaveBeenCalledTimes(1))
+})
+
+it('explains the automatic local extension and prevents editing its ID', async () => {
+ mocks.local = true
+ render(<MetadataSettings />)
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Save metadata mode' })).toBeEnabled())
+ fireEvent.change(screen.getByLabelText('How to load AO3 metadata'), { target: { value: 'extension' } })
+ expect(screen.getByLabelText(/^Extension ID/)).toHaveAttribute('readonly')
+ expect(screen.getByText(/This local app uses AO3 Library Companion/)).toBeVisible()
 })

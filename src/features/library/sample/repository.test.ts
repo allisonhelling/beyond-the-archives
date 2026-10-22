@@ -1,8 +1,9 @@
+import { readAo3Rows, type CsvWork } from '../../imports/ao3-csv'
 import { automaticCollectionRules } from '../automatic-collections'
 import { defaultReadingFilters } from '../reading-search'
 import { orderCollections, moveCollectionIds } from '../collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
+import { importSampleWorks, addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
 import { librarySeries, seriesReadingStatus } from '../series'
 import { parseWorkUrl, validateProgress } from '../model'
 
@@ -499,4 +500,15 @@ it('adds the automatic example once to older samples without replacing a same-na
  expect(upgraded.collections.find(collection => collection.id === id)).toMatchObject({ color: '#123456', symbol: 'moon' })
  await deleteSampleCollection(id)
  expect((await loadSampleLibrary()).collections).toHaveLength(0)
+})
+
+it('imports extension listing metadata into sample storage, preserving existing personal edits and safe retries', async () => {
+ const rows = readAo3Rows([{ title: 'Imported bookmark', link: 'https://archiveofourown.org/works/9990001', source_list: 'bookmarks', 'bookmark date': '20 Oct 2026', date: '01 Oct 2026', chapters: '3/3', 'bookmark notes': 'Private notes', 'bookmark tags': 'Mine', author: 'Writer' }, { title: 'Read later', link: 'https://archiveofourown.org/works/9990002', source_list: 'marked_for_later' }]) as CsvWork[]
+ expect(await importSampleWorks(rows)).toEqual({ batch: null, imported: 2, kept: 0 })
+ const saved = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990001)!
+ expect(saved).toMatchObject({ notes: 'Private notes', personalTags: ['Mine'], reading_status: 'finished', last_read_chapter: 3, finished_at: '2026-10-20T00:00:00Z', metadata: { title: 'Imported bookmark', authors: ['Writer'] } })
+ await updateSampleEntry(saved.id, { notes: 'Personal edit', personal_rating: 5 })
+ expect(await importSampleWorks(rows)).toEqual({ batch: null, imported: 0, kept: 2 })
+ expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ notes: 'Personal edit', personal_rating: 5 })
+ expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990002)).toMatchObject({ reading_status: 'to_read', last_read_chapter: 0 })
 })

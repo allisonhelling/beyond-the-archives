@@ -309,6 +309,8 @@ export type Database = {
           extension_metadata: Json
           extension_chapters: Json
           reading_history: Json
+          work_status: string
+          source_bookmark: Json
         }
         Insert: {
           id?: string
@@ -330,6 +332,8 @@ export type Database = {
           extension_metadata?: Json
           extension_chapters?: Json
           reading_history?: Json
+          work_status?: string
+          source_bookmark?: Json
         }
         Update: {
           id?: string
@@ -351,6 +355,8 @@ export type Database = {
           extension_metadata?: Json
           extension_chapters?: Json
           reading_history?: Json
+          work_status?: string
+          source_bookmark?: Json
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -776,7 +782,7 @@ export type Database = {
       works: {
         Row: {
           id: string
-          ao3_work_id: number
+          ao3_work_id: number | null
           canonical_url: string | null
           canonical_verified_at: string | null
           title: string | null
@@ -800,7 +806,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          ao3_work_id: number
+          ao3_work_id?: number | null
           canonical_url?: string | null
           canonical_verified_at?: string | null
           title?: string | null
@@ -824,7 +830,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          ao3_work_id?: number
+          ao3_work_id?: number | null
           canonical_url?: string | null
           canonical_verified_at?: string | null
           title?: string | null
@@ -871,7 +877,7 @@ export type Database = {
       save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
-      preview_ao3_csv_import: { Args: { p_work_ids: number[] }; Returns: Json }
+      preview_ao3_csv_import: { Args: { p_work_ids: number[]; p_bookmark_ids?: number[] }; Returns: Json }
       submit_ao3_csv_import: { Args: { p_rows: Json }; Returns: Json }
       submit_ao3_library_sync: { Args: { p_rows: Json }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean; p_reading_status?: Database['public']['Enums']['reading_status']; p_series_ids?: number[] }; Returns: string | null }

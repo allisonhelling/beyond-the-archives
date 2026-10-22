@@ -2,10 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './app/App'
 import './styles.css'
+import { isLocalApp } from './lib/local-app'
 
 const root = createRoot(document.getElementById('root')!)
 const localPreview = import.meta.env.DEV
-  && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  && isLocalApp()
   && window.self === window.top
 
 if (localPreview) {

@@ -43,7 +43,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
  for (const [listener] of chrome.runtime.onMessageExternal.addListener.mock.calls) {
-  await new Promise(resolve => listener({ type: 'AO3_LIBRARY_DISCONNECT' }, { url: origin }, resolve))
+  await new Promise(resolve => listener({ type: 'AO3_LIBRARY_DISCONNECT' }, { url: globalThis.__APP_ORIGIN__ }, resolve))
  }
  vi.useRealTimers()
  vi.unstubAllGlobals()
@@ -248,4 +248,51 @@ it('preserves a bookmark work snapshot while capturing its chapter release index
  expect(chrome.scripting.executeScript).toHaveBeenLastCalledWith(expect.objectContaining({ args: [false, 'navigation'] }))
  const upload = fetcher.mock.calls.find(([url]) => url.endsWith('/functions/v1/extension-metadata'))
  expect(JSON.parse(upload[1].body)).toMatchObject({ url: workUrl, navigationUrl, navigationHtml: '<ol class="chapter index">Release dates</ol>' })
+})
+
+it('rejects tokenless sample connections on a hosted extension', async () => {
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' }, { url: origin }, respond)
+ expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false }))
+ expect(state.sampleAuth).toBeUndefined()
+ expect(fetcher).not.toHaveBeenCalled()
+})
+it('connects local sample scanning without credentials and does not claim backend work', async () => {
+ const localOrigin = 'http://127.0.0.1:5173'
+ vi.stubGlobal('__APP_ORIGIN__', localOrigin)
+ chrome.runtime.onMessageExternal.addListener.mockClear()
+ vi.resetModules(); await import('./background.js')
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls.at(-1)[0]({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' }, { url: localOrigin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true }))
+ expect(state.sampleAuth).toMatchObject({ sample: true, userId: 'local-sample-reader' })
+ expect(state.auth).toBeUndefined()
+ chrome.alarms.onAlarm.addListener.mock.calls.at(-1)[0]({ name: 'requested-imports' })
+ await new Promise(resolve => setTimeout(resolve, 30))
+ expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('captures an explicit work or series for local sample imports using the shared capture controller', async () => {
+ const localOrigin = 'http://127.0.0.1:5173'
+ vi.stubGlobal('__APP_ORIGIN__', localOrigin)
+ chrome.runtime.onMessageExternal.addListener.mockClear()
+ vi.resetModules(); await import('./background.js')
+ state.syncSample = true; state.sampleAuth = { userId: 'local-sample-reader', expiresAt: Date.now() / 1000 + 3600 }
+ const listener = chrome.runtime.onMessageExternal.addListener.mock.calls.at(-1)[0]
+ for (const [type, url, pageType] of [['AO3_LIBRARY_CAPTURE_WORK', workUrl, 'work'], ['AO3_LIBRARY_PREVIEW_SERIES', 'https://archiveofourown.org/series/77', 'series']]) {
+  chrome.tabs.query.mockResolvedValue([{ id: 8, status: 'complete', url }])
+  chrome.tabs.get.mockResolvedValue({ id: 8, status: 'complete', url })
+  chrome.scripting.executeScript.mockResolvedValue([{ result: { url, html: '<h2>Metadata</h2>' } }])
+  const respond = vi.fn(); listener({ type, url }, { url: localOrigin }, respond)
+  await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2>Metadata</h2>' } }))
+  expect(chrome.scripting.executeScript).toHaveBeenLastCalledWith(expect.objectContaining({ args: [false, pageType] }))
+ }
+ expect(fetcher).not.toHaveBeenCalled()
+})
+it('does not allow the sample-only work capture path to replace authenticated work jobs', async () => {
+ state.auth = { userId: 'alice', token: 'session', expiresAt: Date.now() / 1000 + 3600 }
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: workUrl }, { url: origin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false })))
+ expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
 })

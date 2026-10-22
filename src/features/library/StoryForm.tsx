@@ -49,7 +49,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   async function submit(event: FormEvent) {
     event.preventDefault(); if (conflict) return; setError('')
     try {
-      const identity = parseWorkUrl(url)
+      const identity = story?.work.ao3_work_id === null && url === story.original_url ? { workId: null } : parseWorkUrl(url)
       if (story && identity.workId !== story.work.ao3_work_id) throw new Error('This URL belongs to a different work. Add it as a separate story to preserve the original record.')
       if (!metadata.title.trim()) throw new Error('A title is required.')
       for (const key of ['published_chapters', 'total_chapters', 'word_count'] as const) {
@@ -75,7 +75,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     finally { setBusy(false) }
   }
   return <form className="story-form" onSubmit={e => void submit(e)}>{section !== 'reading' && <fieldset disabled={busy || Boolean(conflict)}><legend>AO3 metadata · manually entered private overrides</legend><p className="muted">Your corrections are private overrides. Automatic metadata refresh preserves them.</p>
-    <label>AO3 URL<input required type="url" value={url} onChange={e => setUrl(e.target.value)} onBlur={urlDefaults} /></label>
+    <label>AO3 URL<input required type="url" readOnly={story?.work.ao3_work_id === null} value={url} onChange={e => setUrl(e.target.value)} onBlur={urlDefaults} /></label>
     <p className="field-help">{story ? 'You can update the link for this work. The original submission is preserved separately; work identity cannot be changed.' : 'Chapter IDs are not chapter numbers. Unverified links do not set progress; enter chapters read below.'}</p>
     <label>Title<input required value={metadata.title} onChange={e => field('title', e.target.value)} /></label>
     <div className="form-grid"><label>Authors (one per line)<textarea rows={3} value={authors} onChange={e => setAuthors(e.target.value)} /></label><label>Fandoms (one per line)<textarea rows={3} value={fandoms} onChange={e => setFandoms(e.target.value)} /></label></div>

@@ -4,11 +4,13 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
+import { localExtensionId } from '../../src/features/imports/extension-config'
 
-test('built extension captures requested metadata before full load without duplicate uploads', async ({ browserName }, info) => {
+for (const local of [false, true]) {
+test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata before full load without duplicate uploads`, async ({ browserName }, info) => {
  test.skip(info.project.name !== 'desktop' || browserName !== 'chromium', 'Chrome/Edge extension; separate persistent Chromium context.')
  test.setTimeout(90000) // Cold persistent Chromium startup plus service-worker wake-up.
- const appOrigin = 'https://library-extension-test.example'
+ const appOrigin = local ? 'http://127.0.0.1:5173' : 'https://library-extension-test.example'
  let queued = false, claimed = false, loaded = false, workId = 123
  const uploads: { jobId: string; html: string; url: string }[] = []
  // Use real HTTP for extension-worker fetches. Browser route interception can
@@ -34,7 +36,7 @@ test('built extension captures requested metadata before full load without dupli
  const backend = `http://127.0.0.1:${address.port}`
  const profile = await mkdtemp(join(tmpdir(), 'ao3-extension-test-'))
  const extension = join(profile, 'extension')
- execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
+ execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension, ...(local ? ['--local'] : [])], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [
   `--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
   // Extension-created tabs can navigate before Playwright attaches its routes.
@@ -46,6 +48,7 @@ test('built extension captures requested metadata before full load without dupli
  try {
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
   const extensionId = new URL(worker.url()).host
+  if (local) expect(extensionId).toBe(localExtensionId)
   const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">')
   await context.route(`${appOrigin}/**`, route => route.fulfill({ contentType: 'text/html', body: '<html><body>Hosted library test</body></html>' }))
   let slowImage = new Promise<void>(resolve => { releaseImage = resolve })
@@ -110,6 +113,38 @@ test('built extension captures requested metadata before full load without dupli
   expect(preview).toMatchObject({ ok: true, page: { url: seriesUrl } })
   expect((preview as { page: { html: string } }).page.html).toContain('The first story')
   expect(uploads).toHaveLength(2)
+  if (local) {
+   // Sample listing scans authenticate only with the local website boundary.
+   queued = false
+   type SyncReply = { ok: boolean; error?: string; state?: { status: string; pages: number; startPage: number; endPage: number; limited: boolean }; rows?: { title: string }[] }
+   const command = (body: object) => app.evaluate(({ id, body }) => new Promise<SyncReply>(resolve => {
+    const api = (window as Window & { chrome: { runtime: { sendMessage(id: string, body: object, callback: (reply: SyncReply) => void): void } } }).chrome
+    api.runtime.sendMessage(id, body, resolve)
+   }), { id: extensionId, body })
+   expect(await command({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })).toEqual({ ok: true })
+   expect(await command({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: 'https://archiveofourown.org/works/123' })).toMatchObject({ ok: true, page: { url: 'https://archiveofourown.org/works/123' } })
+   const listing = 'https://archiveofourown.org/users/alice/bookmarks'
+   await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a href="?page=3">Next</a></li></ol></div>' }))
+   const openedScan = context.waitForEvent('page', { timeout: 45000 })
+   const started = await command({ type: 'AO3_LIBRARY_SYNC', action: 'start', url: listing, mode: 'full', startPage: 2, endPage: 2 })
+   expect(started).toMatchObject({ ok: true, state: { startPage: 2, endPage: 2, limited: true } })
+   const scan = await openedScan
+   const scanUrl = new URL(listing)
+   scanUrl.searchParams.set('bookmark_search[sort_column]', 'created_at'); scanUrl.searchParams.set('bookmark_search[sort_direction]', 'desc'); scanUrl.searchParams.set('page', '2')
+   await scan.goto(scanUrl.href)
+   // The initial extension-created navigation can precede fixture interception
+   // and hit the intentionally blocked live host. Resume through the same tab
+   // once Playwright has attached, as a user would after resolving an outage.
+   const captured = await command({ type: 'AO3_LIBRARY_SYNC', action: 'status' })
+   if (captured.state?.status === 'paused') expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'resume' })).ok).toBe(true)
+   await expect.poll(async () => (await command({ type: 'AO3_LIBRARY_SYNC', action: 'status' })).state?.status, { timeout: 40000 }).toBe('ready')
+   expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'page', page: 2 })).rows).toEqual([expect.objectContaining({ title: 'Sample scanned work', work_status: 'available' }), expect.objectContaining({ work_status: 'deleted', title: '', link: 'https://archiveofourown.org/bookmarks/988', 'bookmark id': '988', 'bookmark notes': 'Keep this bookmark note' })])
+   expect(scan.url()).toContain('page=2')
+   expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'open-tab' })).ok).toBe(true)
+   expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'finish' })).ok).toBe(true)
+   expect(uploads).toHaveLength(2)
+  }
+
 
  } finally {
   releaseImage?.()
@@ -119,3 +154,4 @@ test('built extension captures requested metadata before full load without dupli
   await rm(profile, { recursive: true, force: true })
  }
 })
+}

@@ -1,6 +1,6 @@
 import { load } from 'cheerio'
-import { parseSeriesUrl, seriesPageUrl, parseWorkUrl, type SeriesPreview } from './urls'
-import { plainText } from './ao3-metadata'
+import { parseSeriesUrl, seriesPageUrl, parseWorkUrl, type SeriesPreview } from './urls.ts'
+import { plainText } from './ao3-metadata.ts'
 
 /** Read only the series listing. Never fetch or create its individual works. */
 export function parseSeries(html: string, sourceUrl: string): SeriesPreview {

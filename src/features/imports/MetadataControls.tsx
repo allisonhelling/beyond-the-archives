@@ -8,10 +8,10 @@ import { useLibrary } from '../library/LibraryProvider'
 import { clearOverride } from './repository'
 import { sampleMode } from '../../lib/sample-mode'
 import type { MetadataRefreshStatus } from './useMetadataRefresh'
-export function MetadataRefreshButton({ busy, status, message, onRefresh, variant = 'inline' }: { busy: boolean; status: MetadataRefreshStatus; message: string; onRefresh: () => void; variant?: 'inline' | 'button' }) {
+export function MetadataRefreshButton({ busy, status, message, onRefresh, unavailable = false, variant = 'inline' }: { busy: boolean; status: MetadataRefreshStatus; message: string; onRefresh: () => void; unavailable?: boolean; variant?: 'inline' | 'button' }) {
  const Icon = status === 'completed' ? Check : status === 'failed' || status === 'partial' || status === 'unknown' ? CircleAlert : status === 'pending' ? Clock : status === 'cancelled' ? X : RefreshCw
  const spinning = status === 'submitting' || status === 'processing'
- return <Tooltip description={message || 'Update Metadata'}>{descriptionId => <button className={variant === 'button' ? 'button secondary story-metadata-edit' : 'icon-button inline-edit-icon metadata-refresh'} type="button" aria-label="Retry / Update Metadata" aria-describedby={descriptionId} aria-busy={busy} data-refresh-status={status} disabled={busy||sampleMode} onClick={onRefresh}><Icon className={spinning ? 'metadata-refresh-spinning' : undefined} size={variant === 'button' ? 14 : '1em'} aria-hidden="true" />{variant === 'button' && <span className="story-metadata-label">Metadata</span>}</button>}</Tooltip>
+ return <Tooltip description={unavailable ? 'No AO3 work ID is available for this deleted bookmark.' : message || 'Update Metadata'}>{descriptionId => <button className={variant === 'button' ? 'button secondary story-metadata-edit' : 'icon-button inline-edit-icon metadata-refresh'} type="button" aria-label="Retry / Update Metadata" aria-describedby={descriptionId} aria-busy={busy} data-refresh-status={status} disabled={busy||sampleMode||unavailable} onClick={onRefresh}><Icon className={spinning ? 'metadata-refresh-spinning' : undefined} size={variant === 'button' ? 14 : '1em'} aria-hidden="true" />{variant === 'button' && <span className="story-metadata-label">Metadata</span>}</button>}</Tooltip>
 }
 export function MetadataControls({story,refreshButton,refreshMessage}:{story:Story;refreshButton:ReactNode;refreshMessage:string}) {
  const {refreshStory}=useLibrary(), [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[field,setField]=useState('')

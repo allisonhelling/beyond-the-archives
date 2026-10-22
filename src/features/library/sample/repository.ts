@@ -1,3 +1,5 @@
+import type { AutomaticMetadata } from '../../imports/ao3-metadata'
+import { bookmarkReadingState, nonemptyMetadata, type CsvWork } from '../../imports/ao3-csv'
 import { recordReadingTransition } from '../reading-history'
 import { defaultReadingFilters, filterReading } from '../reading-search'
 import { applyAutomaticCollections, automaticCollectionRules, collectionRules, type AutomaticCollectionRules } from '../automatic-collections'
@@ -9,7 +11,7 @@ import { compareCollections, normalizeCollectionChanges, type CollectionAppearan
 import snapshots from './stories.json'
 import seriesSnapshots from './series.json'
 import type { SpineDesign } from '../SpineDetails'
-import { abandonedReadingStatus, blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
+import { abandonedReadingStatus, blankMetadata, deletedWorkTitle, sourceBookmark, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
@@ -31,9 +33,9 @@ const spineSamples = [
 ] satisfies { name: string; spineDesign: SpineDesign; color: string; introducedIn: number }[]
 type Library = { stories: Story[]; collections: (Collection & { spineDesign?: SpineDesign })[]; series?: SeriesRecord[]; sampleVersion?: number }
 
-function makeWork(id: number): Work {
+function makeWork(id: number | null): Work {
   return {
-    id: `sample-work-${id}`, ao3_work_id: id, automatic_metadata: {}, last_metadata_success: null, canonical_url: null, canonical_verified_at: null,
+    id: `sample-work-${id ?? crypto.randomUUID()}`, ao3_work_id: id, automatic_metadata: {}, last_metadata_success: null, canonical_url: null, canonical_verified_at: null,
     title: null, summary: null, rating: null, language: null, word_count: null,
     published_chapters: null, total_chapters: null, is_complete: null,
     ao3_published_at: null, ao3_updated_at: null, last_metadata_check: null,
@@ -171,27 +173,31 @@ function find(data: Library, id: string) {
 export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, stories: applyAutomaticCollections(data.stories, data.collections), series: data.series ?? [] } }
 export function resetSampleLibrary() { window.localStorage.removeItem(storageKey) }
 
-export async function saveSampleStory(input: StoryInput) {
+export async function saveSampleStory(input: StoryInput, verifiedChapters?: Record<string, string>, automaticMetadata?: AutomaticMetadata, bookmark?: CsvWork) {
   const data = read()
-  const { workId } = parseWorkUrl(input.url)
+  const existing = input.id ? find(data, input.id) : null
+  const workId = bookmark?.workId === null || existing?.work.ao3_work_id === null ? null : parseWorkUrl(input.url).workId
+  if (workId === null && input.url !== (bookmark?.url ?? existing?.original_url)) throw new Error('Bookmark identity cannot be changed.')
   if (data.collections.some(collection => collection.automatic_rules && input.collections.includes(collection.id))) throw new Error('Automatic collection membership is determined by its filters.')
   validateProgress(input.progress, input.metadata)
-  if (data.stories.some(story => story.work.ao3_work_id === workId && story.id !== input.id)) throw new Error('This story is already in your library.')
-  const existing = input.id ? find(data, input.id) : null
+  if (workId !== null && data.stories.some(story => story.work.ao3_work_id === workId && story.id !== input.id)) throw new Error('This story is already in your library.')
   if (existing && existing.work.ao3_work_id !== workId) throw new Error('The AO3 work identity cannot be changed.')
   if (existing && input.base) {
     const base = editSnapshot(existing), review = mergeEdits(input.base, storyEdits(input), base)
-    if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => saveSampleStory(applyStoryEdits(input, resolveEdits(review.merged, choices), base)))
+    if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => saveSampleStory(applyStoryEdits(input, resolveEdits(review.merged, choices), base), verifiedChapters, automaticMetadata, bookmark))
     input = applyStoryEdits(input, review.merged, base)
   }
   const now = new Date().toISOString()
   const work = existing?.work ?? makeWork(workId)
+  if (verifiedChapters) work.verified_chapters = verifiedChapters
+  if (automaticMetadata) Object.assign(work, { metadata_source: 'extension', canonical_url: workId === null ? null : `https://archiveofourown.org/works/${workId}`, ao3_updated_at: automaticMetadata.ao3_updated_at ?? null })
   const story: Story = {
     id: input.id ?? crypto.randomUUID(), user_id: userId, work_id: work.id,
-    original_url: existing?.original_url ?? input.url, work,
+    original_url: existing?.original_url ?? input.url, work, work_status: existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
+    source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), id: String(bookmark.bookmarkId), url: `https://archiveofourown.org/bookmarks/${bookmark.bookmarkId}`, ...(bookmark.bookmarkStatus ? { status: bookmark.bookmarkStatus } : {}), ...(bookmark.bookmarkDate ? { date: bookmark.bookmarkDate } : {}) } : existing?.source_bookmark ?? {},
     reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, personal_rating: input.personalRating,
-    metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: input.metadata, extension_metadata: {}, extension_chapters: {},
+    metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: automaticMetadata ? {} : existing && input.metadataChanges ? { ...(existing.metadata_overrides as object), ...input.metadataChanges } : input.metadata, extension_metadata: automaticMetadata ? { ...nonemptyMetadata(automaticMetadata), publication_status: input.metadata.publication_status } as Json : existing?.extension_metadata ?? {}, extension_chapters: existing?.extension_chapters ?? {},
     collectionIds: input.collections, personalTags: input.tags,
     created_at: existing?.created_at ?? now, updated_at: now,
     started_at: existing?.started_at ?? null, finished_at: existing?.finished_at ?? null,
@@ -205,6 +211,49 @@ export async function saveSampleStory(input: StoryInput) {
   data.stories = [...data.stories.filter(item => item.id !== story.id), story]
   write(data)
   return story.id
+}
+
+export async function previewSampleCsvImport(works: CsvWork[]) {
+ return read().stories.filter(story => works.some(work => work.workId !== null && work.workId === story.work.ao3_work_id || work.bookmarkId && String(work.bookmarkId) === sourceBookmark(story).id)).map(story => ({
+  workId: works.find(work => work.bookmarkId && String(work.bookmarkId) === sourceBookmark(story).id)?.workStatus === 'deleted' ? null : story.work.ao3_work_id, bookmarkId: sourceBookmark(story).id ? Number(sourceBookmark(story).id) : undefined, id: story.id, version: story.updated_at, title: story.metadata.title,
+  status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, tags: story.personalTags, finishedAt: story.finished_at,
+ }))
+}
+/** Refresh automatic observations while preserving existing personal data. */
+export async function importSampleWorks(works: CsvWork[], options: { mode?: string; updateDeleted?: boolean } = {}) {
+ let imported = 0, kept = 0
+ for (const row of works) {
+  const data = read()
+  const existing = data.stories.find(story => row.bookmarkId && sourceBookmark(story).id === String(row.bookmarkId) || row.workId !== null && story.work.ao3_work_id === row.workId)
+  const incoming = nonemptyMetadata(row.metadata)
+  const automatic = { ...incoming, ...(incoming.is_complete === undefined ? {} : { publication_status: incoming.is_complete ? 'complete' as const : 'in_progress' as const }) }
+  if (existing) {
+   if (row.bookmarkId) existing.source_bookmark = { ...sourceBookmark(existing), id: String(row.bookmarkId), url: `https://archiveofourown.org/bookmarks/${row.bookmarkId}`, ...(row.bookmarkStatus ? { status: row.bookmarkStatus } : {}), ...(row.bookmarkDate ? { date: row.bookmarkDate } : {}) }
+   if (row.workStatus === 'deleted') {
+    if (options.mode !== 'quick' && options.updateDeleted !== false) existing.work_status = 'deleted'
+    write(data); kept++; continue
+   }
+   if (existing.work.ao3_work_id === null && row.workId !== null) { existing.work = makeWork(row.workId); existing.work_id = existing.work.id; existing.original_url = row.url }
+   existing.work_status = 'available'
+   existing.extension_metadata = { ...(existing.extension_metadata as object), ...automatic } as Json
+   existing.metadata = { ...existing.metadata, ...automatic, ...(existing.metadata_overrides as object) }
+   if (incoming.ao3_updated_at) existing.work.ao3_updated_at = incoming.ao3_updated_at
+   write(data); kept++; continue
+  }
+  const reading = bookmarkReadingState(row), finished = reading.status === 'finished'
+  const metadata: Story['metadata'] = { ...blankMetadata, ...row.metadata, title: row.metadata.title || `Deleted Work — Bookmark #${row.bookmarkId}`,
+   publication_status: row.metadata.is_complete === undefined ? 'unknown' : row.metadata.is_complete ? 'complete' : 'in_progress' }
+  const id = await saveSampleStory({ url: row.url, metadata, status: reading.status,
+   progress: reading.progress, notes: row.notes, tags: row.tags, personalRating: null, favorite: false, collections: [] }, undefined, incoming, row)
+  const saved = read(), story = find(saved, id)
+  if (story.work.ao3_work_id === null && !row.metadata.title) story.metadata.title = deletedWorkTitle(story)
+  if (finished && row.bookmarkDate) {
+   story.finished_at = `${row.bookmarkDate}T00:00:00Z`
+   story.reading_history = story.reading_history?.map(event => event.action === 'finished' ? { ...event, at: story.finished_at! } : event)
+  }
+  write(saved); imported++
+ }
+ return { batch: null, imported, kept }
 }
 
 export async function addSampleStoriesToCollections(storyIds: string[], collectionIds: string[]) {
@@ -246,7 +295,7 @@ export async function deleteSampleStory(id: string) {
 }
 export async function restoreSampleStory(story: Story) {
   const data = read()
-  if (data.stories.some(item => item.work.ao3_work_id === story.work.ao3_work_id)) throw new Error('This story is already in your library.')
+  if (data.stories.some(item => story.work.ao3_work_id !== null ? item.work.ao3_work_id === story.work.ao3_work_id : sourceBookmark(item).id === sourceBookmark(story).id)) throw new Error('This story is already in your library.')
   for (const collection of data.collections) {
     if (story.collectionIds.includes(collection.id)) collection.last_story_added_at = new Date().toISOString()
   }
