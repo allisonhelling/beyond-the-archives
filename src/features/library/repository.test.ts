@@ -1,14 +1,15 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { blankMetadata } from './model'
-const state = vi.hoisted(() => ({ data: {} as Record<string, Record<string, unknown>[]>, calls: [] as string[], fail: false, upsert: vi.fn() }))
-vi.mock('../../lib/supabase', () => ({ supabase: { from: (table: string) => ({ upsert: state.upsert, select: () => {
+import { defaultReadingFilters } from './reading-search'
+const state = vi.hoisted(() => ({ data: {} as Record<string, Record<string, unknown>[]>, calls: [] as string[], fail: false, upsert: vi.fn(), rpc: vi.fn(), response: vi.fn() }))
+vi.mock('../../lib/supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string) => ({ upsert: state.upsert, select: () => {
   const query = { order: () => query, range: async (from: number, to: number) => {
     state.calls.push(`${table}:${from}`)
     return { data: (state.data[table] ?? []).slice(from, to + 1), error: state.fail ? { code: 'offline' } : null }
   } }; return query
 } }) } }))
-import { addStoriesToCollections, loadLibrary } from './repository'
-beforeEach(() => { state.data = {}; state.calls = []; state.fail = false })
+import { addStoriesToCollections, loadLibrary, queryLibrary } from './repository'
+beforeEach(() => { state.data = {}; state.calls = []; state.fail = false; state.rpc.mockReturnValue({ abortSignal: state.response }) })
 it('loads beyond the API response cap without losing private tags and memberships', async () => {
   state.data.library_entries = Array.from({ length: 1001 }, (_, n) => ({ id: `entry-${n}`, work_id: `work-${n}`, metadata_overrides: { ...blankMetadata, title: `Story ${n}`, authors: ['Manual author'] } }))
   state.data.works = Array.from({ length: 1001 }, (_, n) => ({ id: `work-${n}` }))
@@ -24,6 +25,24 @@ it('loads beyond the API response cap without losing private tags and membership
 it('reports load failures instead of displaying an empty or partially loaded library', async () => {
   state.fail = true
   await expect(loadLibrary()).rejects.toThrow('Could not load your library')
+})
+
+it.each([
+ ['57014', 500, 'took too long'],
+ ['PGRST301', 401, 'Sign in again'],
+ ['PGRST202', 404, 'latest migrations'],
+ ['', 0, 'Check your connection'],
+ ['22007', 400, 'report error 22007'],
+])('distinguishes results error %s and preserves the underlying cause', async (code, status, message) => {
+ const error = { code, message: 'Backend failure' }
+ state.response.mockResolvedValueOnce({ data: null, error, status })
+ await expect(queryLibrary({ mode: 'library', shelf: 'favorites', filters: defaultReadingFilters }, 1, 50, new AbortController().signal)).rejects.toMatchObject({ message: expect.stringContaining(message), cause: error })
+})
+
+it('keeps cancelled result requests out of the error state', async () => {
+ const controller = new AbortController(); controller.abort()
+ state.response.mockResolvedValueOnce({ data: null, error: { code: '', message: 'Aborted' }, status: 0 })
+ await expect(queryLibrary({ mode: 'library', shelf: 'all', filters: defaultReadingFilters }, 1, 50, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
 })
 
 it('overlays private extension metadata consistently while preserving manual corrections and shared data', async () => {

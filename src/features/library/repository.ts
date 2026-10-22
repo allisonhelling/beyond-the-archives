@@ -1,3 +1,5 @@
+import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './automatic-collections'
+import type { Json } from '../../types/database'
 import { parseSearch, filterReading } from './reading-search'
 import type { SeriesRecord } from './series'
 import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
@@ -69,7 +71,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const tag = tagsById.get(link.tag_id)
     if (tag) { const linked = tagsByWork.get(link.work_id) ?? []; linked.push(tag); tagsByWork.set(link.work_id, linked) }
   }
-  return { series: series.map(record => ({ ...record, collectionIds: membershipsBySeries.get(record.id) ?? [] })), collections: collections.sort(compareCollections), stories: entries.map((entry: Entry) => {
+  return { series: series.map(record => ({ ...record, collectionIds: membershipsBySeries.get(record.id) ?? [] })), collections: collections.sort(compareCollections), stories: applyAutomaticCollections(entries.map((entry: Entry) => {
     const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     // Overlay private automatic metadata before the existing manual-override merge.
@@ -78,7 +80,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const fields = Object.fromEntries(Object.entries(browser).filter(([key]) => ['title','summary','rating','word_count','published_chapters','total_chapters','is_complete','ao3_published_at','ao3_updated_at','last_metadata_check','last_metadata_success'].includes(key)))
     const work = { ...sharedWork, ...fields, automatic_metadata: { ...(sharedWork.automatic_metadata as object), ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : sharedWork.verified_chapters } as Work
     return { ...entry, work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id)), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
-  }) }
+  }), collections) }
 }
 export async function saveStory(input: StoryInput) {
   if (sampleMode) return (await import('./sample/repository')).saveSampleStory(input)
@@ -128,10 +130,10 @@ export async function restoreStory(story: Story) {
   const { error } = await client().rpc('restore_library_story', { p_entry: entry, p_collections: collectionIds, p_tags: personalTags })
   failure(error)
 }
-export async function saveCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string) {
+export async function saveCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string, rules?: AutomaticCollectionRules | null) {
   if (!name.trim()) throw new Error('A collection name is required.')
-  const changes = { name: name.trim(), ...normalizeCollectionChanges({ ...appearance, ...(description !== undefined && { description }) }) }
-  if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id, appearance, description)
+  const changes = { name: name.trim(), ...normalizeCollectionChanges({ ...appearance, ...(description !== undefined && { description }) }), ...(rules !== undefined && { automatic_rules: rules ? automaticCollectionRules(rules.filters) as unknown as Json : null }) }
+  if (sampleMode) return (await import('./sample/repository')).saveSampleCollection(name, id, appearance, description, rules)
   const result = await (id ? client().from('collections').update(changes).eq('id', id) : client().from('collections').insert(changes)).select('id').single()
   failure(result.error)
   return result.data!.id
@@ -182,8 +184,16 @@ export async function queryLibrary(query: LibraryQuery, page: number, size: numb
   // Run the same parser/validation before either transport. Literal substring
   // groups preserve escaped operators and avoid unsafe SQL/regex interpolation.
   filterReading([], query.filters)
-  const { data, error } = await client().rpc('query_library', { p_query: { ...query, terms: parseSearch(query.filters.within) }, p_page: page, p_size: size }).abortSignal(signal)
-  if (error) throw new Error('Could not load these results. Check your connection and retry.')
+  const { data, error, status } = await client().rpc('query_library', { p_query: { ...query, terms: parseSearch(query.filters.within) }, p_page: page, p_size: size }).abortSignal(signal)
+  if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
+  if (error) {
+    const message = error.code === '57014' ? 'Loading these results took too long. Retry or narrow your filters.'
+      : status === 401 || error.code === 'PGRST301' || error.code === 'PGRST303' ? 'Your session has expired. Sign in again to load these results.'
+      : error.code === 'PGRST202' || error.code === '42883' ? 'The library database needs an update. Apply the latest migrations, then retry.'
+      : status === 0 ? 'Could not reach the library. Check your connection and retry.'
+      : `Could not load these results. Retry loading. If this continues, report error ${error.code || status}.`
+    throw new Error(message, { cause: error })
+  }
   return data as unknown as LibraryResults
 }
 export async function loadSeriesRecord(seriesId: number): Promise<SeriesRecord | undefined> {

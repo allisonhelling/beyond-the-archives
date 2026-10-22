@@ -1,0 +1,21 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="360" viewBox="0 0 150 360">
+  <g fill="none" stroke="#e3b66d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 128V45L32 33H118L130 45V128"/>
+    <path d="M27 122V48L35 40H115L123 48V122" stroke-width=".75" opacity=".7"/>
+    <path d="M20 232V315L32 327H118L130 315V232"/>
+    <path d="M27 238V312L35 320H115L123 312V238" stroke-width=".75" opacity=".7"/>
+    <circle cx="75" cy="82" r="29"/>
+    <circle cx="75" cy="82" r="23" stroke-width=".7"/>
+    <path d="M75 48L79 76L107 82L79 88L75 116L71 88L43 82L71 76Z"/>
+    <path d="M75 57L77 80L99 82L77 84L75 107L73 84L51 82L73 80Z" stroke-width=".6"/>
+    <path d="M36 65H46M41 60V70M104 65H114M109 60V70"/>
+    <g transform="translate(0 360) scale(1 -1)">
+      <circle cx="75" cy="82" r="29"/>
+      <circle cx="75" cy="82" r="23" stroke-width=".7"/>
+      <path d="M75 48L79 76L107 82L79 88L75 116L71 88L43 82L71 76Z"/>
+      <path d="M75 57L77 80L99 82L77 84L75 107L73 84L51 82L73 80Z" stroke-width=".6"/>
+      <path d="M36 65H46M41 60V70M104 65H114M109 60V70"/>
+    </g>
+  </g>
+</svg>

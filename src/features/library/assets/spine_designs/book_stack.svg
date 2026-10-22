@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="360" viewBox="0 0 150 360">
+  <g fill="none" stroke="#e3b66d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(0 -16)">
+      <rect x="45" y="56" width="17" height="44" rx="1"/>
+      <rect x="66" y="51" width="17" height="49" rx="1"/>
+      <rect x="87" y="60" width="17" height="40" rx="1"/>
+      <path d="M49 63H58M49 91H58M70 58H79M70 92H79M91 67H100M91 92H100" stroke-width=".8"/>
+      <path d="M40 105H110M45 110H105"/>
+      <path d="M35 89L40 95L35 101L30 95Z"/>
+      <path d="M115 89L120 95L115 101L110 95Z"/>
+      <path d="M35 109L40 115L35 121L30 115Z"/>
+      <path d="M115 109L120 115L115 121L110 115Z"/>
+      <path d="M22 95L30 105L22 115L14 105Z"/>
+      <path d="M128 95L136 105L128 115L120 105Z"/>
+    </g>
+    <g transform="translate(0 376) scale(1 -1)">
+      <rect x="45" y="56" width="17" height="44" rx="1"/>
+      <rect x="66" y="51" width="17" height="49" rx="1"/>
+      <rect x="87" y="60" width="17" height="40" rx="1"/>
+      <path d="M49 63H58M49 91H58M70 58H79M70 92H79M91 67H100M91 92H100" stroke-width=".8"/>
+      <path d="M40 105H110M45 110H105"/>
+      <path d="M35 89L40 95L35 101L30 95Z"/>
+      <path d="M115 89L120 95L115 101L110 95Z"/>
+      <path d="M35 109L40 115L35 121L30 115Z"/>
+      <path d="M115 109L120 115L115 121L110 115Z"/>
+      <path d="M22 95L30 105L22 115L14 105Z"/>
+      <path d="M128 95L136 105L128 115L120 105Z"/>
+    </g>
+  </g>
+</svg>

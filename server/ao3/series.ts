@@ -1,5 +1,5 @@
 import { load } from 'cheerio'
-import { parseSeriesUrl, parseWorkUrl, type SeriesPreview } from '../../src/features/imports/urls.ts'
+import { parseSeriesUrl, seriesPageUrl, parseWorkUrl, type SeriesPreview } from '../../src/features/imports/urls.ts'
 import { plainText } from '../../src/features/imports/ao3-metadata.ts'
 import { retrieveAo3Document } from './adapter.ts'
 
@@ -12,7 +12,9 @@ export function parseSeries(html: string, sourceUrl: string): SeriesPreview {
  if (!title || !list.length || !$('dl.series.meta').length) throw new Error('Series preview is unavailable. Complete AO3 sign-in or confirmation in its tab, then retry, or skip this series.')
  const canonical = $('link[rel="canonical"]').attr('href')
  if (canonical && parseSeriesUrl(new URL(canonical, sourceUrl).href).seriesId !== identity.seriesId) throw new Error('AO3 returned a different series.')
- if ($('.pagination a[rel="next"], .pagination li.next a').length) throw new Error('This series listing has more pages. Import individual work links to avoid an incomplete preview.')
+ const next = $('.pagination a[rel="next"], .pagination li.next a').first()
+ const nextUrl = next.length ? seriesPageUrl(new URL(next.attr('href') ?? '', sourceUrl).href, identity.seriesId) : undefined
+ if (next.length && (!next.attr('href') || nextUrl === seriesPageUrl(sourceUrl))) throw new Error('Series preview returned an invalid Next link.')
  const field = (name: string) => $('dl.series.meta dt').filter((_, node) => $(node).text().trim().replace(/:$/, '').toLowerCase() === name.toLowerCase()).first().next('dd')
  const description = plainText(field('Description'))
  const creators = field('Creator').find('a[rel="author"]')
@@ -44,13 +46,13 @@ export function parseSeries(html: string, sourceUrl: string): SeriesPreview {
   const chapterCounts = chapters.match(/^(\d+)\/(\d+|\?)$/)
   const names = (selector: string) => row.find(selector).toArray().map(tag => $(tag).text().trim()).filter(Boolean)
   const updated = Date.parse(row.find('p.datetime').text().trim())
-  works.push({ workId, url, position, rating: row.find('.required-tags .rating').attr('title') ?? '', relationshipTags: names('.tags .relationships a.tag'), characterTags: names('.tags .characters a.tag'), additionalTags: names('.tags .freeforms a.tag'), updated: Number.isFinite(updated) ? new Date(updated).toISOString().slice(0, 10) : '', title: heading.text().trim() || `AO3 work ${workId}`, authors: row.find('a[rel="author"]').toArray().map(author => $(author).text().trim()), summary: plainText(row.find('blockquote.summary')), fandoms: row.find('.fandoms a.tag').toArray().map(tag => $(tag).text().trim()).filter(Boolean), tags: row.find('.tags a.tag, .fandoms a.tag').toArray().map(tag => $(tag).text().trim()), wordCount: /^\d+$/.test(words) && Number.isSafeInteger(Number(words)) ? Number(words) : null, chapters, complete: chapterCounts ? chapterCounts[2] !== '?' && chapterCounts[1] === chapterCounts[2] : null })
+  works.push({ workId, url, position, rating: row.find('.required-tags .rating').attr('title') ?? '', relationshipTags: names('.tags .relationships a.tag'), characterTags: names('.tags .characters a.tag'), additionalTags: names('.tags .freeforms a.tag'), archiveWarnings: names('.tags .warnings a.tag'), kudos: count(row.find('dd.kudos').first().text()), updated: Number.isFinite(updated) ? new Date(updated).toISOString().slice(0, 10) : '', title: heading.text().trim() || `AO3 work ${workId}`, authors: row.find('a[rel="author"]').toArray().map(author => $(author).text().trim()), summary: plainText(row.find('blockquote.summary')), fandoms: row.find('.fandoms a.tag').toArray().map(tag => $(tag).text().trim()).filter(Boolean), tags: row.find('.tags a.tag, .fandoms a.tag').toArray().map(tag => $(tag).text().trim()), wordCount: /^\d+$/.test(words) && Number.isSafeInteger(Number(words)) ? Number(words) : null, chapters, complete: chapterCounts ? chapterCounts[2] !== '?' && chapterCounts[1] === chapterCounts[2] : null })
  })
- return { ...identity, title, description, complete, creators: creatorNames.length ? creatorNames : [...new Set(works.flatMap(work => work.authors))], creatorLinks, begun: field('Series Begun').text().trim(), updated: field('Series Updated').text().trim(), creatorNotes: plainText(field('Notes')), wordCount: count($('dl.series.meta dd.words').first().text()), workCount: count($('dl.series.meta dd.works').first().text()) ?? works.length, works }
+ return { ...identity, ...(nextUrl && { nextUrl }), title, description, complete, creators: creatorNames.length ? creatorNames : [...new Set(works.flatMap(work => work.authors))], creatorLinks, begun: field('Series Begun').text().trim(), updated: field('Series Updated').text().trim(), creatorNotes: plainText(field('Notes')), wordCount: count($('dl.series.meta dd.words').first().text()), workCount: count($('dl.series.meta dd.works').first().text()) ?? works.length, works }
 }
 export async function retrieveSeries(url: string, fetcher: typeof fetch = fetch) {
  const identity = parseSeriesUrl(url)
- const result = await retrieveAo3Document(identity.normalizedUrl, next => parseSeriesUrl(next).seriesId === identity.seriesId, fetcher, false)
+ const result = await retrieveAo3Document(seriesPageUrl(url, identity.seriesId), next => parseSeriesUrl(next).seriesId === identity.seriesId, fetcher, false)
  if (!('html' in result)) return { preview: null, failure: result }
  return { preview: parseSeries(result.html, result.sourceUrl), failure: null }
 }

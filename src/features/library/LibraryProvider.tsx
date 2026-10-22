@@ -80,10 +80,12 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       const version = ++generation.current
       cache.current.clear()
       const collections = await loadCollections()
+      const catalog = await loadCatalog()
+      const memberships = new Map(catalog.stories.map(story => [story.id, story]))
       if (version !== generation.current) return
       const ids = new Set(collections.map(collection => collection.id))
       const prune = <T extends { collectionIds?: string[] }>(item: T): T => item.collectionIds?.some(id => !ids.has(id)) ? { ...item, collectionIds: item.collectionIds.filter(id => ids.has(id)) } : item
-      setData(previous => ({ ...previous, collections, stories: previous.stories.map(prune), series: previous.series?.map(prune) }))
+      setData(previous => ({ ...previous, collections, stories: previous.stories.map(story => ({ ...prune(story), collectionIds: memberships.get(story.id)?.collectionIds ?? story.collectionIds.filter(id => ids.has(id)), automaticCollectionIds: memberships.get(story.id)?.automaticCollectionIds ?? [] })), series: previous.series?.map(prune) }))
       setRevision(value => value + 1)
     })
     queue.current = task

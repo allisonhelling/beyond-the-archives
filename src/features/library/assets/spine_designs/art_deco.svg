@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 150 360"
+     preserveAspectRatio="none"
+     width="100%"
+     height="100%"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.7"
+     vector-effect="non-scaling-stroke"
+     aria-hidden="true">
+  <g>
+    <path d="M14 65H29V49H45V35H105V49H121V65H136" />
+    <path d="M20 70H34V55H49V42H101V55H116V70H130" stroke-width=".9" />
+
+    <path d="M14 295H29V311H45V325H105V311H121V295H136" />
+    <path d="M20 290H34V305H49V318H101V305H116V290H130" stroke-width=".9" />
+
+    <path d="M75 55V79M67 59L72 79M83 59L78 79M60 65L69 80M90 65L81 80" stroke-width="1.2" />
+    <path d="M62 83Q75 74 88 83" stroke-width="1" />
+
+    <path d="M75 305V281M67 301L72 281M83 301L78 281M60 295L69 280M90 295L81 280" stroke-width="1.2" />
+    <path d="M62 277Q75 286 88 277" stroke-width="1" />
+  </g>
+</svg>

@@ -54,11 +54,11 @@ export function MetadataSettings() {
   } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save metadata settings.') }
   finally { setBusy(false) }
  }
- return <section className="settings-card">
-  <h2>AO3 metadata retrieval</h2>
+ return <section id="settings-metadata" tabIndex={-1} className="settings-card">
+  <h2>AO3 Metadata Retrieval</h2>
   <form className="story-form" onSubmit={event => void save(event)}>
    <fieldset disabled={!ready || busy || sampleMode}>
-    <legend>Retrieval mode</legend>
+    <legend>Retrieval Mode</legend>
     <label>How to load AO3 metadata<select value={mode} onChange={event => setMode(event.target.value)}>
      <option value="direct">Direct retrieval (hosted worker)</option>
      <option value="extension">Browser extension (requested works and series)</option>

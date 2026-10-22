@@ -38,13 +38,17 @@ export function UserscriptSettings() {
   } catch { setMessage('Could not update devices. Check your connection, sign-in, and userscript migration.') }
   finally { setBusy(false) }
  }
- return <section id="ios-safari-userscript" ref={section} className="settings-card"><h2>iOS Safari userscript</h2>
+ async function copyCode() {
+  try { await navigator.clipboard.writeText(code); setMessage('Pairing code copied.') }
+  catch { setMessage('Could not copy. Select the code and copy it manually.') }
+ }
+ return <section id="ios-safari-userscript" tabIndex={-1} ref={section} className="settings-card"><h2>iOS Safari Userscript</h2>
   <p className="muted">Install the built AO3 Library userscript in the free Userscripts app. Pair it here to save and edit your library while reading on AO3.</p>
   <p className="muted">To install or update, configure <code>.env.local.hosted</code> with the hosted website’s public settings and run <code>npm run build:userscript</code> in the project, then copy <code>userscript/dist/ao3-library.user.js</code> into the directory selected in Userscripts. Replace the existing file, open the Userscripts Safari popup, and reload AO3. Check the visible version at the bottom of the AO3 panel. Updates are manual; this script does not assume automatic updates.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void manage('create') }}>
    <label>Device name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>
    <div className="form-actions"><button className="button secondary" disabled={busy || sampleMode}>Create pairing code</button><button className="button secondary" type="button" disabled={busy || sampleMode} onClick={() => void manage('list')}>Refresh devices</button></div>
-   {code && <label>One-time pairing code<input readOnly value={code} onFocus={event => event.target.select()} autoComplete="off" spellCheck={false} /></label>}
+   {code && <label>One-time pairing code<input readOnly value={code} title="Click to copy pairing code" onClick={() => void copyCode()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void copyCode() } }} onFocus={event => event.target.select()} autoComplete="off" spellCheck={false} /></label>}
   </form>
   {message && <p role="status" className="muted">{message}</p>}
   <ul>{devices.map(device => <li key={device.id}>{device.name} · {device.paired ? 'Connected' : 'Awaiting pairing'} · expires {formatDate(device.expires_at)} <button className="button secondary compact" disabled={busy} onClick={() => void manage('revoke', device.id)}>Disconnect {device.name}</button></li>)}</ul>

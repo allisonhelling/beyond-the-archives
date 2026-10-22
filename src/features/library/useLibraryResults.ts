@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { useLibrary } from './LibraryProvider'
 import type { LibraryQuery, LibraryResults } from './repository'
 
-export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions'] } {
+export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; retry: () => void } {
   const { fetchPage, revision } = useLibrary()
   const [state, setState] = useState<{ key: string; queryKey?: string; result?: LibraryResults; error?: string }>({ key: '' })
+  const [attempt, setAttempt] = useState(0)
   const queryKey = JSON.stringify([query, page, size])
-  const key = JSON.stringify([queryKey, revision])
+  const key = JSON.stringify([queryKey, revision, attempt])
+  function retry() { setState({ key: '' }); setAttempt(value => value + 1) }
   useEffect(() => {
     if (!enabled) return
     const controller = new AbortController()
@@ -22,5 +24,5 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
     // The serialized key contains the complete query and revision.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, fetchPage, enabled])
-  return state.key === key || state.queryKey === queryKey && state.result ? { ...state, suggestions: state.result?.suggestions, loading: false } : { loading: enabled, suggestions: state.result?.suggestions }
+  return state.key === key || state.queryKey === queryKey && state.result ? { ...state, suggestions: state.result?.suggestions, loading: false, retry } : { loading: enabled, suggestions: state.result?.suggestions, retry }
 }

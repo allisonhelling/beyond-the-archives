@@ -4,19 +4,22 @@ import { publicationStatuses } from './publication-status'
 import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
 
 type BaseSortOrder = 'updated' | 'added' | 'ready' | 'alpha'
-export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse`
+export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
 export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
   oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; rating: string[]; favorites: boolean; relationship: string; characters: string; tags: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
-  sort: SortOrder; groupBy: GroupBy;
+  sort: SortOrder; groupBy: GroupBy; randomSeed?: string;
 }
 export const defaultReadingFilters: ReadingFilters = {
   query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, rating: [], favorites: false,
   relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
+}
+export function hasReadingFilters(filters: ReadingFilters) {
+  return (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope'].includes(key) && JSON.stringify(filters[key]) !== JSON.stringify(defaultReadingFilters[key]))
 }
 export const normalize = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
 
@@ -70,7 +73,7 @@ function matchesParts(value: string, parts: string[]) {
     return true
   })
 }
-export function tracked(stories: Story[]) { return stories.filter(s => active(s) || s.reading_status === 'to_read') }
+export function tracked(stories: Story[]) { return stories.filter(s => active(s) || ['to_read', 'paused_reading'].includes(s.reading_status)) }
 export function hasNewChapter(story: Story) {
   // Notification timestamps alone do not prove chapter availability.
   const next = story.last_read_chapter + 1
@@ -81,7 +84,7 @@ export function hasNewChapter(story: Story) {
     typeof map?.[String(next)] === 'string' && /^[1-9]\d*$/.test(map[String(next)] as string))
 }
 export function inReadingSection(story: Story, section: string) {
-  if (section === 'to_read') return story.reading_status === 'to_read'
+  if (section === 'to_read' || section === 'paused_reading') return story.reading_status === section
   const reading = story.reading_status === 'reading' || story.reading_status === 're_reading'
   if (section === 'complete') return reading && story.metadata.publication_status === 'complete'
   if (section === 'in_progress') return reading && story.metadata.publication_status === 'in_progress'
@@ -98,10 +101,18 @@ export function searchText(story: Story, scope: SearchScope) {
     publicationStatuses[story.metadata.publication_status].label, isOneShot(story.metadata, story.personalTags) ? 'One-shot' : '',
     story.work.ao3_updated_at ?? '', story.original_url].join('\n')
 }
-export function filterReading(stories: Story[], filters: ReadingFilters) {
+/** Stable seeded order keeps pagination repeatable until a fresh shuffle is selected. */
+export function shuffleKey(id: string, seed = '') {
+  let hash = 2166136261
+  for (const character of `${seed}:${id}`) hash = Math.imul(hash ^ character.codePointAt(0)!, 16777619) >>> 0
+  hash = Math.imul(hash ^ (hash >>> 16), 65599) >>> 0
+  return (hash ^ (hash >>> 16)) >>> 0
+}
+export function filterReading(stories: Story[], filters: ReadingFilters, { authorOnly = false }: { authorOnly?: boolean } = {}) {
   for (const [name, date] of [['From', filters.updatedAfter], ['Through', filters.updatedBefore]]) {
     if (date && !isCalendarDate(date)) throw new Error(`Enter a valid ${name} date (${datePlaceholder()}).`)
   }
+  if (filters.updatedAfter && filters.updatedBefore && filters.updatedAfter > filters.updatedBefore) throw new Error('The last-updated start date must be before the end date.')
   const within = compileSearch(filters.within)
   const query = normalize(filters.query.trim())
   const relationships = normalize(filters.relationship).split(',').map(term => term.trim()).filter(Boolean)
@@ -111,7 +122,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
   const before = filters.updatedBefore ? Date.parse(`${filters.updatedBefore}T00:00:00Z`) + 86400000 : null
   return stories.filter(s => {
     const updated = s.work.ao3_updated_at ? Date.parse(s.work.ao3_updated_at) : null
-    return (!query || normalize([s.metadata.title, ...s.metadata.authors].join('\n')).includes(query)) &&
+    return (!query || normalize([...(authorOnly ? [] : [s.metadata.title]), ...s.metadata.authors].join('\n')).includes(query)) &&
       (!filters.fandoms.length || s.metadata.fandoms.some(f => filters.fandoms.includes(f))) &&
       (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
@@ -123,6 +134,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters) {
       (after === null || (updated !== null && updated >= after)) &&
       (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))
   }).sort((a, b) => {
+    if (filters.sort === 'random') return shuffleKey(a.id, filters.randomSeed) - shuffleKey(b.id, filters.randomSeed) || a.id.localeCompare(b.id)
     const reverse = filters.sort.endsWith('_reverse')
     const order = filters.sort.replace(/_reverse$/, '')
     const direction = reverse ? -1 : 1

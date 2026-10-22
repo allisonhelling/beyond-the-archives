@@ -7,8 +7,8 @@ import { EditConflict } from './edit-merge'
 import { useLibrary } from './LibraryProvider'
 
 /** Works and series share the same collection editor and conflict handling. */
-export function EditCollectionsButton({ selectedIds, onSave, disabled = false, onOpen, description, variant = 'button', onRefresh }: {
- onRefresh?: () => Promise<void>; selectedIds: string[]; onSave: (ids: string[], base: string[]) => Promise<void>; disabled?: boolean; onOpen?: () => void; description?: string; variant?: 'button' | 'field'
+export function EditCollectionsButton({ selectedIds, onSave, disabled = false, onOpen, description, variant = 'button', onRefresh, automaticIds = [] }: {
+ automaticIds?: string[]; onRefresh?: () => Promise<void>; selectedIds: string[]; onSave: (ids: string[], base: string[]) => Promise<void>; disabled?: boolean; onOpen?: () => void; description?: string; variant?: 'button' | 'field'
 }) {
  const { collections, refresh } = useLibrary()
  const [open, setOpen] = useState(false), [selected, setSelected] = useState<string[]>([]), [base, setBase] = useState<string[]>([])
@@ -19,7 +19,7 @@ export function EditCollectionsButton({ selectedIds, onSave, disabled = false, o
   if (wasOpen.current && !open) trigger.current?.focus()
   wasOpen.current = open
  }, [open])
- const assigned = collections.filter(collection => !collection.default_key && selectedIds.includes(collection.id))
+ const assigned = collections.filter(collection => !collection.default_key && (selectedIds.includes(collection.id) || automaticIds.includes(collection.id)))
  const iconOnly = variant === 'field' && assigned.length > 0
  function close() { setOpen(false); setConflict(null) }
  function failed(error: unknown) { if (error instanceof EditConflict) setConflict(error); else setError(error instanceof Error ? error.message : 'Could not save collections.') }

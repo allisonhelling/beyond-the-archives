@@ -1,0 +1,57 @@
+
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="150" height="360"
+     viewBox="0 0 150 360">
+
+  <g fill="none"
+     stroke="#d99b18"
+     stroke-width="1.5"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+
+    <g transform="translate(0 -10)">
+    <!-- Top ornamental frame -->
+    <path d="M20 117V42H130V117"/>
+    <path d="M27 111V49H123V111"
+          stroke-width=".8" opacity=".75"/>
+
+    <!-- Top Art Deco corner detailing -->
+    <path d="M20 62L40 42M110 42L130 62"/>
+    <path d="M27 67L45 49M105 49L123 67"
+          stroke-width=".8"/>
+
+    <!-- Top horizontal diamond chain -->
+    <path d="M37 84H51M99 84H113"
+          stroke-width=".9"/>
+
+    <path d="M51 84L59 76L67 84L59 92Z"/>
+    <path d="M67 84L75 76L83 84L75 92Z"/>
+    <path d="M83 84L91 76L99 84L91 92Z"/>
+
+    <!-- Small central accent -->
+    <path d="M75 60L79 66L75 72L71 66Z"
+          stroke-width="1"/>
+    </g>
+
+    <!-- Lower ornament -->
+    <g transform="translate(0 370) scale(1 -1)">
+      <path d="M20 117V42H130V117"/>
+      <path d="M27 111V49H123V111"
+            stroke-width=".8" opacity=".75"/>
+
+      <path d="M20 62L40 42M110 42L130 62"/>
+      <path d="M27 67L45 49M105 49L123 67"
+            stroke-width=".8"/>
+
+      <path d="M37 84H51M99 84H113"
+            stroke-width=".9"/>
+
+      <path d="M51 84L59 76L67 84L59 92Z"/>
+      <path d="M67 84L75 76L83 84L75 92Z"/>
+      <path d="M83 84L91 76L99 84L91 92Z"/>
+
+      <path d="M75 60L79 66L75 72L71 66Z"
+            stroke-width="1"/>
+    </g>
+  </g>
+</svg>

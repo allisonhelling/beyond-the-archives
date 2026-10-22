@@ -1,10 +1,12 @@
+import { automaticCollectionRules } from '../automatic-collections'
+import { defaultReadingFilters } from '../reading-search'
 import { orderCollections, moveCollectionIds } from '../collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
 import { librarySeries, seriesReadingStatus } from '../series'
 import { parseWorkUrl, validateProgress } from '../model'
 
-beforeEach(() => {
+beforeEach(async () => {
   // Node 25 also exposes localStorage; use an isolated browser-storage contract.
   const items = new Map<string, string>()
   vi.stubGlobal('localStorage', {
@@ -13,8 +15,63 @@ beforeEach(() => {
     removeItem: (key: string) => { items.delete(key) },
     clear: () => items.clear(),
   })
+  // Organization tests start empty; the design-preview seed is covered separately.
+  await deleteSampleCollections((await loadSampleLibrary()).collections.map(collection => collection.id))
 })
 afterEach(() => vi.unstubAllGlobals())
+
+it('seeds separate spine design collections and preserves edits and deletions on reload', async () => {
+ resetSampleLibrary()
+ const { collections } = await loadSampleLibrary()
+ expect(collections.filter(collection => collection.spineDesign).map(collection => collection.spineDesign)).toEqual(['celestial','interlocking-circles','linked-diamonds','book-stack','constellation','deco-crest','star-trails','star-trails-extended','vertical-diamonds','lunar-phases','query-crown'])
+ await saveSampleCollection('My celestial shelf', collections[0].id)
+ await deleteSampleCollection(collections[1].id)
+ const reloaded = await loadSampleLibrary()
+ expect(reloaded.collections.find(collection => collection.id === collections[0].id)).toMatchObject({name:'My celestial shelf',spineDesign:'celestial'})
+ expect(reloaded.collections.some(collection => collection.id === collections[1].id)).toBe(false)
+})
+
+it('adds design samples once to an existing preview without replacing its collections or story edits', async () => {
+ const id = await saveSampleCollection('My reads')
+ const library = await loadSampleLibrary()
+ library.sampleVersion = 3
+ library.stories[0].notes = 'Keep this note'
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.collections.find(collection => collection.id === id)).toMatchObject({id,name:'My reads'})
+ expect(upgraded.collections.filter(collection => collection.spineDesign)).toHaveLength(11)
+ expect(upgraded.stories[0].notes).toBe('Keep this note')
+ expect((await loadSampleLibrary()).collections).toHaveLength(13)
+})
+
+it('renames the legacy celestial design without changing saved collection identities or memberships', async () => {
+ resetSampleLibrary()
+ const library = await loadSampleLibrary()
+ const collection = library.collections[0]
+ Object.assign(collection, { id:'sample-spine-celestial-constellation', name:'My celestial shelf', spineDesign:'celestial-constellation' })
+ library.stories[0].collectionIds = [collection.id]
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.collections[0]).toMatchObject({id:collection.id,name:'My celestial shelf',spineDesign:'celestial'})
+ expect(upgraded.stories[0].collectionIds).toEqual([collection.id])
+ expect((await loadSampleLibrary()).collections).toHaveLength(12)
+})
+
+it('adds the latest preview designs without restoring deleted samples or replacing renamed ones', async () => {
+ resetSampleLibrary()
+ const library = await loadSampleLibrary()
+ library.sampleVersion = 4
+ library.collections = library.collections.slice(0,4)
+ const removed = library.collections.splice(1,1)[0]
+ library.collections[0].name = 'My celestial sample'
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.collections.some(collection => collection.id === removed.id)).toBe(false)
+ expect(upgraded.collections.find(collection => collection.id === library.collections[0].id)?.name).toBe('My celestial sample')
+ expect(upgraded.collections).toHaveLength(11)
+ expect(upgraded.collections.filter(collection => ['deco-crest','star-trails','star-trails-extended','vertical-diamonds','constellation'].includes(collection.spineDesign ?? ''))).toHaveLength(5)
+ expect((await loadSampleLibrary()).collections).toHaveLength(11)
+})
 
 it('keeps custom order through reload, rename, creation, and deletion', async () => {
   const alpha = await saveSampleCollection('Zebra'), beta = await saveSampleCollection('Apple')
@@ -30,11 +87,11 @@ it('keeps custom order through reload, rename, creation, and deletion', async ()
   expect((await loadSampleLibrary()).collections.map(collection => collection.id)).toEqual([alpha, extra])
 })
 
-it('includes all supplied works and both series members in the requested reading groups', async () => {
+it('includes all supplied works and every series member in the requested reading groups', async () => {
   const { stories } = await loadSampleLibrary()
-  expect(stories).toHaveLength(27)
+  expect(stories).toHaveLength(28)
   const counts = Object.fromEntries(['finished', 'waiting_for_updates', 'reading', 're_reading', 'to_read'].map(status => [status, stories.filter(story => story.reading_status === status).length]))
-  expect(counts).toEqual({ finished: 10, waiting_for_updates: 2, reading: 3, re_reading: 1, to_read: 11 })
+  expect(counts).toEqual({ finished: 10, waiting_for_updates: 2, reading: 3, re_reading: 1, to_read: 12 })
   for (const story of stories) {
     expect(parseWorkUrl(story.original_url).workId).toBe(story.work.ao3_work_id)
     expect(() => validateProgress(story.last_read_chapter, story.metadata)).not.toThrow()
@@ -219,13 +276,15 @@ it('merges other-tab personal edits and requires review when both tabs edit note
   expect((await loadSampleLibrary()).stories[0]).toMatchObject({ notes: 'Both notes', personal_rating: 5 })
 })
 
-it('seeds the first two play it again works and reuses their metadata for the series page', async () => {
+it('seeds every play it again work and reuses their metadata for the fully loaded series page', async () => {
   const { librarySeries } = await import('../series')
   const library = await loadSampleLibrary()
   const series = librarySeries(library.stories, library.series).find(series => series.seriesId === 132147)!
   expect(series).toMatchObject({ title: 'play it again', creators: ['metisket'], begun: '2013-06-29', updated: '2020-08-09', wordCount: 74696, workCount: 3, fandoms: ['Teen Wolf (TV)'] })
-  expect(series.works.map(work => [work.workId, work.position, work.title])).toEqual([[862320, 1, 'Play It Again'], [2034597, 2, "This Doesn't Hurt"]])
-  expect(series.savedStories).toHaveLength(2)
+  expect(series.works.map(work => [work.workId, work.position, work.title])).toEqual([[862320, 1, 'Play It Again'], [2034597, 2, "This Doesn't Hurt"], [25794964, 3, 'Kiss of Death']])
+  expect(series.savedStories).toHaveLength(3)
+  expect(series.detailsLoaded).toBe(true)
+  expect(series.record?.metadata).toMatchObject({basic:false,fetchedAt:expect.any(String),works:expect.any(Array)})
   expect(series.savedStories.every(story => story.reading_status === 'to_read' && story.last_read_chapter === 0)).toBe(true)
   await saveSampleSeriesNote(132147, 'Read these next.', '')
   expect((await loadSampleLibrary()).series.find(series => series.ao3_series_id === 132147)?.notes).toBe('Read these next.')
@@ -258,7 +317,7 @@ it('organizes a series independently and finishes its works without replacing pr
  await updateSampleSeries(132147,{favorite:true,collections:[collection]},{favorite:false,collections:[]})
  expect((await loadSampleLibrary()).stories.find(story=>story.id===original.id)?.collectionIds).toEqual([])
  await deleteSampleStory('sample-entry-2034597')
- expect(await finishSampleSeries(132147)).toBe(1)
+ expect(await finishSampleSeries(132147)).toBe(2)
  const library = await loadSampleLibrary()
  expect(library.series[0]).toMatchObject({is_favorite:true,reading_status:'finished',collectionIds:[collection]})
  expect(library.stories.find(story=>story.id===original.id)).toMatchObject({reading_status:'finished',last_read_chapter:3,notes:'Keep fic notes',personal_rating:4,is_favorite:true})
@@ -276,6 +335,7 @@ it('finishes an empty series without adding preview works', async () => {
  await loadSampleLibrary()
  await deleteSampleStory('sample-entry-862320')
  await deleteSampleStory('sample-entry-2034597')
+ await deleteSampleStory('sample-entry-25794964')
  expect(await finishSampleSeries(132147)).toBe(0)
  const library = await loadSampleLibrary()
  expect(library.stories.some(story => [862320,2034597].includes(story.work.ao3_work_id!))).toBe(false)
@@ -315,12 +375,128 @@ it('upgrades version two samples without restoring removed old works or overwrit
  library.stories[0].notes = 'Keep my work note'
  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
  const upgraded = await loadSampleLibrary()
- expect(upgraded.sampleVersion).toBe(3)
+ expect(upgraded.sampleVersion).toBe(8)
  expect(upgraded.series).toHaveLength(4)
- expect(upgraded.stories.some(story => story.work.ao3_work_id === 2034597)).toBe(false)
+ expect(upgraded.stories.some(story => story.work.ao3_work_id === 2034597)).toBe(true)
  expect(upgraded.series[0].notes).toBe('Keep my series note')
  expect(upgraded.stories[0].notes).toBe('Keep my work note')
- expect(upgraded.stories).toHaveLength(26)
+ expect(upgraded.stories).toHaveLength(28)
  await deleteSampleStory('sample-entry-11613168')
  expect((await loadSampleLibrary()).stories.some(story => story.work.ao3_work_id === 11613168)).toBe(false)
+})
+
+it('renames legacy paused statuses while retaining saved progress', async () => {
+ const library = await loadSampleLibrary(), story = library.stories[0]
+ const progress = story.last_read_chapter
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify({ ...library, stories: library.stories.map(item => item.id === story.id ? { ...item, reading_status: 'continue_later' } : item) }))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.stories.find(item => item.id === story.id)).toMatchObject({ reading_status: 'paused_reading', last_read_chapter: progress })
+ expect(JSON.parse(window.localStorage.getItem('between-chapters:sample-library:v1')!).stories.find((item: { id: string }) => item.id === story.id).reading_status).toBe('paused_reading')
+})
+
+it('upgrades the existing play it again sample to full details with every work saved once', async () => {
+ const library = await loadSampleLibrary()
+ library.sampleVersion = 5
+ library.stories = library.stories.filter(story => story.work.ao3_work_id !== 25794964)
+ const original = library.stories.find(story => story.work.ao3_work_id === 862320)!
+ original.notes = 'Keep my notes'; original.last_read_chapter = 1; original.reading_status = 'reading'
+ const record = library.series.find(series => series.ao3_series_id === 132147)!
+ record.notes = 'Keep series notes'; record.is_favorite = true
+ record.metadata = { seriesId:132147, title:'play it again', works:[] }
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ const series = librarySeries(upgraded.stories, upgraded.series).find(series => series.seriesId === 132147)!
+ expect(series.detailsLoaded).toBe(true)
+ expect(series.savedStories).toHaveLength(3)
+ expect(series.works).toHaveLength(3)
+ expect(series.record).toMatchObject({notes:'Keep series notes',is_favorite:true})
+ expect(series.savedStories.find(story=>story.id===original.id)).toMatchObject({notes:'Keep my notes',last_read_chapter:1,reading_status:'reading'})
+ await deleteSampleStory('sample-entry-25794964')
+ expect((await loadSampleLibrary()).stories.some(story=>story.work.ao3_work_id===25794964)).toBe(false)
+})
+
+it('adds lunar phases and query crown once to version six samples while preserving edits and deletions', async () => {
+ resetSampleLibrary()
+ const library = await loadSampleLibrary()
+ library.sampleVersion = 6
+ library.collections = library.collections.filter(collection => !['lunar-phases','query-crown'].includes(collection.spineDesign ?? ''))
+ const removed = library.collections.splice(1,1)[0]
+ library.collections[0].name = 'My edited sample'
+ const story = library.stories[0]
+ story.notes = 'Keep my notes'
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.collections.slice(-2).map(collection => collection.spineDesign)).toEqual(['lunar-phases','query-crown'])
+ expect(upgraded.collections[0].name).toBe('My edited sample')
+ expect(upgraded.collections.some(collection => collection.id === removed.id)).toBe(false)
+ expect(upgraded.stories.find(item => item.id === story.id)?.notes).toBe('Keep my notes')
+ expect(upgraded.collections).toHaveLength(11)
+ await deleteSampleCollection(upgraded.collections.at(-1)!.id)
+ expect((await loadSampleLibrary()).collections).toHaveLength(10)
+})
+
+it('keeps automatic collections in sync with saved works and rule edits, independently from manual membership', async () => {
+ const rules = automaticCollectionRules({...defaultReadingFilters,fandoms:['Teen Wolf (TV)']})
+ const id = await saveSampleCollection('Automatic Teen Wolf',undefined,undefined,undefined,rules)
+ let library = await loadSampleLibrary()
+ expect(library.stories.filter(story=>story.automaticCollectionIds?.includes(id))).toHaveLength(3)
+ const original = library.stories.find(story=>story.work.ao3_work_id===862320)!
+ const added = await saveSampleStory({url:'https://archiveofourown.org/works/999999',metadata:original.metadata,status:'to_read',progress:0,notes:'',personalRating:null,favorite:false,collections:[],tags:[]})
+ library = await loadSampleLibrary()
+ expect(library.stories.find(story=>story.id===added)).toMatchObject({collectionIds:[],automaticCollectionIds:[id]})
+ await expect(addSampleStoriesToCollections([added],[id])).rejects.toThrow('determined by its filters')
+ await saveSampleCollection('Automatic Teen Wolf',id,undefined,undefined,automaticCollectionRules({...defaultReadingFilters,within:'"Kiss of Death"'}))
+ library = await loadSampleLibrary()
+ expect(library.stories.filter(story=>story.automaticCollectionIds?.includes(id)).map(story=>story.metadata.title)).toEqual(['Kiss of Death'])
+ await deleteSampleCollection(id)
+ expect((await loadSampleLibrary()).stories.every(story=>!story.automaticCollectionIds?.includes(id))).toBe(true)
+})
+
+it('converts manual sample collections to rule-based membership while preserving their details', async () => {
+ const library = await loadSampleLibrary(), original=library.stories.find(story=>story.work.ao3_work_id===862320)!
+ const id = await saveSampleCollection('Converted sample',undefined,{color:'#123456',symbol:'moon'},'Keep my summary')
+ await addSampleStoriesToCollections([original.id],[id])
+ await saveSampleCollection('Converted sample',id,undefined,undefined,automaticCollectionRules({...defaultReadingFilters,within:'"Kiss of Death"'}))
+ const updated = await loadSampleLibrary()
+ expect(updated.collections.find(collection=>collection.id===id)).toMatchObject({name:'Converted sample',description:'Keep my summary',color:'#123456',symbol:'moon'})
+ expect(updated.stories.some(story=>story.collectionIds.includes(id))).toBe(false)
+ expect(updated.stories.filter(story=>story.automaticCollectionIds?.includes(id)).map(story=>story.metadata.title)).toEqual(['Kiss of Death'])
+})
+
+
+it('keeps matching sample works when automatic rules are removed and stops future additions', async () => {
+ const rules=automaticCollectionRules({...defaultReadingFilters,fandoms:['Teen Wolf (TV)']})
+ const id=await saveSampleCollection('Frozen matches',undefined,{color:'#123456',symbol:'sparkle'},undefined,rules)
+ const before=await loadSampleLibrary(), matches=before.stories.filter(story=>story.automaticCollectionIds?.includes(id))
+ await saveSampleCollection('Frozen matches',id,undefined,undefined,null)
+ const after=await loadSampleLibrary()
+ expect(after.collections.find(collection=>collection.id===id)?.automatic_rules).toBeNull()
+ expect(after.stories.filter(story=>story.collectionIds.includes(id)).map(story=>story.id)).toEqual(matches.map(story=>story.id))
+ expect(after.stories.some(story=>story.automaticCollectionIds?.includes(id))).toBe(false)
+ const original=matches[0]
+ const added=await saveSampleStory({url:'https://archiveofourown.org/works/999999',metadata:original.metadata,status:'to_read',progress:0,notes:'',personalRating:null,favorite:false,collections:[],tags:[]})
+ expect((await loadSampleLibrary()).stories.find(story=>story.id===added)?.collectionIds).not.toContain(id)
+})
+
+
+it('seeds One Shots as an editable automatic example without restoring it after deletion', async () => {
+ resetSampleLibrary()
+ const starter = (await loadSampleLibrary()).collections.find(collection => collection.name === 'One Shots')!
+ expect(starter).toMatchObject({ default_key: null, color: '#8b491e', symbol: 'scroll', automatic_rules: automaticCollectionRules({ ...defaultReadingFilters, oneShot: 'only' }) })
+ await saveSampleCollection('My one shots', starter.id, { color: '#123456', symbol: 'moon' }, 'My example', automaticCollectionRules({ ...defaultReadingFilters, oneShot: 'exclude' }))
+ expect((await loadSampleLibrary()).collections.find(collection => collection.id === starter.id)).toMatchObject({ name: 'My one shots', color: '#123456', symbol: 'moon', automatic_rules: { filters: { oneShot: 'exclude' } } })
+ await deleteSampleCollection(starter.id)
+ expect((await loadSampleLibrary()).collections.some(collection => collection.id === starter.id)).toBe(false)
+})
+
+it('adds the automatic example once to older samples without replacing a same-named custom shelf', async () => {
+ const id = await saveSampleCollection('One Shots', undefined, { color: '#123456', symbol: 'moon' })
+ const library = await loadSampleLibrary()
+ library.sampleVersion = 7
+ window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
+ const upgraded = await loadSampleLibrary()
+ expect(upgraded.collections.filter(collection => collection.name === 'One Shots')).toHaveLength(1)
+ expect(upgraded.collections.find(collection => collection.id === id)).toMatchObject({ color: '#123456', symbol: 'moon' })
+ await deleteSampleCollection(id)
+ expect((await loadSampleLibrary()).collections).toHaveLength(0)
 })

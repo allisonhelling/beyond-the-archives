@@ -1,12 +1,13 @@
+import { DisplayExamplePage, DisplaySettings } from '../features/library/DisplaySettings'
 import { BrowsingPosition } from '../features/library/BrowsingPosition'
 import { PageSizeSettings } from '../features/library/pagination'
 import { SeriesPage } from '../features/library/SeriesPage'
 import { UserscriptSettings } from '../features/imports/UserscriptSettings'
 import { ImportPage } from '../features/imports/ImportPage'
 import { ExtensionConnection, MetadataSettings } from '../features/imports/MetadataSettings'
-import { useState } from 'react'
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
-import { ArrowRight, BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, Layers, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, ChevronRight, BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, Layers, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
 import { LibraryProvider } from '../features/library/LibraryProvider'
 import { AddStoryPage, LibraryPage, StoryDetailsPage } from '../features/library/LibraryPages'
 import { useDismissible } from '../components/useDismissible'
@@ -29,20 +30,66 @@ const navigation = [
 
 function FoundationPage({ kind }: { kind: 'stats' }) {
   const content = {
-    stats: { title: 'Reading Stats', intro: 'Every chapter is part of your story.', heading: 'Your reading, in perspective.', body: 'Reading statistics arrive in Phase 4, after library and progress tracking are available.', icon: ChartNoAxesCombined, phase: 'PHASE 4 · STATISTICS' },
+    stats: { title: 'Reading Stats', heading: 'Your reading, in perspective.', body: 'Reading statistics arrive in Phase 4, after library and progress tracking are available.', icon: ChartNoAxesCombined, phase: 'PHASE 4 · STATISTICS' },
   }[kind]
   const Icon = content.icon
-  return <><div className="page-heading"><div><h1>{content.title}</h1><p>{content.intro}</p></div><span className="private-badge"><LockKeyhole size={13} /> Only you</span></div>
+  return <><div className="page-heading"><div><h1>{content.title}</h1></div><span className="private-badge"><LockKeyhole size={13} /> Only you</span></div>
     <div className="foundation-banner"><span className="small-icon"><ShieldCheck size={20} /></span><div><strong>A secure beginning</strong><p>Your library, notes, and reading progress are protected at the database level.</p></div><NavLink to="/features">View roadmap <ArrowRight size={16} /></NavLink></div>
     <section className="empty-state"><div className="empty-art" aria-hidden="true"><span className="art-orbit" /><Icon size={58} strokeWidth={1.1} /><span className="art-spark">✧</span></div><span className="eyebrow accent">{content.phase}</span><h2>{content.heading}</h2><p>{content.body}</p><NavLink className="button secondary" to="/features">See what’s coming <ArrowRight size={16} /></NavLink></section>
     <div className="foundation-notes"><div><ShieldCheck size={19} /><span><strong>Private by design</strong><small>Protected at the database level</small></span></div><div><Layers size={19} /><span><strong>A thoughtful foundation</strong><small>Story metadata and your notes stay separate</small></span></div><div><BookOpen size={19} /><span><strong>Built for the next chapter</strong><small>No invented totals or reading progress</small></span></div></div>
   </>
 }
 
+const settingsSections = [
+  ['settings-account', 'Account & Security', 'Sign-in details and password recovery'],
+  ['settings-browsing', 'Library Browsing', 'Default works per page and date format'],
+  ['settings-display', 'Tile and Page Information', 'Customize tags, tiles, and information pages'],
+  ['settings-metadata', 'AO3 Metadata Retrieval', 'Choose how story information is retrieved'],
+  ['ios-safari-userscript', 'iOS Safari Userscript', 'Set up and manage paired Safari devices'],
+  ['settings-coming-soon', 'More in a Later Chapter', 'Upcoming settings and features'],
+] as const
+
+function SettingsSectionLabel({ title, description, descriptionId }: { title: string; description: string; descriptionId: string }) {
+  return <span className="settings-section-label"><span>{title}</span><small className="muted" id={descriptionId}>{description}</small></span>
+}
+
 function SettingsPage() {
   const { session } = useAuth()
+  const location = useLocation(), navigate = useNavigate()
+  const selectedSection = settingsSections.find(([id]) => location.hash === `#${id}`)?.[0]
+  const previousSection = useRef(selectedSection)
+  useEffect(() => {
+    const target = selectedSection ? document.getElementById(selectedSection)
+      : previousSection.current ? document.getElementById(`open-${previousSection.current}`) : null
+    if (target?.getClientRects().length) target.focus({ preventScroll: true })
+    previousSection.current = selectedSection
+  }, [selectedSection])
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [activeSection, setActiveSection] = useState<string>(settingsSections[0][0])
+  const content = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    let frame = 0
+    const sections = settingsSections.flatMap(([id]) => { const section = document.getElementById(id); return section ? [section] : [] })
+    function update() {
+      const boundary = 120
+      const atBottom = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2
+      const current = atBottom ? sections.at(-1) : sections.filter(section => section.getBoundingClientRect().top <= boundary).at(-1)
+      setActiveSection(current?.id ?? settingsSections[0][0])
+    }
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update) }
+    const observer = new ResizeObserver(schedule)
+    if (content.current) observer.observe(content.current)
+    schedule()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule) }
+  }, [])
+  function jumpToSection(id: string) {
+    const section = document.getElementById(id)
+    section?.focus({ preventScroll: true })
+    section?.scrollIntoView({ block: 'start' })
+  }
   async function reset() {
     if (!supabase || !session?.user.email || busy) return
     setBusy(true)
@@ -52,11 +99,27 @@ function SettingsPage() {
     } catch { setMessage('Could not send a recovery email. Please try again.') }
     finally { setBusy(false) }
   }
-  return <><div className="page-heading"><div><span className="eyebrow accent">MAKE YOURSELF AT HOME</span><h1>Settings</h1><p>Your account, your space.</p></div></div><section className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section><PageSizeSettings /><MetadataSettings /><UserscriptSettings /><section className="settings-card"><h2>More in a later chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5, and complete backup and restore in Phase 6.</p></section></>
+  const sections = {
+    'settings-account': <section id="settings-account" tabIndex={-1} className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & Security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section>,
+    'settings-browsing': <PageSizeSettings />,
+    'settings-display': <DisplaySettings />,
+    'settings-metadata': <MetadataSettings />,
+    'ios-safari-userscript': <UserscriptSettings />,
+    'settings-coming-soon': <section id="settings-coming-soon" tabIndex={-1} className="settings-card"><h2>More in a Later Chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5, and complete backup and restore in Phase 6.</p></section>,
+  }
+  return <div className="settings-page" data-section-open={Boolean(selectedSection)}>
+    <aside className="settings-outline"><nav aria-label="Settings Section Outline"><h2>On This Page</h2><ul>{settingsSections.map(([id, title, description]) => <li key={id}><a aria-label={title} aria-describedby={`outline-description-${id}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={event => { event.preventDefault(); jumpToSection(id) }}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></a></li>)}</ul></nav></aside>
+    <div className="settings-content" ref={content}>
+      <div className="page-heading settings-index-heading"><h1>Settings</h1></div>
+      <nav className="settings-section-list" aria-label="Settings sections"><ul>{settingsSections.map(([id, title, description]) => <li key={id}><Link aria-label={title} aria-describedby={`list-description-${id}`} id={`open-${id}`} to={`/settings#${id}`} state={{ settingsIndex: true }}><SettingsSectionLabel title={title} description={description} descriptionId={`list-description-${id}`} /><ChevronRight size={18} aria-hidden="true" /></Link></li>)}</ul></nav>
+      <div className="settings-section-back"><button className="button secondary" onClick={() => { if (location.state?.settingsIndex) navigate(-1); else navigate('/settings', { replace: true }) }}><ArrowLeft size={17} aria-hidden="true" />Back to Settings</button></div>
+      {settingsSections.map(([id]) => <div key={id} className="settings-section" data-selected={selectedSection === id}>{sections[id]}</div>)}
+    </div>
+  </div>
 }
 
 function FeaturesPage() {
-  return <><div className="page-heading"><div><h1>The next chapters</h1><p>A thoughtful foundation for a lasting library.</p></div><span className="status-pill">PHASE 3</span></div><section className="settings-card" aria-labelledby="series-features-heading">
+  return <><div className="page-heading"><div><h1>The next chapters</h1></div><span className="status-pill">PHASE 3</span></div><section className="settings-card" aria-labelledby="series-features-heading">
     <h2 id="series-features-heading">Series pages</h2>
     <p><strong>Default series page.</strong> Works in your library are automatically grouped by their AO3 series, keeping their original part numbers. This page uses your saved works to show authors, fandoms, and word totals. Opening it does not download the full AO3 series. Official series totals and completion stay unknown until you load them.</p>
     <p><strong>Loaded AO3 details.</strong> Choose <strong>Load</strong> to save the series description, official statistics, and available work listing from AO3, including works outside your library. Saving these details does not add those works to your library.</p>
@@ -94,7 +157,7 @@ function Shell() {
   return <div className="app-shell"><BrowsingPosition /><a className="skip-link" href="#main">Skip to content</a><header className="app-header"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{navigation.filter(item => item.to !== '/settings' && item.to !== '/add').map(({ to, label }) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav><div className="header-actions"><div className="add-wrapper" ref={addRef}><button className="button primary compact" aria-expanded={addOpen} aria-controls="add-options" onClick={() => setAddOpen(!addOpen)}><Plus size={16} /> Add</button>{addOpen && <div id="add-options" className="add-menu menu-surface"><strong>Add to your library</strong><button onClick={() => { setAddOpen(false); navigate('/add') }}><span className="add-option-label"><Plus size={19} aria-hidden="true" />Add Story</span></button><button onClick={() => { setAddOpen(false); navigate('/imports') }}><span className="add-option-label"><History size={19} aria-hidden="true" />Import History from AO3</span></button></div>}</div><div className="profile-wrapper" ref={profileRef}><button className="avatar profile-trigger" aria-label="Profile menu" aria-expanded={profileOpen} aria-controls="profile-options" title={session?.user.email} onClick={() => setProfileOpen(!profileOpen)}>{String(profileName).slice(0, 1).toUpperCase()}</button>{profileOpen && <section className="profile-menu menu-surface" id="profile-options" aria-label="Profile menu"><div className="profile-identity"><strong>{profileName}</strong><p>{session?.user.email}</p></div><NavLink className="profile-action mobile-profile-action" to="/imports" onClick={() => setProfileOpen(false)}><History size={17} />Import History from AO3</NavLink><NavLink className="profile-action mobile-profile-action" to="/features" onClick={() => setProfileOpen(false)}><Sparkles size={17} />Features</NavLink><NavLink className="profile-action" to="/settings" onClick={() => setProfileOpen(false)}><Settings size={17} />Settings</NavLink><button className="profile-action" disabled={signingOut || sampleMode} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? 'Logging out…' : 'Log out'}</button></section>}</div></div></header>
     <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">{navigation.filter(item => item.mobileLabel).map(({ to, mobileLabel, icon: Icon }) => <NavLink key={to} to={to} onClick={() => { setAddOpen(false); setProfileOpen(false) }}><Icon size={21} aria-hidden="true" />{mobileLabel}</NavLink>)}</nav>
 
-    <main id="main" className="app-main" tabIndex={-1}>{error && <p role="alert" className="error-message">{error}</p>}<Routes><Route path="/reading" element={<LibraryPage reading />} /><Route path="/library" element={<LibraryPage />} /><Route path="/imports" element={<ImportPage />} /><Route path="/import-fic" element={<Navigate to="/add?import=link" replace />} /><Route path="/add" element={<AddStoryPage />} /><Route path="/series/:id" element={<SeriesPage />} /><Route path="/stories/:id" element={<StoryDetailsPage />} /><Route path="/stats" element={<FoundationPage kind="stats" />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/features" element={<FeaturesPage />} /><Route path="*" element={<Navigate to="/reading" replace />} /></Routes></main><footer className="app-footer"><span>For the stories you can’t put down.</span><span><LockKeyhole size={12} /> A private AO3 reading companion</span></footer>
+    <main id="main" className="app-main" tabIndex={-1}>{error && <p role="alert" className="error-message">{error}</p>}<Routes><Route path="/reading" element={<LibraryPage reading />} /><Route path="/library" element={<LibraryPage />} /><Route path="/imports" element={<ImportPage />} /><Route path="/import-fic" element={<Navigate to="/add?import=link" replace />} /><Route path="/add" element={<AddStoryPage />} /><Route path="/series/:id" element={<SeriesPage />} /><Route path="/stories/:id" element={<StoryDetailsPage />} /><Route path="/stats" element={<FoundationPage kind="stats" />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/settings/example-work" element={<DisplayExamplePage kind="work" />} /><Route path="/settings/example-series" element={<DisplayExamplePage kind="series" />} /><Route path="/features" element={<FeaturesPage />} /><Route path="*" element={<Navigate to="/reading" replace />} /></Routes></main><footer className="app-footer"><span>For the stories you can’t put down.</span><span><LockKeyhole size={12} /> A private AO3 reading companion</span></footer>
   </div>
 }
 

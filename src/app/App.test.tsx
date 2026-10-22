@@ -192,7 +192,7 @@ it('scrolls the Safari settings deep link into view after authentication resolve
     auth.session = fakeSession
     window.history.replaceState(null, '', '/settings#ios-safari-userscript')
     render(<App />)
-    const heading = await screen.findByRole('heading', { name: 'iOS Safari userscript' })
+    const heading = await screen.findByRole('heading', { name: 'iOS Safari Userscript' })
     await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' }))
     expect(scroll.mock.contexts).toContain(heading.closest('section'))
   } finally { delete (HTMLElement.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView }

@@ -8,7 +8,7 @@ export function validateMetadata(result: RetrievalResult): RetrievalResult {
  if(output.rating && !['General Audiences','Teen And Up Audiences','Mature','Explicit','Not Rated'].includes(output.rating)) delete output.rating
  for(const field of ['ao3_published_at','ao3_updated_at'] as const) if(output[field] && Number.isNaN(Date.parse(output[field]!))) delete output[field]
  for(const field of lists) { const value=input[field as keyof AutomaticMetadata]; if(Array.isArray(value) && value.length && value.every(v=>typeof v==='string' && v.length<=10000)) Object.assign(output,{[field]:[...new Set(value as string[])]}) }
- for(const field of ['word_count','published_chapters','total_chapters'] as const) { const value=input[field]; if(typeof value==='number' && Number.isInteger(value) && value>=(field==='total_chapters'?1:0) && value<=2147483647) output[field]=value }
+ for(const field of ['word_count','published_chapters','total_chapters','kudos'] as const) { const value=input[field]; if(typeof value==='number' && Number.isInteger(value) && value>=(field==='total_chapters'?1:0) && value<=2147483647) output[field]=value }
  if(output.published_chapters!==undefined && output.total_chapters!==undefined && output.published_chapters>output.total_chapters) { delete output.published_chapters; delete output.total_chapters }
  if(typeof input.is_complete==='boolean' && output.published_chapters!==undefined) output.is_complete=input.is_complete
  if(input.author_links && typeof input.author_links==='object') output.author_links=Object.fromEntries(Object.entries(input.author_links).filter(([name,url])=>output.authors?.includes(name) && /^https:\/\/archiveofourown\.org\/users\/[^\s?#]+$/.test(url)))

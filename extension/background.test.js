@@ -216,3 +216,17 @@ it('rejects series previews from unrelated sites, invalid URLs and disconnected 
  expect(chrome.tabs.query).not.toHaveBeenCalled()
  expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
 })
+
+it('opens the requested next page instead of reusing another page of the series', async () => {
+ state.auth = { token: 'session', userId: 'alice', expiresAt: Math.floor(Date.now() / 1000) + 3600 }
+ const url = 'https://archiveofourown.org/series/77', next = url + '?page=2'
+ chrome.tabs.query.mockResolvedValue([{ id: 8, status: 'complete', url }])
+ chrome.tabs.create.mockResolvedValue({ id: 9, status: 'complete', url: next })
+ chrome.tabs.get.mockResolvedValue({ id: 9, status: 'complete', url: next })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: next, html: '<h2 class="heading">Series page two</h2>' } }])
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url: next }, { url: origin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url: next, html: '<h2 class="heading">Series page two</h2>' } }))
+ expect(chrome.tabs.create).toHaveBeenCalledWith({ url: next, active: false })
+ expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 9 } }))
+})

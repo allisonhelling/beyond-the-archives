@@ -1,4 +1,4 @@
-import { parseSeriesUrl, parseWorkUrl } from '../src/features/imports/urls.ts'
+import { parseSeriesUrl, seriesPageUrl, parseWorkUrl } from '../src/features/imports/urls.ts'
 import { captureMetadataPage } from './capture.js'
 
 const appOrigin = __APP_ORIGIN__
@@ -117,15 +117,16 @@ async function previewSeries(url) {
  previewRunning = true
  try {
   const identity = parseSeriesUrl(url)
+  const targetUrl = seriesPageUrl(url, identity.seriesId)
   const version = connectionVersion
   const { auth } = await chrome.storage.session.get('auth')
   if (!auth || auth.expiresAt * 1000 <= Date.now()) throw new Error('Reconnect the extension in Settings, then retry.')
   const matches = candidate => {
-   try { return new URL(candidate).origin === 'https://archiveofourown.org' && parseSeriesUrl(candidate).seriesId === identity.seriesId } catch { return false }
+   try { return seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
   }
   const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
   if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
-  const tab = tabs.find(candidate => matches(candidate.url)) ?? await chrome.tabs.create({ url: identity.normalizedUrl, active: false })
+  const tab = tabs.find(candidate => matches(candidate.url)) ?? await chrome.tabs.create({ url: targetUrl, active: false })
   for (let attempt = 0; attempt < 120; attempt++) {
    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
    const current = await chrome.tabs.get(tab.id)

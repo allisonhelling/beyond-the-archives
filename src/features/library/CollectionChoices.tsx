@@ -6,7 +6,7 @@ import { Plus } from 'lucide-react'
 export function CollectionChoices({ collections, selected, onChange }: {
   collections: Collection[]; selected: string[]; onChange: (selected: string[]) => void
 }) {
-  return <SearchableChoices options={collections.filter(collection => !collection.default_key)} selected={selected} onChange={onChange} label="Search collections" />
+  return <SearchableChoices options={collections.filter(collection => !collection.default_key && !collection.automatic_rules)} selected={selected} onChange={onChange} label="Search collections" />
 }
 
 export function SearchableChoices({ options, selected, onChange, label, disabledIds = [] }: {

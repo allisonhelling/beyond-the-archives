@@ -22,7 +22,7 @@ export function CollectionMembershipDialog({ story, collection, onClose }: ({ st
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not add stories to collections.') }
     finally { setBusy(false) }
   }
-  const options = story ? collections.filter(item => !item.default_key) : stories.map(item => ({ id: item.id, name: item.metadata.title, description: item.metadata.authors.join(', ') }))
+  const options = story ? collections.filter(item => !item.default_key && !item.automatic_rules) : stories.map(item => ({ id: item.id, name: item.metadata.title, description: item.metadata.authors.join(', ') }))
   return <Dialog title={story ? 'Add to collection' : `Add stories to ${collection!.name}`} onClose={onClose} busy={busy} className={`collection-membership-dialog${collection ? ' story-choices-dialog' : ''}`}>
     <p>{story ? `Choose collections for “${story.metadata.title}”.` : 'Choose stories from your library.'}</p>
     <form onSubmit={event => { event.preventDefault(); void save() }}>

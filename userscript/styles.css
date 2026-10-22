@@ -27,6 +27,8 @@ section { padding: var(--field-gap); margin: var(--field-gap) 0; border: 1px sol
 .library-link, .edit-button, .complete-chapter, .theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--control-gap); }
 .library-link { min-height: 48px; padding: 10px; border: 1px solid var(--border); border-radius: 5px; color: var(--color-brand); text-decoration: none; }
 .library-link:hover { border-color: var(--accent); }
+.connection-settings { padding-top: var(--field-gap); }
+.rating-info-editor textarea { resize: vertical; overflow-y: auto; }
 .settings-button { display: grid; place-items: center; width: 48px; padding: 10px; }
 button, input, select, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 10px; min-height: 48px; }
 button { cursor: pointer; }
@@ -50,6 +52,9 @@ input[type="checkbox"] { width: 24px; }
 .notes-control { align-items: start; }
 .field-info svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .field-info { font: inherit; position: relative; display: inline-block; }
+.rating-controls { position: relative; }
+.rating-info { position: static; }
+.rating-info > span { white-space: pre-wrap; overflow-wrap: anywhere; }
 .field-info summary { cursor: pointer; list-style: none; color: var(--accent); display: grid; place-items: center; width: 48px; min-height: 48px; }
 .field-info.chapter-progress summary { display: block; width: auto; min-height: 0; color: inherit; }
 .field-info.chapter-progress > span { position: static; display: block; width: max-content; max-width: 70vw; padding: 4px 8px; white-space: normal; }

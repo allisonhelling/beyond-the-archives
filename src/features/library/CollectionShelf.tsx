@@ -4,25 +4,27 @@ import { NewCollectionButton } from './CollectionChoices'
 import { CollectionSpineLabel } from './CollectionSpineLabel'
 import { useCollectionDrag } from './useCollectionDrag'
 import { SpineBookmark } from './SpineBookmark'
+import type { Collection } from './model'
 import type { SpineDesign } from './SpineDetails'
 import { automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
 
-const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'art-deco', currently_reading: 'art-deco', to_read: 'library-label', favorites: 'sunburst-fans', finished:'arched', did_not_finish: 'raised-bands' }
+const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'book-stack', currently_reading: 'art-deco', paused_reading: 'linked-diamonds', to_read: 'library-deco', favorites: 'star-trails-cascading', finished:'arched', did_not_finish: 'raised-bands' }
 
 const shelfColors: Partial<Record<string, string>> = {
   all: '#970000',
-  series: '#07534a',
   currently_reading: '#214921',
+  paused_reading: '#92504e',
   to_read: '#243c5e',
   favorites: '#54254b',
   finished: '#4a1b0f',
   did_not_finish: '#25211f',
+  series: '#07534a',
 }
 
 const heightOrder = [0, 1, 2, 1]
 
 export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange, onAutomaticEdit, showHidden = false }: {
-  items: { id: string; name: string; count: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
+  items: { id: string; name: string; count: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null; spineDesign?: SpineDesign; automatic_rules?: Collection['automatic_rules'] }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
@@ -59,14 +61,15 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing && customIndex >= 0
-    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={shelfDesigns[item.id]} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+    const design = item.automatic_rules ? 'lunar-phases' : item.spineDesign ?? shelfDesigns[item.id]
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={design} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
       if (editing && customIndex < 0 && onAutomaticEdit) { onAutomaticEdit(item.id); return }
       const direct = event.metaKey || event.ctrlKey
       if (customIndex >= 0 && onEdit && (editing || event.shiftKey || direct)) {
         event.preventDefault()
         onEdit(item.id, { color, symbol }, event.shiftKey, direct)
       } else onSelect(item.id)
-    }}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={shelfDesigns[item.id]} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
+    }}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={design} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
     return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
   }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
   const expandable = !editing && (mobile || displayedItems.length + 1 > capacity)

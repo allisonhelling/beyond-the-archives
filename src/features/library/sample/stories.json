@@ -3039,5 +3039,101 @@
     "updated_at": "2022-11-08",
     "captured_at": "2026-10-20T12:00:00.000Z",
     "source_series": "https://archiveofourown.org/series/2888871"
+  },
+  {
+    "metadata_available": true,
+    "source_url": "https://archiveofourown.org/works/25794964",
+    "id": 25794964,
+    "url": "https://archiveofourown.org/works/25794964",
+    "status": "to_read",
+    "progress": 0,
+    "metadata": {
+      "title": "Kiss of Death",
+      "summary": "It’s Stiles’s eighteenth birthday, and he may have made bold statements about jumping certain people on his eighteenth birthday. Out loud. With witnesses. But that’s fine—it’s nothing to stress about. It’s not like every single person he’s ever kissed got horribly murdered or anything.\n\nOh wait, yes it is. It’s exactly like that.",
+      "authors": [
+        "metisket"
+      ],
+      "author_links": {
+        "metisket": "https://archiveofourown.org/users/metisket/pseuds/metisket"
+      },
+      "fandoms": [
+        "Teen Wolf (TV)"
+      ],
+      "relationship_tags": [
+        "Derek Hale/Stiles Stilinski",
+        "Peter Hale & Stiles Stilinski"
+      ],
+      "character_tags": [
+        "Stiles Stilinski",
+        "Derek Hale",
+        "Peter Hale",
+        "Laura Hale",
+        "Sheriff Stilinski",
+        "Jennifer Blake",
+        "Scott McCall (Teen Wolf)",
+        "The Hale Pack"
+      ],
+      "additional_tags": [
+        "stiles's smooth handling of relationship-related trauma",
+        "laura's excellent relationship choices",
+        "peter attempting to help",
+        "no one actually dies! so that's good",
+        "derek's life is suffering",
+        "though still not a patch on canon",
+        "Dimension Travel",
+        "Families of Choice"
+      ],
+      "archive_warnings": [
+        "No Archive Warnings Apply"
+      ],
+      "categories": [
+        "F/F",
+        "M/M"
+      ],
+      "ao3_tags": [
+        "Derek Hale/Stiles Stilinski",
+        "Peter Hale & Stiles Stilinski",
+        "Stiles Stilinski",
+        "Derek Hale",
+        "Peter Hale",
+        "Laura Hale",
+        "Sheriff Stilinski",
+        "Jennifer Blake",
+        "Scott McCall (Teen Wolf)",
+        "The Hale Pack",
+        "stiles's smooth handling of relationship-related trauma",
+        "laura's excellent relationship choices",
+        "peter attempting to help",
+        "no one actually dies! so that's good",
+        "derek's life is suffering",
+        "though still not a patch on canon",
+        "Dimension Travel",
+        "Families of Choice",
+        "No Archive Warnings Apply",
+        "F/F",
+        "M/M"
+      ],
+      "rating": "Teen And Up Audiences",
+      "word_count": 6810,
+      "published_chapters": 1,
+      "total_chapters": 1,
+      "series_memberships": [
+        {
+          "id": 132147,
+          "name": "play it again",
+          "url": "https://archiveofourown.org/series/132147",
+          "position": 3
+        }
+      ],
+      "series": [
+        "play it again"
+      ],
+      "publication_status": "complete"
+    },
+    "published_at": "2020-08-09",
+    "updated_at": "2020-08-09",
+    "verified_chapters": {},
+    "source_series": "https://archiveofourown.org/series/132147",
+    "captured_at": "2026-10-21T12:00:00.000Z"
   }
 ]

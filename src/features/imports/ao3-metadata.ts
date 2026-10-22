@@ -3,7 +3,7 @@ import type { CheerioAPI } from 'cheerio'
 export type AutomaticMetadata = {
  title?: string; summary?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
  ao3_tags?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; archive_warnings?: string[]; categories?: string[];
- rating?: string; word_count?: number; published_chapters?: number; total_chapters?: number; is_complete?: boolean;
+ rating?: string; kudos?: number; word_count?: number; published_chapters?: number; total_chapters?: number; is_complete?: boolean;
  ao3_published_at?: string; ao3_updated_at?: string; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[];
 }
 
@@ -38,6 +38,7 @@ export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
  if (tags.length) metadata.ao3_tags=[...new Set(tags)]
  const rating=$('dd.rating.tags a.tag').first().text().trim(); if (rating) metadata.rating=rating
  const words=count($('dd.words').first().text()); if(words!==undefined) metadata.word_count=words
+ const kudos=count($('dd.kudos').first().text()); if(kudos!==undefined) metadata.kudos=kudos
  const chapterText=$('dd.chapters').first().text().trim().match(/^(\d+)\s*\/\s*(\d+|\?)$/)
  if (chapterText) { metadata.published_chapters=count(chapterText[1]); if(chapterText[2]!=='?') metadata.total_chapters=count(chapterText[2]); if(metadata.total_chapters) metadata.is_complete=metadata.published_chapters===metadata.total_chapters; else metadata.is_complete=false }
  const published=date($('dd.published').first().text().trim()), updated=date($('dd.status').first().text().trim())

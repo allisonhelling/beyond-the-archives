@@ -1,0 +1,36 @@
+
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="150" height="360"
+     viewBox="0 0 150 360">
+  <g fill="none" stroke="#d99b18"
+     stroke-width="1.7"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+
+    <path d="M20 118V35H130V118
+             M20 242V325H130V242"/>
+    <path d="M27 113V42H123V113
+             M27 247V318H123V247"
+          stroke-width=".8" opacity=".75"/>
+
+    <g>
+      <path d="M75 48L87 60L75 72L63 60Z"/>
+      <path d="M75 68L87 80L75 92L63 80Z"/>
+      <path d="M75 88L87 100L75 112L63 100Z"/>
+      <path d="M75 48V112" stroke-width=".8"/>
+      <path d="M45 80H59M91 80H105"/>
+      <path d="M38 75L43 80L38 85
+               M112 75L107 80L112 85"/>
+    </g>
+
+    <g transform="translate(0 360) scale(1 -1)">
+      <path d="M75 48L87 60L75 72L63 60Z"/>
+      <path d="M75 68L87 80L75 92L63 80Z"/>
+      <path d="M75 88L87 100L75 112L63 100Z"/>
+      <path d="M75 48V112" stroke-width=".8"/>
+      <path d="M45 80H59M91 80H105"/>
+      <path d="M38 75L43 80L38 85
+               M112 75L107 80L112 85"/>
+    </g>
+  </g>
+</svg>

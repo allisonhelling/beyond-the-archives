@@ -31,5 +31,5 @@ export function filterLibraryItems(pool: Story[], filters: ReadingFilters, serie
   if (!compileSearch(filters.within)(withinText)) return false
   return filterReading([story], { ...filters, query: '', rating: [], oneShot: 'allowed', within: '' }).length > 0
  })
- return filterReading([...works, ...matches], { ...defaultReadingFilters, sort: filters.sort })
+ return filterReading([...works, ...matches], { ...defaultReadingFilters, sort: filters.sort, randomSeed: filters.randomSeed })
 }

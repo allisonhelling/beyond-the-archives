@@ -1,0 +1,43 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="360" viewBox="0 0 150 360">
+  <g fill="none" stroke="#e3b66d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <defs>
+      <g id="lunar-phases-ornament">
+        <!-- Original horizontal lines -->
+        <path d="M22 0H40M110 0H128" stroke-width="1.2"/>
+
+        <!-- Moon phases -->
+        <circle cx="48" cy="0" r="6"/>
+        <path d="M51 -5A6 6 0 0 0 51 5" stroke-width=".9"/>
+
+        <circle cx="75" cy="0" r="10"/>
+        <circle cx="75" cy="0" r="6.5" stroke-width=".7" opacity=".65"/>
+
+        <circle cx="102" cy="0" r="6"/>
+        <path d="M99 -5A6 6 0 0 1 99 5" stroke-width=".9"/>
+
+        <!-- Connecting lines -->
+        <path d="M57 0H63M87 0H93" stroke-width=".8"/>
+
+        <!-- Central diamond below the moon -->
+        <path d="M75 10V20" stroke-width=".9"/>
+        <path d="M75 19L80 25L75 31L70 25Z"/>
+
+        <!-- Small diamonds below the moon phases -->
+        <path d="M61 3L64 7L61 11L58 7Z" stroke-width=".9"/>
+        <path d="M89 3L92 7L89 11L86 7Z" stroke-width=".9"/>
+
+        <!-- Outer hanging diamonds -->
+        <path d="M32 0V11M118 0V11" stroke-width=".8"/>
+        <path d="M32 11L36 16L32 21L28 16Z" stroke-width=".9"/>
+        <path d="M118 11L122 16L118 21L114 16Z" stroke-width=".9"/>
+      </g>
+    </defs>
+
+    <!-- Top ornament -->
+    <use href="#lunar-phases-ornament" transform="translate(0 49)"/>
+
+    <!-- Bottom mirrored ornament -->
+    <use href="#lunar-phases-ornament" transform="translate(0 311) scale(1 -1)"/>
+  </g>
+</svg>

@@ -1,3 +1,5 @@
+import { defaultReadingFilters, filterReading } from '../reading-search'
+import { applyAutomaticCollections, automaticCollectionRules, collectionRules, type AutomaticCollectionRules } from '../automatic-collections'
 import type { SeriesPreview } from '../../imports/urls'
 import { librarySeries, type SeriesRecord } from '../series'
 import type { Json } from '../../../types/database'
@@ -5,14 +7,28 @@ import { applyStoryEdits, editSnapshot, EditConflict, mergeEdits, resolveEdits, 
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collection-appearance'
 import snapshots from './stories.json'
 import seriesSnapshots from './series.json'
+import type { SpineDesign } from '../SpineDetails'
 import { abandonedReadingStatus, blankMetadata, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
 const capturedAt = '2026-10-15T12:00:00.000Z'
-const sampleVersion = 3
-const seriesVersions: Record<number, number> = { 132147: 2, 1030529: 3, 2404765: 3, 2888871: 3 }
-type Library = { stories: Story[]; collections: Collection[]; series?: SeriesRecord[]; sampleVersion?: number }
+const sampleVersion = 8
+const seriesVersions: Record<number, number> = { 132147: 6, 1030529: 3, 2404765: 3, 2888871: 3 }
+const spineSamples = [
+  { name: 'Celestial', spineDesign: 'celestial', color: '#92504e', introducedIn: 4 },
+  { name: 'Circles', spineDesign: 'interlocking-circles', color: '#214921', introducedIn: 4 },
+  { name: 'Diamonds', spineDesign: 'linked-diamonds', color: '#243c5e', introducedIn: 4 },
+  { name: 'Book Stack', spineDesign: 'book-stack', color: '#07534a', introducedIn: 4 },
+  { name: 'Constellation', spineDesign: 'constellation', color: '#54254b', introducedIn: 5 },
+  { name: 'Deco Crest', spineDesign: 'deco-crest', color: '#92504e', introducedIn: 5 },
+  { name: 'Star Trails', spineDesign: 'star-trails', color: '#243c5e', introducedIn: 5 },
+  { name: 'Extended Trails', spineDesign: 'star-trails-extended', color: '#07534a', introducedIn: 5 },
+  { name: 'Vertical Diamonds', spineDesign: 'vertical-diamonds', color: '#54254b', introducedIn: 5 },
+  { name: 'Lunar Phases', spineDesign: 'lunar-phases', color: '#243c5e', introducedIn: 7 },
+  { name: 'Query Crown', spineDesign: 'query-crown', color: '#54254b', introducedIn: 7 },
+] satisfies { name: string; spineDesign: SpineDesign; color: string; introducedIn: number }[]
+type Library = { stories: Story[]; collections: (Collection & { spineDesign?: SpineDesign })[]; series?: SeriesRecord[]; sampleVersion?: number }
 
 function makeWork(id: number): Work {
   return {
@@ -62,7 +78,18 @@ function seedLibrary(): Library {
       notes: '', is_favorite: false, reading_status: 'to_read', collectionIds: [], created_at: snapshotAt, updated_at: snapshotAt,
     }
   })
-  return { stories, collections: [], series, sampleVersion }
+  const collections: Library['collections'] = spineSamples.map((sample, index) => ({ name:sample.name, color:sample.color, spineDesign:sample.spineDesign,
+    id: `sample-spine-${sample.spineDesign}`, user_id: userId, default_key: null,
+    description: 'Sample collection for comparing spine designs.', symbol: 'book',
+    sort_position: index, last_story_added_at: null, created_at: capturedAt, updated_at: capturedAt,
+  }))
+  collections.push({
+    id: 'sample-one-shots', user_id: userId, name: 'One Shots', default_key: null,
+    color: '#8b491e', symbol: 'scroll', description: null,
+    automatic_rules: automaticCollectionRules({ ...defaultReadingFilters, oneShot: 'only' }) as unknown as Json,
+    sort_position: collections.length, last_story_added_at: null, created_at: capturedAt, updated_at: capturedAt,
+  })
+  return { stories, collections, series, sampleVersion }
 }
 
 function read(): Library {
@@ -71,10 +98,25 @@ function read(): Library {
   try {
     const data = JSON.parse(saved) as Library
     if (Array.isArray(data.stories) && Array.isArray(data.collections)) {
+      // Preserve saved identities and reading progress when upgrading legacy names.
+      let renamedValues = false
+      for (const collection of data.collections) {
+        if ((collection.spineDesign as string) === 'celestial-constellation') {
+          collection.spineDesign = 'celestial'
+          renamedValues = true
+        }
+      }
+      for (const entry of [...data.stories, ...(data.series ?? [])]) {
+        if ((entry.reading_status as string) === 'continue_later') {
+          entry.reading_status = 'paused_reading'
+          renamedValues = true
+        }
+      }
+      if (renamedValues) write(data)
       if ((data.sampleVersion ?? 1) < sampleVersion) {
         const seed = seedLibrary(), seriesIds = new Set(seriesSnapshots.filter(series => seriesVersions[series.seriesId] > (data.sampleVersion ?? 1)).map(series => series.seriesId))
-        // Add newly introduced series once, without restoring older removed samples
-        // or replacing edits to an already-saved work or series note.
+        // Upgrade affected series once, preserving edits to saved works and series notes
+        // and leaving unrelated removed samples absent.
         for (const story of seed.stories.filter(story => story.metadata.series_memberships?.some(series => seriesIds.has(series.id)))) {
           const existing = data.stories.find(saved => saved.work.ao3_work_id === story.work.ao3_work_id)
           if (!existing) data.stories.push(story)
@@ -84,7 +126,19 @@ function read(): Library {
           }
         }
         data.series ??= []
-        for (const series of seed.series ?? []) if (seriesIds.has(series.ao3_series_id) && !data.series.some(saved => saved.ao3_series_id === series.ao3_series_id)) data.series.push(series)
+        for (const series of seed.series ?? []) if (seriesIds.has(series.ao3_series_id)) {
+          const existing = data.series.find(saved => saved.ao3_series_id === series.ao3_series_id)
+          if (!existing) data.series.push(series)
+          else existing.metadata = series.metadata
+        }
+        const newDesigns = new Set<SpineDesign>(spineSamples.filter(sample => sample.introducedIn > (data.sampleVersion ?? 1)).map(sample => sample.spineDesign))
+        for (const collection of seed.collections) {
+          const starter = collection.id === 'sample-one-shots'
+          const introduced = collection.spineDesign ? newDesigns.has(collection.spineDesign) : starter && (data.sampleVersion ?? 1) < 8
+          if (!introduced || data.collections.some(saved => saved.id === collection.id || starter && saved.name === collection.name)) continue
+          const lastPosition = Math.max(-1, ...data.collections.map(saved => saved.sort_position ?? -1))
+          data.collections.push({ ...collection, sort_position: lastPosition + 1 })
+        }
         data.sampleVersion = sampleVersion
         write(data)
       }
@@ -113,12 +167,13 @@ function find(data: Library, id: string) {
   return story
 }
 
-export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, series: data.series ?? [] } }
+export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, stories: applyAutomaticCollections(data.stories, data.collections), series: data.series ?? [] } }
 export function resetSampleLibrary() { window.localStorage.removeItem(storageKey) }
 
 export async function saveSampleStory(input: StoryInput) {
   const data = read()
   const { workId } = parseWorkUrl(input.url)
+  if (data.collections.some(collection => collection.automatic_rules && input.collections.includes(collection.id))) throw new Error('Automatic collection membership is determined by its filters.')
   validateProgress(input.progress, input.metadata)
   if (data.stories.some(story => story.work.ao3_work_id === workId && story.id !== input.id)) throw new Error('This story is already in your library.')
   const existing = input.id ? find(data, input.id) : null
@@ -155,6 +210,7 @@ export async function addSampleStoriesToCollections(storyIds: string[], collecti
   const collections = collectionIds.map(id => {
     const collection = data.collections.find(item => item.id === id && !item.default_key)
     if (!collection) throw new Error('Collection no longer available.')
+    if (collection.automatic_rules) throw new Error('Automatic collection membership is determined by its filters.')
     return collection
   })
   for (const story of stories) for (const collection of collections) {
@@ -193,8 +249,8 @@ export async function restoreSampleStory(story: Story) {
   data.stories.push({ ...story, collectionIds: story.collectionIds.filter(id => data.collections.some(collection => collection.id === id)) })
   write(data)
 }
-export async function saveSampleCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string) {
-  const changes = normalizeCollectionChanges({ ...appearance, ...(description !== undefined && { description }) })
+export async function saveSampleCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string, rules?: AutomaticCollectionRules | null) {
+  const changes = { ...normalizeCollectionChanges({ ...appearance, ...(description !== undefined && { description }) }), ...(rules !== undefined && { automatic_rules: rules ? automaticCollectionRules(rules.filters) as unknown as Json : null }) }
   const data = read(), trimmed = name.trim()
   const collectionId = id ?? crypto.randomUUID()
   if (!trimmed) throw new Error('A collection name is required.')
@@ -203,8 +259,16 @@ export async function saveSampleCollection(name: string, id?: string, appearance
   if (id) {
     const collection = data.collections.find(item => item.id === id)
     if (!collection) throw new Error('Collection no longer available.')
+    if (collection.automatic_rules && rules === null) {
+      const matching = new Set(filterReading(data.stories, collectionRules(collection)!.filters, { authorOnly: true }).map(story => story.id))
+      for (const story of data.stories) if (matching.has(story.id) && !story.collectionIds.includes(collectionId)) story.collectionIds.push(collectionId)
+    }
     Object.assign(collection, { name: trimmed, updated_at: now, ...changes })
-  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: changes.description ?? null, default_key: null, created_at: now, updated_at: now, color: changes.color ?? null, symbol: changes.symbol ?? null, sort_position: null, last_story_added_at: null })
+  } else data.collections.push({ id: collectionId, user_id: userId, name: trimmed, description: changes.description ?? null, default_key: null, created_at: now, updated_at: now, color: changes.color ?? null, symbol: changes.symbol ?? null, sort_position: null, last_story_added_at: null, ...changes })
+  if (rules) {
+    for (const story of data.stories) story.collectionIds = story.collectionIds.filter(id => id !== collectionId)
+    for (const series of data.series ?? []) series.collectionIds = series.collectionIds?.filter(id => id !== collectionId)
+  }
   data.collections.sort(compareCollections)
   write(data)
   return collectionId
@@ -263,7 +327,7 @@ export async function updateSampleSeries(seriesId: number, values: EditValues, b
  const base = { favorite: record.is_favorite ?? false, collections: record.collectionIds ?? [] }, review = mergeEdits(baseline, values, base)
  if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => updateSampleSeries(seriesId, resolveEdits(review.merged, choices), base))
  const ids = review.merged.collections as string[]
- if (ids.some(id => !data.collections.some(collection => collection.id === id && !collection.default_key))) throw new Error('Collection unavailable.')
+ if (ids.some(id => !data.collections.some(collection => collection.id === id && !collection.default_key && !collection.automatic_rules))) throw new Error('Collection unavailable.')
  const now = new Date().toISOString()
  for (const collection of data.collections) if (ids.includes(collection.id) && !record.collectionIds?.includes(collection.id)) collection.last_story_added_at = now
  Object.assign(record, { is_favorite: review.merged.favorite, collectionIds: ids, updated_at: now }); write(data)

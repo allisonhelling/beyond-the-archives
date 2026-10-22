@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { blankMetadata, type Story } from './model'
-import { librarySeries, seriesReadingStatus, seriesMemberships, type SeriesRecord } from './series'
+import { librarySeries, seriesInformation, seriesKudosLabel, seriesReadingStatus, seriesMemberships, type SeriesRecord } from './series'
 import type { SeriesPreview } from '../imports/urls'
 const url = 'https://archiveofourown.org/series/77'
 function story(id: number, series = true): Story { return { id: String(id), work: { ao3_work_id: id }, metadata: { ...blankMetadata, title: `Saved ${id}`, authors: ['Reader author'], fandoms: ['Saved fandom'], series_memberships: series ? [{ id: 77, url, name: 'My series', position: 4 }] : [] } } as unknown as Story }
@@ -38,6 +38,10 @@ it.each([
  [['finished','to_read'],'reading'],
  [['re_reading','finished'],'reading'],
  [['waiting_for_updates','to_read'],'reading'],
+ [['paused_reading','to_read'],'paused_reading'],
+ [['finished','paused_reading'],'paused_reading'],
+ [['paused_reading','paused_reading'],'paused_reading'],
+ [['reading','paused_reading'],'reading'],
  [['did_not_finish','did_not_finish'],'did_not_finish'],
 ] as const)('derives series reading status from contained works: %j → %s', (states,expected) => {
  const stories = states.map((status,index) => ({...story(101+index),reading_status:status}))
@@ -80,4 +84,18 @@ it('keeps same-named works and series distinct by their AO3 IDs', () => {
  const shared = librarySeries([first,second])
  expect(shared).toHaveLength(1)
  expect(shared[0].works.map(work=>[work.workId,work.title])).toEqual([[101,'Same fic title'],[102,'Same fic title']])
+})
+
+
+it('unions series tags and warnings and totals known kudos once per work', () => {
+ const saved = story(102)
+ saved.metadata = { ...saved.metadata, relationship_tags: ['Alex/Morgan'], character_tags: ['Alex'], additional_tags: ['Adventure'], archive_warnings: ['Graphic Depictions Of Violence'], kudos: 0 }
+ saved.personal_rating = 4
+ const snapshot = { ...preview, works: preview.works.map(work => ({ ...work, relationshipTags: ['Alex/Morgan'], characterTags: ['Morgan'], additionalTags: ['Adventure', 'Magic'], archiveWarnings: ['No Archive Warnings Apply'], kudos: 12 })) }
+ const series = librarySeries([saved], [record(snapshot)])[0]
+ const info = seriesInformation(series)
+ expect(info).toMatchObject({ relationships: ['Alex/Morgan'], characters: ['Morgan', 'Alex'], tags: ['Adventure', 'Magic'], warnings: ['No Archive Warnings Apply', 'Graphic Depictions Of Violence'], kudos: 12, kudosKnown: 2, worksKnown: 2, personalRating: 4, ratedWorks: 1 })
+ expect(seriesKudosLabel(info)).toBe('12 kudos')
+ delete series.works[0].kudos
+ expect(seriesKudosLabel(seriesInformation(series))).toBe('0 kudos (1 of 2 works known)')
 })

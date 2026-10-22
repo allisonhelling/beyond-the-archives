@@ -1,5 +1,5 @@
 import { readBoundedBody } from './read-body.ts'
-import { parseSeriesUrl } from '../../src/features/imports/urls.ts'
+import { seriesPageUrl } from '../../src/features/imports/urls.ts'
 import { parseSeries, retrieveSeries } from './series.ts'
 
 type Dependencies = {
@@ -22,7 +22,7 @@ export function seriesHandler(deps: Dependencies) {
    if ('error' in body) return reply({ error: body.error === 'missing' ? 'Missing request.' : 'Series snapshot too large.' }, body.error === 'missing' ? 400 : 413)
    const input = JSON.parse(body.text)
    let url: string
-   try { url = parseSeriesUrl(input.url).normalizedUrl } catch { return reply({ error: 'Enter a valid AO3 series URL.' }, 400) }
+   try { url = seriesPageUrl(input.url) } catch { return reply({ error: 'Enter a valid AO3 series URL.' }, 400) }
    if (input.html !== undefined) {
     if (typeof input.html !== 'string') return reply({ error: 'Invalid snapshot.' }, 400)
     return reply({ preview: parseSeries(input.html, url) })
@@ -33,7 +33,8 @@ export function seriesHandler(deps: Dependencies) {
     if (result.failure.pauseSeconds) await deps.pause(result.failure.pauseSeconds, result.failure.category ?? 'series_preview')
     return reply({ error: 'Could not preview this series. AO3 may require sign-in or be unavailable. Retry later, use the browser extension, or skip this series.' }, 422)
    }
-   return reply({ preview: result.preview })
+   // Match reserve_series_preview’s 35-second hosted retrieval gate.
+   return reply({ preview: result.preview, ...(result.preview?.nextUrl && { nextPageDelayMs: 35_000 }) })
   } catch (error) { return reply({ error: error instanceof Error && /Series preview|different series|more pages/.test(error.message) ? error.message : 'Could not preview this series. Retry or skip it to continue.' }, 422) }
  }
 }

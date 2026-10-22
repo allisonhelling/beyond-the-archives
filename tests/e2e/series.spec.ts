@@ -42,7 +42,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  expect(bounds!.x).toBeGreaterThanOrEqual(0)
  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width)
  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
- await dialog.getByRole('button', {name:'Load'}).click()
+ await dialog.getByRole('button', {name:'Save'}).click()
  await expect(dialog.getByRole('button', {name:'Full series details saved'})).toBeDisabled()
  expect(tables.library_series).toHaveLength(1)
  expect(tables.library_entries).toHaveLength(1)
@@ -82,7 +82,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await expect(card.getByText('My personal series summary', {exact:true})).toBeVisible()
  await expect(card).not.toContainText('Unsaved sequel')
  await expect(card).not.toContainText('Second summary')
- await page.goto('/settings')
+ await page.goto('/settings#settings-browsing')
  await expect(page.getByText('Dates will appear:', {exact:false})).toContainText('10/20/2026')
  await expect(page.getByRole('combobox', {name:'Works per page',exact:true})).toHaveCSS('border-top-style', 'solid')
  await expect(page.getByRole('combobox', {name:'Date format',exact:true})).toHaveCSS('border-top-style', 'solid')
@@ -107,7 +107,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await expect(page.getByText('20 Oct 2026', {exact:true})).toBeVisible()
  await page.goto('/stories/entry-101')
  await expect(page.getByText('20 Oct 2026', {exact:true})).toBeVisible()
- await page.goto('/settings')
+ await page.goto('/settings#settings-browsing')
  await expect(page.getByRole('combobox', {name:'Date format',exact:true})).toHaveValue('DMY')
  await page.getByRole('combobox', {name:'Date format',exact:true}).selectOption('YMD')
  await expect(page.getByText('Dates will appear:', {exact:false})).toHaveText('Dates will appear: 2026-10-20Date Updated: 2026 Oct 20')
@@ -134,4 +134,32 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await expect(related).toHaveCount(0)
  expect(tables.library_entries).toHaveLength(1)
 
+})
+
+test('series preview follows Next pages before offering all works for import', async ({ page }) => {
+ const tables = await fixture(page), url = 'https://archiveofourown.org/series/77'
+ const requested: string[] = []
+ await page.route('**/functions/v1/series-preview', route => {
+  const target = route.request().postDataJSON().url as string
+  requested.push(target)
+  const number = Number(new URL(target).searchParams.get('page') ?? 1)
+  return route.fulfill({ json: { preview: {
+   seriesId: 77, normalizedUrl: url, title: 'Paged series', description: '', workCount: 3,
+   ...(number < 3 && { nextUrl: `${url}?page=${number + 1}` }),
+   works: [{ workId: 100 + number, url: `https://archiveofourown.org/works/${100 + number}`, position: number, title: `Paged work ${number}`, authors: ['Author'], summary: '', tags: [], wordCount: 100, chapters: '1/1', complete: true }],
+  } } })
+ })
+ await page.goto('/series/77'); await login(page)
+ await page.getByRole('button', { name: 'Choose Works to Import' }).click()
+ const dialog = page.getByRole('dialog', { name: 'Review series', exact: true })
+ await expect(dialog.getByRole('checkbox')).toHaveCount(3)
+ expect(requested).toEqual([url, `${url}?page=2`, `${url}?page=3`])
+ const save = dialog.getByRole('button', { name: 'Save', exact: true })
+ await expect(save).toHaveAccessibleDescription('Load and save full series details from AO3')
+ const heading = dialog.locator('.series-import-heading')
+ await expect(heading.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
+ await save.click()
+ await expect(dialog.getByRole('button', { name: 'Full series details saved' })).toBeDisabled()
+ expect(tables.library_series).toHaveLength(1)
+ expect(tables.library_entries).toHaveLength(0)
 })

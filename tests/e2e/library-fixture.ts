@@ -100,7 +100,18 @@ export async function fixture(page: Page) {
     const matches = (row: Row) => requestedIds.has(String(row.id)) && (url.searchParams.get('default_key') !== 'is.null' || !row.default_key)
     if (request.method() === 'PATCH') {
       const changed = rows.filter(matches)
+      if (table === 'collections' && body?.automatic_rules === null) {
+        const stories = libraryQueryFixture('library_story_details', { p_ids: tables.library_entries.map(entry => entry.id) }, tables) as { id: string; automaticCollectionIds?: string[] }[]
+        for (const collection of changed.filter(row => row.automatic_rules)) for (const story of stories) {
+          if (story.automaticCollectionIds?.includes(String(collection.id)) && !tables.collection_works.some(link => link.collection_id === collection.id && link.library_entry_id === story.id)) tables.collection_works.push({ collection_id: collection.id, library_entry_id: story.id })
+        }
+      }
       changed.forEach(row => Object.assign(row, body, { updated_at: now }))
+      if (table === 'collections' && body?.automatic_rules) {
+        const automatic = new Set(changed.map(row => row.id))
+        tables.collection_works = tables.collection_works.filter(link => !automatic.has(link.collection_id))
+        tables.collection_series = tables.collection_series.filter(link => !automatic.has(link.collection_id))
+      }
       return route.fulfill({ json: request.headers().accept?.includes('object') ? changed[0] : null })
     }
     if (request.method() === 'DELETE') {

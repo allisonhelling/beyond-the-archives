@@ -57,3 +57,9 @@ it('closes on Escape without submitting or closing the enclosing form', async ()
   expect(trigger).toHaveAttribute('aria-expanded', 'false')
   expect(submit).not.toHaveBeenCalled()
 })
+
+
+it('shows preset hex values when requested by the shared tag appearance settings', () => {
+ render(<CollectionColorPicker value="#970000" onChange={vi.fn()} showHex />)
+ expect(screen.getByRole('button',{name:'Custom color'})).toHaveTextContent('#970000')
+})

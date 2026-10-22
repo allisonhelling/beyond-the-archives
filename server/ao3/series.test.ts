@@ -12,10 +12,10 @@ it('extracts ordered work previews with original positions, summaries, tags and 
  expect(preview.works[0]).toMatchObject({ workId: 101, position: 1, authors: ['One'], wordCount: 12345, chapters: '2/2', complete: true, summary: 'A beginning.', tags: ['Fandom', 'Adventure'] })
  expect(preview.works[1]).toMatchObject({ workId: 102, position: 4, wordCount: 0, complete: false, tags: ['Fanart'] })
 })
-it('rejects unavailable, different, and paginated listings rather than returning misleading previews', () => {
+it('rejects unavailable, different, and invalid paginated listings', () => {
  expect(() => parseSeries('<h2 class="heading">Sign in</h2>', url)).toThrow('Series preview is unavailable')
  expect(() => parseSeries(html, 'https://archiveofourown.org/series/78')).toThrow('different series')
- expect(() => parseSeries(html + '<ol class="pagination"><li class="next"><a>Next</a></li></ol>', url)).toThrow('more pages')
+ expect(() => parseSeries(html + '<ol class="pagination"><li class="next"><a>Next</a></li></ol>', url)).toThrow('invalid Next link')
 })
 it('fetches only the normalized listing, never follows redirects or loads its works', async () => {
  const fetcher = vi.fn().mockResolvedValue(new Response(html, { headers: { 'content-type': 'text/html' } }))
@@ -67,4 +67,22 @@ it('tracks the series Complete field independently from the completion of its wo
  expect(parseSeries(html.replace('<dt>Description:</dt>', '<dt>Complete:</dt><dd>No</dd><dt>Description:</dt>'),url).complete).toBe(false)
  expect(parseSeries(html.replace('<dt>Description:</dt>', '<dt>Complete:</dt><dd>Yes</dd><dt>Description:</dt>'),url).complete).toBe(true)
  expect(parseSeries(html,url).complete).toBe(null)
+})
+
+it('extracts the Next page and retains its page number for retrieval', async () => {
+ const next = url + '?page=2'
+ const page = html + '<ol class="pagination"><li class="next"><a href="?page=2">Next</a></li></ol>'
+ expect(parseSeries(page, url).nextUrl).toBe(next)
+ const fetcher = vi.fn().mockResolvedValue(new Response(html, { headers: { 'content-type': 'text/html' } }))
+ await retrieveSeries(next, fetcher)
+ expect(fetcher.mock.calls[0][0]).toBe(next)
+ for (const href of ['https://evil.example/series/77?page=2', '/series/78?page=2', '?page=1', '?page=oops']) {
+  expect(() => parseSeries(html + `<ol class="pagination"><li class="next"><a href="${href}">Next</a></li></ol>`, url)).toThrow()
+ }
+})
+
+it('extracts kudos and categorized warnings from series work listings', () => {
+ const source = html.replace('<dd class="words">', '<dd class="kudos">1,234</dd><dd class="words">').replace('<ul class="tags">', '<ul class="tags"><li class="warnings"><a class="tag">Major Character Death</a></li>')
+ expect(parseSeries(source, url).works[0]).toMatchObject({ kudos: 1234, archiveWarnings: ['Major Character Death'] })
+ expect(parseSeries(html, url).works[0].kudos).toBeNull()
 })

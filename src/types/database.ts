@@ -94,6 +94,7 @@ export type Database = {
           symbol: string | null
           sort_position: number | null
           last_story_added_at: string | null
+          automatic_rules: Json | null
         }
         Insert: {
           id?: string
@@ -107,6 +108,7 @@ export type Database = {
           symbol?: string | null
           sort_position?: number | null
           last_story_added_at?: string | null
+          automatic_rules?: Json | null
         }
         Update: {
           id?: string
@@ -120,6 +122,7 @@ export type Database = {
           symbol?: string | null
           sort_position?: number | null
           last_story_added_at?: string | null
+          automatic_rules?: Json | null
         }
         Relationships: [
         ]
@@ -230,6 +233,37 @@ export type Database = {
           { foreignKeyName: 'import_items_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
           { foreignKeyName: 'import_items_duplicate_of_fkey'; columns: ['duplicate_of']; isOneToOne: false; referencedRelation: 'import_items'; referencedColumns: ['id'] },
           { foreignKeyName: 'import_items_batch_id_user_id_fkey'; columns: ['batch_id', 'user_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
+      library_collection_documents: {
+        Row: {
+          id: string | null
+          user_id: string | null
+          work_id: string | null
+          story: Json | null
+          search_any: string | null
+          search_summary: string | null
+          search_notes: string | null
+        }
+        Insert: {
+          id?: string | null
+          user_id?: string | null
+          work_id?: string | null
+          story?: Json | null
+          search_any?: string | null
+          search_summary?: string | null
+          search_notes?: string | null
+        }
+        Update: {
+          id?: string | null
+          user_id?: string | null
+          work_id?: string | null
+          story?: Json | null
+          search_any?: string | null
+          search_summary?: string | null
+          search_notes?: string | null
+        }
+        Relationships: [
         ]
       }
       library_entries: {
@@ -819,9 +853,9 @@ export type Database = {
       }
     }
     Enums: {
-      metadata_source: 'unknown' | 'ao3' | 'manual' | 'extension'
+      reading_status: 'to_read' | 'reading' | 'paused_reading' | 'waiting_for_updates' | 're_reading' | 'finished' | 'did_not_finish'
       ao3_tag_category: 'relationship' | 'character' | 'freeform' | 'warning' | 'category'
-      reading_status: 'to_read' | 'reading' | 'waiting_for_updates' | 're_reading' | 'finished' | 'did_not_finish'
+      metadata_source: 'unknown' | 'ao3' | 'manual' | 'extension'
     }
     CompositeTypes: { [_ in never]: never }
   }

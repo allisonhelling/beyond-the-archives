@@ -20,11 +20,12 @@ function toHex({ h, s, v }: Hsv) {
   return `#${channel(5)}${channel(3)}${channel(1)}`
 }
 
-export function CollectionColorPicker({ value, onChange, disabled = false }: { value: string; onChange: (hex: string) => void; disabled?: boolean }) {
+export function CollectionColorPicker({ value, onChange, disabled = false, showHex = false }: { value: string; onChange: (hex: string) => void; disabled?: boolean; showHex?: boolean }) {
   const [open, setOpen] = useState(false)
   const [hsv, setHsv] = useState(() => toHsv(value))
   const current = validHex.test(value) && toHex(hsv) !== value.toLowerCase() ? toHsv(value) : hsv
-  const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false))
+  // Let the outside click finish before collapsing this inline panel moves its target.
+  const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false), { outsideEvent: 'click', dismissOnFocus: false })
   const trigger = useRef<HTMLButtonElement>(null)
   const hexInput = useRef<HTMLInputElement>(null)
   const panelId = useId()
@@ -38,7 +39,7 @@ export function CollectionColorPicker({ value, onChange, disabled = false }: { v
     if (open && (event.key === 'Escape' || event.key === 'Enter')) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus() }
   }}>
     <button ref={trigger} type="button" className="button secondary collection-color-trigger" disabled={disabled} aria-label="Custom color" title={value} aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>
-      <span className="collection-color-swatch" style={{ '--cover-color': validHex.test(value) ? value : toHex(current) } as CSSProperties} aria-hidden="true" />{customColor ? value : 'Custom color'}
+      <span className="collection-color-swatch" style={{ '--cover-color': validHex.test(value) ? value : toHex(current) } as CSSProperties} aria-hidden="true" />{showHex || customColor ? value : 'Custom color'}
     </button>
     <div id={panelId} className="collection-color-picker" hidden={!open} data-open={open || undefined}>
       {open && <div className="collection-color-controls" role="group" aria-label="Color picker">

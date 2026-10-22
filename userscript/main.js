@@ -4,6 +4,8 @@ import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
 
+const defaultRatingInfo = 'Add how your personal rating system corresponds to the stars here! Edit this text in settings. To hide the info symbol, leave the box blank.'
+
 export async function mountLibrary(doc = document, href = location.href) {
  const page = readPage(doc, href)
  if (!page || doc.getElementById('ao3-library-companion')) return
@@ -24,13 +26,14 @@ export async function mountLibrary(doc = document, href = location.href) {
  if (bottomAnchor) bottomAnchor.before(bottomHost)
  else doc.querySelector('#workskin')?.after(bottomHost)
  bottomHost.hidden = true
- const storageKey = `connection:${__SUPABASE_URL__}`, themeKey = `theme:${__SUPABASE_URL__}`
+ const storageKey = `connection:${__SUPABASE_URL__}`, themeKey = `theme:${__SUPABASE_URL__}`, ratingInfoKey = `rating-info:${__SUPABASE_URL__}`
  const preferredTheme = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
- let [connection, theme] = await Promise.all([GM.getValue(storageKey, null), GM.getValue(themeKey, preferredTheme)])
+ let [connection, theme, ratingInfo] = await Promise.all([GM.getValue(storageKey, null), GM.getValue(themeKey, preferredTheme), GM.getValue(ratingInfoKey, defaultRatingInfo)])
+ ratingInfo = typeof ratingInfo === 'string' ? ratingInfo : defaultRatingInfo
  theme = ['light', 'dark'].includes(theme) ? theme : preferredTheme
  const applyTheme = () => [host, bottomHost].forEach(surface => { surface.dataset.theme = theme })
  applyTheme()
- let entry = null, collections = [], loaded = false, busy = false, draft = null, activePanel = null, syncEditorProgress = null, disposePersonalControls = null, syncEditorDraft = null, disposeConflict = null, pendingConflict = null
+ let entry = null, collections = [], loaded = false, busy = false, draft = null, activePanel = null, syncEditorProgress = null, personalControls = null, syncEditorDraft = null, disposeConflict = null, pendingConflict = null
  const toolbar = doc.createElement('div'); toolbar.className = 'toolbar'; section.append(toolbar)
  const message = doc.createElement('p'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite')
  const panel = doc.createElement('div'); section.append(message, panel)
@@ -86,10 +89,16 @@ export async function mountLibrary(doc = document, href = location.href) {
    message.textContent = 'Saved'; renderToolbar()
   } })
  }
- function clearEditor() { disposePersonalControls?.(); disposePersonalControls = null; syncEditorProgress = null; syncEditorDraft = null; editorPanel.replaceChildren() }
+ function clearEditor() { personalControls?.unmount(); personalControls = null; syncEditorProgress = null; syncEditorDraft = null; editorPanel.replaceChildren() }
  function resetPanels() { clearConflict(); showPanel(null); clearEditor(); connectionPanel.replaceChildren() }
  function panelButton(label, name, action, parent = toolbar) {
-  const element = button(label, action, parent)
+  const element = button(label, async () => {
+   await action()
+   if (bottomBar.contains(element) && activePanel === name) {
+    host.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    panel.querySelector('div:not([hidden]) input, div:not([hidden]) textarea')?.focus({ preventScroll: true })
+   }
+  }, parent)
   element.setAttribute('aria-expanded', String(activePanel === name))
   element.setAttribute('aria-controls', name === 'editor' ? editorPanel.id : connectionPanel.id)
   return element
@@ -205,16 +214,22 @@ export async function mountLibrary(doc = document, href = location.href) {
  }
  function renderToolbar() {
   toolbar.replaceChildren(); bottomBar.replaceChildren()
-  bottomHost.hidden = !connection || !loaded || !entry
+  bottomHost.hidden = false
+  bottomBar.className = entry ? 'row bottom-bar' : 'toolbar'
   footer.hidden = Boolean(connection && !activePanel)
-  libraryLink(toolbar)
-  const center = node('div', '', toolbar); center.className = 'row toolbar-progress'
-  const actions = node('div', '', toolbar); actions.className = 'row toolbar-actions'
+  renderBar(toolbar)
+  if (entry) renderProgress(bottomBar)
+  else renderBar(bottomBar)
+ }
+ function renderBar(parent) {
+  libraryLink(parent)
+  const center = node('div', '', parent); center.className = 'row toolbar-progress'
+  const actions = node('div', '', parent); actions.className = 'row toolbar-actions'
   if (!connection) { panelButton('Connect Library', 'connection', showConnection, actions); return }
   if (!loaded) button('Load saved entry', load, center)
   else if (!entry) panelButton('Add to Library', 'editor', openEditor, center)
   else {
-   renderProgress(actions, center); renderProgress(bottomBar)
+   renderProgress(actions, center)
    const edit = panelButton('Edit', 'editor', openEditor, actions); edit.className = 'edit-button'
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
@@ -226,12 +241,13 @@ export async function mountLibrary(doc = document, href = location.href) {
   if (activePanel === 'connection') { showPanel(null); return }
   showPanel('connection')
   if (connectionPanel.childNodes.length) return
+  const settingsActions = node('div', '', connectionPanel); settingsActions.className = 'row connection-settings'
   const themeToggle = button('', async () => {
    const next = theme === 'light' ? 'dark' : 'light'
    try { await GM.setValue(themeKey, next) }
    catch { throw new Error('Could not save your color mode. Try again.') }
    theme = next; applyTheme(); renderThemeToggle()
-  }, connectionPanel)
+  }, settingsActions)
   themeToggle.className = 'theme-toggle'
   function renderThemeToggle() {
    themeToggle.replaceChildren()
@@ -239,6 +255,24 @@ export async function mountLibrary(doc = document, href = location.href) {
    node('span', theme === 'light' ? 'Dark Mode' : 'Light Mode', themeToggle)
   }
   renderThemeToggle()
+  const ratingToggle = button('Rating Info', () => {
+   ratingEditor.hidden = !ratingEditor.hidden
+   ratingToggle.setAttribute('aria-expanded', String(!ratingEditor.hidden))
+   if (!ratingEditor.hidden) ratingText.focus()
+  }, settingsActions)
+  ratingToggle.setAttribute('aria-expanded', 'false'); ratingToggle.setAttribute('aria-controls', 'library-rating-info')
+  const ratingEditor = node('div', '', connectionPanel); ratingEditor.id = 'library-rating-info'; ratingEditor.className = 'rating-info-editor'; ratingEditor.hidden = true
+  const ratingLabel = node('label', 'Rating info text', ratingEditor), ratingText = node('textarea', '', ratingLabel)
+  ratingText.rows = 4; ratingText.value = ratingInfo
+  node('p', 'Saved on this device. Leave blank and save to hide the rating info icon.', ratingEditor)
+  button('Save Rating Info', async () => {
+   const next = ratingText.value
+   try { await GM.setValue(ratingInfoKey, next) }
+   catch { throw new Error('Could not save your rating info. Try again.') }
+   ratingInfo = next
+   personalControls?.updateRatingInfo(ratingInfo)
+   message.textContent = 'Rating info saved on this device.'
+  }, ratingEditor)
   node('p', 'In Library Settings → iOS Safari userscript, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
   const label = node('label', 'One-time pairing code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false
@@ -279,7 +313,7 @@ export async function mountLibrary(doc = document, href = location.href) {
    infoHelp(control, title, description)
   }
   const status = field('Reading Status', 'select', 'status')
-  for (const key of [...new Set(['to_read', 'reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? 'Currently Reading' : statuses[key], status); option.value = key }
+  for (const key of [...new Set(['to_read', 'reading', 'paused_reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? 'Currently Reading' : statuses[key], status); option.value = key }
   status.value = draft.status
   help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-reading marks the fic as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
@@ -321,7 +355,7 @@ export async function mountLibrary(doc = document, href = location.href) {
   }
   const notes = growingField('Private Notes', 'notes', 3)
   const personal = node('div', '', fieldset)
-  const renderPersonal = () => { disposePersonalControls?.(); disposePersonalControls = mountPersonalControls(personal, draft, () => { void preserveDraft() }) }
+  const renderPersonal = () => { personalControls?.unmount(); personalControls = mountPersonalControls(personal, draft, () => { void preserveDraft() }, ratingInfo) }
   renderPersonal()
   const choices = node('details', '', fieldset); choices.className = 'collection-picker'
   node('summary', 'Add to custom collection', choices)

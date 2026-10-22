@@ -132,3 +132,9 @@ it('shows only saved work titles and summaries on tiles, with the private series
  fireEvent.click(controls)
  expect(screen.getByRole('button', { name:'Expand All' })).toBeVisible()
 })
+
+it('hides the unsaved-work toggle when every series work is in the library', () => {
+ mocks.series = [record({ ...full, workCount: 1 })]
+ show()
+ expect(screen.queryByRole('button', { name: /Works Not in Library/ })).not.toBeInTheDocument()
+})

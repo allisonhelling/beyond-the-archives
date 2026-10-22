@@ -40,6 +40,8 @@ try {
       query_library: { Args: { p_query?: Json; p_page?: number; p_size?: number }; Returns: Json }
       update_library_series: { Args: { p_series: number; p_input: Json; p_base: Json }; Returns: undefined }
       finish_library_series: { Args: { p_series: number }; Returns: number }
+      ensure_library_series: { Args: { p_series: number; p_title: string }; Returns: undefined }
+      remove_library_series_details: { Args: { p_series: number }; Returns: undefined }
       remember_library_series: { Args: { p_metadata: Json }; Returns: string }
       save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }

@@ -10,7 +10,7 @@ async function user(id: string, action: () => Promise<void>) { await db.exec(`se
 async function save(options: { url?: string; metadata?: object; status?: string; progress?: number; id?: string; collections?: string[]; tags?: string[] } = {}) {
   return db.query<{ id: string }>('select public.save_library_story($1,$2,$3,$4,$5,$6::smallint,$7,$8::uuid[],$9::text[],$10::uuid) as id', [options.url ?? 'https://archiveofourown.org/works/123/chapters/999?view_adult=true', JSON.stringify(options.metadata ?? { title: 'Private title', authors: ['A', 'B'], series: ['Manual series'], fandoms: ['F'], ao3_tags: ['AO3 tag'], total_chapters: null, published_chapters: null }), options.status ?? 'reading', options.progress ?? 0, 'Private notes', 4, true, options.collections ?? [], options.tags ?? ['Comfort', 'Revisit'], options.id ?? null])
 }
-beforeAll(async () => { db = await createTestDatabase(); await db.exec(`insert into auth.users values ('${alice}'),('${bob}')`) }, 30000)
+beforeAll(async () => { db = await createTestDatabase(); await db.exec(`insert into auth.users values ('${alice}'),('${bob}'); delete from public.collections`) }, 30000)
 afterAll(async () => { await db?.close() })
 it('saves manually without retrieval, preserving unknown counts, original URL and private metadata', async () => {
   await user(alice, async () => {

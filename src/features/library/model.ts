@@ -1,13 +1,14 @@
 import { parseWorkUrl } from '../imports/urls'
 import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
-export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
+export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
-export type Metadata = { one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export function ratingLabel(rating: string): string { return /^teen and up audiences$/i.test(rating) ? 'Teen and Up' : rating }
+export type Metadata = { kudos?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 export type Entry = Database['public']['Tables']['library_entries']['Row']
 export type Work = Database['public']['Tables']['works']['Row']
-export type Collection = Database['public']['Tables']['collections']['Row']
-export type Story = Entry & { detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
+export type Collection = Omit<Database['public']['Tables']['collections']['Row'], 'automatic_rules'> & { automatic_rules?: Json | null }
+export type Story = Entry & { automaticCollectionIds?: string[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 export const blankMetadata: Metadata = { title: '', authors: [], fandoms: [], ao3_tags: [], summary: '', rating: '', publication_status: 'unknown', published_chapters: null, total_chapters: null, word_count: null }
 /** Manual corrections take precedence; automatic labels follow current metadata and tags. */
 export function isOneShot(metadata: Metadata, personalTags: string[] = []): boolean {

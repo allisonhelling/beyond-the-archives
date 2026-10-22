@@ -34,6 +34,7 @@
 fieldset.personal-rating { border: 0; padding: 0; margin: 0; background: transparent; flex: 1; }
 .personal-rating legend { padding: 0; font-size: var(--personal-control-font-size, 14px); margin-bottom: 8px; }
 .rating-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rating-actions { display: inline-flex; align-items: center; gap: inherit; }
 .rating-stars { --rating-preview-fill: #d9a3a3; color: var(--color-brand); display: flex; align-items: center; gap: 2px; }
 .rating-star[data-preview] svg { fill: var(--rating-preview-fill); }
 label.rating-star, span.rating-star { display: grid; place-items: center; position: relative; margin: 0; width: var(--rating-star-width, 32px); height: var(--rating-star-height, 40px); color: var(--color-brand, #970000); }
@@ -45,3 +46,11 @@ label.rating-star, span.rating-star { display: grid; place-items: center; positi
   label.rating-star, span.rating-star { width: var(--rating-star-width, 27px); }
   .rating-controls { gap: 6px; }
 }
+/* Presentation is shared across every metadata surface and the shape picker. */
+.categorized-tags { color: var(--tag-color); font-size: var(--personal-control-font-size, 13px); }
+.categorized-tags .metadata-tag { color: inherit; border-color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 8%, #fffdfb); }
+.categorized-tags[data-tag-shape="curved"] .metadata-tag { border-radius: 5px; }
+.categorized-tags[data-tag-shape="sharp"] .metadata-tag { border-radius: 0; }
+.categorized-tags:is([data-tag-shape="bullets"], [data-tag-shape="commas"]) { display: inline; }
+.categorized-tags:is([data-tag-shape="bullets"], [data-tag-shape="commas"]) .metadata-tag { border: 0; padding: 0; border-radius: 0; background: transparent; }
+.info-separator { font-size: calc(var(--personal-control-font-size, 13px) * .75); vertical-align: .08em; white-space: pre; }

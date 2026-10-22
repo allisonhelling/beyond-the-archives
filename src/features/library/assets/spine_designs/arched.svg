@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 150 360"
+     preserveAspectRatio="none"
+     width="100%"
+     height="100%"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.7"
+     stroke-linejoin="round"
+     vector-effect="non-scaling-stroke"
+     aria-hidden="true">
+  <g>
+    <path d="M20 302V108C20 78 46 57 75 40C104 57 130 78 130 108V302L120 312H30Z" />
+    <path d="M27 299V109C27 84 50 65 75 49C100 65 123 84 123 109V299L117 305H33Z" stroke-width=".8" opacity=".75" />
+    <path d="M75 65L81 74L75 83L69 74Z" stroke-width="1" />
+    <path d="M75 279L81 287L75 295L69 287ZM43 287H61M89 287H107" stroke-width="1" />
+  </g>
+</svg>

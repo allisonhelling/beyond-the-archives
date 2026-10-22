@@ -3,8 +3,8 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Shared JS database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
-import { defaultReadingFilters, filterReading, parseSearch } from '../../src/features/library/reading-search'
-import { librarySeries } from '../../src/features/library/series'
+import { defaultReadingFilters, filterReading, parseSearch, shuffleKey } from '../../src/features/library/reading-search'
+import { librarySeries, seriesInformation } from '../../src/features/library/series'
 import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series-search'
 import type { Story } from '../../src/features/library/model'
 import type { LibraryResults } from '../../src/features/library/repository'
@@ -101,6 +101,50 @@ it('searches unsaved series installments and private saved corrections before pa
   if(related) expect(related.works[0].title).toBe(saved.metadata.title)
  }
 })
+it('loads collections and series sorted by update date when a series has no update date',async()=>{
+ await db.query('select public.remember_library_series($1)',[JSON.stringify({seriesId:1001,title:'Undated series',normalizedUrl:'https://archiveofourown.org/series/1001',basic:false,updated:'',works:[]})])
+ await db.query('select public.update_library_series(1001,$1,$2)',[JSON.stringify({favorite:true}),JSON.stringify({favorite:false})])
+ for (const shelf of ['series','favorites']) {
+  expect((await query({sort:'updated'},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(true)
+  expect((await query({sort:'updated',updatedAfter:'2026-01-01'},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(false)
+ }
+})
+it('returns inferred series without trying to remove metadata from a null personal record',async()=>{
+ const saved=(await documents())[2]
+ const membership={id:2000,name:'Inferred series',url:'https://archiveofourown.org/series/2000',position:1}
+ await db.query("update public.library_entries set metadata_overrides=metadata_overrides||jsonb_build_object('series_memberships',$2::jsonb) where id=$1",[saved.id,JSON.stringify([membership])])
+ for (const sort of ['added','added_reverse','alpha','alpha_reverse','updated','updated_reverse','ready','ready_reverse']) {
+  const result=await query({sort},1,25,'series')
+  const inferred=result.series.find(series=>series.seriesId===2000)
+  expect(inferred).toMatchObject({title:'Inferred series',record:null,savedStories:[{id:saved.id}]})
+  expect(result.stories.some(story=>story.id==='series:2000')).toBe(true)
+ }
+})
+it('pauses and resumes a story without changing progress and matches paused series in the new shelf',async()=>{
+ const saved=(await documents())[2]
+ await db.query('select public.update_library_entry_checked($1,$2,$3)',[saved.id,JSON.stringify({status:'paused_reading'}),JSON.stringify({status:saved.reading_status,progress:saved.last_read_chapter})])
+ const paused=(await documents()).find(story=>story.id===saved.id)!
+ expect(paused).toMatchObject({reading_status:'paused_reading',last_read_chapter:saved.last_read_chapter})
+ const dashboard=(await db.query<{result:LibraryResults}>('select public.query_library($1,1,25) result',[JSON.stringify({mode:'reading',shelf:'paused_reading',filters:defaultReadingFilters})])).rows[0].result
+ expect(dashboard.sections.paused_reading).toBe(1)
+ expect(dashboard.stories.map(story=>story.id)).toEqual([saved.id])
+ const results=await query({},1,25,'paused_reading')
+ expect(results.stories.map(story=>story.id)).toEqual(expect.arrayContaining([saved.id,'series:2000']))
+ expect((await query({within:'"Paused Reading"'},1,25,'paused_reading')).stories.map(story=>story.id)).toContain(saved.id)
+ expect((await query({},1,100,'currently_reading')).stories.map(story=>story.id)).not.toContain(saved.id)
+ await db.query('select public.update_library_entry_checked($1,$2,$3)',[saved.id,JSON.stringify({status:saved.reading_status}),JSON.stringify({status:'paused_reading',progress:saved.last_read_chapter})])
+ expect((await query({},1,25,'paused_reading')).stories).toEqual([])
+ expect((await documents()).find(story=>story.id===saved.id)?.last_read_chapter).toBe(saved.last_read_chapter)
+})
+it('includes current work kudos, warnings and personal ratings in paginated series tiles',async()=>{
+ const saved=(await documents())[0]
+ const membership={id:3333,name:'Metadata series',url:'https://archiveofourown.org/series/3333',position:1}
+ await db.query("update public.library_entries set personal_rating=3,metadata_overrides=metadata_overrides||jsonb_build_object('series_memberships',$2::jsonb,'kudos',2345,'archive_warnings',jsonb_build_array('Graphic Depictions Of Violence')) where id=$1",[saved.id,JSON.stringify([membership])])
+ const series=(await query({},1,100,'series')).series.find(series=>series.seriesId===3333)!
+ expect(series.savedStories[0].personal_rating).toBe(3)
+ expect(series.works[0]).toMatchObject({kudos:2345,archiveWarnings:['Graphic Depictions Of Violence']})
+ expect(seriesInformation(series)).toMatchObject({kudos:2345,personalRating:3,warnings:['Graphic Depictions Of Violence']})
+})
 it('isolates private projections, catalog, series and details and disallows direct cache writes',async()=>{
  const ids=(await documents()).map(s=>s.id)
  await db.exec(`set role authenticated; set request.jwt.claim.sub='${bob}'`)
@@ -116,4 +160,16 @@ it('isolates private projections, catalog, series and details and disallows dire
  await expect(db.query('select public.query_library()')).rejects.toThrow('permission denied')
  await expect(db.query('select * from public.library_search_documents')).rejects.toThrow('permission denied')
  await db.exec(`reset role; set role authenticated; set request.jwt.claim.sub='${alice}'`)
+})
+
+it('keeps seeded random ordering in parity with the browser across page boundaries',async()=>{
+ const docs=await documents(), filters={...defaultReadingFilters,sort:'random' as const,randomSeed:'first shuffle'}
+ const first=await query(filters)
+ const remaining=await Promise.all(Array.from({length:first.pages-1},(_,i)=>query(filters,i+2)))
+ const ids=[first,...remaining].flatMap(result=>result.stories.map(story=>story.id))
+ expect(ids).toEqual(filterReading(docs,filters).map(story=>story.id))
+ expect(new Set(ids).size).toBe(docs.length)
+ expect((await query(filters)).stories.map(story=>story.id)).toEqual(first.stories.map(story=>story.id))
+ expect((await query({...filters,randomSeed:'another shuffle'})).stories.map(story=>story.id)).not.toEqual(first.stories.map(story=>story.id))
+ expect((await db.query<{key:string}>('select public.library_shuffle_key($1,$2)::text key',['series:42','Café 📚'])).rows[0].key).toBe(String(shuffleKey('series:42','Café 📚')))
 })

@@ -70,11 +70,10 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
    const available = preview?.works.filter(work => !savedIds.has(work.workId) && !direct.has(work.workId)) ?? []
    const disabled = busy || loading !== undefined
    return <section className="settings-card series-import-preview" key={id} aria-label={preview?.title ?? `Series ${id}`}>
-    <h3>{preview ? <><a className="clickable-text" href={url} target="_blank" rel="noreferrer">{preview.title}</a> · </> : null}Series {id}</h3>
+    <div className="series-import-heading"><h3>{preview ? <><a className="clickable-text" href={url} target="_blank" rel="noreferrer">{preview.title}</a> · </> : null}Series {id}</h3>{!review?.skipped && <Tooltip description={review?.detailsSaved ? 'Full series details saved' : 'Load and save full series details from AO3'}>{tooltipId => <button type="button" className="button secondary" aria-describedby={tooltipId} disabled={disabled || review?.detailsSaved} onClick={() => void saveDetails(id, url)}>{review?.detailsSaved ? 'Full series details saved' : 'Save'}</button>}</Tooltip>}</div>
     {preview?.description && <p className="story-summary">{preview.description}</p>}
     {review?.error && <p className="error-message" role="alert">{review.error}</p>}
     {review?.skipped ? <><p>Series skipped.</p><button className="text-button" disabled={disabled} onClick={() => void load(id, url)}>Review series</button></> : <>
-     <div className="form-actions"><Tooltip description={review?.detailsSaved ? 'Full series details saved' : 'Load full series from AO3'}>{tooltipId => <button type="button" className="button secondary" aria-describedby={tooltipId} disabled={disabled || review?.detailsSaved} onClick={() => void saveDetails(id, url)}>{review?.detailsSaved ? 'Full series details saved' : 'Load'}</button>}</Tooltip></div>
      {!preview && <button className="button secondary" disabled={disabled} onClick={() => void load(id, url)}>{loading === id ? 'Loading series…' : review?.error ? 'Retry preview' : 'Load works'}</button>}
      {preview && <>
       <p>{preview.works.length} visible works · {available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>

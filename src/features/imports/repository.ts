@@ -2,7 +2,7 @@ import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { supabase } from '../../lib/supabase'
 import { allRows } from '../library/repository'
-import { classifyUrl, extractUrls, parseSeriesUrl, type SeriesPreview } from './urls'
+import { classifyUrl, extractUrls, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
 import { connectExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
 type Row<K extends keyof Database['public']['Tables']> = Database['public']['Tables'][K]['Row']
@@ -60,15 +60,32 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
  if (!session.session) throw new Error('Sign in to preview series.')
  const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode').eq('user_id', session.session.user.id).maybeSingle()
  if (settingsError) throw new Error('Could not load metadata settings. Retry the preview.')
- let body: { url: string; html?: string } = { url: identity.normalizedUrl }
- if (preferences?.retrieval_mode === 'extension') body = await previewSeriesWithExtension(identity.normalizedUrl)
- const { data, error } = await db.functions.invoke('series-preview', { body })
- if (error) {
-  let message = 'Could not preview this series. Check the series-preview function is deployed, then retry or skip it.'
-  try { const response = error.context as Response; const detail = await response.json(); if (typeof detail.error === 'string') message = detail.error } catch { /* Use the connection guidance. */ }
-  throw new Error(message)
+ let nextUrl: string | undefined = identity.normalizedUrl
+ let preview: SeriesPreview | undefined
+ const visited = new Set<string>(), works = new Map<number, SeriesPreview['works'][number]>()
+ while (nextUrl) {
+  const pageUrl = seriesPageUrl(nextUrl, identity.seriesId)
+  if (visited.has(pageUrl)) throw new Error('Series preview returned a repeated page. Retry the preview.')
+  visited.add(pageUrl)
+  let body: { url: string; html?: string } = { url: pageUrl }
+  if (preferences?.retrieval_mode === 'extension') body = await previewSeriesWithExtension(pageUrl)
+  const { data, error } = await db.functions.invoke('series-preview', { body })
+  if (error) {
+   let message = 'Could not preview this series. Check the series-preview function is deployed, then retry or skip it.'
+   try { const response = error.context as Response; const detail = await response.json(); if (typeof detail.error === 'string') message = detail.error } catch { /* Use the connection guidance. */ }
+   throw new Error(message)
+  }
+  if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
+  const page = data.preview as SeriesPreview
+  preview ??= { ...page }
+  for (const work of page.works) if (!works.has(work.workId)) works.set(work.workId, work)
+  nextUrl = page.nextUrl
+  if (nextUrl && preferences?.retrieval_mode !== 'extension' && data.nextPageDelayMs === 35_000) await new Promise(resolve => setTimeout(resolve, data.nextPageDelayMs))
  }
- if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
- const preview = data.preview as SeriesPreview
+ if (!preview) throw new Error('Series preview is unavailable.')
+ delete preview.nextUrl
+ preview.works = [...works.values()]
+ preview.workCount = Math.max(preview.workCount ?? 0, preview.works.length)
+
  return { ...preview, fetchedAt: new Date().toISOString() }
 }

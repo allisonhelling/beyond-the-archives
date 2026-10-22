@@ -1,3 +1,5 @@
+import { automaticCollectionRules } from './automatic-collections'
+import { defaultReadingFilters } from './reading-search'
 import { beforeAll, afterAll, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -188,4 +190,39 @@ it('bulk edits only chosen appearance fields and excludes names and summaries', 
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
   expect(state.updateMany).toHaveBeenCalledWith(['existing', 'second'], { symbol: 'leaf' })
   expect(state.save).not.toHaveBeenCalled()
+})
+
+it('converts an existing manual collection to automatic filters without changing its identity or appearance', async () => {
+ const user = userEvent.setup(), onClose = vi.fn()
+ render(<NewCollectionDialog collection={collection} onClose={onClose} />)
+ const automatic = screen.getByRole('checkbox',{name:'Automatic collection'})
+ expect(automatic).toBeEnabled()
+ await user.click(automatic)
+ expect(screen.getByText(/Saving replaces the manually chosen works/)).toBeVisible()
+ fireEvent.change(screen.getByRole('searchbox',{name:'Search author'}),{target:{value:'Comfort'}})
+ await user.click(screen.getByRole('heading',{name:'Edit collection'}))
+ await user.click(screen.getByRole('button',{name:'Save changes'}))
+ await waitFor(()=>expect(onClose).toHaveBeenCalledOnce())
+ expect(state.save).toHaveBeenCalledWith('Night reads','existing',{color:'#123456',symbol:'moon'},'',expect.objectContaining({filters:expect.objectContaining({query:'Comfort'})}))
+})
+
+
+it('warns before turning automatic collections off and saves removal of the rules only on Save', async () => {
+ const user=userEvent.setup(), closeEditor=vi.fn()
+ const automatic={...collection,automatic_rules:automaticCollectionRules({...defaultReadingFilters,tags:'Fluff'})} as unknown as Collection
+ render(<NewCollectionDialog collection={automatic} onClose={closeEditor} />)
+ const toggle=screen.getByRole('checkbox',{name:'Automatic collection'})
+ await user.click(toggle)
+ let confirmation=screen.getByRole('dialog',{name:'Turn Off Automatic Collection?'})
+ expect(confirmation).toHaveTextContent('New works will no longer be added automatically')
+ await user.click(within(confirmation).getByRole('button',{name:'Cancel'}))
+ expect(toggle).toBeChecked()
+ await user.click(toggle)
+ confirmation=screen.getByRole('dialog',{name:'Turn Off Automatic Collection?'})
+ await user.click(within(confirmation).getByRole('button',{name:'Keep Works and Turn Off'}))
+ expect(toggle).not.toBeChecked()
+ expect(screen.queryByRole('group',{name:'Collection Filters'})).not.toBeInTheDocument()
+ expect(state.save).not.toHaveBeenCalled()
+ await user.click(screen.getByRole('button',{name:'Save changes'}))
+ expect(state.save).toHaveBeenCalledWith(collection.name,collection.id,{color:collection.color,symbol:collection.symbol},'',null)
 })

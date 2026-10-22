@@ -10,7 +10,9 @@ export function readBrowsing(params: URLSearchParams, defaults = defaultReadingF
     } else if (typeof defaultReadingFilters[key] === 'boolean') Object.assign(filters, { [key]: value === 'true' })
     else Object.assign(filters, { [key]: value })
   }
-  if (!['added','added_reverse','updated','updated_reverse','ready','ready_reverse','alpha','alpha_reverse'].includes(filters.sort)) filters.sort = defaults.sort
+  const randomSeed = params.get('randomSeed')
+  if (randomSeed !== null) filters.randomSeed = randomSeed
+  if (!['random','added','added_reverse','updated','updated_reverse','ready','ready_reverse','alpha','alpha_reverse'].includes(filters.sort)) filters.sort = defaults.sort
   if (!['none','fandom','author','series'].includes(filters.groupBy)) filters.groupBy = defaults.groupBy
   if (!['allowed','only','exclude'].includes(filters.oneShot)) filters.oneShot = 'allowed'
   if (!['any','summary','notes'].includes(filters.scope)) filters.scope = 'any'

@@ -70,3 +70,14 @@ it('retrieves a public fixture through the bounded fetch adapter without credent
  expect(request.mock.calls[0][1]).toMatchObject({redirect:'manual'})
  expect(request.mock.calls[0][1]).not.toHaveProperty('credentials')
 })
+
+it('extracts and validates kudos, including zero, without treating missing metadata as zero', () => {
+ for (const [text, expected] of [['1,234', 1234], ['0', 0], ['', undefined], ['unknown', undefined]] as const) {
+  const html = fixture('work').replace('<dd class="words">', `<dd class="kudos">${text}</dd><dd class="words">`)
+  expect(validateMetadata(parseMetadata(html, 123, 'https://archiveofourown.org/works/123')).metadata?.kudos).toBe(expected)
+ }
+ for (const kudos of [-1, 1.5, 2147483648]) {
+  const result = parse(); result.metadata!.kudos = kudos
+  expect(validateMetadata(result).metadata?.kudos).toBeUndefined()
+ }
+})

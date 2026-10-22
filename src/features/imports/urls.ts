@@ -7,11 +7,19 @@ export function parseWorkUrl(original: string): WorkIdentity {
   return { workId: Number(match[1]), chapterId: match[2] ?? null, original, normalizedUrl: `https://archiveofourown.org/works/${match[1]}` }
 }
 export type SeriesIdentity = { seriesId: number; normalizedUrl: string }
-export type SeriesPreview = SeriesIdentity & { basic?: boolean; fetchedAt?: string; title: string; description: string; complete?: boolean | null; creators?: string[]; creatorLinks?: Record<string, string>; begun?: string; updated?: string; creatorNotes?: string; wordCount?: number | null; workCount?: number | null; works: { workId: number; url: string; position: number | null; title: string; authors: string[]; fandoms?: string[]; rating?: string; relationshipTags?: string[]; characterTags?: string[]; additionalTags?: string[]; updated?: string; summary: string; tags: string[]; wordCount: number | null; chapters: string; complete: boolean | null }[] }
+export type SeriesPreview = SeriesIdentity & { nextUrl?: string; basic?: boolean; fetchedAt?: string; title: string; description: string; complete?: boolean | null; creators?: string[]; creatorLinks?: Record<string, string>; begun?: string; updated?: string; creatorNotes?: string; wordCount?: number | null; workCount?: number | null; works: { workId: number; url: string; position: number | null; title: string; authors: string[]; fandoms?: string[]; rating?: string; relationshipTags?: string[]; characterTags?: string[]; additionalTags?: string[]; archiveWarnings?: string[]; kudos?: number | null; updated?: string; summary: string; tags: string[]; wordCount: number | null; chapters: string; complete: boolean | null }[] }
 export function parseSeriesUrl(original: string): SeriesIdentity {
   const match = original.trim().match(/^https?:\/\/(?:www\.)?archiveofourown\.org\/series\/([1-9]\d*)\/?(?:[?#][^\s]*)?$/)
   if (!match || !Number.isSafeInteger(Number(match[1]))) throw new Error('Enter a valid AO3 series URL.')
   return { seriesId: Number(match[1]), normalizedUrl: `https://archiveofourown.org/series/${match[1]}` }
+}
+/** Preserve only the page number when following a series listing. */
+export function seriesPageUrl(url: string, seriesId = parseSeriesUrl(url).seriesId): string {
+  const identity = parseSeriesUrl(url), parsed = new URL(url)
+  if (parsed.origin !== 'https://archiveofourown.org' || identity.seriesId !== seriesId) throw new Error('Series preview returned an invalid Next link.')
+  const page = parsed.searchParams.get('page')
+  if (page !== null && (!/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page)))) throw new Error('Series preview returned an invalid page number.')
+  return identity.normalizedUrl + (page && Number(page) > 1 ? `?page=${Number(page)}` : '')
 }
 export function classifyUrl(original: string): { kind: 'valid'; identity: WorkIdentity } | { kind: 'series'; identity: SeriesIdentity } | { kind: 'unrelated' | 'invalid' | 'unsupported'; message: string } {
   let host = ''

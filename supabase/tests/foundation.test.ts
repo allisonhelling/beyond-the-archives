@@ -19,7 +19,7 @@ async function asUser(user: string, action: () => Promise<void>) {
 
 beforeAll(async () => {
   db = await createTestDatabase()
-  await db.exec(`insert into auth.users values ('${alice}'), ('${bob}');`)
+  await db.exec(`insert into auth.users values ('${alice}'), ('${bob}'); delete from public.collections;`)
   for (const [n, user] of [[1, alice], [2, bob]] as const) {
     await db.exec(`
       insert into public.works(id, ao3_work_id, title) values ('${id(2, n)}', ${n}, 'Work ${n}');

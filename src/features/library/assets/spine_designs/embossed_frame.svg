@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 150 360"
+     preserveAspectRatio="none"
+     width="100%"
+     height="100%"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.7"
+     vector-effect="non-scaling-stroke"
+     aria-hidden="true">
+  <g>
+    <path d="M21 35H129V325H21Z" />
+    <path d="M27 41H123V319H27Z" stroke-width=".8" opacity=".75" />
+    <path d="M21 55L40 35M110 35L129 55M21 305L40 325M110 325L129 305" />
+    <path d="M67 53L75 45L83 53L75 61Z" />
+    <path d="M67 307L75 299L83 307L75 315Z" />
+  </g>
+</svg>

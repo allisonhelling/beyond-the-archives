@@ -3,7 +3,7 @@ const {rpc,session,settings,invoke}=vi.hoisted(()=>({rpc:vi.fn(),session:vi.fn()
 vi.mock('../../lib/supabase',()=>({supabase:{rpc,auth:{getSession:session},from:()=>({select:()=>({eq:()=>({maybeSingle:settings})})}),functions:{invoke}}}))
 vi.mock('../library/repository',()=>({allRows:vi.fn()}))
 import { previewSeries, submitImport } from './repository'
-beforeEach(()=>{rpc.mockReset()})
+beforeEach(()=>{rpc.mockReset();invoke.mockReset()})
 it('explains a missing Phase 3 migration instead of suggesting a one-link batch is too large',async()=>{
  rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'Internal database details'}})
  await expect(submitImport('https://archiveofourown.org/works/123')).rejects.toThrow('The connected Supabase database is missing the Phase 3 importer.')
@@ -56,4 +56,44 @@ it('fetches a temporary preview without writing any series metadata', async () =
  await expect(previewSeries(preview.normalizedUrl)).resolves.toMatchObject(preview)
  expect(invoke).toHaveBeenCalledWith('series-preview',{body:{url:preview.normalizedUrl}})
  expect(rpc).not.toHaveBeenCalled()
+})
+
+it('follows every Next link and deduplicates overlapping works before returning the preview', async () => {
+ session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
+ settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})
+ const url = 'https://archiveofourown.org/series/77'
+ const first = {seriesId:77,normalizedUrl:url,title:'Series',works:[{workId:101}],nextUrl:url+'?page=2'}
+ invoke.mockResolvedValueOnce({data:{preview:first},error:null})
+  .mockResolvedValueOnce({data:{preview:{...first,works:[{workId:101},{workId:102}],nextUrl:url+'?page=3'}},error:null})
+  .mockResolvedValueOnce({data:{preview:{...first,works:[{workId:103}],nextUrl:undefined}},error:null})
+ const preview = await previewSeries(url)
+ expect(preview.works.map(work=>work.workId)).toEqual([101,102,103])
+ expect(preview.nextUrl).toBeUndefined()
+ expect(invoke.mock.calls.map(call=>call[1].body.url)).toEqual([url,url+'?page=2',url+'?page=3'])
+ expect(rpc).not.toHaveBeenCalled()
+})
+it('rejects repeated pagination instead of returning an incomplete preview', async () => {
+ session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
+ settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})
+ const url = 'https://archiveofourown.org/series/77'
+ invoke.mockResolvedValue({data:{preview:{seriesId:77,works:[],nextUrl:url}},error:null})
+ await expect(previewSeries(url)).rejects.toThrow('repeated page')
+ expect(invoke).toHaveBeenCalledTimes(1)
+})
+
+it('respects the hosted retrieval gate between series pages', async () => {
+ vi.useFakeTimers()
+ try {
+  session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
+  settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})
+  const url = 'https://archiveofourown.org/series/77'
+  invoke.mockResolvedValueOnce({data:{preview:{seriesId:77,works:[],nextUrl:url+'?page=2'},nextPageDelayMs:35_000},error:null})
+   .mockResolvedValueOnce({data:{preview:{seriesId:77,works:[]}},error:null})
+  const result = previewSeries(url)
+  await vi.advanceTimersByTimeAsync(34_999)
+  expect(invoke).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(1)
+  await result
+  expect(invoke).toHaveBeenCalledTimes(2)
+ } finally { vi.useRealTimers() }
 })

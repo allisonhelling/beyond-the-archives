@@ -1,0 +1,42 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="360" viewBox="0 0 150 360">
+  <g fill="none" stroke="#e3b66d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Main label frame -->
+    <path d="M20 98V48L33 35H117L130 48V98"/>
+    <path d="M27 92V51L36 42H114L123 51V92"
+          stroke-width=".8" opacity=".75"/>
+
+    <!-- Top ornamental divider -->
+    <path d="M39 66H63M87 66H111" stroke-width=".9"/>
+    <path d="M75 56L84 66L75 76L66 66Z"/>
+    <path d="M75 60L80 66L75 72L70 66Z" stroke-width=".7"/>
+
+    <!-- Small library label details -->
+    <path d="M44 85H106" stroke-width=".9"/>
+    <path d="M54 91H96" stroke-width=".7" opacity=".7"/>
+
+    <!-- Corner accents -->
+    <path d="M20 48H33V35M117 35V48H130" stroke-width=".8"/>
+
+    <!-- Bottom mirrored ornament -->
+    <g transform="translate(0 360) scale(1 -1)">
+      <path d="M20 98V48L33 35H117L130 48V98"/>
+      <path d="M27 92V51L36 42H114L123 51V92"
+            stroke-width=".8" opacity=".75"/>
+
+      <path d="M39 66H63M87 66H111" stroke-width=".9"/>
+      <path d="M75 56L84 66L75 76L66 66Z"/>
+      <path d="M75 60L80 66L75 72L70 66Z" stroke-width=".7"/>
+
+      <path d="M44 85H106" stroke-width=".9"/>
+      <path d="M54 91H96" stroke-width=".7" opacity=".7"/>
+
+      <path d="M20 48H33V35M117 35V48H130" stroke-width=".8"/>
+    </g>
+
+    <!-- Subtle side accents -->
+    <path d="M20 122V138M130 122V138M20 222V238M130 222V238"
+          stroke-width=".8" opacity=".65"/>
+  </g>
+</svg>

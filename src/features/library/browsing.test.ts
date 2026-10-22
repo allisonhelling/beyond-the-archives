@@ -29,3 +29,10 @@ it('removes temporary page-size overrides from links so reload uses the saved de
  expect(readBrowsing(next)).toMatchObject({size:100,page:2})
  expect(next.get('shelf')).toBe('favorites')
 })
+
+it('retains a random seed in browsing links without changing its ordering between pages',()=>{
+ const filters={...defaultReadingFilters,sort:'random' as const,randomSeed:'chosen-shuffle'}
+ const params=writeBrowsing(new URLSearchParams(),filters,25,2)
+ expect(readBrowsing(params)).toEqual({filters,page:2,size:25})
+ expect(readBrowsing(writeBrowsing(params,filters,25,3)).filters).toEqual(filters)
+})

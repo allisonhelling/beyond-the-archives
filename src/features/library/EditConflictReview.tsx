@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { EditConflict, type EditValues } from './edit-merge'
-import { statuses } from './model'
+import { ratingLabel, statuses } from './model'
 import type { Json } from '../../types/database'
 
 const labels: Record<string, string> = { reading: 'Reading progress', notes: 'Private notes', status: 'Reading status', progress: 'Chapters read', rating: 'Personal rating', favorite: 'Favorite', tags: 'Personal tags', collections: 'Custom collections' }
 function display(field: string, value: Json) {
   if (field === 'reading' && value && typeof value === 'object' && !Array.isArray(value)) return `${statuses[value.status as keyof typeof statuses] ?? value.status} · ${value.progress} chapters read`
+  if (field === 'metadata.rating' && typeof value === 'string') return ratingLabel(value)
   if (field === 'status' && typeof value === 'string') return statuses[value as keyof typeof statuses] ?? value
   if (value === null || value === '') return '(empty)'
   return typeof value === 'string' ? value : Array.isArray(value) ? value.join('\n') || '(empty)' : JSON.stringify(value, null, 2)

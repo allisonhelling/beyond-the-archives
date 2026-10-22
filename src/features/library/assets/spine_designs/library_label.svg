@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 360" preserveAspectRatio="none" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.7" vector-effect="non-scaling-stroke" aria-hidden="true">
+  <g>
+    <path d="M16 86H134V274H16Z"/>
+    <path d="M22 92H128V268H22Z" stroke-width=".9"/>
+    <path d="M16 105H134M16 255H134" stroke-width=".8"/>
+    <g>
+      <path d="M75 43L82 52L75 61L68 52Z" stroke-width="1.2"/>
+      <path d="M33 52H60M90 52H117M75 32V37M75 67V72" stroke-width=".9"/>
+      <path d="M39 60Q50 60 56 66H66M111 60Q100 60 94 66H84" stroke-width=".8"/>
+    </g>
+    <g transform="translate(0 360) scale(1 -1)">
+      <path d="M75 43L82 52L75 61L68 52Z" stroke-width="1.2"/>
+      <path d="M33 52H60M90 52H117M75 32V37M75 67V72" stroke-width=".9"/>
+      <path d="M39 60Q50 60 56 66H66M111 60Q100 60 94 66H84" stroke-width=".8"/>
+    </g>
+  </g>
+</svg>

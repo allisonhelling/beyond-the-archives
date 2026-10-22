@@ -370,3 +370,20 @@ it('rebuilds each affected document once when imports share common tags and fand
   await clearJobs();await db.exec('delete from public.metadata_preferences')
  }
 })
+
+it('persists zero and updated kudos in automatic metadata, preserves missing counts and rejects invalid counts', async () => {
+ await clearJobs()
+ const url = 'https://archiveofourown.org/works/987652'
+ for (const kudos of [0, 1234, undefined]) {
+  await ready(); await submit([url]); const job = (await claim())!
+  expect(await finish(job, { title: 'Kudos fic', published_chapters: 6, ...(kudos !== undefined && { kudos }) })).toBe(true)
+  expect((await db.query<{ count: number }>("select (automatic_metadata->>'kudos')::integer as count from public.works where ao3_work_id=987652")).rows[0].count).toBe(kudos === 0 ? 0 : 1234)
+  await clearJobs()
+ }
+ const details = await asUser(alice, () => db.query<{ count: number }>("select (public.library_story_details(array[e.id])->0->'metadata'->>'kudos')::integer as count from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=987652"))
+ expect(details.rows[0].count).toBe(1234)
+ await ready(); await submit([url]); const job = (await claim())!
+ await expect(finish(job, { title: 'Bad', kudos: -1 })).rejects.toThrow(/Invalid kudos/)
+ expect((await db.query<{ count: number }>("select (automatic_metadata->>'kudos')::integer as count from public.works where ao3_work_id=987652")).rows[0].count).toBe(1234)
+ await clearJobs()
+})

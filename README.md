@@ -358,9 +358,11 @@ Abandoned fics use a private publication status, independent of reading status. 
 
 Under **Library → Edit Collections**, click an automatic collection to hide it after confirmation. Custom collection editors also offer a Hide icon. **View Hidden** reveals hidden collections faded in their saved shelf order; open one and choose **Unhide** to restore it. Hiding preserves every story and saves visibility in this browser alongside collection sorting preferences.
 
+**One Shots** is a starter custom automatic collection with **One Shots → Only**, color `#8b491e`, and the scroll symbol. Apply `20261021000600_starter_one_shots_collection.sql` to add it once to existing accounts and create it when new accounts are added. It remains fully editable and deletable; library reads never restore it. Existing same-named collections are preserved. The local sample preview includes it too.
+
 One-shots are detected from complete one-chapter works or exact AO3/personal tags “One-shot”, “One shot”, or “Oneshot” (case-insensitive). A diamond badge identifies them on cards and details. Use the One-shot checkbox when manually adding or editing AO3 metadata to correct the classification, including works with extra art or author-note chapters. Manual corrections survive metadata refresh; remove the `one_shot` override under Automatic metadata to return to automatic detection. Both Library and Reading filters offer One-shot → Allowed (default), Only, or Exclude. Apply `20261019000200_one_shot_override.sql` for validation and resetting one-shot overrides.
 
-Sort menus include reverse choices for fic and collection ordering, including **Alphabetical (Z–A)**. Choices persist in the existing browser preferences. Reverse collection sorting changes only the display order; saved manual positions stay intact.
+Sort menus include reverse choices for fic and collection ordering, including **Alphabetical (Z–A)**. **Random** shuffles fic and series results and retains its seed while paging or reloading. Select another sort and then Random again for a fresh shuffle. Choices persist in the existing browser preferences. Reverse collection sorting changes only the display order; saved manual positions stay intact.
 
 ## Large libraries
 
