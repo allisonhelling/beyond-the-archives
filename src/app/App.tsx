@@ -1,3 +1,4 @@
+import { BackupSettings } from '../features/backups/BackupSettings'
 import { DisplayExamplePage, DisplaySettings } from '../features/library/DisplaySettings'
 import { BrowsingPosition } from '../features/library/BrowsingPosition'
 import { PageSizeSettings } from '../features/library/pagination'
@@ -46,6 +47,7 @@ const settingsSections = [
   ['settings-display', 'Tile and Page Information', 'Customize tags, tiles, and information pages'],
   ['settings-metadata', 'AO3 Metadata Retrieval', 'Choose how story information is retrieved'],
   ['ios-safari-userscript', 'iOS Safari Userscript', 'Set up and manage paired Safari devices'],
+  ['settings-backup', 'Export Backup', 'Download a complete copy or save a private backup in Supabase'],
   ['settings-coming-soon', 'More in a Later Chapter', 'Upcoming settings and features'],
 ] as const
 
@@ -105,7 +107,8 @@ function SettingsPage() {
     'settings-display': <DisplaySettings />,
     'settings-metadata': <MetadataSettings />,
     'ios-safari-userscript': <UserscriptSettings />,
-    'settings-coming-soon': <section id="settings-coming-soon" tabIndex={-1} className="settings-card"><h2>More in a Later Chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5, and complete backup and restore in Phase 6.</p></section>,
+    'settings-backup': <BackupSettings />,
+    'settings-coming-soon': <section id="settings-coming-soon" tabIndex={-1} className="settings-card"><h2>More in a Later Chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5. Export Backup is available above; in-app restore is planned for a later phase.</p></section>,
   }
   return <div className="settings-page" data-section-open={Boolean(selectedSection)}>
     <aside className="settings-outline"><nav aria-label="Settings Section Outline"><h2>On This Page</h2><ul>{settingsSections.map(([id, title, description]) => <li key={id}><a aria-label={title} aria-describedby={`outline-description-${id}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={event => { event.preventDefault(); jumpToSection(id) }}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></a></li>)}</ul></nav></aside>
@@ -131,7 +134,7 @@ function FeaturesPage() {
     ['03', 'Bring your stories along', 'Bulk AO3 links, persistent import jobs, and respectful metadata retrieval.'],
     ['04', 'Find your next escape', 'Advanced search refinements and reading statistics.'],
     ['05', 'Stay in the story', 'Email-powered chapter notifications and controlled metadata refreshes.'],
-    ['06', 'Keep what matters', 'Complete backups and restore, optional extension, and production hardening.'],
+    ['06', 'Keep what matters', 'In-app restore, scheduled backups, and production hardening. Complete exports and administrator restore are available in Settings.'],
   ].map(([phase, title, text]) => <section className="roadmap-card" key={phase}><span className="phase-number">{phase}</span><span className="eyebrow">{phase === '03' ? 'IMPLEMENTED · WORKER SETUP REQUIRED' : 'PLANNED'}</span><h2>{title}</h2><p>{text}</p></section>)}</div></>
 }
 

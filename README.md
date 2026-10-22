@@ -369,3 +369,7 @@ Sort menus include reverse choices for fic and collection ordering, including **
 Library and Reading now query numbered server pages of 50 works by default. Choose 25, 50, 100 or 250 in Settings or the results toolbar. URLs preserve the selected collection, filters, grouping, sorting, page and effective size. Large pages reuse the cards with variable-height virtualization. Edits refresh affected works, and completed import batches stop polling.
 
 Apply migrations through `20261020000200_import_history_and_fairness.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
+
+## Export and restore backups
+
+Settings → Export Backup downloads all of the signed-in account's application data and this browser's preferences, or saves a private compressed copy in Supabase. Saved backups can be downloaded or deleted from the same settings section. Supabase keeps the three most recent successful copies per account, with one save attempt per minute and a 50 MiB per-file limit; local downloads are unrestricted. Apply migrations through `20261021000900_backup_retention.sql` and serve/deploy the `save-backup` Edge Function first. An administrator can restore empty tables or replace an account's data with `npm run backup:restore`; run `npm run perf:backup` for the 10,000-work round-trip check. See [backup contents, restore commands, and backend storage notes](docs/BACKUPS.md).

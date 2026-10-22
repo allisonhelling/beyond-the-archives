@@ -4,7 +4,7 @@ import { CustomCollectionNames } from './CustomCollectionNames'
 import { DisplayInfo } from './DisplayInfo'
 import { formatDateTime } from '../../lib/dates'
 import { useStorySnapshot } from './useStorySnapshot'
-import { browsingReturnTo } from './browsing'
+import { browsingReturnTo, collectionSortKey } from './browsing'
 import { CompletedImportSeriesNotice } from '../imports/ImportedSeriesNotice'
 import { PersonalNote } from './PersonalNote'
 import { SeriesCard } from './SeriesCollection'
@@ -187,7 +187,6 @@ export function LibraryPage({ reading = false }: { reading?: boolean }) {
 }
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
 
-const collectionSortKey = 'between-chapters:collection-sort:v1'
 type CollectionSort = { order: CollectionOrder; hiddenAutomatic: string[]; hiddenCustom: string[] }
 function initialCollectionSort(): CollectionSort {
   try {

@@ -2,6 +2,8 @@
 // Keys are read into memory from the CLI; never written or printed.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { gzipSync, gunzipSync } from 'node:zlib'
+import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { parseLocalSupabaseStatus } from './supabase-status.mjs'
 
@@ -161,6 +163,64 @@ try {
     const retained = await alice.client.from('library_entries').select('id').in('work_id', works.data.map(w => w.id))
     assert.equal(retained.data.length, 110, 'Cancellation must retain every saved work')
   })
+  await check('saved backups enforce retention and rate limits on the trusted backend', async () => {
+    const [alice, bob] = users
+    const snapshot = await alice.client.rpc('export_library_backup')
+    assert.ok(!snapshot.error, 'Apply the library backup migrations before running Storage integration checks')
+    const expected = process.env.INTEGRATION_BACKUP_FIXTURE
+      ? JSON.parse(gunzipSync(await readFile(process.env.INTEGRATION_BACKUP_FIXTURE)).toString()) : snapshot.data
+    const bytes = gzipSync(JSON.stringify(expected))
+    const bucket = client => client.storage.from('library-backups')
+    const invoke = client => client.functions.invoke('save-backup', { body: new Blob([bytes], { type: 'application/gzip' }), headers: { 'Content-Type': 'application/gzip' } })
+    const list = async user => {
+      const result = await bucket(admin).list(user.id)
+      assert.ok(!result.error)
+      return result.data.map(file => `${user.id}/${file.name}`).sort()
+    }
+    const blocked = `${alice.id}/bypass-${randomUUID()}.json.gz`
+    assert.ok((await bucket(alice.client).upload(blocked,bytes,{ contentType:'application/gzip' })).error, 'Direct owner upload bypassed the retention gate')
+    assert.ok((await bucket(bob.client).upload(blocked,bytes,{ contentType:'application/gzip' })).error, 'Cross-account upload succeeded')
+    assert.ok((await invoke(anonymous)).error, 'Anonymous save succeeded')
+    // Seed legacy copies using the service role; client accounts cannot do this.
+    const originals = []
+    for (let n = 1; n <= 3; n++) {
+      const path = `${alice.id}/legacy-${n}-${randomUUID()}.json.gz`
+      assert.ok(!(await bucket(admin).upload(path,bytes,{ contentType:'application/gzip' })).error)
+      originals.push(path)
+    }
+    const saved = await invoke(alice.client)
+    assert.ok(!saved.error, 'Trusted backup endpoint failed; serve/deploy save-backup and apply the retention migration')
+    assert.equal(saved.data.backups.length,3)
+    const after = await list(alice)
+    assert.equal(after.length,3)
+    assert.ok(!after.includes(originals[0]), 'Oldest backup was not pruned')
+    const newest = saved.data.backups[0].path
+    assert.ok(newest.startsWith(`${alice.id}/`), 'Server did not bind path to the authenticated user')
+    assert.ok((await bucket(alice.client).upload(newest,bytes,{ contentType:'application/gzip',upsert:true })).error, 'Existing backup was overwritten')
+    const rejected = await invoke(alice.client)
+    assert.equal(rejected.error?.context?.status,429, 'Immediate repeat save was not rate limited')
+    assert.deepEqual(await list(alice),after, 'Rejected save changed retained backups')
+    assert.ok(!(await alice.client.rpc('export_library_backup')).error, 'Download export was rate limited')
+    assert.ok((await bucket(bob.client).download(newest)).error)
+    assert.ok((await bucket(anonymous).download(newest)).error)
+    assert.deepEqual((await bucket(bob.client).list(alice.id)).data,[])
+    await bucket(bob.client).remove([newest])
+    const downloaded = await bucket(alice.client).download(newest)
+    assert.ok(!downloaded.error, 'Another account deleted a backup or owner download failed')
+    assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(await downloaded.data.arrayBuffer())).toString()),expected)
+    if (process.env.INTEGRATION_BACKUP_FIXTURE) console.log(`Verified live Storage round trip: ${expected.tables.library_entries.length} works; ${bytes.length} compressed bytes.`)
+    // Administrative clock adjustment is test-only; users cannot access this table.
+    assert.ok(!(await admin.from('backup_save_state').update({ attempted_at: new Date(0).toISOString() }).eq('user_id',alice.id)).error)
+    const concurrent = await Promise.all([invoke(alice.client),invoke(alice.client)])
+    assert.equal(concurrent.filter(result => !result.error).length,1,'Concurrent requests created multiple backups')
+    assert.equal((await list(alice)).length,3)
+    assert.ok(!(await invoke(bob.client)).error,'One account consumed another account’s cooldown')
+    // Legacy/interrupted cleanup is reconciled by GET without a creation attempt.
+    for (let n = 0; n < 2; n++) assert.ok(!(await bucket(admin).upload(`${alice.id}/extra-${n}-${randomUUID()}.json.gz`,bytes,{ contentType:'application/gzip' })).error)
+    const refreshed = await alice.client.functions.invoke('save-backup',{ method:'GET' })
+    assert.ok(!refreshed.error)
+    assert.equal((await list(alice)).length,3)
+  })
   await check('public registration is disabled', async () => {
     const signup = await anonymous.auth.signUp({ email: `blocked-${randomUUID()}@example.test`, password: `Test-${randomUUID()}!Aa1` })
     // Track an unexpected account so a failed security assertion still cleans it up.
@@ -172,11 +232,15 @@ try {
 } catch (error) {
   console.error(`Failed stage: ${stage}`)
   if (error instanceof assert.AssertionError) console.error(error.message)
+  else if (error instanceof Error) console.error(error.name, error.stack?.split('\n').filter(line => line.includes('test-supabase.mjs')).slice(0,2).join('\n'))
   console.error('Live Supabase integration checks failed. Inspect local Auth/PostgREST configuration and migrations; credentials are intentionally omitted.')
   process.exitCode = 1
 } finally {
   let cleanupFailed = false
   for (const user of users) {
+    const saved = await admin.storage.from('library-backups').list(user.id)
+    if (saved.error) cleanupFailed = true
+    else if (saved.data.length && (await admin.storage.from('library-backups').remove(saved.data.map(file => `${user.id}/${file.name}`))).error) cleanupFailed = true
     await user.client.auth.signOut()
     if ((await admin.auth.admin.deleteUser(user.id)).error) cleanupFailed = true
   }

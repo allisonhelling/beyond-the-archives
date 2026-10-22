@@ -1,5 +1,8 @@
 import { defaultReadingFilters, type ReadingFilters } from './reading-search'
 import { pageSize, savedPageSize } from './page-size'
+export const readingPreferencesKey = 'between-chapters:reading-preferences:v1'
+export const collectionSortKey = 'between-chapters:collection-sort:v1'
+
 export function readBrowsing(params: URLSearchParams, defaults = defaultReadingFilters) {
   const filters = { ...defaults }
   for (const key of Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]) {

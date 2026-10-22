@@ -3,7 +3,7 @@ import { useLibrary } from './LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
 import { SeriesCard } from './SeriesCollection'
 import { useLibraryResults } from './useLibraryResults'
-import { readBrowsing, writeBrowsing } from './browsing'
+import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing'
 import { Pagination } from './pagination'
 import { pageSize, pageSizes } from './page-size'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -27,10 +27,9 @@ const groupOptions: { value: ReadingFilters['groupBy']; label: string }[] = [
   { value: 'none', label: 'None' }, { value: 'fandom', label: 'Fandom' },
   { value: 'author', label: 'Author' }, { value: 'series', label: 'Series' },
 ]
-const preferencesKey = 'between-chapters:reading-preferences:v1'
 function initialReadingFilters(): ReadingFilters {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(preferencesKey) ?? '{}')
+    const saved = JSON.parse(window.localStorage.getItem(readingPreferencesKey) ?? '{}')
     return { ...defaultReadingFilters,
       sort: sortOptions.find(option => option.value === saved?.sort)?.value ?? defaultReadingFilters.sort,
       ...(saved?.sort === 'random' && { randomSeed: crypto.randomUUID() }),
@@ -82,7 +81,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     if (next.toString() !== params.toString()) setParams(next, { replace: true })
   }, [params, setParams, filters, urlSize, page, mode, draft])
   useEffect(() => {
-    try { window.localStorage.setItem(preferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
+    try { window.localStorage.setItem(readingPreferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
   }, [filters.sort, filters.groupBy])
   const selected = params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')

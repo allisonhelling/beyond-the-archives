@@ -33,6 +33,28 @@ export type Database = {
         Relationships: [
         ]
       }
+      backup_save_state: {
+        Row: {
+          user_id: string
+          attempted_at: string | null
+          lease_token: string | null
+          lease_until: string | null
+        }
+        Insert: {
+          user_id: string
+          attempted_at?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+        }
+        Update: {
+          user_id?: string
+          attempted_at?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+        }
+        Relationships: [
+        ]
+      }
       collection_series: {
         Row: {
           user_id: string
@@ -515,9 +537,9 @@ export type Database = {
           requested_reading_status?: Database['public']['Enums']['reading_status'] | null
         }
         Relationships: [
-          { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
           { foreignKeyName: 'metadata_jobs_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
           { foreignKeyName: 'metadata_jobs_batch_id_user_id_fkey'; columns: ['batch_id', 'user_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id', 'user_id'] },
+          { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
         ]
       }
       metadata_preferences: {
@@ -824,6 +846,11 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }
+      release_backup_save: { Args: { p_user: string; p_token: string }; Returns: undefined }
+      backup_storage_files: { Args: { p_user: string }; Returns: Json }
+      export_library_backup: { Args: Record<string, never>; Returns: Json }
+      restore_library_backup: { Args: { p_backup: Json; p_user: string; p_replace?: boolean }; Returns: Json }
       paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
       library_catalog: { Args: Record<string, never>; Returns: Json }
       library_story_details: { Args: { p_ids: string[] }; Returns: Json }
