@@ -2532,7 +2532,7 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
   await page.goto(path)
   await expect(page.locator('.story-card')).toHaveCount(2)
   await openFilters(page)
-  await page.getByRole('button', { name: 'In a series', exact: true }).click()
+  await page.getByRole('button', { name: 'In a Series', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.locator('.story-card h2')).toContainText('The story')
   await expect(page.locator('.story-card .story-facts')).toHaveText('Part 1 of Stories and art · Rating unknown · 12,000 words')

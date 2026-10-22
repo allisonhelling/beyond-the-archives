@@ -75,7 +75,14 @@ try {
       for (const user of users) {
         const result = await user.client.from(table).select('*')
         assert.ok(!result.error, `Authenticated read failed for ${table}`)
-        assert.equal(result.data.length, 1, `Incorrect visible row count for ${table}`)
+        if (table === 'collections') {
+          // New accounts also receive starter collections from the Auth trigger.
+          const owned = await admin.from(table).select('id').eq('user_id', user.id)
+          assert.ok(!owned.error, 'Could not read expected account collections')
+          assert.deepEqual(result.data.map(row => row.id).sort(), owned.data.map(row => row.id).sort(), 'Visible collections must exactly match the account’s collections')
+        } else {
+          assert.equal(result.data.length, 1, `Incorrect visible row count for ${table}`)
+        }
       }
     })
   }

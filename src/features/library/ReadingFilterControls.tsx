@@ -4,7 +4,8 @@ import { Dropdown } from '../../components/Dropdown'
 import { useDismissible } from '../../components/useDismissible'
 import { DateFilterField } from './DateFilterField'
 import { SearchSuggestions } from './SearchSuggestions'
-import { filterDateText, ratingLabel, ratings, tagNames, type Story } from './model'
+import { ratingLabel, ratings, tagNames, type Story } from './model'
+import { filterPublicationLabel, readingFilterLabels } from './reading-filter-labels'
 import { publicationStatuses } from './publication-status'
 import { defaultReadingFilters, normalize, type ReadingFilters } from './reading-search'
 
@@ -54,14 +55,10 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
   const fandoms = fandomOptions ?? localFandoms
   function clearFilters() { onChange({ ...defaultReadingFilters, sort: filters.sort, groupBy: filters.groupBy, ...(filters.randomSeed && { randomSeed: filters.randomSeed }) }) }
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { onChange({ ...filters, [key]: value }) }
-  const publicationLabel = (value: keyof typeof publicationStatuses) => mode === 'series' ? value === 'complete' ? 'Complete' : value === 'in_progress' ? 'Incomplete' : 'Completion unknown' : publicationStatuses[value].label
-  const activeFilters = [filters.query && `${automaticCollection ? 'Author' : 'Title / author'}: ${filters.query}`, ...filters.fandoms.map(f => `Fandom: ${f}`), ...filters.publication.map(status => `Publication status: ${publicationLabel(status)}`),
-    filters.oneShot !== 'allowed' && `One-shot: ${filters.oneShot === 'only' ? 'Only' : 'Exclude'}`,
-    filters.inSeries && 'In a series', ...filters.rating.map(rating => `Rating: ${ratingLabel(rating)}`), filters.favorites && 'Favorites',
-    filters.relationship && `Relationships: ${filters.relationship}`, filters.characters && `Characters: ${filters.characters}`, filters.tags && `Tags: ${filters.tags}`, filters.within && `Within ${filters.scope}: ${filters.within}`,
-    filters.updatedAfter && `Updated from ${filterDateText(filters.updatedAfter)}`, filters.updatedBefore && `Updated through ${filterDateText(filters.updatedBefore)}`].filter(Boolean)
+  const publicationLabel = (value: keyof typeof publicationStatuses) => filterPublicationLabel(value, mode === 'series')
+  const activeFilters = readingFilterLabels(filters, { authorOnly: automaticCollection, series: mode === 'series' })
   const membershipToggles = <>
-      <button type="button" className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a series</button>
+      <button type="button" className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a Series</button>
       <button type="button" className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Heart size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites</button>
   </>
   return <>

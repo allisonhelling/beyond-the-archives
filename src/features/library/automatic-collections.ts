@@ -1,5 +1,5 @@
-import { ratingLabel, type Collection, type Story } from './model'
-import { publicationStatuses } from './publication-status'
+import { type Collection, type Story } from './model'
+import { readingFilterLabels } from './reading-filter-labels'
 import { defaultReadingFilters, filterReading, hasReadingFilters, parseSearch, type ReadingFilters, type SearchTerms } from './reading-search'
 
 export type AutomaticCollectionRules = { filters: ReadingFilters; terms: SearchTerms }
@@ -31,13 +31,5 @@ export function applyAutomaticCollections(stories: Story[], collections: Collect
 export function automaticCollectionLabels(collection: Pick<Collection, 'automatic_rules'>): string[] {
   const rules = collectionRules(collection)
   if (!rules) return []
-  const f = { ...defaultReadingFilters, ...rules.filters }
-  return [
-    ...(f.query ? [`Author: ${f.query}`] : []), ...f.fandoms.map(value => `Fandom: ${value}`),
-    ...f.publication.map(value => `Publication: ${publicationStatuses[value].label}`), ...f.rating.map(value => `Rating: ${ratingLabel(value)}`),
-    ...(f.oneShot !== 'allowed' ? [f.oneShot === 'only' ? 'One-shots Only' : 'Exclude One-shots'] : []),
-    ...(f.inSeries ? ['In a Series'] : []), ...(f.favorites ? ['Favorites'] : []),
-    ...([['relationship', 'Relationships'], ['characters', 'Characters'], ['tags', 'Tags'], ['updatedAfter', 'Updated From'], ['updatedBefore', 'Updated Through']] as const).flatMap(([key, label]) => f[key] ? [`${label}: ${f[key]}`] : []),
-    ...(f.within ? [`Search ${f.scope === 'any' ? 'All Information' : f.scope === 'summary' ? 'Summary' : 'Notes'}: ${f.within}`] : []),
-  ]
+  return readingFilterLabels({ ...defaultReadingFilters, ...rules.filters }, { authorOnly: true })
 }

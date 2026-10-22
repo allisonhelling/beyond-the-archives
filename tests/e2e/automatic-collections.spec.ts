@@ -16,6 +16,17 @@ test('automatic collection rules persist and update connected library results, c
  let dialog=page.getByRole('dialog',{name:'New collection',exact:true})
  await dialog.getByRole('textbox',{name:'Name',exact:true}).fill('Found family fandom')
  await dialog.getByRole('checkbox',{name:'Automatic collection',exact:true}).check()
+ for (const name of ['Favorites', 'In a Series']) {
+  const toggle = dialog.getByRole('button', { name, exact: true })
+  const before = await toggle.boundingBox()
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  const after = await toggle.boundingBox()
+  expect(after?.width).toBe(before?.width)
+  expect(after?.height).toBe(before?.height)
+  await expect(dialog.getByLabel('Active filters')).toContainText(name === 'Favorites' ? 'Favorites Only' : 'In a Series Only')
+  await toggle.click()
+ }
  await dialog.getByRole('button',{name:/Select fandoms/}).click()
  await dialog.getByRole('checkbox',{name:/^Fandom/}).check()
  await dialog.getByRole('textbox',{name:'Name',exact:true}).click()
