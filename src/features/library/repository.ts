@@ -5,7 +5,7 @@ import type { SeriesRecord } from './series'
 import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
-import { blankMetadata, effectiveMetadata } from './model'
+import { blankMetadata, effectiveMetadata, effectiveWork } from './model'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
@@ -22,7 +22,7 @@ export async function allRows<T>(page: (from: number, to: number) => PromiseLike
     if (result.data.length < 500) return data
   }
 }
-function groupLinks<T, V>(links: T[], key: (link: T) => string, value: (link: T) => V) {
+export function groupLinks<T, V>(links: T[], key: (link: T) => string, value: (link: T) => V) {
   const index = new Map<string, V[]>()
   for (const link of links) {
     const id = key(link), values = index.get(id) ?? []
@@ -74,11 +74,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
   return { series: series.map(record => ({ ...record, collectionIds: membershipsBySeries.get(record.id) ?? [] })), collections: collections.sort(compareCollections), stories: applyAutomaticCollections(entries.map((entry: Entry) => {
     const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
-    // Overlay private automatic metadata before the existing manual-override merge.
-    // All work consumers (dates, chapter links, search) see the same effective data.
-    const browser = entry.extension_metadata && typeof entry.extension_metadata === 'object' && !Array.isArray(entry.extension_metadata) ? entry.extension_metadata : {}
-    const fields = Object.fromEntries(Object.entries(browser).filter(([key]) => ['title','summary','rating','word_count','published_chapters','total_chapters','is_complete','ao3_published_at','ao3_updated_at','last_metadata_check','last_metadata_success'].includes(key)))
-    const work = { ...sharedWork, ...fields, automatic_metadata: { ...(sharedWork.automatic_metadata as object), ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : sharedWork.verified_chapters } as Work
+    const work = effectiveWork(sharedWork, entry)
     return { ...entry, work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id)), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
   }), collections) }
 }

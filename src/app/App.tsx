@@ -1,4 +1,5 @@
 import { BackupSettings } from '../features/backups/BackupSettings'
+import { CsvExportSettings } from '../features/backups/CsvExportSettings'
 import { DisplayExamplePage, DisplaySettings } from '../features/library/DisplaySettings'
 import { BrowsingPosition } from '../features/library/BrowsingPosition'
 import { PageSizeSettings } from '../features/library/pagination'
@@ -47,7 +48,8 @@ const settingsSections = [
   ['settings-display', 'Tile and Page Information', 'Customize tags, tiles, and information pages'],
   ['settings-metadata', 'AO3 Metadata Retrieval', 'Choose how story information is retrieved'],
   ['ios-safari-userscript', 'iOS Safari Userscript', 'Set up and manage paired Safari devices'],
-  ['settings-backup', 'Export Backup', 'Download a complete copy or save a private backup in Supabase'],
+  ['settings-backup', 'Export Backup', 'Download, save, or restore a complete library backup'],
+  ['settings-csv-export', 'Export CSV', 'Download works, series, and collections in one ZIP'],
   ['settings-coming-soon', 'More in a Later Chapter', 'Upcoming settings and features'],
 ] as const
 
@@ -108,7 +110,8 @@ function SettingsPage() {
     'settings-metadata': <MetadataSettings />,
     'ios-safari-userscript': <UserscriptSettings />,
     'settings-backup': <BackupSettings />,
-    'settings-coming-soon': <section id="settings-coming-soon" tabIndex={-1} className="settings-card"><h2>More in a Later Chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5. Export Backup is available above; in-app restore is planned for a later phase.</p></section>,
+    'settings-csv-export': <CsvExportSettings />,
+    'settings-coming-soon': <section id="settings-coming-soon" tabIndex={-1} className="settings-card"><h2>More in a Later Chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5. Library backup export and restore are available above.</p></section>,
   }
   return <div className="settings-page" data-section-open={Boolean(selectedSection)}>
     <aside className="settings-outline"><nav aria-label="Settings Section Outline"><h2>On This Page</h2><ul>{settingsSections.map(([id, title, description]) => <li key={id}><a aria-label={title} aria-describedby={`outline-description-${id}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={event => { event.preventDefault(); jumpToSection(id) }}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></a></li>)}</ul></nav></aside>

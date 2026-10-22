@@ -37,6 +37,8 @@ try {
       claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }
       release_backup_save: { Args: { p_user: string; p_token: string }; Returns: undefined }
       backup_storage_files: { Args: { p_user: string }; Returns: Json }
+      preview_library_restore: { Args: { p_backup: Json }; Returns: Json }
+      restore_own_library_backup: { Args: { p_backup: Json; p_fingerprint: string; p_safety_path: string }; Returns: Json }
       export_library_backup: { Args: Record<string, never>; Returns: Json }
       restore_library_backup: { Args: { p_backup: Json; p_user: string; p_replace?: boolean }; Returns: Json }
       paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
