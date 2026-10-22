@@ -181,13 +181,14 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const authorLine = await page.locator('.story-details-authors').boundingBox()
   const metadataActions = await page.locator('.story-metadata-actions').boundingBox()
   if (info.project.name === 'mobile') {
-    expect(metadataActions!.y).toBeGreaterThanOrEqual(authorLine!.y + authorLine!.height)
     const title = await page.locator('.story-title-row h1').boundingBox()
     const fandoms = await page.locator('.details-fandom-rating').boundingBox()
-    expect(authorLine!.y - title!.y - title!.height).toBeLessThanOrEqual(2)
-    expect(metadataActions!.y).toBeGreaterThanOrEqual(fandoms!.y + fandoms!.height)
+    expect(metadataActions!.y).toBeGreaterThanOrEqual(title!.y + title!.height)
+    expect(authorLine!.y).toBeGreaterThanOrEqual(metadataActions!.y + metadataActions!.height)
+    expect(fandoms!.y).toBeGreaterThanOrEqual(authorLine!.y + authorLine!.height)
     const favorite = (await page.locator('.story-title-row > .action-tooltip .favorite').boundingBox())!
-    expect(favorite.y).toBeGreaterThanOrEqual(fandoms!.y + fandoms!.height)
+    expect(favorite.y).toBeGreaterThanOrEqual(title!.y + title!.height)
+    expect(favorite.y + favorite.height).toBeLessThanOrEqual(authorLine!.y)
     const stats = page.locator('.details-story-stats')
     const chapters = (await stats.getByText('Published / Total Chapters', { exact: true }).boundingBox())!
     const updated = (await stats.getByText('Date Updated', { exact: true }).boundingBox())!
@@ -202,7 +203,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   }
   const favoriteBounds = await page.locator('.story-title-row > .action-tooltip .favorite').boundingBox()
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator('.details-fic-fields dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All tags', /^Personal tags/i, 'Saved', 'Last edited'])
+  await expect(ficSection.locator('.details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All tags', /^Personal tags/i, 'Saved', 'Last edited', 'Other metadata'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -653,7 +654,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(page.getByRole('alert')).toContainText('mm/dd/yyyy')
   await panel.getByLabel('From', { exact: true }).fill('10/15/2026')
   await expect(panel.getByLabel('Choose from date', { exact: true })).toHaveValue('2026-10-15')
-  await expect(page.getByLabel('Active filters', { exact: true })).toContainText('Updated from 10/15/2026')
+  await expect(page.getByLabel('Active filters', { exact: true })).toContainText('Updated From: 10/15/2026')
   await panel.getByLabel('Choose through date', { exact: true }).fill('2026-10-16')
   await expect(panel.getByLabel('Through', { exact: true })).toHaveValue('10/16/2026')
   await expect(cards).toHaveCount(1)
@@ -762,7 +763,7 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await openFilters(page)
   const workFilters = page.getByRole('region', { name: 'Reading filters' })
   await workFilters.getByRole('button', { name: 'Work Status', exact: true }).click()
-  await workFilters.getByRole('checkbox', { name: 'In progress on AO3', exact: true }).check()
+  await workFilters.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).check()
   await workFilters.getByRole('checkbox', { name: 'Complete on AO3', exact: true }).check()
   // View All includes waiting works; only the publication tiles exclude them.
   await expect(page.locator('.story-card').getByRole('heading').getByRole('link')).toHaveText(['Complete read', 'Complete waiting', 'Unfinished read', 'Unfinished reread', 'Waiting fic'])
@@ -1051,7 +1052,7 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(page.getByRole('alert')).toContainText('mm/dd/yyyy')
   await panel.getByLabel('From', { exact: true }).fill('10/15/2026')
   await expect(panel.getByLabel('Choose from date', { exact: true })).toHaveValue('2026-10-15')
-  await expect(page.getByLabel('Active filters', { exact: true })).toContainText('Updated from 10/15/2026')
+  await expect(page.getByLabel('Active filters', { exact: true })).toContainText('Updated From: 10/15/2026')
   await panel.getByLabel('Choose through date', { exact: true }).fill('2026-10-16')
   await expect(panel.getByLabel('Through', { exact: true })).toHaveValue('10/16/2026')
   await expect(cards).toHaveCount(1)
@@ -2027,7 +2028,7 @@ test('publication checkboxes combine statuses without a dead collection and aban
   await page.keyboard.press('Escape')
   await expect(cards).toHaveCount(2)
   await panel.getByRole('button', { name: 'Publication status', exact: true }).click()
-  await panel.getByRole('checkbox', { name: 'In progress on AO3', exact: true }).check()
+  await panel.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).check()
   await expect(cards).toHaveCount(3)
   await panel.getByRole('checkbox', { name: 'Abandoned', exact: true }).uncheck()
   await page.keyboard.press('Escape')
@@ -2192,9 +2193,9 @@ test('automatic collections can be hidden and restored without losing stories', 
   await page.getByRole('checkbox', { name: 'Abandoned', exact: true }).check()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await page.getByRole('checkbox', { name: 'Abandoned', exact: true }).uncheck()
-  await page.getByRole('checkbox', { name: 'In progress on AO3', exact: true }).check()
+  await page.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).check()
   await expect(page.locator('.story-card')).toHaveCount(0)
-  await page.getByRole('checkbox', { name: 'In progress on AO3', exact: true }).uncheck()
+  await page.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).uncheck()
   await expect(page.locator('.story-card')).toHaveCount(1)
 })
 
@@ -2535,16 +2536,12 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
   await page.getByRole('button', { name: 'In a Series', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.locator('.story-card h2')).toContainText('The story')
-  await expect(page.locator('.story-card .story-facts')).toHaveText('Part 1 of Stories and art · Rating unknown · 12,000 words')
+  await expect(page.locator('.story-card .story-facts')).toHaveText('Part 1 of Stories and art • Rating unknown • 12,000 words')
   await expect(page.locator('.story-card .story-facts').getByRole('link', { name: 'Stories and art', exact: true })).toHaveAttribute('href', '/series/77')
   await expect(page.locator('.story-card .series-membership')).toHaveCSS('text-transform','none')
   await expect(page.getByRole('link', { name: 'See Full Details…', exact: true })).toHaveCount(0)
-  const card = page.locator('.work-card'), seriesLabel = (await card.locator('.story-card-series').boundingBox())!, summary = (await card.locator('.story-summary').boundingBox())!
-  if (page.viewportSize()!.width <= 650) {
-   const footer = (await card.locator('.book-spine-footer').boundingBox())!
-   expect(seriesLabel.y).toBeGreaterThanOrEqual(summary.y + summary.height)
-   expect(seriesLabel.y + seriesLabel.height).toBeLessThanOrEqual(footer.y)
-  } else expect(seriesLabel.y).toBeLessThan(summary.y)
+  const card = page.locator('.work-card'), facts = (await card.locator('.story-facts').boundingBox())!, summary = (await card.locator('.story-summary').boundingBox())!
+  expect(facts.y + facts.height).toBeLessThanOrEqual(summary.y)
  }
 })
 

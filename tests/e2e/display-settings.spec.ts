@@ -87,7 +87,7 @@ test('full work and series tiles expand on demand, hide/show outside the preview
   await expect(field(work, 'workTile', 'fandoms')).toBeVisible()
   // Real card actions remain visible, but cannot edit records or navigate in the editor.
   await work.locator('.story-card-title h2 a').click()
-  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page).toHaveURL(/\/settings#settings-display$/)
   expect(await work.locator('.work-card').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
   await work.screenshot({ path: `test-results/full-work-tile-preview-${info.project.name}.png` })
   await page.goto('/reading')
@@ -122,7 +122,7 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
   await expect(field(preview, group, key)).toHaveCount(0)
   expect(await stored(page)).toBeNull()
   await page.locator('.display-example-page > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
-  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page).toHaveURL(/\/settings#settings-display$/)
   await page.getByRole('link', { name: `Edit ${kind} Info Page`, exact: true }).click()
   await expect(field(preview, group, key)).toBeVisible()
   await manage(preview, true)
@@ -131,7 +131,7 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
   await field(preview, statistics, 'words').press('Alt+ArrowDown')
   await expect(preview.locator('.details-story-stats dt').first()).toHaveText(kind === 'Work' ? 'Published / Total Chapters' : 'Publication Status')
   await page.locator('.display-example-page > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
-  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page).toHaveURL(/\/settings#settings-display$/)
   const preferences = JSON.parse((await stored(page))!)
   expect(preferences[group].hidden).toContain(key)
   expect(preferences[statistics].order[1]).toBe('words')
@@ -247,7 +247,7 @@ test('new tile metadata and category colors preview immediately and apply only a
     }
     await manage(preview, false)
     await expect(field(preview, group, 'warnings')).toContainText('Creator Chose Not To Use Archive Warnings')
-    await expect(field(preview, group, 'kudos')).toContainText('18,314')
+    await expect(field(preview, group, 'kudos')).toContainText(kind === 'Work' ? '18,314' : '27,699')
     await expect(field(preview, group, 'relationships')).not.toContainText('Relationships:')
     await expect(field(preview, group, 'characters')).not.toContainText('Characters:')
     await expect(field(preview, group, 'tags')).not.toContainText('Additional Tags:')
@@ -258,6 +258,7 @@ test('new tile metadata and category colors preview immediately and apply only a
   }
   expect(await stored(page)).toBeNull()
   await page.reload()
+  await page.getByRole('button', { name: 'Edit Tag Format', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Series Tiles', exact: true }).click()
   const work = editor(page, 'Work Tile')
@@ -269,6 +270,7 @@ test('new tile metadata and category colors preview immediately and apply only a
   await colors.getByRole('textbox', { name: 'Custom color (hex)', exact: true }).fill('#123abc')
   await page.locator('.display-settings > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
   await page.reload()
+  await page.getByRole('button', { name: 'Edit Tag Format', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Series Tiles', exact: true }).click()
   await expect(page.locator('.tag-shape-option[aria-pressed="true"] .metadata-tag').first()).toHaveCSS('color', 'rgb(18, 58, 188)')
@@ -458,7 +460,8 @@ test('editor actions are centered, tile sections separated, and category rows st
  expect(layout.headingCenterY).toBeCloseTo(layout.toggleCenterY,0)
  expect(layout.toggleRight).toBeLessThanOrEqual(layout.headingLeft)
  expect(layout.afterPreviewGap).toBeGreaterThanOrEqual(32)
- expect(layout.columns).toBe(info.project.name==='mobile'?1:2)
+ // The desktop settings outline leaves room for one full category row per line.
+ expect(layout.columns).toBe(1)
  expect(layout.allPickerLeft).toBe(layout.rows[0].pickerLeft)
  for(const [index,row] of layout.rows.entries()) {
   expect(row.pickerLeft).toBe(layout.rows[index % layout.columns].pickerLeft)

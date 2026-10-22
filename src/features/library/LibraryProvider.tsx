@@ -5,7 +5,7 @@ import { UndoNotice } from '../../components/UndoNotice'
 import { abandonedReadingStatus, type Collection, type Story } from './model'
 import { deleteStory, loadCatalog, loadStories, loadSeriesRecord, loadAffectedCollections, loadCollections, queryLibrary, storyCatalogEntry, restoreStory, updateEntry, type LibraryQuery, type LibraryResults } from './repository'
 type ReadingUndo = { id: string; storyId: string; title: string; message: string; saved?: { status: Story['reading_status']; progress: number }; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
-type LibraryState = { rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
+type LibraryState = { temporaryPageSizes: Map<LibraryQuery['mode'], number>; rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
 const Context = createContext<LibraryState | null>(null)
 export function LibraryProvider({ children, userId = 'sample' }: { children: ReactNode; userId?: string }) {
   const [data, setData] = useState<{ stories: Story[]; collections: Collection[]; series?: SeriesRecord[] }>({ stories: [], collections: [], series: [] })
@@ -14,6 +14,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const [revision, setRevision] = useState(0)
   const generation = useRef(0)
   const lifecycle = useRef(0)
+  const [temporaryPageSizes] = useState(() => new Map<LibraryQuery['mode'], number>())
   const [rowHeights] = useState(() => new Map<string, number>())
   const cache = useRef(new Map<string, LibraryResults>())
   const retainedDetails = useRef(new Map<string, number>())
@@ -156,9 +157,9 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   useEffect(() => {
     void refresh().catch(() => {})
     const pages = cache.current, heights = rowHeights, life = lifecycle, requests = generation
-    return () => { life.current++; requests.current++; pages.clear(); heights.clear() }
-  }, [refresh, rowHeights])
-  return <Context.Provider value={{ ...data, rowHeights, series: data.series ?? [], loading, error, revision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
+    return () => { life.current++; requests.current++; pages.clear(); heights.clear(); temporaryPageSizes.clear() }
+  }, [refresh, rowHeights, temporaryPageSizes])
+  return <Context.Provider value={{ ...data, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
     {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss undo notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous, notice.saved ?? {}); await refreshStory(notice.storyId) }} />)}</section>}
     {children}
   </Context.Provider>

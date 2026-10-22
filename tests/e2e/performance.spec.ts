@@ -24,7 +24,7 @@ test('10,000-work library pages incrementally and restores a large page after de
  expect(queries.every(q=>q.size<=250)).toBe(true)
  await expect(page.getByRole('navigation',{name:'Result pages'}).first()).toContainText('1–50 of 10000')
  const largeStart=Date.now()
- await page.getByLabel('Works per page').first().selectOption('250')
+ await page.getByRole('combobox', { name: 'Works per page', exact: true }).first().selectOption('250')
  await expect(page.locator('[data-virtualized="true"]')).toBeVisible()
  expect(await page.locator('.work-card').count()).toBeLessThan(100)
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
@@ -51,6 +51,7 @@ test('10,000-work library pages incrementally and restores a large page after de
  await expect(page.locator('[data-virtualized="true"]')).toBeVisible()
  expect(await page.locator('.work-card').count()).toBeLessThan(100)
  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(scroll-150)
+ await expect(page.getByRole('combobox', { name: 'Works per page', exact: true }).first()).toHaveValue('250')
  // The page cache avoids a second query when returning from work details.
  expect(queries.filter(q=>q.size===250)).toHaveLength(1)
  await page.getByLabel('Search title or author',{exact:true}).fill('Story 09999')
@@ -61,6 +62,8 @@ test('10,000-work library pages incrementally and restores a large page after de
  expect(await page.locator('.work-card').count()).toBeLessThan(100)
  await page.goForward()
  await expect(page.locator('.work-card')).toHaveCount(1)
+ await page.reload()
+ await expect(page.getByRole('combobox', { name: 'Works per page', exact: true }).first()).toHaveValue('50')
  const report={environment:'local Chromium, mocked transport; 10,000 work catalog',project:info.project.name,firstDisplayMs,largePageMs,largeRenderMs,heap,queries,transfers}
  await mkdir('artifacts/performance',{recursive:true})
  await writeFile(`artifacts/performance/browser-${info.project.name}.json`,JSON.stringify(report,null,2))

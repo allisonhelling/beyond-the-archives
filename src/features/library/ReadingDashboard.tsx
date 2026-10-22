@@ -1,4 +1,5 @@
 import { LibraryResults } from './LibraryResults'
+import { useLibrary } from './LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
 import { SeriesCard } from './SeriesCollection'
 import { useLibraryResults } from './useLibraryResults'
@@ -63,7 +64,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const [defaults] = useState(initialReadingFilters)
   const [params, setParams] = useSearchParams()
   const decoded = readBrowsing(params, defaults)
-  const [temporarySize, setTemporarySize] = useState<number>()
+  // Retain local selections across detail navigation; a reload creates a new provider.
+  const { temporaryPageSizes } = useLibrary()
+  const [temporarySize, setTemporarySize] = useState(() => pageSize(params.get('size')) === undefined ? temporaryPageSizes.get(mode) : undefined)
   const [draft, setDraft] = useState<{ source: string; filters: ReadingFilters } | null>(null)
   const currentUrl = params.toString()
   const filters = draft?.source === currentUrl ? draft.filters : decoded.filters
@@ -99,7 +102,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
   function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }
   error ||= remote.error ?? ''
-  const pagination = <Pagination page={currentPage} pages={pages} total={total} size={size} onPage={changePage} trailing={<><Tooltip description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per page information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per page<select className="filter-input select-fit" value={size} onChange={event => { setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
+  const pagination = <Pagination page={currentPage} pages={pages} total={total} size={size} onPage={changePage} trailing={<><Tooltip description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per page information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
   const orderingControls = <>
     <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
     <Dropdown label="Group" icon={Layers3} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
