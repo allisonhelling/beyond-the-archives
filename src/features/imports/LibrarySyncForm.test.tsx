@@ -1,6 +1,6 @@
 import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), sample: false }))
 vi.mock('../../lib/sample-mode', () => ({ get sampleMode() { return mocks.sample } }))
@@ -88,7 +88,7 @@ it('sends the chosen request interval and explains bookmark sorting and reading 
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', readingStatus: 'to_read', delaySeconds: 60 }))
  expect(screen.getByText(/Ensure that bookmarks are sorted by "Date Bookmarked"/)).toBeVisible()
- expect(screen.getByText(/Earlier or same-day bookmarks are marked Reading/)).toBeVisible()
+ expect(screen.queryByText(/Earlier or same-day bookmarks/)).not.toBeInTheDocument()
  expect(screen.queryByText(/CSV importer’s reading-status rules/)).not.toBeInTheDocument()
 })
 
@@ -114,7 +114,7 @@ it('reports affected bookmark works after sync while keeping existing personal d
 })
 
 afterEach(() => vi.unstubAllGlobals())
-it('prompts again when username saving is declined, and skips prompts with a saved username', async () => {
+it('prompts again when saving is declined, and prefills saved usernames for bookmark options', async () => {
  mocks.command.mockResolvedValue({ state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
@@ -128,7 +128,9 @@ it('prompts again when username saving is declined, and skips prompts with a sav
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', expect.objectContaining({ url: 'https://archiveofourown.org/users/Oceanbreeze7/readings?show=to-read', autoImport: true })))
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
- expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+ expect(screen.getByRole('dialog', { name: 'Import Bookmarks' })).toBeVisible()
+ expect(screen.getByLabelText('AO3 Username')).toHaveValue('Oceanbreeze7')
+ fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
  await waitFor(() => expect(mocks.command.mock.calls.filter(([action]) => action === 'start')).toHaveLength(3))
  expect(screen.getByLabelText('AO3 List URL')).toBeEnabled()
 })
@@ -253,10 +255,19 @@ it('does not import direct works if a later checkpoint cannot be prepared for se
 it('leaves chapter-date checks off by default and includes the option for an opted-in bookmark scan', async () => {
  mocks.command.mockResolvedValue({ state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
- const option = screen.getByRole('checkbox', { name: 'Check chapter publication dates for bookmarks' })
- expect(option).not.toBeChecked()
- fireEvent.click(option)
+ expect(within(screen.getByRole('group', { name: 'Scan Options' })).queryByRole('checkbox')).not.toBeInTheDocument()
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
+ const dialog = screen.getByRole('dialog', { name: 'Import Bookmarks' })
+ expect(within(dialog).getByText('Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.')).toBeVisible()
+ const option = within(dialog).getByRole('checkbox', { name: 'Check chapter publication dates' })
+ expect(option).not.toBeChecked()
+ fireEvent.focus(within(dialog).getByRole('button', { name: 'Chapter publication dates information' }))
+ expect(screen.getByRole('tooltip')).toHaveTextContent('Estimates chapters read by comparing each chapter’s publication date with the bookmark date. Chapters published on the bookmark date or with missing dates remain unconfirmed. Uses the scan tab to open eligible works’ Chapter Index pages so scans will take longer than usual.')
+ fireEvent.blur(within(dialog).getByRole('button', { name: 'Chapter publication dates information' }))
+ fireEvent.focus(within(dialog).getByRole('button', { name: 'Saved username information' }))
+ expect(screen.getByRole('tooltip')).toHaveTextContent('View, change, or delete your saved username in Settings.')
+ expect(within(dialog).getByRole('checkbox', { name: 'Save my AO3 username for future imports' })).toBeVisible()
+ fireEvent.click(option)
  fireEvent.change(screen.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', expect.objectContaining({ autoImport: true, checkChapterDates: true })))
@@ -265,9 +276,28 @@ it('leaves chapter-date checks off by default and includes the option for an opt
 it('rejects an older extension that would silently ignore the requested chapter-date check', async () => {
  mocks.command.mockImplementation(async action => action === 'start' ? { state: { ...ready, status: 'running' } } : { state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
- fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates for bookmarks' }))
- fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/reader/bookmarks' } })
- fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates' }))
+ fireEvent.change(screen.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('Rebuild and reload AO3 Library Companion')
  expect(mocks.command).toHaveBeenCalledWith('discard', { scanId: 'scan' })
+})
+
+it('does not carry bookmark chapter checks into Marked for Later or list URL imports', async () => {
+ mocks.command.mockResolvedValue({ state: null })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Marked for Later' }))
+ expect(within(screen.getByRole('dialog')).getByText(/New Marked for Later works are saved as To Read/)).toBeVisible()
+ expect(screen.queryByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeInTheDocument()
+ fireEvent.change(screen.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', expect.objectContaining({ url: 'https://archiveofourown.org/users/reader/readings?show=to-read' })))
+ expect(mocks.command.mock.calls.find(([name]) => name === 'start')?.[1]).not.toHaveProperty('checkChapterDates')
+ fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
+ await waitFor(() => expect(mocks.command.mock.calls.filter(([name]) => name === 'start')).toHaveLength(2))
+ expect(mocks.command.mock.calls.filter(([name]) => name === 'start')[1][1]).not.toHaveProperty('checkChapterDates')
 })

@@ -1,0 +1,945 @@
+{
+  "collections": [
+    {
+      "id": "a279462f-103f-4831-afdf-3a9396f7b2aa",
+      "user_id": "sample-reader",
+      "name": "One Shots",
+      "description": null,
+      "default_key": null,
+      "created_at": "2026-10-22T00:29:14.969Z",
+      "updated_at": "2026-10-23T01:50:11.697Z",
+      "color": "#721613",
+      "symbol": "scroll",
+      "sort_position": 0,
+      "last_story_added_at": null,
+      "automatic_rules": {
+        "filters": {
+          "query": "",
+          "fandoms": [],
+          "publication": [],
+          "oneShot": "only",
+          "inSeries": false,
+          "rating": [],
+          "personalRating": [],
+          "favorites": false,
+          "personalNotes": false,
+          "recs": false,
+          "relationship": "",
+          "characters": "",
+          "tags": "",
+          "updatedAfter": "",
+          "updatedBefore": "",
+          "within": "",
+          "scope": "any",
+          "sort": "added",
+          "groupBy": "none"
+        },
+        "terms": []
+      }
+    },
+    {
+      "name": "Celestial",
+      "spineDesign": "celestial",
+      "color": "#92504e",
+      "id": "sample-spine-celestial-constellation",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 2,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Circles",
+      "spineDesign": "interlocking-circles",
+      "color": "#214921",
+      "id": "sample-spine-interlocking-circles",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 3,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Diamonds",
+      "spineDesign": "linked-diamonds",
+      "color": "#243c5e",
+      "id": "sample-spine-linked-diamonds",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 4,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Book Stack",
+      "spineDesign": "book-stack",
+      "color": "#07534a",
+      "id": "sample-spine-book-stack",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 5,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Constellation",
+      "color": "#54254b",
+      "spineDesign": "constellation",
+      "id": "sample-spine-constellation",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 6,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Deco Crest",
+      "color": "#8c0000",
+      "spineDesign": "deco-crest",
+      "id": "sample-spine-deco-crest",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 7,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-21T18:08:09.357Z"
+    },
+    {
+      "name": "Star Trails",
+      "color": "#243c5e",
+      "spineDesign": "star-trails",
+      "id": "sample-spine-star-trails",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 8,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Extended Trails",
+      "color": "#07534a",
+      "spineDesign": "star-trails-extended",
+      "id": "sample-spine-star-trails-extended",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 9,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Vertical Diamonds",
+      "color": "#54254b",
+      "spineDesign": "vertical-diamonds",
+      "id": "sample-spine-vertical-diamonds",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 10,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Lunar Phases",
+      "color": "#243c5e",
+      "spineDesign": "lunar-phases",
+      "id": "sample-spine-lunar-phases",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 11,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "name": "Query Crown",
+      "color": "#54254b",
+      "spineDesign": "query-crown",
+      "id": "sample-spine-query-crown",
+      "user_id": "sample-reader",
+      "default_key": null,
+      "description": "Sample collection for comparing spine designs.",
+      "symbol": "book",
+      "sort_position": 12,
+      "last_story_added_at": null,
+      "created_at": "2026-10-15T12:00:00.000Z",
+      "updated_at": "2026-10-15T12:00:00.000Z"
+    },
+    {
+      "id": "42d74eee-bd0f-4328-a45b-307df04fcd56",
+      "user_id": "sample-reader",
+      "name": "Custom Collection",
+      "description": null,
+      "default_key": null,
+      "created_at": "2026-10-23T04:29:23.513Z",
+      "updated_at": "2026-10-23T04:29:23.513Z",
+      "color": "#970000",
+      "symbol": "flask",
+      "sort_position": 1,
+      "last_story_added_at": null
+    }
+  ],
+  "stories": [
+    {
+      "id": "sample-entry-58049017"
+    },
+    {
+      "id": "sample-entry-5681311"
+    },
+    {
+      "id": "sample-entry-23818510"
+    },
+    {
+      "id": "sample-entry-21116591",
+      "started_at": "2026-10-23T04:11:05.479Z",
+      "finished_at": "2026-10-23T04:11:59.352Z",
+      "updated_at": "2026-10-23T04:11:59.352Z",
+      "reading_history": [
+        {
+          "action": "added",
+          "at": "2026-10-23T04:10:42.335Z",
+          "status": "finished"
+        },
+        {
+          "action": "status",
+          "at": "2026-10-23T04:10:42.335Z",
+          "status": "to_read",
+          "previous_status": "finished"
+        },
+        {
+          "action": "finished",
+          "at": "2026-10-23T04:10:58.174Z",
+          "status": "finished",
+          "previous_status": "to_read"
+        },
+        {
+          "action": "status",
+          "at": "2026-10-23T04:11:05.479Z",
+          "status": "re_reading",
+          "previous_status": "finished"
+        },
+        {
+          "action": "paused_reading",
+          "at": "2026-10-23T04:11:34.852Z",
+          "status": "paused_reading",
+          "previous_status": "re_reading"
+        },
+        {
+          "action": "resumed",
+          "at": "2026-10-23T04:11:42.678Z",
+          "status": "re_reading",
+          "previous_status": "paused_reading"
+        },
+        {
+          "action": "finished",
+          "at": "2026-10-23T04:11:59.352Z",
+          "status": "finished",
+          "previous_status": "re_reading"
+        }
+      ]
+    },
+    {
+      "id": "sample-entry-22445740",
+      "updated_at": "2026-10-19T02:36:41.894Z"
+    },
+    {
+      "id": "sample-entry-24973237"
+    },
+    {
+      "id": "sample-entry-3591783",
+      "last_read_chapter": 70,
+      "is_favorite": true,
+      "started_at": "2026-10-23T03:18:50.480Z",
+      "finished_at": "2026-10-23T02:56:28.310Z",
+      "updated_at": "2026-10-23T04:09:19.621Z",
+      "reading_history": [
+        {
+          "action": "added",
+          "at": "2026-10-23T02:56:28.310Z",
+          "status": "re_reading"
+        },
+        {
+          "action": "finished",
+          "at": "2026-10-23T02:56:28.310Z",
+          "status": "finished",
+          "previous_status": "re_reading"
+        },
+        {
+          "action": "status",
+          "at": "2026-10-23T03:18:50.480Z",
+          "status": "re_reading",
+          "previous_status": "finished"
+        }
+      ]
+    },
+    {
+      "id": "sample-entry-32342644",
+      "updated_at": "2026-10-20T03:26:24.110Z"
+    },
+    {
+      "id": "sample-entry-36236251"
+    },
+    {
+      "id": "sample-entry-47309251"
+    },
+    {
+      "id": "sample-entry-23224837"
+    },
+    {
+      "id": "sample-entry-23469442"
+    },
+    {
+      "id": "sample-entry-40090614",
+      "metadata_overrides": {
+        "title": "Tea & Fire",
+        "authors": [
+          "AppoApples"
+        ],
+        "fandoms": [
+          "Star Wars - All Media Types",
+          "Star Wars Prequel Trilogy",
+          "Star Wars Legends - All Media Types"
+        ],
+        "ao3_tags": [
+          "No Archive Warnings Apply",
+          "F/M",
+          "M/M",
+          "Jango Fett/Obi-Wan Kenobi",
+          "Obi-Wan Kenobi",
+          "Anakin Skywalker",
+          "Jango Fett",
+          "Myles the Mandalorian (Star Wars)",
+          "Mace Windu",
+          "Yoda (Star Wars)",
+          "Dooku | Darth Tyranus",
+          "Sheev Palpatine | Darth Sidious",
+          "Padmé Amidala",
+          "Qui-Gon Jinn",
+          "Quinlan Vos",
+          "Boba Fett",
+          "Clones - Character",
+          "Rael Averross",
+          "Asajj Ventress",
+          "Feral (Star Wars: The Clone Wars)",
+          "Savage Opress",
+          "All the Clones",
+          "Salis",
+          "Mylee (Mahou Senshi Louie)",
+          "Pre Vizsla",
+          "Satine Kryze",
+          "Death Watch - Character",
+          "Everyone Needs Hugs",
+          "Obi-Wan Kenobi Needs a Hug",
+          "Jango Fett Needs a Hug",
+          "Anakin Skywalker Needs a Hug",
+          "Therapy would help if the actually tried",
+          "Angst",
+          "Fluff and Angst",
+          "Post-Traumatic Stress Disorder - PTSD",
+          "BAMF Obi-Wan Kenobi",
+          "Obi-Wan Kenobi no karks left to give",
+          "Obi-Wan Kenobi Agent of Chaos",
+          "Obi-Wan Kenobi being a good dad",
+          "Jango Fett adopting all the kids",
+          "Count Dooku not prepared",
+          "Alternate Universe",
+          "Alternate Universe - Canon Divergence",
+          "Alternate Universe - Time Travel",
+          "From Tatooine post Revenge of the Sith to four years after Phantom Menace",
+          "Time Travel",
+          "Lemons",
+          "Competence Kink",
+          "Competency",
+          "Spite",
+          "Uncontrolled adoption",
+          "Lords of Sass",
+          "Army of Foundlings"
+        ],
+        "series": [],
+        "summary": "If you could go back, what would you change? I would have left. Obi-Wan has been in hiding for ten years on Tatooine when one meditation brings him into the past. Even if he can undo the mistakes of the past, he finds himself still on verge of shattering.\n\nInstead of fixing mistakes, he decides to go on the war path, to spite Dooku, to kark with Sidious, to put a pipe bomb in the extremism of the New Mandalorians and Death Watch, but most importantly, to save his men.\n\nHis vode.\n\nJango Fett can either step up or step aside, because just like Obi-Wan never stopped being a Jedi, he never stopped being one of the best military minds this galaxy has ever seen.",
+        "rating": "Mature",
+        "publication_status": "complete",
+        "published_chapters": 37,
+        "total_chapters": 37,
+        "word_count": 127813,
+        "relationship_tags": [
+          "Jango Fett/Obi-Wan Kenobi"
+        ],
+        "character_tags": [
+          "Obi-Wan Kenobi",
+          "Anakin Skywalker",
+          "Jango Fett",
+          "Myles the Mandalorian (Star Wars)",
+          "Mace Windu",
+          "Yoda (Star Wars)",
+          "Dooku | Darth Tyranus",
+          "Sheev Palpatine | Darth Sidious",
+          "Padmé Amidala",
+          "Qui-Gon Jinn",
+          "Quinlan Vos",
+          "Boba Fett",
+          "Clones - Character",
+          "Rael Averross",
+          "Asajj Ventress",
+          "Feral (Star Wars: The Clone Wars)",
+          "Savage Opress",
+          "All the Clones",
+          "Salis",
+          "Mylee (Mahou Senshi Louie)",
+          "Pre Vizsla",
+          "Satine Kryze",
+          "Death Watch - Character"
+        ],
+        "additional_tags": [
+          "Everyone Needs Hugs",
+          "Obi-Wan Kenobi Needs a Hug",
+          "Jango Fett Needs a Hug",
+          "Anakin Skywalker Needs a Hug",
+          "Therapy would help if the actually tried",
+          "Angst",
+          "Fluff and Angst",
+          "Post-Traumatic Stress Disorder - PTSD",
+          "BAMF Obi-Wan Kenobi",
+          "Obi-Wan Kenobi no karks left to give",
+          "Obi-Wan Kenobi Agent of Chaos",
+          "Obi-Wan Kenobi being a good dad",
+          "Jango Fett adopting all the kids",
+          "Count Dooku not prepared",
+          "Alternate Universe",
+          "Alternate Universe - Canon Divergence",
+          "Alternate Universe - Time Travel",
+          "From Tatooine post Revenge of the Sith to four years after Phantom Menace",
+          "Time Travel",
+          "Lemons",
+          "Competence Kink",
+          "Competency",
+          "Spite",
+          "Uncontrolled adoption",
+          "Lords of Sass",
+          "Army of Foundlings"
+        ]
+      },
+      "personalTags": [
+        "test",
+        "aaa",
+        "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"
+      ],
+      "updated_at": "2026-10-18T23:55:13.809Z"
+    },
+    {
+      "id": "sample-entry-8577016",
+      "metadata": {
+        "title": "On My Love",
+        "authors": [
+          "RikoJasmine"
+        ],
+        "fandoms": [
+          "Yuri!!! on Ice (Anime)"
+        ],
+        "ao3_tags": [],
+        "summary": "",
+        "rating": "",
+        "publication_status": "unknown",
+        "published_chapters": null,
+        "total_chapters": null,
+        "word_count": null,
+        "series": [],
+        "relationship_tags": [],
+        "character_tags": [],
+        "additional_tags": [],
+        "one_shot": true,
+        "manual_url": "https://archiveofourown.org/works/8577016/chapters/19665139",
+        "author_links": {}
+      },
+      "metadata_overrides": {
+        "title": "On My Love",
+        "authors": [
+          "RikoJasmine"
+        ],
+        "fandoms": [
+          "Yuri!!! on Ice (Anime)"
+        ],
+        "ao3_tags": [],
+        "summary": "",
+        "rating": "",
+        "publication_status": "unknown",
+        "published_chapters": null,
+        "total_chapters": null,
+        "word_count": null,
+        "series": [],
+        "relationship_tags": [],
+        "character_tags": [],
+        "additional_tags": [],
+        "one_shot": true,
+        "manual_url": "https://archiveofourown.org/works/8577016/chapters/19665139",
+        "author_links": {}
+      },
+      "updated_at": "2026-10-19T07:26:45.789Z"
+    },
+    {
+      "id": "sample-entry-2034597",
+      "reading_status": "finished",
+      "last_read_chapter": 1,
+      "updated_at": "2026-10-20T02:06:06.125Z"
+    },
+    {
+      "id": "sample-entry-862320",
+      "reading_status": "reading",
+      "last_read_chapter": 2,
+      "metadata_overrides": {
+        "title": "Play It Again",
+        "authors": [
+          "metisket"
+        ],
+        "fandoms": [
+          "Teen Wolf (TV)"
+        ],
+        "ao3_tags": [
+          "Derek Hale/Stiles Stilinski",
+          "Stiles Stilinski & Laura Hale",
+          "Scott McCall & Stiles Stilinski",
+          "Stiles Stilinski",
+          "Derek Hale",
+          "Scott McCall",
+          "Laura Hale",
+          "Sheriff Stilinski",
+          "Peter Hale",
+          "Allison Argent",
+          "Lydia Martin",
+          "Danny Māhealani",
+          "Erica Reyes",
+          "Isaac Lahey",
+          "Vernon Boyd",
+          "Talia Hale",
+          "Chris Argent",
+          "The Hale Family - Character",
+          "The Argent Family - Character",
+          "Alan Deaton",
+          "Pre-Slash",
+          "Magical Stiles Stilinski",
+          "derek's mad planning skillz",
+          "magical objects and their insufficient warning labels",
+          "laura's in charge",
+          "making the most of your afterlife",
+          "oh look here's a lower place",
+          "Alternate Universe",
+          "Dimension Travel",
+          "Graphic Depictions Of Violence",
+          "Gen",
+          "M/M"
+        ],
+        "summary": "In which Stiles goes along with one of Derek’s plans and ends up in an alternate universe as a result. He should’ve known better. He did know better, actually, and that means he has no one to blame but himself.\n\n“Laura wants to lure the kid in with food and kindness and make a pet of him, like a feral cat. Derek wants to have him arrested for stalking. They’re at an impasse. (And the rest of the family is staying emphatically out of it in a way that suggests bets have been placed.)”",
+        "rating": "Teen And Up Audiences",
+        "publication_status": "complete",
+        "published_chapters": 3,
+        "total_chapters": 3,
+        "word_count": 63206,
+        "author_links": {
+          "metisket": "https://archiveofourown.org/users/metisket/pseuds/metisket"
+        },
+        "relationship_tags": [
+          "Derek Hale/Stiles Stilinski",
+          "Stiles Stilinski & Laura Hale",
+          "Scott McCall & Stiles Stilinski"
+        ],
+        "character_tags": [
+          "Stiles Stilinski",
+          "Derek Hale",
+          "Scott McCall",
+          "Laura Hale",
+          "Sheriff Stilinski",
+          "Peter Hale",
+          "Allison Argent",
+          "Lydia Martin",
+          "Danny Māhealani",
+          "Erica Reyes",
+          "Isaac Lahey",
+          "Vernon Boyd",
+          "Talia Hale",
+          "Chris Argent",
+          "The Hale Family - Character",
+          "The Argent Family - Character",
+          "Alan Deaton"
+        ],
+        "additional_tags": [
+          "Pre-Slash",
+          "Magical Stiles Stilinski",
+          "derek's mad planning skillz",
+          "magical objects and their insufficient warning labels",
+          "laura's in charge",
+          "making the most of your afterlife",
+          "oh look here's a lower place",
+          "Alternate Universe",
+          "Dimension Travel"
+        ],
+        "archive_warnings": [
+          "Graphic Depictions Of Violence"
+        ],
+        "categories": [
+          "Gen",
+          "M/M"
+        ],
+        "series_memberships": [
+          {
+            "id": 132147,
+            "name": "play it again",
+            "url": "https://archiveofourown.org/series/132147",
+            "position": 1
+          }
+        ],
+        "series": [
+          "play it again"
+        ]
+      },
+      "updated_at": "2026-10-23T04:30:33.039Z",
+      "is_rec": true,
+      "reading_history": []
+    },
+    {
+      "id": "sample-entry-11613168",
+      "reading_status": "finished",
+      "last_read_chapter": 17,
+      "finished_at": "2026-10-23T02:55:34.020Z",
+      "updated_at": "2026-10-23T02:55:34.020Z",
+      "reading_history": [
+        {
+          "action": "added",
+          "at": "2026-10-23T02:55:34.020Z",
+          "status": "paused_reading"
+        },
+        {
+          "action": "finished",
+          "at": "2026-10-23T02:55:34.020Z",
+          "status": "finished",
+          "previous_status": "paused_reading"
+        }
+      ]
+    },
+    {
+      "id": "sample-entry-30812612",
+      "is_favorite": true,
+      "updated_at": "2026-10-23T03:07:51.142Z",
+      "reading_history": []
+    },
+    {
+      "id": "sample-entry-32993803",
+      "reading_status": "paused_reading",
+      "last_read_chapter": 5,
+      "started_at": "2026-10-23T03:35:46.202Z",
+      "updated_at": "2026-10-23T04:08:49.934Z",
+      "reading_history": [
+        {
+          "action": "added",
+          "at": "2026-10-23T03:35:46.202Z",
+          "status": "finished"
+        },
+        {
+          "action": "status",
+          "at": "2026-10-23T03:35:46.202Z",
+          "status": "re_reading",
+          "previous_status": "finished"
+        },
+        {
+          "action": "paused_reading",
+          "at": "2026-10-23T04:08:49.934Z",
+          "status": "paused_reading",
+          "previous_status": "re_reading"
+        }
+      ]
+    },
+    {
+      "id": "sample-entry-40664127"
+    },
+    {
+      "id": "sample-entry-38750292"
+    },
+    {
+      "id": "sample-entry-38807499"
+    },
+    {
+      "id": "sample-entry-25794964"
+    }
+  ],
+  "series": [
+    {
+      "id": "sample-series-132147",
+      "metadata": {
+        "seriesId": 132147,
+        "normalizedUrl": "https://archiveofourown.org/series/132147",
+        "title": "play it again",
+        "description": "",
+        "complete": false,
+        "creators": [
+          "metisket"
+        ],
+        "creatorLinks": {
+          "metisket": "https://archiveofourown.org/users/metisket/pseuds/metisket"
+        },
+        "begun": "2013-06-29",
+        "updated": "2020-08-09",
+        "creatorNotes": "",
+        "wordCount": 74696,
+        "workCount": 3,
+        "basic": false,
+        "fetchedAt": "2026-10-21T12:00:00.000Z",
+        "works": [
+          {
+            "workId": 862320,
+            "url": "https://archiveofourown.org/works/862320",
+            "position": 1,
+            "title": "Play It Again",
+            "authors": [
+              "metisket"
+            ],
+            "rating": "Teen And Up Audiences",
+            "relationshipTags": [
+              "Derek Hale/Stiles Stilinski",
+              "Stiles Stilinski & Laura Hale",
+              "Scott McCall & Stiles Stilinski"
+            ],
+            "characterTags": [
+              "Stiles Stilinski",
+              "Derek Hale",
+              "Scott McCall",
+              "Laura Hale",
+              "Sheriff Stilinski",
+              "Peter Hale",
+              "Allison Argent",
+              "Lydia Martin",
+              "Danny Māhealani",
+              "Erica Reyes",
+              "Isaac Lahey",
+              "Vernon Boyd",
+              "Talia Hale",
+              "Chris Argent",
+              "The Hale Family - Character",
+              "The Argent Family - Character",
+              "Alan Deaton"
+            ],
+            "additionalTags": [
+              "Pre-Slash",
+              "Magical Stiles Stilinski",
+              "derek's mad planning skillz",
+              "magical objects and their insufficient warning labels",
+              "laura's in charge",
+              "making the most of your afterlife",
+              "oh look here's a lower place",
+              "Alternate Universe",
+              "Dimension Travel"
+            ],
+            "updated": "2013-07-12",
+            "fandoms": [
+              "Teen Wolf (TV)"
+            ],
+            "summary": "In which Stiles goes along with one of Derek’s plans and ends up in an alternate universe as a result. He should’ve known better. He did know better, actually, and that means he has no one to blame but himself.\n\n“Laura wants to lure the kid in with food and kindness and make a pet of him, like a feral cat. Derek wants to have him arrested for stalking. They’re at an impasse. (And the rest of the family is staying emphatically out of it in a way that suggests bets have been placed.)”",
+            "tags": [
+              "Derek Hale/Stiles Stilinski",
+              "Stiles Stilinski & Laura Hale",
+              "Scott McCall & Stiles Stilinski",
+              "Stiles Stilinski",
+              "Derek Hale",
+              "Scott McCall",
+              "Laura Hale",
+              "Sheriff Stilinski",
+              "Peter Hale",
+              "Allison Argent",
+              "Lydia Martin",
+              "Danny Māhealani",
+              "Erica Reyes",
+              "Isaac Lahey",
+              "Vernon Boyd",
+              "Talia Hale",
+              "Chris Argent",
+              "The Hale Family - Character",
+              "The Argent Family - Character",
+              "Alan Deaton",
+              "Pre-Slash",
+              "Magical Stiles Stilinski",
+              "derek's mad planning skillz",
+              "magical objects and their insufficient warning labels",
+              "laura's in charge",
+              "making the most of your afterlife",
+              "oh look here's a lower place",
+              "Alternate Universe",
+              "Dimension Travel",
+              "Graphic Depictions Of Violence",
+              "Gen",
+              "M/M"
+            ],
+            "wordCount": 63206,
+            "chapters": "3/3",
+            "complete": true
+          },
+          {
+            "workId": 2034597,
+            "url": "https://archiveofourown.org/works/2034597",
+            "position": 2,
+            "title": "This Doesn't Hurt",
+            "authors": [
+              "metisket"
+            ],
+            "rating": "Teen And Up Audiences",
+            "relationshipTags": [
+              "Melissa McCall & Isaac Lahey",
+              "Melissa McCall & Scott McCall"
+            ],
+            "characterTags": [
+              "Melissa McCall",
+              "Isaac Lahey",
+              "Scott McCall",
+              "Stiles Stilinski",
+              "Sheriff Stilinski"
+            ],
+            "additionalTags": [
+              "accidental adoption",
+              "Families of Choice",
+              "scott is just trying to help",
+              "melissa blames stiles for all of this",
+              "and she is not wrong"
+            ],
+            "updated": "2014-07-28",
+            "fandoms": [
+              "Teen Wolf (TV)"
+            ],
+            "summary": "Melissa isn’t sure how she accidentally adopted a teenager, but she’s confident that somehow, it’s all Stiles Stilinski’s fault.",
+            "tags": [
+              "Melissa McCall & Isaac Lahey",
+              "Melissa McCall & Scott McCall",
+              "Melissa McCall",
+              "Isaac Lahey",
+              "Scott McCall",
+              "Stiles Stilinski",
+              "Sheriff Stilinski",
+              "accidental adoption",
+              "Families of Choice",
+              "scott is just trying to help",
+              "melissa blames stiles for all of this",
+              "and she is not wrong",
+              "No Archive Warnings Apply",
+              "Gen"
+            ],
+            "wordCount": 4680,
+            "chapters": "1/1",
+            "complete": true
+          },
+          {
+            "workId": 25794964,
+            "url": "https://archiveofourown.org/works/25794964",
+            "position": 3,
+            "title": "Kiss of Death",
+            "authors": [
+              "metisket"
+            ],
+            "rating": "Teen And Up Audiences",
+            "relationshipTags": [
+              "Derek Hale/Stiles Stilinski",
+              "Peter Hale & Stiles Stilinski"
+            ],
+            "characterTags": [
+              "Stiles Stilinski",
+              "Derek Hale",
+              "Peter Hale",
+              "Laura Hale",
+              "Sheriff Stilinski",
+              "Jennifer Blake",
+              "Scott McCall (Teen Wolf)",
+              "The Hale Pack"
+            ],
+            "additionalTags": [
+              "stiles's smooth handling of relationship-related trauma",
+              "laura's excellent relationship choices",
+              "peter attempting to help",
+              "no one actually dies! so that's good",
+              "derek's life is suffering",
+              "though still not a patch on canon",
+              "Dimension Travel",
+              "Families of Choice"
+            ],
+            "updated": "2020-08-09",
+            "fandoms": [
+              "Teen Wolf (TV)"
+            ],
+            "summary": "It’s Stiles’s eighteenth birthday, and he may have made bold statements about jumping certain people on his eighteenth birthday. Out loud. With witnesses. But that’s fine—it’s nothing to stress about. It’s not like every single person he’s ever kissed got horribly murdered or anything.\n\nOh wait, yes it is. It’s exactly like that.",
+            "tags": [
+              "Derek Hale/Stiles Stilinski",
+              "Peter Hale & Stiles Stilinski",
+              "Stiles Stilinski",
+              "Derek Hale",
+              "Peter Hale",
+              "Laura Hale",
+              "Sheriff Stilinski",
+              "Jennifer Blake",
+              "Scott McCall (Teen Wolf)",
+              "The Hale Pack",
+              "stiles's smooth handling of relationship-related trauma",
+              "laura's excellent relationship choices",
+              "peter attempting to help",
+              "no one actually dies! so that's good",
+              "derek's life is suffering",
+              "though still not a patch on canon",
+              "Dimension Travel",
+              "Families of Choice",
+              "No Archive Warnings Apply",
+              "F/F",
+              "M/M"
+            ],
+            "wordCount": 6810,
+            "chapters": "1/1",
+            "complete": true
+          }
+        ]
+      },
+      "created_at": "2026-10-19T12:00:00.000Z",
+      "updated_at": "2026-10-21T00:00:42.227Z",
+      "reading_status": "finished"
+    },
+    {
+      "id": "sample-series-1030529"
+    },
+    {
+      "id": "sample-series-2404765",
+      "created_at": "2026-10-19T12:00:00.000Z",
+      "updated_at": "2026-10-19T12:00:00.000Z"
+    },
+    {
+      "id": "sample-series-2888871",
+      "metadata": {
+        "seriesId": 2888871,
+        "normalizedUrl": "https://archiveofourown.org/series/2888871",
+        "title": "From the Archives",
+        "description": "",
+        "basic": true,
+        "works": []
+      },
+      "created_at": "2026-10-19T12:00:00.000Z",
+      "updated_at": "2026-10-19T12:00:00.000Z"
+    }
+  ],
+  "sampleVersion": 8
+}

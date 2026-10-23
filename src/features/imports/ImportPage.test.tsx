@@ -211,6 +211,6 @@ it('restores the same pasted work and series form in sample mode and saves witho
  await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith(links,true,'to_read',[]))
  await waitFor(()=>expect(mocks.refresh).toHaveBeenCalled())
  expect(mocks.history).not.toHaveBeenCalled()
- expect(screen.queryByText('Previous batches')).not.toBeInTheDocument()
+ expect(screen.queryByText('Previous Batches')).not.toBeInTheDocument()
  expect(screen.getByLabelText('AO3 URLs')).toHaveValue('')
 })

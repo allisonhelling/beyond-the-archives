@@ -21,11 +21,11 @@ export function ImportPage() {
  const [reviewing,setReviewing]=useState(false)
  const library=useLibrary()
  const [relatedBatch, setRelatedBatch] = useState<string>()
- const [historyPage,setHistoryPage]=useState(1),[resultPage,setResultPage]=useState(1)
+ const [resultPage,setResultPage]=useState(1)
  const [resultView,setResultView]=useState<{batchId?:string;finished:boolean;status:string}>({finished:false,status:'all'})
  const [text,setText]=useState(typeof location.state?.seriesUrl==='string'?location.state.seriesUrl:''), [selected,setSelected]=useState<string>()
  const [error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false)
- const history=useImportHistory(selected,historyPage,resultPage,resultView.status,!sampleMode,busy)
+ const history=useImportHistory(selected,1,resultPage,resultView.status,!sampleMode,busy)
  const {data,loading,reload}=history
  async function action(fn:()=>Promise<unknown>) {setBusy(true);setError('');try {await fn();if(sampleMode)await library.refresh();else await reload()}catch(e){setError(e instanceof Error?e.message:'Import operation failed.')}finally{setBusy(false)}}
  const batch=data.batches.find(b=>b.id===selected)??data.batches[0]
@@ -53,8 +53,7 @@ export function ImportPage() {
  {reviewing ? <SeriesImportReview text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
  <h2>Import Work or Series Links</h2>
  <label>AO3 URLs<textarea rows={10} value={text} onChange={event=>setText(event.target.value)} placeholder={"Paste work or series links here one per line\nhttps://archiveofourown.org/works/123"} disabled={busy} /></label>
- <ImportReadingStatus value={readingStatus} onChange={setReadingStatus} disabled={busy} />
- <p className="field-help">Applies to all links imported.</p>
+ <ImportReadingStatus description="Applies to all links imported." value={readingStatus} onChange={setReadingStatus} disabled={busy} />
  <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; review and select their works before importing.`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
  <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount?'Review series':'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
  </form>}
@@ -62,8 +61,7 @@ export function ImportPage() {
  {sampleMode && <p className="muted">Pasted links use the local extension and save to this browser’s sample library. Keep this page open while importing and complete any AO3 sign-in in the requested tab. Series use the same work picker; existing saved works are kept. New work-page requests wait 15 seconds between captures. Retry interrupted imports with the same links to continue safely.</p>}
  {message&&<p role="status">{message}</p>}{(error||history.error)&&<p className="error-message" role="alert">{error||history.error}</p>}
  {finished && batch?.id === relatedBatch && <ImportedSeriesNotice stories={(library.stories ?? []).filter(story => batchEntries.has(story.id))} onImported={id => { setSelected(id); setRelatedBatch(undefined) }} />}
- {!sampleMode && <section className="settings-card"><h2>Previous batches</h2>{loading?<p role="status">Loading import history…</p>:!data.batches.length?<p>No imports yet. Paste your first batch above.</p>:<label>Batch<select value={batch?.id??''} onChange={event=>{setResultPage(1);setSelected(event.target.value)}}>{data.batches.map(b=><option key={b.id} value={b.id}>{formatDateTime(b.created_at)}{b.cancelled_at?' · Cancelled':''}</option>)}</select></label>}
- {data.summary&&<Pagination page={historyPage} pages={data.summary.historyPages} total={data.summary.historyTotal} size={25} onPage={page=>{setHistoryPage(page);setResultPage(1)}}/>}
+ {!sampleMode && <section className="settings-card"><h2>Previous Batches</h2>{loading?<p role="status">Loading import history…</p>:!data.batches.length?<p>No imports yet. Paste your first batch above.</p>:<label>Batch<select value={batch?.id??''} onChange={event=>{setResultPage(1);setSelected(event.target.value)}}>{data.batches.map(b=><option key={b.id} value={b.id}>{formatDateTime(b.created_at)}{b.cancelled_at?' · Cancelled':''}</option>)}</select></label>}
  {batch&&<><p>{total} tracked URLs · {data.summary?.imported??data.items.filter(i=>i.result==='imported'&&i.status==='completed').length} imported with metadata · {data.summary?.alreadySaved??data.items.filter(i=>i.result==='already_saved').length} already saved</p><div className="import-status-filters" role="group" aria-label="Filter import results by status"><button className="text-button" aria-pressed={statusFilter==='all'} aria-controls="import-result-table" onClick={()=>setStatusFilter('all')}>All results: {total}</button>{finished&&<button className="text-button" aria-pressed={statusFilter==='review'} aria-controls="import-result-table" onClick={()=>setStatusFilter('review')}>Review: {reviewCount}</button>}{Object.entries(counts).map(([name,n])=><button key={name} className="text-button" aria-pressed={statusFilter===name} aria-controls="import-result-table" onClick={()=>setStatusFilter(name)}>{name}: {n}</button>)}</div>
  <p className="muted" role="status">{statusFilter==='review'?(reviewCount?`Batch finished. Showing failed, skipped, and cancelled results for your review. ${visibleCount} of ${total} results.`:'Batch finished. No failed, skipped, or cancelled results to review.'):`Showing ${visibleCount} of ${total} results${statusFilter!=='all'?` · ${statusFilter}`:''}`}</p>
  <progress aria-label="Import progress" max={Math.max(total,1)} value={data.summary?.completed??data.items.filter(i=>!activeStatuses.includes(i.status)).length}/>

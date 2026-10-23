@@ -8,6 +8,7 @@ import { librarySeries, type SeriesRecord } from '../series'
 import type { Json } from '../../../types/database'
 import { applyStoryEdits, editSnapshot, EditConflict, mergeEdits, resolveEdits, storyEdits, type EditValues } from '../edit-merge'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collection-appearance'
+import defaultState from './default-state.json'
 import snapshots from './stories.json'
 import seriesSnapshots from './series.json'
 import type { SpineDesign } from '../SpineDetails'
@@ -44,7 +45,7 @@ function makeWork(id: number | null): Work {
   }
 }
 
-function seedLibrary(): Library {
+function originalSamples(): Library {
   const stories: Story[] = snapshots.map(sample => {
     const snapshotAt = sample.captured_at ?? capturedAt
     const work: Work = {
@@ -95,6 +96,18 @@ function seedLibrary(): Library {
   return { stories, collections, series, sampleVersion }
 }
 
+// Store only changes to the original fixtures so captured defaults reuse work metadata.
+// Keep originalSamples separate for legacy upgrades, which must preserve historical seeds.
+function seedLibrary(): Library {
+  const original = originalSamples()
+  const saved = structuredClone(defaultState)
+  return {
+    ...saved,
+    stories: saved.stories.map(story => ({ ...original.stories.find(sample => sample.id === story.id), ...story })),
+    series: saved.series.map(series => ({ ...original.series?.find(sample => sample.id === series.id), ...series })),
+  } as Library
+}
+
 function read(): Library {
   const saved = window.localStorage.getItem(storageKey)
   if (!saved) return seedLibrary()
@@ -122,7 +135,7 @@ function read(): Library {
       }
       if (renamedValues) write(data)
       if ((data.sampleVersion ?? 1) < sampleVersion) {
-        const seed = seedLibrary(), seriesIds = new Set(seriesSnapshots.filter(series => seriesVersions[series.seriesId] > (data.sampleVersion ?? 1)).map(series => series.seriesId))
+        const seed = originalSamples(), seriesIds = new Set(seriesSnapshots.filter(series => seriesVersions[series.seriesId] > (data.sampleVersion ?? 1)).map(series => series.seriesId))
         // Upgrade affected series once, preserving edits to saved works and series notes
         // and leaving unrelated removed samples absent.
         for (const story of seed.stories.filter(story => story.metadata.series_memberships?.some(series => seriesIds.has(series.id)))) {

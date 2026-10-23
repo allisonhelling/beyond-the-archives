@@ -18,7 +18,7 @@ test('sample collections preview the new designs alongside the selected default 
  }
  const starter = shelf.getByRole('button', { name: 'One Shots', exact: true })
  await expect(starter).toHaveAttribute('data-spine-design', 'lunar-phases')
- await expect(starter).toHaveCSS('--cover-color', '#8b491e')
+ await expect(starter).toHaveCSS('--cover-color', '#721613')
  await expect(starter.locator('.lucide-scroll-text')).toHaveCount(1)
  await starter.click()
  const editor = page.getByRole('dialog', { name: 'Edit collection', exact: true })
@@ -90,7 +90,7 @@ test('series share work layouts, search contained fics, organize independently a
  await expect(text.nth(1)).toBeHidden()
  await card.getByRole('button', { name: 'Expand All', exact: true }).click()
  await expect(text.nth(0)).toBeVisible(); await expect(text.nth(1)).toBeVisible()
- await expect(card.getByRole('link', { name: 'View saved work: Play It Again', exact: true }).locator('.lucide-bookmark')).toBeVisible()
+ await expect(card.getByRole('link', { name: 'View saved work: Play It Again', exact: true }).locator('.lucide-book-open-text')).toBeVisible()
  const search = page.getByLabel('Search title or author', { exact: true })
  await search.fill("This Doesn't Hurt"); await expect(card).toHaveCount(1)
  await search.fill('Missing story'); await expect(card).toHaveCount(0)
@@ -209,8 +209,8 @@ test('series summary links open work details and work headings and collection ed
 test('series status follows individual work status changes and headers show date-only updates', async ({ page }) => {
  await page.goto('/library?shelf=series')
  const status = originalSeriesCard(page).locator('.series-reading-status')
- await expect(status).toHaveText('To Read')
- await expect(originalSeriesCard(page).locator('.story-facts')).toHaveText('To Read · 3 works · 74,696 words')
+ await expect(status).toHaveText('Currently Reading')
+ await expect(originalSeriesCard(page).locator('.story-facts')).toHaveText('Currently Reading · 3 works · 74,696 words')
  await expect(originalSeriesCard(page).locator('.series-reading-status')).toHaveCount(1)
  async function setWork(id: number, value: string) {
   await page.goto(`/stories/sample-entry-${id}`)
@@ -303,9 +303,9 @@ test('requested sample series demonstrate full details, basic pages and partial 
  await page.goto('/library?shelf=series')
  await expect(page.locator('.series-card')).toHaveCount(4)
  for (const [id, title, count, status, full] of [
-  [1030529, 'Point of Divergence', 1, 'Currently Reading', true],
-  [2404765, 'Son of Sea Foam', 4, 'Finished', false],
-  [2888871, 'From the Archives', 6, 'To Read', true],
+  [1030529, 'Point of Divergence', 1, 'Finished', true],
+  [2404765, 'Son of Sea Foam', 2, 'Paused Reading', false],
+  [2888871, 'From the Archives', 3, 'To Read', false],
  ] as const) {
   await page.goto(`/series/${id}`)
   await expect(page.getByRole('heading', {name:title,level:1,exact:true})).toBeVisible()
@@ -365,4 +365,31 @@ test('automatic collections match saved filters, new works and rule edits with a
  await expect(page.getByRole('heading',{name:'Kiss of Death',exact:true})).toBeVisible()
  await page.reload()
  await expect(page.locator('.work-card')).toHaveCount(1)
+})
+
+test('Reset sample data restores the captured library after local changes', async ({ page }) => {
+ await page.goto('/library')
+ const baseline = await page.evaluate(async () => {
+  const { loadSampleLibrary } = await import(/* @vite-ignore */ '/src/features/library/sample/repository.ts')
+  return loadSampleLibrary()
+ })
+ await page.evaluate(baseline => {
+  const edited = structuredClone(baseline)
+  edited.stories[0].notes = 'Temporary edit'
+  edited.stories[0].last_read_chapter = 0
+  edited.stories.pop()
+  edited.collections.pop()
+  localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(edited))
+ }, baseline)
+ await page.reload()
+ await page.getByRole('button', { name: 'Reset sample data', exact: true }).click()
+ await expect(page).toHaveURL(/\/reading$/)
+ const restored = await page.evaluate(async () => {
+  const { loadSampleLibrary } = await import(/* @vite-ignore */ '/src/features/library/sample/repository.ts')
+  return loadSampleLibrary()
+ })
+ expect(restored).toEqual(baseline)
+ expect(restored.stories).toHaveLength(23)
+ expect(restored.series).toHaveLength(4)
+ expect(restored.collections).toHaveLength(13)
 })

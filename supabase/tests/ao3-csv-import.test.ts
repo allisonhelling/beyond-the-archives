@@ -146,3 +146,17 @@ it('keeps the explicit list status authoritative while allowing dated progress f
  expect(await entry(122)).toMatchObject({ reading_status: 'reading', last_read_chapter: 2 })
  expect(await entry(123)).toMatchObject({ reading_status: 'paused_reading', last_read_chapter: 0 })
 })
+
+it('applies list status progress rules to new works and preserves existing status and progress', async () => {
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(124, { importReadingStatus: 'reading' })])])
+ const existing = await entry(124)
+ await db.query('update public.library_entries set last_read_chapter=1 where id=$1', [existing.id])
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([
+  row(124, { importReadingStatus: 'finished' }),
+  row(125, { importReadingStatus: 'finished' }),
+  row(126, { importReadingStatus: 'to_read' }),
+ ])])
+ expect(await entry(124)).toMatchObject({ reading_status: 'reading', last_read_chapter: 1 })
+ expect(await entry(125)).toMatchObject({ reading_status: 'finished', last_read_chapter: 3 })
+ expect(await entry(126)).toMatchObject({ reading_status: 'to_read', last_read_chapter: 0 })
+})

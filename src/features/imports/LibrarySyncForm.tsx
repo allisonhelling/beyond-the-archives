@@ -29,8 +29,8 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   setError('')
   try {
    const savedUsername = usernamePreference.read()
-   if (savedUsername) { const link = usernameUrl(kind, savedUsername); setUrl(link); void action('start', link, true) }
-   else { setUsername(''); setRememberUsername(false); setUsernameKind(kind) }
+   if (savedUsername && kind === 'marked_for_later') { const link = usernameUrl(kind, savedUsername); setUrl(link); void action('start', link, true) }
+   else { setUsername(savedUsername); setRememberUsername(Boolean(savedUsername)); setUsernameKind(kind) }
   } catch (failure) { setError((failure as Error).message) }
  }
  const intervalId = useId(), modeId = useId(), urlId = useId()
@@ -49,15 +49,15 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  useEffect(() => {
   if (sampleMode) void connectExtension().then(connected => { if (connected) return refresh() }).catch(() => {})
  }, [refresh])
- async function action(name: string, listUrl = url, autoImport = false) {
+ async function action(name: string, listUrl = url, autoImport = false, withChapterDates = false) {
   if (pending.current) return
   pending.current = true; setBusy(true); setError(''); setMessage('')
   try {
    if (name === 'start' && !await connectExtension()) throw new Error(sampleMode ? 'Load or reload AO3 Library Companion (Local) from extension/local/dist in Chrome, then retry.' : 'Connect the extension in Settings, then try again.')
    if (name === 'start' || name === 'discard') { setSeriesReview(null); selection.current = null }
    if (name === 'start') { setCollectionName(null); setCreatedCollection(null) }
-   const reply = await librarySyncCommand(name, name === 'start' ? { url: listUrl.trim(), mode, ...(checkChapterDates ? { checkChapterDates: true } : {}), ...(!autoImport ? { readingStatus } : {}), ...(autoImport ? { autoImport: true } : {}), ...(/^https:\/\/archiveofourown\.org\/collections\//.test(listUrl.trim()) && importToCollection ? { importToCollection: true } : {}), delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
-   if (name === 'start' && checkChapterDates && reply.state && reply.state.checkChapterDates !== true) {
+   const reply = await librarySyncCommand(name, name === 'start' ? { url: listUrl.trim(), mode, ...(withChapterDates ? { checkChapterDates: true } : {}), ...(!autoImport ? { readingStatus } : {}), ...(autoImport ? { autoImport: true } : {}), ...(/^https:\/\/archiveofourown\.org\/collections\//.test(listUrl.trim()) && importToCollection ? { importToCollection: true } : {}), delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
+   if (name === 'start' && withChapterDates && reply.state && reply.state.checkChapterDates !== true) {
     const discarded = await librarySyncCommand('discard', { scanId: reply.state.id })
     setState(discarded.state ?? null)
     throw new Error('Rebuild and reload AO3 Library Companion before using chapter-date checks. The unsupported scan was discarded; start it again after updating.')
@@ -135,15 +135,15 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   <h2 id="library-sync-heading">AO3 Library Sync</h2>
   {sampleMode && <p className="field-help">Sample imports use the local extension and save only to this browser’s sample library. No library account or background worker is needed. Load extension/local/dist in Chrome before starting.</p>}
   <p className="scan-introduction">Scan works across pages using AO3 Library Companion. Existing notes, personal tags, ratings, and progress are kept.</p>
-  <p className="field-help">New bookmarks dated after the work’s latest update are marked Finished, with the bookmark date as the finished date. Earlier or same-day bookmarks are marked Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also leave bookmarks Reading with unconfirmed progress. New Marked for Later works are saved as To Read.</p>
+  <p className="field-help">New bookmarks dated after the work’s latest update are marked Finished, with the bookmark date as the finished date.</p>
   <p className="field-help">Ensure that bookmarks are sorted by "Date Bookmarked". Changing the sort order may cause the scanner to miss entries.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void action('start') }}>
    <fieldset className="scan-options"><legend>Scan Options</legend><div className="form-controls-row">
-   <div className="form-control"><div className="editable-field-heading"><label htmlFor={modeId}>Scan Mode</label><Tooltip description="Full Scan collects all listings from a list. Quick Sync checks newest entries until a previously imported record is found.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Scan mode information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><select id={modeId} className="select-fit" value={selectedMode} disabled={busy || Boolean(saved)} onChange={event => { setMode(event.target.value); if (event.target.value === 'quick') { setStartPage(''); setEndPage('') } }}><option value="full">Full Scan</option><option value="quick">Quick Sync</option></select></div>
    <div className="form-control">
     <div className="editable-field-heading"><label htmlFor={intervalId}>Time Between Page Requests</label></div>
     <div className="input-with-unit"><input id={intervalId} aria-describedby={`${intervalId}-unit`} className="input-fit" type="number" required min={5} max={3600} step={1} value={interval} disabled={busy} onChange={event => setDelayDraft(event.target.value)} /><span id={`${intervalId}-unit`}>seconds</span><Tooltip description="Default interval: 15 seconds. Choose 5–3,600 seconds; browser scheduling and a small random delay may make requests slower.">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Request interval information" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div>
    </div>
+   <div className="form-control"><div className="editable-field-heading"><label htmlFor={modeId}>Scan Mode</label><Tooltip description="Full Scan collects all listings from a list. Quick Sync checks newest entries until a previously imported record is found.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Scan mode information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><select id={modeId} className="select-fit" value={selectedMode} disabled={busy || Boolean(saved)} onChange={event => { setMode(event.target.value); if (event.target.value === 'quick') { setStartPage(''); setEndPage('') } }}><option value="full">Full Scan</option><option value="quick">Quick Sync</option></select></div>
    {selectedMode === 'full' && <fieldset className="scan-page-limits" aria-label="Limit Full Library Scan (Optional)">
     <legend><span className="editable-field-heading">Limit Full Library Scan (Optional)<Tooltip description="Enter page numbers only; both endpoints are included. Leave Start Page blank for page 1 and End Page blank to scan to the list’s end. Selected ranges are partial scans and do not update the Quick Sync baseline.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Page limits information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></span></legend>
     <div className="form-grid form-grid-two-columns">
@@ -151,18 +151,18 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
      <label>End Page<input type="number" min={startPage ? Number(startPage) : 1} max={500} step={1} value={endPage} placeholder="Leave Blank" disabled={busy || Boolean(saved)} onChange={event => setEndPage(event.target.value)} /></label>
     </div>
    </fieldset>}</div>
-   <BookmarkChapterDatesOption scan checked={saved ? state.checkChapterDates ?? false : checkChapterDates} disabled={busy || Boolean(saved)} onChange={setCheckChapterDates} />
    </fieldset>
    <div className="form-actions"><button type="button" className="button secondary" disabled={busy || Boolean(saved)} onClick={() => importUsername('bookmarks')}>Import Bookmarks</button><button type="button" className="button secondary" disabled={busy || Boolean(saved)} onClick={() => importUsername('marked_for_later')}>Import Marked for Later</button></div>
-   <div className="form-control"><div className="editable-field-heading"><label htmlFor={urlId}>AO3 List URL</label><Tooltip description="Accepts a full user or pseud Works, Series, or Bookmarks URL, tag Works/Bookmarks URL, work search URL, or an AO3 collection URL.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="AO3 List URL information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><input id={urlId} type="url" required value={url} placeholder="https://archiveofourown.org/users/USERNAME/bookmarks" disabled={busy || Boolean(saved)} onChange={event => setUrl(event.target.value)} /></div>
-   <ImportReadingStatus ariaLabel="Reading status for AO3 list URL" value={saved ? state.readingStatus ?? readingStatus : readingStatus} onChange={setReadingStatus} disabled={busy || Boolean(saved)} />
-   <p className="field-help">Applies to new works imported from this list URL. Existing reading progress is preserved. The username import buttons use their own bookmark and Marked for Later statuses.</p>
+   <div className="form-controls-row list-import-controls">
+   <div className="form-control list-url-control"><div className="editable-field-heading"><label htmlFor={urlId}>AO3 List URL</label><Tooltip description="Accepts a full user or pseud's Works, Series, or Bookmarks URL, tag Works/Bookmarks URL, work search URL, or an AO3 collection URL.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="AO3 List URL information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><input id={urlId} type="url" required value={url} placeholder="https://archiveofourown.org/users/USERNAME/bookmarks" disabled={busy || Boolean(saved)} onChange={event => setUrl(event.target.value)} /></div>
+   <ImportReadingStatus description="Applies to new works imported from this list URL. Existing reading progress is preserved." ariaLabel="Reading status for AO3 list URL" value={saved ? state.readingStatus ?? readingStatus : readingStatus} onChange={setReadingStatus} disabled={busy || Boolean(saved)} />
+   <button className="button primary" disabled={busy || Boolean(saved)}>Import from List</button>
+   </div>
    {/^https:\/\/archiveofourown\.org\/collections\//.test(url.trim()) && <div className="editable-field-heading"><label className="check-label"><input type="checkbox" checked={importToCollection} disabled={busy || Boolean(saved)} onChange={event => setImportToCollection(event.target.checked)} />Import to New Collection</label><Tooltip description="Creates a new collection with all of the added works">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Import to New Collection information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div>}
 
    {state && ['running', 'paused'].includes(state.status) && <button type="button" className="button secondary" disabled={busy} onClick={() => void action('set-delay')}>Apply Request Interval</button>}
-   <button className="button primary" disabled={busy || Boolean(saved)}>Import from List</button>
   </form>
-  <p className="field-help">Uses one scan tab with your selected request interval; background alarms may make it slower. Existing work imports finish first. Keep Chrome running. If sign-in or a request restriction blocks the scan, an alert lets you open the scan tab. Resolve the issue there, then resume manually. Checkpoints stay on this device until imported or discarded; no individual work pages are opened.</p>
+  <p className="field-help">Uses one scan tab with your selected request interval; background alarms may make it slower. Existing work imports finish first. Keep Chrome running. If sign-in or a request restriction blocks the scan, an alert lets you open the scan tab. Resolve the issue there, then resume manually. Checkpoints stay on this device until imported or discarded.</p>
   {state && <p role="status">{state.status} · {state.pages} pages saved · {state.count} works collected · {state.skipped} unsupported entries skipped</p>}
   {state?.checkChapterDates && <p className="field-help">Chapter dates: {state.chapterDatesChecked ?? 0} indexes checked · {state.chapterDatesUnavailable ?? 0} unavailable or incomplete.</p>}
   {state?.limited && <p className="field-help">Partial scan · pages {state.startPage ?? 1}–{state.endPage ?? 'end of list'}{state.partial ? " · stopped at the selected end page; more pages remain on AO3" : ""}. Importing this range will not update the Quick Sync baseline.</p>}
@@ -184,9 +184,11 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    try {
     const link = usernameUrl(usernameKind, username)
     if (rememberUsername) usernamePreference.save(username)
-    setUrl(link); setUsernameKind(null); void action('start', link, true)
+    setUrl(link); setUsernameKind(null); void action('start', link, true, usernameKind === 'bookmarks' && checkChapterDates)
    } catch (failure) { setError((failure as Error).message) }
-  }}>{error && <p role="alert" className="error-message">{error}</p>}<label>AO3 Username<input required pattern={ao3UsernamePattern} value={username} onChange={event => setUsername(event.target.value)} autoComplete="off" /></label><label className="check-label"><input type="checkbox" checked={rememberUsername} onChange={event => setRememberUsername(event.target.checked)} />Save my AO3 username for future imports on this browser</label><p className="field-help">View, change, or delete your saved username in Settings. {usernameKind === 'marked_for_later' && 'Marked for Later requires signing in to AO3 in the scan browser.'}</p><button className="button primary" disabled={busy}>Start Import</button></form></Dialog>}
+  }}>{error && <p role="alert" className="error-message">{error}</p>}<label>AO3 Username<input required pattern={ao3UsernamePattern} value={username} onChange={event => setUsername(event.target.value)} autoComplete="off" /></label><div className="editable-field-heading"><label className="check-label"><input type="checkbox" checked={rememberUsername} onChange={event => setRememberUsername(event.target.checked)} />Save my AO3 username for future imports</label><Tooltip description="View, change, or delete your saved username in Settings.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Saved username information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div>
+   {usernameKind === 'bookmarks' && <><p className="field-help">Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.</p><BookmarkChapterDatesOption scan checked={checkChapterDates} disabled={busy} onChange={setCheckChapterDates} /></>}
+   {usernameKind === 'marked_for_later' && <p className="field-help">New Marked for Later works are saved as To Read. Marked for Later requires signing in to AO3 in the scan browser.</p>}<button className="button primary" disabled={busy}>Start Import</button></form></Dialog>}
   {message && <p role="status">{message}</p>}{error && !usernameKind && <p role="alert" className="error-message">{error}</p>}
  </section>
 }
