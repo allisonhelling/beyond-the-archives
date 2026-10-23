@@ -1,6 +1,6 @@
 import type { Database, Json } from '../../types/database'
 import { backupFileLimit, backupTables, type SavedBackup } from '../../types/backups'
-import { effectiveMetadata, effectiveWork, type Entry, type Work } from '../library/model'
+import { bookmarkRec, effectiveMetadata, effectiveWork, type Entry, type Work } from '../library/model'
 import { groupLinks } from '../library/repository'
 import { backupClient, backupBucket, BackupRequestError, browserPreferenceKeys, saveBackup } from './repository'
 
@@ -31,7 +31,7 @@ export function privateBackupMetadata(backup: LibraryBackup): LibraryBackup {
     // the source snapshot that was present when the backup was created.
     const metadata = effectiveMetadata(work, {}, tagLinks.get(work.id)?.filter(Boolean), authorLinks.get(work.id)?.filter(Boolean), fandomLinks.get(work.id)?.filter(Boolean))
     const fields = Object.fromEntries(['title', 'summary', 'rating', 'word_count', 'published_chapters', 'total_chapters', 'is_complete', 'ao3_published_at', 'ao3_updated_at', 'last_metadata_check', 'last_metadata_success'].map(key => [key, work[key as keyof Work]]))
-    return { ...entry, work_status: entry.work_status ?? 'unknown', source_bookmark: entry.source_bookmark ?? {}, extension_metadata: { ...fields, ...metadata } as Json, extension_chapters: work.verified_chapters }
+    return { ...entry, is_rec: entry.is_rec ?? (bookmarkRec(entry) === true), work_status: entry.work_status ?? 'unknown', source_bookmark: entry.source_bookmark ?? {}, extension_metadata: { ...fields, ...metadata } as Json, extension_chapters: work.verified_chapters }
   })
   return { ...backup, tables: { ...tables, library_entries: entries } }
 }

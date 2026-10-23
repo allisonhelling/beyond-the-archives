@@ -58,3 +58,13 @@ it('can read legacy Rec symbols but rejects invented Rec values', () => {
  for (const [status, expected] of [['rec', true], ['public', false], ['private', null], ['hidden', null]] as const) expect(readAo3Rows([{ title: 'Work', link: 'https://archiveofourown.org/works/42', source_list: 'bookmarks', 'bookmark status': status }])[0].bookmarkRec).toBe(expected)
  expect(() => readAo3Rows([{ title: 'Work', link: 'https://archiveofourown.org/works/42', 'bookmark rec': 'probably' }])).toThrow('invalid bookmark rec')
 })
+
+it('uses the verified chapter prefix before the bookmark day for scan and sample imports', async () => {
+ const { bookmarkReadingState } = await import('./ao3-csv')
+ const work = readAo3Rows([{ source_list: 'bookmarks', title: 'Chapter dates', link: 'https://archiveofourown.org/works/1', chapters: '3/3', date: '2026-10-20', 'bookmark date': '2026-10-10', 'chapter dates': JSON.stringify({ '1': '2026-09-01', '2': '2026-10-01', '3': '2026-10-10' }) }])[0] as import('./ao3-csv').CsvWork
+ expect(bookmarkReadingState(work)).toMatchObject({ status: 'reading', progress: 2 })
+ expect(bookmarkReadingState({ ...work, importReadingStatus: 'reading' })).toMatchObject({ status: 'reading', progress: 2 })
+ expect(bookmarkReadingState({ ...work, importReadingStatus: 'paused_reading' })).toMatchObject({ status: 'paused_reading', progress: 0 })
+ expect(bookmarkReadingState({ ...work, bookmarkDate: null })).toMatchObject({ progress: 0 })
+ expect(() => readAo3Rows([{ source_list: 'bookmarks', title: 'Bad dates', link: work.url, chapters: '3/3', 'chapter dates': '{"1":"2026-02-31"}' }])).toThrow('invalid chapter dates')
+})

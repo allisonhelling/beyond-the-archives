@@ -94,7 +94,7 @@ it('searches unsaved series installments and private saved corrections before pa
  const rows=(await db.query<{record:never}>("select to_jsonb(r)||'{\"collectionIds\":[]}'::jsonb record from public.library_series r")).rows.map(r=>r.record)
  const series=librarySeries(await documents(),rows),pool=series.map(seriesSearchStory)
  for(const filters of [{query:'Unsaved'},{within:'unsaved',scope:'summary'},{rating:['Explicit']},{oneShot:'only'},{}]) {
-  const expected=filterLibraryItems(pool,{...defaultReadingFilters,...filters} as typeof defaultReadingFilters,series)
+  const expected=filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,...filters} as typeof defaultReadingFilters,series)
   const result=await query(filters,1,25,'series')
   expect(result.stories.map(s=>s.id)).toEqual(expected.map(s=>s.id))
   const related=result.series.find(item=>item.seriesId===999)
@@ -105,8 +105,8 @@ it('loads collections and series sorted by update date when a series has no upda
  await db.query('select public.remember_library_series($1)',[JSON.stringify({seriesId:1001,title:'Undated series',normalizedUrl:'https://archiveofourown.org/series/1001',basic:false,updated:'',works:[]})])
  await db.query('select public.update_library_series(1001,$1,$2)',[JSON.stringify({favorite:true}),JSON.stringify({favorite:false})])
  for (const shelf of ['series','favorites']) {
-  expect((await query({sort:'updated'},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(true)
-  expect((await query({sort:'updated',updatedAfter:'2026-01-01'},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(false)
+  expect((await query({sort:'updated',showSeries:true},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(true)
+  expect((await query({sort:'updated',showSeries:true,updatedAfter:'2026-01-01'},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(false)
  }
 })
 it('returns inferred series without trying to remove metadata from a null personal record',async()=>{
@@ -128,7 +128,7 @@ it('pauses and resumes a story without changing progress and matches paused seri
  const dashboard=(await db.query<{result:LibraryResults}>('select public.query_library($1,1,25) result',[JSON.stringify({mode:'reading',shelf:'paused_reading',filters:defaultReadingFilters})])).rows[0].result
  expect(dashboard.sections.paused_reading).toBe(1)
  expect(dashboard.stories.map(story=>story.id)).toEqual([saved.id])
- const results=await query({},1,25,'paused_reading')
+ const results=await query({showSeries:true},1,25,'paused_reading')
  expect(results.stories.map(story=>story.id)).toEqual(expect.arrayContaining([saved.id,'series:2000']))
  expect((await query({within:'"Paused Reading"'},1,25,'paused_reading')).stories.map(story=>story.id)).toContain(saved.id)
  expect((await query({},1,100,'currently_reading')).stories.map(story=>story.id)).not.toContain(saved.id)
@@ -177,7 +177,7 @@ it('matches personal notes, multi-select personal ratings and known Recs before 
  const ids = (await documents()).slice(0, 3).map(story => story.id)
  await db.exec('reset role')
  await db.query("update public.library_entries set notes=E' \n\t ',personal_rating=null,source_bookmark='{}' where user_id=$1", [alice])
- for (const [index, id] of ids.entries()) await db.query('update public.library_entries set notes=$2,personal_rating=$3,source_bookmark=$4 where id=$1', [id, index === 2 ? '  ' : 'Personal thoughts', [1, 5, null][index], JSON.stringify({ id: `bookmark-${index}`, rec: [true, false, null][index] })])
+ for (const [index, id] of ids.entries()) await db.query('update public.library_entries set notes=$2,personal_rating=$3,source_bookmark=$4,is_rec=$5 where id=$1', [id, index === 2 ? '  ' : 'Personal thoughts', [1, 5, null][index], JSON.stringify({ id: `bookmark-${index}`, rec: [true, false, null][index] }), index === 0])
  await db.exec('set role authenticated')
  const docs = await documents()
  for (const patch of [{ personalNotes: true }, { recs: true }, { personalRating: ['1', '5'] }, { personalRating: ['unrated'] }, { personalNotes: true, personalRating: ['1'], recs: true }]) {
@@ -186,11 +186,37 @@ it('matches personal notes, multi-select personal ratings and known Recs before 
  }
  expect((await query({}, 1, 100, 'recs')).stories.map(story => story.id)).toEqual([ids[0]])
  const catalog = (await db.query<{ result: { stories: Story[] } }>('select public.library_catalog() result')).rows[0].result
- expect(catalog.stories.find(story => story.id === ids[0])?.source_bookmark).toEqual({ rec: true })
+ expect(catalog.stories.find(story => story.id === ids[0])?.is_rec).toBe(true)
  const rules = { filters: { ...defaultReadingFilters, personalNotes: true, personalRating: ['1', '5'], recs: true }, terms: [] }
  const collection = (await db.query<{ id: string }>('insert into public.collections(name,automatic_rules) values($1,$2) returning id', ['Notes and Recs', JSON.stringify(rules)])).rows[0]
  expect((await query({}, 1, 100, collection.id)).stories.map(story => story.id)).toEqual([ids[0]])
  const records = (await db.query<{ record: never }>("select to_jsonb(r)||'{\"collectionIds\":[]}'::jsonb record from public.library_series r")).rows.map(row => row.record)
  const series = librarySeries(docs, records), pool = series.map(seriesSearchStory)
- for (const personalRating of [['1', '5'], ['unrated']]) expect((await query({ personalRating }, 1, 100, 'series')).stories.map(story => story.id)).toEqual(filterLibraryItems(pool, { ...defaultReadingFilters, personalRating }, series).map(story => story.id))
+ for (const personalRating of [['1', '5'], ['unrated']]) expect((await query({ personalRating }, 1, 100, 'series')).stories.map(story => story.id)).toEqual(filterLibraryItems(pool, { ...defaultReadingFilters, showSeries: true, personalRating }, series).map(story => story.id))
+})
+
+it('hides series by default in mixed shelves and includes them on request before pagination', async () => {
+ const hidden = await query({}, 1, 100, 'favorites')
+ expect(hidden.stories.every(story => !story.id.startsWith('series:'))).toBe(true)
+ const shown = await query({ showSeries: true }, 1, 100, 'favorites')
+ expect(shown.series.length).toBeGreaterThan(0)
+ expect(shown.total).toBe(hidden.total + shown.series.length)
+ expect((await query({}, 1, 100, 'series')).series.length).toBeGreaterThan(0)
+ const all = await query({}, 1, 100), allShown = await query({ showSeries: true }, 1, 100)
+ expect(allShown.total).toBe(all.total + allShown.series.length)
+ expect(allShown.series.length).toBeGreaterThan(0)
+})
+
+it('matches first-series-work filters in the browser, paginated queries and automatic collections', async () => {
+ const docs = await documents(), ids = docs.slice(0, 5).map(story => story.id)
+ const membership = (position: number | null, id = 4444) => ({ id, name: 'Installment filter', url: `https://archiveofourown.org/series/${id}`, position })
+ const metadata = [{ series_memberships: [membership(1)] }, { series_memberships: [membership(2)] }, { series_memberships: [membership(null)] }, { series: ['Legacy names only'], series_memberships: [] }, { series_memberships: [membership(2), membership(1, 5555)] }]
+ for (const [index, id] of ids.entries()) await db.query('update public.library_entries set metadata_overrides=$2 where id=$1', [id, JSON.stringify(metadata[index])])
+ const current = await documents(), filters = { ...defaultReadingFilters, excludeLaterSeries: true }
+ const expected = filterReading(current, filters).map(story => story.id)
+ expect((await query(filters, 1, 100)).stories.map(story => story.id)).toEqual(expected)
+ expect(expected).toEqual(expect.arrayContaining([ids[0], ids[4]]))
+ for (const id of ids.slice(1, 4)) expect(expected).not.toContain(id)
+ const collection = (await db.query<{ id: string }>('insert into public.collections(name,automatic_rules) values($1,$2) returning id', ['Series starts', JSON.stringify({ filters, terms: [] })])).rows[0]
+ expect((await query({}, 1, 100, collection.id)).stories.map(story => story.id)).toEqual(expected)
 })

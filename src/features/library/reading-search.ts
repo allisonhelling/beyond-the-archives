@@ -1,7 +1,7 @@
 import { datePlaceholder } from '../../lib/dates'
 import { inSeries, seriesMemberships } from './series'
 import { publicationStatuses } from './publication-status'
-import { active, isCalendarDate, isOneShot, bookmarkRec, statuses, tagNames, type Story } from './model'
+import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
 
 type BaseSortOrder = 'updated' | 'added' | 'ready' | 'alpha'
 export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
@@ -9,17 +9,17 @@ export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
-  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string;
+  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy; randomSeed?: string;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
+  query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, showSeries: false, excludeLaterSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
   relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
 export function hasReadingFilters(filters: ReadingFilters) {
-  return (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope'].includes(key) && JSON.stringify(filters[key]) !== JSON.stringify(defaultReadingFilters[key]))
+  return (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope', 'showSeries'].includes(key) && JSON.stringify(filters[key]) !== JSON.stringify(defaultReadingFilters[key]))
 }
 export const normalize = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
 
@@ -127,8 +127,9 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
       (!filters.inSeries || inSeries(s)) &&
+      (!filters.excludeLaterSeries || !inSeries(s) || seriesMemberships(s).some(series => series.position === 1)) &&
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&
-      (!filters.personalNotes || Boolean(s.notes?.trim())) && (!filters.recs || bookmarkRec(s) === true) &&
+      (!filters.personalNotes || Boolean(s.notes?.trim())) && (!filters.recs || s.is_rec) &&
       (!filters.personalRating?.length || (s.personalRatings?.length ? s.personalRatings : [s.personal_rating ?? null]).some(rating => filters.personalRating.includes(rating === null ? 'unrated' : String(rating)))) &&
       relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
       characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&

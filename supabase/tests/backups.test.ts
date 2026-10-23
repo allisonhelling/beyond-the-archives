@@ -102,6 +102,21 @@ it('scrubs leases, resumes interrupted jobs, and only remaps UUID columns', asyn
   expect((await snapshot(bob)).tables.metadata_jobs[0].lease_token).toBeNull()
 })
 
+it('round-trips personal Recs and restores legacy backups from their imported Rec baseline', async () => {
+ const backup = await snapshot()
+ expect(backup.tables.library_entries.length).toBeGreaterThan(0)
+ for (const entry of backup.tables.library_entries) { entry.is_rec = false; entry.source_bookmark = { rec: true } }
+ await restore(backup)
+ expect((await snapshot()).tables.library_entries.every(entry => entry.is_rec === false)).toBe(true)
+ const legacy = structuredClone(backup)
+ for (const entry of legacy.tables.library_entries) delete entry.is_rec
+ await restore(legacy)
+ expect((await snapshot()).tables.library_entries.every(entry => entry.is_rec === true)).toBe(true)
+ for (const entry of legacy.tables.library_entries) entry.source_bookmark = { status: 'private rec' }
+ await restore(legacy)
+ expect((await snapshot()).tables.library_entries.every(entry => entry.is_rec === true)).toBe(true)
+})
+
 it('restores into empty application tables and exports more than the PostgREST row limit', async () => {
   const backup = await snapshot()
   const names = Object.keys(backup.tables)

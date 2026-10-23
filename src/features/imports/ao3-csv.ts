@@ -1,11 +1,11 @@
-import { scraperDate } from '../../lib/dates'
+import { isCalendarDate, scraperDate } from '../../lib/dates'
 export { scraperDate } from '../../lib/dates'
 import { classifyUrl } from './urls'
 import type { AutomaticMetadata } from './ao3-metadata'
 import { bookmarkRec, type SourceBookmark } from '../library/model'
 
 export type CsvWork = {
- source: 'bookmarks' | 'marked_for_later'; url: string; workId: number | null; workStatus?: 'available' | 'deleted'; bookmarkId?: number; bookmarkStatus?: string; bookmarkUser?: string; bookmarkCount?: number; bookmarkRec?: boolean | null; metadata: AutomaticMetadata;
+ importReadingStatus?: import('../library/model').Status; source: 'bookmarks' | 'marked_for_later'; url: string; workId: number | null; workStatus?: 'available' | 'deleted'; bookmarkId?: number; bookmarkStatus?: string; bookmarkUser?: string; bookmarkCount?: number; bookmarkRec?: boolean | null; metadata: AutomaticMetadata;
  bookmarkDate: string | null; updatedDate: string | null; notes: string; tags: string[];
 }
 export type CsvSource = Omit<CsvWork, 'workId'> & { workId?: number | null; seriesId?: number }
@@ -78,6 +78,11 @@ export function readAo3Rows(rows: Record<string, string>[]): CsvSource[] {
   if (rec !== undefined && !['true', 'false', '', 'unknown'].includes(rec)) throw new Error(`CSV row ${index + 2}: invalid bookmark rec.`)
   const recommendation = bookmarkRec({ source_bookmark: { status: row['bookmark status'], ...(rec !== undefined && { rec: rec === 'true' ? true : rec === 'false' ? false : null }) } })
   const metadata = csvMetadata(row)
+  if (row['chapter dates']) {
+   const dates: unknown = JSON.parse(row['chapter dates'])
+   if (!dates || typeof dates !== 'object' || Array.isArray(dates) || Object.entries(dates).some(([position, date]) => !/^[1-9]\d*$/.test(position) || Number(position) > (metadata.published_chapters ?? 0) || typeof date !== 'string' || !isCalendarDate(date))) throw new Error(`CSV row ${index + 2}: invalid chapter dates.`)
+   metadata.chapter_dates = dates as Record<string, string>
+  }
   if (!deleted && !metadata.title) throw new Error(`CSV row ${index + 2}: title is missing.`)
   return { source, url: identity.kind === 'valid' || identity.kind === 'series' ? identity.identity.normalizedUrl : bookmarkUrl, ...(identity.kind === 'valid' ? { workId: identity.identity.workId } : identity.kind === 'series' ? { seriesId: identity.identity.seriesId } : { workId: null }), workStatus: deleted ? 'deleted' : 'available', ...(hasBookmark ? { bookmarkId } : {}), bookmarkStatus: row['bookmark status'], metadata,
    bookmarkDate: source === 'bookmarks' ? scraperDate(row['bookmark date'] ?? '') : null, ...(source === 'bookmarks' && { bookmarkRec: recommendation }), bookmarkUser: row['bookmark user'], bookmarkCount: count(row['bookmark count']), updatedDate: scraperDate(row.date ?? ''), notes: row['bookmark notes'] ?? '', tags: list(row['bookmark tags']) }
@@ -106,10 +111,20 @@ export function csvBookmark(work: CsvWork): SourceBookmark {
   ...(work.bookmarkStatus ? { status: work.bookmarkStatus } : {}), ...(work.bookmarkDate ? { date: work.bookmarkDate } : {}),
   ...(work.bookmarkUser ? { user: work.bookmarkUser } : {}), ...(work.bookmarkCount !== undefined ? { count: work.bookmarkCount } : {}) }
 }
+/** Date-only AO3 timestamps cannot establish reading order on the same day. */
+function chapterProgressBeforeBookmark(dates: Record<string, string> | undefined, published: number | undefined, bookmark: string | null): number {
+ if (!dates || !published || !bookmark || !isCalendarDate(bookmark)) return 0
+ let progress = 0
+ for (let position = 1; position <= published && isCalendarDate(dates[String(position)] ?? '') && dates[String(position)] < bookmark; position++) progress = position
+ return progress
+}
+
 export function bookmarkReadingState(work: CsvWork) {
+ const datedProgress = work.source === 'bookmarks' ? chapterProgressBeforeBookmark(work.metadata.chapter_dates, work.metadata.published_chapters, work.bookmarkDate) : 0
+ if (work.importReadingStatus) return { status: work.importReadingStatus, progress: work.importReadingStatus === 'finished' ? work.metadata.published_chapters ?? 0 : work.importReadingStatus === 'reading' ? datedProgress : 0, finishedAt: work.importReadingStatus === 'finished' ? new Date().toISOString() : null }
  const finished = work.source === 'bookmarks' && Boolean(work.bookmarkDate && work.updatedDate && work.bookmarkDate > work.updatedDate)
  return { status: work.source === 'marked_for_later' ? 'to_read' as const : finished ? 'finished' as const : 'reading' as const,
-  progress: finished ? work.metadata.published_chapters ?? 0 : 0, finishedAt: finished ? work.bookmarkDate : null }
+  progress: finished ? work.metadata.published_chapters ?? 0 : datedProgress, finishedAt: finished ? work.bookmarkDate : null }
 }
 /** Work metadata never participates in personal bookmark conflict review. */
 export function bookmarkConflicts(works: CsvWork[], existing: CsvConflict[]) {

@@ -3,13 +3,19 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Shared JS database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
-import { automaticCollectionRules } from '../../src/features/library/automatic-collections'
+import { automaticCollectionRules, collectionRules } from '../../src/features/library/automatic-collections'
 import { defaultReadingFilters } from '../../src/features/library/reading-search'
 import type { Collection } from '../../src/features/library/model'
 
 let db: PGlite
 const alice = '10000000-0000-0000-0000-000000000001', bob = '10000000-0000-0000-0000-000000000002'
 const rules = automaticCollectionRules({ ...defaultReadingFilters, oneShot: 'only' })
+function expectStarterRules(collection: Collection) {
+ const saved = collectionRules(collection)
+ expect(saved).not.toBeNull()
+ // Saved rules may predate filters whose omitted values use the current defaults.
+ expect({ ...saved, filters: { ...defaultReadingFilters, ...saved?.filters } }).toEqual(rules)
+}
 beforeAll(async () => {
  db = await createTestDatabase()
  await db.exec(`insert into auth.users values ('${alice}'),('${bob}'); set role authenticated; set request.jwt.claim.sub='${alice}'`)
@@ -20,7 +26,8 @@ it('creates an ordinary private automatic collection before any works are saved'
  expect((await db.query('select * from public.library_entries')).rows).toEqual([])
  const collections = (await db.query<Collection>('select * from public.collections')).rows
  expect(collections).toHaveLength(1)
- expect(collections[0]).toMatchObject({ user_id: alice, name: 'One Shots', color: '#8b491e', symbol: 'scroll', default_key: null, automatic_rules: rules })
+ expect(collections[0]).toMatchObject({ user_id: alice, name: 'One Shots', color: '#8b491e', symbol: 'scroll', default_key: null })
+ expectStarterRules(collections[0])
  await expect(db.query('select public.seed_starter_collection($1)', [bob])).rejects.toThrow(/permission denied/)
 })
 
@@ -51,5 +58,7 @@ it('preserves a same-named existing shelf when provisioning existing accounts', 
  expect(collections[0]).toMatchObject({ name: 'One Shots', color: '#123456', symbol: 'moon', automatic_rules: null })
  await db.query('delete from public.collections where user_id=$1', [bob])
  await db.query('select public.seed_starter_collection($1)', [bob])
- expect((await db.query<Collection>('select * from public.collections where user_id=$1', [bob])).rows[0]).toMatchObject({ name: 'One Shots', automatic_rules: rules })
+ const starter = (await db.query<Collection>('select * from public.collections where user_id=$1', [bob])).rows[0]
+ expect(starter).toMatchObject({ name: 'One Shots' })
+ expectStarterRules(starter)
 })

@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { MemoryRouter, useNavigate } from 'react-router-dom'
+import { act, renderHook, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { blankMetadata, type Story } from './model'
@@ -9,7 +10,7 @@ import { LibraryProvider, useLibrary } from './LibraryProvider'
 const query={mode:'library' as const,shelf:'all',filters:defaultReadingFilters}
 const result={stories:[],series:[],total:0,page:1,pages:1,sections:{},fandoms:[]}
 const story=(id:string,title=id)=>({id,metadata:{...blankMetadata,title,summary:'Full summary'},notes:'Private notes',personalTags:['Personal tag'],work:{ao3_work_id:1,verified_chapters:{'1':'910'}},collectionIds:[],reading_status:'reading',last_read_chapter:0}) as unknown as Story
-const wrapper=({children}:{children:ReactNode})=><LibraryProvider userId="reader-1">{children}</LibraryProvider>
+const wrapper=({children}:{children:ReactNode})=><MemoryRouter><LibraryProvider userId="reader-1">{children}</LibraryProvider></MemoryRouter>
 beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.query.mockResolvedValue(result)})
 it('serializes targeted refreshes and preserves unrelated works without reloading the catalog',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper})
@@ -47,7 +48,7 @@ it('discards private page caches when the account provider unmounts',async()=>{
  const first=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(first.result.current.loading).toBe(false))
  await first.result.current.fetchPage(query,1,50,new AbortController().signal)
  first.unmount()
- const second=renderHook(()=>useLibrary(),{wrapper:({children})=><LibraryProvider userId="reader-2">{children}</LibraryProvider>})
+ const second=renderHook(()=>useLibrary(),{wrapper:({children})=><MemoryRouter><LibraryProvider userId="reader-2">{children}</LibraryProvider></MemoryRouter>})
  await waitFor(()=>expect(second.result.current.loading).toBe(false))
  await second.result.current.fetchPage(query,1,50,new AbortController().signal)
  expect(mocks.query).toHaveBeenCalledTimes(2)
@@ -95,4 +96,17 @@ it('applies the same limit when a catalog contains full details',async()=>{
  expect(view.result.current.stories.filter(s=>s.detailsLoaded!==false)).toHaveLength(100)
  expect(view.result.current.stories[0]).toMatchObject({id:'0',detailsLoaded:false,notes:'',metadata:{summary:''}})
  expect(view.result.current.stories[139]).toMatchObject({id:'139',notes:'Private notes'})
+})
+
+
+it('dismisses undo notifications when navigating to a new page', async () => {
+ const view = renderHook(() => ({ library: useLibrary(), navigate: useNavigate() }), { wrapper })
+ await waitFor(() => expect(view.result.current.library.loading).toBe(false))
+ mocks.stories.mockResolvedValue([story('one')])
+ await act(() => view.result.current.library.markFinished(story('one')))
+ expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible()
+ act(() => view.result.current.navigate('/', { replace: true }))
+ expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible()
+ act(() => view.result.current.navigate('/settings'))
+ expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
 })

@@ -3,7 +3,7 @@ import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { sampleMode } from '../../lib/sample-mode'
 import { supabase } from '../../lib/supabase'
-import { allRows } from '../library/repository'
+import { addStoriesToCollections, allRows } from '../library/repository'
 import { classifyUrl, extractUrls, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
 import { connectExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
@@ -123,9 +123,9 @@ export async function previewCsvImport(works: import('./ao3-csv').CsvWork[]): Pr
   return incoming ? { ...conflict, workId: incoming.workId } : conflict
  })
 }
-export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conflicts: import('./ao3-csv').CsvConflict[], choices: Record<string, import('./ao3-csv').CsvChoice>) {
+export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conflicts: import('./ao3-csv').CsvConflict[], choices: Record<string, import('./ao3-csv').CsvChoice>, checkChapterDates = false) {
  const saved = new Map(conflicts.map(conflict => [csvWorkKey(conflict), conflict]))
- const rows = works.map(work => ({ ...work, choice: choices[csvWorkKey(work)] ?? 'keep', expectedVersion: saved.get(csvWorkKey(work))?.version ?? null }))
+ const rows = works.map(work => ({ ...work, checkChapterDates, choice: choices[csvWorkKey(work)] ?? 'keep', expectedVersion: saved.get(csvWorkKey(work))?.version ?? null }))
  const { data, error } = await client().rpc('submit_ao3_csv_import', { p_rows: rows as unknown as import('../../types/database').Json })
  if (error) {
   if (error.code === '40001') throw new Error('Your library changed after CSV review. Choose the files again to refresh conflicts before importing.')
@@ -135,14 +135,19 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  return data as unknown as { batch: string | null; imported: number; kept: number }
 }
 
-export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[]) {
- const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status) {
+ if (readingStatus) works = works.map(work => ({ ...work, importReadingStatus: readingStatus }))
+ const conflicts = !readingStatus && works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
  let result: { batch: string | null; imported: number; kept: number }
  if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works)
  else {
   const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json })
   if (error) throw new Error('Could not import this scan page. Apply the latest database migrations and check your connection; retry safely to preserve personal data.')
   result = data as unknown as typeof result
+ }
+ if (collectionId) {
+  const saved = await previewCsvImport(works)
+  await addStoriesToCollections(saved.map(work => work.id), [collectionId])
  }
  return { ...result, ...(conflicts.length ? { bookmarkConflicts: conflicts } : {}) }
 }

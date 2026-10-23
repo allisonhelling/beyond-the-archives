@@ -123,3 +123,26 @@ it('overwriting bookmark fields preserves manual corrections and empty automatic
  await submit([row(922, { choice: 'overwrite', expectedVersion: current.updated_at, metadata: { title: 'AO3 title', summary: '', kudos: 0 }, notes: 'Approved replacement', tags: ['Approved tag'] })])
  expect(await entry(922)).toMatchObject({ notes: 'Approved replacement', metadata_overrides: { title: 'Manual title' }, extension_metadata: { title: 'AO3 title', summary: 'Public summary', kudos: 0 } })
 })
+
+it('imports scanned chapter dates without opening metadata jobs and preserves existing progress', async () => {
+ const metadata = { ...row(120).metadata, chapter_dates: { '1': '2026-08-01', '2': '2026-08-20', '3': '2026-09-01' } }
+ const rows = [row(120, { bookmarkDate: '2026-09-01', metadata })]
+ const result = (await db.query<{ result: { batch: string } }>('select public.submit_ao3_library_sync($1) result', [JSON.stringify(rows)])).rows[0].result
+ expect(await entry(120)).toMatchObject({ reading_status: 'reading', last_read_chapter: 2, finished_at: null })
+ expect((await db.query<{ status: string }>('select status from public.metadata_jobs where batch_id=$1', [result.batch])).rows.every(job => job.status === 'completed')).toBe(true)
+ await db.query('update public.library_entries set last_read_chapter=1 where id=$1', [(await entry(120)).id])
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify(rows)])
+ expect(await entry(120)).toMatchObject({ last_read_chapter: 1 })
+})
+it('honors the explicit CSV opt-out even if metadata later supplies chapter dates', async () => {
+ const result = await submit([row(121, { bookmarkDate: '2026-09-01', checkChapterDates: false })])
+ expect((await db.query<{ bookmark_import: { checkChapterDates: boolean } }>('select bookmark_import from public.metadata_jobs where batch_id=$1', [result.batch])).rows[0].bookmark_import.checkChapterDates).toBe(false)
+ await finish(result.batch!, { '1': '2026-08-01', '2': '2026-08-20', '3': '2026-09-01' })
+ expect(await entry(121)).toMatchObject({ reading_status: 'reading', last_read_chapter: 0 })
+})
+it('keeps the explicit list status authoritative while allowing dated progress for Reading', async () => {
+ const metadata = { ...row(122).metadata, chapter_dates: { '1': '2026-08-01', '2': '2026-08-20', '3': '2026-09-01' } }
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(122, { bookmarkDate: '2026-09-01', metadata, importReadingStatus: 'reading' }), row(123, { bookmarkDate: '2026-09-01', metadata, importReadingStatus: 'paused_reading' })])])
+ expect(await entry(122)).toMatchObject({ reading_status: 'reading', last_read_chapter: 2 })
+ expect(await entry(123)).toMatchObject({ reading_status: 'paused_reading', last_read_chapter: 0 })
+})

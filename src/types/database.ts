@@ -311,6 +311,7 @@ export type Database = {
           reading_history: Json
           work_status: string
           source_bookmark: Json
+          is_rec: boolean
         }
         Insert: {
           id?: string
@@ -334,6 +335,7 @@ export type Database = {
           reading_history?: Json
           work_status?: string
           source_bookmark?: Json
+          is_rec?: boolean
         }
         Update: {
           id?: string
@@ -357,6 +359,7 @@ export type Database = {
           reading_history?: Json
           work_status?: string
           source_bookmark?: Json
+          is_rec?: boolean
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -430,6 +433,7 @@ export type Database = {
           updated_at: string
           is_favorite: boolean
           reading_status: Database['public']['Enums']['reading_status']
+          is_rec: boolean
         }
         Insert: {
           id?: string
@@ -441,6 +445,7 @@ export type Database = {
           updated_at?: string
           is_favorite?: boolean
           reading_status?: Database['public']['Enums']['reading_status']
+          is_rec?: boolean
         }
         Update: {
           id?: string
@@ -452,6 +457,7 @@ export type Database = {
           updated_at?: string
           is_favorite?: boolean
           reading_status?: Database['public']['Enums']['reading_status']
+          is_rec?: boolean
         }
         Relationships: [
         ]

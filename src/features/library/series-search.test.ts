@@ -10,15 +10,20 @@ const series = librarySeries([], [{ao3_series_id:77,metadata,notes:'Private seri
 const pool = series.map(seriesSearchStory)
 it('searches all preview works, including unsaved fics, using the shared filter toolbar contract', () => {
  for (const patch of [{query:'Other fic'},{query:'Author B'},{fandoms:['Second fandom']},{relationship:'A/B, C/D'},{characters:'Character B'},{tags:'Adventure'},{rating:['Mature','Explicit']},{favorites:true},{within:'garden ship'},{within:'"Other fic"'},{within:'flying',scope:'summary' as const},{within:'reminder',scope:'notes' as const}]) {
-  expect(filterLibraryItems(pool,{...defaultReadingFilters,...patch},series)).toEqual(pool)
+  expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,...patch},series)).toEqual(pool)
  }
- expect(filterLibraryItems(pool,{...defaultReadingFilters,within:'garden -ship'},series)).toEqual([])
- expect(filterLibraryItems(pool,{...defaultReadingFilters,within:'missing'},series)).toEqual([])
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,within:'garden -ship'},series)).toEqual([])
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,within:'missing'},series)).toEqual([])
 })
 it('filters AO3 series completion independently from complete works and finished reading', () => {
- expect(filterLibraryItems(pool,{...defaultReadingFilters,publication:['in_progress']},series)).toEqual(pool)
- expect(filterLibraryItems(pool,{...defaultReadingFilters,publication:['complete']},series)).toEqual([])
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,publication:['in_progress']},series)).toEqual(pool)
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,publication:['complete']},series)).toEqual([])
  expect(pool[0].reading_status).toBe('finished') // A series can be finished without importing its works.
- expect(filterLibraryItems(pool,{...defaultReadingFilters,oneShot:'only'},series)).toEqual(pool)
- expect(filterLibraryItems(pool,{...defaultReadingFilters,oneShot:'exclude'},series)).toEqual(pool)
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,oneShot:'only'},series)).toEqual(pool)
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,oneShot:'exclude'},series)).toEqual(pool)
+})
+
+it('hides series cards until explicitly enabled without excluding their individual works', () => {
+ expect(filterLibraryItems(pool, defaultReadingFilters, series)).toEqual([])
+ expect(filterLibraryItems(pool, { ...defaultReadingFilters, showSeries: true, excludeLaterSeries: true }, series)).toEqual(pool)
 })

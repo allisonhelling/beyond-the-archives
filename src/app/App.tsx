@@ -1,3 +1,4 @@
+import { Ao3UsernameSettings } from '../features/imports/Ao3UsernameSettings'
 import { LibrarySyncProvider } from '../features/imports/LibrarySyncProvider'
 import { BackupSettings } from '../features/backups/BackupSettings'
 import { CsvExportSettings } from '../features/backups/CsvExportSettings'
@@ -47,6 +48,7 @@ const settingsSections = [
   ['settings-account', 'Account & Security', 'Sign-in details and password recovery'],
   ['settings-browsing', 'Library Browsing', 'Default works per page and date format'],
   ['settings-display', 'Tile and Page Information', 'Customize tags, tiles, and information pages'],
+  ['settings-ao3-username', 'AO3 Username', 'View, change, or delete your saved import username'],
   ['settings-metadata', 'AO3 Metadata Retrieval', 'Choose how story information is retrieved'],
   ['ios-safari-userscript', 'iOS Safari Userscript', 'Set up and manage paired Safari devices'],
   ['settings-backup', 'Export Backup', 'Download, save, or restore a complete library backup'],
@@ -108,6 +110,7 @@ function SettingsPage() {
     'settings-account': <section id="settings-account" tabIndex={-1} className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & Security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section>,
     'settings-browsing': <PageSizeSettings />,
     'settings-display': <DisplaySettings />,
+    'settings-ao3-username': <Ao3UsernameSettings />,
     'settings-metadata': <MetadataSettings />,
     'ios-safari-userscript': <UserscriptSettings />,
     'settings-backup': <BackupSettings />,

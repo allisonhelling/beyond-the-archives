@@ -33,13 +33,15 @@ beforeAll(async () => {
 }, 30000)
 afterAll(async () => { await db?.close() })
 it('retries the migration after its SQL committed without losing data or duplicating the Safari merge', async () => {
- const { id } = await seed(), before = await snapshot(id)
+ const { id } = await seed(), { rec, ...before } = await snapshot(id)
  const definition = async () => (await db.query<{ sql: string }>("select pg_get_functiondef('public.userscript_library(text,text,bigint,jsonb)'::regprocedure) sql")).rows[0].sql
  const original = await definition()
  const migration = await readFile(new URL('../migrations/20261019000201_safe_library_edits.sql', import.meta.url), 'utf8')
  for (let attempt = 0; attempt < 2; attempt++) {
   await db.exec(migration)
+  // This historical migration predates the Rec snapshot field; the stored choice stays intact.
   expect(await snapshot(id)).toEqual(before)
+  expect((await db.query<{ is_rec: boolean }>('select is_rec from public.library_entries where id=$1', [id])).rows[0].is_rec).toBe(rec)
   expect(await definition()).toBe(original)
  }
 })

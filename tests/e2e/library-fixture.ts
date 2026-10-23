@@ -14,7 +14,7 @@ export async function fixture(page: Page) {
   })
   type Row = Record<string, unknown>
   const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
-  const snapshot = (entry: Row): EditValues => ({ status: entry.reading_status as string, progress: entry.last_read_chapter as number, notes: entry.notes as string, rating: entry.personal_rating as number | null, favorite: entry.is_favorite as boolean, metadata: entry.metadata_overrides as EditValues, tags: tables.library_entry_tags.filter(link => link.library_entry_id === entry.id).map(link => String(tables.personal_tags.find(tag => tag.id === link.personal_tag_id)?.name)), collections: tables.collection_works.filter(link => link.library_entry_id === entry.id).map(link => String(link.collection_id)) })
+  const snapshot = (entry: Row): EditValues => ({ status: entry.reading_status as string, progress: entry.last_read_chapter as number, notes: entry.notes as string, rating: entry.personal_rating as number | null, favorite: entry.is_favorite as boolean, rec: (entry.is_rec ?? false) as boolean, metadata: entry.metadata_overrides as EditValues, tags: tables.library_entry_tags.filter(link => link.library_entry_id === entry.id).map(link => String(tables.personal_tags.find(tag => tag.id === link.personal_tag_id)?.name)), collections: tables.collection_works.filter(link => link.library_entry_id === entry.id).map(link => String(link.collection_id)) })
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
@@ -45,7 +45,7 @@ export async function fixture(page: Page) {
       }
       if (table === 'update_library_entry_checked') {
         const previous = { ...entry! } as unknown as Story
-        Object.assign(entry!, { reading_status: values.status, last_read_chapter: values.progress, notes: values.notes, personal_rating: values.rating, is_favorite: values.favorite, updated_at: now })
+        Object.assign(entry!, { reading_status: values.status, last_read_chapter: values.progress, notes: values.notes, personal_rating: values.rating, is_favorite: values.favorite, is_rec: values.rec, updated_at: now })
         recordReadingTransition(entry! as unknown as Story, previous, now)
         return route.fulfill({ status: 204 })
       }

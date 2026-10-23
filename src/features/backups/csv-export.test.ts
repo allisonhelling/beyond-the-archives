@@ -37,7 +37,7 @@ function fixture() {
     { id: 'auto', name: 'Favorites', automatic_rules: rules },
   ] as Collection[]
   const story = { id: 'entry', work_id: 'work', notes: 'Renée, "private"\nSecond line', personal_rating: 4.5,
-    reading_status: 'reading', last_read_chapter: 3, is_favorite: true, personalTags: ['Fluff', '私のタグ'], collectionIds: ['manual'],
+    reading_status: 'reading', last_read_chapter: 3, is_favorite: true, is_rec: true, source_bookmark: { rec: false }, personalTags: ['Fluff', '私のタグ'], collectionIds: ['manual'],
     work: { id: 'work', ao3_work_id: 123, language: 'English', verified_chapters: { 1: '456' } },
     metadata: { ...blankMetadata, title: '=HYPERLINK("unsafe")', authors: ['Author'], word_count: 1234 }, metadata_overrides: { title: '=HYPERLINK("unsafe")' },
   } as unknown as Story
@@ -52,7 +52,8 @@ it('exports private fields, rich metadata, custom collections, rules, and both m
   const exported = Object.fromEntries(files.map(file => [file.name, rows(file.content)]))
   const work = exported['works.csv'][0]
   expect(work).toMatchObject({ notes: library.stories[0].notes, personal_rating: '4.5', reading_status: 'reading', last_read_chapter: '3',
-    word_count: '1234', work_language: 'English', title: '\'=HYPERLINK("unsafe")' })
+    rec: 'true', word_count: '1234', work_language: 'English', title: '\'=HYPERLINK("unsafe")' })
+  expect(work).not.toHaveProperty('is_rec')
   expect(JSON.parse(work.personal_tags)).toEqual(['Fluff', '私のタグ'])
   expect(JSON.parse(work.collection_names)).toEqual(['Custom, "shelf"', 'Favorites'])
   expect(JSON.parse(work.work_verified_chapters)).toEqual({ 1: '456' })

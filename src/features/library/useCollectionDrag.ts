@@ -31,7 +31,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
           if (gap < distance) { distance = gap; nearest = slot }
         }
       }
-      target = nearest?.dataset.collectionGroup === pending.slot.dataset.collectionGroup ? nearest?.dataset.collectionId ?? null : null
+      target = nearest?.dataset.collectionId ?? null
       if (pending.selecting) {
         if (!target) return
         const ids = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].filter(slot => slot.dataset.collectionGroup === pending!.slot.dataset.collectionGroup).map(slot => slot.dataset.collectionId!)
@@ -106,7 +106,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       const slot = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-collection-id]') : null
       if (!slot || !shelf!.contains(slot)) return
       event.preventDefault()
-      const slots = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].filter(item => item.dataset.collectionGroup === slot.dataset.collectionGroup)
+      const slots = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')]
       const selected = handlers.current.selection?.selectedIds ?? []
       const moving = selected.includes(slot.dataset.collectionId!) ? selected : [slot.dataset.collectionId!]
       const direction = event.key === 'ArrowLeft' ? -1 : 1

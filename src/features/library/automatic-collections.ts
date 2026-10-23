@@ -7,7 +7,7 @@ export function collectionRules(collection: Pick<Collection, 'automatic_rules'>)
   return collection.automatic_rules ? collection.automatic_rules as unknown as AutomaticCollectionRules : null
 }
 export function automaticCollectionRules(filters: ReadingFilters): AutomaticCollectionRules {
-  const normalized = { ...defaultReadingFilters, ...filters, sort: defaultReadingFilters.sort, groupBy: defaultReadingFilters.groupBy }
+  const normalized = { ...defaultReadingFilters, ...filters, showSeries: false, sort: defaultReadingFilters.sort, groupBy: defaultReadingFilters.groupBy }
   delete normalized.randomSeed
   filterReading([], normalized)
   if (!hasReadingFilters(normalized)) throw new Error('Choose at least one filter for this automatic collection.')

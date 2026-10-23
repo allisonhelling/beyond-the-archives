@@ -71,3 +71,50 @@ it('imports new bookmark-only deletions in Quick Sync and allows editing without
  expect(await submitLibrarySync(rows)).toMatchObject({ imported: 0, kept: 2 })
  expect(rpc).not.toHaveBeenCalled()
 })
+
+it('adds new and already saved works to the imported custom collection idempotently', async () => {
+ const { saveCollection } = await import('../library/repository')
+ const collectionId = await saveCollection('Imported AO3 Collection', undefined, undefined, 'Summary\n\nIntro')
+ const rows = readAo3Rows([{ title: 'New work', link: 'https://archiveofourown.org/works/9990040', source_list: 'marked_for_later' }]) as CsvWork[]
+ await submitLibrarySync(rows, collectionId)
+ await submitLibrarySync(rows, collectionId)
+ const library = await loadSampleLibrary()
+ expect(library.stories.filter(story => story.work.ao3_work_id === 9990040)).toHaveLength(1)
+ expect(library.stories.find(story => story.work.ao3_work_id === 9990040)?.collectionIds).toEqual([collectionId])
+ expect(library.collections.find(collection => collection.id === collectionId)).toMatchObject({ name: 'Imported AO3 Collection', description: 'Summary\n\nIntro' })
+})
+
+it('seeds personal Rec once and preserves edits across later sample imports and reloads', async () => {
+ const { updateSampleEntry } = await import('../library/sample/repository')
+ const rows = readAo3Rows([{ title: 'Personal Rec', link: 'https://archiveofourown.org/works/9990201', source_list: 'bookmarks', 'bookmark id': '9991201', 'bookmark rec': 'true' }]) as CsvWork[]
+ await submitLibrarySync(rows)
+ const saved = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990201)!
+ expect(saved.is_rec).toBe(true)
+ await updateSampleEntry(saved.id, { is_rec: false })
+ await submitLibrarySync(rows)
+ expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)?.is_rec).toBe(false)
+ await updateSampleEntry(saved.id, { is_rec: true })
+ await submitLibrarySync([{ ...rows[0], bookmarkRec: null }])
+ expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ is_rec: true, source_bookmark: { rec: null } })
+})
+
+it('migrates old sample Rec observations once without overwriting later local choices', async () => {
+ const key = 'between-chapters:sample-library:v1'
+ const library = await loadSampleLibrary(), saved = library.stories[0]
+ const legacy = { ...saved, source_bookmark: { rec: true } } as Partial<typeof saved>
+ delete legacy.is_rec
+ localStorage.setItem(key, JSON.stringify({ ...library, stories: [legacy] }))
+ expect((await loadSampleLibrary()).stories[0].is_rec).toBe(true)
+ const { updateSampleEntry } = await import('../library/sample/repository')
+ await updateSampleEntry(saved.id, { is_rec: false })
+ expect((await loadSampleLibrary()).stories[0].is_rec).toBe(false)
+})
+
+it('uses captured chapter dates for new sample bookmarks while keeping existing progress', async () => {
+ const rows = readAo3Rows([{ source_list: 'bookmarks', title: 'Dated sample', link: 'https://archiveofourown.org/works/9990040', chapters: '3/3', date: '2026-10-20', 'bookmark date': '2026-10-10', 'chapter dates': JSON.stringify({ '1': '2026-09-01', '2': '2026-10-01', '3': '2026-10-10' }) }]) as CsvWork[]
+ await submitLibrarySync(rows)
+ const saved = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990040)!
+ expect(saved).toMatchObject({ reading_status: 'reading', last_read_chapter: 2 })
+ await submitLibrarySync(rows)
+ expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)?.last_read_chapter).toBe(2)
+})

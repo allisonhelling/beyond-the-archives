@@ -99,7 +99,7 @@ export async function addStoriesToCollections(storyIds: string[], collectionIds:
   failure(error)
 }
 export async function updateEntry(id: string, changes: EntryUpdate, base: EditValues) {
-  const keys = { reading_status: 'status', last_read_chapter: 'progress', notes: 'notes', personal_rating: 'rating', is_favorite: 'favorite' } as const
+  const keys = { reading_status: 'status', last_read_chapter: 'progress', notes: 'notes', personal_rating: 'rating', is_favorite: 'favorite', is_rec: 'rec' } as const
   const edits: EditValues = Object.fromEntries(Object.entries(changes).map(([key, value]) => [keys[key as keyof EntryUpdate], value]))
   async function save(values: EditValues, baseline: EditValues): Promise<void> {
     if (sampleMode) return (await import('./sample/repository')).updateSampleEntryChecked(id, values, baseline)
@@ -114,7 +114,7 @@ export async function updateEntry(id: string, changes: EntryUpdate, base: EditVa
   return save(edits, base)
 }
 
-type EntryUpdate = Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'notes' | 'personal_rating'>
+type EntryUpdate = Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'is_rec' | 'notes' | 'personal_rating'>
 export async function deleteStory(id: string) {
   if (sampleMode) return (await import('./sample/repository')).deleteSampleStory(id)
   const { error } = await client().from('library_entries').delete().eq('id', id); failure(error)

@@ -25,8 +25,8 @@ await build({
 })
 await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  ...(values.local ? { key: localExtensionKey } : {}),
- manifest_version: 3, name: values.local ? 'AO3 Library Companion (Local)' : 'AO3 Library Companion', version: '0.4.0', minimum_chrome_version: '120',
- description: 'Imports requested works and scans AO3 Bookmarks or Marked for Later from your connected library.',
+ manifest_version: 3, name: values.local ? 'AO3 Library Companion (Local)' : 'AO3 Library Companion', version: '0.5.0', minimum_chrome_version: '120',
+ description: 'Imports requested works and scans AO3 lists and collections from your connected library.',
  permissions: ['storage', 'unlimitedStorage', 'alarms', 'scripting', 'webNavigation'],
  host_permissions: ['https://archiveofourown.org/*', `${backend.origin}/*`],
  externally_connectable: { matches: [`${app.origin}/*`] },

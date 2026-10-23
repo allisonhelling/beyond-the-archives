@@ -22,7 +22,7 @@ export function librarySeries(stories: Story[], records: SeriesRecord[] = []): L
   const ids = new Set(preview.works?.map(work => work.workId) ?? [])
   const saved = [...ids].flatMap(id => { const story = storiesByAo3Id.get(id); return story ? [story] : [] })
   const group = groups.get(record.ao3_series_id)
-  if (group || saved.length || preview.basic === false || record.is_favorite || record.reading_status === 'finished' || record.collectionIds?.length || record.notes) groups.set(record.ao3_series_id, { title: preview.title, stories: [...new Map([...(group?.stories ?? []), ...saved].map(story => [story.id, story])).values()], record })
+  if (group || saved.length || preview.basic === false || record.is_favorite || record.is_rec || record.reading_status === 'finished' || record.collectionIds?.length || record.notes) groups.set(record.ao3_series_id, { title: preview.title, stories: [...new Map([...(group?.stories ?? []), ...saved].map(story => [story.id, story])).values()], record })
  }
  return [...groups].map(([seriesId, group]) => {
   const preview = group.record?.metadata as unknown as SeriesPreview | undefined

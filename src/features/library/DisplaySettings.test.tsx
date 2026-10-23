@@ -1,4 +1,6 @@
 import { MetadataTags } from './MetadataTags'
+import { ReadingFilterControls } from './ReadingFilterControls'
+import { defaultReadingFilters } from './reading-search'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DisplayInfo } from './DisplayInfo'
@@ -170,6 +172,22 @@ it('uses the chosen tag appearance for removable filter bubbles', () => {
  expect(remove).toHaveBeenCalledWith('A/B')
 })
 
+it('colors active filter tags by category and updates them when settings are saved', () => {
+ const preferences = displayPreferences()
+ preferences.tagAppearance = { shape: 'sharp', colors: { relationships: '#123abc', characters: '#456def', tags: '#789abc' } }
+ act(() => saveDisplay(preferences))
+ render(<ReadingFilterControls stories={[]} filters={{ ...defaultReadingFilters, relationship: 'A/B', characters: 'A', tags: 'Fluff', rating: ['Teen And Up Audiences'], personalRating: ['1'] }} onChange={vi.fn()} />)
+ const active = within(screen.getByLabelText('Active filters'))
+ const tag = (label: string) => active.getByText(label).closest('.categorized-tags')
+ for (const [label, color] of [['Relationships: A/B', '#123abc'], ['Characters: A', '#456def'], ['Tags: Fluff', '#789abc'], ['Content Rating: Teen and Up', 'var(--color-link)'], ['Rating: 1/5', 'var(--color-link)']]) {
+  expect(tag(label)).toHaveStyle(`--tag-color: ${color}`)
+  expect(tag(label)).toHaveAttribute('data-tag-shape', 'sharp')
+ }
+ preferences.tagAppearance.colors.relationships = '#abcdef'
+ act(() => saveDisplay(preferences))
+ expect(tag('Relationships: A/B')).toHaveStyle('--tag-color: #abcdef')
+})
+
 it('shows a drop shadow in the same slot used by the move operation without saving the draft', () => {
  const preferences=displayPreferences()
  const projected=moveDisplaySelection(preferences.workTile,['authors'],'fandoms')
@@ -188,4 +206,29 @@ it('migrates surface-specific appearance into one validated site-wide preference
  expect(preferences.workTile).not.toHaveProperty('colors')
  expect(preferences.seriesTile).not.toHaveProperty('tagShape')
  expect(tagAppearance(JSON.stringify({...JSON.parse(raw),tagAppearance:{shape:'sharp',colors:{warnings:'#970000'}}}))).toEqual({shape:'sharp',colors:{warnings:'#970000'}})
+})
+
+it('renders fixed tile controls without duplicating grouped lines and dividers from the tile body', () => {
+ const preferences = displayPreferences()
+ preferences.workTile.order.push('line:empty', 'divider:test')
+ preferences.workTile.lines = { ...preferences.workTile.lines, 'line:empty': [] }
+ render(<DisplayEditorContext value={{ preferences, groups: ['workTile'], selected: null }}><div data-testid="header"><DisplayInfo group="workTile" fields={['favorite', 'rec']}>{{ favorite: <button>Favorite</button>, rec: <button>Recommended</button> }}</DisplayInfo></div><div data-testid="body"><DisplayInfo group="workTile">{{ authors: <p>Author</p> }}</DisplayInfo></div></DisplayEditorContext>)
+ expect(within(screen.getByTestId('header')).getAllByRole('button')).toHaveLength(2)
+ expect(screen.getByTestId('header').querySelector('.display-grouped-line, hr')).toBeNull()
+ expect(screen.getByTestId('body').querySelectorAll('[data-display-field="line:empty"]')).toHaveLength(1)
+ expect(screen.getByTestId('body').querySelectorAll('hr')).toHaveLength(1)
+})
+
+
+it('labels hidden series in active library filters and switches to Show Series when selected', () => {
+ const props = { stories: [], filters: { ...defaultReadingFilters }, onChange: vi.fn() }
+ const view = render(<ReadingFilterControls {...props} />)
+ expect(screen.getByLabelText('Active filters')).toHaveTextContent('Hide Series')
+ view.rerender(<ReadingFilterControls {...props} filters={{ ...props.filters, showSeries: true }} />)
+ expect(screen.getByLabelText('Active filters')).toHaveTextContent('Show Series')
+ expect(screen.getByLabelText('Active filters')).not.toHaveTextContent('Hide Series')
+ view.rerender(<ReadingFilterControls {...props} mode="reading" />)
+ expect(screen.queryByLabelText('Active filters')).not.toBeInTheDocument()
+ view.rerender(<ReadingFilterControls {...props} automaticCollection />)
+ expect(screen.queryByLabelText('Active filters')).not.toBeInTheDocument()
 })

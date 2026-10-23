@@ -11,7 +11,8 @@ import { classifyUrl, extractUrls, groupWorks, type SeriesPreview } from './urls
 export type SeriesWorkSelection = { seriesId: number; works: SeriesPreview['works'] }
 
 type Review = { preview?: SeriesPreview; selected: Set<number>; error?: string; skipped?: boolean; closed?: Set<number>; detailsSaved?: boolean }
-export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, autoLoad = false, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, confirmLabel = 'Import selected', cancelLabel = 'Back to links' }: {
+export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, autoLoad = false, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, confirmLabel = 'Import selected', cancelLabel = 'Back to links', allowEmpty = false }: {
+ allowEmpty?: boolean
  showReadingStatus?: boolean; confirmLabel?: string; cancelLabel?: string
  onBusyChange?(busy: boolean): void
  initialReadingStatus?: Status; onReadingStatusChange?(status: Status): void
@@ -105,6 +106,6 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
    </section>
   })}
   <p className="field-help">Overlapping selections are imported once. Original series part numbers are preserved when work metadata loads.</p>
-  <div className="form-actions"><button className="button primary" disabled={busy || loading !== undefined || !ready || direct.size + selected.size === 0} onClick={() => onConfirm([...selected.values()], readingStatus, [...series.keys()].filter(id => reviews[id]?.preview && !reviews[id]?.skipped), selections)}>{confirmLabel}</button><button className="button secondary" disabled={busy || loading !== undefined} onClick={onCancel}>{cancelLabel}</button></div>
+  <div className="form-actions"><button className="button primary" disabled={busy || loading !== undefined || !ready || !allowEmpty && direct.size + selected.size === 0} onClick={() => onConfirm([...selected.values()], readingStatus, [...series.keys()].filter(id => reviews[id]?.preview && !reviews[id]?.skipped), selections)}>{confirmLabel}</button><button className="button secondary" disabled={busy || loading !== undefined} onClick={onCancel}>{cancelLabel}</button></div>
  </section>
 }

@@ -1,6 +1,10 @@
 /** Serialized by chrome.scripting; keep this function self-contained. */
 export async function captureMetadataPage(waitForReady = false, pageType = 'work') {
  if (location.origin !== 'https://archiveofourown.org') return null
+ if (pageType !== 'series' && document.readyState === 'complete' && !document.querySelector('h2.title') && /Error\s+404/i.test(document.querySelector('#main h2, #main h1')?.textContent ?? '') && /The page you were looking for doesn['’]t exist\./i.test(document.querySelector('#main')?.textContent ?? '')) {
+  // Send only the error evidence; account navigation and other page content stay private.
+  return { url: location.href, html: '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>', notFound: true }
+ }
  const navigation = pageType === 'navigation'
  if (navigation) {
   if (document.readyState !== 'complete' || !/^\/works\/[1-9]\d*\/navigate$/.test(location.pathname)) return null
@@ -44,10 +48,6 @@ export async function captureMetadataPage(waitForReady = false, pageType = 'work
   }
  }
  if (location.origin !== 'https://archiveofourown.org') return null
- if (!series && document.readyState === 'complete' && !document.querySelector('h2.title') && /Error\s+404/i.test(document.querySelector('#main h2, #main h1')?.textContent ?? '') && /The page you were looking for doesn['’]t exist\./i.test(document.querySelector('#main')?.textContent ?? '')) {
-  // Send only the error evidence; account navigation and other page content stay private.
-  return { url: location.href, html: '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>', notFound: true }
- }
  if (!document.querySelector(series ? 'h2.heading' : 'h2.title')) return null
  const container = document.createElement('div')
  const selectors = series ? ['#main h2.heading', 'dl.series.meta', '.series.work.index', '.pagination', 'link[rel="canonical"]'] : ['h2.title', 'h3.byline', '.summary.module', 'dl.work.meta', '#selected_id', '.work.navigation', '.navigation.actions', 'link[rel="canonical"]']

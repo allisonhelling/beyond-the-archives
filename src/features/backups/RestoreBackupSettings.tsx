@@ -28,10 +28,9 @@ export function RestoreBackupSettings({ backups, disabled, onActiveChange, onRes
   const locked = disabled || loading || Boolean(prepared || message)
   return <>
     <h3>Restore Backup</h3>
-    <p>Restore a JSON or JSON.gz backup from your own account. Preview the changes before replacing your library. A safety copy of your current library is saved privately in Supabase first; restoration stops if that copy cannot be saved.</p>
+    <p className="muted">Restore a JSON or JSON.gz backup from your own account. Preview the changes before replacing your library. A safety copy of your current library is saved privately in Supabase first; restoration stops if that copy cannot be saved.</p>
     <label className="backup-source-field">Choose backup file<input type="file" accept=".json,.gz,application/json,application/gzip" disabled={locked} onChange={event => {
       const file = event.target.files?.[0]
-      event.target.value = ''
       if (file) void preview(file)
     }} /></label>
     {backups.length > 0 && <div className="form-actions">
@@ -47,7 +46,7 @@ export function RestoreBackupSettings({ backups, disabled, onActiveChange, onRes
     {loading && <p role="status">Validating backup and preparing preview…</p>}
     {error && <p role="alert">{error}</p>}
     {message && <><p role="status">{message}</p><button className="button primary" onClick={() => window.location.reload()}>Reload Library</button></>}
-    {prepared && <ConfirmationDialog title="Replace your library with this backup?" confirmLabel="Save Safety Backup and Replace Library" pendingLabel="Saving safety copy and restoring…" onClose={close} onConfirm={async () => {
+    {prepared && <ConfirmationDialog className="backup-restore-dialog" title="Replace your library with this backup?" confirmLabel="Save Safety Backup and Replace Library" pendingLabel="Saving safety copy and restoring…" onClose={close} onConfirm={async () => {
       const result = await restoreBackup(prepared)
       setMessage(result)
       await onRestored()

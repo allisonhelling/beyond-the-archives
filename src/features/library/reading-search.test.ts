@@ -8,9 +8,9 @@ function story(title: string, values: Partial<Story> = {}): Story {
 }
 it('combines notes, Rec evidence, personal rating and content rating independently', () => {
  const entries = [
-  story('Recommended', { personal_rating: 5, notes: 'My thoughts', source_bookmark: { rec: true }, metadata: { ...blankMetadata, rating: 'Mature' } }),
-  story('Not a Rec', { personal_rating: 1, notes: 'Other notes', source_bookmark: { rec: false }, metadata: { ...blankMetadata, rating: 'Explicit' } }),
-  story('Unknown', { personal_rating: null, notes: ' \n\t ', source_bookmark: { rec: null } }),
+  story('Recommended', { personal_rating: 5, notes: 'My thoughts', is_rec: true, source_bookmark: { rec: true }, metadata: { ...blankMetadata, rating: 'Mature' } }),
+  story('Not a Rec', { personal_rating: 1, notes: 'Other notes', is_rec: false, source_bookmark: { rec: false }, metadata: { ...blankMetadata, rating: 'Explicit' } }),
+  story('Unknown', { personal_rating: null, notes: ' \n\t ', is_rec: false, source_bookmark: { rec: null } }),
  ]
  expect(filterReading(entries, { ...defaultReadingFilters, personalNotes: true })).toHaveLength(2)
  expect(filterReading(entries, { ...defaultReadingFilters, recs: true })).toEqual([entries[0]])
@@ -188,4 +188,16 @@ it('groups series by AO3 identity, including same-named memberships and series c
  expect(readingGroups(cards,'series').map(([,stories,key])=>[key,stories.map(story=>story.id)])).toEqual([
   ['series:77',['series:77']],['series:88',['series:88']],
  ])
+})
+
+it('keeps standalone works and confirmed first installments while excluding later or unknown series parts', () => {
+ const membership = (position: number | null, id = 77) => ({ id, name: 'A series', url: `https://archiveofourown.org/series/${id}`, position })
+ const entries = [story('Standalone'), ...[1, 2, null].map(position => story(`Part ${position}`, { metadata: { ...blankMetadata, series_memberships: [membership(position)] } })),
+  story('Names only', { metadata: { ...blankMetadata, series: ['Legacy series'] } }),
+  story('First in another series', { metadata: { ...blankMetadata, series_memberships: [membership(2), membership(1, 88)] } }),
+ ]
+ expect(filterReading(entries, defaultReadingFilters)).toHaveLength(entries.length)
+ const filters = { ...defaultReadingFilters, excludeLaterSeries: true }
+ expect(filterReading(entries, filters).map(work => work.id).sort()).toEqual(['First in another series', 'Part 1', 'Standalone'])
+ expect(filterReading(entries, { ...filters, inSeries: true }).map(work => work.id).sort()).toEqual(['First in another series', 'Part 1'])
 })

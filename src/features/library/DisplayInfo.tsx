@@ -2,7 +2,7 @@ import { GripVertical } from 'lucide-react'
 import { Children, Fragment, cloneElement, isValidElement, useContext, type HTMLAttributes, type ReactElement, type ReactNode } from 'react'
 import { useDisplayPreference } from './useDisplayPreference'
 import { DisplayEditorContext } from './display-editor-context'
-import { displayGroups, displayFieldLabel, displayDivider, shortDisplayDivider, displayLine, type DisplayGroup } from './display-settings'
+import { isDisplayFieldHidden, displayGroups, displayFieldLabel, displayDivider, shortDisplayDivider, displayLine, type DisplayGroup } from './display-settings'
 
 /** Annotate the real elements in editor previews without changing their layout. */
 function editable(node: ReactNode, group: DisplayGroup, field: string, selected: boolean, moving = false): ReactNode {
@@ -14,7 +14,7 @@ function editable(node: ReactNode, group: DisplayGroup, field: string, selected:
     ? cloneElement(element, attributes)
     : <div {...attributes} className={`display-edit-contents${moving ? ' display-drop-shadow' : ''}`}>{element}</div>
 }
-export function DisplayInfo({ group, children, separator }: { group: DisplayGroup; children: Partial<Record<string, ReactNode>>; separator?: ReactNode }) {
+export function DisplayInfo({ group, children, separator, fields }: { group: DisplayGroup; children: Partial<Record<string, ReactNode>>; separator?: ReactNode; fields?: string[] }) {
   const editor = useContext(DisplayEditorContext)
   const preference = useDisplayPreference(group)
   const drop = editor?.dropPreview?.group === group ? editor.dropPreview : undefined
@@ -27,7 +27,7 @@ export function DisplayInfo({ group, children, separator }: { group: DisplayGrou
     if (isValidElement<{ children?: ReactNode }>(node) && node.type === Fragment && !Children.toArray(node.props.children).length) node = <p className="muted">No {displayFieldLabel(group, key)?.toLowerCase()} saved.</p>
     return editable(node, group, key, (editor?.selectedFields ?? (editor?.selected ? [editor.selected] : [])).some(field => field.group === group && field.field === key), editor?.dropPreview?.group === group && editor.dropPreview.fields.includes(key))
   }
-  const entries = order.filter(key => displayLine(key) || displayDivider(key) ? !hidden.includes(key) : hasContent(key))
+  const entries = fields ? fields.filter(key => hasContent(key) && !isDisplayFieldHidden(preference, key)) : order.filter(key => displayLine(key) || displayDivider(key) ? !hidden.includes(key) : hasContent(key))
   function renderEntry(key: string, index: number) {
     if (displayDivider(key)) {
       const divider = <hr className={`story-summary-divider display-custom-divider${shortDisplayDivider(key) ? ' display-short-divider' : ''}`} />

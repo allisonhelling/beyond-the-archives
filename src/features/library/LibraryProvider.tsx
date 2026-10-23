@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom'
 import type { SeriesRecord } from './series'
 import { editSnapshot } from './edit-merge'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -128,7 +129,11 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     if (version !== generation.current) throw new DOMException('Obsolete library result', 'AbortError')
     return result
   }, [userId])
+  const location = useLocation()
   const [undoNotices, setUndoNotices] = useState<ReadingUndo[]>([])
+  const noticeUrl = location.pathname + location.search
+  const [noticeLocation, setNoticeLocation] = useState(noticeUrl)
+  if (noticeLocation !== noticeUrl) { setNoticeLocation(noticeUrl); setUndoNotices([]) }
   const dismissUndo = useCallback((id: string) => setUndoNotices(notices => notices.filter(notice => notice.id !== id)), [])
   async function updateReadingWithUndo(story: Story, status: Story['reading_status'], chapters: number, message: string) {
     await updateEntry(story.id, { last_read_chapter: chapters, reading_status: status }, editSnapshot(story))

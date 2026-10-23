@@ -3,7 +3,7 @@ import { EditConflict, type EditValues } from './edit-merge'
 import { ratingLabel, statuses } from './model'
 import type { Json } from '../../types/database'
 
-const labels: Record<string, string> = { reading: 'Reading progress', notes: 'Private notes', status: 'Reading status', progress: 'Chapters read', rating: 'Personal rating', favorite: 'Favorite', tags: 'Personal tags', collections: 'Custom collections' }
+const labels: Record<string, string> = { reading: 'Reading progress', notes: 'Private notes', status: 'Reading status', progress: 'Chapters read', rating: 'Personal rating', favorite: 'Favorite', rec: 'Rec', tags: 'Personal tags', collections: 'Custom collections' }
 function display(field: string, value: Json) {
   if (field === 'reading' && value && typeof value === 'object' && !Array.isArray(value)) return `${statuses[value.status as keyof typeof statuses] ?? value.status} · ${value.progress} chapters read`
   if (field === 'metadata.rating' && typeof value === 'string') return ratingLabel(value)

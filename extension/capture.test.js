@@ -106,3 +106,12 @@ it('captures only the requested chapter release index for bookmark progress', as
  vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123'))
  expect(await captureMetadataPage(false, 'navigation')).toBeNull()
 })
+
+it('returns only explicit missing-page evidence when a chapter index is unavailable', async () => {
+ vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123/navigate'))
+ Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true })
+ document.body.innerHTML = '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div><div>Private navigation</div>'
+ const page = await captureMetadataPage(false, 'navigation')
+ expect(page.notFound).toBe(true)
+ expect(page.html).not.toContain('Private navigation')
+})

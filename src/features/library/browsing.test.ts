@@ -12,7 +12,7 @@ it('keeps filter edits distinct from pagination, shelf changes and detail naviga
  expect(isFilterNavigation(original, '/library?shelf=recs&personalNotes=true')).toBe(false)
  expect(isFilterNavigation('/stories/1', filtered)).toBe(false)
  expect(isFilterNavigation(original, filtered + '#work')).toBe(false)
- const filters = { ...defaultReadingFilters, personalRating: ['1', '5', 'unrated'], personalNotes: true, recs: true }
+ const filters = { ...defaultReadingFilters, personalRating: ['1', '5', 'unrated'], personalNotes: true, recs: true, showSeries: true, excludeLaterSeries: true }
  expect(readBrowsing(writeBrowsing(new URLSearchParams(), filters, 25)).filters).toEqual(filters)
 })
 afterAll(()=>vi.unstubAllGlobals())

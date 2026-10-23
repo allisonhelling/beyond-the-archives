@@ -1,3 +1,4 @@
+import { BookmarkChapterDatesOption } from './BookmarkChapterDatesOption'
 import { useRef, useState } from 'react'
 import { formatDate } from '../../lib/dates'
 import { statuses } from '../library/model'
@@ -8,6 +9,7 @@ import { SeriesImportReview, type SeriesWorkSelection } from './SeriesImportRevi
 
 type Prepared = { works: CsvWork[]; conflicts: CsvConflict[] }
 export function CsvImportForm({ onImported }: { onImported: (batch: string | null) => Promise<void> }) {
+ const [checkChapterDates, setCheckChapterDates] = useState(false)
  const [prepared, setPrepared] = useState<Prepared>(), [choices, setChoices] = useState<Record<string, CsvChoice>>({})
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
  const [seriesSources, setSeriesSources] = useState<CsvSource[]>()
@@ -49,8 +51,8 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   if (!prepared || pending.current) return
   pending.current = true; setBusy(true); setError('')
   try {
-   const result = await submitCsvImport(prepared.works, prepared.conflicts, choices)
-   setPrepared(undefined); setMessage(`Imported ${result.imported} works. Kept ${result.kept} existing works. Non-empty AO3 metadata was refreshed for existing works. Metadata and chapter dates for new or overwritten works continue processing in import history.`)
+   const result = await submitCsvImport(prepared.works, prepared.conflicts, choices, checkChapterDates)
+   setPrepared(undefined); setMessage(`Imported ${result.imported} works. Kept ${result.kept} existing works. Non-empty AO3 metadata was refreshed for existing works. Metadata${checkChapterDates ? ' and chapter dates' : ''} for new or overwritten works continue processing in import history.`)
    await onImported(result.batch)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not import the CSV files.') }
   finally { pending.current = false; setBusy(false) }
@@ -60,7 +62,8 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
  return <section className="settings-card story-form" aria-labelledby="csv-import-heading">
   <h2 id="csv-import-heading">Import AO3 bookmarks or Marked for Later</h2>
   <p>Choose CSV exports from your AO3 scraper, including combined lists. Bookmark notes become personal notes and bookmark tags become personal tags. Marked for Later works are saved as unread (To Read); existing personal data is always kept. Non-empty AO3 metadata refreshes automatically for every imported work, including existing works. Explicit manual metadata corrections are preserved.</p>
-  <p className="field-help">Bookmarks dated after the work’s update date are saved as Read (Finished), with that bookmark date as the finished date. Earlier bookmarks are Currently Reading (Reading); chapter release dates determine progress. Missing dates leave progress unconfirmed. Choose which works to include from each series before reviewing conflicts.</p>
+  <p className="field-help">Bookmarks dated after the work’s update date are saved as Read (Finished), with that bookmark date as the finished date. Earlier bookmarks are Currently Reading (Reading); chapter progress is unconfirmed unless you enable the chapter-date check. Missing dates leave progress unconfirmed. Choose which works to include from each series before reviewing conflicts.</p>
+  <BookmarkChapterDatesOption checked={checkChapterDates} disabled={busy} onChange={setCheckChapterDates} />
   <label>AO3 CSV files<input type="file" multiple accept=".csv,text/csv" disabled={busy || Boolean(seriesSources)} onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; if (files.length) void preview(files) }} /></label>
   {busy && <p role="status">{message || 'Processing CSV import…'}</p>}
   {!busy && message && <p role="status">{message}</p>}

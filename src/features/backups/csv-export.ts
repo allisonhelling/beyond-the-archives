@@ -43,13 +43,13 @@ export function libraryCsvFiles(library: Awaited<ReturnType<typeof loadLibrary>>
   return [...new Set(selection)].map(name => {
     switch (name) {
       case 'works.csv': return { name, content: csv(stories.map(story => {
-        const { work, metadata, collectionIds: manualIds, automaticCollectionIds, personalTags, detailsLoaded, ...entry } = story
+        const { work, metadata, is_rec, collectionIds: manualIds, automaticCollectionIds, personalTags, detailsLoaded, ...entry } = story
         void detailsLoaded
         const ids = workCollections.get(story.id)!
-        return { ...metadata, ...entry, ...Object.fromEntries(Object.entries(work).map(([key, value]) => [`work_${key}`, value])),
+        return { ...metadata, ...entry, rec: is_rec, ...Object.fromEntries(Object.entries(work).map(([key, value]) => [`work_${key}`, value])),
           metadata, personal_tags: personalTags, collection_ids: ids, collection_names: collectionNames(ids),
           manual_collection_ids: manualIds, automatic_collection_ids: automaticCollectionIds ?? [] }
-      }), ['id', 'work_id', 'title', 'authors', 'reading_status', 'last_read_chapter', 'notes', 'personal_rating', 'personal_tags', 'collection_names']) }
+      }), ['id', 'work_id', 'title', 'authors', 'reading_status', 'last_read_chapter', 'notes', 'rec', 'personal_rating', 'personal_tags', 'collection_names']) }
       case 'series.csv': return { name, content: csv(series.map(record => {
         const { collectionIds, detailsLoaded, ...fields } = record
         void collectionIds; void detailsLoaded
