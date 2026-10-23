@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
-import { automaticCollectionRules } from '../../src/features/library/automatic-collections'
+import { automaticCollectionRules } from '../../src/features/library/collections/automatic-collections'
 import { defaultReadingFilters } from '../../src/features/library/reading-search'
 import { fixture, login } from './library-fixture'
 

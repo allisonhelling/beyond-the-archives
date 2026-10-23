@@ -1,7 +1,7 @@
 import { filterDateText, ratingLabel } from './model'
 import { publicationStatuses } from './publication-status'
 import type { ReadingFilters } from './reading-search'
-import type { TagCategory } from './display-settings'
+import type { TagCategory } from './display/display-settings'
 
 export function filterPublicationLabel(value: ReadingFilters['publication'][number], series = false) {
   return series

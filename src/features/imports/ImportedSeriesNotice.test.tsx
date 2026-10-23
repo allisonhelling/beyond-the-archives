@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 const mocks = vi.hoisted(() => ({ history: vi.fn(), submit: vi.fn(), preview: vi.fn(), remember: vi.fn(), refresh: vi.fn(), stories: [{ id: 'saved-101', work: { ao3_work_id: 101 }, metadata: { title: 'Saved fic', series_memberships: [{ id: 77, name: 'Related series', url: 'https://archiveofourown.org/series/77', position: 1 }] } }] }))
 vi.mock('./repository', () => ({ importHistory: mocks.history, submitImport: mocks.submit, previewSeries: mocks.preview }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ stories: mocks.stories, refresh: mocks.refresh, refreshSeries: mocks.refresh }) }))
-vi.mock('../library/series-repository', () => ({ rememberSeries: mocks.remember }))
+vi.mock('../library/series/series-repository', () => ({ rememberSeries: mocks.remember }))
 import { ImportedSeriesNotice, CompletedImportSeriesNotice } from './ImportedSeriesNotice'
 const showModal = HTMLDialogElement.prototype.showModal, close = HTMLDialogElement.prototype.close
 beforeAll(() => {

@@ -1,26 +1,27 @@
-import { isDisplayFieldHidden } from './display-settings'
+import { WorkSummary } from './summaries/WorkSummary'
+import { isDisplayFieldHidden } from './display/display-settings'
 import { WorkStatusBadge } from './WorkStatusBadge'
 import { BookmarkRec } from './BookmarkRec'
 import { resumeReadingStatus, readingDuration } from './reading-history'
-import { automaticCollectionLabels } from './automatic-collections'
+import { automaticCollectionLabels } from './collections/automatic-collections'
 import { MetadataTags } from './MetadataTags'
-import { CustomCollectionNames } from './CustomCollectionNames'
-import { DisplayInfo } from './DisplayInfo'
+import { CustomCollectionNames } from './collections/CustomCollectionNames'
+import { DisplayInfo } from './display/DisplayInfo'
 import { formatDateTime } from '../../lib/dates'
 import { useStorySnapshot } from './useStorySnapshot'
-import { browsingReturnTo, collectionSortKey } from './browsing'
+import { browsingReturnTo, collectionSortKey } from './browsing/browsing'
 import { CompletedImportSeriesNotice } from '../imports/ImportedSeriesNotice'
 import { PersonalNote } from './PersonalNote'
-import { SeriesCard } from './SeriesCollection'
-import { filterLibraryItems, seriesSearchStory, seriesItemId } from './series-search'
-import { librarySeries, seriesReadingStatus } from './series'
+import { SeriesCard } from './series/SeriesCollection'
+import { filterLibraryItems, seriesSearchStory, seriesItemId } from './series/series-search'
+import { librarySeries, seriesReadingStatus } from './series/series'
 import { EditConflictReview } from './EditConflictReview'
 import { editSnapshot, EditConflict, type EditValues } from './edit-merge'
 import { OneShotIndicator } from './OneShotIndicator'
-import { CollectionVisibilityDialog } from './CollectionVisibility'
+import { CollectionVisibilityDialog } from './collections/CollectionVisibility'
 import { Dropdown } from '../../components/Dropdown'
-import { readingStatusIcons, collectionOrderOptions, orderCollections, moveCollectionIds, type CollectionOrder, type CollectionAppearance } from './collection-appearance'
-import { SeriesNames } from './SeriesNames'
+import { readingStatusIcons, collectionOrderOptions, orderCollections, moveCollectionIds, type CollectionOrder, type CollectionAppearance } from './collections/collection-appearance'
+import { SeriesNames } from './series/SeriesNames'
 import { MetadataControls, MetadataRefreshButton } from '../imports/MetadataControls'
 import { useMetadataRefresh } from '../imports/useMetadataRefresh'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -33,17 +34,17 @@ import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { Tooltip } from '../../components/Tooltip'
 import { StarRating } from './StarRating'
-import { useDisplayPreference } from './useDisplayPreference'
+import { useDisplayPreference } from './display/useDisplayPreference'
 import { FavoriteButton, PersonalToggleButton } from './FavoriteButton'
 import { AuthorNames } from './AuthorNames'
 import { StoryForm } from './StoryForm'
 import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
 import { ImportLinkForm } from '../imports/ImportLinkForm'
-import { EditCollectionsButton } from './EditCollectionsButton'
-import { CollectionMembershipDialog } from './CollectionMembershipDialog'
-import { NewCollectionDialog } from './NewCollectionDialog'
-import { CollectionShelf } from './CollectionShelf'
-import { SpineOrnament } from './SpineOrnament'
+import { EditCollectionsButton } from './collections/EditCollectionsButton'
+import { CollectionMembershipDialog } from './collections/CollectionMembershipDialog'
+import { NewCollectionDialog } from './collections/NewCollectionDialog'
+import { CollectionShelf } from './collections/CollectionShelf'
+import { SpineOrnament } from './collections/SpineOrnament'
 import { ReadingDashboard } from './ReadingDashboard'
 import { publicationStatuses } from './publication-status'
 
@@ -174,7 +175,7 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
       rating: <span className="display-fact-value">{ratingLabel(story.metadata.rating) || 'Rating unknown'}</span>,
       words: <span className="display-fact-value">{story.metadata.word_count?.toLocaleString() ?? '?'} words</span>,
       chapters: <span className="display-fact-value">{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'} chapters</span>,
-      summary: <>{story.metadata.summary && <><hr className="story-summary-divider" /><p className="story-summary">{story.metadata.summary}</p></>}</>,
+      summary: <>{story.metadata.summary && <><hr className="story-summary-divider" /><div className="story-summary"><WorkSummary metadata={story.metadata} /></div></>}</>,
       relationships: <div className="story-facts"><MetadataTags values={tagNames(story.metadata, 'relationship')} category="relationships" /></div>,
       characters: <div className="story-facts"><MetadataTags values={tagNames(story.metadata, 'character')} category="characters" /></div>,
       tags: <div className="story-facts"><MetadataTags values={tagNames(story.metadata, 'freeform')} category="tags" /></div>,
@@ -193,7 +194,7 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
 const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'],] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
-  if (reading) return <><div className="page-heading"><div><h1>Currently Reading</h1></div><Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary></>
+  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={refreshButton => <div className="page-heading"><div><h1>Currently Reading</h1></div><div className="library-heading-actions">{refreshButton}<Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
   return <LibraryContent />
 }
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
@@ -364,22 +365,22 @@ function LibraryContent() {
       return { ...item, count: works + seriesCount, countLabel: seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
     })
 
-  return <><div className="page-heading library-heading"><div><div className="library-title-row"><h1>Your Library</h1>
+  return <><LibraryBoundary><ReadingDashboard renderHeader={refreshButton => <><div className="page-heading library-heading"><div><div className="library-title-row"><h1>Your Library</h1>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection selection">
       <Tooltip description="View Hidden">{descriptionId => <button aria-describedby={descriptionId} type="button" className="button secondary" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>}</Tooltip>
       <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel selection' : 'Select collections'}</button>
       <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip description={collectionControlHelp} placement="bottom">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
       {selectingCollections && <button type="button" className="button secondary" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit selected</button>}
     </div>}
-    <div className="library-heading-actions">
-      <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link>
+    <div className="library-heading-actions">{!editingCollections && <>{refreshButton}
+      <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></>}
       <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
       <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
-    </div></div></div></div><LibraryBoundary>
+    </div></div></div></div>
     <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy} onSelect={key => setParams(previous => { const next = new URLSearchParams(previous); next.set('shelf', key); next.set('page', '1'); return next })} />
     {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.automatic_rules && <p className="field-help">Automatic collection · Matching works are included as your library changes.</p>}{collection.description && <p className="collection-summary">{collection.description}</p>}{collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}</div>}
     {error && <p role="alert" className="error-message">{error}</p>}
-    <ReadingDashboard mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={collection && !collection.default_key && !collection.automatic_rules && <button ref={addStoriesTrigger} type="button" className="button secondary button-small" onClick={() => setAddingToCollection(collection)}>Add Story</button>} />
+</>} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={!editingCollections && collection && !collection.default_key && !collection.automatic_rules && <button ref={addStoriesTrigger} type="button" className="button secondary button-small" onClick={() => setAddingToCollection(collection)}>Add Story</button>} />
   </LibraryBoundary>{visibilityTarget && <CollectionVisibilityDialog collection={visibilityTarget} onClose={closeVisibility} onConfirm={async () => { setCollectionHidden(visibilityTarget.id, !visibilityTarget.hidden); setEditingCollection(null) }} />}{addingToCollection && <CollectionMembershipDialog collection={addingToCollection} onClose={() => { setAddingToCollection(null); addStoriesTrigger.current?.focus() }} />}{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} hidden={collectionSort.hiddenCustom.includes(editingCollection.id)} onVisibilityChange={changeEditedCollectionVisibility} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
 }
 export function AddStoryPage() {
@@ -468,7 +469,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <section className="settings-card details-fic-panel" aria-label="Story information">
         <dl className="metadata-list details-fic-fields">
 <DisplayInfo group="workInfo">{{
-      summary: <> <div><dt>Summary</dt><dd className="story-summary story-details-summary">{story.metadata.summary || 'No summary saved.'}</dd></div> </>,
+      summary: <> <div><dt>Summary</dt><dd className="story-summary story-details-summary"><WorkSummary metadata={story.metadata} fallback="No summary saved." /></dd></div> </>,
       relationships: <> <div><dt>Relationships</dt><dd><MetadataTags values={tagNames(story.metadata, 'relationship')} category="relationships" /></dd></div> </>,
       characters: <> <div><dt>Characters</dt><dd><MetadataTags values={tagNames(story.metadata, 'character')} category="characters" /></dd></div> </>,
       tags: <> <div><dt>Additional Tags</dt><dd><MetadataTags values={tagNames(story.metadata, 'freeform')} /></dd></div> </>,

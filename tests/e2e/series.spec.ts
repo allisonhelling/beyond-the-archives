@@ -11,7 +11,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   previews++
   return route.fulfill({json:{preview:{seriesId:77,normalizedUrl:seriesUrl,title:'Related series',description:'AO3 series description',creatorNotes:'Creator notes',begun:'2020-01-02',updated:'2026-10-20',workCount:2,wordCount:900,complete:false,works:[
    {workId:101,url:'https://archiveofourown.org/works/101',position:1,title:'Saved fic',authors:['Author'],fandoms:['Preview fandom'],summary:'First summary',tags:[],wordCount:200,chapters:'1/1',complete:true},
-   {workId:102,url:'https://archiveofourown.org/works/102',position:2,title:'Unsaved sequel',authors:['Author'],fandoms:['Preview fandom'],summary:'Second summary',tags:['Adventure'],wordCount:700,chapters:'1/?',complete:false},
+   {workId:102,url:'https://archiveofourown.org/works/102',position:2,title:'Unsaved sequel',authors:['Author'],fandoms:['Preview fandom'],summary:'Second summary',summary_html:'<p>Second <em>summary</em></p>',tags:['Adventure'],wordCount:700,chapters:'1/?',complete:false},
   ]}}})
  })
  await page.goto('/series/77'); await login(page)
@@ -50,6 +50,9 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await dialog.getByRole('button', {name:'Close dialog'}).click()
  await expect(page.getByRole('heading', {name:'Works in this series'})).toBeVisible()
  await expect(page.getByRole('link', {name:'Part 2: Unsaved sequel'})).toBeVisible()
+ const unsavedTile = page.locator('.work-card').filter({ has: page.getByRole('link', {name:'Part 2: Unsaved sequel'}) })
+ await expect(unsavedTile.locator('.story-summary')).toHaveCSS('font-size', page.viewportSize()!.width > 1100 ? '15px' : '13px')
+ await expect(unsavedTile.locator('.story-summary em')).toHaveCSS('font-style', 'italic')
  await page.reload()
  await expect(page.getByRole('link', {name:'Part 2: Unsaved sequel'})).toBeVisible()
  expect(previews).toBe(1)

@@ -7,6 +7,7 @@ export function useImportHistory(selected: string | undefined, historyPage: numb
   const { refresh } = useLibrary()
   const [data, setData] = useState<ImportHistory>({ batches: [], items: [], jobs: [] })
   const [loading, setLoading] = useState(true), [error, setError] = useState('')
+  const [loadedSelection, setLoadedSelection] = useState<string>()
   const queue = useRef<Promise<unknown>>(Promise.resolve()), version = useRef(0)
   const signatures = useRef(new Map<string, string>())
   const reload = useCallback(async () => {
@@ -26,7 +27,7 @@ export function useImportHistory(selected: string | undefined, historyPage: numb
       if (affected.size) await refresh([...affected])
       for (const [id, signature] of changed) signatures.current.set(id, signature)
       while (signatures.current.size > 6000) signatures.current.delete(signatures.current.keys().next().value!)
-      if (request === version.current) { setData(next); setLoading(false); setError('') }
+      if (request === version.current) { setData(next); setLoadedSelection(selected); setLoading(false); setError('') }
       return next
     })
     queue.current = operation
@@ -46,5 +47,5 @@ export function useImportHistory(selected: string | undefined, historyPage: numb
     const requests = version
     return () => { alive = false; clearTimeout(timer); requests.current++ }
   }, [reload, enabled, busy])
-  return { data, loading, error, reload }
+  return { data, loading, error, reload, loadedSelection }
 }

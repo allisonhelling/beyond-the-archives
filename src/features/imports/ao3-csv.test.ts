@@ -68,3 +68,7 @@ it('uses the verified chapter prefix before the bookmark day for scan and sample
  expect(bookmarkReadingState({ ...work, bookmarkDate: null })).toMatchObject({ progress: 0 })
  expect(() => readAo3Rows([{ source_list: 'bookmarks', title: 'Bad dates', link: work.url, chapters: '3/3', 'chapter dates': '{"1":"2026-02-31"}' }])).toThrow('invalid chapter dates')
 })
+
+it('preserves formatted listing summaries alongside their plain searchable text', () => {
+ expect(csvMetadata({ title: 'Work', summary: 'Legacy summary', summary_html: '<p>An <em>italic</em> summary.</p>' })).toMatchObject({ summary: 'An italic summary.', summary_html: '<p>An <em>italic</em> summary.</p>' })
+})

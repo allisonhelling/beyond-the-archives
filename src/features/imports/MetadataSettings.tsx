@@ -1,20 +1,11 @@
+import './metadata-settings.css'
+import { metadataSettingsSection } from './settings-sections'
 import { isLocalApp } from '../../lib/local-app'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/auth-context'
 import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
-import { connectExtension, disconnectExtension, extensionId, setExtensionId } from './extension'
-
-export function ExtensionConnection() {
- const { session, loading } = useAuth()
- useEffect(() => {
-  if (sampleMode || loading) return
-  // Stay mounted across the auth gate; remounts and closing the page must not
-  // disconnect queued imports. Only a resolved signed-out session does that.
-  void (session ? connectExtension(session) : disconnectExtension()).catch(() => {})
- }, [session, loading])
- return null
-}
+import { connectExtension, extensionId, setExtensionId } from './extension'
 
 export function MetadataSettings() {
  const { session } = useAuth()
@@ -55,8 +46,8 @@ export function MetadataSettings() {
   } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save metadata settings.') }
   finally { setBusy(false) }
  }
- return <section id="settings-metadata" tabIndex={-1} className="settings-card">
-  <h2>AO3 Metadata Retrieval</h2>
+ return <section id={metadataSettingsSection.id} tabIndex={-1} className="settings-card">
+  <h2>{metadataSettingsSection.title}</h2>
   {isLocalApp() && <p className="muted">This local app uses AO3 Library Companion (Local). Build it with <code>npm run build:extension:local</code>, load <code>extension/local/dist</code> in Chrome, then reconnect. The local extension ID is selected automatically.</p>}
   <form className="story-form" onSubmit={event => void save(event)}>
    <fieldset disabled={!ready || busy || sampleMode}>

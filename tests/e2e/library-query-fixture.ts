@@ -1,8 +1,8 @@
-import { applyAutomaticCollections } from '../../src/features/library/automatic-collections'
+import { applyAutomaticCollections } from '../../src/features/library/collections/automatic-collections'
 import { effectiveMetadata, type Collection, type Story, type Work } from '../../src/features/library/model'
 import { defaultReadingFilters, filterReading, inReadingSection, tracked } from '../../src/features/library/reading-search'
-import { librarySeries, seriesReadingStatus, type SeriesRecord } from '../../src/features/library/series'
-import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series-search'
+import { librarySeries, seriesReadingStatus, type SeriesRecord } from '../../src/features/library/series/series'
+import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series/series-search'
 type Row = Record<string, unknown>
 
 // Transport fixtures reuse the client reference semantics. Actual SQL parity and

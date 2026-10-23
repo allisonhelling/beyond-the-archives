@@ -1,4 +1,4 @@
-import { automaticCollectionRules } from '../../src/features/library/automatic-collections'
+import { automaticCollectionRules } from '../../src/features/library/collections/automatic-collections'
 import { defaultReadingFilters } from '../../src/features/library/reading-search'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'

@@ -42,7 +42,7 @@ await build({ configFile: false, define: {
  __BRAND_ICON__: JSON.stringify(renderToStaticMarkup(createElement(BookOpen, { size: 23, strokeWidth: 1.6, 'aria-hidden': true }))),
  __APP_ORIGIN__: JSON.stringify(app.origin), __SCRIPT_VERSION__: JSON.stringify(version),
 }, build: { outDir: values.outDir, emptyOutDir: true, minify: false,
- lib: { entry: 'userscript/main.js', name: 'AO3Library', formats: ['iife'], fileName: () => 'ao3-library.user.js' },
+ lib: { entry: 'companions/safari/content.js', name: 'AO3Library', formats: ['iife'], fileName: () => 'ao3-library.user.js' },
 } })
 // Vite's final transform can strip Rollup comments; Userscripts requires this
 // header at the start of the actual installable file.

@@ -1,3 +1,4 @@
+import { readSummary } from '../library/summaries/summary'
 import { isCalendarDate, scraperDate } from '../../lib/dates'
 export { scraperDate } from '../../lib/dates'
 import { classifyUrl } from './urls'
@@ -43,6 +44,7 @@ function count(text = '') { const raw = text.replaceAll(',', '').trim(); const v
 export function csvMetadata(row: Record<string, string>): AutomaticMetadata {
  const metadata: AutomaticMetadata = { title: row.title?.trim() ?? '', summary: row.summary ?? '', authors: list(row.author), fandoms: list(row.fandoms),
   categories: list(row.category), relationship_tags: list(row.relationships), character_tags: list(row.characters), additional_tags: list(row.freeforms), archive_warnings: list(row.warnings) }
+ if (row.summary_html) Object.assign(metadata, readSummary(row.summary_html))
  metadata.ao3_tags = [...new Set([...(metadata.categories ?? []), ...(metadata.relationship_tags ?? []), ...(metadata.character_tags ?? []), ...(metadata.additional_tags ?? []), ...(metadata.archive_warnings ?? [])])]
  if (row.rating?.trim()) metadata.rating = row.rating.trim()
  for (const [column, field] of [['words', 'word_count'], ['kudos', 'kudos'], ['bookmarks', 'bookmark_count'], ['comments', 'comment_count'], ['hits', 'hits']] as const) {

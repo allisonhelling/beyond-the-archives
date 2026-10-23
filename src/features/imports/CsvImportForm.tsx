@@ -39,7 +39,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
    for (const row of seriesSources.filter(row => row.seriesId !== undefined)) {
     for (const work of selections.find(selection => selection.seriesId === row.seriesId)?.works ?? []) {
      // Use the selected installment's metadata and date, retaining its source bookmark.
-     const metadata = csvMetadata({ title: work.title, summary: work.summary, author: work.authors.join(', '), fandoms: (work.fandoms ?? []).join(', '), chapters: work.chapters, words: String(work.wordCount ?? ''), rating: work.rating ?? '', relationships: (work.relationshipTags ?? []).join(', '), characters: (work.characterTags ?? []).join(', '), freeforms: (work.additionalTags ?? []).join(', '), warnings: (work.archiveWarnings ?? []).join(', '), date: work.updated?.slice(0, 10) ?? '' })
+     const metadata = csvMetadata({ title: work.title, summary: work.summary, summary_html: work.summary_html ?? '', author: work.authors.join(', '), fandoms: (work.fandoms ?? []).join(', '), chapters: work.chapters, words: String(work.wordCount ?? ''), rating: work.rating ?? '', relationships: (work.relationshipTags ?? []).join(', '), characters: (work.characterTags ?? []).join(', '), freeforms: (work.additionalTags ?? []).join(', '), warnings: (work.archiveWarnings ?? []).join(', '), date: work.updated?.slice(0, 10) ?? '' })
      works.push({ ...row, workId: work.workId, url: work.url, metadata, updatedDate: work.updated?.slice(0, 10) ?? null })
     }
    }

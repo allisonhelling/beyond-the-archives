@@ -2,9 +2,9 @@ import { downloadFile } from '../../lib/download'
 import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
 import { dateFormatKey } from '../../lib/dates'
-import { displaySettingsKey } from '../library/display-settings'
-import { readingPreferencesKey, collectionSortKey } from '../library/browsing'
-import { pageSizeKey } from '../library/page-size'
+import { displaySettingsKey } from '../library/display/display-settings'
+import { readingPreferencesKey, collectionSortKey } from '../library/browsing/browsing'
+import { pageSizeKey } from '../library/browsing/page-size'
 import { backupBucket, backupFileLimit, type SavedBackup } from '../../types/backups'
 
 // Explicit allowlist: never export Supabase sessions or device credentials.

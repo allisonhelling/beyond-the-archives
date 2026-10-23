@@ -1,13 +1,15 @@
+import { MetadataRefreshButton } from '../imports/MetadataControls'
+import { usePageMetadataRefresh } from '../imports/usePageMetadataRefresh'
 import { LibraryResults } from './LibraryResults'
 import { useLibrary } from './LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
-import { SeriesCard } from './SeriesCollection'
+import { SeriesCard } from './series/SeriesCollection'
 import { useLibraryResults } from './useLibraryResults'
-import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing'
-import { Pagination } from './pagination'
-import { pageSize, pageSizes } from './page-size'
+import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing/browsing'
+import { Pagination } from './browsing/Pagination'
+import { pageSize, pageSizes } from './browsing/page-size'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, Layers3, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
@@ -50,7 +52,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, filterItems = filterReading }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; filterItems?: typeof filterReading }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, renderHeader, filterItems = filterReading }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; renderHeader?: (refreshButton: ReactNode) => ReactNode; filterItems?: typeof filterReading }) {
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileQuery)
@@ -96,6 +98,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const currentPage = sampleMode ? Math.min(page, pages) : remote.result?.page ?? page
   const shown = sampleMode ? localShown.slice((currentPage - 1) * size, currentPage * size) : remote.result?.stories ?? remote.previousResult?.stories ?? []
   const seriesById = new Map((remote.result ?? remote.previousResult)?.series.map(series => [`series:${series.seriesId}`, series]) ?? [])
+  const refreshStories = shown.flatMap(story => seriesById.get(story.id)?.savedStories ?? [story])
+  const metadataRefresh = usePageMetadataRefresh(refreshStories)
+  const refreshButton = <MetadataRefreshButton {...metadataRefresh} unavailable={metadataRefresh.unavailable || remote.loading || Boolean(error || remote.error)} onRefresh={() => void metadataRefresh.refresh()} variant="icon" label="Mass refresh all stories on page" description="Mass refresh all stories on page" />
   useEffect(() => {
     if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
   }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
@@ -107,12 +112,14 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     <Dropdown label="Group" icon={Layers3} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
   </>
   return <>
+    {renderHeader?.(refreshButton)}
+    {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View import history</Link></p>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard sections">{displayedSections.map(([key, title, description, Icon]) => {
       const label = mobile && key === 'waiting' ? 'Waiting' : title
       return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, filters, urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : sampleMode ? filtered.filter(story => inReadingSection(story, key)).length : remote.result?.sections[key] ?? '—'}</span></button>
     })}</nav>}
     <ReadingFilterControls stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.result?.fandoms} />
-    {resultsActions && <div className="results-row">{resultsActions}</div>}
+    {resultsActions && <div className="results-row">{refreshButton}{resultsActions}</div>}
     {pagination}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <div role="alert" className="error-message">{error}{remote.error && <button className="button secondary" onClick={remote.retry}>Retry loading</button>}</div>}

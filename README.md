@@ -6,6 +6,31 @@ Phase 2 implements a private, manually managed library: story creation and editi
 
 The additive Phase 2 migration was applied to the local development Supabase stack. No hosted database was changed or deployed during this phase.
 
+## Code organization
+
+Keep components, behavior, styles, and unit tests beside the feature that owns them:
+
+- `src/app/`: app shell, routes, and authentication boundary.
+- `src/features/settings/`: Settings page layout, section navigation, account settings, and browser-bar pairing. The page composes feature-owned section definitions; each title, description, stable ID, and optional link aliases live together in that feature's `settings-sections.ts` and supply both navigation and section headings.
+- `src/features/imports/`, `src/features/library/`, and `src/features/backups/`: their feature logic and settings, including import, display, and export settings.
+- `src/features/library/collections/`: collection editors, membership controls, shelf/spine rendering, appearance, automatic rules, drag behavior, and tests.
+- `src/features/library/series/`: series models, repository, search, cards, pages, controls, and tests.
+- `src/features/library/display/`: display preferences, editor context, live rendering helpers, previews, styles, and tests.
+- `src/features/library/browsing/`: browsing preferences, page-size settings, pagination, position restoration, styles, and tests.
+- `src/features/library/summaries/`: summary extraction, safe shared rendering, styles, and tests.
+- `src/features/imports/ExtensionConnection.tsx`: the extension connection lifecycle, separate from `MetadataSettings.tsx` and its settings form.
+- `companions/shared/`: the AO3 bar, page parsing, editor adapters, styles, and shared tests.
+- `companions/safari/`: Userscripts entrypoint, build tests, and installation guide.
+- `companions/chrome/`: Chrome/Edge entrypoints, messaging bridge, metadata capture, list sync, tests, and installation guide.
+
+Build commands remain in `scripts/`. Installable output still goes to `userscript/dist/`, `extension/dist/`, and `extension/local/dist/`. Shared card, form, and layout primitives stay in `src/styles.css`. Feature-only styles live beside their components; browsing, display, and summary styles load through `src/main.tsx`. Browser integration tests stay in `tests/e2e/`. Extend these feature boundaries incrementally when changing related code.
+
+## Summary formatting and tile text
+
+Desktop work tiles (above the 1100px mobile-layout breakpoint) use the same 15px minimum text size as work info summaries. Mobile tile and summary typography keeps its existing sizes. Imported summaries retain semantic formatting (including emphasis, bold, paragraphs, line breaks, lists, and links) in a separate `summary_html` metadata field; plain summaries remain available for search and manual editing. The shared renderer strips active content and unsafe attributes. Plain-text manual corrections take precedence over older formatted metadata.
+
+Apply `20261023000400_formatted_work_summaries.sql` and deploy the updated metadata worker and website. Rebuild/reload the Chrome extension or Safari userscript for imports from those companions. Refresh metadata for previously saved works to recover formatting; formatting discarded by older imports cannot be reconstructed from their plain text. Local builds do not deploy or apply these changes automatically.
+
 ## Run locally
 
 Run commands from `FanficTrackerLibrary/`. Requires Node **22.12+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
@@ -69,7 +94,7 @@ npm run build:extension:local
 
 In Chrome/Edge, open `chrome://extensions` or `edge://extensions`, enable Developer mode, and **Load unpacked → `extension/local/dist`**. After rebuilding, click **Reload** on that extension's card. If you have an older local extension without the fixed ID, remove that older local installation and load the new local build once. In the local app's **Settings → AO3 metadata retrieval**, select **Browser extension**, and click **Save metadata mode**. The local app automatically selects the fixed ID of **AO3 Library Companion (Local)** and ignores any hosted extension ID. Use **Reconnect extension** after a browser restart. Complete any AO3 sign-in or adult-content confirmation in the requested AO3 tab.
 
-Import one work with **Add → Add Story**, which opens **Add Story → Import from link**, or use **Add → Import History from AO3** for batches. Importing a verified chapter link opens the existing fic when already saved and sets its reading location: chapter 10 means chapters 1–9 read. This also supports returning to an earlier chapter. Metadata-only refreshes preserve reading location; edits made while retrieval is pending take precedence. Existing queued requests keep their original retrieval mode. See [the extension guide](extension/README.md) for hosted builds and detailed behavior.
+Import one work with **Add → Add Story**, which opens **Add Story → Import from link**, or use **Add → Import History from AO3** for batches. Importing a verified chapter link opens the existing fic when already saved and sets its reading location: chapter 10 means chapters 1–9 read. This also supports returning to an earlier chapter. Metadata-only refreshes preserve reading location; edits made while retrieval is pending take precedence. Existing queued requests keep their original retrieval mode. See [the extension guide](companions/chrome/README.md) for hosted builds and detailed behavior.
 
 ### Configure the direct metadata worker
 
@@ -266,10 +291,25 @@ Key modeling decisions:
 src/
   app/                 protected routes and responsive shell
   components/          shared presentation components
-  features/auth/       session provider, sign-in and password recovery
+  features/
+    auth/              session provider, sign-in and password recovery
+    settings/          Settings layout, navigation, account and pairing controls
+    imports/           AO3 imports, sync, metadata retrieval and their settings
+    backups/           backup/restore and CSV export, settings, styles and tests
+    library/           shared library models, data access and work/reading UI
+      collections/     collection controls, shelves, appearance, rules and tests
+      series/          series data, search, pages, controls and tests
+      browsing/        page size, pagination, restoration and settings
+      display/         display preferences, editors, previews and settings
+      summaries/       summary parsing, rendering, styles and tests
+      sample/          local sample data and repository
   lib/                 public configuration and typed Supabase client
   types/database.ts    generated migration-derived types
   test/                frontend and server-boundary test setup
+companions/
+  shared/              AO3 bar, parsing, personal controls, styles and tests
+  chrome/              extension entrypoints, capture, sync, messaging and tests
+  safari/              userscript entrypoint, build tests and install guide
 server/                trusted operator utilities, excluded from browser imports
 supabase/
   migrations/          versioned PostgreSQL schema, constraints, grants and RLS
@@ -355,7 +395,7 @@ On `/imports`, **AO3 Library Sync** scans a complete unfiltered Bookmarks or Mar
 
 The extension ports the Python scraper’s listing selectors and reuses the CSV metadata conversion and database validation. It saves page checkpoints separately from work-import jobs, uses one scan tab with a configurable request interval (15 seconds by default, minimum 5 seconds), and pauses on login, restriction, or unexpected pages for manual resume. Imports use saved listing metadata without opening individual work pages. Deleted-work bookmarks are retained; external and series bookmarks are skipped; historical chapter progress unavailable on listing pages remains unconfirmed.
 
-Apply migrations through `20261022000600_deleted_bookmarks.sql`, deploy the updated website, rebuild/reload the extension, and reconnect in Settings. No new Edge Function or Python installation is needed. See [the library sync guide](extension/README.md#bookmarks-and-marked-for-later-sync) for limits, checkpoint privacy, recovery, and installation.
+Apply migrations through `20261022000600_deleted_bookmarks.sql`, deploy the updated website, rebuild/reload the extension, and reconnect in Settings. No new Edge Function or Python installation is needed. See [the library sync guide](companions/chrome/README.md#bookmarks-and-marked-for-later-sync) for limits, checkpoint privacy, recovery, and installation.
 
 Use **Time Between Page Requests** to select 5–3,600 seconds. Apply request interval updates the next request of an existing scan, and the setting survives resume. Login and request restrictions pause scanning and show an app-wide dialog with **Open AO3 scan tab**, which focuses the existing AO3 tab without retrying it. Resolve the issue before choosing Resume scan.
 
@@ -369,7 +409,7 @@ Sample mode also supports **Library Sync** through the local extension. Build/lo
 
 ## Browser extension mode
 
-Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes explicit work imports, metadata refreshes, series previews, and library listing scans, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](extension/README.md).
+Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes explicit work imports, metadata refreshes, series previews, and library listing scans, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](companions/chrome/README.md).
 
 ## Series import previews
 

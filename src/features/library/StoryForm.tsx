@@ -9,7 +9,7 @@ import { saveStory } from './repository'
 import { StarRating } from './StarRating'
 import { FavoriteButton } from './FavoriteButton'
 import { useLibrary } from './LibraryProvider'
-import { CollectionChoices, NewCollectionButton } from './CollectionChoices'
+import { CollectionChoices, NewCollectionButton } from './collections/CollectionChoices'
 import { PersonalTagInput } from './PersonalTagInput'
 export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story; onCancel?: () => void; section?: 'all' | 'metadata' | 'reading' }) {
   const library = useLibrary(), navigate = useNavigate(), [params] = useSearchParams(), location = useLocation()

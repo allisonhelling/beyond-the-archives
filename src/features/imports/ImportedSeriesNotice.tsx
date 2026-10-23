@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog } from '../../components/Dialog'
 import { useLibrary } from '../library/LibraryProvider'
-import { seriesMemberships } from '../library/series'
+import { seriesMemberships } from '../library/series/series'
 import type { Status, Story } from '../library/model'
 import { importHistory, submitImport } from './repository'
 import { importFinished, selectedImportText, type SeriesPreview } from './urls'

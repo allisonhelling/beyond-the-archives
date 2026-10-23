@@ -1,13 +1,13 @@
 import { readReadingHistory } from './reading-history'
-import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './automatic-collections'
+import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './collections/automatic-collections'
 import type { Json } from '../../types/database'
 import { parseSearch, filterReading } from './reading-search'
-import type { SeriesRecord } from './series'
+import type { SeriesRecord } from './series/series'
 import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
 import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork } from './model'
-import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collection-appearance'
+import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collections/collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
 function failure(error: { code?: string } | null) {
@@ -176,7 +176,7 @@ export async function loadStories(ids: string[]): Promise<Story[]> {
   return ((data ?? []) as unknown as Story[]).map(story => ({ ...story, detailsLoaded: true }))
 }
 export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: string; filters: import('./reading-search').ReadingFilters }
-export type LibraryResults = { suggestions?: { relationships: string[]; characters: string[]; tags: string[] }; stories: Story[]; series: import('./series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
+export type LibraryResults = { suggestions?: { relationships: string[]; characters: string[]; tags: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export async function queryLibrary(query: LibraryQuery, page: number, size: number, signal: AbortSignal): Promise<LibraryResults> {
   // Run the same parser/validation before either transport. Literal substring
   // groups preserve escaped operators and avoid unsafe SQL/regex interpolation.

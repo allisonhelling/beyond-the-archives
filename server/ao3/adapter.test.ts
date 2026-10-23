@@ -108,3 +108,9 @@ it('retains valid AO3 bookmark, comment and hit counts, including zero', () => {
   expect(validateMetadata(result).metadata?.[field]).toBeUndefined()
  }
 })
+
+it('retains safe summary formatting through the metadata validation boundary', () => {
+ const html = fixture('work').replace('<p>A summary &amp; more.</p>', '<p>A <em>summary</em> &amp; <strong>more</strong>.</p>')
+ const result = validateMetadata(parseMetadata(html, 123, 'https://archiveofourown.org/works/123'))
+ expect(result.metadata).toMatchObject({ summary: 'A summary & more.', summary_html: '<p>A <em>summary</em> &amp; <strong>more</strong>.</p>' })
+})

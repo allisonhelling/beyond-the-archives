@@ -1,7 +1,8 @@
+import { WorkSummary } from '../library/summaries/WorkSummary'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { useLibrary } from '../library/LibraryProvider'
-import { rememberSeries } from '../library/series-repository'
+import { rememberSeries } from '../library/series/series-repository'
 import { Tooltip } from '../../components/Tooltip'
 import type { Status } from '../library/model'
 import { ImportReadingStatus } from './ImportReadingStatus'
@@ -97,7 +98,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
           if (open) closed.delete(work.workId); else closed.add(work.workId)
           return { ...current, [id]: { ...current[id], closed } }
          })
-        }}><summary>Summary and tags</summary><p className="story-summary">{work.summary || 'No summary provided.'}</p><p className="field-help">{work.tags.join(' · ') || 'No tags provided.'}</p></details>
+        }}><summary>Summary and tags</summary><div className="story-summary"><WorkSummary metadata={work} fallback="No summary provided." /></div><p className="field-help">{work.tags.join(' · ') || 'No tags provided.'}</p></details>
        </div>
       })}
      </>}

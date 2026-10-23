@@ -1,5 +1,5 @@
 import { datePlaceholder } from '../../lib/dates'
-import { inSeries, seriesMemberships } from './series'
+import { inSeries, seriesMemberships } from './series/series'
 import { publicationStatuses } from './publication-status'
 import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
 

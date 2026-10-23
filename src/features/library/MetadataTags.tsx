@@ -1,7 +1,7 @@
 import { Fragment, type CSSProperties } from 'react'
 import { X } from 'lucide-react'
-import { useTagAppearance } from './useDisplayPreference'
-import { tagColors, type TagCategory, type TagShape } from './display-settings'
+import { useTagAppearance } from './display/useDisplayPreference'
+import { tagColors, type TagCategory, type TagShape } from './display/display-settings'
 
 /** Shared tag chips for tiles and information pages; category labels stay outside the chips. */
 export function MetadataTags({ values, category = 'tags', shape, onRemove, removeLabel }: { values: string[]; category?: TagCategory | null; shape?: TagShape; onRemove?: (value: string) => void; removeLabel?: (value: string) => string }) {

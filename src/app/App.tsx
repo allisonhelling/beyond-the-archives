@@ -1,17 +1,13 @@
-import { Ao3UsernameSettings } from '../features/imports/Ao3UsernameSettings'
+import { SettingsPage } from '../features/settings/SettingsPage'
 import { LibrarySyncProvider } from '../features/imports/LibrarySyncProvider'
-import { BackupSettings } from '../features/backups/BackupSettings'
-import { CsvExportSettings } from '../features/backups/CsvExportSettings'
-import { DisplayExamplePage, DisplaySettings } from '../features/library/DisplaySettings'
-import { BrowsingPosition } from '../features/library/BrowsingPosition'
-import { PageSizeSettings } from '../features/library/pagination'
-import { SeriesPage } from '../features/library/SeriesPage'
-import { UserscriptSettings } from '../features/imports/UserscriptSettings'
+import { DisplayExamplePage } from '../features/library/display/DisplaySettings'
+import { BrowsingPosition } from '../features/library/browsing/BrowsingPosition'
+import { SeriesPage } from '../features/library/series/SeriesPage'
 import { ImportPage } from '../features/imports/ImportPage'
-import { ExtensionConnection, MetadataSettings } from '../features/imports/MetadataSettings'
-import { useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, ChevronRight, BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, Layers, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
+import { ExtensionConnection } from '../features/imports/ExtensionConnection'
+import { useState } from 'react'
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { ArrowRight, BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, Layers, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
 import { LibraryProvider } from '../features/library/LibraryProvider'
 import { AddStoryPage, LibraryPage, StoryDetailsPage } from '../features/library/LibraryPages'
 import { useDismissible } from '../components/useDismissible'
@@ -19,7 +15,7 @@ import { Brand } from '../components/Brand'
 import { AuthProvider } from '../features/auth/AuthProvider'
 import { useAuth } from '../features/auth/auth-context'
 import { AuthScreen } from '../features/auth/AuthScreen'
-import { authRedirectUrl, supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { sampleMode } from '../lib/sample-mode'
 
 const navigation = [
@@ -44,89 +40,6 @@ function FoundationPage({ kind }: { kind: 'stats' }) {
   </>
 }
 
-const settingsSections = [
-  ['settings-account', 'Account & Security', 'Sign-in details and password recovery'],
-  ['settings-browsing', 'Library Browsing', 'Default works per page and date format'],
-  ['settings-display', 'Tile and Page Information', 'Customize tags, tiles, and information pages'],
-  ['settings-ao3-username', 'AO3 Username', 'View, change, or delete your saved import username'],
-  ['settings-metadata', 'AO3 Metadata Retrieval', 'Choose how story information is retrieved'],
-  ['ios-safari-userscript', 'AO3 Browser Bar', 'Set up and manage paired Chrome, Edge, and Safari devices'],
-  ['settings-backup', 'Export Backup', 'Download, save, or restore a complete library backup'],
-  ['settings-csv-export', 'Export CSV', 'Download works, series, and collections in one ZIP'],
-  ['settings-coming-soon', 'More in a Later Chapter', 'Upcoming settings and features'],
-] as const
-
-function SettingsSectionLabel({ title, description, descriptionId }: { title: string; description: string; descriptionId: string }) {
-  return <span className="settings-section-label"><span>{title}</span><small className="muted" id={descriptionId}>{description}</small></span>
-}
-
-function SettingsPage() {
-  const { session } = useAuth()
-  const location = useLocation(), navigate = useNavigate()
-  const selectedSection = settingsSections.find(([id]) => location.hash === `#${id}` || id === 'ios-safari-userscript' && location.hash === '#ao3-browser-bar')?.[0]
-  const previousSection = useRef(selectedSection)
-  useEffect(() => {
-    const target = selectedSection ? document.getElementById(selectedSection)
-      : previousSection.current ? document.getElementById(`open-${previousSection.current}`) : null
-    if (target?.getClientRects().length) target.focus({ preventScroll: true })
-    previousSection.current = selectedSection
-  }, [selectedSection])
-  const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [activeSection, setActiveSection] = useState<string>(settingsSections[0][0])
-  const content = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    let frame = 0
-    const sections = settingsSections.flatMap(([id]) => { const section = document.getElementById(id); return section ? [section] : [] })
-    function update() {
-      const boundary = 120
-      const atBottom = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2
-      const current = atBottom ? sections.at(-1) : sections.filter(section => section.getBoundingClientRect().top <= boundary).at(-1)
-      setActiveSection(current?.id ?? settingsSections[0][0])
-    }
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update) }
-    const observer = new ResizeObserver(schedule)
-    if (content.current) observer.observe(content.current)
-    schedule()
-    window.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule) }
-  }, [])
-  function jumpToSection(id: string) {
-    const section = document.getElementById(id)
-    section?.focus({ preventScroll: true })
-    section?.scrollIntoView({ block: 'start' })
-  }
-  async function reset() {
-    if (!supabase || !session?.user.email || busy) return
-    setBusy(true)
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(session.user.email, { redirectTo: authRedirectUrl() })
-      setMessage(error ? 'Could not send a recovery email. Please try again.' : 'Check your email for a password recovery link. Open it in this browser.')
-    } catch { setMessage('Could not send a recovery email. Please try again.') }
-    finally { setBusy(false) }
-  }
-  const sections = {
-    'settings-account': <section id="settings-account" tabIndex={-1} className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>Account & Security</h2></div><dl><div><dt>Signed in as</dt><dd>{session?.user.email}</dd></div><div><dt>Library visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send password recovery email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section>,
-    'settings-browsing': <PageSizeSettings />,
-    'settings-display': <DisplaySettings />,
-    'settings-ao3-username': <Ao3UsernameSettings />,
-    'settings-metadata': <MetadataSettings />,
-    'ios-safari-userscript': <UserscriptSettings />,
-    'settings-backup': <BackupSettings />,
-    'settings-csv-export': <CsvExportSettings />,
-    'settings-coming-soon': <section id="settings-coming-soon" tabIndex={-1} className="settings-card"><h2>More in a Later Chapter</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5. Library backup export and restore are available above.</p></section>,
-  }
-  return <div className="settings-page" data-section-open={Boolean(selectedSection)}>
-    <aside className="settings-outline"><nav aria-label="Settings Section Outline"><h2>On This Page</h2><ul>{settingsSections.map(([id, title, description]) => <li key={id}><a aria-label={title} aria-describedby={`outline-description-${id}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={event => { event.preventDefault(); jumpToSection(id) }}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></a></li>)}</ul></nav></aside>
-    <div className="settings-content" ref={content}>
-      <div className="page-heading settings-index-heading"><h1>Settings</h1></div>
-      <nav className="settings-section-list" aria-label="Settings sections"><ul>{settingsSections.map(([id, title, description]) => <li key={id}><Link aria-label={title} aria-describedby={`list-description-${id}`} id={`open-${id}`} to={`/settings#${id}`} state={{ settingsIndex: true }}><SettingsSectionLabel title={title} description={description} descriptionId={`list-description-${id}`} /><ChevronRight size={18} aria-hidden="true" /></Link></li>)}</ul></nav>
-      <div className="settings-section-back"><button className="button secondary" onClick={() => { if (location.state?.settingsIndex) navigate(-1); else navigate('/settings', { replace: true }) }}><ArrowLeft size={17} aria-hidden="true" />Back to Settings</button></div>
-      {settingsSections.map(([id]) => <div key={id} className="settings-section" data-selected={selectedSection === id}>{sections[id]}</div>)}
-    </div>
-  </div>
-}
 
 function FeaturesPage() {
   return <><div className="page-heading"><div><h1>The next chapters</h1></div><span className="status-pill">PHASE 3</span></div><section className="settings-card" aria-labelledby="series-features-heading">

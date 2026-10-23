@@ -86,3 +86,8 @@ it('extracts kudos and categorized warnings from series work listings', () => {
  expect(parseSeries(source, url).works[0]).toMatchObject({ kudos: 1234, archiveWarnings: ['Major Character Death'] })
  expect(parseSeries(html, url).works[0].kudos).toBeNull()
 })
+
+it('retains formatting in individual work summaries from series listings', () => {
+ const preview = parseSeries(html.replace('A beginning.', '<em>A beginning.</em>'), url)
+ expect(preview.works[0]).toMatchObject({ summary: 'A beginning.', summary_html: expect.stringContaining('<em>A beginning.</em>') })
+})

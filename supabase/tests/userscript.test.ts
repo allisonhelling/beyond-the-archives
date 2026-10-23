@@ -104,7 +104,7 @@ it('refreshes private metadata and chapter mappings while preserving personal fi
  await db.exec("update public.library_entries set metadata_overrides='{\"title\":\"My title\"}',is_favorite=true where work_id=(select id from public.works where ao3_work_id=789)")
  const current = await request('get', {}, device.secret, 789)
  const before = (await db.query<{ entry: Record<string, unknown> }>('select to_jsonb(e) as entry from public.library_entries e where work_id=(select id from public.works where ao3_work_id=789)')).rows[0].entry
- const input = { version: current.entry.version, metadata: { title: 'New title', summary: null, published_chapters: 3, is_complete: false, kudos: 456, additional_tags: ['New tag'], notes: 'Unwanted note' }, chapters: { '3': '930' } }
+ const input = { version: current.entry.version, metadata: { title: 'New title', summary: null, summary_html: '<p>Keep <em>summary</em></p>', published_chapters: 3, is_complete: false, kudos: 456, additional_tags: ['New tag'], notes: 'Unwanted note' }, chapters: { '3': '930' } }
  await expect(request('refresh_metadata', { ...input, version: 'stale' }, device.secret, 789)).rejects.toThrow(/Entry changed/)
  await expect(request('refresh_metadata', { ...input, metadata: { title: 'Bad', published_chapters: -1 } }, device.secret, 789)).rejects.toThrow(/Invalid/)
  await expect(request('refresh_metadata', { ...input, chapters: { '4': '940' } }, device.secret, 789)).rejects.toThrow(/Invalid chapter/)
@@ -112,7 +112,7 @@ it('refreshes private metadata and chapter mappings while preserving personal fi
  const refreshed = await request('refresh_metadata', input, device.secret, 789)
  expect(refreshed.entry).toEqual(current.entry)
  const after = (await db.query<{ entry: Record<string, unknown> }>('select to_jsonb(e) as entry from public.library_entries e where work_id=(select id from public.works where ao3_work_id=789)')).rows[0].entry
- expect(after).toEqual({ ...before, extension_metadata: expect.objectContaining({ title: 'New title', summary: 'Keep summary', published_chapters: 3, total_chapters: null, publication_status: 'in_progress', additional_tags: ['New tag'], kudos: 456, last_metadata_success: expect.any(String) }), extension_chapters: { '3': '930' } })
+ expect(after).toEqual({ ...before, extension_metadata: expect.objectContaining({ title: 'New title', summary: 'Keep summary', summary_html: '<p>Keep <em>summary</em></p>', published_chapters: 3, total_chapters: null, publication_status: 'in_progress', additional_tags: ['New tag'], kudos: 456, last_metadata_success: expect.any(String) }), extension_chapters: { '3': '930' } })
  expect(after.extension_metadata).not.toHaveProperty('notes')
  expect((await db.query('select title,verified_chapters from public.works where ao3_work_id=789')).rows[0]).toMatchObject({ title: null, verified_chapters: {} })
  await expect(request('refresh_metadata', { ...input, version: null }, device.secret, 999)).rejects.toThrow(/Save this work first/)

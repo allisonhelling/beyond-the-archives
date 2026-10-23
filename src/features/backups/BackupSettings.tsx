@@ -1,3 +1,5 @@
+import './backups.css'
+import { backupSettingsSection } from './settings-sections'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CloudUpload, Download } from 'lucide-react'
 import { sampleMode } from '../../lib/sample-mode'
@@ -45,8 +47,8 @@ export function BackupSettings() {
     finally { exporting.current = false; setBusy('') }
   }
   const disabled = Boolean(busy || sampleMode || deleting || restoring)
-  return <section id="settings-backup" tabIndex={-1} className="settings-card">
-    <div className="section-title"><Download size={21} /><h2>Export Backup</h2></div>
+  return <section id={backupSettingsSection.id} tabIndex={-1} className="settings-card">
+    <div className="section-title"><Download size={21} /><h2>{backupSettingsSection.title}</h2></div>
     <p>Download or save your complete library, including all works and their metadata, reading progress, private notes, ratings, tags, collections, saved series, import history, and settings. Every saved work is included, across all pages.</p>
     <div className="form-actions">
       <button className="button secondary" disabled={disabled} onClick={() => void run('export', exportBackup, 'Your backup download has started. Keep the file somewhere safe; it includes your private notes.')}><Download size={17} />{busy === 'export' ? 'Preparing backup…' : 'Export Backup'}</button>

@@ -1,10 +1,10 @@
 import { readAo3Rows, type CsvWork } from '../../imports/ao3-csv'
-import { automaticCollectionRules } from '../automatic-collections'
+import { automaticCollectionRules } from '../collections/automatic-collections'
 import { defaultReadingFilters } from '../reading-search'
-import { orderCollections, moveCollectionIds } from '../collection-appearance'
+import { orderCollections, moveCollectionIds } from '../collections/collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { importSampleWorks, addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
-import { librarySeries, seriesReadingStatus } from '../series'
+import { librarySeries, seriesReadingStatus } from '../series/series'
 import defaultState from './default-state.json'
 import { parseWorkUrl, validateProgress } from '../model'
 
@@ -294,7 +294,7 @@ it('merges other-tab personal edits and requires review when both tabs edit note
 })
 
 it('seeds every play it again work and reuses their metadata for the fully loaded series page', async () => {
-  const { librarySeries } = await import('../series')
+  const { librarySeries } = await import('../series/series')
   const library = await loadSampleLibrary()
   const series = librarySeries(library.stories, library.series).find(series => series.seriesId === 132147)!
   expect(series).toMatchObject({ title: 'play it again', creators: ['metisket'], begun: '2013-06-29', updated: '2020-08-09', wordCount: 74696, workCount: 3, fandoms: ['Teen Wolf (TV)'] })

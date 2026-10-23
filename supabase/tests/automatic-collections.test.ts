@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Shared JS database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
-import { automaticCollectionRules } from '../../src/features/library/automatic-collections'
+import { automaticCollectionRules } from '../../src/features/library/collections/automatic-collections'
 import { defaultReadingFilters } from '../../src/features/library/reading-search'
 import type { LibraryResults } from '../../src/features/library/repository'
 import type { Story } from '../../src/features/library/model'

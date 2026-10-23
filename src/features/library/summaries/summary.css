@@ -1,0 +1,10 @@
+.formatted-summary { white-space: normal; }
+.formatted-summary :is(p, blockquote, ul, ol, pre, hr) + :is(p, blockquote, ul, ol, pre, hr) { margin-top: 1em; }
+.formatted-summary :is(h1, h2, h3, h4, h5, h6) { font: inherit; font-weight: 700; margin-block: 1em .5em; }
+.formatted-summary :is(ul, ol) { padding-inline-start: 1.5em; }
+.formatted-summary ul { list-style: disc; }
+.formatted-summary ol { list-style: decimal; }
+.formatted-summary blockquote { padding-inline-start: 1em; border-inline-start: 2px solid var(--color-border); }
+.formatted-summary pre { white-space: pre-wrap; }
+.formatted-summary a { color: var(--color-link); text-decoration: underline; }
+.formatted-summary hr { border: 0; border-top: 1px solid var(--color-border); }

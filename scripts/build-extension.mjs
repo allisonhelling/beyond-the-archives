@@ -21,7 +21,7 @@ for (const url of [app, backend]) {
  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('Use HTTPS or local development origins.')
  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Configure origins without paths or credentials.')
 }
-const version = '0.6.0'
+const version = '0.6.1'
 const define = {
  'process.env.NODE_ENV': JSON.stringify('production'),
  __APP_ORIGIN__: JSON.stringify(app.origin), __SUPABASE_URL__: JSON.stringify(backend.origin), __SUPABASE_KEY__: JSON.stringify(config.key),
@@ -30,11 +30,11 @@ const define = {
 }
 await build({
  configFile: false, define,
- build: { outDir, emptyOutDir: true, minify: false, lib: { entry: 'extension/background.js', formats: ['es'], fileName: () => 'background.js' } },
+ build: { outDir, emptyOutDir: true, minify: false, lib: { entry: 'companions/chrome/background.js', formats: ['es'], fileName: () => 'background.js' } },
 })
 await build({
  configFile: false, define,
- build: { outDir, emptyOutDir: false, minify: false, lib: { entry: 'extension/content.js', name: 'AO3LibraryBar', formats: ['iife'], fileName: () => 'content.js' } },
+ build: { outDir, emptyOutDir: false, minify: false, lib: { entry: 'companions/chrome/content.js', name: 'AO3LibraryBar', formats: ['iife'], fileName: () => 'content.js' } },
 })
 await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  ...(values.local ? { key: localExtensionKey } : {}),

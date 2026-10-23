@@ -1,20 +1,18 @@
-import { StrictMode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), id: vi.fn(), local: false, auth: { session: { user: { id: 'alice' } } as Session | null, loading: false } }))
+const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), connect: vi.fn(), id: vi.fn(), local: false, auth: { session: { user: { id: 'alice' } } as Session | null, loading: false } }))
 vi.mock('../../lib/local-app', () => ({ isLocalApp: () => mocks.local }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => mocks.auth }))
 vi.mock('../../lib/supabase', () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.load }) }), upsert: mocks.save }) } }))
-vi.mock('./extension', () => ({ extensionId: () => '', setExtensionId: mocks.id, connectExtension: mocks.connect, disconnectExtension: mocks.disconnect }))
-import { ExtensionConnection, MetadataSettings } from './MetadataSettings'
+vi.mock('./extension', () => ({ extensionId: () => '', setExtensionId: mocks.id, connectExtension: mocks.connect }))
+import { MetadataSettings } from './MetadataSettings'
 
 beforeEach(() => {
  vi.clearAllMocks()
  mocks.local = false
  mocks.auth = { session: { user: { id: 'alice' } } as Session, loading: false }
- mocks.disconnect.mockResolvedValue(true)
  mocks.load.mockResolvedValue({ data: null, error: null })
  mocks.save.mockResolvedValue({ error: null })
  mocks.connect.mockResolvedValue(true)
@@ -50,25 +48,6 @@ it('leaves the current database mode intact when the extension cannot connect', 
  fireEvent.click(screen.getByRole('button', { name: 'Save metadata mode' }))
  expect(await screen.findByRole('status')).toHaveTextContent('Could not connect.')
  expect(mocks.save).not.toHaveBeenCalled()
-})
-
-it('keeps the extension connected through StrictMode remounts and page closure', async () => {
- const { unmount } = render(<StrictMode><ExtensionConnection /></StrictMode>)
- await waitFor(() => expect(mocks.connect).toHaveBeenCalledWith(mocks.auth.session))
- expect(mocks.disconnect).not.toHaveBeenCalled()
- unmount()
- expect(mocks.disconnect).not.toHaveBeenCalled()
-})
-it('waits for auth initialization and disconnects after sign-out', async () => {
- mocks.auth = { session: null, loading: true }
- const { rerender } = render(<ExtensionConnection />)
- expect(mocks.disconnect).not.toHaveBeenCalled()
- mocks.auth = { session: { user: { id: 'alice' } } as Session, loading: false }
- rerender(<ExtensionConnection />)
- await waitFor(() => expect(mocks.connect).toHaveBeenCalledWith(mocks.auth.session))
- mocks.auth = { session: null, loading: false }
- rerender(<ExtensionConnection />)
- await waitFor(() => expect(mocks.disconnect).toHaveBeenCalledTimes(1))
 })
 
 it('explains the automatic local extension and prevents editing its ID', async () => {

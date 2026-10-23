@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import type { SeriesRecord } from './series'
+import type { SeriesRecord } from './series/series'
 import { editSnapshot } from './edit-merge'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { UndoNotice } from '../../components/UndoNotice'

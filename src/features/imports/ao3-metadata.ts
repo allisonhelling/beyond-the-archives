@@ -1,7 +1,8 @@
 import type { CheerioAPI } from 'cheerio'
+import { readSummary } from '../library/summaries/summary.ts'
 
 export type AutomaticMetadata = {
- chapter_dates?: Record<string, string>; title?: string; summary?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
+ chapter_dates?: Record<string, string>; title?: string; summary?: string; summary_html?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
  ao3_tags?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; archive_warnings?: string[]; categories?: string[];
  rating?: string; kudos?: number; bookmark_count?: number; comment_count?: number; hits?: number; word_count?: number; published_chapters?: number; total_chapters?: number; is_complete?: boolean;
  ao3_published_at?: string; ao3_updated_at?: string; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[];
@@ -10,26 +11,11 @@ export type AutomaticMetadata = {
 function count(text: string) { const value = text.replaceAll(',', '').trim(); const n = Number(value); return /^\d+$/.test(value) && Number.isSafeInteger(n) && n <= 2147483647 ? n : undefined }
 function date(text: string) { return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text)) ? `${text}T00:00:00Z` : undefined }
 
-/** Preserve displayed paragraph and line breaks while storing plain text. */
-export function plainText(element: ReturnType<CheerioAPI>) {
- const copy = element.clone()
- // HTML source whitespace is not a displayed break. Preserve the breaks supplied
- // by markup before storing plain text for the shared pre-wrap display.
- copy.find('script, style').remove()
- copy.find('*').addBack().contents().each((_, node) => {
-  if (node.type === 'text') node.data = node.data.replace(/[\t\n\f\r ]+/g, ' ')
- })
- copy.find('br').replaceWith('\n')
- copy.find('p, div, blockquote, h1, h2, h3, h4, h5, h6, ul, ol, pre, hr').before('\n\n').after('\n\n')
- copy.find('li').before('\n').after('\n')
- return copy.text().replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-}
-
 /** Shared extraction for website imports and the inline AO3 companion. */
 export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
  const metadata: AutomaticMetadata = { title: $('h2.title').first().text().trim() }
  const summary = $('.summary.module blockquote').first()
- if (summary.length) metadata.summary = plainText(summary)
+ if (summary.length) Object.assign(metadata, readSummary(summary.html() ?? ''))
  const authors = $('h3.byline a[rel="author"]')
  if (authors.length) { metadata.authors=[]; metadata.author_links={}; authors.each((_, node) => { const name=$(node).text().trim(); if (!name) return; metadata.authors!.push(name); try { const u=new URL($(node).attr('href')!,sourceUrl); if (u.origin==='https://archiveofourown.org' && /^\/users\//.test(u.pathname)) metadata.author_links![name]=u.href } catch { /* Name is still useful. */ } }) }
  const groups = { fandoms:'fandom', relationship_tags:'relationship', character_tags:'character', additional_tags:'freeform', archive_warnings:'warning', categories:'category' } as const

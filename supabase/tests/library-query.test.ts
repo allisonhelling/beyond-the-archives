@@ -4,8 +4,8 @@ import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Shared JS database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
 import { defaultReadingFilters, filterReading, parseSearch, shuffleKey } from '../../src/features/library/reading-search'
-import { librarySeries, seriesInformation } from '../../src/features/library/series'
-import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series-search'
+import { librarySeries, seriesInformation } from '../../src/features/library/series/series'
+import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series/series-search'
 import type { Story } from '../../src/features/library/model'
 import type { LibraryResults } from '../../src/features/library/repository'
 let db: PGlite

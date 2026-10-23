@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { readingMilliseconds, recordReadingTransition, resumeReadingStatus } from './reading-history'
-import { exampleWork } from './display-examples'
+import { exampleWork } from './display/display-examples'
 
 it('excludes each pause, closes a pause on finish, and stops the estimate at the finish date', () => {
  const story = { ...exampleWork, created_at: '2026-10-01T00:00:00Z', finished_at: '2026-10-11T00:00:00Z', reading_status: 'finished' as const,

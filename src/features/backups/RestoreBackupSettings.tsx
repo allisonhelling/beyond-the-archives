@@ -1,3 +1,4 @@
+import './backups.css'
 import { useRef, useState } from 'react'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { formatDateTime } from '../../lib/dates'

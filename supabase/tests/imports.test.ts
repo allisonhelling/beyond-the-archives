@@ -387,3 +387,14 @@ it('persists zero and updated kudos in automatic metadata, preserves missing cou
  expect((await db.query<{ count: number }>("select (automatic_metadata->>'kudos')::integer as count from public.works where ao3_work_id=987652")).rows[0].count).toBe(1234)
  await clearJobs()
 })
+
+it('stores formatted automatic summaries and projects them alongside searchable plain text', async () => {
+ await clearJobs()
+ await submit(['https://archiveofourown.org/works/88444'])
+ await ready()
+ const job = (await claim())!
+ expect(job.workId).toBe(88444)
+ expect(await finish(job, { title: 'Formatted summary', summary: 'An italic summary.', summary_html: '<p>An <em>italic</em> summary.</p>', authors: ['Author'], published_chapters: 1, total_chapters: 1 }, { '1': '88445' })).toBe(true)
+ const result = await asUser(alice, () => db.query<{ metadata: object }>("select story->'metadata' as metadata from public.library_story_documents where work_id=(select id from public.works where ao3_work_id=88444)"))
+ expect(result.rows[0].metadata).toMatchObject({ summary: 'An italic summary.', summary_html: '<p>An <em>italic</em> summary.</p>' })
+})

@@ -1,0 +1,6 @@
+.csv-export-settings { font-size: 14px; }
+.csv-export-settings :is(p, label, legend, small, .button) { font-size: inherit; line-height: 1.8; }
+.backup-source-field { display: grid; gap: 8px; min-width: 0; flex: 1 1 240px; margin-block: 15px; }
+.backup-source-field input[type=file] { width: 100%; border: 0; padding: 0; background: transparent; font: inherit; }
+.backup-source-field input[type=file]::file-selector-button { border: 1px solid #dfcbc5; border-radius: 7px; padding: 10px 16px; margin-right: 12px; background: #fffdfb; color: var(--color-brand); font: inherit; cursor: pointer; }
+.backup-source-field input { min-width: 0; max-width: 100%; }

@@ -182,8 +182,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const series = page.locator('.story-series-eyebrow')
   await expect(series).toHaveText('Part 3 of My manual series')
   const seriesBox = (await series.boundingBox())!, workTitleBox = (await page.locator('.story-title-row h1').boundingBox())!
-  if (info.project.name === 'mobile') expect(seriesBox.y + seriesBox.height).toBeLessThanOrEqual(workTitleBox.y)
-  else expect(seriesBox.y).toBeGreaterThanOrEqual(workTitleBox.y + workTitleBox.height)
+  expect(seriesBox.y + seriesBox.height).toBeLessThanOrEqual(workTitleBox.y)
   await expect(series.getByRole('link', { name: 'My manual series' })).toHaveAttribute('href', '/series/77')
   await expect(series.locator('strong')).toHaveText('3')
   await expect(series.locator('.series-membership')).toHaveCSS('text-transform', 'uppercase')
@@ -1769,16 +1768,20 @@ test('collection sort modes preserve manual order across switches, creation, and
     await expect(sort).toContainText(label)
     await expand()
   }
-  await expect(actions.locator(':scope > :nth-child(1)')).toHaveText('Add Story')
-  await expect(actions.locator(':scope > :nth-child(2)')).toHaveText('Edit Collections')
-  await expect(actions.locator(':scope > :nth-child(3)').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+  await expect(actions.locator(':scope > :nth-child(1)').getByRole('button', { name: 'Mass refresh all stories on page', exact: true })).toBeVisible()
+  await expect(actions.locator(':scope > :nth-child(2)')).toHaveText('Add Story')
+  await expect(actions.locator(':scope > :nth-child(3)')).toHaveText('Edit Collections')
+  await expect(actions.locator(':scope > :nth-child(4)').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
   await expect(sort.locator('.dropdown-label svg')).toHaveCount(1)
   await actions.getByRole('button', { name: 'Edit Collections', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Mass refresh all stories on page', exact: true })).toHaveCount(0)
+  await expect(actions.getByRole('link', { name: 'Add Story', exact: true })).toHaveCount(0)
   await expect(titles).toHaveText(['Zebra', 'Apple', 'Middle'])
   await shelf.getByRole('button', { name: 'Middle', exact: true }).press('Alt+ArrowLeft')
   await expect(titles).toHaveText(['Zebra', 'Middle', 'Apple'])
   const manualPositions = tables.collections.map(collection => collection.sort_position)
   await actions.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await expect(actions.getByRole('button', { name: 'Mass refresh all stories on page', exact: true })).toBeVisible()
   await choose('Alphabetical (A–Z)')
   await expect(titles).toHaveText(['Apple', 'Middle', 'Zebra'])
   await choose('Alphabetical (Z–A)')
@@ -3004,3 +3007,78 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   }
   await page.screenshot({ path: `/tmp/ao3-import-${info.project.name}.png`, fullPage: true })
 })
+
+test('work tiles enlarge text only on desktop and retain summary formatting at every size', async ({ page }) => {
+ await page.addInitScript(() => localStorage.setItem('between-chapters:display:v1', JSON.stringify({ workTile: { hidden: [] } })))
+ const tables = await fixture(page)
+ const summary = 'An italic and bold summary.\n\nAnother paragraph with a link.'
+ const summaryHtml = '<p>An <em>italic</em> and <strong>bold</strong> summary.</p><p>Another paragraph with a <a href="/works/123">link</a>.</p>'
+ tables.works.push({ id: 'formatted-work', ao3_work_id: 123, title: 'Formatted work', summary, automatic_metadata: { summary_html: summaryHtml }, published_chapters: 2, total_chapters: 3, verified_chapters: {} })
+ tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: {}, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
+ await page.goto('/library'); await login(page)
+ const tile = page.locator('.work-card')
+ const originalViewport = page.viewportSize()!
+ const desktop = originalViewport.width > 1100
+ await expect(tile.locator('.story-summary').first()).toHaveCSS('font-size', desktop ? '15px' : '13px')
+ for (const width of [1100, 1101]) {
+  await page.setViewportSize({ ...originalViewport, width })
+  await expect(tile.locator('.story-summary').first()).toHaveCSS('font-size', width > 1100 ? '15px' : '13px')
+ }
+ await page.setViewportSize(originalViewport)
+ await expect(tile.locator('.story-summary em')).toHaveCSS('font-style', 'italic')
+ await expect(tile.locator('.story-summary strong')).toHaveCSS('font-weight', '700')
+ await expect(tile.locator('.formatted-summary > p')).toHaveCount(2)
+ const tileFonts = await tile.evaluate(element => {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), fonts = []
+  while (walker.nextNode()) {
+   const node = walker.currentNode, parent = node.parentElement
+   if (parent instanceof HTMLElement && parent.getClientRects().length && /[\p{L}\p{N}]/u.test(node.textContent ?? '')) fonts.push({ text: node.textContent?.trim(), size: parseFloat(getComputedStyle(parent).fontSize) })
+  }
+  return fonts
+ })
+ await tile.getByRole('link', { name: 'Formatted work', exact: true }).click()
+ const summaryElement = page.locator('.story-details-summary')
+ await expect(summaryElement.locator('em')).toHaveCSS('font-style', 'italic')
+ await expect(summaryElement.locator('strong')).toHaveCSS('font-weight', '700')
+ await expect(summaryElement.getByRole('link', { name: 'link', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/works/123')
+ const summarySize = await summaryElement.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+ expect(summarySize).toBe(originalViewport.width <= 600 ? 12 : 15)
+ if (desktop) expect(tileFonts.filter(font => font.size < summarySize)).toEqual([])
+ else expect(Math.min(...tileFonts.map(font => font.size))).toBe(13)
+})
+
+for (const route of ['/library', '/reading', '/library?shelf=refresh-collection']) {
+test(`mass metadata refresh respects filters and pagination on ${route}`, async ({ page }) => {
+  const tables = await fixture(page)
+  tables.collections.push({ id: 'refresh-collection', user_id: '10000000-0000-0000-0000-000000000001', name: 'Refresh collection', default_key: null, color: '#123456', symbol: 'book', sort_position: 0, created_at: '2026-10-15T00:00:00Z' })
+  for (let index = 0; index < 28; index++) {
+    const id = index + 101
+    tables.works.push({ id: `refresh-work-${id}`, ao3_work_id: id, title: `${index === 27 ? 'Excluded' : 'Matching'} work ${String(index).padStart(2, '0')}`, rating: 'Mature', verified_chapters: {} })
+    tables.library_entries.push({ id: `refresh-entry-${id}`, work_id: `refresh-work-${id}`, reading_status: 'reading', last_read_chapter: 3, is_favorite: false, personal_rating: null, notes: 'Keep notes', original_url: `https://archiveofourown.org/works/${id}/chapters/999`, created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: {} })
+    tables.collection_works.push({ collection_id: 'refresh-collection', library_entry_id: `refresh-entry-${id}` })
+  }
+  let submitted: Record<string, unknown> | undefined
+  await page.route('**/rest/v1/rpc/submit_import_urls', async route => {
+    submitted = route.request().postDataJSON()
+    await route.fulfill({ json: 'page-refresh-batch' })
+  })
+  await page.route('**/rest/v1/rpc/paged_import_history', async route => {
+    await route.fulfill({ json: { batches: [{ id: 'page-refresh-batch' }], items: [], jobs: [], summary: { total: 2, active: true, counts: {} } } })
+  })
+  await page.goto(`${route}${route.includes('?') ? '&' : '?'}query=Matching&sort=alpha&page=2&size=25`)
+  await login(page)
+  await expect(page.locator('.work-card')).toHaveCount(2)
+  const refresh = page.locator('.page-heading').getByRole('button', { name: 'Mass refresh all stories on page', exact: true })
+  await expect(refresh).toBeEnabled()
+  await refresh.hover()
+  await expect(refresh).toHaveAccessibleDescription('Mass refresh all stories on page')
+  if (route.includes('refresh-collection')) {
+    await expect(page.locator('.results-row').getByRole('button', { name: 'Mass refresh all stories on page', exact: true })).toBeVisible()
+  }
+  await refresh.click()
+  await expect.poll(() => submitted).toEqual({ p_urls: ['https://archiveofourown.org/works/126', 'https://archiveofourown.org/works/127'], p_update_reading_location: false })
+  await expect(refresh).toBeDisabled()
+  await expect(page.getByText('Metadata refresh queued for 2 works. See import history for progress.')).toBeVisible()
+  expect(tables.library_entries.every(entry => entry.last_read_chapter === 3 && entry.notes === 'Keep notes')).toBe(true)
+})
+}

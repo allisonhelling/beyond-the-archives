@@ -1,3 +1,5 @@
+import './backups.css'
+import { csvExportSettingsSection } from './settings-sections'
 import { useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import { csvFiles, exportLibraryCsv, type CsvFile } from './csv-export'
@@ -13,8 +15,8 @@ export function CsvExportSettings() {
     catch { setError('Could not export your library. Check your connection and try again.') }
     finally { pending.current = false; setBusy(false) }
   }
-  return <section id="settings-csv-export" tabIndex={-1} className="settings-card csv-export-settings">
-    <div className="section-title"><Download size={21} /><h2>Export CSV</h2></div>
+  return <section id={csvExportSettingsSection.id} tabIndex={-1} className="settings-card csv-export-settings">
+    <div className="section-title"><Download size={21} /><h2>{csvExportSettingsSection.title}</h2></div>
     <p>Choose the files to include in one ZIP download. Exports include every saved item across all pages, including private notes and ratings.</p>
     <fieldset disabled={busy}>
       <legend>Files to export</legend>

@@ -2,7 +2,7 @@ import { useId, useState, type KeyboardEvent } from 'react'
 import { useDismissible } from '../../components/useDismissible'
 import { normalize } from './reading-search'
 import { MetadataTags } from './MetadataTags'
-import { type TagCategory } from './display-settings'
+import { type TagCategory } from './display/display-settings'
 
 export type SuggestionGroup = { label: string; values: string[] }
 export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help, tagCategory }: {
