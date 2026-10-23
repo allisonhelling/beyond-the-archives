@@ -1,3 +1,4 @@
+import { FilePicker } from '../../components/FilePicker'
 import './backups.css'
 import { useRef, useState } from 'react'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -30,10 +31,7 @@ export function RestoreBackupSettings({ backups, disabled, onActiveChange, onRes
   return <>
     <h3>Restore Backup</h3>
     <p className="muted">Restore a JSON or JSON.gz backup from your own account. Preview the changes before replacing your library. A safety copy of your current library is saved privately in Supabase first; restoration stops if that copy cannot be saved.</p>
-    <label className="backup-source-field">Choose backup file<input type="file" accept=".json,.gz,application/json,application/gzip" disabled={locked} onChange={event => {
-      const file = event.target.files?.[0]
-      if (file) void preview(file)
-    }} /></label>
+    <FilePicker className="backup-source-field" label="Choose backup file" accept=".json,.gz,application/json,application/gzip" disabled={locked} onChange={files => void preview(files[0])} />
     {backups.length > 0 && <div className="form-actions">
       <label className="backup-source-field">Saved backup<select aria-label="Saved backup to restore" disabled={locked} value={selected} onChange={event => setSelected(event.target.value)}>
         <option value="">Choose a saved backup</option>

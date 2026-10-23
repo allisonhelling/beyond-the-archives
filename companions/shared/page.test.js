@@ -2,7 +2,7 @@ import fixture from '../../server/ao3/fixtures/work.html?raw'
 import { parseMetadata } from '../../server/ao3/adapter.ts'
 import { captureMetadataPage } from '../chrome/capture.js'
 import { expect, it, vi } from 'vitest'
-import { readPage } from './page'
+import { collectWorkPage, readPage } from './page'
 
 function page(chapter, total = '10', full = false) {
  const doc = new DOMParser().parseFromString(`<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/${total}</dd></dl><select id="selected_id">${Array.from({ length: 10 }, (_, i) => `<option value="${100 + i}">${i + 1}. Title</option>`).join('')}</select><div id="chapters">PRIVATE CHAPTER TEXT</div>`, 'text/html')
@@ -58,4 +58,27 @@ it('reads series listings with the shared parser and excludes unrelated page con
  expect(page.series.works.length).toBeGreaterThan(0)
  expect(JSON.stringify(page)).not.toContain('PRIVATE CHAPTER TEXT')
  expect(readPage(doc, 'https://evil.test/series/77')).toBeNull()
+})
+
+
+it('collects a missing work summary from the first page without sending chapter summaries or story text', async () => {
+ const doc = new DOMParser().parseFromString('<h2 class="title">Later chapter</h2><dl class="work meta"><dd class="chapters">6/?</dd></dl><select id="selected_id"><option value="940">4. Fourth</option></select><div id="chapters"><div class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div>PRIVATE STORY TEXT</div></div>', 'text/html')
+ const fetcher = vi.fn().mockResolvedValue({ ok: true, url: 'https://archiveofourown.org/works/123?view_adult=true', text: async () => fixture.replace('<dl>', '<dl class="work meta">') })
+ const result = await collectWorkPage(doc, 'https://archiveofourown.org/works/123/chapters/940', fetcher)
+ expect(fetcher).toHaveBeenCalledExactlyOnceWith('https://archiveofourown.org/works/123?view_adult=true', expect.objectContaining({ credentials: 'same-origin' }))
+ expect(result).toMatchObject({ current: 4, metadata: { summary: 'A summary & more.', categories: ['M/M'] }, automaticMetadata: { summary: 'A summary & more.' } })
+ expect(JSON.stringify(result)).not.toMatch(/Chapter summary only|PRIVATE STORY TEXT/)
+})
+
+it('rereads current metadata without a network request when the work summary is present', async () => {
+ const doc = new DOMParser().parseFromString(fixture.replace('<dl>', '<dl class="work meta">'), 'text/html')
+ const fetcher = vi.fn()
+ expect((await collectWorkPage(doc, 'https://archiveofourown.org/works/123/chapters/940', fetcher)).metadata.summary).toBe('A summary & more.')
+ expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('refuses to save metadata from a different work after a redirect', async () => {
+ const doc = new DOMParser().parseFromString('<h2 class="title">Test</h2>', 'text/html')
+ const fetcher = vi.fn().mockResolvedValue({ ok: true, url: 'https://archiveofourown.org/works/999', text: vi.fn() })
+ await expect(collectWorkPage(doc, 'https://archiveofourown.org/works/123/chapters/940', fetcher)).rejects.toThrow('Could not collect')
 })

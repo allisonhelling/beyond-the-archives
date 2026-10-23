@@ -1,4 +1,4 @@
-import { WorkSummary } from './summaries/WorkSummary'
+import { workMetadataFields } from './display/WorkMetadataFields'
 import { isDisplayFieldHidden } from './display/display-settings'
 import { WorkStatusBadge } from './WorkStatusBadge'
 import { BookmarkRec } from './BookmarkRec'
@@ -28,7 +28,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownWideNarrow, ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, Info, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Collection, type Status, type Story } from './model'
+import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, validateProgress, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -169,24 +169,12 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
   return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
     <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
 <DisplayInfo group="workTile">{{
-      authors: <> <p className="authors">By <AuthorNames metadata={story.metadata} /></p> </>,
-      fandoms: <> <p className="muted">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'}</p> </>,
-      series: !!story.metadata.series?.length && <span className="display-fact-value"><SeriesNames metadata={story.metadata} /></span>,
-      rating: <span className="display-fact-value">{ratingLabel(story.metadata.rating) || 'Rating unknown'}</span>,
-      words: <span className="display-fact-value">{story.metadata.word_count?.toLocaleString() ?? '?'} words</span>,
-      chapters: <span className="display-fact-value">{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'} chapters</span>,
-      summary: <>{story.metadata.summary && <><hr className="story-summary-divider" /><div className="story-summary"><WorkSummary metadata={story.metadata} /></div></>}</>,
-      relationships: <div className="story-facts"><MetadataTags values={tagNames(story.metadata, 'relationship')} category="relationships" /></div>,
-      characters: <div className="story-facts"><MetadataTags values={tagNames(story.metadata, 'character')} category="characters" /></div>,
-      tags: <div className="story-facts"><MetadataTags values={tagNames(story.metadata, 'freeform')} category="tags" /></div>,
-      warnings: <div className="story-facts"><MetadataTags values={story.metadata.archive_warnings ?? []} category="warnings" /></div>,
+      ...workMetadataFields(story, 'tile'),
       personalRating: <div className="tile-personal-rating"><StarRating value={story.personal_rating} /></div>,
       collections: <div className="story-facts"><CustomCollectionNames ids={[...story.collectionIds, ...(story.automaticCollectionIds ?? [])]} /></div>,
-      kudos: <span className="display-fact-value">{story.metadata.kudos?.toLocaleString() ?? '?'} kudos</span>,
       notes: <p className="story-summary">{story.notes || 'No private notes saved.'}</p>,
       reading: <p className="story-facts">{statuses[story.reading_status]}</p>,
       saved: <p className="story-facts">Saved: {formatDateTime(story.created_at)}</p>,
-      updated: <p className="story-facts">Updated: {ao3Date(story.work.ao3_updated_at)}</p>,
       progress: <> <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} /> </>
     }}</DisplayInfo>
   </>}</StoryControls></article>
@@ -469,11 +457,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <section className="settings-card details-fic-panel" aria-label="Story information">
         <dl className="metadata-list details-fic-fields">
 <DisplayInfo group="workInfo">{{
-      summary: <> <div><dt>Summary</dt><dd className="story-summary story-details-summary"><WorkSummary metadata={story.metadata} fallback="No summary saved." /></dd></div> </>,
-      relationships: <> <div><dt>Relationships</dt><dd><MetadataTags values={tagNames(story.metadata, 'relationship')} category="relationships" /></dd></div> </>,
-      characters: <> <div><dt>Characters</dt><dd><MetadataTags values={tagNames(story.metadata, 'character')} category="characters" /></dd></div> </>,
-      tags: <> <div><dt>Additional Tags</dt><dd><MetadataTags values={tagNames(story.metadata, 'freeform')} /></dd></div> </>,
-      allTags: <> <div><dt className="sr-only">All tags</dt><dd><details className="details-disclosure"><summary>All tags</summary><MetadataTags values={story.metadata.ao3_tags} /></details></dd></div> </>,
+      ...workMetadataFields(story, 'info'),
       personalTags: <> <div><PersonalStoryField key={story.id} story={story} /></div> </>,
       saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>{story.finished_at && <div><dt>Finished</dt><dd>{formatDateTime(story.finished_at)}</dd></div>}<div><dt>Estimated reading time</dt><dd>{readingDuration(story)}</dd></div>{story.reading_history?.filter(event => ['paused_reading', 'resumed'].includes(event.action)).map((event, index) => <div key={index}><dt>{event.action === 'resumed' ? 'Resumed' : 'Paused'}</dt><dd>{formatDateTime(event.at)}</dd></div>)} </>,
       edited: <> <div><dt>Last edited</dt><dd>{formatDateTime(story.updated_at)}</dd></div> </>,

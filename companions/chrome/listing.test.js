@@ -5,7 +5,7 @@ import { vi } from 'vitest'
 function page(html, path = '/users/alice/bookmarks') {
  const dom = new JSDOM(html, { url: 'https://archiveofourown.org' + path })
  vi.stubGlobal('document', dom.window.document); vi.stubGlobal('location', dom.window.location)
- Object.defineProperty(dom.window.document, 'readyState', { value: 'complete' })
+ Object.defineProperty(dom.window.document, 'readyState', { value: 'complete', configurable: true })
 }
 it('extracts scraper-compatible bookmark fields, line breaks, stable identities and pagination', () => {
  page(`<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_12"><h4 class="heading"><a href="/works/34">Title</a> by <a rel="author">Author</a></h4><div class="header"><p class="datetime">20 Oct 2026</p></div><blockquote class="summary"><p><em>One</em></p><p>Two<br>Three</p></blockquote><dl><dd class="words">1,234</dd><dd class="chapters">2/?</dd></dl><div class="user"><div class="notes"><p>Private notes</p></div><div class="tags"><a class="tag">Mine</a></div></div></li><li class="bookmark deleted" id="bookmark_13"><p class="message">This has been deleted, sorry!</p></li><li class="bookmark"><h4 class="heading"><a href="/series/44">Series</a></h4></li></ol><ol class="pagination"><li><a href="?page=2">Next</a></li></ol></div>`)
@@ -59,4 +59,14 @@ it('captures works on user, pseud, and series work pages using the shared row fo
 it('reads collection summary and intro from AO3 collection profile markup', () => {
  page('<div id="main"><div class="collection home profile"><div class="primary header module"><h2 class="heading"><a>Collection Title</a></h2><blockquote class="userstuff"><p>Summary</p></blockquote></div><div id="intro"><h3>Intro:</h3><blockquote class="userstuff"><p>First</p><p>Second<br>Third</p></blockquote></div><div id="rules">Omit rules</div></div></div>', '/collections/example/profile')
  expect(captureListingPage('collection_profile')).toMatchObject({ collection: { name: 'Collection Title', description: 'Summary\n\nFirst\nSecond\nThird' }, rows: [], hasNext: false })
+})
+
+it('reports an unfinished document as pending rather than a sign-in failure', () => {
+ page('<div id="main" class="bookmarks-index"><ol class="bookmark index"></ol></div>')
+ for (const value of ['loading', 'interactive']) {
+  Object.defineProperty(document, 'readyState', { value, configurable: true })
+  expect(captureListingPage('bookmarks')).toEqual({ url: location.href, pending: true })
+ }
+ Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true })
+ expect(captureListingPage('bookmarks')).toMatchObject({ rows: [], hasNext: false })
 })

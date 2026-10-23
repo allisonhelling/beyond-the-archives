@@ -398,3 +398,15 @@ it('stores formatted automatic summaries and projects them alongside searchable 
  const result = await asUser(alice, () => db.query<{ metadata: object }>("select story->'metadata' as metadata from public.library_story_documents where work_id=(select id from public.works where ao3_work_id=88444)"))
  expect(result.rows[0].metadata).toMatchObject({ summary: 'An italic summary.', summary_html: '<p>An <em>italic</em> summary.</p>' })
 })
+
+it('persists all AO3 statistics and language through worker completion and library projections', async () => {
+ await clearJobs(); await ready(); await submit(['https://archiveofourown.org/works/88446'])
+ const job = (await claim())!
+ expect(await finish(job, { title: 'Complete metadata', bookmark_count: 0, comment_count: 12, hits: 1234, language: 'English' })).toBe(true)
+ const result = await asUser(alice, () => db.query<{ metadata: object }>("select story->'metadata' as metadata from public.library_story_documents where work_id=(select id from public.works where ao3_work_id=88446)"))
+ expect(result.rows[0].metadata).toMatchObject({ bookmark_count: 0, comment_count: 12, hits: 1234, language: 'English' })
+ await clearJobs(); await ready(); await submit(['https://archiveofourown.org/works/88446'])
+ const bad = (await claim())!
+ await expect(finish(bad, { title: 'Invalid count', hits: -1 })).rejects.toThrow(/Invalid .*count/)
+ await clearJobs()
+})

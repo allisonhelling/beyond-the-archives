@@ -1,6 +1,6 @@
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { blankMetadata, parseLines, statuses, validateProgress } from '../../src/features/library/model'
-import { readPage } from './page'
+import { collectWorkPage, readPage } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
@@ -499,6 +499,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   form.addEventListener('submit', event => { event.preventDefault(); if (pendingConflict) return; void run(async () => {
    fieldset.disabled = true
    try {
+    if (!entry && !tile) Object.assign(page, await collectWorkPage(doc, href))
     const chapterNumber = Number(draft.chapter)
     if (!['to_read', 'finished'].includes(draft.status) && (!Number.isInteger(chapterNumber) || chapterNumber < 1)) throw new Error('Enter a valid current chapter.')
     const value = draft.status === 'to_read' ? 0 : draft.status === 'finished' ? page.metadata.published_chapters : chapterNumber - (draft.chapterFinished ? 0 : 1)
@@ -514,7 +515,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (entry && !tile) {
    const recollect = node('span', '', actions); recollect.className = 'field-control'
    button('Collect metadata', async () => {
-    const refreshed = readPage(doc, href)
+    const refreshed = await collectWorkPage(doc, href)
     if (!refreshed?.metadata.title) throw new Error('AO3 metadata is unavailable. Reload this work and try again.')
     const result = await rpc('refresh_metadata', { version: entry.version, metadata: refreshed.automaticMetadata, chapters: refreshed.chapters })
     accept(result); Object.assign(page, refreshed)

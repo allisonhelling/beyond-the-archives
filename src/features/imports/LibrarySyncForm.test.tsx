@@ -263,6 +263,7 @@ it('leaves chapter-date checks off by default and includes the option for an opt
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
  const dialog = screen.getByRole('dialog', { name: 'Import Bookmarks' })
  expect(within(dialog).getByText('Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.')).toBeVisible()
+ expect(within(dialog).getByText(/Earlier or same-day bookmarks/).compareDocumentPosition(within(dialog).getByLabelText('AO3 Username')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  const option = within(dialog).getByRole('checkbox', { name: 'Check chapter publication dates' })
  expect(option).not.toBeChecked()
  fireEvent.focus(within(dialog).getByRole('button', { name: 'Chapter publication dates information' }))

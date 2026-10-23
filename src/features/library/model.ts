@@ -4,7 +4,7 @@ export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-Reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
 export function ratingLabel(rating: string): string { return /^teen and up audiences$/i.test(rating) ? 'Teen and Up' : rating }
-export type Metadata = { kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { language?: string; kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 type EntryRow = Database['public']['Tables']['library_entries']['Row']
 export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark'>>
 export type Work = Database['public']['Tables']['works']['Row']
@@ -54,7 +54,7 @@ export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Databa
 }
 export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata>; base?: import('./edit-merge').EditValues }
 
-export function savedWorkUrl(story: Story) {
+export function savedWorkUrl(story: Pick<Story, 'metadata' | 'original_url'> & { work: Pick<Work, 'ao3_work_id'> }) {
   try {
     const url = story.metadata.manual_url
     if (typeof url === 'string' && parseWorkUrl(url).workId === story.work.ao3_work_id) return url

@@ -2,7 +2,7 @@ import type { CheerioAPI } from 'cheerio'
 import { readSummary } from '../library/summaries/summary.ts'
 
 export type AutomaticMetadata = {
- chapter_dates?: Record<string, string>; title?: string; summary?: string; summary_html?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
+ language?: string; chapter_dates?: Record<string, string>; title?: string; summary?: string; summary_html?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
  ao3_tags?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; archive_warnings?: string[]; categories?: string[];
  rating?: string; kudos?: number; bookmark_count?: number; comment_count?: number; hits?: number; word_count?: number; published_chapters?: number; total_chapters?: number; is_complete?: boolean;
  ao3_published_at?: string; ao3_updated_at?: string; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[];
@@ -22,6 +22,7 @@ export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
  for (const [field, css] of Object.entries(groups)) { const section=$(`dd.${css}.tags`); if (section.length) Object.assign(metadata,{[field]:section.find('a.tag').toArray().map(node=>$(node).text().trim()).filter(Boolean)}) }
  const tags = Object.keys(groups).filter(k=>k!=='fandoms').flatMap(k=>metadata[k as keyof AutomaticMetadata] as string[] ?? [])
  if (tags.length) metadata.ao3_tags=[...new Set(tags)]
+ const language=$('dd.language').first().text().trim(); if (language) metadata.language=language
  const rating=$('dd.rating.tags a.tag').first().text().trim(); if (rating) metadata.rating=rating
  const words=count($('dd.words').first().text()); if(words!==undefined) metadata.word_count=words
  for (const [selector, field] of [['kudos', 'kudos'], ['bookmarks', 'bookmark_count'], ['comments', 'comment_count'], ['hits', 'hits']] as const) {

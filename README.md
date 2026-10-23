@@ -25,6 +25,14 @@ Keep components, behavior, styles, and unit tests beside the feature that owns t
 
 Build commands remain in `scripts/`. Installable output still goes to `userscript/dist/`, `extension/dist/`, and `extension/local/dist/`. Shared card, form, and layout primitives stay in `src/styles.css`. Feature-only styles live beside their components; browsing, display, and summary styles load through `src/main.tsx`. Browser integration tests stay in `tests/e2e/`. Extend these feature boundaries incrementally when changing related code.
 
+## AO3 metadata capture and display
+
+The browser bar rereads work metadata when saving a new work. If a later chapter omits the work summary, it retrieves the first work page on AO3 before saving. Chapter summaries and chapter text are excluded from the saved metadata. Existing entries can use **Collect metadata** to refresh the same fields while keeping personal edits.
+
+Settings → Tile and Page Information offers **Category** (AO3 relationship category), bookmarks, comments, hits, language, publication date/status, work ID, and the AO3 link alongside the existing work metadata. These fields can be shown, hidden, grouped, and reordered in work tiles and information pages. Category is also available for series tiles and information pages. New fields start hidden to preserve saved layouts.
+
+Apply `20261023000500_complete_ao3_metadata.sql` for language and companion statistics, deploy the updated app/worker, and reload the rebuilt Chrome companion (v0.6.2). Existing incomplete records need a metadata refresh or **Collect metadata**; this change does not queue unsolicited refreshes.
+
 ## Summary formatting and tile text
 
 Desktop work tiles (above the 1100px mobile-layout breakpoint) use the same 15px minimum text size as work info summaries. Mobile tile and summary typography keeps its existing sizes. Imported summaries retain semantic formatting (including emphasis, bold, paragraphs, line breaks, lists, and links) in a separate `summary_html` metadata field; plain summaries remain available for search and manual editing. The shared renderer strips active content and unsafe attributes. Plain-text manual corrections take precedence over older formatted metadata.

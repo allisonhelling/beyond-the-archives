@@ -15,10 +15,13 @@ beforeEach(() => {
 it('previews uploaded files, shows replacement counts, and permits cancellation without saving or restoring', async () => {
   const active = vi.fn()
   render(<RestoreBackupSettings backups={[]} disabled={false} onActiveChange={active} onRestored={vi.fn()} />)
+  expect(screen.getByRole('button', { name: 'Choose Files' })).toBeEnabled()
+  expect(screen.getByText('No file chosen')).toBeVisible()
   const file = new File(['{}'], 'backup.json')
   fireEvent.change(screen.getByLabelText('Choose backup file'), { target: { files: [file] } })
   const dialog = await screen.findByRole('dialog')
   expect(prepareRestore).toHaveBeenCalledWith(file)
+  expect(screen.getByText('backup.json', { exact: true })).toBeVisible()
   expect(within(dialog).getByText('5 current → 2 in backup')).toBeInTheDocument()
   expect(restoreBackup).not.toHaveBeenCalled()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))

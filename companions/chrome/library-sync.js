@@ -164,6 +164,12 @@ export function createLibrarySync({ auth, available, changed }) {
    }
    if (!state.captured) {
     const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, args: [state.kind] }))[0]?.result
+    // Tab completion and the injected document can briefly disagree during navigation.
+    // Wait for this document without requesting the page again or reporting a login failure.
+    if (result?.pending && result.url === state.requestUrl) {
+     if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
+     return
+    }
     if (!result || result.error || result.url !== state.requestUrl) {
      state.attention = result?.attention ?? 'page_error'
      throw new Error(result?.error ?? 'AO3 page could not be captured. Check the tab and resume.')

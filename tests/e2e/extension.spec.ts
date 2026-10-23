@@ -77,7 +77,11 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    if (route.request().url().includes('/slow-image-')) {
     await slowImage
     await route.fulfill({ status: 204 })
-   } else await route.fulfill({ contentType: 'text/html', body: loaded ? fixture.replaceAll('/works/123', `/works/${workId}`).replace('</body>', `<img src="/slow-image-${workId}.png"></body>`) : '<html><body>This work could have adult content. Confirm in your browser.</body></html>' })
+   } else {
+    let body = loaded ? fixture.replaceAll('/works/123', `/works/${workId}`).replace('</body>', `<img src="/slow-image-${workId}.png"></body>`) : '<html><body>This work could have adult content. Confirm in your browser.</body></html>'
+    if (route.request().url().includes('/chapters/940')) body = body.replace(/<div class="summary module">[\s\S]*?<\/div>/, '<div id="chapters"><div class="chapter"><div class="summary module"><blockquote>CHAPTER SUMMARY ONLY</blockquote></div>PRIVATE CHAPTER TEXT</div></div>')
+    await route.fulfill({ contentType: 'text/html', body })
+   }
   })
   const ao3 = await context.newPage()
   await ao3.goto('https://archiveofourown.org/works/123')
@@ -126,7 +130,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await bar.getByLabel('Private Notes', { exact: true }).fill('Saved directly from Chrome')
   await bar.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(bar.getByRole('status')).toHaveText('Saved')
-  expect(barEntries.get(123)).toMatchObject({ notes: 'Saved directly from Chrome' })
+  expect(barEntries.get(123)).toMatchObject({ notes: 'Saved directly from Chrome', metadata: { summary: 'A summary & more.', summary_html: '<p>A summary &amp; more.</p>', categories: ['M/M'], word_count: 12345 } })
   await expect(bar.locator('.library-link')).toHaveText('')
   await expect(bar.getByText('Ch. 0 / 6', { exact: true })).toBeVisible()
   const summaryFont = await ao3.locator('#workskin .summary blockquote').evaluate(element => getComputedStyle(element).fontSize)
@@ -149,6 +153,14 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   expect(barEntries.get(123)).toMatchObject({ notes: 'Edited directly from Chrome', status: 'reading', progress: 1 })
   expect(await ao3.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
   expect(await ao3.evaluate(() => document.body.textContent)).not.toContain('paired-chrome-secret')
+  // Saving from a later chapter retrieves the work summary from the first page.
+  barEntries.delete(123)
+  await ao3.goto('https://archiveofourown.org/works/123/chapters/940')
+  await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
+  await bar.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(bar.getByRole('status')).toHaveText('Saved')
+  expect(barEntries.get(123)).toMatchObject({ progress: 3, metadata: { summary: 'A summary & more.', categories: ['M/M'], word_count: 12345 } })
+  expect(JSON.stringify(barEntries.get(123))).not.toMatch(/CHAPTER SUMMARY ONLY|PRIVATE CHAPTER TEXT/)
   // A newly opened work also captures early, not just an existing tab reload.
   workId = 456
   claimed = false
@@ -209,7 +221,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
     api.runtime.sendMessage(id, body, resolve)
    }), { id: extensionId, body })
    await expect.poll(() => command({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })).toEqual({ ok: true })
-   expect(await command({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: 'https://archiveofourown.org/works/123' })).toMatchObject({ ok: true, page: { url: 'https://archiveofourown.org/works/123' } })
+   expect(await command({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: 'https://archiveofourown.org/works/123' })).toMatchObject({ ok: true, page: { url: expect.stringMatching(/^https:\/\/archiveofourown\.org\/works\/123(?:\/chapters\/[1-9]\d*)?(?:[?#].*)?$/) } })
    const listing = 'https://archiveofourown.org/users/alice/bookmarks'
    await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a href="?page=3">Next</a></li></ol></div>' }))
    const openedScan = context.waitForEvent('page', { timeout: 45000 })

@@ -124,3 +124,16 @@ it('refreshes private metadata and chapter mappings while preserving personal fi
  await expect(request('refresh_metadata', input, device.secret, 789)).rejects.toThrow(/Reconnect/)
  expect(saved.entry.notes).toBe('Keep notes')
 })
+
+it('retains summary, categories, language and statistics when adding and recollecting a work from the companion', async () => {
+ let token = ''
+ await user(alice, async () => { const code = (await manage('create')).code; token = (await request('claim', {}, code)).secret })
+ const metadata = { title: 'Complete browser metadata', summary: 'A work summary.', summary_html: '<p>A work summary.</p>', authors: ['Author'], categories: ['M/M'], language: 'English', kudos: 42, bookmark_count: 0, comment_count: 12, hits: 1234, published_chapters: 1, total_chapters: 1, publication_status: 'complete' }
+ const saved = await request('save', { metadata, status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }, token, 99881)
+ await request('refresh_metadata', { version: saved.entry.version, metadata: { ...metadata, hits: 2345 }, chapters: {} }, token, 99881)
+ const result = await userMetadata()
+ async function userMetadata() {
+  return (await db.query<{ metadata: object }>("select extension_metadata as metadata from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=99881")).rows[0].metadata
+ }
+ expect(result).toMatchObject({ summary: metadata.summary, summary_html: metadata.summary_html, categories: ['M/M'], language: 'English', kudos: 42, bookmark_count: 0, comment_count: 12, hits: 2345 })
+})

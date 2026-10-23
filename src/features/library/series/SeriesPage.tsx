@@ -1,4 +1,4 @@
-import { WorkSummary } from '../summaries/WorkSummary'
+import { workMetadataFields } from '../display/WorkMetadataFields'
 import { MetadataTags } from '../MetadataTags'
 import { DisplayInfo } from '../display/DisplayInfo'
 import { formatDateTime, formatDate } from '../../../lib/dates'
@@ -12,7 +12,7 @@ import { readingStatusIcons } from '../collections/collection-appearance'
 import { ao3Date } from '../model'
 import { AuthorNames } from '../AuthorNames'
 import { PersonalNote } from '../PersonalNote'
-import { librarySeries, seriesInformation, seriesKudosLabel, seriesReadingLabel, seriesReadingStatus, seriesCompletionLabel, type LibrarySeries } from './series'
+import { librarySeries, seriesInformation, seriesWorkMetadata, seriesKudosLabel, seriesReadingLabel, seriesReadingStatus, seriesCompletionLabel, type LibrarySeries } from './series'
 import { SeriesControls } from './SeriesControls'
 import { Dialog } from '../../../components/Dialog'
 import { Tooltip } from '../../../components/Tooltip'
@@ -101,16 +101,13 @@ notes: <>   <section className="details-private-notes" aria-label="Private notes
 works: <>   <section aria-label="Works in series"><h2>{basic ? 'Works in your library' : 'Works in this series'}</h2><div className="story-grid">{visibleWorks.map(work => {
    const saved = savedById.get(work.workId)
    return saved ? <StoryCard key={work.workId} story={saved} /> : <article className="story-card work-card" key={work.workId}><h2><a href={work.url} target="_blank" rel="noreferrer">{work.position ? `Part ${work.position}: ` : ''}{work.title}</a></h2><DisplayInfo group="workTile">{{
-    authors: <p className="authors">By <AuthorNames metadata={{ authors: work.authors }} /></p>,
-    fandoms: <p className="muted">{work.fandoms?.join(' · ') || 'Fandom unknown'}</p>,
-    words: <span className="display-fact-value">{work.wordCount?.toLocaleString() ?? '?'} words</span>,
-    chapters: <span className="display-fact-value">{work.chapters || 'Chapters unknown'}</span>,
-    summary: work.summary && <div className="story-summary"><WorkSummary metadata={work} /></div>,
+    ...workMetadataFields({ metadata: seriesWorkMetadata(work, series), original_url: work.url, work: { ao3_work_id: work.workId, language: work.language ?? null, ao3_published_at: null, ao3_updated_at: work.updated ?? null } }, 'tile'),
   }}</DisplayInfo><Link className="story-details-link clickable-text" to="/add" state={{ workUrl: work.url }}>Add to Library</Link></article>
   })}</div>{!visibleWorks.length && <p>{busy ? 'Loading the series work list…' : hideUnsaved ? 'No works from this series are in your library.' : 'No available works saved for this series.'}</p>}</section> </>,
 information: <>
   <section className="settings-card details-fic-panel" aria-label="Series information"><dl className="metadata-list details-fic-fields">
 <DisplayInfo group="seriesInfo">{{
+category: <div><dt>Category</dt><dd><MetadataTags values={info.categories} /></dd></div>,
 libraryCount: <div><dt>Works in Library</dt><dd>{series.savedStories.length}</dd></div>,
 words: <div><dt>Word Count</dt><dd>{series.wordCount?.toLocaleString() ?? '?'} words</dd></div>,
 relationships: <div><dt>Relationships</dt><dd><MetadataTags values={info.relationships} category="relationships" /></dd></div>,

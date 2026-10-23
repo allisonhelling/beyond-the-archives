@@ -1,3 +1,6 @@
+import { MemoryRouter } from 'react-router-dom'
+import { exampleWork } from './display-examples'
+import { workMetadataFields } from './WorkMetadataFields'
 import { MetadataTags } from '../MetadataTags'
 import { ReadingFilterControls } from '../ReadingFilterControls'
 import { defaultReadingFilters } from '../reading-search'
@@ -231,4 +234,25 @@ it('labels hidden series in active library filters and switches to Show Series w
  expect(screen.queryByLabelText('Active filters')).not.toBeInTheDocument()
  view.rerender(<ReadingFilterControls {...props} automaticCollection />)
  expect(screen.queryByLabelText('Active filters')).not.toBeInTheDocument()
+})
+
+it.each(['tile', 'info'] as const)('renders every selectable AO3 field in the %s layout, including known zero statistics', layout => {
+ const group = layout === 'tile' ? 'workTile' : 'workInfo'
+ localStorage.setItem(displaySettingsKey, JSON.stringify({ [group]: { order: Object.keys(displayGroups[group].fields), hidden: [] } }))
+ const story = { ...exampleWork, metadata: { ...exampleWork.metadata, categories: ['M/M'], language: 'English', bookmark_count: 0, comment_count: 123, hits: 4567 } }
+ render(<MemoryRouter><DisplayInfo group={group}>{workMetadataFields(story, layout)}</DisplayInfo></MemoryRouter>)
+ expect(screen.getByText('M/M')).toBeVisible()
+ expect(screen.getByText('0 bookmarks')).toBeVisible()
+ expect(screen.getByText('123 comments')).toBeVisible()
+ expect(screen.getByText('4,567 hits')).toBeVisible()
+ expect(screen.getByText(/English/)).toBeVisible()
+ expect(screen.getByRole('link', { name: 'View on AO3' })).toHaveAttribute('href', story.original_url)
+ expect(screen.getAllByText(/2017/).length).toBeGreaterThan(0)
+})
+
+it('keeps added AO3 fields hidden until selected, preserving saved layouts', () => {
+ render(<MemoryRouter><DisplayInfo group="workTile">{workMetadataFields({ ...exampleWork, metadata: { ...exampleWork.metadata, categories: ['M/M'], language: 'English' } }, 'tile')}</DisplayInfo></MemoryRouter>)
+ expect(screen.queryByText('M/M')).not.toBeInTheDocument()
+ expect(screen.queryByText(/English/)).not.toBeInTheDocument()
+ expect(screen.getByText(/66,463 words/)).toBeVisible()
 })

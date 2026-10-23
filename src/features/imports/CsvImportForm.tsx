@@ -1,3 +1,4 @@
+import { FilePicker } from '../../components/FilePicker'
 import { BookmarkChapterDatesOption } from './BookmarkChapterDatesOption'
 import { useRef, useState } from 'react'
 import { formatDate } from '../../lib/dates'
@@ -64,7 +65,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   <p>Choose CSV exports from your AO3 scraper, including combined lists. Bookmark notes become personal notes and bookmark tags become personal tags. Marked for Later works are saved as unread (To Read); existing personal data is always kept. Non-empty AO3 metadata refreshes automatically for every imported work, including existing works. Explicit manual metadata corrections are preserved.</p>
   <p className="field-help">Bookmarks dated after the work’s update date are saved as Read (Finished), with that bookmark date as the finished date. Earlier bookmarks are Currently Reading (Reading); chapter progress is unconfirmed unless you enable the chapter-date check. Missing dates leave progress unconfirmed. Choose which works to include from each series before reviewing conflicts.</p>
   <BookmarkChapterDatesOption checked={checkChapterDates} disabled={busy} onChange={setCheckChapterDates} />
-  <label>AO3 CSV files<input type="file" multiple accept=".csv,text/csv" disabled={busy || Boolean(seriesSources)} onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; if (files.length) void preview(files) }} /></label>
+  <FilePicker label="AO3 CSV files" multiple accept=".csv,text/csv" disabled={busy || Boolean(seriesSources)} onChange={files => void preview(files)} />
   {busy && <p role="status">{message || 'Processing CSV import…'}</p>}
   {!busy && message && <p role="status">{message}</p>}
   {error && <p className="error-message" role="alert">{error}</p>}

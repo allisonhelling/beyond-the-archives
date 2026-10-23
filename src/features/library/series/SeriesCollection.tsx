@@ -38,6 +38,7 @@ export function SeriesCard({ series, linkId }: { series: LibrarySeries; linkId?:
  return <article className="story-card series-card" data-story-id={`series:${series.seriesId}`}><SeriesControls series={series}>{({ actions }) => <>
   <div className="story-card-title"><h2><Link id={linkId} to={`/series/${series.seriesId}`} state={origin}>{series.title}</Link>{'\u00a0'}<Tooltip description={label}>{id => <span className="publication-icon" role="img" aria-label={label} aria-describedby={id} tabIndex={0}><Icon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></h2>{actions}</div>
 <DisplayInfo group="seriesTile">{{
+category: <div className="story-facts">Category: <MetadataTags values={info.categories} /></div>,
 authors: <> <p className="authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> </>,
 fandoms: <>   <p className="muted">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> </>,
 reading: <span className="series-reading-status display-fact-value">{readingLabel === 'Finished' ? 'Finished Reading' : readingLabel}</span>,

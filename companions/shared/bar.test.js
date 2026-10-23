@@ -7,7 +7,7 @@ const mountLibrary = (doc, href, options = {}) => mountSharedLibrary(doc, href, 
 
 let root, bottomRoot, storage, network, entry
 beforeEach(() => {
- document.body.innerHTML = '<main id="main"><div id="workskin"><h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104">4. Fourth</option></select></div><div id="kudos">Kudos list</div></main>'
+ document.body.innerHTML = '<main id="main"><div id="workskin"><h2 class="title">Test</h2><div class="summary module"><blockquote><p>Work summary.</p></blockquote></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104">4. Fourth</option></select></div><div id="kudos">Kudos list</div></main>'
  const attach = Element.prototype.attachShadow
  vi.spyOn(Element.prototype, 'attachShadow').mockImplementation(function (options) { const surface = attach.call(this, options); if (this.id === 'ao3-library-companion') root = surface; else bottomRoot = surface; return surface })
  vi.stubGlobal('__SUPABASE_URL__', 'https://backend.test')
@@ -600,4 +600,17 @@ it('centers the disconnected Chrome instructions in the collapsed row and reuses
  fireEvent.click(findButton('Close'))
  await waitFor(() => expect(root.querySelector('.toolbar-progress')).toContainElement(footer))
  expect(root.querySelectorAll('small')).toHaveLength(1)
+})
+
+
+it('recaptures complete metadata at save time instead of storing the initial page snapshot', async () => {
+ await mount()
+ fireEvent.click(findButton('Add to Library'))
+ const notes = await within(root).findByLabelText('Private Notes')
+ document.querySelector('.summary blockquote').innerHTML = '<p>Updated <em>work summary</em>.</p>'
+ document.querySelector('dl.work.meta').insertAdjacentHTML('beforeend', '<dd class="category tags"><a class="tag">M/M</a></dd><dd class="language">English</dd><dd class="kudos">42</dd><dd class="bookmarks">0</dd><dd class="comments">12</dd><dd class="hits">1,234</dd>')
+ fireEvent.submit(notes.closest('form'))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ const payload = JSON.parse(network.mock.lastCall[0].data)
+ expect(payload.p_input.metadata).toMatchObject({ summary: 'Updated work summary.', summary_html: '<p>Updated <em>work summary</em>.</p>', categories: ['M/M'], language: 'English', kudos: 42, bookmark_count: 0, comment_count: 12, hits: 1234 })
 })

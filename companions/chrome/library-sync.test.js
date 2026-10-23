@@ -252,3 +252,22 @@ it('keeps progress unconfirmed for incomplete indexes without losing the saved l
  expect(local.librarySync).toMatchObject({ status: 'ready', chapterDatesChecked: 1, chapterDatesUnavailable: 1 })
  expect((await sync.command({ action: 'page', page: 1 })).rows[0]['chapter dates']).toBeUndefined()
 })
+
+it('waits for a pending capture without pausing or requesting another page', async () => {
+ await start(); clock += 20000; await sync.pump()
+ chrome.scripting.executeScript.mockResolvedValueOnce([{ result: { url: local.librarySync.requestUrl, pending: true } }])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'running', pages: 0, error: '' })
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1, count: 1 })
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+})
+
+it('times out a document that remains pending without losing saved pages', async () => {
+ await start(); clock += 20000; await sync.pump()
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, pending: true } }])
+ clock += 120001; await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'paused', pages: 0, error: 'Page load timed out. Check AO3, then resume.' })
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+})

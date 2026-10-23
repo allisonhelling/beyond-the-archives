@@ -5,7 +5,7 @@ const lists=['authors','fandoms','ao3_tags','relationship_tags','character_tags'
 export function validateMetadata(result: RetrievalResult): RetrievalResult {
  if(!result.metadata) return result
  const input=result.metadata, output: AutomaticMetadata={}
- for(const field of ['title','summary','summary_html','rating','ao3_published_at','ao3_updated_at'] as const) { const value=input[field]; if(typeof value==='string' && value.length<=100000 && value.trim()) output[field]=value }
+ for(const field of ['title','summary','summary_html','language','rating','ao3_published_at','ao3_updated_at'] as const) { const value=input[field]; if(typeof value==='string' && value.length<=100000 && value.trim()) output[field]=value }
  if(output.rating && !['General Audiences','Teen And Up Audiences','Mature','Explicit','Not Rated'].includes(output.rating)) delete output.rating
  for(const field of ['ao3_published_at','ao3_updated_at'] as const) if(output[field] && Number.isNaN(Date.parse(output[field]!))) delete output[field]
  for(const field of lists) { const value=input[field as keyof AutomaticMetadata]; if(Array.isArray(value) && value.length && value.every(v=>typeof v==='string' && v.length<=10000)) Object.assign(output,{[field]:[...new Set(value as string[])]}) }
