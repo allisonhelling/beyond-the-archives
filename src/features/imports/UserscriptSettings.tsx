@@ -9,10 +9,10 @@ export function UserscriptSettings() {
  const section = useRef<HTMLElement>(null)
  const { hash } = useLocation()
  useEffect(() => {
-  if (hash === '#ios-safari-userscript') section.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  if (['#ios-safari-userscript', '#ao3-browser-bar'].includes(hash)) section.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
  }, [hash])
  const [devices, setDevices] = useState<Device[]>([])
- const [name, setName] = useState('Safari on iPhone')
+ const [name, setName] = useState('My browser')
  const [code, setCode] = useState('')
  const [busy, setBusy] = useState(false)
  const [message, setMessage] = useState('')
@@ -42,9 +42,10 @@ export function UserscriptSettings() {
   try { await navigator.clipboard.writeText(code); setMessage('Pairing code copied.') }
   catch { setMessage('Could not copy. Select the code and copy it manually.') }
  }
- return <section id="ios-safari-userscript" tabIndex={-1} ref={section} className="settings-card"><h2>iOS Safari Userscript</h2>
-  <p className="userscript-intro">Install the built AO3 Library userscript in the free Userscripts app. Pair it here to save and edit your library while reading on AO3.</p>
-  <p className="muted">To install or update, configure <code>.env.local.hosted</code> with the hosted website’s public settings and run <code>npm run build:userscript</code> in the project, then copy <code>userscript/dist/ao3-library.user.js</code> into the directory selected in Userscripts. Replace the existing file, open the Userscripts Safari popup, and reload AO3. Check the visible version at the bottom of the AO3 panel. Updates are manual; this script does not assume automatic updates.</p>
+ return <section id="ios-safari-userscript" tabIndex={-1} ref={section} className="settings-card"><h2 id="ao3-browser-bar">AO3 Browser Bar</h2>
+  <p className="userscript-intro">Save and edit your library directly on AO3 using AO3 Library Companion in Chrome or Edge, or the AO3 Library userscript in Safari. Create a pairing code here, then paste it into Connect Library on an AO3 work or series page.</p>
+  <p>Chrome and Edge: install or reload AO3 Library Companion, then reload AO3. The bar uses its own device pairing, separate from the extension connection for metadata imports and scans.</p>
+  <p className="muted">Safari: to install or update, configure <code>.env.local.hosted</code> with the hosted website’s public settings and run <code>npm run build:userscript</code> in the project, then copy <code>userscript/dist/ao3-library.user.js</code> into the directory selected in Userscripts. Replace the existing file, open the Userscripts Safari popup, and reload AO3. Check the visible version at the bottom of the AO3 panel. Updates are manual; this script does not assume automatic updates.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void manage('create') }}>
    <label>Device name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>
    <div className="form-actions"><button className="button secondary" disabled={busy || sampleMode}>Create pairing code</button><button className="button secondary" type="button" disabled={busy || sampleMode} onClick={() => void manage('list')}>Refresh devices</button></div>

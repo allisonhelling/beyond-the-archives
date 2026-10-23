@@ -48,7 +48,7 @@ it('keeps failed notes across reload, confirms only after success, and stores no
 it('marks this chapter finished without transmitting or replacing personal fields', async () => {
  entry = { version: 'v1', status: 'reading', progress: 1, notes: 'Private', rating: 4, tags: ['Tag'], collections: [] }
  await mount()
- fireEvent.click(findButton('Through Ch. 4'))
+ fireEvent.click(findButton('Mark through chapter 4 as read'))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading' })
 
@@ -214,7 +214,7 @@ it('synchronizes an editor draft from the reading bar and keeps progress control
  const pairing = root.getElementById('library-connection')
  expect(within(pairing).getAllByRole('button').map(button => button.textContent)).toEqual(['Dark Mode', 'Rating Info', 'Connect', 'Disconnect device', 'Close'])
  expect(within(pairing).queryByLabelText('Adjust reading progress')).not.toBeInTheDocument()
- fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Through Ch. 4' }))
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark through chapter 4 as read' }))
  await waitFor(() => expect(fields.getByText('Ch. 4 / 10')).toBeInTheDocument())
  await toggle('Edit', true)
  expect(fields.getByLabelText('Current chapter')).toHaveValue(5)
@@ -252,7 +252,7 @@ it.each([false, true])('keeps one logo in the main bar when panels open (saved e
   expect([...summary.children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10chapters read'])
   expect([...bottomRoot.querySelector('.reading-summary').children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10chapters read'])
   expect(summary.querySelector('.status-bullet')).toHaveAttribute('aria-hidden', 'true')
-  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Through Ch. 4'))
+  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Mark through chapter 4 as read'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Edit'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Connection'))
  }
@@ -273,7 +273,7 @@ it('marks the latest WIP chapter read without finishing the fic', async () => {
   return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
  })
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/110')
- fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Through Ch. 10' }))
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark through chapter 10 as read' }))
  await waitFor(() => expect(entry).toMatchObject({ status: 'reading', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 10 / 10')).toBeInTheDocument()
@@ -289,7 +289,7 @@ it('places only progress controls before kudos and immediately updates both bars
  expect(within(bottomRoot).queryByRole('button', { name: 'Connection' })).not.toBeInTheDocument()
  let finish
  network.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
- fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Through Ch. 4' }))
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark through chapter 4 as read' }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 4 / 10')).toBeInTheDocument()
   expect(within(surface).getByText('Read')).toBeInTheDocument()
@@ -298,7 +298,7 @@ it('places only progress controls before kudos and immediately updates both bars
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save'))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 2 / 10')).toBeInTheDocument()
-  expect(within(surface).getByRole('button', { name: 'Through Ch. 4' })).toBeEnabled()
+  expect(within(surface).getByRole('button', { name: 'Mark through chapter 4 as read' })).toBeEnabled()
  }
  expect(within(bottomRoot).getByText(/Could not save/)).toBeInTheDocument()
 })
@@ -544,12 +544,16 @@ it('offers series selection and individual work details using the existing conne
 
 it('places series controls after the info box and work controls after all tile data', async () => {
  document.body.innerHTML = (await import('../server/ao3/fixtures/series.html?raw')).default
+ document.querySelector('.series.work.index li.work dl.stats').insertAdjacentHTML('beforeend', '<dd class="kudos">42</dd>')
  await mountLibrary(document, 'https://archiveofourown.org/series/77')
- expect(document.querySelector('dl.series.meta').nextElementSibling.id).toBe('ao3-library-companion')
+ expect(document.getElementById('series-stats').nextElementSibling.id).toBe('ao3-library-companion')
+ expect(document.querySelector('.series.work.index').previousElementSibling.id).toBe('ao3-library-companion')
+ expect(document.getElementById('ao3-library-progress')).toBeNull()
  for (const id of [101, 102]) {
   const host = document.getElementById(`ao3-library-work-${id}`)
   expect(host).not.toBeNull()
   expect(host.parentElement.lastElementChild).toBe(host)
+  expect(host.parentElement.querySelectorAll('[id^="ao3-library-"]')).toHaveLength(1)
   expect(host.previousElementSibling.matches('dl.stats')).toBe(true)
  }
  expect(network.mock.calls.map(([request]) => JSON.parse(request.data).p_work)).toEqual([77, 101, 102])
@@ -563,4 +567,18 @@ it('uses only the logo and counts published chapters when the planned total is h
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 3 / 10')).toBeInTheDocument()
  }
+})
+
+it('centers the disconnected Chrome instructions in the collapsed row and reuses them when expanded', async () => {
+ storage.clear()
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser: 'chrome' })
+ const footer = within(root).getByText(/AO3 Library v/)
+ expect(root.querySelector('.toolbar-progress')).toContainElement(footer)
+ expect(footer).toHaveClass('inline-instructions')
+ fireEvent.click(findButton('Connect Library'))
+ await waitFor(() => expect(footer.parentElement).toBe(root.querySelector('section')))
+ expect(footer).not.toHaveClass('inline-instructions')
+ fireEvent.click(findButton('Close'))
+ await waitFor(() => expect(root.querySelector('.toolbar-progress')).toContainElement(footer))
+ expect(root.querySelectorAll('small')).toHaveLength(1)
 })

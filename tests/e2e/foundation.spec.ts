@@ -225,13 +225,13 @@ test('series imports require explicit work selection and fit desktop and mobile'
 })
 
 
-test('Safari instructions link scrolls directly to its settings section after sign-in', async ({ page }) => {
-  await page.goto('/settings#ios-safari-userscript')
+for (const hash of ['#ios-safari-userscript', '#ao3-browser-bar']) test(`Browser bar instructions link ${hash} scrolls directly to its settings section after sign-in`, async ({ page }) => {
+  await page.goto(`/settings${hash}`)
   await page.getByLabel('Email address').fill('reader@example.com')
   await page.getByLabel('Password', { exact: true }).fill('Test-password-123!')
   await page.getByRole('button', { name: 'Sign in to your library' }).click()
-  await expect(page.getByRole('heading', { name: 'iOS Safari Userscript', exact: true })).toBeInViewport()
+  await expect(page.getByRole('heading', { name: 'AO3 Browser Bar', exact: true })).toBeInViewport()
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'iOS Safari Userscript', exact: true })).toBeInViewport()
+  await expect(page.getByRole('heading', { name: 'AO3 Browser Bar', exact: true })).toBeInViewport()
 })

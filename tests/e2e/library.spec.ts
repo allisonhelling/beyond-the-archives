@@ -181,6 +181,9 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.reload(); await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   const series = page.locator('.story-series-eyebrow')
   await expect(series).toHaveText('Part 3 of My manual series')
+  const seriesBox = (await series.boundingBox())!, workTitleBox = (await page.locator('.story-title-row h1').boundingBox())!
+  if (info.project.name === 'mobile') expect(seriesBox.y + seriesBox.height).toBeLessThanOrEqual(workTitleBox.y)
+  else expect(seriesBox.y).toBeGreaterThanOrEqual(workTitleBox.y + workTitleBox.height)
   await expect(series.getByRole('link', { name: 'My manual series' })).toHaveAttribute('href', '/series/77')
   await expect(series.locator('strong')).toHaveText('3')
   await expect(series.locator('.series-membership')).toHaveCSS('text-transform', 'uppercase')

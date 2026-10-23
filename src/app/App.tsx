@@ -50,7 +50,7 @@ const settingsSections = [
   ['settings-display', 'Tile and Page Information', 'Customize tags, tiles, and information pages'],
   ['settings-ao3-username', 'AO3 Username', 'View, change, or delete your saved import username'],
   ['settings-metadata', 'AO3 Metadata Retrieval', 'Choose how story information is retrieved'],
-  ['ios-safari-userscript', 'iOS Safari Userscript', 'Set up and manage paired Safari devices'],
+  ['ios-safari-userscript', 'AO3 Browser Bar', 'Set up and manage paired Chrome, Edge, and Safari devices'],
   ['settings-backup', 'Export Backup', 'Download, save, or restore a complete library backup'],
   ['settings-csv-export', 'Export CSV', 'Download works, series, and collections in one ZIP'],
   ['settings-coming-soon', 'More in a Later Chapter', 'Upcoming settings and features'],
@@ -63,7 +63,7 @@ function SettingsSectionLabel({ title, description, descriptionId }: { title: st
 function SettingsPage() {
   const { session } = useAuth()
   const location = useLocation(), navigate = useNavigate()
-  const selectedSection = settingsSections.find(([id]) => location.hash === `#${id}`)?.[0]
+  const selectedSection = settingsSections.find(([id]) => location.hash === `#${id}` || id === 'ios-safari-userscript' && location.hash === '#ao3-browser-bar')?.[0]
   const previousSection = useRef(selectedSection)
   useEffect(() => {
     const target = selectedSection ? document.getElementById(selectedSection)

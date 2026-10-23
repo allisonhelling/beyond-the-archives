@@ -10,7 +10,9 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
  const directory = await mkdtemp(join(tmpdir(), 'ao3-userscript-browser-'))
  try {
   execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
-  const script = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
+  const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
+  // Userscripts supplies GM in the script's scope, without exposing it on globalThis.
+  const script = `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);`
   await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></div><div id="kudos">Kudos list</div></main></body></html>' }))
   await page.goto('https://archiveofourown.org/works/123/chapters/104')
   await page.exposeFunction('mergeLibraryEdits', mergeEdits)
@@ -21,7 +23,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    Element.prototype.attachShadow = function (options) { return attach.call(this, { ...options, mode: 'open' }) }
    const state: { entry: Record<string, unknown> | null; fail: boolean; requests: Record<string, unknown>[] } = { entry: null, fail: true, requests: [] }
    const storage = new Map<string, unknown>([['connection:https://userscript-test.supabase.co', { userId: 'alice', secret: 'fixture-device-secret' }]])
-   Object.assign(window, { userscriptTestState: state, GM: {
+   Object.assign(window, { userscriptTestState: state, userscriptTestApi: {
     getValue: async (key: string, fallback: unknown) => storage.get(key) ?? fallback,
     setValue: async (key: string, value: unknown) => storage.set(key, value),
     deleteValue: async (key: string) => storage.delete(key),
@@ -44,6 +46,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
     },
    } })
   })
+  expect(await page.evaluate(() => 'GM' in globalThis)).toBe(false)
   await page.addScriptTag({ content: script })
   const top = page.locator('#ao3-library-companion'), bottom = page.locator('#ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in between chapters library' })).toBeVisible()
@@ -199,7 +202,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in between chapters library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
   await expect(top.locator('.library-link')).toHaveText('')
-  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Through Ch. 4', exact: true })).toBeVisible()
+  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Mark through chapter 4 as read', exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.locator('.chapter-progress > span')).toBeHidden()
    await surface.getByLabel('About chapters read', { exact: true }).click()
@@ -216,18 +219,35 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await top.locator('.toolbar').evaluate(element => { element.scrollLeft = 0 })
   const barBounds = (await top.locator('.toolbar').boundingBox())!, linkBounds = (await top.locator('.library-link').boundingBox())!, actionsBoundsTop = (await top.locator('.toolbar-actions').boundingBox())!, centerBounds = (await top.locator('.toolbar-progress').boundingBox())!
   expect(Math.abs(linkBounds.x - barBounds.x)).toBeLessThan(1)
-  const rightEdge = await top.locator('.toolbar').evaluate(element => element.getBoundingClientRect().x + element.scrollWidth)
-  expect(Math.abs(actionsBoundsTop.x + actionsBoundsTop.width - rightEdge)).toBeLessThan(1)
-  expect(Math.abs(centerBounds.x + centerBounds.width / 2 - (linkBounds.x + linkBounds.width + actionsBoundsTop.x) / 2)).toBeLessThan(1)
+  const mobile = page.viewportSize()!.width <= 650
   const rowCenter = linkBounds.y + linkBounds.height / 2
-  expect(Math.abs(centerBounds.y + centerBounds.height / 2 - rowCenter)).toBeLessThan(1)
-  expect(Math.abs(actionsBoundsTop.y + actionsBoundsTop.height / 2 - rowCenter)).toBeLessThan(1)
+  if (mobile) {
+   expect(actionsBoundsTop.y).toBeGreaterThanOrEqual(centerBounds.y + centerBounds.height)
+   const original = page.viewportSize()!
+   for (const width of [320, 375, 390, 430]) {
+    await page.setViewportSize({ ...original, width })
+    for (const surface of [top, bottom]) {
+     expect(await surface.locator('.toolbar, .bottom-bar').first().evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+    }
+    const bounds = (await top.locator('.complete-chapter').boundingBox())!
+    expect(bounds.x).toBeGreaterThanOrEqual(0)
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width)
+   }
+   await page.setViewportSize(original)
+  } else {
+   const rightEdge = await top.locator('.toolbar').evaluate(element => element.getBoundingClientRect().x + element.scrollWidth)
+   expect(Math.abs(actionsBoundsTop.x + actionsBoundsTop.width - rightEdge)).toBeLessThan(1)
+   expect(Math.abs(centerBounds.x + centerBounds.width / 2 - (linkBounds.x + linkBounds.width + actionsBoundsTop.x) / 2)).toBeLessThan(1)
+   expect(Math.abs(centerBounds.y + centerBounds.height / 2 - rowCenter)).toBeLessThan(1)
+   expect(Math.abs(actionsBoundsTop.y + actionsBoundsTop.height / 2 - rowCenter)).toBeLessThan(1)
+  }
+  await expect(top.locator('.complete-chapter')).toHaveText('Ch. 4')
   await expect(top.locator('.toolbar')).toHaveCSS('column-gap', '12px')
   await expect(top.locator('.toolbar-actions')).toHaveCSS('gap', '12px')
   const actionButtons = await top.locator('.toolbar-actions > button').all()
   for (const button of actionButtons) {
    const bounds = (await button.boundingBox())!
-   expect(Math.abs(bounds.y + bounds.height / 2 - rowCenter)).toBeLessThan(1)
+   if (!mobile) expect(Math.abs(bounds.y + bounds.height / 2 - rowCenter)).toBeLessThan(1)
    await expect(button).toHaveCSS('margin-left', '0px')
   }
   const bottomBounds = (await bottom.locator('.bottom-bar').boundingBox())!, chapterBounds = (await bottom.locator('.reading-summary').boundingBox())!, completeBounds = (await bottom.locator('.complete-chapter').boundingBox())!
@@ -240,13 +260,13 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 3 / 10', { exact: true })).toBeVisible()
    await expect(surface.getByText('Currently Reading', { exact: true })).toBeVisible()
-   await expect(surface.getByRole('button', { name: 'Through Ch. 4', exact: true })).toBeVisible()
+   await expect(surface.getByRole('button', { name: 'Mark through chapter 4 as read', exact: true })).toBeVisible()
   }
   await top.screenshot({ path: `test-results/userscript-top-toolbar-${page.viewportSize()!.width}.png` })
   await bottom.screenshot({ path: `test-results/userscript-bottom-toolbar-${page.viewportSize()!.width}.png` })
   await expect(bottom.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await expect(bottom.getByRole('button', { name: 'Connection', exact: true })).toHaveCount(0)
-  await bottom.getByRole('button', { name: 'Through Ch. 4', exact: true }).click()
+  await bottom.getByRole('button', { name: 'Mark through chapter 4 as read', exact: true }).click()
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
    await expect(surface.getByText('Read', { exact: true })).toBeVisible()
@@ -287,7 +307,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByLabel('This chapter is finished', { exact: true }).uncheck()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 0 / 10', { exact: true })).toBeVisible()
-  await bottom.getByRole('button', { name: 'Through Ch. 4', exact: true }).click()
+  await bottom.getByRole('button', { name: 'Mark through chapter 4 as read', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
   await page.evaluate(() => {
    document.getElementById('ao3-library-companion')!.remove()
@@ -386,6 +406,8 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(ratingExplanation).toHaveCSS('white-space', 'pre-wrap')
   await expect(ratingExplanation).toHaveCSS('background-color', 'rgb(51, 51, 51)')
   const explanationBox = (await ratingExplanation.boundingBox())!
+  const ratingControlsBox = (await page.locator('.rating-controls').boundingBox())!
+  expect(explanationBox.width).toBeCloseTo(Math.min(420, ratingControlsBox.width), 0)
   expect(explanationBox.x).toBeGreaterThanOrEqual(0)
   expect(explanationBox.x + explanationBox.width).toBeLessThanOrEqual(page.viewportSize()!.width)
   await ratingHelp.click()
@@ -419,6 +441,27 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   for (const surface of [top, bottom]) {
    await expect(surface).toHaveAttribute('data-theme', 'light')
    await expect(surface.locator('section').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+  }
+  // Safari's installable userscript also mounts every series work before pairing.
+  const seriesUrl = 'https://archiveofourown.org/series/77'
+  const seriesHtml = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')
+  await page.route(seriesUrl, route => route.fulfill({ contentType: 'text/html', body: seriesHtml }))
+  await page.goto(seriesUrl)
+  await page.evaluate(() => {
+   const attach = Element.prototype.attachShadow
+   Element.prototype.attachShadow = function (options) { return attach.call(this, { ...options, mode: 'open' }) }
+   Object.assign(window, { userscriptTestApi: { getValue: async (_key: string, fallback: unknown) => fallback } })
+  })
+  await page.addScriptTag({ content: script })
+  await expect(page.locator('#ao3-library-companion').getByRole('button', { name: 'Connect Library', exact: true })).toBeVisible()
+  expect(await page.locator('#series-stats').evaluate(element => element.nextElementSibling?.id)).toBe('ao3-library-companion')
+  expect(await page.locator('.series.work.index').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-companion')
+  await expect(page.locator('#ao3-library-progress')).toHaveCount(0)
+  for (const work of [101, 102]) {
+   const tile = page.locator(`#ao3-library-work-${work}`)
+   await expect(tile.getByRole('button', { name: 'Connect Library', exact: true })).toBeVisible()
+   expect(await tile.evaluate(element => element.parentElement?.lastElementChild === element && element.previousElementSibling?.matches('dl.stats'))).toBe(true)
+   await expect(tile.locator('..').locator('[id^="ao3-library-"]')).toHaveCount(1)
   }
  } finally { await rm(directory, { recursive: true, force: true }) }
 })

@@ -7,34 +7,48 @@ import { mountPersonalControls, mountConflictReview } from './personal-controls'
 
 const defaultRatingInfo = 'Add how your personal rating system corresponds to the stars here! Edit this text in settings. To hide the info symbol, leave the box blank.'
 
-export async function mountLibrary(doc = document, href = location.href, tile = null) {
+export async function mountLibrary(doc = document, href = location.href, options = {}) {
+ // Safari Userscripts provides GM in the script scope, rather than on globalThis.
+ const { tile = null, api = typeof GM === 'undefined' ? undefined : GM, browser = 'safari' } = options
  const page = tile?.page ?? readPage(doc, href)
  const hostId = tile ? `ao3-library-work-${page.work}` : 'ao3-library-companion'
  if (!page || doc.getElementById(hostId)) return
  const host = doc.createElement('div')
  host.id = hostId
+ host.dataset.browser = browser
+ if (tile) host.dataset.workTile = 'true'
+ let ao3FontSize
+ if (browser === 'chrome') {
+  const scope = tile?.element ?? doc.querySelector('#workskin') ?? doc.querySelector('#main') ?? doc.body
+  const summary = scope.querySelector('.summary p') ?? scope.querySelector('.summary blockquote') ?? scope.querySelector('.summary') ?? scope
+  ao3FontSize = doc.defaultView.getComputedStyle(summary).fontSize
+  host.style.setProperty('--ao3-font-size', ao3FontSize)
+ }
  const root = host.attachShadow({ mode: 'closed' })
  const style = doc.createElement('style'); style.textContent = styles; root.append(style)
  const section = doc.createElement('section'); section.setAttribute('aria-label', 'AO3 Library'); root.append(section)
  if (tile) tile.element.append(host)
- else if (page.series) doc.querySelector('dl.series.meta')?.after(host)
+ else if (page.series) doc.querySelector('#main .series.work.index')?.before(host)
  else doc.querySelector('#workskin')?.before(host)
  if (!host.isConnected) doc.querySelector('#main')?.prepend(host)
  const bottomId = tile ? `${hostId}-progress` : 'ao3-library-progress'
  doc.getElementById(bottomId)?.remove()
  const bottomHost = doc.createElement('div'); bottomHost.id = bottomId
+ bottomHost.dataset.browser = browser
+ if (ao3FontSize) bottomHost.style.setProperty('--ao3-font-size', ao3FontSize)
  const bottomRoot = bottomHost.attachShadow({ mode: 'closed' }); bottomRoot.append(style.cloneNode(true))
  const bottomSection = doc.createElement('section'); bottomSection.className = 'bottom-section'; bottomSection.setAttribute('aria-label', 'Reading progress'); bottomRoot.append(bottomSection)
  const bottomBar = doc.createElement('div'); bottomBar.className = 'row bottom-bar'; bottomBar.setAttribute('aria-live', 'polite'); bottomSection.append(bottomBar)
  const bottomMessage = doc.createElement('p'); bottomMessage.setAttribute('aria-live', 'polite'); bottomSection.append(bottomMessage)
- const bottomAnchor = doc.querySelector('#kudos') ?? doc.querySelector('.kudos') ?? doc.querySelector('#feedback')
- if (tile) { /* Work tiles use their single inline bar. */ }
- else if (bottomAnchor) bottomAnchor.before(bottomHost)
- else doc.querySelector('#workskin')?.after(bottomHost)
+ if (!tile && !page.series) {
+  const bottomAnchor = doc.querySelector('#kudos') ?? doc.querySelector('.kudos') ?? doc.querySelector('#feedback')
+  if (bottomAnchor) bottomAnchor.before(bottomHost)
+  else doc.querySelector('#workskin')?.after(bottomHost)
+ }
  bottomHost.hidden = true
  const storageKey = `connection:${__SUPABASE_URL__}`, themeKey = `theme:${__SUPABASE_URL__}`, ratingInfoKey = `rating-info:${__SUPABASE_URL__}`
  const preferredTheme = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
- let [connection, theme, ratingInfo] = await Promise.all([GM.getValue(storageKey, null), GM.getValue(themeKey, preferredTheme), GM.getValue(ratingInfoKey, defaultRatingInfo)])
+ let [connection, theme, ratingInfo] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme), api.getValue(ratingInfoKey, defaultRatingInfo)])
  ratingInfo = typeof ratingInfo === 'string' ? ratingInfo : defaultRatingInfo
  theme = ['light', 'dark'].includes(theme) ? theme : preferredTheme
  const applyTheme = () => [host, bottomHost].forEach(surface => { surface.dataset.theme = theme })
@@ -48,7 +62,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
  panel.append(editorPanel, connectionPanel)
  const conflictPanel = doc.createElement('div'); section.append(conflictPanel)
  const footer = doc.createElement('small'); footer.textContent = `AO3 Library v${__SCRIPT_VERSION__} · `
- const update = doc.createElement('a'); update.href = `${__APP_ORIGIN__}/settings#ios-safari-userscript`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & update instructions'
+ const update = doc.createElement('a'); update.href = `${__APP_ORIGIN__}/settings#${browser === 'chrome' ? 'ao3-browser-bar' : 'ios-safari-userscript'}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & update instructions'
  footer.append(update); section.append(footer)
  showPanel(null)
  const draftKey = () => `draft:${__SUPABASE_URL__}:${connection.userId}:${page.series ? 'series:' : ''}${page.work}`
@@ -91,7 +105,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   disposeConflict = mountConflictReview(conflictPanel, { conflict: error, collections, onCancel: clearConflict, onError: next => { if (next instanceof EditConflict) showConflict(next); else message.textContent = next instanceof Error ? next.message : 'Could not save. Your draft is preserved.' }, onSaved: async data => {
    accept(data); clearConflict()
    if (error.action === 'progress') await syncProgressDraft()
-   else { clearEditor(); draft = null; showPanel(null); await GM.deleteValue(draftKey()) }
+   else { clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()) }
    message.textContent = 'Saved'; renderToolbar()
   } })
  }
@@ -119,10 +133,10 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
  async function rpc(action, input = {}, secret = connection?.secret) {
   const backend = new URL(__SUPABASE_URL__)
   const networkMessage = ['localhost', '127.0.0.1', '[::1]'].includes(backend.hostname)
-   ? 'This script points to a local development server. Install the hosted Safari userscript to connect from an iPhone. Your draft is preserved.'
-   : `Cannot reach the library backend. Check your connection and Userscripts network access to ${backend.hostname}, then retry. Your draft is preserved.`
+   && browser === 'safari' ? 'This script points to a local development server. Install the hosted Safari userscript to connect from an iPhone. Your draft is preserved.'
+   : `Cannot reach the library backend. Check your connection and ${browser === 'chrome' ? 'extension' : 'Userscripts network'} access to ${backend.hostname}, then retry. Your draft is preserved.`
   let response
-  try { response = await GM.xmlHttpRequest({
+  try { response = await api.xmlHttpRequest({
    method: 'POST', url: `${__SUPABASE_URL__}/rest/v1/rpc/userscript_library`, timeout: 20000,
    headers: { apikey: __SUPABASE_KEY__, 'Content-Type': 'application/json' },
    data: JSON.stringify({ p_secret: secret, p_action: page.series && ['get', 'save'].includes(action) ? `series_${action}` : action, p_work: page.work, p_input: input }),
@@ -145,7 +159,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   return { chapter, chapterFinished: entry.progress >= chapter }
  }
  function preserveDraft() {
-  return GM.setValue(draftKey(), draft).catch(() => { message.textContent = 'Could not preserve the draft on this device. Keep this panel open.' })
+  return api.setValue(draftKey(), draft).catch(() => { message.textContent = 'Could not preserve the draft on this device. Keep this panel open.' })
  }
  async function load() { accept(await rpc('get')); renderToolbar() }
  async function progress(value, status) {
@@ -187,7 +201,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   draft.base = base; draft.version = entry?.version ?? null; await preserveDraft()
  }
  async function syncProgressDraft() {
-  draft = draft ?? await GM.getValue(draftKey(), null)
+  draft = draft ?? await api.getValue(draftKey(), null)
   if (draft) {
    Object.assign(draft, entryPosition(), { status: entry.status })
    draft.base = { ...(draft.base ?? {}), status: entry.status, progress: entry.progress }
@@ -207,7 +221,8 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
    node('span', 'Read', indicator)
   } else {
    const final = page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
-   const complete = button(final ? 'Finished' : `Through Ch. ${page.current}`, () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading'), parent)
+   const complete = button(final ? 'Finished' : `Ch. ${page.current}`, () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading'), parent)
+   if (!final) complete.setAttribute('aria-label', `Mark through chapter ${page.current} as read`)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
@@ -219,10 +234,15 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
  }
  function renderToolbar() {
   toolbar.replaceChildren(); bottomBar.replaceChildren()
+  const inlineInstructions = browser === 'chrome' && !connection && !activePanel
+  toolbar.classList.toggle('toolbar-disconnected', inlineInstructions)
   bottomHost.hidden = Boolean(page.series || tile)
   bottomBar.className = entry ? 'row bottom-bar' : 'toolbar'
   footer.hidden = Boolean(connection && !activePanel)
   renderBar(toolbar)
+  footer.classList.toggle('inline-instructions', inlineInstructions)
+  if (inlineInstructions) toolbar.querySelector('.toolbar-progress').append(footer)
+  else section.append(footer)
   if (entry && !page.series) renderProgress(bottomBar)
   else renderBar(bottomBar)
  }
@@ -250,7 +270,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   const settingsActions = node('div', '', connectionPanel); settingsActions.className = 'row connection-settings'
   const themeToggle = button('', async () => {
    const next = theme === 'light' ? 'dark' : 'light'
-   try { await GM.setValue(themeKey, next) }
+   try { await api.setValue(themeKey, next) }
    catch { throw new Error('Could not save your color mode. Try again.') }
    theme = next; applyTheme(); renderThemeToggle()
   }, settingsActions)
@@ -273,24 +293,24 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   node('p', 'Saved on this device. Leave blank and save to hide the rating info icon.', ratingEditor)
   button('Save Rating Info', async () => {
    const next = ratingText.value
-   try { await GM.setValue(ratingInfoKey, next) }
+   try { await api.setValue(ratingInfoKey, next) }
    catch { throw new Error('Could not save your rating info. Try again.') }
    ratingInfo = next
    personalControls?.updateRatingInfo(ratingInfo)
    seriesControls.forEach(control => control.updateRatingInfo(ratingInfo))
    message.textContent = 'Rating info saved on this device.'
   }, ratingEditor)
-  node('p', 'In Library Settings → iOS Safari userscript, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
+  node('p', 'In Library Settings → AO3 Browser Bar, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
   const label = node('label', 'One-time pairing code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false
   const actions = node('div', '', connectionPanel); actions.className = 'row'
   button('Connect', async () => {
    const next = await rpc('claim', {}, input.value.trim())
-   await GM.setValue(storageKey, next); connection = next; input.value = ''; loaded = false; draft = null; resetPanels()
+   await api.setValue(storageKey, next); connection = next; input.value = ''; loaded = false; draft = null; resetPanels()
    await load(); message.textContent = 'Library connected'
   }, actions)
   if (connection) button('Disconnect device', async () => {
-   await rpc('disconnect'); await GM.deleteValue(storageKey); connection = null; entry = null; loaded = false; draft = null; resetPanels(); message.textContent = 'Device disconnected. Local unsaved drafts are retained for this account.'
+   await rpc('disconnect'); await api.deleteValue(storageKey); connection = null; entry = null; loaded = false; draft = null; resetPanels(); message.textContent = 'Device disconnected. Local unsaved drafts are retained for this account.'
   }, actions)
   button('Close', () => showPanel(null), actions)
  }
@@ -307,7 +327,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   return { version: draft.version, preview: page.series, notes: draft.notes, favorite: draft.favorite, collections: draft.collections, works }
  }
  async function openSeriesEditor() {
-  const stored = await GM.getValue(draftKey(), null)
+  const stored = await api.getValue(draftKey(), null)
   draft = draft ?? stored ?? { version: entry?.version ?? null, notes: entry?.notes ?? '', favorite: entry?.favorite ?? false, collections: entry?.collections ?? [], works: {}, base: { notes: entry?.notes ?? '', favorite: entry?.favorite ?? false, collections: entry?.collections ?? [] } }
   showPanel('editor')
   node('h3', 'Add Series to Library', editorPanel)
@@ -355,7 +375,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   }
   const actions = node('div', '', form); actions.className = 'row editor-actions'
   const save = node('button', 'Save series and selected works', actions); save.type = 'submit'
-  button('Cancel', async () => { clearEditor(); draft = null; showPanel(null); await GM.deleteValue(draftKey()) }, actions)
+  button('Cancel', async () => { clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()) }, actions)
   if (entry) button('Reload saved series', async () => {
    await load()
    const base = { notes: entry.notes, favorite: entry.favorite, collections: entry.collections }
@@ -372,7 +392,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   }, actions)
   form.addEventListener('submit', event => { event.preventDefault(); void run(async () => {
    accept(await rpc('save', seriesSaveInput()))
-   clearEditor(); draft = null; showPanel(null); await GM.deleteValue(draftKey()); message.textContent = 'Saved'
+   clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()); message.textContent = 'Saved'
   }) })
  }
  async function openEditor() {
@@ -380,7 +400,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
   if (editorPanel.childNodes.length) { showPanel('editor'); return }
   if (!loaded) await load()
   if (page.series) { await openSeriesEditor(); return }
-  const stored = await GM.getValue(draftKey(), null)
+  const stored = await api.getValue(draftKey(), null)
   draft = draft ?? stored ?? (entry ? { version: entry.version, status: entry.status, ...entryPosition(), notes: entry.notes, rating: entry.rating ?? '', tags: entry.tags.join('\n'), collections: entry.collections } : { ...page.defaults, version: null, notes: '', rating: '', tags: '', collections: [] })
   if (!Object.hasOwn(draft, 'base')) draft.base = stored ? {} : entryValues()
   if (stored) message.textContent = 'Unsaved draft restored. Review it before saving.'
@@ -480,13 +500,13 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
     const value = draft.status === 'to_read' ? 0 : draft.status === 'finished' ? page.metadata.published_chapters : chapterNumber - (draft.chapterFinished ? 0 : 1)
     if (value === null) throw new Error('The published chapter count is unavailable. Reload AO3 before finishing the work.')
     validateProgress(value, page.metadata)
-    await GM.setValue(draftKey(), draft)
+    await api.setValue(draftKey(), draft)
     accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), tags: parseLines(draft.tags), collections: draft.collections }))
     message.textContent = 'Saved'; clearEditor(); draft = null; showPanel(null)
-    await GM.deleteValue(draftKey()).catch(() => { message.textContent = 'Saved. Could not clear the local draft.' })
+    await api.deleteValue(draftKey()).catch(() => { message.textContent = 'Saved. Could not clear the local draft.' })
    } finally { fieldset.disabled = false }
   }) })
-  button('Cancel', async () => { await GM.deleteValue(draftKey()); clearEditor(); draft = null; showPanel(null) }, actions)
+  button('Cancel', async () => { await api.deleteValue(draftKey()); clearEditor(); draft = null; showPanel(null) }, actions)
   if (entry && !tile) {
    const recollect = node('span', '', actions); recollect.className = 'field-control'
    button('Collect metadata', async () => {
@@ -514,7 +534,7 @@ export async function mountLibrary(doc = document, href = location.href, tile = 
    const element = [...doc.querySelectorAll('.series.work.index li.work')].find(item => [...item.querySelectorAll('h4.heading a')].some(link => new URL(link.getAttribute('href'), href).href === work.url))
    if (!element) continue
    const automaticMetadata = seriesWorkMetadata(work, page.series)
-   await mountLibrary(doc, work.url, { element, page: { work: work.workId, metadata: { ...blankMetadata, ...automaticMetadata }, automaticMetadata, chapters: {}, current: null, defaults: { status: 'to_read', chapter: 1, chapterFinished: false } } })
+   await mountLibrary(doc, work.url, { ...options, tile: { element, page: { work: work.workId, metadata: { ...blankMetadata, ...automaticMetadata }, automaticMetadata, chapters: {}, current: null, defaults: { status: 'to_read', chapter: 1, chapterFinished: false } } } })
   }
  }
 }

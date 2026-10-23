@@ -2,7 +2,7 @@
 
 For the inline library controls in iOS Safari's free Userscripts app, see [the userscript companion](../userscript/README.md). Build its installable file with `npm run build:userscript`.
 
-This Manifest V3 extension is part of the hosted library project. It captures metadata for explicitly requested work imports, refreshes, series previews, and library listing scans on the connected website. It does not install an AO3 content script, watch browsing history, or import works just because you visit them.
+This Manifest V3 extension is part of the hosted library project. It captures metadata for explicitly requested work imports, refreshes, series previews, and library listing scans on the connected website. It also adds the shared Safari library bar directly to AO3 work, chapter, and series pages. Visiting a page never creates an import job or automatically saves a work. Once paired, the bar loads your saved details for that page.
 
 ## Deploy the hosted boundary
 
@@ -28,7 +28,7 @@ Then run:
 npm run build:extension
 ```
 
-The build reuses the app's public-key validation and writes `extension/dist/manifest.json` and `background.js`. Only public configuration is embedded. The generated directory is ignored by Git. For local development set `EXTENSION_APP_ORIGIN=http://127.0.0.1:5173` (or the actual Vite port). A build accepts messages from exactly that configured website origin; build again if the origin or Supabase project changes.
+The build reuses the app's public-key validation and writes `extension/dist/manifest.json`, `background.js`, and `content.js`. Only public configuration is embedded. The generated directory is ignored by Git. For local development set `EXTENSION_APP_ORIGIN=http://127.0.0.1:5173` (or the actual Vite port). A build accepts messages from exactly that configured website origin; build again if the origin or Supabase project changes.
 
 The Supabase URL and public key must also match the connected website's project. If `.env.local` points to local Supabase and your hosted public configuration is in `.env.local.hosted`, set `EXTENSION_APP_ORIGIN` to the hosted website origin and build with:
 
@@ -49,6 +49,20 @@ npx supabase functions serve extension-metadata
 The extension can connect to Supabase Auth while this handler is stopped, but uploads and timeout reports will fail and hold up the import queue. A `503` with `name resolution failed` from `/functions/v1/extension-metadata` means the local Edge Function runtime is unavailable. Start it, then reconnect the extension in Settings. Older requests that have already failed can be retried from import history.
 
 For local use, run `npm run dev` and open `http://127.0.0.1:5173/settings` (use the port printed by Vite). After rebuilding the extension, click **Reload** on its card in the browser's extensions page. `https://library-extension-test.example` is intercepted only inside the automated browser test; opening it normally produces a DNS error. Tests build their extension in a temporary directory so your installed `extension/dist` keeps its configured origin.
+
+## Pair the AO3 bar
+
+After rebuilding, reload AO3 Library Companion at `chrome://extensions` (or `edge://extensions`), then reload AO3. Existing AO3 tabs need a reload to receive the new content script.
+
+1. Open the library website’s **Settings → AO3 Browser Bar**.
+2. Give this browser a device name and create a pairing code.
+3. Open an AO3 work or series page, click **Connect Library**, and paste the code within five minutes. Reload other open AO3 tabs after pairing.
+
+The bar reuses the Safari editor, personal controls, progress buttons, theme, and conflict review. Series controls appear after all series information and stats, immediately before the works list; each work’s bar follows its listing data. Chrome bar text matches the computed AO3 summary text size. Work pages also have a reading-progress bar near the bottom. Links display the library logo and chapter progress uses read / published counts.
+
+Bar pairing is separate from the website’s import/scan connection. It lasts up to 90 days across browser restarts and website sign-outs. Revoke it from AO3 Browser Bar settings or **Disconnect device** in the bar. Drafts remain local to the paired account. The existing userscript database migrations must be applied; Chrome needs no additional migration.
+
+The content script runs in Chrome’s isolated world with a closed shadow root. It communicates only with the extension’s internal message handler. That handler restricts requests to AO3 work/series tabs, bar-specific storage keys, and the fixed library RPC. Credentials and drafts use extension-local storage; import tokens and scan checkpoints are not exposed by the bar bridge. Nothing uses AO3 local/session storage or page messaging.
 
 ## Behavior and connection lifetime
 

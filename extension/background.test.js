@@ -18,7 +18,7 @@ beforeEach(async () => {
  vi.resetModules()
  state = {}
  chrome = {
-  runtime: { onMessageExternal: event() },
+  runtime: { onMessageExternal: event(), onMessage: event() },
   storage: { local: { get: vi.fn(async () => ({})) }, session: {
    get: vi.fn(async keys => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map(key => [key, state[key]]))),
    set: vi.fn(async values => { Object.assign(state, structuredClone(values)) }),

@@ -185,14 +185,14 @@ describe('private app access and navigation', () => {
   })
 })
 
-it('scrolls the Safari settings deep link into view after authentication resolves', async () => {
+it.each(['#ios-safari-userscript', '#ao3-browser-bar'])('scrolls the browser bar settings deep link %s into view after authentication resolves', async hash => {
   const scroll = vi.fn()
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll })
   try {
     auth.session = fakeSession
-    window.history.replaceState(null, '', '/settings#ios-safari-userscript')
+    window.history.replaceState(null, '', `/settings${hash}`)
     render(<App />)
-    const heading = await screen.findByRole('heading', { name: 'iOS Safari Userscript' })
+    const heading = await screen.findByRole('heading', { name: 'AO3 Browser Bar' })
     await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' }))
     expect(scroll.mock.contexts).toContain(heading.closest('section'))
   } finally { delete (HTMLElement.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView }

@@ -2,6 +2,9 @@ import { parseSeriesUrl, seriesPageUrl, parseWorkUrl } from '../src/features/imp
 import { captureMetadataPage } from './capture.js'
 import { isLocalHostname } from '../src/lib/local-app.ts'
 import { createLibrarySync } from './library-sync.js'
+import { installBarBridge } from './bar-background.js'
+
+installBarBridge()
 
 const appOrigin = __APP_ORIGIN__
 const backend = __SUPABASE_URL__
@@ -103,7 +106,7 @@ async function pump() {
   }
   const latest = await chrome.storage.session.get(['auth', 'active', 'syncSample'])
   if (version !== connectionVersion || latest.auth?.userId !== auth.userId || latest.active?.token !== active.token) return
-  // No content script runs on ordinary visits. Injection requires a claimed job.
+  // Metadata capture requires a claimed job; the inline bar runs independently.
   const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: active.workPage ? [tab.status !== 'complete', 'navigation'] : [tab.status !== 'complete'] })
   const page = results[0]?.result
   if (version !== connectionVersion || !page) return

@@ -82,7 +82,7 @@ it('extracts the Next page and retains its page number for retrieval', async () 
 })
 
 it('extracts kudos and categorized warnings from series work listings', () => {
- const source = html.replace('<dd class="words">', '<dd class="kudos">1,234</dd><dd class="words">').replace('<ul class="tags">', '<ul class="tags"><li class="warnings"><a class="tag">Major Character Death</a></li>')
+ const source = html.replace('<dl class="stats"><dd class="words">', '<dl class="stats"><dd class="kudos">1,234</dd><dd class="words">').replace('<ul class="tags">', '<ul class="tags"><li class="warnings"><a class="tag">Major Character Death</a></li>')
  expect(parseSeries(source, url).works[0]).toMatchObject({ kudos: 1234, archiveWarnings: ['Major Character Death'] })
  expect(parseSeries(html, url).works[0].kudos).toBeNull()
 })

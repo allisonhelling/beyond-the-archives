@@ -1,6 +1,6 @@
 import { chromium, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
@@ -13,6 +13,8 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  const appOrigin = local ? 'http://127.0.0.1:5173' : 'https://library-extension-test.example'
  let queued = false, claimed = false, loaded = false, workId = 123
  const uploads: { jobId: string; html: string; url: string }[] = []
+ const barRequests: { p_action: string; p_work: number; p_input: Record<string, unknown> }[] = []
+ const barEntries = new Map<number, Record<string, unknown>>()
  // Use real HTTP for extension-worker fetches. Browser route interception can
  // delay delivery until the worker's next alarm, obscuring the actual flow.
  const server = createServer(async (request, response) => {
@@ -22,6 +24,18 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   else if (path === '/rest/v1/rpc/claim_extension_job') {
    body = queued && !claimed ? { id: 'requested-job', token: 'requested-lease', workId, expiresAt: new Date(Date.now() + 300000).toISOString() } : null
    if (body) claimed = true
+  } else if (path === '/rest/v1/rpc/userscript_library') {
+   let data = ''
+   for await (const part of request) data += part
+   const requestBody = JSON.parse(data)
+   barRequests.push(requestBody)
+   if (requestBody.p_action === 'claim') body = { secret: 'paired-chrome-secret', userId: 'alice' }
+   else {
+    if (['save', 'progress'].includes(requestBody.p_action)) {
+     barEntries.set(requestBody.p_work, { ...barEntries.get(requestBody.p_work), ...requestBody.p_input, id: `bar-${requestBody.p_work}`, version: String(barRequests.length) })
+    }
+    body = { entry: barEntries.get(requestBody.p_work) ?? null, collections: [], savedWorks: [] }
+   }
   } else if (path === '/rest/v1/metadata_jobs') body = [{ status: 'processing', lease_token: 'requested-lease' }]
   else if (path === '/functions/v1/extension-metadata') {
    let data = ''
@@ -37,6 +51,13 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  const profile = await mkdtemp(join(tmpdir(), 'ao3-extension-test-'))
  const extension = join(profile, 'extension')
  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension, ...(local ? ['--local'] : [])], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
+ // Only this temporary test artifact opens the shadow roots for Playwright.
+ // The installed artifact keeps the same closed roots as the Safari companion.
+ const contentPath = join(extension, 'content.js'), content = await readFile(contentPath, 'utf8')
+ expect(content).toContain('mode: "closed"')
+ await writeFile(contentPath, content.replaceAll('mode: "closed"', 'mode: "open"'))
+ const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'utf8'))
+ expect(manifest.content_scripts).toEqual([{ matches: ['https://archiveofourown.org/works/*', 'https://archiveofourown.org/series/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }])
  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [
   `--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
   // Extension-created tabs can navigate before Playwright attaches its routes.
@@ -49,7 +70,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
   const extensionId = new URL(worker.url()).host
   if (local) expect(extensionId).toBe(localExtensionId)
-  const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">')
+  const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">').replace('</head>', '<style>.summary blockquote { font-size: 14px; }</style></head>').replace('<h2 class="title heading">', '<main id="main"><div id="workskin"><h2 class="title heading">').replace('</body>', '</div><div id="kudos">Kudos</div></main></body>')
   await context.route(`${appOrigin}/**`, route => route.fulfill({ contentType: 'text/html', body: '<html><body>Hosted library test</body></html>' }))
   let slowImage = new Promise<void>(resolve => { releaseImage = resolve })
   await context.route('https://archiveofourown.org/**', async route => {
@@ -84,6 +105,50 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   expect(uploads[0].html).not.toContain('user[login]')
   await ao3.reload()
   expect(uploads).toHaveLength(1)
+  // The native content script uses the real worker bridge and shared editor.
+  expect(barRequests).toHaveLength(0) // Unpaired browsing never requests private library data.
+  const bar = ao3.locator('#ao3-library-companion')
+  const instructions = bar.locator('.toolbar-progress .inline-instructions')
+  await expect(instructions).toBeVisible()
+  const instructionBox = (await instructions.boundingBox())!, centerBox = (await bar.locator('.toolbar-progress').boundingBox())!
+  const connectButton = bar.getByRole('button', { name: 'Connect Library', exact: true })
+  const connectBox = (await connectButton.boundingBox())!
+  expect(instructionBox.x + instructionBox.width / 2).toBeCloseTo(centerBox.x + centerBox.width / 2, 0)
+  expect(instructionBox.y + instructionBox.height / 2).toBeCloseTo(connectBox.y + connectBox.height / 2, 0)
+  await expect(connectButton).toHaveCSS('min-height', '32px')
+  expect(connectBox.height).toBeLessThan(48)
+  await expect(bar.locator('.brand-icon svg')).toHaveCSS('width', '18px')
+  await connectButton.click()
+  await expect(bar.locator('.inline-instructions')).toHaveCount(0)
+  await bar.getByLabel('One-time pairing code', { exact: true }).fill('one-time-code')
+  await bar.getByRole('button', { name: 'Connect', exact: true }).click()
+  await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
+  await bar.getByLabel('Private Notes', { exact: true }).fill('Saved directly from Chrome')
+  await bar.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(bar.getByRole('status')).toHaveText('Saved')
+  expect(barEntries.get(123)).toMatchObject({ notes: 'Saved directly from Chrome' })
+  await expect(bar.locator('.library-link')).toHaveText('')
+  await expect(bar.getByText('Ch. 0 / 6', { exact: true })).toBeVisible()
+  const summaryFont = await ao3.locator('#workskin .summary blockquote').evaluate(element => getComputedStyle(element).fontSize)
+  expect(summaryFont).toBe('14px')
+  for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
+   await expect(surface.locator('.reading-summary strong')).toHaveCSS('font-size', summaryFont)
+  }
+  await expect(bar.getByRole('button', { name: 'Edit', exact: true })).toHaveCSS('font-size', summaryFont)
+  await expect(bar.locator('.settings-button')).toHaveCSS('width', '32px')
+  await expect(bar.locator('.edit-button svg')).toHaveCSS('width', '18px')
+  await expect(bar.locator('small a')).toHaveAttribute('href', `${appOrigin}/settings#ao3-browser-bar`)
+  await ao3.reload()
+  await bar.getByRole('button', { name: 'Edit', exact: true }).click()
+  await expect(bar.getByLabel('Private Notes', { exact: true })).toHaveValue('Saved directly from Chrome')
+  await bar.getByLabel('Private Notes', { exact: true }).fill('Edited directly from Chrome')
+  await bar.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(bar.getByRole('status')).toHaveText('Saved')
+  await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark through chapter 1 as read', exact: true }).click()
+  await expect(bar.getByText('Ch. 1 / 6', { exact: true })).toBeVisible()
+  expect(barEntries.get(123)).toMatchObject({ notes: 'Edited directly from Chrome', status: 'reading', progress: 1 })
+  expect(await ao3.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
+  expect(await ao3.evaluate(() => document.body.textContent)).not.toContain('paired-chrome-secret')
   // A newly opened work also captures early, not just an existing tab reload.
   workId = 456
   claimed = false
@@ -102,10 +167,11 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   expect(uploads).toHaveLength(2)
   // Series previews reuse the same explicit-request boundary and never queue works.
   const seriesUrl = 'https://archiveofourown.org/series/77'
-  const seriesFixture = await readFile('server/ao3/fixtures/series.html', 'utf8')
+  const seriesFixture = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')
   await context.route(seriesUrl, route => route.fulfill({ contentType: 'text/html', body: seriesFixture }))
   const series = await context.newPage()
   await series.goto(seriesUrl)
+  await series.addStyleTag({ content: '.work.blurb { border: 1px solid #ccc; padding: 8px; } .work.blurb > dl.stats { float: right; margin: 0; }' })
   const preview = await app.evaluate(({ id, url }) => new Promise(resolve => {
    const api = (window as Window & { chrome?: { runtime: { sendMessage(id: string, body: object, callback: (result: unknown) => void): void } } }).chrome
    api?.runtime.sendMessage(id, { type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, resolve)
@@ -113,6 +179,27 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   expect(preview).toMatchObject({ ok: true, page: { url: seriesUrl } })
   expect((preview as { page: { html: string } }).page.html).toContain('The first story')
   expect(uploads).toHaveLength(2)
+  await expect(series.locator('#ao3-library-companion').getByRole('button', { name: 'Add to Library', exact: true })).toBeVisible()
+  expect(await series.locator('#series-stats').evaluate(element => element.nextElementSibling?.id)).toBe('ao3-library-companion')
+  expect(await series.locator('.series.work.index').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-companion')
+  await expect(series.locator('#ao3-library-progress')).toHaveCount(0)
+  for (const work of [101, 102]) {
+   const tile = series.locator(`#ao3-library-work-${work}`)
+   await expect(tile.getByRole('button', { name: 'Add to Library', exact: true })).toBeVisible()
+   expect(await tile.evaluate(element => element.parentElement?.lastElementChild === element && element.previousElementSibling?.matches('dl.stats'))).toBe(true)
+   await expect(tile.locator('..').locator('[id^="ao3-library-"]')).toHaveCount(1)
+   const hostBox = (await tile.boundingBox())!, panelBox = (await tile.locator('section').first().boundingBox())!
+   const statsBox = (await tile.locator('..').locator('dl.stats').boundingBox())!
+   expect(panelBox.y - statsBox.y - statsBox.height).toBeCloseTo(20, 0)
+   expect(hostBox.y + hostBox.height - panelBox.y - panelBox.height).toBeCloseTo(4, 0)
+  }
+  const tile = series.locator('#ao3-library-work-101')
+  await tile.getByRole('button', { name: 'Add to Library', exact: true }).click()
+  await tile.getByLabel('Private Notes', { exact: true }).fill('Saved from a series tile')
+  await tile.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(tile.getByRole('status')).toHaveText('Saved')
+  expect(barEntries.get(101)).toMatchObject({ notes: 'Saved from a series tile' })
+  expect(barRequests.some(request => request.p_action === 'series_get' && request.p_work === 77)).toBe(true)
   if (local) {
    // Sample listing scans authenticate only with the local website boundary.
    queued = false
@@ -121,7 +208,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
     const api = (window as Window & { chrome: { runtime: { sendMessage(id: string, body: object, callback: (reply: SyncReply) => void): void } } }).chrome
     api.runtime.sendMessage(id, body, resolve)
    }), { id: extensionId, body })
-   expect(await command({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })).toEqual({ ok: true })
+   await expect.poll(() => command({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })).toEqual({ ok: true })
    expect(await command({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: 'https://archiveofourown.org/works/123' })).toMatchObject({ ok: true, page: { url: 'https://archiveofourown.org/works/123' } })
    const listing = 'https://archiveofourown.org/users/alice/bookmarks'
    await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a href="?page=3">Next</a></li></ol></div>' }))

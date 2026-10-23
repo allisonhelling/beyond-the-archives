@@ -329,6 +329,9 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .details-reading-controls .status-select { min-width: 0; font-size: 14px; }
 .details-reading-controls .status-select select { height: 44px; min-width: 0; width: 100%; }
 @media (max-width: 600px) {
+  .work-details-heading > div { display: flex; flex-direction: column; }
+  .work-details-heading .story-return-link { order: -2; align-self: flex-start; }
+  .work-details-heading > div > .story-series-eyebrow, .work-details-heading > div > .display-grouped-line:has(.story-series-eyebrow) { order: -1; }
   .story-details-page .story-section-heading:not(.story-section-heading-actions) { grid-template-columns: 1fr; }
   .story-title-row { grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
   .story-title-row h1 { grid-column: 1 / -1; }
