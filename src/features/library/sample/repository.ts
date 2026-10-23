@@ -1,5 +1,5 @@
 import type { AutomaticMetadata } from '../../imports/ao3-metadata'
-import { bookmarkReadingState, nonemptyMetadata, type CsvWork } from '../../imports/ao3-csv'
+import { csvBookmark, bookmarkReadingState, nonemptyMetadata, type CsvWork } from '../../imports/ao3-csv'
 import { recordReadingTransition } from '../reading-history'
 import { defaultReadingFilters, filterReading } from '../reading-search'
 import { applyAutomaticCollections, automaticCollectionRules, collectionRules, type AutomaticCollectionRules } from '../automatic-collections'
@@ -101,6 +101,7 @@ function read(): Library {
   try {
     const data = JSON.parse(saved) as Library
     if (Array.isArray(data.stories) && Array.isArray(data.collections)) {
+      for (const story of data.stories) if (story.work_status === 'deleted') story.metadata.publication_status = 'deleted'
       // Preserve saved identities and reading progress when upgrading legacy names.
       let renamedValues = false
       for (const collection of data.collections) {
@@ -194,7 +195,7 @@ export async function saveSampleStory(input: StoryInput, verifiedChapters?: Reco
   const story: Story = {
     id: input.id ?? crypto.randomUUID(), user_id: userId, work_id: work.id,
     original_url: existing?.original_url ?? input.url, work, work_status: existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
-    source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), id: String(bookmark.bookmarkId), url: `https://archiveofourown.org/bookmarks/${bookmark.bookmarkId}`, ...(bookmark.bookmarkStatus ? { status: bookmark.bookmarkStatus } : {}), ...(bookmark.bookmarkDate ? { date: bookmark.bookmarkDate } : {}) } : existing?.source_bookmark ?? {},
+    source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), ...csvBookmark(bookmark) } : existing?.source_bookmark ?? {},
     reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, personal_rating: input.personalRating,
     metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: automaticMetadata ? {} : existing && input.metadataChanges ? { ...(existing.metadata_overrides as object), ...input.metadataChanges } : input.metadata, extension_metadata: automaticMetadata ? { ...nonemptyMetadata(automaticMetadata), publication_status: input.metadata.publication_status } as Json : existing?.extension_metadata ?? {}, extension_chapters: existing?.extension_chapters ?? {},
@@ -220,7 +221,7 @@ export async function previewSampleCsvImport(works: CsvWork[]) {
  }))
 }
 /** Refresh automatic observations while preserving existing personal data. */
-export async function importSampleWorks(works: CsvWork[], options: { mode?: string; updateDeleted?: boolean } = {}) {
+export async function importSampleWorks(works: CsvWork[]) {
  let imported = 0, kept = 0
  for (const row of works) {
   const data = read()
@@ -228,15 +229,16 @@ export async function importSampleWorks(works: CsvWork[], options: { mode?: stri
   const incoming = nonemptyMetadata(row.metadata)
   const automatic = { ...incoming, ...(incoming.is_complete === undefined ? {} : { publication_status: incoming.is_complete ? 'complete' as const : 'in_progress' as const }) }
   if (existing) {
-   if (row.bookmarkId) existing.source_bookmark = { ...sourceBookmark(existing), id: String(row.bookmarkId), url: `https://archiveofourown.org/bookmarks/${row.bookmarkId}`, ...(row.bookmarkStatus ? { status: row.bookmarkStatus } : {}), ...(row.bookmarkDate ? { date: row.bookmarkDate } : {}) }
+   if (row.bookmarkId) existing.source_bookmark = { ...sourceBookmark(existing), ...csvBookmark(row) }
    if (row.workStatus === 'deleted') {
-    if (options.mode !== 'quick' && options.updateDeleted !== false) existing.work_status = 'deleted'
+    existing.work_status = 'deleted'
+    existing.metadata.publication_status = 'deleted'
     write(data); kept++; continue
    }
    if (existing.work.ao3_work_id === null && row.workId !== null) { existing.work = makeWork(row.workId); existing.work_id = existing.work.id; existing.original_url = row.url }
    existing.work_status = 'available'
    existing.extension_metadata = { ...(existing.extension_metadata as object), ...automatic } as Json
-   existing.metadata = { ...existing.metadata, ...automatic, ...(existing.metadata_overrides as object) }
+   existing.metadata = { ...existing.metadata, ...(existing.extension_metadata as object), ...(existing.metadata_overrides as object) }
    if (incoming.ao3_updated_at) existing.work.ao3_updated_at = incoming.ao3_updated_at
    write(data); kept++; continue
   }

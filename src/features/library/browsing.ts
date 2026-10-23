@@ -3,6 +3,12 @@ import { pageSize, savedPageSize } from './page-size'
 export const readingPreferencesKey = 'between-chapters:reading-preferences:v1'
 export const collectionSortKey = 'between-chapters:collection-sort:v1'
 
+export function isFilterNavigation(from: string, to: string) {
+  const previous = new URL(from || '/', 'https://library.local'), next = new URL(to, 'https://library.local')
+  return previous.pathname === next.pathname && previous.hash === next.hash && previous.searchParams.get('shelf') === next.searchParams.get('shelf') &&
+    Object.keys(defaultReadingFilters).some(key => previous.searchParams.get(key) !== next.searchParams.get(key))
+}
+
 export function readBrowsing(params: URLSearchParams, defaults = defaultReadingFilters) {
   const filters = { ...defaults }
   for (const key of Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]) {

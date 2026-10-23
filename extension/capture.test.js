@@ -21,6 +21,16 @@ it('skips unloaded, unrelated and oversized pages', async () => {
  vi.stubGlobal('location', new URL('https://example.com/works/123'))
  expect(await captureMetadataPage()).toBeNull()
 })
+it('captures only explicit 404 evidence without account content or fabricated metadata', async () => {
+ vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
+ document.body.innerHTML = '<nav>PRIVATE ACCOUNT</nav><div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>'
+ const captured = await captureMetadataPage()
+ expect(captured.notFound).toBe(true)
+ expect(captured.html).not.toContain('PRIVATE ACCOUNT')
+ expect(parseMetadata(captured.html, 123, captured.url)).toMatchObject({ category: 'not_found', metadata: null })
+ document.querySelector('#main h2').textContent = 'Temporarily unavailable'
+ expect(await captureMetadataPage()).toBeNull()
+})
 
 it('waits for parsed metadata and chapter navigation before capturing ahead of full load', async () => {
  const readyState = vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')

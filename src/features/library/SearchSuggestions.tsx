@@ -1,12 +1,13 @@
 import { useId, useState, type KeyboardEvent } from 'react'
 import { useDismissible } from '../../components/useDismissible'
 import { normalize } from './reading-search'
-import { X } from 'lucide-react'
+import { MetadataTags } from './MetadataTags'
+import type { TagCategory } from './display-settings'
 
 export type SuggestionGroup = { label: string; values: string[] }
-export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help }: {
+export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help, tagCategory }: {
   label: string; placeholder: string; value: string; onChange: (value: string) => void;
-  groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; hideLabel?: boolean; chips?: boolean; help?: string
+  groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; hideLabel?: boolean; chips?: boolean; help?: string; tagCategory?: TagCategory
 }) {
   const [focused, setFocused] = useState(false), id = useId()
   const [appendSuggestion, setAppendSuggestion] = useState(false)
@@ -32,7 +33,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
     onChange([...previous, ...(!previous.some(item => normalize(item) === normalize(text)) ? [text] : [])].join(', '))
     setDraft('')
     setAppendSuggestion(multiple && keepOpen)
-    ref.current?.querySelector<HTMLInputElement>('input')?.focus()
+    ref.current?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
     setFocused(keepOpen)
   }
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
@@ -40,7 +41,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
     {focused && <div className="search-suggestions menu-surface" id={id} aria-label={`${label} suggestions`}>
       {suggestions.map(group => <section key={group.label} aria-label={`${group.label} suggestions`}>{!hideHeadings && <span className="suggestion-heading">{group.label}</span>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
     </div>}
-    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} selected filters`}>{selected.map(text => <button type="button" key={text} aria-label={`Remove ${label} filter ${text}`} onClick={() => onChange(selected.filter(item => item !== text).join(', '))}>{text}<X size={14} /></button>)}</div>}
+    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} selected filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
     {help && <small className="suggestion-help">{help}</small>}
   </div>
 }

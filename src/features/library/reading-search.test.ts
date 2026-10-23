@@ -6,6 +6,19 @@ function story(title: string, values: Partial<Story> = {}): Story {
     notes: '', personalTags: [], is_favorite: false, work: { ao3_updated_at: null, verified_chapters: {} },
     last_update_notification_at: null, update_dismissed_at: null, ...values } as Story
 }
+it('combines notes, Rec evidence, personal rating and content rating independently', () => {
+ const entries = [
+  story('Recommended', { personal_rating: 5, notes: 'My thoughts', source_bookmark: { rec: true }, metadata: { ...blankMetadata, rating: 'Mature' } }),
+  story('Not a Rec', { personal_rating: 1, notes: 'Other notes', source_bookmark: { rec: false }, metadata: { ...blankMetadata, rating: 'Explicit' } }),
+  story('Unknown', { personal_rating: null, notes: ' \n\t ', source_bookmark: { rec: null } }),
+ ]
+ expect(filterReading(entries, { ...defaultReadingFilters, personalNotes: true })).toHaveLength(2)
+ expect(filterReading(entries, { ...defaultReadingFilters, recs: true })).toEqual([entries[0]])
+ expect(filterReading(entries, { ...defaultReadingFilters, personalRating: ['1', '5'] })).toHaveLength(2)
+ expect(filterReading(entries, { ...defaultReadingFilters, personalRating: ['unrated'] })).toEqual([entries[2]])
+ expect(filterReading(entries, { ...defaultReadingFilters, personalNotes: true, recs: true, personalRating: ['5'], rating: ['Mature'] })).toEqual([entries[0]])
+ expect(filterReading(entries, { ...defaultReadingFilters, personalRating: ['5'], rating: ['Explicit'] })).toEqual([])
+})
 describe('within-results query syntax', () => {
   it.each([
     ['book*', 'book', true], ['book*', 'books and booking', true],
@@ -115,10 +128,11 @@ it('includes or excludes abandoned fics independently of their reading status', 
 })
 
 it('combines selected publication statuses with OR and treats an empty selection as all statuses', () => {
-  const entries = ['complete', 'in_progress', 'abandoned', 'unknown'].map(publication => story(publication, {
+  const entries = ['complete', 'in_progress', 'abandoned', 'unknown', 'deleted'].map(publication => story(publication, {
     metadata: { ...blankMetadata, title: publication, publication_status: publication as Story['metadata']['publication_status'] },
   }))
-  expect(filterReading(entries, { ...defaultReadingFilters, publication: [] })).toHaveLength(4)
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: [] })).toHaveLength(5)
+  expect(filterReading(entries, { ...defaultReadingFilters, publication: ['deleted'] })).toEqual([entries[4]])
   expect(filterReading(entries, { ...defaultReadingFilters, publication: ['abandoned', 'complete'] }).map(story => story.id).sort()).toEqual(['abandoned', 'complete'])
   expect(filterReading(entries, { ...defaultReadingFilters, publication: ['complete', 'in_progress', 'unknown'] })).toHaveLength(3)
   expect(filterReading(entries, { ...defaultReadingFilters, publication: ['unknown'] })).toEqual([entries[3]])

@@ -40,7 +40,7 @@ export function createLibrarySync({ auth, available, changed }) {
    if (message.mode === 'quick' && !baseline.length) throw new Error('Complete and import a full scan of this list before Quick Sync.')
    await discard(await read())
    const next = { ...identity, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
-    startPage, endPage, delaySeconds, updateDeleted: message.updateDeleted !== false, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now() + delaySeconds * 1000, keys: [], error: '' }
+    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now() + delaySeconds * 1000, keys: [], error: '' }
    await write(next); changed(); return { state: next }
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
@@ -158,8 +158,8 @@ export function createLibrarySync({ auth, available, changed }) {
   try {
    const result = await command(message)
    if (result.state) {
-    const { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, updateDeleted, attention, attentionId } = result.state
-    return { state: { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, updateDeleted, attention, attentionId } }
+    const { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId } = result.state
+    return { state: { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId } }
    }
    return result
   } finally { if (mutation) busy = false }

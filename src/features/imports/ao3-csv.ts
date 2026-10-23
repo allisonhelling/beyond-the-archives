@@ -2,9 +2,10 @@ import { scraperDate } from '../../lib/dates'
 export { scraperDate } from '../../lib/dates'
 import { classifyUrl } from './urls'
 import type { AutomaticMetadata } from './ao3-metadata'
+import { bookmarkRec, type SourceBookmark } from '../library/model'
 
 export type CsvWork = {
- source: 'bookmarks' | 'marked_for_later'; url: string; workId: number | null; workStatus?: 'available' | 'deleted'; bookmarkId?: number; bookmarkStatus?: string; metadata: AutomaticMetadata;
+ source: 'bookmarks' | 'marked_for_later'; url: string; workId: number | null; workStatus?: 'available' | 'deleted'; bookmarkId?: number; bookmarkStatus?: string; bookmarkUser?: string; bookmarkCount?: number; bookmarkRec?: boolean | null; metadata: AutomaticMetadata;
  bookmarkDate: string | null; updatedDate: string | null; notes: string; tags: string[];
 }
 export type CsvSource = Omit<CsvWork, 'workId'> & { workId?: number | null; seriesId?: number }
@@ -73,10 +74,13 @@ export function readAo3Rows(rows: Record<string, string>[]): CsvSource[] {
   if (source !== 'bookmarks' && source !== 'marked_for_later') throw new Error(`CSV row ${index + 2}: unknown source_list ${source}`)
   if (deleted && (source !== 'bookmarks' || !hasBookmark)) throw new Error(`CSV row ${index + 2}: deleted bookmarks require a bookmark ID.`)
   if (row.work_status && !['available', 'deleted'].includes(row.work_status)) throw new Error(`CSV row ${index + 2}: unsupported work_status.`)
+  const rec = row['bookmark rec']?.trim().toLowerCase()
+  if (rec !== undefined && !['true', 'false', '', 'unknown'].includes(rec)) throw new Error(`CSV row ${index + 2}: invalid bookmark rec.`)
+  const recommendation = bookmarkRec({ source_bookmark: { status: row['bookmark status'], ...(rec !== undefined && { rec: rec === 'true' ? true : rec === 'false' ? false : null }) } })
   const metadata = csvMetadata(row)
   if (!deleted && !metadata.title) throw new Error(`CSV row ${index + 2}: title is missing.`)
   return { source, url: identity.kind === 'valid' || identity.kind === 'series' ? identity.identity.normalizedUrl : bookmarkUrl, ...(identity.kind === 'valid' ? { workId: identity.identity.workId } : identity.kind === 'series' ? { seriesId: identity.identity.seriesId } : { workId: null }), workStatus: deleted ? 'deleted' : 'available', ...(hasBookmark ? { bookmarkId } : {}), bookmarkStatus: row['bookmark status'], metadata,
-   bookmarkDate: source === 'bookmarks' ? scraperDate(row['bookmark date'] ?? '') : null, updatedDate: scraperDate(row.date ?? ''), notes: row['bookmark notes'] ?? '', tags: list(row['bookmark tags']) }
+   bookmarkDate: source === 'bookmarks' ? scraperDate(row['bookmark date'] ?? '') : null, ...(source === 'bookmarks' && { bookmarkRec: recommendation }), bookmarkUser: row['bookmark user'], bookmarkCount: count(row['bookmark count']), updatedDate: scraperDate(row.date ?? ''), notes: row['bookmark notes'] ?? '', tags: list(row['bookmark tags']) }
  })
 }
 /** Keep each work once, preferring bookmarks and the most recent bookmark date. */
@@ -95,6 +99,13 @@ export function nonemptyMetadata(metadata: AutomaticMetadata): AutomaticMetadata
  return result
 }
 export const csvWorkKey = (work: Pick<CsvWork, 'workId' | 'bookmarkId'>) => work.workId === null ? `bookmark:${work.bookmarkId}` : String(work.workId)
+/** Keep source bookmark observations separate from editable personal fields. */
+export function csvBookmark(work: CsvWork): SourceBookmark {
+ if (!work.bookmarkId) return {}
+ return { id: String(work.bookmarkId), url: `https://archiveofourown.org/bookmarks/${work.bookmarkId}`, notes: work.notes, tags: work.tags, rec: bookmarkRec({ source_bookmark: { status: work.bookmarkStatus, ...(work.bookmarkRec !== undefined && { rec: work.bookmarkRec }) } }),
+  ...(work.bookmarkStatus ? { status: work.bookmarkStatus } : {}), ...(work.bookmarkDate ? { date: work.bookmarkDate } : {}),
+  ...(work.bookmarkUser ? { user: work.bookmarkUser } : {}), ...(work.bookmarkCount !== undefined ? { count: work.bookmarkCount } : {}) }
+}
 export function bookmarkReadingState(work: CsvWork) {
  const finished = work.source === 'bookmarks' && Boolean(work.bookmarkDate && work.updatedDate && work.bookmarkDate > work.updatedDate)
  return { status: work.source === 'marked_for_later' ? 'to_read' as const : finished ? 'finished' as const : 'reading' as const,

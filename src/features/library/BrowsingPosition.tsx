@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useLocation, useNavigationType } from 'react-router-dom'
+import { isFilterNavigation } from './browsing'
 
 // A session-local bounded map avoids persisting private URLs after sign-out.
 export function BrowsingPosition() {
@@ -15,12 +16,13 @@ export function BrowsingPosition() {
   useLayoutEffect(() => {
     const browsing = /^\/(reading|library|series\/)/.test(path)
     const returning = action === 'POP' || /^\/(stories|series)\//.test(previousRoute.current)
-    previousRoute.current = location.pathname
-    const saved = returning ? positions.current.get(path) : undefined
+    const preserve = action !== 'POP' && browsing && isFilterNavigation(previousRoute.current, path)
+    previousRoute.current = path
+    const saved = returning && !preserve ? positions.current.get(path) : undefined
     let frame = 0, stopped = false, attempts = 0
     function restore() {
       if (stopped) return
-      if (location.hash) {
+      if (location.hash && !preserve) {
         let id = location.hash.slice(1)
         try { id = decodeURIComponent(id) } catch { /* Keep malformed fragment text literal. */ }
         document.getElementById(id)?.scrollIntoView()
@@ -31,7 +33,7 @@ export function BrowsingPosition() {
         window.scrollTo(0, saved.y)
         if (saved.focus) document.getElementById(saved.focus)?.focus({ preventScroll: true })
         if ((pending || saved.focus && !document.getElementById(saved.focus) || document.documentElement.scrollHeight < saved.y + window.innerHeight) && attempts++ < 900) frame = requestAnimationFrame(restore)
-      } else window.scrollTo(0, 0)
+      } else if (!preserve) window.scrollTo(0, 0)
     }
     // Result data may arrive after this route mounts; retry until it has height.
     frame = requestAnimationFrame(restore)

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ao3Date, authorPageUrl, blankMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress } from './model'
+import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress, type Work } from './model'
+it('projects deleted availability without losing saved work fields or manual corrections', () => {
+  const work = { title: 'Source title', summary: 'Saved summary', is_complete: true, published_chapters: 8, automatic_metadata: {} } as Work
+  const manual = { title: 'My title', publication_status: 'complete' }
+  expect(effectiveMetadata(work, manual, [], [], [], 'deleted')).toMatchObject({ title: 'My title', summary: 'Saved summary', published_chapters: 8, publication_status: 'deleted' })
+  expect(effectiveMetadata(work, manual, [], [], [], 'available').publication_status).toBe('complete')
+  expect(manual.publication_status).toBe('complete')
+})
 describe('manual AO3 identity and progress', () => {
   it('accepts AO3 author and pseud pages and rejects unrelated or unsafe destinations', () => {
     for (const url of ['https://archiveofourown.org/users/Author', 'https://archiveofourown.org/users/Author/pseuds/PenName', 'https://archiveofourown.org/users/Author/profile', 'https://archiveofourown.org/users/Author/works']) expect(authorPageUrl(` ${url} `)).toBe(url)

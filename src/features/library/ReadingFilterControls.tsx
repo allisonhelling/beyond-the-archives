@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, Heart, Info, Layers3, SlidersHorizontal, X } from 'lucide-react'
+import { ChevronDown, FileText, Heart, Info, Layers3, SlidersHorizontal, Star } from 'lucide-react'
+import { MetadataTags } from './MetadataTags'
 import { Dropdown } from '../../components/Dropdown'
 import { useDismissible } from '../../components/useDismissible'
 import { DateFilterField } from './DateFilterField'
@@ -16,7 +17,7 @@ function FandomSelect({ options, selected, onChange }: { options: FandomOption[]
   const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false))
   return <div className="fandom-select" ref={ref}>
     <button type="button" className="filter-input fandom-trigger" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><span>Select fandoms {selected.length ? `(${selected.length})` : ''}</span><ChevronDown size={16} /></button>
-    {!open && selected.length > 0 && <div className="filter-chips">{selected.map(name => <button type="button" key={name} aria-label={`Remove fandom ${name}`} onClick={() => onChange(selected.filter(f => f !== name))}>{name}<X size={14} /></button>)}</div>}
+    {!open && selected.length > 0 && <div className="filter-chips"><MetadataTags values={selected} removeLabel={name => `Remove fandom ${name}`} onRemove={name => onChange(selected.filter(f => f !== name))} /></div>}
     {open && <div id={id} className="fandom-panel menu-surface" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
       <input aria-label="Search fandoms" type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search fandoms" />
       {/* Keep label presses from focusing the page and dismissing the menu before checkbox activation. */}
@@ -59,7 +60,9 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
   const activeFilters = readingFilterLabels(filters, { authorOnly: automaticCollection, series: mode === 'series' })
   const membershipToggles = <>
       <button type="button" className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a Series</button>
-      <button type="button" className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Heart size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites</button>
+      <button type="button" className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Star size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites</button>
+      <button type="button" className={`button ${filters.personalNotes ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.personalNotes)} onClick={() => change('personalNotes', !filters.personalNotes)}><FileText size={17} />Personal Notes</button>
+      <button type="button" className={`button ${filters.recs ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.recs)} onClick={() => change('recs', !filters.recs)}><Heart size={17} fill={filters.recs ? 'currentColor' : 'none'} />Recs</button>
   </>
   return <>
     <section className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series toolbar' : mode === 'library' ? 'Library toolbar' : 'Reading toolbar'}>
@@ -69,12 +72,13 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       {!alwaysExpanded && <button type="button" className={`button ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series filters' : mode === 'library' ? 'Library filters' : 'Reading filters'}><div className="filter-grid">
-      <SearchSuggestions label="Relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />
-      <SearchSuggestions label="Characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
+      <SearchSuggestions label="Relationships" tagCategory="relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />
+      <SearchSuggestions label="Characters" tagCategory="characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
 
       <div className="filter-choice-row">
-      <Dropdown fitContent label="Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
+      <Dropdown fitContent label="Content Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
+      <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
       <Dropdown fitContent label={mode !== 'reading' ? 'Publication status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
       <Dropdown fitContent label="One-shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
       {!automaticCollection && membershipToggles}
@@ -88,6 +92,6 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <details className="search-help"><summary aria-label="Search syntax and modes"><Info size={18} /></summary><div id={helpId}><p><strong>Any field</strong> combines saved titles, authors, fandoms, AO3 tags, personal tags, summaries, notes, ratings, statuses, and URLs. <strong>Summary</strong> searches only the fic’s summary. <strong>Notes</strong> searches only your private notes.</p><ul><li><code>book*</code> — any characters: book, books, booking.</li><li><code>Harry Potter</code> — AND: both terms must occur.</li><li><code>Harry || Potter</code> — OR: either or both terms.</li><li><code>"Harry Lockhart"</code> — words in exact sequence.</li><li><code>Harry -Lockhart</code> — include Harry, exclude Lockhart.</li></ul><p>AND and NOT apply before OR. Use a backslash to escape literal symbols, such as <code>\*</code>, <code>\-</code>, <code>\"</code>, <code>\|</code>, or <code>\\</code>. Matching ignores case and accents. Searches stay within the selected {mode === 'library' ? 'shelf' : 'tile'} and filters.</p></div></details></div>
       <Dropdown label="Search in" value={filters.scope} onChange={value => change('scope', value as ReadingFilters['scope'])} options={[{ value: 'any', label: 'Any field' }, { value: 'summary', label: 'Summary' }, { value: 'notes', label: 'Notes' }]} />
     </div></div><div className="form-actions"><button type="button" className="button secondary" onClick={clearFilters}>Clear all filters</button>{!alwaysExpanded && <button type="button" className="button secondary" onClick={() => setExpanded(false)}>Hide</button>}</div></section>}
-    {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active filters"><div className="filter-chips">{activeFilters.map(text => <span key={String(text)}>{text}</span>)}</div><button type="button" className="text-button" onClick={clearFilters}>Clear all filters</button></div>}
+    {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active filters"><div className="filter-chips"><MetadataTags values={activeFilters} /></div><button type="button" className="text-button" onClick={clearFilters}>Clear all filters</button></div>}
   </>
 }

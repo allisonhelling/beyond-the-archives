@@ -1,5 +1,5 @@
 import { MetadataTags } from './MetadataTags'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DisplayInfo } from './DisplayInfo'
 import { DisplayEditorContext } from './display-editor-context'
@@ -158,6 +158,16 @@ it('defaults tags to bullet-separated colored text and persists every selected s
  }
  expect(view.container).toHaveTextContent('Fluff, Humor')
  expect(tagAppearance('{"workTile":{"tagShape":"unsafe"}}').shape).toBe('bullets')
+})
+it('uses the chosen tag appearance for removable filter bubbles', () => {
+ const preferences = displayPreferences(), remove = vi.fn()
+ preferences.tagAppearance = { shape: 'sharp', colors: { relationships: '#123abc' } }
+ act(() => saveDisplay(preferences))
+ const view = render(<MetadataTags values={['A/B']} category="relationships" onRemove={remove} removeLabel={value => `Remove Relationships filter ${value}`} />)
+ expect(view.container.querySelector('[data-tag-shape]')).toHaveAttribute('data-tag-shape', 'sharp')
+ expect(view.container.querySelector('[data-tag-category]')).toHaveStyle('--tag-color: #123abc')
+ fireEvent.click(screen.getByRole('button', { name: 'Remove Relationships filter A/B' }))
+ expect(remove).toHaveBeenCalledWith('A/B')
 })
 
 it('shows a drop shadow in the same slot used by the move operation without saving the draft', () => {

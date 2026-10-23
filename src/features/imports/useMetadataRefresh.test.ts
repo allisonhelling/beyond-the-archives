@@ -4,8 +4,8 @@ import type { Story } from '../library/model'
 import type { metadataRefreshJob as readJob } from './repository'
 import { useMetadataRefresh } from './useMetadataRefresh'
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), submit: vi.fn(), reload: vi.fn() }))
-vi.mock('./repository', () => ({ metadataRefreshJob: mocks.read, submitImport: mocks.submit }))
+const mocks = vi.hoisted(() => ({ read: vi.fn(), submit: vi.fn(), reload: vi.fn(), markDeleted: vi.fn() }))
+vi.mock('./repository', () => ({ metadataRefreshJob: mocks.read, submitImport: mocks.submit, markWorkDeleted: mocks.markDeleted }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refresh: mocks.reload }) }))
 vi.mock('../../lib/sample-mode', () => ({ sampleMode: false }))
 type Job = NonNullable<Awaited<ReturnType<typeof readJob>>>
@@ -159,4 +159,25 @@ it('ignores a submission result that arrives after leaving the story', async () 
   hook.rerender({ selected: story })
   await act(async () => {})
   expect(hook.result.current.status).toBe('idle')
+})
+it('asks about observed 404 refreshes and changes status only after confirmation', async () => {
+ mocks.read.mockResolvedValue(job('failed', { id: 'missing-job', error_category: 'not_found' }))
+ const { result } = await mount()
+ expect(result.current.notFound).toBe(false)
+ await act(async () => { await result.current.refresh() })
+ expect(result.current.notFound).toBe(true)
+ expect(mocks.markDeleted).not.toHaveBeenCalled()
+ await act(async () => { await result.current.confirmDeleted() })
+ expect(mocks.markDeleted).toHaveBeenCalledWith(story.id, 'missing-job')
+ expect(mocks.reload).toHaveBeenLastCalledWith([story.id])
+ act(() => result.current.dismissNotFound())
+ expect(result.current.notFound).toBe(false)
+})
+it('cancels a 404 confirmation without updating the saved work', async () => {
+ mocks.read.mockResolvedValue(job('failed', { id: 'missing-job', error_category: 'not_found' }))
+ const { result } = await mount()
+ await act(async () => { await result.current.refresh() })
+ act(() => result.current.dismissNotFound())
+ expect(result.current.notFound).toBe(false)
+ expect(mocks.markDeleted).not.toHaveBeenCalled()
 })

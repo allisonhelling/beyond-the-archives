@@ -39,7 +39,7 @@ export function extensionHandler(deps: Dependencies) {
      if (input.navigationHtml !== undefined && (typeof input.navigationHtml !== 'string' || input.navigationUrl !== `https://archiveofourown.org/works/${job.workId}/navigate`)) return reply({ error: 'Chapter index identity mismatch.' }, 400)
      result = validateMetadata(withChapterDates(result, input.navigationHtml as string | undefined, job.workId))
     }
-    if (!result.metadata) return reply({ waiting: true, category: result.category })
+    if (!result.metadata && result.category !== 'not_found') return reply({ waiting: true, category: result.category })
    }
    const committed = await deps.finish(job, result)
    return reply({ committed }, committed ? 200 : 409)

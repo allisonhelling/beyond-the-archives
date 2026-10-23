@@ -36,6 +36,10 @@ it('waits for login, confirmation, and valid work metadata without committing fa
  expect(finish).not.toHaveBeenCalled()
  expect((await handler(request({ url: 'https://archiveofourown.org/works/456' }))).status).toBe(400)
 })
+it('finishes an explicit AO3 404 so the app can ask the owner before marking deletion', async () => {
+ expect(await (await handler(request({ html: '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>' }))).json()).toEqual({ committed: true })
+ expect(finish).toHaveBeenCalledWith(job, expect.objectContaining({ category: 'not_found', metadata: null, retryable: false }))
+})
 it('bounds input, supports preflight, and finishes timeout as an explicit retry', async () => {
  expect((await handler(request({ html: 'x'.repeat(1000001) }))).status).toBe(413)
  expect(finish).not.toHaveBeenCalled()

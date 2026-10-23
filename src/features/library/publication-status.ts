@@ -1,4 +1,4 @@
-import { BookCheck, BookX, NotebookPen, createLucideIcon } from 'lucide-react'
+import { BookCheck, BookX, Trash2, NotebookPen, createLucideIcon } from 'lucide-react'
 
 const BookQuestion = createLucideIcon('BookQuestion', [
   ['path', { d: 'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 1 4 19.5Z', strokeDasharray: '3 3', key: 'outline' }],
@@ -10,5 +10,6 @@ export const publicationStatuses = {
   complete: { label: 'Complete on AO3', Icon: BookCheck },
   in_progress: { label: 'In progress on AO3', Icon: NotebookPen },
   abandoned: { label: 'Abandoned', Icon: BookX },
+  deleted: { label: 'Deleted', Icon: Trash2 },
   unknown: { label: 'AO3 Status Unknown', Icon: BookQuestion },
 } as const

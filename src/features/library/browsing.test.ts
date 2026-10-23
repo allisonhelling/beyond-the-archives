@@ -1,8 +1,20 @@
 import { afterAll, beforeEach, expect, it, vi } from 'vitest'
-import { browsingReturnTo, readBrowsing, writeBrowsing } from './browsing'
+import { browsingReturnTo, isFilterNavigation, readBrowsing, writeBrowsing } from './browsing'
 import { defaultReadingFilters } from './reading-search'
 import { pageSizeKey } from './page-size'
 beforeEach(()=>{const values=new Map<string,string>();vi.stubGlobal('localStorage',{getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>values.set(key,value)})})
+it('keeps filter edits distinct from pagination, shelf changes and detail navigation', () => {
+ const original = '/library?shelf=all&page=3&personalNotes=false'
+ const filtered = '/library?shelf=all&page=1&personalNotes=true'
+ expect(isFilterNavigation(original, filtered)).toBe(true)
+ expect(isFilterNavigation(filtered, original)).toBe(true)
+ expect(isFilterNavigation(original, '/library?shelf=all&page=4&personalNotes=false')).toBe(false)
+ expect(isFilterNavigation(original, '/library?shelf=recs&personalNotes=true')).toBe(false)
+ expect(isFilterNavigation('/stories/1', filtered)).toBe(false)
+ expect(isFilterNavigation(original, filtered + '#work')).toBe(false)
+ const filters = { ...defaultReadingFilters, personalRating: ['1', '5', 'unrated'], personalNotes: true, recs: true }
+ expect(readBrowsing(writeBrowsing(new URLSearchParams(), filters, 25)).filters).toEqual(filters)
+})
 afterAll(()=>vi.unstubAllGlobals())
 it('uses a saved size only without a valid URL size and canonicalizes malformed page links',()=>{
  localStorage.setItem(pageSizeKey,'100')

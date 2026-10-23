@@ -1,7 +1,7 @@
 import { datePlaceholder } from '../../lib/dates'
 import { inSeries, seriesMemberships } from './series'
 import { publicationStatuses } from './publication-status'
-import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
+import { active, isCalendarDate, isOneShot, bookmarkRec, statuses, tagNames, type Story } from './model'
 
 type BaseSortOrder = 'updated' | 'added' | 'ready' | 'alpha'
 export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
@@ -9,12 +9,12 @@ export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
-  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; rating: string[]; favorites: boolean; relationship: string; characters: string; tags: string;
+  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy; randomSeed?: string;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, rating: [], favorites: false,
+  query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
   relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
@@ -128,6 +128,8 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
       (!filters.inSeries || inSeries(s)) &&
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&
+      (!filters.personalNotes || Boolean(s.notes?.trim())) && (!filters.recs || bookmarkRec(s) === true) &&
+      (!filters.personalRating?.length || (s.personalRatings?.length ? s.personalRatings : [s.personal_rating ?? null]).some(rating => filters.personalRating.includes(rating === null ? 'unrated' : String(rating)))) &&
       relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
       characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&
       tags.every(term => tagNames(s.metadata, 'freeform').some(t => normalize(t).includes(term))) &&

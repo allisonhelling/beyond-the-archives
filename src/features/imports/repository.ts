@@ -59,6 +59,11 @@ export async function metadataRefreshJob(entryId: string, batchId?: string) {
  return data
 }
 
+export async function markWorkDeleted(entryId: string, jobId: string) {
+ const { error } = await client().rpc('mark_work_deleted', { p_entry: entryId, p_job: jobId })
+ if (error) throw new Error('Could not mark the work as deleted. Apply the latest migrations and retry.')
+}
+
 export async function previewSeries(url: string): Promise<SeriesPreview> {
  const identity = parseSeriesUrl(url)
  let useExtension = sampleMode
@@ -130,11 +135,10 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  return data as unknown as { batch: string | null; imported: number; kept: number }
 }
 
-export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], options: { mode?: string; updateDeleted?: boolean } = {}) {
- works = works.map(work => ({ ...work, scanMode: options.mode ?? 'full', updateDeleted: options.updateDeleted ?? true }))
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[]) {
  const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
  let result: { batch: string | null; imported: number; kept: number }
- if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works, options)
+ if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works)
  else {
   const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json })
   if (error) throw new Error('Could not import this scan page. Apply the latest database migrations and check your connection; retry safely to preserve personal data.')

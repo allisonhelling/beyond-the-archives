@@ -27,7 +27,7 @@ export function captureListingPage(kind) {
   const deleted = kind === 'bookmarks' && (item.classList.contains('deleted') || /^this (?:work |item )?has been deleted[, .!]/i.test(text(item.querySelector(':scope > p.message'))))
   if (!deleted && (!link || link.origin !== location.origin || !/^\/works\/[1-9]\d*$/.test(link.pathname))) { skipped++; continue }
   const workLink = link?.origin === location.origin && /^\/works\/[1-9]\d*$/.test(link.pathname) ? link.origin + link.pathname : ''
-  const row = { title: deleted ? '' : text(title), link: workLink, source_list: kind, work_status: deleted ? 'deleted' : 'available',
+  const row = { title: workLink ? text(title) : '', link: workLink, source_list: kind, work_status: deleted ? 'deleted' : 'available',
    author: join(item, 'h4.heading > a[rel="author"]'), fandoms: join(item, '.fandoms a'),
    category: text(item.querySelector('.required-tags .category')), relationships: join(item, '.tags .relationships > a'),
    characters: join(item, '.tags .characters > a'), freeforms: join(item, '.tags .freeforms > a'),
@@ -36,10 +36,13 @@ export function captureListingPage(kind) {
    recipient: join(item, 'h4.heading > a[href$="gifts"]'), summary: lines(item.querySelector('.summary')) }
   for (const field of ['words', 'comments', 'kudos', 'bookmarks', 'hits']) row[field] = text(item.querySelector(`dd.${field}`)).replace(/\D/g, '')
   if (kind === 'bookmarks') {
+   const status = item.querySelector(':scope > .status')
+   // AO3 replaces Rec icons with a lock/admin icon for private/hidden bookmarks.
+   const rec = status?.querySelector('.rec') ? 'true' : status?.querySelector('.public') && !status.querySelector('.private, .hidden') ? 'false' : 'unknown'
    const id = item.id.match(/^bookmark_([1-9]\d*)$/)?.[1]
    if (!id) return { error: 'A bookmark has no stable ID. Scan stopped; saved pages are preserved.' }
    if (!row.link) row.link = `${location.origin}/bookmarks/${id}`
-   Object.assign(row, { 'bookmark id': id, 'bookmark status': item.querySelector('.status > a:first-child > span')?.className ?? '',
+   Object.assign(row, { 'bookmark id': id, 'bookmark rec': rec, 'bookmark status': status?.querySelector('a:first-child > span')?.className ?? '',
     'bookmark tags': join(item, '.user .tags a.tag'), 'bookmark notes': lines(item.querySelector('.user .notes')),
     'bookmark user': text(item.querySelector('.user .byline > a')), 'bookmark date': text(item.querySelector('.user .datetime')),
     'bookmark url': `${location.origin}/bookmarks/${id}`, 'bookmark count': (item.querySelector('.status')?.title ?? '').replace(/\D/g, '') })

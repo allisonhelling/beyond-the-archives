@@ -1,10 +1,10 @@
 import type { Collection, Status, Story } from './model'
-import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feather, Flame, FlaskConical, Flower2, Gem, Heart, KeyRound, Leaf, Library, Layers3, Moon, Music, Pause, Sparkle, ScrollText, Sun, Telescope, X, type LucideIcon } from 'lucide-react'
+import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feather, Flame, FlaskConical, Flower2, Gem, Heart, KeyRound, Leaf, Library, Layers3, Moon, Music, Pause, Sparkle, ScrollText, Star, Sun, Telescope, X, type LucideIcon } from 'lucide-react'
 
 export const readingStatusIcons: Record<Status, LucideIcon> = { to_read: Bookmark, reading: BookOpenText, paused_reading: Pause, re_reading: BookOpenText, waiting_for_updates: BookOpenText, finished: Check, did_not_finish: X }
-export const automaticCollectionIcons: Partial<Record<string, LucideIcon>> = { all: Library, series: Layers3, currently_reading: readingStatusIcons.reading, paused_reading: readingStatusIcons.paused_reading, to_read: readingStatusIcons.to_read, favorites: Heart, finished: readingStatusIcons.finished, did_not_finish: readingStatusIcons.did_not_finish }
+export const automaticCollectionIcons: Partial<Record<string, LucideIcon>> = { all: Library, series: Layers3, currently_reading: readingStatusIcons.reading, paused_reading: readingStatusIcons.paused_reading, to_read: readingStatusIcons.to_read, favorites: Star, recs: Heart, finished: readingStatusIcons.finished, did_not_finish: readingStatusIcons.did_not_finish }
 
-export const defaultShelfColors = { all: '#970000', currently_reading: '#214921', paused_reading: '#92504e', to_read: '#243c5e', favorites: '#54254b', finished: '#4a1b0f', did_not_finish: '#25211f', series: '#07534a' } as const
+export const defaultShelfColors = { all: '#970000', currently_reading: '#214921', paused_reading: '#92504e', to_read: '#243c5e', favorites: '#54254b', recs: '#92504e', finished: '#4a1b0f', did_not_finish: '#25211f', series: '#07534a' } as const
 
 export const collectionColors = [
   { label: 'Burgundy', value: defaultShelfColors.all }, { label: 'Forest', value: defaultShelfColors.currently_reading },

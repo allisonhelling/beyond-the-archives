@@ -858,6 +858,7 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      mark_work_deleted: { Args: { p_entry: string; p_job: string }; Returns: undefined }
       claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }
       release_backup_save: { Args: { p_user: string; p_token: string }; Returns: undefined }
       backup_storage_files: { Args: { p_user: string }; Returns: Json }

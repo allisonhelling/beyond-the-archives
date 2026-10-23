@@ -9,6 +9,8 @@ export function failure(category: string, message: string, retryable = false, pa
 /** Pure fixture-testable parser. No database or personal reading data enters this adapter. */
 export function parseMetadata(html: string, workId: number, sourceUrl: string): RetrievalResult {
  const $ = load(html)
+ // A missing page is evidence for a user decision, never an automatic deletion.
+ if (!$('h2.title').length && /Error\s+404/i.test($('#main h2, #main h1').text()) && /The page you were looking for doesn['’]t exist\./i.test($('#main').text())) return failure('not_found', "Error 404: The page you were looking for doesn't exist.")
  if ($('#main #new_user, #main form[action="/users/login"]').length || /This work is only available to registered users|you must be logged in to access|This work could have adult content/i.test($.text())) return failure('restricted','AO3 sign-in is required. Edit this saved work manually.')
  const heading = $('h2.title').first().text().trim()
  if (!heading) return failure('parser_failure','Expected AO3 metadata was not found. The saved work is still editable.')
@@ -52,7 +54,15 @@ export async function retrieveAo3Document(expected: string, matches: (url: strin
    if(response.headers.get('cf-mitigated')==='challenge') return failure('blocked','AO3 returned a blocking challenge. Retrieval is paused.',true,86400)
    if(response.status===403) return failure('blocked','AO3 blocked retrieval. All requests are paused for 24 hours.',true,86400)
    if(response.status===401) return failure('restricted','AO3 authentication is required. Use manual metadata.')
-   if([404,410].includes(response.status)) return failure('unavailable','AO3 work is deleted or unavailable. The saved work remains editable.')
+   if(response.status===404) {
+    const body = await readBoundedBody(response.body, 4_000_000)
+    if (!('error' in body)) {
+     const missing = parseMetadata(body.text, 0, target)
+     if (missing.category === 'not_found') return missing
+    }
+    return failure('unavailable','AO3 work is deleted or unavailable. The saved work remains editable.')
+   }
+   if(response.status===410) return failure('unavailable','AO3 work is deleted or unavailable. The saved work remains editable.')
    if(response.status>=500) return failure('temporary_unavailable','AO3 is temporarily unavailable.',true)
    if(response.status>=300 && response.status<400) {
     if (!followRedirects) return failure('redirect','AO3 redirected the preview. Use the browser extension or retry later.')

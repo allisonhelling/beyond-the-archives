@@ -37,6 +37,12 @@ it.each([[404,'unavailable',false],[410,'unavailable',false],[401,'restricted',f
  const result=await retrieveMetadata({workId:123,normalizedUrl:'https://archiveofourown.org/works/123'},request)
  expect(result).toMatchObject({category,retryable,metadata:null});expect(request).toHaveBeenCalledTimes(1)
 })
+it.each([200, 404])('recognizes an explicit AO3 404 page with HTTP %s without replacing metadata', async status => {
+ const html = '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>'
+ const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(html, { status, headers: { 'content-type': 'text/html' } }))
+ expect(await retrieveMetadata({ workId: 123, normalizedUrl: 'https://archiveofourown.org/works/123' }, request)).toMatchObject({ category: 'not_found', metadata: null, chapters: {}, retryable: false })
+ expect(parseMetadata(fixture('work').replace('A summary &amp; more.', html), 123, 'https://archiveofourown.org/works/123').metadata?.title).toBe('A & B')
+})
 it('never follows an offsite, login or changed-identity redirect',async()=>{
  for(const location of ['https://evil.test/works/123','/users/login','/works/456']) {
   const request=vi.fn<typeof fetch>().mockResolvedValue(new Response('',{status:302,headers:{location}}))

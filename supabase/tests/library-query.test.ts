@@ -173,3 +173,24 @@ it('keeps seeded random ordering in parity with the browser across page boundari
  expect((await query({...filters,randomSeed:'another shuffle'})).stories.map(story=>story.id)).not.toEqual(first.stories.map(story=>story.id))
  expect((await db.query<{key:string}>('select public.library_shuffle_key($1,$2)::text key',['series:42','Café 📚'])).rows[0].key).toBe(String(shuffleKey('series:42','Café 📚')))
 })
+it('matches personal notes, multi-select personal ratings and known Recs before pagination', async () => {
+ const ids = (await documents()).slice(0, 3).map(story => story.id)
+ await db.exec('reset role')
+ await db.query("update public.library_entries set notes=E' \n\t ',personal_rating=null,source_bookmark='{}' where user_id=$1", [alice])
+ for (const [index, id] of ids.entries()) await db.query('update public.library_entries set notes=$2,personal_rating=$3,source_bookmark=$4 where id=$1', [id, index === 2 ? '  ' : 'Personal thoughts', [1, 5, null][index], JSON.stringify({ id: `bookmark-${index}`, rec: [true, false, null][index] })])
+ await db.exec('set role authenticated')
+ const docs = await documents()
+ for (const patch of [{ personalNotes: true }, { recs: true }, { personalRating: ['1', '5'] }, { personalRating: ['unrated'] }, { personalNotes: true, personalRating: ['1'], recs: true }]) {
+  const expected = filterReading(docs, { ...defaultReadingFilters, ...patch }).map(story => story.id)
+  expect((await query(patch, 1, 100)).stories.map(story => story.id)).toEqual(expected)
+ }
+ expect((await query({}, 1, 100, 'recs')).stories.map(story => story.id)).toEqual([ids[0]])
+ const catalog = (await db.query<{ result: { stories: Story[] } }>('select public.library_catalog() result')).rows[0].result
+ expect(catalog.stories.find(story => story.id === ids[0])?.source_bookmark).toEqual({ rec: true })
+ const rules = { filters: { ...defaultReadingFilters, personalNotes: true, personalRating: ['1', '5'], recs: true }, terms: [] }
+ const collection = (await db.query<{ id: string }>('insert into public.collections(name,automatic_rules) values($1,$2) returning id', ['Notes and Recs', JSON.stringify(rules)])).rows[0]
+ expect((await query({}, 1, 100, collection.id)).stories.map(story => story.id)).toEqual([ids[0]])
+ const records = (await db.query<{ record: never }>("select to_jsonb(r)||'{\"collectionIds\":[]}'::jsonb record from public.library_series r")).rows.map(row => row.record)
+ const series = librarySeries(docs, records), pool = series.map(seriesSearchStory)
+ for (const personalRating of [['1', '5'], ['unrated']]) expect((await query({ personalRating }, 1, 100, 'series')).stories.map(story => story.id)).toEqual(filterLibraryItems(pool, { ...defaultReadingFilters, personalRating }, series).map(story => story.id))
+})

@@ -108,7 +108,7 @@ async function pump() {
   const page = results[0]?.result
   if (version !== connectionVersion || !page) return
   if (active.workPage ? page.url !== navigationUrl : !matchingWork(page.url, active.workId)) return
-  if (active.chapterDates && !active.workPage) {
+  if (active.chapterDates && !active.workPage && !page.notFound) {
    active.workPage = page
    await chrome.storage.session.set({ active })
    await chrome.storage.session.set({ ao3LastNavigation: Date.now() })

@@ -160,13 +160,13 @@ it('marks a redirected login as needing attention without trying to import it', 
  expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
 })
 
-it('persists the full-scan deletion preference and retains deleted bookmarks in scan pages', async () => {
- const reply = await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', updateDeleted: false })
- expect(reply.state.updateDeleted).toBe(false)
+it('retains deleted bookmarks in scan pages without a deletion preference', async () => {
+ const reply = await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full' })
+ expect(reply.state).not.toHaveProperty('updateDeleted')
  const deleted = { source_list: 'bookmarks', 'bookmark id': '22', work_status: 'deleted', link: 'https://archiveofourown.org/bookmarks/22', title: '' }
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [deleted], skipped: 0, hasNext: false } }])
  await collect()
  expect((await sync.command({ action: 'page', page: 1 })).rows).toEqual([deleted])
  const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
- expect((await restarted.command({ action: 'status' })).state.updateDeleted).toBe(false)
+ expect((await restarted.command({ action: 'status' })).state).not.toHaveProperty('updateDeleted')
 })

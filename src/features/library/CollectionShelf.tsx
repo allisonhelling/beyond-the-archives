@@ -8,7 +8,7 @@ import type { Collection } from './model'
 import type { SpineDesign } from './SpineDetails'
 import { defaultShelfColors as shelfColors, automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
 
-const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'book-stack', currently_reading: 'art-deco', paused_reading: 'linked-diamonds', to_read: 'library-deco', favorites: 'star-trails-cascading', finished:'arched', did_not_finish: 'raised-bands' }
+const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'book-stack', currently_reading: 'art-deco', paused_reading: 'linked-diamonds', to_read: 'library-deco', finished:'arched',favorites: 'star-trails-cascading', recs: 'star-trails-extended', did_not_finish: 'raised-bands' }
 
 const heightOrder = [0, 1, 2, 1]
 
@@ -49,7 +49,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     const color = shelfColors[item.id as keyof typeof shelfColors] ?? item.color ?? collectionColors[(Object.keys(shelfSymbols).length + appearanceIndex) % collectionColors.length].value
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
-    const editable = editing && customIndex >= 0
+    const editable = editing
     const design = item.automatic_rules ? 'lunar-phases' : item.spineDesign ?? shelfDesigns[item.id]
     const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={design} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
       if (editing && customIndex < 0 && onAutomaticEdit) { onAutomaticEdit(item.id); return }
@@ -59,7 +59,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
         onEdit(item.id, { color, symbol }, event.shiftKey, direct)
       } else onSelect(item.id)
     }}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={design} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
-    return editable ? <div className="collection-spine-editor" data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
+    return editable ? <div className={`collection-spine-movable${customIndex >= 0 ? ' collection-spine-editor' : ''}`} data-collection-group={customIndex >= 0 ? 'custom' : 'default'} data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
   }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
   const expandable = !editing && (mobile || displayedItems.length + 1 > capacity)
   const bookendArtwork =
@@ -86,7 +86,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   const rowSize = mobile && !showAll ? shelfContents.length : capacity
   const rows = Array.from({ length: Math.ceil(shelfContents.length / rowSize) }, (_, index) => shelfContents.slice(index * rowSize, (index + 1) * rowSize))
   return <nav className={`collection-shelves${showAll ? ' collection-shelves-expanded' : ''}${editing ? ' collection-shelves-editing' : ''}`} aria-label="Library shelves" style={{ '--collection-shelf-capacity': capacity } as CSSProperties} onClickCapture={preventDragClick}>
-    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder custom collections. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging. Shift-click or Shift-drag to select collections for bulk editing. Start Shift-drag on a selected collection to deselect a range. Drag a selected collection to move the selected group.</span>}
+    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder collections within their default or custom group. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging. Shift-click or Shift-drag to select collections for bulk editing. Start Shift-drag on a selected collection to deselect a range. Drag a selected collection to move the selected group.</span>}
     <div id={shelfId} className="collection-shelf-rows" ref={shelfRef}>{rows.map((row, index) => <div className="collection-shelf-row" key={index}>{row}{index === 0 && !mobile && bookend}</div>)}</div>
   </nav>
 }

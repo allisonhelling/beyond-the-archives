@@ -11,7 +11,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
     if (!enabled || !keyboardFocus.current) return
     shelfRef.current?.querySelector<HTMLButtonElement>(`[data-collection-id="${CSS.escape(keyboardFocus.current)}"] .collection-spine`)?.focus()
     keyboardFocus.current = null
-  }, [enabled, shelfRef])
+  })
   useEffect(() => { handlers.current = { onMove, selection } }, [onMove, selection])
   useEffect(() => {
     const shelf = shelfRef.current
@@ -31,10 +31,10 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
           if (gap < distance) { distance = gap; nearest = slot }
         }
       }
-      target = nearest?.dataset.collectionId ?? null
+      target = nearest?.dataset.collectionGroup === pending.slot.dataset.collectionGroup ? nearest?.dataset.collectionId ?? null : null
       if (pending.selecting) {
         if (!target) return
-        const ids = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].map(slot => slot.dataset.collectionId!)
+        const ids = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].filter(slot => slot.dataset.collectionGroup === pending!.slot.dataset.collectionGroup).map(slot => slot.dataset.collectionId!)
         const from = ids.indexOf(pending.id), to = ids.indexOf(target)
         const range = ids.slice(Math.min(from, to), Math.max(from, to) + 1)
         const next = pending.deselecting ? pending.initialSelection.filter(id => !range.includes(id)) : [...new Set([...pending.initialSelection, ...range])]
@@ -81,7 +81,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       if (!event.isPrimary || event.button !== 0 || event.metaKey || event.ctrlKey || pending) return
       const button = (event.target as Element).closest<HTMLButtonElement>('.collection-spine')
       const slot = button?.closest<HTMLElement>('[data-collection-id]')
-      if (!button || button.disabled || !slot || (event.shiftKey && !handlers.current.selection)) return
+      if (!button || button.disabled || !slot || (event.shiftKey && (!handlers.current.selection || slot.dataset.collectionGroup === 'default'))) return
       suppressClick.current = false
       const rect = button.getBoundingClientRect()
       pointer = { x: event.clientX, y: event.clientY }
@@ -106,7 +106,7 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       const slot = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-collection-id]') : null
       if (!slot || !shelf!.contains(slot)) return
       event.preventDefault()
-      const slots = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')]
+      const slots = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].filter(item => item.dataset.collectionGroup === slot.dataset.collectionGroup)
       const selected = handlers.current.selection?.selectedIds ?? []
       const moving = selected.includes(slot.dataset.collectionId!) ? selected : [slot.dataset.collectionId!]
       const direction = event.key === 'ArrowLeft' ? -1 : 1

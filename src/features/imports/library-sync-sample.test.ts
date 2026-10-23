@@ -48,23 +48,21 @@ it('refreshes sample work observations, reports personal differences, and preser
  expect(rpc).not.toHaveBeenCalled()
 })
 
-it('keeps deleted bookmarks and only updates existing deletion status during enabled full scans', async () => {
+it('automatically marks deleted bookmarks while preserving saved metadata and personal data', async () => {
  const normal = readAo3Rows([{ title: 'The Stars Between Us', author: 'ExampleAuthor', fandoms: 'Star Wars', summary: 'Original summary', source_list: 'bookmarks', work_status: 'available', 'bookmark id': '8101', 'bookmark status': 'private', 'bookmark date': '2026-10-20', date: '2026-10-01', chapters: '8/8', 'bookmark notes': 'Loved chapter 8!', 'bookmark tags': 'Favorites, To Reread', link: 'https://archiveofourown.org/works/9990020' }]) as CsvWork[]
  await submitLibrarySync(normal)
  const before = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990020)!
- const gone = readAo3Rows([{ title: '', source_list: 'bookmarks', work_status: 'deleted', 'bookmark id': '8101', link: 'https://archiveofourown.org/bookmarks/8101', 'bookmark notes': 'Different notes', 'bookmark tags': 'Other' }]) as CsvWork[]
- await submitLibrarySync(gone, { mode: 'quick' })
- expect((await loadSampleLibrary()).stories.find(story => story.id === before.id)?.work_status).toBe('available')
- await submitLibrarySync(gone, { updateDeleted: false })
- expect((await loadSampleLibrary()).stories.find(story => story.id === before.id)?.work_status).toBe('available')
+ const gone = readAo3Rows([{ title: '', summary: '', author: '', fandoms: '', source_list: 'bookmarks', work_status: 'deleted', 'bookmark id': '8101', link: 'https://archiveofourown.org/bookmarks/8101', 'bookmark notes': 'Different notes\nStill visible', 'bookmark tags': 'Other', 'bookmark date': '21 Oct 2026', 'bookmark user': 'alice', 'bookmark count': '0' }]) as CsvWork[]
  const result = await submitLibrarySync(gone)
  expect(result).toMatchObject({ imported: 0, kept: 1, bookmarkConflicts: [{ workId: null, bookmarkId: 8101 }] })
- expect((await loadSampleLibrary()).stories.find(story => story.id === before.id)).toMatchObject({ work_status: 'deleted', metadata: before.metadata, notes: before.notes, personalTags: before.personalTags, reading_status: before.reading_status, last_read_chapter: before.last_read_chapter, finished_at: before.finished_at })
+ expect((await loadSampleLibrary()).stories.find(story => story.id === before.id)).toMatchObject({ work_status: 'deleted', metadata: { ...before.metadata, publication_status: 'deleted' }, extension_metadata: before.extension_metadata, metadata_overrides: before.metadata_overrides,
+  source_bookmark: { id: '8101', url: 'https://archiveofourown.org/bookmarks/8101', date: '2026-10-21', user: 'alice', count: 0, notes: 'Different notes\nStill visible', tags: ['Other'] },
+  notes: before.notes, personalTags: before.personalTags, reading_status: before.reading_status, last_read_chapter: before.last_read_chapter, finished_at: before.finished_at })
 })
 it('imports new bookmark-only deletions in Quick Sync and allows editing without a work URL', async () => {
  const deleted = (id: number) => ({ source_list: 'bookmarks', work_status: 'deleted', title: '', 'bookmark id': String(id), link: `https://archiveofourown.org/bookmarks/${id}`, 'bookmark notes': 'Saved note', 'bookmark tags': 'Favorite' })
  const rows = readAo3Rows([deleted(8201), deleted(8202)]) as CsvWork[]
- expect(await submitLibrarySync(rows, { mode: 'quick' })).toMatchObject({ imported: 2, kept: 0 })
+ expect(await submitLibrarySync(rows)).toMatchObject({ imported: 2, kept: 0 })
  const saved = (await loadSampleLibrary()).stories.find(story => story.original_url === rows[0].url)!
  expect(saved).toMatchObject({ work_status: 'deleted', work: { ao3_work_id: null }, metadata: { title: 'Deleted Work — Bookmark #8201', authors: [], fandoms: [] }, notes: 'Saved note', personalTags: ['Favorite'], extension_metadata: { publication_status: 'unknown' }, metadata_overrides: {} })
  const { saveSampleStory } = await import('../library/sample/repository')

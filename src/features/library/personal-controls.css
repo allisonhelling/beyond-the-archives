@@ -36,6 +36,7 @@ fieldset.personal-rating { border: 0; padding: 0; margin: 0; background: transpa
 .rating-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .rating-actions { display: inline-flex; align-items: center; gap: inherit; }
 .rating-stars { --rating-preview-fill: #d9a3a3; color: var(--color-brand); display: flex; align-items: center; gap: 2px; }
+.rating-star-icon { width: var(--rating-star-icon-size, 25px); height: var(--rating-star-icon-size, 25px); }
 .rating-star[data-preview] svg { fill: var(--rating-preview-fill); }
 label.rating-star, span.rating-star { display: grid; place-items: center; position: relative; margin: 0; width: var(--rating-star-width, 32px); height: var(--rating-star-height, 40px); color: var(--color-brand, #970000); }
 .rating-star input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { bookmarkConflicts, csvMetadata, nonemptyMetadata, parseCsv, readAo3Csv, scraperDate, uniqueCsvWorks } from './ao3-csv'
+import { bookmarkConflicts, csvBookmark, csvMetadata, nonemptyMetadata, parseCsv, readAo3Csv, readAo3Rows, scraperDate, uniqueCsvWorks, type CsvWork } from './ao3-csv'
 const csv = (source = 'bookmarks') => '\ufeffsource_list,title,link,author,fandoms,category,relationships,characters,freeforms,rating,warnings,date,words,chapters,summary,bookmark date,bookmark tags,bookmark notes\r\n' + `${source},"Title, with comma",https://archiveofourown.org/works/123,Author,Fandom,Gen,A/B,A,Adventure,General Audiences,No Archive Warnings Apply,01 Oct 2026,"1,234",2/3,"Line one\nLine two",20 Oct 2026,"Mine, Favorite","Saved ""summary""\nMore notes"\r\n`
 it('reads scraper CSVs with multiline summaries, notes, escaped quotes, dates and counts', () => {
  expect(readAo3Csv(csv())[0]).toMatchObject({ source: 'bookmarks', workId: 123, bookmarkDate: '2026-10-20', updatedDate: '2026-10-01', notes: 'Saved "summary"\nMore notes', tags: ['Mine', 'Favorite'], metadata: { title: 'Title, with comma', summary: 'Line one\nLine two', authors: ['Author'], word_count: 1234, published_chapters: 2, total_chapters: 3, is_complete: false, relationship_tags: ['A/B'] } })
@@ -40,4 +40,21 @@ it('retains deleted bookmark identities without inventing work metadata', () => 
  expect(rows[0]).toMatchObject({ workId: null, workStatus: 'deleted', bookmarkId: 123456, bookmarkStatus: 'private', metadata: {}, notes: 'Loved chapter 8!', tags: ['Favorites'] })
  expect(uniqueCsvWorks([{ ...rows[0], workId: null }, { ...rows[0], workId: null, bookmarkId: 123457 }])).toHaveLength(2)
  expect(() => readAo3Csv('source_list,work_status,title,link\nbookmarks,deleted,,https://archiveofourown.org/bookmarks/123456')).toThrow()
+})
+it('keeps all bookmark observations through conversion without turning blank work fields into metadata', () => {
+ const work = readAo3Rows([{ source_list: 'bookmarks', work_status: 'deleted', title: '', summary: '', author: '', fandoms: '', words: '', chapters: '',
+  link: 'https://archiveofourown.org/bookmarks/123456', 'bookmark id': '123456', 'bookmark url': 'https://archiveofourown.org/bookmarks/123456',
+  'bookmark status': 'private rec', 'bookmark date': '20 Oct 2026', 'bookmark user': 'alice', 'bookmark count': '0',
+  'bookmark notes': 'First note\nSecond\nThird', 'bookmark tags': 'Favorites, To Reread' }])[0] as CsvWork
+ expect(work.metadata).toEqual({})
+ expect(csvBookmark(work)).toEqual({ id: '123456', url: 'https://archiveofourown.org/bookmarks/123456', status: 'private rec', date: '2026-10-20', user: 'alice', count: 0, rec: true, notes: 'First note\nSecond\nThird', tags: ['Favorites', 'To Reread'] })
+})
+it.each([['true', true], ['false', false], ['unknown', null], ['', null]] as const)('retains the explicit bookmark Rec value %s independently from Favorites', (value, expected) => {
+ const work = readAo3Rows([{ source_list: 'bookmarks', title: 'Work', link: 'https://archiveofourown.org/works/42', 'bookmark id': '5', 'bookmark status': 'public', 'bookmark rec': value }])[0] as CsvWork
+ expect(work.bookmarkRec).toBe(expected)
+ expect(csvBookmark(work).rec).toBe(expected)
+})
+it('can read legacy Rec symbols but rejects invented Rec values', () => {
+ for (const [status, expected] of [['rec', true], ['public', false], ['private', null], ['hidden', null]] as const) expect(readAo3Rows([{ title: 'Work', link: 'https://archiveofourown.org/works/42', source_list: 'bookmarks', 'bookmark status': status }])[0].bookmarkRec).toBe(expected)
+ expect(() => readAo3Rows([{ title: 'Work', link: 'https://archiveofourown.org/works/42', 'bookmark rec': 'probably' }])).toThrow('invalid bookmark rec')
 })

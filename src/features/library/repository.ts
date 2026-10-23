@@ -6,7 +6,7 @@ import type { SeriesRecord } from './series'
 import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
-import { blankMetadata, effectiveMetadata, effectiveWork } from './model'
+import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork } from './model'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
@@ -76,7 +76,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     const work = effectiveWork(sharedWork, entry)
-    return { ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id)), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
+    return { ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id), entry.work_status), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
   }), collections) }
 }
 export async function saveStory(input: StoryInput) {
@@ -206,7 +206,7 @@ export function storyCatalogEntry(story: Story): Story {
   return { ...story, detailsLoaded: false,
     metadata: { ...blankMetadata, title: story.metadata.title, authors: story.metadata.authors, fandoms: story.metadata.fandoms, series: story.metadata.series, series_memberships: story.metadata.series_memberships, publication_status: story.metadata.publication_status },
     work: { id: story.work.id, ao3_work_id: story.work.ao3_work_id } as Work,
-    metadata_overrides: {}, extension_metadata: {}, extension_chapters: {}, notes: '', personalTags: [] }
+    source_bookmark: { rec: bookmarkRec(story) }, metadata_overrides: {}, extension_metadata: {}, extension_chapters: {}, notes: '', personalTags: [] }
 }
 
 export async function loadAffectedCollections(ids: string[]): Promise<Collection[]> {

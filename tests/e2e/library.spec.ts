@@ -32,6 +32,68 @@ async function ordering(page: Page) {
   return page.locator('.reading-toolbar')
 }
 
+test('personal notes, ratings and Recs filter works without scrolling and share tag formatting', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('between-chapters:display:v1', JSON.stringify({
+    tagAppearance: { shape: 'sharp', colors: { tags: '#123abc', relationships: '#654321' } },
+    workTile: { order: ['personalRating'], hidden: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'collections', 'kudos'] },
+  })))
+  const tables = await fixture(page)
+  for (let index = 0; index < 24; index++) {
+    tables.works.push({ id: `filter-work-${index}`, ao3_work_id: index + 1, title: `Filter work ${index}`, summary: 'A saved summary', rating: index % 2 ? 'Explicit' : 'Mature', verified_chapters: {} })
+    tables.library_entries.push({ id: `filter-entry-${index}`, work_id: `filter-work-${index}`, reading_status: 'to_read', last_read_chapter: 0, is_favorite: index % 4 === 0, personal_rating: [5, 1, null][index % 3], notes: index % 2 ? ' \n\t ' : 'Personal thoughts', source_bookmark: { id: String(index + 100), rec: [true, false, null][index % 3] }, original_url: `https://archiveofourown.org/works/${index + 1}`, created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: {} })
+  }
+  await page.goto('/library'); await login(page)
+  const cards = page.locator('.work-card')
+  await expect(cards).toHaveCount(24)
+  await expect(cards.first().locator('.favorite svg')).toHaveClass(/lucide-star/)
+  await expect(cards.first().locator('.favorite svg')).toHaveCSS('width', '20px')
+  await expect(cards.first().locator('.rating-star-icon').first()).toHaveCSS('width', '18px')
+  await expect(cards.first().locator('.story-quick-actions .bookmark-rec svg')).toHaveClass(/lucide-heart/)
+  const favoriteBounds = (await cards.first().locator('.favorite').boundingBox())!, recBounds = (await cards.first().locator('.bookmark-rec').boundingBox())!
+  expect(recBounds.x).toBeGreaterThanOrEqual(favoriteBounds.x + favoriteBounds.width)
+  await expect(page.locator('.bookmark-rec[data-rec="true"]')).toHaveCount(8)
+  await expect(page.locator('.bookmark-rec[data-rec="false"]')).toHaveCount(8)
+  await expect(page.locator('.bookmark-rec[data-rec="unknown"]')).toHaveCount(8)
+  await openFilters(page)
+  const panel = page.getByRole('region', { name: 'Library filters' })
+  const notes = panel.getByRole('button', { name: 'Personal Notes', exact: true })
+  await notes.evaluate(element => window.scrollTo(0, element.getBoundingClientRect().top + scrollY - 130))
+  const before = await page.evaluate(() => scrollY)
+  expect(before).toBeGreaterThan(0)
+  await notes.click()
+  await expect(cards).toHaveCount(12)
+  expect(Math.abs(await page.evaluate(() => scrollY) - before)).toBeLessThan(3)
+  await expect(page.locator('.active-reading-filters [data-tag-shape]')).toHaveAttribute('data-tag-shape', 'sharp')
+  await expect(page.locator('.active-reading-filters .metadata-tag').first()).toHaveCSS('border-radius', '0px')
+  await notes.click()
+  await expect(cards).toHaveCount(24)
+  expect(Math.abs(await page.evaluate(() => scrollY) - before)).toBeLessThan(3)
+  await notes.click()
+  await panel.getByRole('button', { name: 'Rating', exact: true }).click()
+  const personal = panel.getByRole('dialog', { name: 'Rating', exact: true })
+  await personal.getByRole('checkbox', { name: '5/5', exact: true }).check()
+  await expect(cards).toHaveCount(4)
+  await personal.getByRole('checkbox', { name: '1/5', exact: true }).check()
+  await expect(cards).toHaveCount(8)
+  await panel.getByRole('button', { name: 'Rating', exact: true }).click()
+  await panel.getByRole('button', { name: 'Content Rating', exact: true }).click()
+  await panel.getByRole('checkbox', { name: 'Mature', exact: true }).check()
+  await panel.getByRole('button', { name: 'Content Rating', exact: true }).click()
+  await panel.getByRole('button', { name: 'Recs', exact: true }).click()
+  await expect(cards).toHaveCount(4)
+  await expect(page.locator('.active-reading-filters')).toContainText('Rating: 5/5')
+  await expect(page.locator('.active-reading-filters')).toContainText('Content Rating: Mature')
+  await expect(page.locator('.active-reading-filters')).toContainText('Recs Only')
+  const shelves = page.getByRole('navigation', { name: 'Library shelves' })
+  const recShelf = shelves.getByRole('button', { name: 'Recs', exact: true })
+  if (!await recShelf.isVisible()) await shelves.getByRole('button', { name: 'Show all collections', exact: true }).click()
+  await recShelf.click()
+  await expect(cards).toHaveCount(4)
+  await panel.getByRole('button', { name: 'Clear all filters', exact: true }).click()
+  await expect(cards).toHaveCount(8)
+  await expect(cards.locator('.bookmark-rec[data-rec="true"]')).toHaveCount(8)
+})
+
 async function completeCollectionDialog(page: Page, name: string) {
   const dialog = page.getByRole('dialog', { name: 'New collection', exact: true })
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
@@ -587,9 +649,9 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(toolbar.getByRole('button', { name: 'Remove fandom Fandom A' })).toBeVisible()
   await expect(cards).toHaveCount(1)
   await clear()
-  await panel.getByRole('button', { name: 'Rating', exact: true }).click()
+  await panel.getByRole('button', { name: 'Content Rating', exact: true }).click()
   await panel.getByRole('checkbox', { name: 'Mature', exact: true }).check()
-  await expect(panel.getByRole('dialog', { name: 'Rating', exact: true })).toBeVisible()
+  await expect(panel.getByRole('dialog', { name: 'Content Rating', exact: true })).toBeVisible()
   await panel.getByRole('checkbox', { name: 'Teen and Up', exact: true }).check()
   await expect(cards).toHaveCount(2)
   await expect(cards.filter({has:page.getByRole('heading',{name:'Beta voyage',exact:true})}).locator('.story-facts')).toContainText('Teen and Up')
@@ -597,9 +659,9 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await panel.getByRole('checkbox', { name: 'Teen and Up', exact: true }).uncheck()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect(cards).toHaveCount(1)
-  await panel.getByRole('button', { name: 'Rating', exact: true }).click()
+  await panel.getByRole('button', { name: 'Content Rating', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-  await expect(panel.getByRole('dialog', { name: 'Rating', exact: true })).toHaveCount(0)
+  await expect(panel.getByRole('dialog', { name: 'Content Rating', exact: true })).toHaveCount(0)
   await clear()
   await panel.getByRole('button', { name: 'Favorites' }).click()
   await expect(cards).toHaveCount(1)
@@ -1136,6 +1198,50 @@ for (const outcome of ['completed', 'failed'] as const) {
 }
 
 
+test('AO3 404 refresh asks before marking publication Deleted and preserves saved information', async ({ page }) => {
+  await page.clock.install()
+  const tables = await fixture(page)
+  tables.works.push({ id: 'missing-work', ao3_work_id: 123, title: 'Saved work', summary: 'Saved summary', is_complete: true, published_chapters: 8, total_chapters: 8, verified_chapters: {} })
+  const entry = { id: 'missing-entry', work_id: 'missing-work', reading_status: 'reading', last_read_chapter: 3, is_favorite: true, notes: 'My private notes', original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', work_status: 'available', metadata_overrides: { title: 'My saved title', authors: [], fandoms: [] } }
+  tables.library_entries.push(entry)
+  const original = structuredClone(entry)
+  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+    tables.metadata_jobs.splice(0, tables.metadata_jobs.length, { id: 'missing-job', entry_id: entry.id, batch_id: 'missing-batch', status: 'pending', error_category: null, created_at: new Date().toISOString() })
+    return route.fulfill({ json: 'missing-batch' })
+  })
+  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/mark_work_deleted', route => {
+    expect(route.request().postDataJSON()).toEqual({ p_entry: entry.id, p_job: 'missing-job' })
+    entry.work_status = 'deleted'
+    return route.fulfill({ status: 204 })
+  })
+  await page.goto(`/stories/${entry.id}`); await login(page)
+  for (const confirm of [false, true]) {
+    await page.getByRole('button', { name: 'Retry / Update Metadata', exact: true }).first().click()
+    await expect(page.getByRole('button', { name: 'Retry / Update Metadata', exact: true }).first()).toHaveAttribute('data-refresh-status', 'pending')
+    Object.assign(tables.metadata_jobs[0], { status: 'failed', error_category: 'not_found', error_message: "Error 404: The page you were looking for doesn't exist." })
+    await page.clock.fastForward(5000)
+    const dialog = page.getByRole('dialog', { name: 'Mark work as deleted?', exact: true })
+    await expect(dialog).toContainText("‘My saved title’ returns an Error 404: The page you were looking for doesn't exist. Would you like to mark the work as deleted? Your existing metadata and information will be preserved.")
+    await expect(dialog.getByRole('link', { name: 'My saved title' })).toHaveAttribute('href', entry.original_url)
+    expect(entry).toEqual(original)
+    await dialog.getByRole('button', { name: confirm ? 'Mark as deleted' : 'Cancel', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+  }
+  expect(entry).toEqual({ ...original, work_status: 'deleted' })
+  await expect(page.getByText('Deleted', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'My saved title', exact: true })).toBeVisible()
+  await expect(page.getByText('Saved summary', { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Deleted', { exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Back to Library', exact: true }).click()
+  await openFilters(page)
+  await page.getByRole('button', { name: 'Publication status', exact: true }).click()
+  await page.getByRole('checkbox', { name: 'Deleted', exact: true }).check()
+  await expect(page.locator('.work-card')).toHaveCount(1)
+  await expect(page.locator('.work-card h2')).toContainText('My saved title')
+})
+
 for (const source of ['menu', 'add'] as const) {
 test(`Add Story opens the saved work and displays retrieved metadata from ${source}`, async ({ page }) => {
   const tables = await fixture(page)
@@ -1241,7 +1347,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
   }
   await checkBookendPosition()
   if (mobile()) {
-    await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(33)
+    await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(34)
     const quickCreate = shelf.locator('.collection-shelf-bookend').getByRole('button', { name: 'New collection', exact: true }).last()
     const quickBounds = (await quickCreate.boundingBox())!, stopBounds = (await bookend.boundingBox())!
     expect(quickBounds.y + quickBounds.height).toBeLessThan(stopBounds.y)
@@ -1270,8 +1376,8 @@ test('collection bookspines expand into shelves and keep creation last at every 
   await expect(shelf.getByRole('button', { name: 'Show fewer collections', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await expect(rows.first().getByRole('button', { name: 'Show fewer collections', exact: true })).toHaveText('SEE LESS')
   await checkBookendPosition()
-  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(33)
-  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-details')).toHaveCount(33)
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(34)
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-details')).toHaveCount(34)
   for (const name of ['Collection 1', 'New collection']) {
     await expect(shelf.getByRole('button', { name, exact: true }).last().locator('.collection-spine-details')).toHaveCount(1)
   }
@@ -1303,7 +1409,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
   for (const row of await rows.all()) expect((await row.boundingBox())!.width).toBe(fullWidth)
   tables.collections = []
   await page.reload()
-  await expect(shelf.locator('.collection-spine')).toHaveCount(9)
+  await expect(shelf.locator('.collection-spine')).toHaveCount(10)
   await expect(shelf.locator('.collection-shelf-toggle')).toBeVisible()
   await expect(shelf.locator('.collection-shelf-toggle')).toHaveAttribute('aria-hidden', 'true')
   await expect(shelf.locator('.collection-shelf-toggle text')).toHaveCount(0)
@@ -1338,11 +1444,11 @@ test('collection popup previews and persists name, color, and symbol', async ({ 
   expect(appearanceBounds.x).toBeGreaterThanOrEqual(previewBounds.x + previewBounds.width)
   if (page.viewportSize()!.width > 700) expect((await dialog.boundingBox())!.width).toBeGreaterThan(700)
   expect(await dialog.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true)
-  await expect(preview.locator('.collection-spine')).toHaveCSS('background-color', 'rgb(53, 74, 53)')
+  await expect(preview.locator('.collection-spine')).toHaveCSS('background-color', 'rgb(33, 73, 33)')
   await openAppearance(dialog, 'Color')
   await dialog.getByRole('button', { name: 'Custom color', exact: true }).click()
   const hexColor = dialog.getByRole('textbox', { name: 'Custom color (hex)', exact: true })
-  await expect(hexColor).toHaveValue('#354a35')
+  await expect(hexColor).toHaveValue('#214921')
   await hexColor.fill('#GGGGGG')
   await closeAppearance(dialog)
   await dialog.getByRole('button', { name: 'Create collection', exact: true }).click()
@@ -1368,6 +1474,35 @@ test('collection popup previews and persists name, color, and symbol', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width)
 })
 
+
+test('default collections reorder by keyboard and drag and retain their order after reload', async ({ page }) => {
+  const tables = await fixture(page)
+  tables.collections = []
+  await page.goto('/library'); await login(page)
+  const shelf = page.getByRole('navigation', { name: 'Library shelves', exact: true })
+  await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
+  const defaults = shelf.locator('[data-collection-group="default"]')
+  const reading = shelf.getByRole('button', { name: 'Currently Reading', exact: true })
+  await reading.press('Alt+ArrowLeft')
+  await expect(defaults.first()).toHaveAttribute('data-collection-id', 'currently_reading')
+  await expect(reading).toBeFocused()
+  const all = shelf.getByRole('button', { name: 'All Works', exact: true })
+  await all.scrollIntoViewIfNeeded()
+  const from = (await all.boundingBox())!, to = (await reading.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 })
+  await expect(defaults.first()).toHaveAttribute('data-drop-target', 'true')
+  await page.mouse.up()
+  await expect(defaults.first()).toHaveAttribute('data-collection-id', 'all')
+  await reading.press('Alt+ArrowLeft')
+  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.reload()
+  await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
+  await expect(defaults.first()).toHaveAttribute('data-collection-id', 'currently_reading')
+  await shelf.getByRole('button', { name: 'Currently Reading', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Hide “Currently Reading”?', exact: true })).toBeVisible()
+})
 
 test('edits, reorders, and deletes custom collections without moving default shelves', async ({ page }) => {
   const tables = await fixture(page)
@@ -2290,7 +2425,7 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   const filter = page.getByRole('button', { name: 'One-shot', exact: true })
   await expect(filter).toContainText('Allowed')
   const choices = page.locator('.filter-choice-row')
-  const bounds = await Promise.all(['Rating', 'Publication status', 'One-shot', 'Favorites'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
+  const bounds = await Promise.all(['Content Rating', 'Publication status', 'One-shot', 'Favorites'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
   if (info.project.name === 'desktop') {
     for (const box of bounds) expect(Math.abs(box!.y - bounds[0]!.y)).toBeLessThan(2)
     const labels = await choices.locator('.filter-label').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().y))

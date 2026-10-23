@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
+import { readAo3Rows } from '../../src/features/imports/ao3-csv'
 // @ts-expect-error Shared database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
 let db: PGlite
@@ -15,9 +16,15 @@ it('retains a deleted bookmark by identity and preserves all previously imported
  await sync([available(101)])
  const before = await story(1101)
  expect(before).toMatchObject({ work_status: 'available', source_bookmark: { id: '1101', status: 'private' }, metadata: { title: 'The Stars Between Us' } })
- expect(await sync([deleted(1101)])).toMatchObject({ imported: 0, kept: 1 })
+ const rows = readAo3Rows([{ source_list: 'bookmarks', work_status: 'deleted', title: '', summary: '', author: '', fandoms: '', words: '', chapters: '',
+  link: 'https://archiveofourown.org/bookmarks/1101', 'bookmark id': '1101', 'bookmark status': 'private rec', 'bookmark date': '21 Oct 2026',
+  'bookmark user': 'alice', 'bookmark count': '0', 'bookmark notes': 'Remaining bookmark notes\nStill visible', 'bookmark tags': 'Favorite, To Reread' }])
+ expect(rows[0].metadata).toEqual({})
+ expect(await sync(rows)).toMatchObject({ imported: 0, kept: 1 })
  const after = await story(1101)
- expect(after).toMatchObject({ id: before!.id, work_status: 'deleted', metadata: before!.metadata, notes: before!.notes, personalTags: before!.personalTags, reading_status: before!.reading_status, last_read_chapter: before!.last_read_chapter, finished_at: before!.finished_at })
+ expect(after).toMatchObject({ id: before!.id, work_status: 'deleted', metadata: { ...(before!.metadata as object), publication_status: 'deleted' }, notes: before!.notes, personalTags: before!.personalTags, reading_status: before!.reading_status, last_read_chapter: before!.last_read_chapter, finished_at: before!.finished_at })
+ expect(after).toMatchObject({ work: before!.work, extension_metadata: before!.extension_metadata, metadata_overrides: before!.metadata_overrides,
+  source_bookmark: { id: '1101', url: 'https://archiveofourown.org/bookmarks/1101', status: 'private rec', date: '2026-10-21', user: 'alice', count: 0, notes: 'Remaining bookmark notes\nStill visible', tags: ['Favorite', 'To Reread'] } })
  expect((after!.work as { ao3_work_id: number }).ao3_work_id).toBe(101)
  expect((await db.query('select count(*)::integer n from public.metadata_jobs where entry_id=$1', [before!.id])).rows[0]).toEqual({ n: 1 })
 })
@@ -30,14 +37,14 @@ it('creates independent bookmark-only placeholders without fabricating source me
  const preview = (await db.query<{ result: unknown[] }>('select public.preview_ao3_csv_import($1,$2) result', [[], [2201]])).rows[0].result
  expect(preview).toEqual([expect.objectContaining({ id: first!.id, workId: null, bookmarkId: 2201 })])
 })
-it('imports new deleted bookmarks during Quick Sync while leaving existing status unchanged', async () => {
+it('applies explicit deletions in Quick Sync and ignores the former opt-out for saved scans', async () => {
  await sync([available(102), available(103)])
  await sync([{ ...deleted(1102), scanMode: 'quick' }, { ...deleted(2203), scanMode: 'quick' }])
- expect(await story(1102)).toMatchObject({ work_status: 'available' })
+ expect(await story(1102)).toMatchObject({ work_status: 'deleted', metadata: { publication_status: 'deleted' } })
  expect(await story(2203)).toMatchObject({ work_status: 'deleted' })
  expect(await story(1103)).toMatchObject({ work_status: 'available' })
  await sync([{ ...deleted(1102), updateDeleted: false }])
- expect(await story(1102)).toMatchObject({ work_status: 'available' })
+ expect(await story(1102)).toMatchObject({ work_status: 'deleted', metadata: { publication_status: 'deleted' } })
  await sync([deleted(1102)])
  expect(await story(1102)).toMatchObject({ work_status: 'deleted' })
 })
@@ -90,4 +97,39 @@ it('includes deleted status and bookmark identity in library queries and backup 
  const backup = (await db.query<{ b: object }>('select public.export_library_backup() b')).rows[0].b
  await expect(db.query('select public.preview_library_restore($1)', [JSON.stringify(backup)])).resolves.toBeTruthy()
  expect(await story(2201)).toMatchObject({ work_status: 'deleted', notes: 'Edited note' })
+})
+
+it('filters Deleted as publication status while preserving stored source metadata and private corrections', async () => {
+ const listing = (await db.query<{ result: { stories: { metadata: { publication_status: string } }[] } }>(`select public.query_library('{"mode":"library","shelf":"all","filters":{"publication":["deleted"]}}',1,100) result`)).rows[0].result
+ expect(listing.stories.length).toBeGreaterThan(0)
+ expect(listing.stories.every(story => story.metadata.publication_status === 'deleted')).toBe(true)
+ const saved = await story(1101)
+ expect(saved).toMatchObject({ metadata: { title: 'The Stars Between Us', publication_status: 'deleted', published_chapters: 8 }, extension_metadata: { is_complete: true, publication_status: 'complete' } })
+ expect((await db.query<{ text: string }>("select public.library_search_text($1,'any') text", [JSON.stringify(saved)])).rows[0].text).not.toContain('AO3 Status Unknown')
+})
+
+it('requires an owner-confirmed 404 job and changes only work availability', async () => {
+ await sync([available(105)])
+ const before = await story(1105)
+ const job = (await db.query<{ id: string }>('select id from public.metadata_jobs where entry_id=$1', [before!.id])).rows[0]
+ await expect(db.query('select public.mark_work_deleted($1,$2)', [before!.id, job.id])).rejects.toThrow('404 refresh')
+ await db.exec('reset role')
+ await db.query("update public.metadata_jobs set status='failed',error_category='not_found' where id=$1", [job.id])
+ await db.exec(`set role authenticated;set request.jwt.claim.sub='${bob}'`)
+ await expect(db.query('select public.mark_work_deleted($1,$2)', [before!.id, job.id])).rejects.toThrow('404 refresh')
+ await db.exec(`set request.jwt.claim.sub='${alice}'`)
+ await db.query('select public.mark_work_deleted($1,$2)', [before!.id, job.id])
+ expect(await story(1105)).toMatchObject({ ...before, work_status: 'deleted', metadata: { ...(before!.metadata as object), publication_status: 'deleted' }, updated_at: expect.any(String) })
+})
+it('saves true, false and unknown Rec observations without changing Favorites or work metadata', async () => {
+ await sync([{ ...available(107), bookmarkRec: true }])
+ const before = await story(1107)
+ expect(before).toMatchObject({ source_bookmark: { rec: true }, is_favorite: false })
+ for (const rec of [false, true, null]) {
+  await sync([{ ...available(107), bookmarkRec: rec }])
+  expect(await story(1107)).toMatchObject({ source_bookmark: { rec }, is_favorite: false, metadata: before!.metadata })
+ }
+ await sync([{ ...deleted(1107), bookmarkRec: null }])
+ expect(await story(1107)).toMatchObject({ work_status: 'deleted', source_bookmark: { rec: null } })
+ await expect(sync([{ ...available(107), bookmarkRec: 'false' }])).rejects.toThrow('Invalid bookmark Rec')
 })

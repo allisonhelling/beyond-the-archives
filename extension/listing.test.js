@@ -29,3 +29,23 @@ it('recognizes AO3’s explicit deleted message while leaving hidden and unsuppo
  page('<div id="main" class="bookmarks-index"><ol class="bookmark"><li id="bookmark_100" class="bookmark blurb group"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Remember this</p></div><ul class="tags"><li><a class="tag">Mine</a></li></ul></div></li><li id="bookmark_101" class="bookmark"><p class="message">This work is hidden.</p></li><li id="bookmark_102" class="bookmark"><div class="user"><div class="notes">This has been deleted, sorry!</div></div></li></ol></div>')
  expect(captureListingPage('bookmarks')).toMatchObject({ skipped: 2, rows: [{ work_status: 'deleted', title: '', link: 'https://archiveofourown.org/bookmarks/100', 'bookmark id': '100', 'bookmark notes': 'Remember this', 'bookmark tags': 'Mine' }] })
 })
+it('retains all displayed bookmark fields and remaining work data for explicit deletions', () => {
+ page(`<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_123456"><p class="message">This has been deleted, sorry!</p>
+ <p class="status" title="0 bookmarks"><a><span class="private rec">Private</span></a></p>
+ <div class="user"><h5 class="byline"><a>alice</a></h5><p class="datetime">20 Oct 2026</p>
+ <blockquote class="notes"><p>First note</p><p>Second<br>Third</p></blockquote><ul class="tags"><li><a class="tag">Favorites</a></li><li><a class="tag">To Reread</a></li></ul></div>
+ <blockquote class="summary"><p>Remaining summary</p></blockquote><dl><dd class="kudos">12</dd></dl></li></ol></div>`)
+ const result = captureListingPage('bookmarks')
+ expect(result).toMatchObject({ skipped: 0, rows: [{ title: '', work_status: 'deleted', link: 'https://archiveofourown.org/bookmarks/123456',
+  'bookmark id': '123456', 'bookmark url': 'https://archiveofourown.org/bookmarks/123456', 'bookmark notes': 'First note\nSecond\nThird',
+  'bookmark tags': 'Favorites, To Reread', 'bookmark date': '20 Oct 2026', 'bookmark user': 'alice', 'bookmark count': '0', 'bookmark status': 'private rec',
+  summary: 'Remaining summary', kudos: '12' }] })
+ document.querySelector('li.bookmark').insertAdjacentHTML('afterbegin', '<h4 class="heading"><a href="/works/42">Remaining title</a></h4>')
+ expect(captureListingPage('bookmarks').rows[0]).toMatchObject({ title: 'Remaining title', link: 'https://archiveofourown.org/works/42', work_status: 'deleted' })
+})
+it.each([
+ ['rec', 'true'], ['public', 'false'], ['private', 'unknown'], ['hidden', 'unknown'], ['', 'unknown'],
+])('records Rec evidence from the %s bookmark symbol without guessing', (symbol, expected) => {
+ page(`<div id="main" class="bookmarks-index"><ol class="bookmark"><li class="bookmark" id="bookmark_5"><h4 class="heading"><a href="/works/42">Work</a></h4>${symbol ? `<p class="status"><a><span class="${symbol}"></span></a></p>` : ''}<div class="user"><div class="notes"><span class="rec">Rec in personal notes</span></div></div></li></ol></div>`)
+ expect(captureListingPage('bookmarks').rows[0]['bookmark rec']).toBe(expected)
+})

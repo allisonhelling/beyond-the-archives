@@ -9,7 +9,6 @@ import { readAo3Rows, uniqueCsvWorks, csvWorkKey, type CsvConflict, type CsvWork
 import { submitLibrarySync } from './repository'
 
 export function LibrarySyncForm({ onImported }: { onImported: (batch: string | null) => Promise<void> }) {
- const [updateDeleted, setUpdateDeleted] = useState(true)
  const intervalId = useId()
  const [url, setUrl] = useState(''), [mode, setMode] = useState('full')
  const [startPage, setStartPage] = useState(''), [endPage, setEndPage] = useState('')
@@ -27,7 +26,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   pending.current = true; setBusy(true); setError(''); setMessage('')
   try {
    if (name === 'start' && !await connectExtension()) throw new Error(sampleMode ? 'Load or reload AO3 Library Companion (Local) from extension/local/dist in Chrome, then retry.' : 'Connect the extension in Settings, then try again.')
-   const reply = await librarySyncCommand(name, name === 'start' ? { url: url.trim(), mode, updateDeleted, delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
+   const reply = await librarySyncCommand(name, name === 'start' ? { url: url.trim(), mode, delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
    setState(reply.state ?? null)
    if (['start', 'set-delay', 'resume'].includes(name)) setDelayDraft(null)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Library sync failed.') }
@@ -47,7 +46,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     const reply = await librarySyncCommand('page', { page, scanId: state.id })
     const rows = uniqueCsvWorks(readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork => row.workId !== undefined))
     if (!rows.length) continue
-    const result = await submitLibrarySync(rows, { mode: state.mode, updateDeleted: state.updateDeleted })
+    const result = await submitLibrarySync(rows)
     for (const conflict of result.bookmarkConflicts ?? []) differences.set(csvWorkKey(conflict), conflict)
     setConflicts([...differences.values()])
     imported += result.imported; kept += result.kept; batch = result.batch ?? batch
@@ -76,8 +75,6 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     <div className="input-with-unit"><input id={intervalId} aria-describedby={`${intervalId}-unit`} className="input-fit" type="number" required min={5} max={3600} step={1} value={interval} disabled={busy} onChange={event => setDelayDraft(event.target.value)} /><span id={`${intervalId}-unit`}>seconds</span></div>
    </div>
    </div>
-   {selectedMode === 'full' && <label className="check-label"><input type="checkbox" checked={saved ? state?.updateDeleted !== false : updateDeleted} disabled={busy || Boolean(saved)} onChange={event => setUpdateDeleted(event.target.checked)} />Update Deleted Work Status</label>}
-   <p className="field-help">Deleted-work bookmarks are kept. Full scans can mark previously saved works deleted only when AO3 explicitly labels their bookmark deleted. Quick Sync imports new deleted bookmarks but leaves existing deletion status unchanged. Missing listings never mark a work deleted.</p>
    {selectedMode === 'full' && <fieldset className="scan-page-limits">
     <legend>Limit Full Library Scan (Optional)</legend>
     <div className="form-grid form-grid-two-columns">

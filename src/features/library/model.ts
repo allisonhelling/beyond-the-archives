@@ -4,12 +4,12 @@ export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-Reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
 export function ratingLabel(rating: string): string { return /^teen and up audiences$/i.test(rating) ? 'Teen and Up' : rating }
-export type Metadata = { kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 type EntryRow = Database['public']['Tables']['library_entries']['Row']
 export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark'>>
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Omit<Database['public']['Tables']['collections']['Row'], 'automatic_rules'> & { automatic_rules?: Json | null }
-export type Story = Omit<Entry, 'reading_history'> & { reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
+export type Story = Omit<Entry, 'reading_history'> & { reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 /** Overlay account-specific source data before resolving manual corrections. */
 export function effectiveWork(sharedWork: Work, entry: Pick<Entry, 'extension_metadata' | 'extension_chapters' | 'source_bookmark' | 'work_status'>): Work {
   const browser = entry.extension_metadata && typeof entry.extension_metadata === 'object' && !Array.isArray(entry.extension_metadata) ? entry.extension_metadata : {}
@@ -48,9 +48,9 @@ export function chapterUrl(story: Story, position = nextUnread(story.last_read_c
   return typeof chapter === 'string' && /^[1-9]\d*$/.test(chapter) ? `https://archiveofourown.org/works/${story.work.ao3_work_id}/chapters/${chapter}` : null
 }
 export function active(story: Story) { return ['reading', 'waiting_for_updates', 're_reading'].includes(story.reading_status) }
-export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Database['public']['Tables']['tags']['Row'], 'name' | 'category'>[] = [], authors: { name: string; ao3_url: string | null }[] = [], fandoms: {name: string}[] = []): Metadata {
+export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Database['public']['Tables']['tags']['Row'], 'name' | 'category'>[] = [], authors: { name: string; ao3_url: string | null }[] = [], fandoms: {name: string}[] = [], workStatus?: Entry['work_status']): Metadata {
   const manual = overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {}
-  return { ...blankMetadata, authors: authors.map(a => a.name), author_links: Object.fromEntries(authors.filter(a => a.ao3_url).map(a => [a.name, a.ao3_url!])), fandoms: fandoms.map(f => f.name), title: work.title ?? `AO3 work ${work.ao3_work_id}`, summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', archive_warnings: tags.filter(tag => tag.category === 'warning').map(tag => tag.name), categories: tags.filter(tag => tag.category === 'category').map(tag => tag.name), ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...(work.automatic_metadata as Partial<Metadata>), ...manual } as Metadata
+  return { ...blankMetadata, authors: authors.map(a => a.name), author_links: Object.fromEntries(authors.filter(a => a.ao3_url).map(a => [a.name, a.ao3_url!])), fandoms: fandoms.map(f => f.name), title: work.title ?? `AO3 work ${work.ao3_work_id}`, summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', archive_warnings: tags.filter(tag => tag.category === 'warning').map(tag => tag.name), categories: tags.filter(tag => tag.category === 'category').map(tag => tag.name), ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...(work.automatic_metadata as Partial<Metadata>), ...manual, ...(workStatus === 'deleted' ? { publication_status: 'deleted' } : {}) } as Metadata
 }
 export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata>; base?: import('./edit-merge').EditValues }
 
@@ -80,7 +80,17 @@ export function changedMetadata(current: Metadata, next: Metadata): Partial<Meta
 
 export { ao3Date, filterDateText, isCalendarDate } from '../../lib/dates'
 
-export function sourceBookmark(entry: Pick<Entry, 'source_bookmark'>): { id?: string; status?: string; date?: string; url?: string } {
- return entry.source_bookmark && typeof entry.source_bookmark === 'object' && !Array.isArray(entry.source_bookmark) ? entry.source_bookmark as { id?: string; status?: string; date?: string; url?: string } : {}
+export type SourceBookmark = { id?: string; status?: string; date?: string; url?: string; user?: string; count?: number; rec?: boolean | null; notes?: string; tags?: string[] }
+export function sourceBookmark(entry: Pick<Entry, 'source_bookmark'>): SourceBookmark {
+ return entry.source_bookmark && typeof entry.source_bookmark === 'object' && !Array.isArray(entry.source_bookmark) ? entry.source_bookmark as SourceBookmark : {}
 }
 export function deletedWorkTitle(entry: Pick<Entry, 'source_bookmark'>) { return `Deleted Work — Bookmark #${sourceBookmark(entry).id ?? '?'}` }
+
+/** Private/hidden bookmark icons do not expose the Rec checkbox value. */
+export function bookmarkRec(entry: Pick<Entry, 'source_bookmark'>): boolean | null {
+ const source = sourceBookmark(entry)
+ if (typeof source.rec === 'boolean') return source.rec
+ if (Object.hasOwn(source, 'rec')) return null
+ const status = (source.status ?? '').split(/\s+/)
+ return status.includes('rec') ? true : status.includes('public') && !status.some(value => ['private', 'hidden'].includes(value)) ? false : null
+}

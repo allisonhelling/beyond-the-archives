@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { sampleMode } from '../../lib/sample-mode'
 import type { Story } from '../library/model'
 import { useLibrary } from '../library/LibraryProvider'
-import { metadataRefreshJob, submitImport } from './repository'
+import { markWorkDeleted, metadataRefreshJob, submitImport } from './repository'
 
 type Job = NonNullable<Awaited<ReturnType<typeof metadataRefreshJob>>>
 export type MetadataRefreshStatus = 'idle' | 'submitting' | 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'unknown'
@@ -30,11 +30,13 @@ export function useMetadataRefresh(story: Story | undefined) {
   const entryId = story?.id
   const [feedback, setFeedback] = useState<Feedback & { entryId: string }>()
   const [request, setRequest] = useState<{ entryId: string; batchId: string }>()
+  const [missing, setMissing] = useState<{ entryId: string; jobId: string }>()
   const [visitEntryId, setVisitEntryId] = useState(entryId)
   if (visitEntryId !== entryId) {
     setVisitEntryId(entryId)
     setFeedback(undefined)
     setRequest(undefined)
+    setMissing(undefined)
   }
   const submitting = useRef(false)
   const generation = useRef(0)
@@ -69,6 +71,7 @@ export function useMetadataRefresh(story: Story | undefined) {
         const visible = observing ? result : idle
         setFeedback({ ...visible, entryId: entryId! })
         if (job && !again && observing) {
+          if (job.status === 'failed' && job.error_category === 'not_found') setMissing({ entryId: entryId!, jobId: job.id })
           try { await refreshLibrary([entryId!]) }
           catch {
             if (active && version === generation.current) setFeedback({ ...result, entryId: entryId!, message: `${result.message} Could not reload your library. Reload the page to see the latest saved data.` })
@@ -91,6 +94,7 @@ export function useMetadataRefresh(story: Story | undefined) {
     generation.current += 1
     const version = generation.current
     setFeedback({ entryId: story.id, status: 'submitting', busy: true, message: 'Requesting metadata refresh…' })
+    setMissing(undefined)
     try {
       const batchId = await submitImport(story.original_url, false)
       if (version !== generation.current) return
@@ -102,5 +106,10 @@ export function useMetadataRefresh(story: Story | undefined) {
       setFeedback({ entryId: story.id, status: 'failed', busy: false, message: error instanceof Error ? error.message : 'Could not request metadata refresh.' })
     } finally { if (version === generation.current) submitting.current = false }
   }
-  return { ...current, refresh }
+  async function confirmDeleted() {
+    if (!missing || missing.entryId !== entryId) return
+    await markWorkDeleted(missing.entryId, missing.jobId)
+    await refreshLibrary([missing.entryId])
+  }
+  return { ...current, refresh, notFound: missing?.entryId === entryId && Boolean(missing), dismissNotFound: () => setMissing(undefined), confirmDeleted }
 }

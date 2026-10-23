@@ -15,7 +15,7 @@ export function StarRating({ value, onChange, onSave, onEdit, disabled = false, 
     if (!editing) { onEdit?.(); setDraft(value); setHovered(null); setEditing(true) }
     else if (await onSave(draft)) { setHovered(null); setEditing(false) }
   }
-  const starIcons = [1, 2, 3, 4, 5].map(number => <Star key={number} size={25} aria-hidden="true" fill={number <= preview ? 'currentColor' : 'none'} />)
+  const starIcons = [1, 2, 3, 4, 5].map(number => <Star key={number} size={25} className="rating-star-icon" aria-hidden="true" fill={number <= preview ? 'currentColor' : 'none'} />)
   const savedStars = <div className="rating-stars" role="img" aria-label={rating ? `${rating} out of 5 stars` : 'Unrated'}>{starIcons.map((icon, index) => <span className="rating-star" key={index}>{icon}</span>)}</div>
   if (!onChange && !onSave) return savedStars
   const clearRating = interactive && rating !== null && <button type="button" className="text-button clear-rating" onClick={() => change(null)}>Clear rating</button>

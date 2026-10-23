@@ -1,4 +1,5 @@
 import { WorkStatusBadge } from './WorkStatusBadge'
+import { BookmarkRec } from './BookmarkRec'
 import { resumeReadingStatus, readingDuration } from './reading-history'
 import { automaticCollectionLabels } from './automatic-collections'
 import { MetadataTags } from './MetadataTags'
@@ -25,7 +26,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownWideNarrow, ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, Info, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Collection, type Status, type Story } from './model'
+import { active, ao3Date, bookmarkRec, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, tagNames, validateProgress, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -107,7 +108,7 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
   const favorite = <FavoriteButton selected={story.is_favorite} disabled={blocked} onChange={selected => void change({ is_favorite: selected })} />
   const StatusIcon = readingStatusIcons[story.reading_status]
   const readingStatus = <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label>
-  const actions = <div className="story-quick-actions">{favorite}
+  const actions = <div className="story-quick-actions">{favorite}<BookmarkRec story={story} />
     <details className="story-menu" ref={menuRef} open={menuOpen} onToggle={event => setMenuOpen(event.currentTarget.open)}>
       <summary aria-label={`Story actions for ${story.metadata.title}`}><MoreHorizontal size={22} /></summary>
       <div className="menu-surface">
@@ -182,7 +183,7 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
     }}</DisplayInfo>
   </>}</StoryControls></article>
 }
-const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['favorites', 'Favorites'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series']] as const
+const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'], ['did_not_finish', 'Did Not Finish'],] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
   if (reading) return <><div className="page-heading"><div><h1>Currently Reading</h1></div><Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div><LibraryBoundary><ReadingDashboard stories={stories} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary></>
@@ -190,13 +191,13 @@ export function LibraryPage({ reading = false }: { reading?: boolean }) {
 }
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
 
-type CollectionSort = { order: CollectionOrder; hiddenAutomatic: string[]; hiddenCustom: string[] }
+type CollectionSort = { automaticOrder: string[]; order: CollectionOrder; hiddenAutomatic: string[]; hiddenCustom: string[] }
 function initialCollectionSort(): CollectionSort {
   try {
     const saved = JSON.parse(window.localStorage.getItem(collectionSortKey) ?? 'null')
-    return { order: collectionOrderOptions.find(option => option.value === saved?.order)?.value ?? 'created_newest', hiddenAutomatic: shelves.map(([id]) => id).filter(id => Array.isArray(saved?.hiddenAutomatic) && saved.hiddenAutomatic.includes(id)), hiddenCustom: Array.isArray(saved?.hiddenCustom) ? saved.hiddenCustom.filter((id: unknown): id is string => typeof id === 'string') : [] }
+    return { automaticOrder: [...new Set<string>([...(Array.isArray(saved?.automaticOrder) ? saved.automaticOrder.filter((id: unknown): id is string => shelves.some(([key]) => key === id)) : []), ...shelves.map(([id]) => id)])], order: collectionOrderOptions.find(option => option.value === saved?.order)?.value ?? 'created_newest', hiddenAutomatic: shelves.map(([id]) => id).filter(id => Array.isArray(saved?.hiddenAutomatic) && saved.hiddenAutomatic.includes(id)), hiddenCustom: Array.isArray(saved?.hiddenCustom) ? saved.hiddenCustom.filter((id: unknown): id is string => typeof id === 'string') : [] }
   } catch { /* Sorting still works when browser storage is unavailable. */ }
-  return { order: 'created_newest', hiddenAutomatic: [], hiddenCustom: [] }
+  return { automaticOrder: shelves.map(([id]) => id), order: 'created_newest', hiddenAutomatic: [], hiddenCustom: [] }
 }
 
 function LibraryContent() {
@@ -301,6 +302,10 @@ function LibraryContent() {
     setEditingCollection({ ...item, ...appearance })
   }
   async function moveCollection(id: string, targetId: string) {
+    if (shelves.some(([key]) => key === id)) {
+      setCollectionSort(previous => ({ ...previous, automaticOrder: moveCollectionIds(previous.automaticOrder, id, targetId) }))
+      return
+    }
     const ids = collections.filter(item => !item.default_key).map(item => item.id)
     const ordered = moveCollectionIds(ids, id, targetId, selectedCollectionIds)
     if (ordered === ids) return
@@ -319,12 +324,13 @@ function LibraryContent() {
       if (story.reading_status === 'waiting_for_updates') add('waiting', story)
       if (['paused_reading', 'to_read', 'finished', 'did_not_finish'].includes(story.reading_status)) add(story.reading_status, story)
       if (story.is_favorite) add('favorites', story)
+      if (bookmarkRec(story) === true) add('recs', story)
       for (const id of new Set([...story.collectionIds, ...(story.automaticCollectionIds ?? [])])) add(id, story)
     }
     return index
   }, [stories])
   function storiesForShelf(key: string) {
-    return collectionsById.has(key) || ['currently_reading', 'paused_reading', 'complete', 'new', 'waiting', 'to_read', 'finished', 'did_not_finish', 'favorites'].includes(key) ? worksByShelf.get(key) ?? [] : stories
+    return collectionsById.has(key) || ['currently_reading', 'paused_reading', 'complete', 'new', 'waiting', 'to_read', 'finished', 'did_not_finish', 'favorites', 'recs'].includes(key) ? worksByShelf.get(key) ?? [] : stories
   }
   const series = useMemo(() => librarySeries(stories, seriesRecords ?? []), [stories, seriesRecords])
   const seriesByShelf = useMemo(() => {
@@ -343,7 +349,7 @@ function LibraryContent() {
   const shelfSeries = seriesForShelf(selected)
   const seriesById = new Map(shelfSeries.map(series => [seriesItemId(series), series]))
   const shelfStories = selected === 'series' ? shelfSeries.map(seriesSearchStory) : [...storiesForShelf(selected), ...shelfSeries.map(seriesSearchStory)]
-  const shelfItems = [...shelves.map(([id, name]) => ({ id, name, hidden: collectionSort.hiddenAutomatic.includes(id) })), ...displayedCollections.map(item => ({ ...item, hidden: collectionSort.hiddenCustom.includes(item.id) }))]
+  const shelfItems = [...[...shelves].sort((a, b) => collectionSort.automaticOrder.indexOf(a[0]) - collectionSort.automaticOrder.indexOf(b[0])).map(([id, name]) => ({ id, name, hidden: collectionSort.hiddenAutomatic.includes(id) })), ...displayedCollections.map(item => ({ ...item, hidden: collectionSort.hiddenCustom.includes(item.id) }))]
     .map(item => {
       const works = item.id === 'series' ? 0 : storiesForShelf(item.id).length, seriesCount = seriesForShelf(item.id).length
       return { ...item, count: works + seriesCount, countLabel: seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
@@ -424,7 +430,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <div className="story-title-row">
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing && <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>}
-        {!editing && <>{favorite}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+        {!editing && <>{favorite}<BookmarkRec story={story} /><div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{
         series: <> {!!story.metadata.series?.length && <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p>} </>,
@@ -477,5 +483,8 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <MetadataControls story={story} refreshButton={<MetadataRefreshButton {...metadataRefreshProps} />} refreshMessage={metadataRefresh.message} /> </>
     }}</DisplayInfo>
     </>}
+    {metadataRefresh.notFound && <ConfirmationDialog title="Mark work as deleted?" confirmLabel="Mark as deleted" pendingLabel="Saving…" onConfirm={metadataRefresh.confirmDeleted} onClose={metadataRefresh.dismissNotFound}>
+      <p>‘<a className="clickable-text" href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a>’ returns an Error 404: The page you were looking for doesn't exist. Would you like to mark the work as deleted? Your existing metadata and information will be preserved.</p>
+    </ConfirmationDialog>}
   </div>}</StoryControls> : <p>Story unavailable. <Link to={returnTo}>Return to {returnLabel}</Link></p>}</LibraryBoundary>
 }

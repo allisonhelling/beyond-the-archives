@@ -249,6 +249,17 @@ it('preserves a bookmark work snapshot while capturing its chapter release index
  const upload = fetcher.mock.calls.find(([url]) => url.endsWith('/functions/v1/extension-metadata'))
  expect(JSON.parse(upload[1].body)).toMatchObject({ url: workUrl, navigationUrl, navigationHtml: '<ol class="chapter index">Release dates</ol>' })
 })
+it('reports an explicit 404 without navigating to a missing chapter index', async () => {
+ const originalFetch = fetcher.getMockImplementation()
+ fetcher.mockImplementation((url, options) => url.endsWith('/claim_extension_job') ? Response.json({ ...job, chapterDates: true }) : originalFetch(url, options))
+ chrome.tabs.query.mockResolvedValue([{ id: 7, status: 'complete', url: workUrl }])
+ chrome.tabs.update = vi.fn()
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: workUrl, html: '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>', notFound: true } }])
+ await connect()
+ await vi.waitFor(() => expect(fetcher.mock.calls.some(([url]) => url.endsWith('/functions/v1/extension-metadata'))).toBe(true))
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+ expect(state.active).toBeUndefined()
+})
 
 it('rejects tokenless sample connections on a hosted extension', async () => {
  const respond = vi.fn()
