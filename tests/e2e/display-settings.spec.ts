@@ -519,7 +519,7 @@ test('desktop settings outline shows descriptions and jumps to every section', a
  await expect(page.getByRole('navigation', { name: 'Settings Quick Access', exact: true })).toHaveCount(0)
  const outline = page.getByRole('navigation', { name: 'Settings Section Outline', exact: true })
  await expect(outline).toBeVisible()
- await expect(outline.getByRole('link')).toHaveCount(8)
+ await expect(outline.getByRole('link')).toHaveCount(9)
  const outlineBox = (await outline.boundingBox())!, contentBox = (await page.locator('.settings-content').boundingBox())!
  expect(outlineBox.x + outlineBox.width).toBeLessThanOrEqual(contentBox.x)
  const links = await outline.getByRole('link').evaluateAll(nodes => nodes.map(node => ({ title: node.getAttribute('aria-label')!, href: node.getAttribute('href')! })))
@@ -553,7 +553,7 @@ test('mobile settings list opens sections, supports back, and retains display dr
  const list = page.getByRole('navigation', { name: 'Settings sections', exact: true })
  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
  await expect(page.getByText('MAKE YOURSELF AT HOME')).toHaveCount(0)
- await expect(list.getByRole('link')).toHaveCount(8)
+ await expect(list.getByRole('link')).toHaveCount(9)
  await page.setViewportSize({ width: 320, height: 844 })
  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
  await expect(page.getByRole('navigation', { name: 'Settings Quick Access', exact: true })).toHaveCount(0)

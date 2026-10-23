@@ -439,7 +439,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <div className="story-title-row">
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing && <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>}
-        {!editing && <>{favorite}{rec}<div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{
         series: <> {!!story.metadata.series?.length && <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p>} </>,

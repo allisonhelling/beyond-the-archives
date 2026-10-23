@@ -250,7 +250,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .story-title-row h1 { grid-column: 1; grid-row: 1; min-width: 0; margin-top: 0; overflow-wrap: anywhere; }
 .work-details-heading .details-fandom-rating { grid-column: 1 / -1; grid-row: 3; }
 .story-title-row .story-details-authors { grid-column: 1 / -1; grid-row: 2; }
-.story-title-row > .action-tooltip { grid-column: 2; grid-row: 1; }
+.story-title-row > .story-title-toggles { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 8px; }
 .story-metadata-actions { grid-column: 3; grid-row: 1; justify-self: end; display: flex; align-items: stretch; gap: 8px; margin-left: auto; }
 .story-metadata-label { display: none; }
 .story-metadata-edit { flex-shrink: 0; max-width: 150px; }
@@ -332,11 +332,11 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .story-details-page .story-section-heading:not(.story-section-heading-actions) { grid-template-columns: 1fr; }
   .story-title-row { grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
   .story-title-row h1 { grid-column: 1 / -1; }
-  .story-title-row > .action-tooltip { grid-column: 1; grid-row: 3; margin-top: 10px; }
+  .story-title-row > .story-title-toggles { grid-column: 1; grid-row: 3; margin-top: 10px; }
   .story-metadata-actions { grid-column: 2; grid-row: 3; justify-self: start; margin: 10px 0 0; }
   .story-metadata-label { display: inline; }
   .story-metadata-edit { max-width: 110px; height: 34px; min-height: 34px; padding: 6px 8px; gap: 6px; }
-  .work-details-heading .story-title-row > .action-tooltip, .work-details-heading .story-metadata-actions { grid-row: 4; }
+  .work-details-heading .story-title-row > .story-title-toggles, .work-details-heading .story-metadata-actions { grid-row: 4; }
   .details-story-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; font-size: 14px; }
   .settings-card.details-progress-panel { padding: 12px; }
   .details-reading-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -702,8 +702,8 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .updated-filter-row { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 10px; }
 .updated-filter { margin: 0; }
 @media (min-width: 701px) {
-  .collection-rule-filters .filter-date-options { flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .collection-rule-filters .filter-membership-toggles { order: 1; }
+  .collection-rule-filters .filter-date-options { flex-direction: row; align-items: center; }
+  .collection-rule-filters .filter-membership-toggles { order: 1; flex: 1; }
   .collection-rule-filters .updated-filter { grid-template-columns: repeat(2, max-content); }
   .collection-rule-filters .date-filter-input { width: calc(10ch + 14px + var(--filter-control-height)); }
 }

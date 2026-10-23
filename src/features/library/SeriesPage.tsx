@@ -60,7 +60,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
   <div className="page-heading story-details-heading"><div>
    <Link className="story-return-link clickable-text" to={returnTo} aria-label="Back to Series"><ArrowLeft size={16} aria-hidden="true" />Series</Link>
    <div className="story-title-row"><h1><a href={series.normalizedUrl} target="_blank" rel="noreferrer">{series.title}</a></h1>
-    {favorite}
+    <div className="story-title-toggles">{favorite}</div>
     <div className="story-metadata-actions"><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')
      try { await removeSeriesDetails(seriesId); await refreshSeries(seriesId) } catch (error) { setError(error instanceof Error ? error.message : 'Could not remove series details.') } finally { setBusy(false) }

@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: { output: { manualChunks: { supabase: ['@supabase/supabase-js'], react: ['react', 'react-dom', 'react-router-dom'] } } },
     },
     test: {
+      maxWorkers: 2,
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       exclude: ['tests/e2e/**', 'node_modules/**'],
