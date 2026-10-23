@@ -24,7 +24,7 @@ it('retains a deleted bookmark by identity and preserves all previously imported
  const after = await story(1101)
  expect(after).toMatchObject({ id: before!.id, work_status: 'deleted', metadata: { ...(before!.metadata as object), publication_status: 'deleted' }, notes: before!.notes, personalTags: before!.personalTags, reading_status: before!.reading_status, last_read_chapter: before!.last_read_chapter, finished_at: before!.finished_at })
  expect(after).toMatchObject({ work: before!.work, extension_metadata: before!.extension_metadata, metadata_overrides: before!.metadata_overrides,
-  source_bookmark: { id: '1101', url: 'https://archiveofourown.org/bookmarks/1101', status: 'private rec', date: '2026-10-21', user: 'alice', count: 0, notes: 'Remaining bookmark notes\nStill visible', tags: ['Favorite', 'To Reread'] } })
+  source_bookmark: { id: '1101', url: 'https://archiveofourown.org/bookmarks/1101', status: 'private rec', date: '2026-10-20', user: 'alice', count: 0, notes: 'Remaining bookmark notes\nStill visible', tags: ['Favorite', 'To Reread'] } })
  expect((after!.work as { ao3_work_id: number }).ao3_work_id).toBe(101)
  expect((await db.query('select count(*)::integer n from public.metadata_jobs where entry_id=$1', [before!.id])).rows[0]).toEqual({ n: 1 })
 })

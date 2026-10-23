@@ -276,7 +276,7 @@ it('marks the latest WIP chapter read without finishing the fic', async () => {
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Through Ch. 10' }))
  await waitFor(() => expect(entry).toMatchObject({ status: 'reading', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
-  expect(within(surface).getByText('Ch. 10 / ?')).toBeInTheDocument()
+  expect(within(surface).getByText('Ch. 10 / 10')).toBeInTheDocument()
   expect(within(surface).getByText('Read')).toBeInTheDocument()
  }
 })
@@ -520,7 +520,7 @@ it('keeps saved rating info on storage failure and allows retry', async () => {
 it('offers series selection and individual work details using the existing connected toolbar', async () => {
  document.body.innerHTML = (await import('../server/ao3/fixtures/series.html?raw')).default
  await mountLibrary(document, 'https://archiveofourown.org/series/77')
- expect(JSON.parse(network.mock.lastCall[0].data).p_action).toBe('series_get')
+ expect(JSON.parse(network.mock.calls[0][0].data).p_action).toBe('series_get')
  fireEvent.click(findButton('Add to Library'))
  const notes = await within(root).findByLabelText('Series private notes')
  fireEvent.change(notes, { target: { value: 'Read on vacation' } })
@@ -540,4 +540,27 @@ it('offers series selection and individual work details using the existing conne
  expect(body.p_input).toMatchObject({ notes: 'Read on vacation', works: [{ workId, notes: 'Individual reminder', status: 're_reading' }] })
  expect(body.p_input.works).toHaveLength(1)
  expect(storage.has('draft:https://backend.test:alice:series:77')).toBe(false)
+})
+
+it('places series controls after the info box and work controls after all tile data', async () => {
+ document.body.innerHTML = (await import('../server/ao3/fixtures/series.html?raw')).default
+ await mountLibrary(document, 'https://archiveofourown.org/series/77')
+ expect(document.querySelector('dl.series.meta').nextElementSibling.id).toBe('ao3-library-companion')
+ for (const id of [101, 102]) {
+  const host = document.getElementById(`ao3-library-work-${id}`)
+  expect(host).not.toBeNull()
+  expect(host.parentElement.lastElementChild).toBe(host)
+  expect(host.previousElementSibling.matches('dl.stats')).toBe(true)
+ }
+ expect(network.mock.calls.map(([request]) => JSON.parse(request.data).p_work)).toEqual([77, 101, 102])
+})
+
+it('uses only the logo and counts published chapters when the planned total is higher', async () => {
+ document.querySelector('dd.chapters').textContent = '10/20'
+ entry = { id: 'saved-work', version: 'v1', status: 'reading', progress: 3, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ expect(root.querySelector('.library-link').textContent).toBe('')
+ for (const surface of [root, bottomRoot]) {
+  expect(within(surface).getByText('Ch. 3 / 10')).toBeInTheDocument()
+ }
 })

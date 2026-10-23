@@ -104,12 +104,16 @@ it('lets a paused scan use a new interval without losing its saved pages', async
 })
 
 it('reports affected bookmark works after sync while keeping existing personal data', async () => {
- mocks.submit.mockResolvedValue({ batch: null, imported: 0, kept: 1, bookmarkConflicts: [{ workId: 10, id: 'saved-bookmark', title: 'Changed bookmark' }] })
+ mocks.submit.mockResolvedValue({ batch: null, imported: 0, kept: 1, bookmarkConflicts: [{ workId: 10, id: 'saved-bookmark', title: 'Changed bookmark', notes: 'Library note', tags: ['Library tag'], incomingNotes: 'AO3 note', incomingTags: ['AO3 tag'] }] })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
  const summary = await screen.findByText('1 Bookmark Conflicts — Personal Data Kept')
  fireEvent.click(summary)
  expect(screen.getByRole('link', { name: 'Changed bookmark' })).toHaveAttribute('href', '/stories/saved-bookmark')
+ expect(screen.getByText('Library note')).toBeVisible()
+ expect(screen.getByText('AO3 note')).toBeVisible()
+ expect(screen.getByText('Library tag')).toBeVisible()
+ expect(screen.getByText('AO3 tag')).toBeVisible()
  expect(screen.getByText(/Non-empty AO3 metadata was refreshed; existing personal data was preserved/)).toBeVisible()
 })
 

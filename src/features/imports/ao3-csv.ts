@@ -9,7 +9,7 @@ export type CsvWork = {
  bookmarkDate: string | null; updatedDate: string | null; notes: string; tags: string[];
 }
 export type CsvSource = Omit<CsvWork, 'workId'> & { workId?: number | null; seriesId?: number }
-export type CsvConflict = { workId: number | null; bookmarkId?: number; id: string; version: string; title: string; status: string; progress: number; notes: string; tags: string[]; finishedAt?: string | null }
+export type CsvConflict = { workId: number | null; bookmarkId?: number; id: string; version: string; title: string; status: string; progress: number; notes: string; tags: string[]; finishedAt?: string | null; incomingNotes?: string; incomingTags?: string[]; incomingReading?: ReturnType<typeof bookmarkReadingState> }
 export type CsvChoice = 'keep' | 'overwrite'
 
 /** RFC 4180 fields, including escaped quotes, embedded newlines, BOM and CRLF. */

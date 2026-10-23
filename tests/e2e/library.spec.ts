@@ -88,8 +88,13 @@ test('personal notes, ratings and Recs filter works without scrolling and share 
   const recShelf = shelves.getByRole('button', { name: 'Recs', exact: true })
   if (!await recShelf.isVisible()) await shelves.getByRole('button', { name: 'Show all collections', exact: true }).click()
   await recShelf.click()
+  // Both shelves have four matches with these filters; count alone cannot
+  // establish that the shelf navigation has committed before the next click.
+  await expect(recShelf).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL(/[?&]shelf=recs(?:&|$)/)
   await expect(cards).toHaveCount(4)
   await panel.getByRole('button', { name: 'Clear all filters', exact: true }).click()
+  await expect(recShelf).toHaveAttribute('aria-pressed', 'true')
   await expect(cards).toHaveCount(8)
   await expect(cards.locator('.bookmark-rec[data-rec="true"]')).toHaveCount(8)
 })

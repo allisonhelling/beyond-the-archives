@@ -544,3 +544,13 @@ it('restores the captured default after edits, removals and additions on every r
  resetSampleLibrary()
  expect(await loadSampleLibrary()).toEqual(baseline)
 })
+
+it('uses earlier bookmark dates and either Rec while retaining personal notes in sample mode', async () => {
+ const row = { workId: 9990091, url: 'https://archiveofourown.org/works/9990091', source: 'bookmarks' as const, bookmarkId: 9990191, bookmarkDate: '2026-10-21', updatedDate: '2026-10-01', metadata: { title: 'Date merge', published_chapters: 1 }, notes: 'Saved note', tags: ['Saved tag'], bookmarkRec: false }
+ await importSampleWorks([row])
+ await importSampleWorks([{ ...row, bookmarkDate: '2026-10-10', bookmarkRec: true, notes: 'Incoming note', tags: ['Incoming tag'] }])
+ const saved = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === row.workId)!
+ expect(saved).toMatchObject({ created_at: '2026-10-10T00:00:00Z', finished_at: '2026-10-10T00:00:00Z', is_rec: true, notes: 'Saved note', personalTags: ['Saved tag'], source_bookmark: { date: '2026-10-10', notes: 'Incoming note' } })
+ await importSampleWorks([row])
+ expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ finished_at: saved.finished_at, is_rec: true })
+})

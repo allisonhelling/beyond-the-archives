@@ -1,4 +1,4 @@
-import { bookmarkConflicts, csvWorkKey } from './ao3-csv'
+import { bookmarkConflicts, bookmarkReadingState, csvWorkKey } from './ao3-csv'
 import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { sampleMode } from '../../lib/sample-mode'
@@ -149,5 +149,8 @@ export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], co
   const saved = await previewCsvImport(works)
   await addStoriesToCollections(saved.map(work => work.id), [collectionId])
  }
- return { ...result, ...(conflicts.length ? { bookmarkConflicts: conflicts } : {}) }
+ return { ...result, ...(conflicts.length ? { bookmarkConflicts: conflicts.map(conflict => {
+  const incoming = works.find(work => csvWorkKey(work) === csvWorkKey(conflict))
+  return { ...conflict, incomingNotes: incoming?.notes, incomingTags: incoming?.tags, incomingReading: incoming ? bookmarkReadingState(incoming) : undefined }
+ }) } : {}) }
 }

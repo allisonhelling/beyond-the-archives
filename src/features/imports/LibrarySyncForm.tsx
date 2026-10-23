@@ -9,6 +9,8 @@ import { Tooltip } from '../../components/Tooltip'
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react'
 import { sampleMode } from '../../lib/sample-mode'
 import { Link } from 'react-router-dom'
+import { statuses } from '../library/model'
+import { formatDate } from '../../lib/dates'
 import { useLibrarySyncStatus } from './LibrarySyncProvider'
 import { connectExtension, librarySyncCommand } from './extension'
 import { readAo3Rows, uniqueCsvWorks, csvWorkKey, type CsvConflict, type CsvWork } from './ao3-csv'
@@ -178,7 +180,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    selection.current = { scanId: state.id, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
-  {conflicts.length > 0 && <details><summary>{conflicts.length} Bookmark Conflicts — Personal Data Kept</summary><p>These incoming bookmarks differ in notes, personal tags, or reading state. Your library’s values were kept. Use CSV import to review and overwrite bookmark data if desired.</p><ul>{conflicts.map(conflict => <li key={csvWorkKey(conflict)}><Link to={`/stories/${conflict.id}`}>{conflict.title || `AO3 work ${conflict.workId}`}</Link></li>)}</ul></details>}
+  {conflicts.length > 0 && <details><summary>{conflicts.length} Bookmark Conflicts — Personal Data Kept</summary><p>These incoming bookmarks differ in notes, personal tags, or reading state. Saved notes, tags, and reading state were kept. Older bookmark dates take precedence and Rec is enabled if either version selected it. Use CSV import to overwrite personal data if desired.</p><ul>{conflicts.map(conflict => <li key={csvWorkKey(conflict)}><Link to={`/stories/${conflict.id}`}>{conflict.title || `AO3 work ${conflict.workId}`}</Link><dl><dt>Reading state before import</dt><dd>{statuses[conflict.status as keyof typeof statuses]} · {conflict.progress} chapters read · Finished: {formatDate(conflict.finishedAt)}</dd>{conflict.incomingReading && <><dt>Incoming reading state</dt><dd>{statuses[conflict.incomingReading.status]} · {conflict.incomingReading.progress} chapters read · Finished: {formatDate(conflict.incomingReading.finishedAt)}</dd></>}<dt>Saved personal notes</dt><dd>{conflict.notes || 'None'}</dd><dt>Incoming bookmark notes</dt><dd>{conflict.incomingNotes || 'None'}</dd><dt>Saved personal tags</dt><dd>{conflict.tags.join(', ') || 'None'}</dd><dt>Incoming bookmark tags</dt><dd>{conflict.incomingTags?.join(', ') || 'None'}</dd></dl></li>)}</ul></details>}
   {usernameKind && <Dialog title={usernameKind === 'bookmarks' ? 'Import Bookmarks' : 'Import Marked for Later'} busy={busy} onClose={() => setUsernameKind(null)}><form className="story-form" onSubmit={event => {
    event.preventDefault()
    try {

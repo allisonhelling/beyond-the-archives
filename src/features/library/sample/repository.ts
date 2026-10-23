@@ -237,6 +237,25 @@ export async function previewSampleCsvImport(works: CsvWork[]) {
   status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, tags: story.personalTags, finishedAt: story.finished_at,
  }))
 }
+function applySampleBookmarkHistory(story: Story, row: CsvWork) {
+ const source = sourceBookmark(story), observed = csvBookmark(row)
+ const cutoff = Math.min(Date.parse(story.created_at), Date.parse(source.date ?? story.created_at))
+ if (row.source === 'bookmarks') {
+  story.is_rec ||= bookmarkRec({ source_bookmark: { status: row.bookmarkStatus, rec: row.bookmarkRec ?? observed.rec } }) === true
+  const date = [source.date, row.bookmarkDate].filter((value): value is string => Boolean(value)).sort()[0]
+  if (date) {
+   observed.date = date
+   const at = `${date}T00:00:00Z`, oldFinished = story.finished_at
+   if (Date.parse(at) < Date.parse(story.created_at)) story.created_at = at
+   if (story.started_at && Date.parse(at) < Date.parse(story.started_at)) story.started_at = at
+   const reading = bookmarkReadingState(row)
+   if (row.workStatus !== 'deleted' && !row.importReadingStatus && reading.finishedAt && Date.parse(reading.finishedAt) <= cutoff && (!oldFinished || Date.parse(reading.finishedAt) < Date.parse(oldFinished))) story.finished_at = `${reading.finishedAt}T00:00:00Z`
+   story.reading_history = story.reading_history?.map(event => event.action === 'added' ? { ...event, at: story.created_at } : event.action === 'finished' && event.at === oldFinished ? { ...event, at: story.finished_at! } : event)
+  }
+ }
+ if (row.source === 'bookmarks') story.source_bookmark = { ...source, ...observed }
+}
+
 /** Refresh automatic observations while preserving existing personal data. */
 export async function importSampleWorks(works: CsvWork[]) {
  let imported = 0, kept = 0
@@ -246,7 +265,7 @@ export async function importSampleWorks(works: CsvWork[]) {
   const incoming = nonemptyMetadata(row.metadata)
   const automatic = { ...incoming, ...(incoming.is_complete === undefined ? {} : { publication_status: incoming.is_complete ? 'complete' as const : 'in_progress' as const }) }
   if (existing) {
-   if (row.bookmarkId) existing.source_bookmark = { ...sourceBookmark(existing), ...csvBookmark(row) }
+   applySampleBookmarkHistory(existing, row)
    if (row.workStatus === 'deleted') {
     existing.work_status = 'deleted'
     existing.metadata.publication_status = 'deleted'
@@ -270,6 +289,7 @@ export async function importSampleWorks(works: CsvWork[]) {
    story.finished_at = `${row.bookmarkDate}T00:00:00Z`
    story.reading_history = story.reading_history?.map(event => event.action === 'finished' ? { ...event, at: story.finished_at! } : event)
   }
+  applySampleBookmarkHistory(story, row)
   write(saved); imported++
  }
  return { batch: null, imported, kept }

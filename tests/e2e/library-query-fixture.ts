@@ -9,8 +9,9 @@ type Row = Record<string, unknown>
 // RLS are independently checked in supabase/tests/library-query.test.ts.
 export function libraryQueryFixture(name: string, body: Row, tables: Record<string, Row[]>) {
  const rows = (name: string) => tables[name] ?? []
+ const worksById = new Map(rows('works').map(work => [work.id, work]))
  const stories = applyAutomaticCollections(rows('library_entries').map(entry => {
-  const shared = rows('works').find(work => work.id === entry.work_id)
+  const shared = worksById.get(entry.work_id)
   if (!shared) return null
   const browser = entry.extension_metadata as Row ?? {}
   const work = { ...shared, ...Object.fromEntries(Object.entries(browser).filter(([key]) => ['title','summary','rating','word_count','published_chapters','total_chapters','is_complete','ao3_published_at','ao3_updated_at','last_metadata_check','last_metadata_success'].includes(key))), automatic_metadata: { ...shared.automatic_metadata as Row, ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : shared.verified_chapters ?? {} } as Work

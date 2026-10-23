@@ -21,15 +21,15 @@ beforeAll(async () => {
 }, 30000)
 afterAll(async () => { await db?.close() })
 
-it('initializes Rec only on first import and keeps local edits when AO3 changes or hides the value', async () => {
+it('enables Rec when either saved or incoming bookmark selects it', async () => {
  await sync([row(1, true), row(2, false), row(3, null)])
  expect((await story(1)).is_rec).toBe(true)
  expect((await story(2)).is_rec).toBe(false)
  expect((await story(3)).is_rec).toBe(false)
  await setRec(1, false); await setRec(3, true)
  await sync([row(1, true), row(2, true), row(3, null)])
- expect((await story(1)).is_rec).toBe(false)
- expect((await story(2)).is_rec).toBe(false)
+ expect((await story(1)).is_rec).toBe(true)
+ expect((await story(2)).is_rec).toBe(true)
  expect(await story(3)).toMatchObject({ is_rec: true, source_bookmark: { rec: null } })
  await db.query('select public.submit_ao3_csv_import($1)', [JSON.stringify([{ ...row(3, false), choice: 'overwrite', expectedVersion: (await story(3)).updated_at }])])
  expect((await story(3)).is_rec).toBe(true)
@@ -43,6 +43,7 @@ it('initializes bookmark-only deleted works and works without bookmark IDs', asy
 })
 
 it('uses personal Rec for shelves, automatic collections, filtering and compact catalog counts', async () => {
+ await setRec(1, false)
  const saved = await story(3)
  const collection = (await db.query<{ id: string }>('insert into public.collections(name,automatic_rules) values($1,$2) returning id', ['Personal Recs', JSON.stringify({ filters: { ...defaultReadingFilters, recs: true }, terms: [] })])).rows[0]
  const catalog = (await db.query<{ result: { stories: Story[] } }>('select public.library_catalog() result')).rows[0].result

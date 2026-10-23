@@ -1,5 +1,5 @@
 import { seriesWorkMetadata } from '../src/features/library/series'
-import { parseLines, statuses, validateProgress } from '../src/features/library/model'
+import { blankMetadata, parseLines, statuses, validateProgress } from '../src/features/library/model'
 import { readPage } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../src/features/library/edit-merge'
@@ -7,24 +7,29 @@ import { mountPersonalControls, mountConflictReview } from './personal-controls'
 
 const defaultRatingInfo = 'Add how your personal rating system corresponds to the stars here! Edit this text in settings. To hide the info symbol, leave the box blank.'
 
-export async function mountLibrary(doc = document, href = location.href) {
- const page = readPage(doc, href)
- if (!page || doc.getElementById('ao3-library-companion')) return
+export async function mountLibrary(doc = document, href = location.href, tile = null) {
+ const page = tile?.page ?? readPage(doc, href)
+ const hostId = tile ? `ao3-library-work-${page.work}` : 'ao3-library-companion'
+ if (!page || doc.getElementById(hostId)) return
  const host = doc.createElement('div')
- host.id = 'ao3-library-companion'
+ host.id = hostId
  const root = host.attachShadow({ mode: 'closed' })
  const style = doc.createElement('style'); style.textContent = styles; root.append(style)
  const section = doc.createElement('section'); section.setAttribute('aria-label', 'AO3 Library'); root.append(section)
- doc.querySelector('#workskin')?.before(host)
+ if (tile) tile.element.append(host)
+ else if (page.series) doc.querySelector('dl.series.meta')?.after(host)
+ else doc.querySelector('#workskin')?.before(host)
  if (!host.isConnected) doc.querySelector('#main')?.prepend(host)
- doc.getElementById('ao3-library-progress')?.remove()
- const bottomHost = doc.createElement('div'); bottomHost.id = 'ao3-library-progress'
+ const bottomId = tile ? `${hostId}-progress` : 'ao3-library-progress'
+ doc.getElementById(bottomId)?.remove()
+ const bottomHost = doc.createElement('div'); bottomHost.id = bottomId
  const bottomRoot = bottomHost.attachShadow({ mode: 'closed' }); bottomRoot.append(style.cloneNode(true))
  const bottomSection = doc.createElement('section'); bottomSection.className = 'bottom-section'; bottomSection.setAttribute('aria-label', 'Reading progress'); bottomRoot.append(bottomSection)
  const bottomBar = doc.createElement('div'); bottomBar.className = 'row bottom-bar'; bottomBar.setAttribute('aria-live', 'polite'); bottomSection.append(bottomBar)
  const bottomMessage = doc.createElement('p'); bottomMessage.setAttribute('aria-live', 'polite'); bottomSection.append(bottomMessage)
  const bottomAnchor = doc.querySelector('#kudos') ?? doc.querySelector('.kudos') ?? doc.querySelector('#feedback')
- if (bottomAnchor) bottomAnchor.before(bottomHost)
+ if (tile) { /* Work tiles use their single inline bar. */ }
+ else if (bottomAnchor) bottomAnchor.before(bottomHost)
  else doc.querySelector('#workskin')?.after(bottomHost)
  bottomHost.hidden = true
  const storageKey = `connection:${__SUPABASE_URL__}`, themeKey = `theme:${__SUPABASE_URL__}`, ratingInfoKey = `rating-info:${__SUPABASE_URL__}`
@@ -193,7 +198,7 @@ export async function mountLibrary(doc = document, href = location.href) {
   const summary = node('div', '', summaryParent); summary.className = 'row reading-summary'
   node('strong', entry.status === 'reading' ? 'Currently Reading' : statuses[entry.status], summary)
   const bullet = node('span', '•', summary); bullet.className = 'status-bullet'; bullet.dataset.status = entry.status; bullet.setAttribute('aria-hidden', 'true')
-  infoHelp(summary, 'chapters read', 'chapters read', `Ch. ${entry.progress} / ${page.metadata.total_chapters ?? '?'}`)
+  infoHelp(summary, 'chapters read', 'chapters read', `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`)
   if (!page.current) return
   const read = entry.progress >= page.current
   if (read) {
@@ -210,12 +215,11 @@ export async function mountLibrary(doc = document, href = location.href) {
  function libraryLink(parent) {
   const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${__APP_ORIGIN__}/series/${page.work}` : `${__APP_ORIGIN__}/stories/${encodeURIComponent(entry.id)}` : `${__APP_ORIGIN__}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in between chapters library')
   // Trusted, build-time Lucide logo markup; no page or user content is injected.
-  if (entry) node('span', 'View in', logo)
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }
  function renderToolbar() {
   toolbar.replaceChildren(); bottomBar.replaceChildren()
-  bottomHost.hidden = Boolean(page.series)
+  bottomHost.hidden = Boolean(page.series || tile)
   bottomBar.className = entry ? 'row bottom-bar' : 'toolbar'
   footer.hidden = Boolean(connection && !activePanel)
   renderBar(toolbar)
@@ -483,7 +487,7 @@ export async function mountLibrary(doc = document, href = location.href) {
    } finally { fieldset.disabled = false }
   }) })
   button('Cancel', async () => { await GM.deleteValue(draftKey()); clearEditor(); draft = null; showPanel(null) }, actions)
-  if (entry) {
+  if (entry && !tile) {
    const recollect = node('span', '', actions); recollect.className = 'field-control'
    button('Collect metadata', async () => {
     const refreshed = readPage(doc, href)
@@ -505,6 +509,14 @@ export async function mountLibrary(doc = document, href = location.href) {
  }
  renderToolbar()
  if (connection) await run(load)
+ if (page.series) {
+  for (const work of page.series.works) {
+   const element = [...doc.querySelectorAll('.series.work.index li.work')].find(item => [...item.querySelectorAll('h4.heading a')].some(link => new URL(link.getAttribute('href'), href).href === work.url))
+   if (!element) continue
+   const automaticMetadata = seriesWorkMetadata(work, page.series)
+   await mountLibrary(doc, work.url, { element, page: { work: work.workId, metadata: { ...blankMetadata, ...automaticMetadata }, automaticMetadata, chapters: {}, current: null, defaults: { status: 'to_read', chapter: 1, chapterFinished: false } } })
+  }
+ }
 }
 
 if (typeof GM !== 'undefined') void mountLibrary().catch(() => { /* Userscripts storage unavailable; no credential fallback to page storage. */ })

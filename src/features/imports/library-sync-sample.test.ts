@@ -56,7 +56,7 @@ it('automatically marks deleted bookmarks while preserving saved metadata and pe
  const result = await submitLibrarySync(gone)
  expect(result).toMatchObject({ imported: 0, kept: 1, bookmarkConflicts: [{ workId: null, bookmarkId: 8101 }] })
  expect((await loadSampleLibrary()).stories.find(story => story.id === before.id)).toMatchObject({ work_status: 'deleted', metadata: { ...before.metadata, publication_status: 'deleted' }, extension_metadata: before.extension_metadata, metadata_overrides: before.metadata_overrides,
-  source_bookmark: { id: '8101', url: 'https://archiveofourown.org/bookmarks/8101', date: '2026-10-21', user: 'alice', count: 0, notes: 'Different notes\nStill visible', tags: ['Other'] },
+  source_bookmark: { id: '8101', url: 'https://archiveofourown.org/bookmarks/8101', date: '2026-10-20', user: 'alice', count: 0, notes: 'Different notes\nStill visible', tags: ['Other'] },
   notes: before.notes, personalTags: before.personalTags, reading_status: before.reading_status, last_read_chapter: before.last_read_chapter, finished_at: before.finished_at })
 })
 it('imports new bookmark-only deletions in Quick Sync and allows editing without a work URL', async () => {
@@ -84,7 +84,7 @@ it('adds new and already saved works to the imported custom collection idempoten
  expect(library.collections.find(collection => collection.id === collectionId)).toMatchObject({ name: 'Imported AO3 Collection', description: 'Summary\n\nIntro' })
 })
 
-it('seeds personal Rec once and preserves edits across later sample imports and reloads', async () => {
+it('combines saved and incoming Rec across sample imports and reloads', async () => {
  const { updateSampleEntry } = await import('../library/sample/repository')
  const rows = readAo3Rows([{ title: 'Personal Rec', link: 'https://archiveofourown.org/works/9990201', source_list: 'bookmarks', 'bookmark id': '9991201', 'bookmark rec': 'true' }]) as CsvWork[]
  await submitLibrarySync(rows)
@@ -92,7 +92,7 @@ it('seeds personal Rec once and preserves edits across later sample imports and 
  expect(saved.is_rec).toBe(true)
  await updateSampleEntry(saved.id, { is_rec: false })
  await submitLibrarySync(rows)
- expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)?.is_rec).toBe(false)
+ expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)?.is_rec).toBe(true)
  await updateSampleEntry(saved.id, { is_rec: true })
  await submitLibrarySync([{ ...rows[0], bookmarkRec: null }])
  expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ is_rec: true, source_bookmark: { rec: null } })

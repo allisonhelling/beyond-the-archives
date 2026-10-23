@@ -198,7 +198,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(page.getByRole('status')).toHaveText('Saved')
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in between chapters library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
-  await expect(top.locator('.library-link')).toHaveText('View in')
+  await expect(top.locator('.library-link')).toHaveText('')
   await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Through Ch. 4', exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.locator('.chapter-progress > span')).toBeHidden()
