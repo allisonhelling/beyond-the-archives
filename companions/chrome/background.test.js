@@ -108,6 +108,7 @@ it('does not reconnect after sign-out while an authentication request is in flig
  const listener = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]
  const connectReply = vi.fn(), disconnectReply = vi.fn()
  listener({ type: 'AO3_LIBRARY_CONNECT', token: 'session', expiresAt: Math.floor(Date.now() / 1000) + 3600 }, { url: origin }, connectReply)
+ await vi.waitFor(() => expect(finishAuthentication).toBeTypeOf('function'))
  listener({ type: 'AO3_LIBRARY_DISCONNECT' }, { url: origin }, disconnectReply)
  finishAuthentication(Response.json({ id: 'alice' }))
  await vi.waitFor(() => expect(connectReply).toHaveBeenCalledWith({ ok: false }))
@@ -264,7 +265,7 @@ it('reports an explicit 404 without navigating to a missing chapter index', asyn
 it('rejects tokenless sample connections on a hosted extension', async () => {
  const respond = vi.fn()
  chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' }, { url: origin }, respond)
- expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false }))
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false })))
  expect(state.sampleAuth).toBeUndefined()
  expect(fetcher).not.toHaveBeenCalled()
 })

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { captureListingPage } from './listing.js'
+import { captureListingPage, sameScanUrl } from './listing.js'
 import { JSDOM } from 'jsdom'
 import { vi } from 'vitest'
 function page(html, path = '/users/alice/bookmarks') {
@@ -69,4 +69,10 @@ it('reports an unfinished document as pending rather than a sign-in failure', ()
  }
  Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true })
  expect(captureListingPage('bookmarks')).toMatchObject({ rows: [], hasNext: false })
+})
+
+it('matches equivalent scan queries while rejecting different pages, filters, paths and origins', () => {
+ const url = 'https://archiveofourown.org/users/alice/bookmarks?bookmark_search%5Bsort_column%5D=created_at&page=1'
+ expect(sameScanUrl('https://archiveofourown.org/users/alice/bookmarks?page=1&bookmark_search[sort_column]=created_at', url)).toBe(true)
+ for (const other of [url.replace('page=1', 'page=2'), url.replace('created_at', 'revised_at'), url.replace('/alice/', '/bob/'), url.replace('archiveofourown.org', 'example.com'), undefined]) expect(sameScanUrl(other, url)).toBe(false)
 })

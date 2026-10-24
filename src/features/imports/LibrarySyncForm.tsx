@@ -135,7 +135,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  const selectedMode = saved && state.mode ? state.mode : mode
  return <section className="settings-card story-form" aria-labelledby="library-sync-heading">
   <h2 id="library-sync-heading">AO3 Library Sync</h2>
-  {sampleMode && <p className="field-help">Sample imports use the local extension and save only to this browser’s sample library. No library account or background worker is needed. Load extension/local/dist in Chrome before starting.</p>}
+  {sampleMode && <p className="field-help">Sample imports use the extension with Local selected and save only to this browser’s sample library. No library account or background worker is needed. Select Local in the companion’s extension settings and enter its ID in this app’s Settings before starting.</p>}
   <p className="scan-introduction">Scan works across pages using AO3 Library Companion. Existing notes, personal tags, ratings, and progress are kept.</p>
   <p className="field-help">New bookmarks dated after the work’s latest update are marked Finished, with the bookmark date as the finished date.</p>
   <p className="field-help">Ensure that bookmarks are sorted by "Date Bookmarked". Changing the sort order may cause the scanner to miss entries.</p>

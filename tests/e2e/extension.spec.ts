@@ -1,4 +1,4 @@
-import { chromium, expect, test } from '@playwright/test'
+import { chromium, expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,14 +13,16 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  const appOrigin = local ? 'http://127.0.0.1:5173' : 'https://library-extension-test.example'
  let queued = false, claimed = false, loaded = false, workId = 123
  const uploads: { jobId: string; html: string; url: string }[] = []
+ const authentications: { host: string; authorization: string }[] = []
  const barRequests: { p_action: string; p_work: number; p_input: Record<string, unknown> }[] = []
  const barEntries = new Map<number, Record<string, unknown>>()
+ const localBarEntries = new Map<number, Record<string, unknown>>()
  // Use real HTTP for extension-worker fetches. Browser route interception can
  // delay delivery until the worker's next alarm, obscuring the actual flow.
  const server = createServer(async (request, response) => {
   const path = new URL(request.url!, 'http://127.0.0.1').pathname
   let body: unknown
-  if (path === '/auth/v1/user') body = { id: 'alice' }
+  if (path === '/auth/v1/user') { authentications.push({ host: request.headers.host ?? '', authorization: request.headers.authorization ?? '' }); body = { id: 'alice' } }
   else if (path === '/rest/v1/rpc/claim_extension_job') {
    body = queued && !claimed ? { id: 'requested-job', token: 'requested-lease', workId, expiresAt: new Date(Date.now() + 300000).toISOString() } : null
    if (body) claimed = true
@@ -29,12 +31,13 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    for await (const part of request) data += part
    const requestBody = JSON.parse(data)
    barRequests.push(requestBody)
+   const entries = request.headers.host?.startsWith('localhost:') ? localBarEntries : barEntries
    if (requestBody.p_action === 'claim') body = { secret: 'paired-chrome-secret', userId: 'alice' }
    else {
     if (['save', 'progress'].includes(requestBody.p_action)) {
-     barEntries.set(requestBody.p_work, { ...barEntries.get(requestBody.p_work), ...requestBody.p_input, id: `bar-${requestBody.p_work}`, version: String(barRequests.length) })
+     entries.set(requestBody.p_work, { ...entries.get(requestBody.p_work), ...requestBody.p_input, id: `bar-${requestBody.p_work}`, version: String(barRequests.length) })
     }
-    body = { entry: barEntries.get(requestBody.p_work) ?? null, collections: [], savedWorks: [] }
+    body = { entry: entries.get(requestBody.p_work) ?? null, collections: [], savedWorks: [] }
    }
   } else if (path === '/rest/v1/metadata_jobs') body = [{ status: 'processing', lease_token: 'requested-lease' }]
   else if (path === '/functions/v1/extension-metadata') {
@@ -50,7 +53,14 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  const backend = `http://127.0.0.1:${address.port}`
  const profile = await mkdtemp(join(tmpdir(), 'ao3-extension-test-'))
  const extension = join(profile, 'extension')
- execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension, ...(local ? ['--local'] : [])], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_APP_ORIGIN: appOrigin, VITE_SUPABASE_URL: backend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
+ const buildBackend = local ? backend : 'https://extension-test.supabase.co'
+ execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension, ...(local ? ['--local'] : [])], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_APP_ORIGIN: 'http://127.0.0.1:5173', EXTENSION_LOCAL_SUPABASE_URL: local ? backend : `http://localhost:${address.port}`, EXTENSION_LOCAL_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_local_test', VITE_SUPABASE_URL: buildBackend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
+ // Only temporary test artifacts use the HTTP fixture backend. Hosted builds
+ // reject local backends so deployed pairing codes cannot target the wrong DB.
+ for (const file of ['background.js', 'content.js', 'manifest.json']) {
+  const path = join(extension, file)
+  await writeFile(path, (await readFile(path, 'utf8')).replaceAll(buildBackend, backend))
+ }
  // Only this temporary test artifact opens the shadow roots for Playwright.
  // The installed artifact keeps the same closed roots as the Safari companion.
  const contentPath = join(extension, 'content.js'), content = await readFile(contentPath, 'utf8')
@@ -89,10 +99,11 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const app = await context.newPage()
   await app.goto(`${appOrigin}/imports`)
   queued = true // Represents the hosted website saving an explicit import/refresh request.
-  const connect = () => app.evaluate(id => new Promise(resolve => {
+  const connectFrom = (page: Page, token = 'test-user-session') => page.evaluate(({ id, token }) => new Promise(resolve => {
    const api = (window as Window & { chrome?: { runtime: { sendMessage(id: string, body: object, callback: (result: unknown) => void): void } } }).chrome
-   api?.runtime.sendMessage(id, { type: 'AO3_LIBRARY_CONNECT', token: 'test-user-session', expiresAt: Math.floor(Date.now() / 1000) + 3600 }, resolve)
-  }), extensionId)
+   api?.runtime.sendMessage(id, { type: 'AO3_LIBRARY_CONNECT', token, expiresAt: Math.floor(Date.now() / 1000) + 3600 }, resolve)
+  }), { id: extensionId, token })
+  const connect = () => connectFrom(app)
   expect(await connect()).toEqual({ ok: true })
   await expect.poll(() => claimed).toBe(true)
   expect(uploads).toHaveLength(0) // Confirmation page is never uploaded.
@@ -212,6 +223,71 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await expect(tile.getByRole('status')).toHaveText('Saved')
   expect(barEntries.get(101)).toMatchObject({ notes: 'Saved from a series tile' })
   expect(barRequests.some(request => request.p_action === 'series_get' && request.p_work === 77)).toBe(true)
+  if (!local) {
+   queued = false
+   await bar.getByRole('button', { name: 'Edit', exact: true }).click()
+   await bar.getByLabel('Private Notes', { exact: true }).fill('Hosted draft retained')
+   await expect(bar.getByLabel('Library environment: Hosted')).toBeVisible()
+   const options = await context.newPage()
+   await options.goto(`chrome-extension://${extensionId}/options.html`)
+   await expect(options.getByLabel('Library environment')).toHaveValue('hosted')
+   const localOrigin = 'http://127.0.0.1:5173'
+   await context.route(`${localOrigin}/**`, route => route.fulfill({ contentType: 'text/html', body: '<html><body>Local library test</body></html>' }))
+   const localApp = await context.newPage()
+   await localApp.goto(`${localOrigin}/settings`)
+   const authCount = authentications.length
+   expect(await connectFrom(localApp, 'test-local-session')).toMatchObject({ ok: false, error: expect.stringContaining('Select the matching') })
+   expect(authentications).toHaveLength(authCount)
+
+   async function switchTo(environment: string) {
+    await options.getByLabel('Library environment').selectOption(environment)
+    await options.getByRole('button', { name: 'Switch environment' }).click()
+    await expect(options.getByRole('status')).toContainText('Environment saved.')
+   }
+   await options.evaluate(async () => {
+    const api = (window as Window & { chrome: { storage: { local: { set(values: object): Promise<void> } } } }).chrome
+    await api.storage.local.set({ librarySync: { id: 'hosted-paused-scan', userId: 'alice', status: 'running' } })
+   })
+   await options.getByLabel('Library environment').selectOption('local')
+   await options.getByRole('button', { name: 'Switch environment' }).click()
+   await expect(options.getByRole('status')).toContainText('Pause the running scan')
+   await options.evaluate(async () => {
+    const api = (window as Window & { chrome: { storage: { local: { set(values: object): Promise<void> } } } }).chrome
+    await api.storage.local.set({ librarySync: { id: 'hosted-paused-scan', userId: 'alice', status: 'paused' } })
+   })
+   await switchTo('local')
+   expect(await connectFrom(localApp, 'test-local-session')).toMatchObject({ ok: true })
+   expect(authentications.at(-1)).toEqual({ host: `localhost:${address.port}`, authorization: 'Bearer test-local-session' })
+   await expect(bar.getByRole('status')).toContainText('Environment changed to Local')
+   const beforeStaleSave = barRequests.length
+   await bar.getByRole('button', { name: 'Save', exact: true }).click()
+   await expect(bar.getByRole('status')).toContainText('Environment changed.')
+   expect(barRequests.length).toBe(beforeStaleSave)
+   await ao3.reload()
+   await expect(bar.getByLabel('Library environment: Local')).toBeVisible()
+   await bar.getByRole('button', { name: 'Connect Library', exact: true }).click()
+   await bar.getByLabel('One-time pairing code', { exact: true }).fill('local-pairing-code')
+   await bar.getByRole('button', { name: 'Connect', exact: true }).click()
+   await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
+   await bar.getByLabel('Private Notes', { exact: true }).fill('Local draft retained')
+   const claims = barRequests.filter(request => request.p_action === 'claim').length
+   await switchTo('hosted')
+   const retainedImport = await app.evaluate(({ id, url }) => new Promise(resolve => {
+    const api = (window as Window & { chrome: { runtime: { sendMessage(id: string, body: object, callback: (reply: unknown) => void): void } } }).chrome
+    api.runtime.sendMessage(id, { type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, resolve)
+   }), { id: extensionId, url: seriesUrl })
+   expect(retainedImport).toMatchObject({ ok: true })
+   await ao3.reload()
+   await bar.getByRole('button', { name: 'Edit', exact: true }).click()
+   await expect(bar.getByLabel('Private Notes', { exact: true })).toHaveValue('Hosted draft retained')
+   await switchTo('local')
+   await ao3.reload()
+   await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
+   await expect(bar.getByLabel('Private Notes', { exact: true })).toHaveValue('Local draft retained')
+   expect(barRequests.filter(request => request.p_action === 'claim')).toHaveLength(claims)
+   await options.reload()
+   await expect(options.getByLabel('Library environment')).toHaveValue('local')
+  }
   if (local) {
    // Sample listing scans authenticate only with the local website boundary.
    queued = false

@@ -8,7 +8,8 @@ import { mountPersonalControls, mountConflictReview } from './personal-controls'
 const defaultRatingInfo = 'Add how your personal rating system corresponds to the stars here! Edit this text in settings. To hide the info symbol, leave the box blank.'
 
 export async function mountLibrary(doc = document, href = location.href, options = {}) {
- const { tile = null, api, browser = 'safari' } = options
+ const { tile = null, api, browser = 'safari', config } = options
+ const backendUrl = config?.backend ?? __SUPABASE_URL__, appOrigin = config?.appOrigin ?? __APP_ORIGIN__, publicKey = config?.publicKey ?? __SUPABASE_KEY__
  const page = tile?.page ?? readPage(doc, href)
  const hostId = tile ? `ao3-library-work-${page.work}` : 'ao3-library-companion'
  if (!page || doc.getElementById(hostId)) return
@@ -45,7 +46,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   else doc.querySelector('#workskin')?.after(bottomHost)
  }
  bottomHost.hidden = true
- const storageKey = `connection:${__SUPABASE_URL__}`, themeKey = `theme:${__SUPABASE_URL__}`, ratingInfoKey = `rating-info:${__SUPABASE_URL__}`
+ const storageKey = `connection:${backendUrl}`, themeKey = `theme:${backendUrl}`, ratingInfoKey = `rating-info:${backendUrl}`
  const preferredTheme = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
  let [connection, theme, ratingInfo] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme), api.getValue(ratingInfoKey, defaultRatingInfo)])
  ratingInfo = typeof ratingInfo === 'string' ? ratingInfo : defaultRatingInfo
@@ -61,10 +62,10 @@ export async function mountLibrary(doc = document, href = location.href, options
  panel.append(editorPanel, connectionPanel)
  const conflictPanel = doc.createElement('div'); section.append(conflictPanel)
  const footer = doc.createElement('small'); footer.textContent = `AO3 Library v${__SCRIPT_VERSION__} · `
- const update = doc.createElement('a'); update.href = `${__APP_ORIGIN__}/settings#${browser === 'chrome' ? 'ao3-browser-bar' : 'ios-safari-userscript'}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & update instructions'
+ const update = doc.createElement('a'); update.href = `${appOrigin}/settings#${browser === 'chrome' ? 'ao3-browser-bar' : 'ios-safari-userscript'}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & Update Instructions'
  footer.append(update); section.append(footer)
  showPanel(null)
- const draftKey = () => `draft:${__SUPABASE_URL__}:${connection.userId}:${page.series ? 'series:' : ''}${page.work}`
+ const draftKey = () => `draft:${backendUrl}:${connection.userId}:${page.series ? 'series:' : ''}${page.work}`
  function node(tag, text, parent) { const element = doc.createElement(tag); if (text) element.textContent = text; parent?.append(element); return element }
  function button(label, action, parent = toolbar) {
   const element = node('button', label, parent); element.type = 'button'; element.disabled = busy || Boolean(pendingConflict)
@@ -130,27 +131,27 @@ export async function mountLibrary(doc = document, href = location.href, options
   finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); bottomMessage.textContent = message.textContent === 'Saved' ? '' : message.textContent }
  }
  async function rpc(action, input = {}, secret = connection?.secret) {
-  const backend = new URL(__SUPABASE_URL__)
+  const backend = new URL(backendUrl)
   const networkMessage = ['localhost', '127.0.0.1', '[::1]'].includes(backend.hostname)
    && browser === 'safari' ? 'This script points to a local development server. Install the hosted Safari userscript to connect from an iPhone. Your draft is preserved.'
    : `Cannot reach the library backend. Check your connection and ${browser === 'chrome' ? 'extension' : 'Userscripts network'} access to ${backend.hostname}, then retry. Your draft is preserved.`
   let response
   try { response = await api.xmlHttpRequest({
-   method: 'POST', url: `${__SUPABASE_URL__}/rest/v1/rpc/userscript_library`, timeout: 20000,
-   headers: { apikey: __SUPABASE_KEY__, 'Content-Type': 'application/json' },
+   method: 'POST', url: `${backendUrl}/rest/v1/rpc/userscript_library`, timeout: 20000,
+   headers: { apikey: publicKey, 'Content-Type': 'application/json' },
    data: JSON.stringify({ p_secret: secret, p_action: page.series && ['get', 'save'].includes(action) ? `series_${action}` : action, p_work: page.work, p_input: input }),
-  }) } catch { throw new Error(networkMessage) }
+  }) } catch (error) { if (error?.code === 'ENVIRONMENT_CHANGED') throw error; throw new Error(networkMessage) }
   if (!response?.status) throw new Error(networkMessage)
   let data
   try { data = JSON.parse(response.responseText) } catch { throw new Error('Backend unavailable. Your draft is preserved; try again.') }
   if (response.status < 200 || response.status >= 300) {
    if (data.code === '28000') {
-    if (action === 'claim') throw new Error(`Pairing code not accepted by ${__APP_ORIGIN__}. Create a fresh code on that website and paste it within 5 minutes. If both Chrome companions are enabled, disable the companion for the other library and reload AO3. Your draft is preserved.`)
+    if (action === 'claim') throw new Error(`Pairing code not accepted by ${appOrigin}. Create a fresh code on that website and paste it within 5 minutes.${browser === 'chrome' ? ' Check the selected Hosted / Local environment in the extension settings and reload AO3.' : ''} Your draft is preserved.`)
     throw new Error('Device authorization expired or was revoked. Reconnect below; your draft is preserved.')
    }
    const conflict = conflictFromError(data, (values, base) => rpc(action, { ...input, ...values, base }))
    if (conflict) { conflict.action = action; throw conflict }
-   if (data.code === '40001') throw new Error('This entry changed elsewhere. Reload saved entry, review your draft, then save again.')
+   if (data.code === '40001') throw new Error('This entry changed elsewhere. Reload Saved Entry, review your draft, then save again.')
    throw new Error('Could not save or load. Check your connection and chapter count, then retry. Your draft is preserved.')
   }
   return data
@@ -230,7 +231,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   }
  }
  function libraryLink(parent) {
-  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${__APP_ORIGIN__}/series/${page.work}` : `${__APP_ORIGIN__}/stories/${encodeURIComponent(entry.id)}` : `${__APP_ORIGIN__}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in between chapters library')
+  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in between chapters library')
   // Trusted, build-time Lucide logo markup; no page or user content is injected.
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }
@@ -252,8 +253,9 @@ export async function mountLibrary(doc = document, href = location.href, options
   libraryLink(parent)
   const center = node('div', '', parent); center.className = 'row toolbar-progress'
   const actions = node('div', '', parent); actions.className = 'row toolbar-actions'
+  if (config?.label) { const label = node('span', config.label, actions); label.className = 'environment-label'; label.setAttribute('aria-label', `Library environment: ${config.label}`) }
   if (!connection) { panelButton('Connect Library', 'connection', showConnection, actions); return }
-  if (!loaded) button('Load saved entry', load, center)
+  if (!loaded) button('Load Saved Entry', load, center)
   else if (!entry) panelButton('Add to Library', 'editor', openEditor, center)
   else {
    if (page.series) node('span', 'Series saved', center)
@@ -302,10 +304,10 @@ export async function mountLibrary(doc = document, href = location.href, options
    seriesControls.forEach(control => control.updateRatingInfo(ratingInfo))
    message.textContent = 'Rating info saved on this device.'
   }, ratingEditor)
-  const libraryLink = node('a', `Library Settings (${__APP_ORIGIN__})`, connectionPanel)
-  libraryLink.href = `${__APP_ORIGIN__}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
+  const libraryLink = node('a', `Library Settings (${appOrigin})`, connectionPanel)
+  libraryLink.href = `${appOrigin}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
   node('p', 'In Library Settings → AO3 Browser Bar, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
-  const label = node('label', 'One-time pairing code', connectionPanel), input = node('input', '', label)
+  const label = node('label', 'One-Time Pairing Code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false
   const actions = node('div', '', connectionPanel); actions.className = 'row'
   button('Connect', async () => {
@@ -313,10 +315,50 @@ export async function mountLibrary(doc = document, href = location.href, options
    await api.setValue(storageKey, next); connection = next; input.value = ''; loaded = false; draft = null; resetPanels()
    await load(); message.textContent = 'Library connected'
   }, actions)
-  if (connection) button('Disconnect device', async () => {
+  if (connection) button('Disconnect Device', async () => {
    await rpc('disconnect'); await api.deleteValue(storageKey); connection = null; entry = null; loaded = false; draft = null; resetPanels(); message.textContent = 'Device disconnected. Local unsaved drafts are retained for this account.'
   }, actions)
   button('Close', () => showPanel(null), actions)
+ }
+ // One collection field serves standalone works, series, and selected installments.
+ function collectionPicker(parent, title, value, onChange) {
+  const field = node('div', '', parent); field.className = 'collection-picker'
+  const heading = node('div', '', field); heading.className = 'row collection-heading'
+  node('h4', title, heading)
+  const names = node('ul', '', field); names.className = 'collection-names'
+  const editor = node('div', '', field); editor.hidden = true
+  const trigger = button('', () => { editor.hidden = !editor.hidden; trigger.setAttribute('aria-expanded', String(!editor.hidden)); if (!editor.hidden) search.focus() }, heading)
+  trigger.setAttribute('aria-expanded', 'false')
+  const searchLabel = node('label', '', editor), search = node('input', '', searchLabel)
+  search.type = 'search'; search.placeholder = 'Search Custom Collections'; search.setAttribute('aria-label', 'Search Custom Collections')
+  const list = node('fieldset', '', editor); list.setAttribute('aria-label', title)
+  const empty = node('p', collections.length ? 'No matching collections.' : 'Create custom collections in your library.', editor)
+  function sync() {
+   const assigned = collections.filter(collection => value().includes(collection.id))
+   names.replaceChildren(); names.hidden = !assigned.length
+   for (const collection of assigned) node('li', collection.name, names)
+   trigger.replaceChildren()
+   if (assigned.length) {
+    icon(['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z'], trigger)
+    trigger.setAttribute('aria-label', `Edit ${title}`); trigger.title = `Edit ${title}`; trigger.className = 'collection-edit'
+   } else {
+    trigger.textContent = 'Add to Collection'; trigger.removeAttribute('aria-label'); trigger.removeAttribute('title'); trigger.className = ''
+   }
+   list.querySelectorAll('input').forEach(checkbox => { checkbox.checked = value().includes(checkbox.value) })
+  }
+  for (const collection of collections) {
+   const label = node('label', collection.name, list), checkbox = node('input', '', label)
+   checkbox.type = 'checkbox'; checkbox.value = collection.id; label.dataset.name = collection.name.toLocaleLowerCase()
+   checkbox.addEventListener('change', () => { onChange(checkbox.checked ? [...value(), collection.id] : value().filter(id => id !== collection.id)); sync(); void preserveDraft() })
+  }
+  const filter = () => {
+   const query = search.value.trim().toLocaleLowerCase(), labels = [...list.querySelectorAll('label')]
+   labels.forEach(label => { label.hidden = !label.dataset.name.includes(query) }); empty.hidden = labels.some(label => !label.hidden)
+  }
+  search.addEventListener('input', filter)
+  button('Done', () => { editor.hidden = true; trigger.setAttribute('aria-expanded', 'false'); trigger.focus() }, editor)
+  sync(); filter()
+  return sync
  }
  function seriesSaveInput() {
   const works = page.series.works.flatMap(work => {
@@ -334,13 +376,10 @@ export async function mountLibrary(doc = document, href = location.href, options
   const stored = await api.getValue(draftKey(), null)
   draft = draft ?? stored ?? { version: entry?.version ?? null, notes: entry?.notes ?? '', favorite: entry?.favorite ?? false, collections: entry?.collections ?? [], works: {}, base: { notes: entry?.notes ?? '', favorite: entry?.favorite ?? false, collections: entry?.collections ?? [] } }
   showPanel('editor')
-  node('h3', 'Add Series to Library', editorPanel)
   const form = node('form', '', editorPanel), fieldset = node('fieldset', '', form)
-  node('p', page.series.title, fieldset)
-  node('p', 'Choose works to add. Already saved works keep their existing progress and details. You can also save the series without adding works.', fieldset)
   if (page.series.nextUrl) {
    node('p', 'This listing has more pages. Save this page, then visit the next page to add more works.', fieldset)
-   const next = node('a', 'Next series page', fieldset); next.href = page.series.nextUrl
+   const next = node('a', 'Next Series Page', fieldset); next.href = page.series.nextUrl
   }
   function input(parent, title, tag, value, onChange, type) {
    const label = node('label', title, parent), control = node(tag, '', label)
@@ -351,49 +390,53 @@ export async function mountLibrary(doc = document, href = location.href, options
    control.addEventListener('change', () => { onChange(type === 'checkbox' ? control.checked : control.value); void preserveDraft() })
    return control
   }
-  input(fieldset, 'Series private notes', 'textarea', draft.notes, value => { draft.notes = value })
-  input(fieldset, 'Favorite series', 'input', draft.favorite, value => { draft.favorite = value }, 'checkbox')
-  const choices = node('details', '', fieldset); node('summary', 'Series collections', choices)
-  for (const collection of collections) input(choices, collection.name, 'input', draft.collections.includes(collection.id), checked => { draft.collections = checked ? [...draft.collections, collection.id] : draft.collections.filter(id => id !== collection.id) }, 'checkbox')
-  const all = button('Select all available works', async () => {
+  input(fieldset, 'Series Private Notes', 'textarea', draft.notes, value => { draft.notes = value })
+  input(fieldset, 'Favorite Series', 'input', draft.favorite, value => { draft.favorite = value }, 'checkbox')
+  collectionPicker(fieldset, 'Series Collections', () => draft.collections, value => { draft.collections = value })
+  node('p', 'Choose works to add. Already saved works keep their existing progress and details. You can also save the series without adding works.', fieldset)
+  const all = button('Select All Available Works', async () => {
    for (const checkbox of fieldset.querySelectorAll('input[data-work-choice]')) { checkbox.checked = true; checkbox.dispatchEvent(new Event('change')) }
   }, fieldset)
   all.disabled = false
   for (const work of page.series.works) {
-   const row = node('details', '', fieldset), summary = node('summary', '', row)
+   const row = node('div', '', fieldset)
    const saved = savedWorks.includes(work.workId)
    const details = draft.works[work.workId] ??= { selected: false, status: 'to_read', progress: 0, notes: '', rating: '', tags: '', collections: [] }
-   const checkbox = input(summary, `${work.position ? `Part ${work.position}: ` : ''}${work.title}${saved ? ' (already saved)' : ''}`, 'input', saved || details.selected, value => { details.selected = value }, 'checkbox')
+   const checkbox = input(row, `${work.position ? `Part ${work.position}: ` : ''}${work.title}${saved ? ' (already saved)' : ''}`, 'input', saved || details.selected, value => { details.selected = value }, 'checkbox')
    checkbox.disabled = saved
    if (!saved) checkbox.dataset.workChoice = String(work.workId)
    if (saved) continue
-   node('p', 'Details below apply only to this work when selected.', row)
-   const status = input(row, `Reading status: ${work.title}`, 'select', details.status, value => { details.status = value })
+   const disclosure = node('details', '', row); disclosure.className = 'work-details'
+   node('summary', 'Details below apply only to this work when selected.', disclosure)
+   const status = input(disclosure, `Reading Status: ${work.title}`, 'select', details.status, value => { details.status = value })
    for (const [key, title] of Object.entries(statuses)) { const option = node('option', title, status); option.value = key }
    status.value = details.status
-   const chapter = input(row, `Chapters read: ${work.title}`, 'input', details.progress, value => { details.progress = Number(value) }, 'number'); chapter.min = '0'; chapter.step = '1'
-   input(row, `Private notes: ${work.title}`, 'textarea', details.notes, value => { details.notes = value })
-   seriesControls.push(mountPersonalControls(node('div', '', row), details, () => { void preserveDraft() }, ratingInfo))
-   const workCollections = node('details', '', row); node('summary', 'Work collections', workCollections)
-   for (const collection of collections) input(workCollections, collection.name, 'input', details.collections.includes(collection.id), checked => { details.collections = checked ? [...details.collections, collection.id] : details.collections.filter(id => id !== collection.id) }, 'checkbox')
+   const chapter = input(disclosure, `Chapters Read: ${work.title}`, 'input', details.progress, value => { details.progress = Number(value) }, 'number'); chapter.min = '0'; chapter.step = '1'
+   input(disclosure, `Private Notes: ${work.title}`, 'textarea', details.notes, value => { details.notes = value })
+   seriesControls.push(mountPersonalControls(node('div', '', disclosure), details, () => { void preserveDraft() }, ratingInfo))
+   collectionPicker(disclosure, 'Work Collections', () => details.collections, value => { details.collections = value })
   }
   const actions = node('div', '', form); actions.className = 'row editor-actions'
-  const save = node('button', 'Save series and selected works', actions); save.type = 'submit'
+  const save = node('button', 'Save Series and Selected Works', actions); save.type = 'submit'
   button('Cancel', async () => { clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()) }, actions)
-  if (entry) button('Reload saved series', async () => {
-   await load()
-   const base = { notes: entry.notes, favorite: entry.favorite, collections: entry.collections }
-   const local = { notes: draft.notes, favorite: draft.favorite, collections: draft.collections }
-   const review = mergeEdits(draft.base ?? {}, local, base)
-   Object.assign(draft, review.merged, { version: entry.version, base })
-   await preserveDraft()
-   if (review.conflicts.length) {
-    const conflict = new EditConflict({ ...review, base }, choices => rpc('save', { ...seriesSaveInput(), ...resolveEdits(review.merged, choices) }))
-    conflict.action = 'save'; throw conflict
-   }
-   clearEditor(); await openSeriesEditor()
-   message.textContent = 'Saved series reloaded. Your local work selections and edits are retained.'
-  }, actions)
+  if (entry) {
+   const reload = node('span', '', actions); reload.className = 'field-control reload-entry'
+   button('Reload Saved Series', async () => {
+    await load()
+    const base = { notes: entry.notes, favorite: entry.favorite, collections: entry.collections }
+    const local = { notes: draft.notes, favorite: draft.favorite, collections: draft.collections }
+    const review = mergeEdits(draft.base ?? {}, local, base)
+    Object.assign(draft, review.merged, { version: entry.version, base })
+    await preserveDraft()
+    if (review.conflicts.length) {
+     const conflict = new EditConflict({ ...review, base }, choices => rpc('save', { ...seriesSaveInput(), ...resolveEdits(review.merged, choices) }))
+     conflict.action = 'save'; throw conflict
+    }
+    clearEditor(); await openSeriesEditor()
+    message.textContent = 'Saved series reloaded. Your local work selections and edits are retained.'
+   }, reload)
+   infoHelp(reload, 'Reload Saved Series', 'Loads the latest saved series notes, favorite and collections from your library. Your local work selections and edits are kept. Conflicting changes can be reviewed before saving. Reloading does not save your draft or refresh AO3 metadata.')
+  }
   form.addEventListener('submit', event => { event.preventDefault(); void run(async () => {
    accept(await rpc('save', seriesSaveInput()))
    clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()); message.textContent = 'Saved'
@@ -409,7 +452,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (!Object.hasOwn(draft, 'base')) draft.base = stored ? {} : entryValues()
   if (stored) message.textContent = 'Unsaved draft restored. Review it before saving.'
   showPanel('editor')
-  node('h3', entry ? 'Edit Library Entry' : 'Add to Library', editorPanel)
+  if (entry) node('h3', 'Edit Library Entry', editorPanel)
   const form = node('form', '', editorPanel)
   const fieldset = node('fieldset', '', form)
   const field = (title, tag, key) => {
@@ -429,10 +472,10 @@ export async function mountLibrary(doc = document, href = location.href, options
   for (const key of [...new Set(['to_read', 'reading', 'paused_reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? 'Currently Reading' : statuses[key], status); option.value = key }
   status.value = draft.status
   help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
-  const chapter = field('Current chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
+  const chapter = field('Current Chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
   if (page.metadata.published_chapters) chapter.max = String(page.metadata.published_chapters)
-  help(chapter, 'current chapter', 'Current chapter − 1 counts as completed; check finished to include this chapter.')
-  const finished = field('This chapter is finished', 'input', 'chapterFinished'); finished.type = 'checkbox'; finished.checked = draft.chapterFinished
+  help(chapter, 'current chapter', 'Current Chapter − 1 counts as completed; check finished to include this chapter.')
+  const finished = field('This Chapter Is Finished', 'input', 'chapterFinished'); finished.type = 'checkbox'; finished.checked = draft.chapterFinished
   function showChapterFields() {
    const tracking = !['to_read', 'finished'].includes(status.value)
    chapter.closest('label').hidden = finished.closest('label').hidden = !tracking
@@ -470,29 +513,10 @@ export async function mountLibrary(doc = document, href = location.href, options
   const personal = node('div', '', fieldset)
   const renderPersonal = () => { personalControls?.unmount(); personalControls = mountPersonalControls(personal, draft, () => { void preserveDraft() }, ratingInfo) }
   renderPersonal()
-  const choices = node('details', '', fieldset); choices.className = 'collection-picker'
-  node('summary', 'Add to custom collection', choices)
-  const searchLabel = node('label', '', choices), search = node('input', '', searchLabel); search.type = 'search'; search.placeholder = 'Search custom collections'; search.setAttribute('aria-label', 'Search custom collections')
-  const collectionList = node('fieldset', '', choices); collectionList.setAttribute('aria-label', 'Custom collections')
-  const empty = node('p', collections.length ? 'No matching collections.' : 'Create custom collections in your library to add this fic.', choices)
-  for (const collection of collections) {
-   const label = node('label', collection.name, collectionList), checkbox = node('input', '', label); checkbox.type = 'checkbox'; checkbox.value = collection.id; checkbox.checked = draft.collections.includes(collection.id)
-   label.dataset.name = collection.name.toLocaleLowerCase()
-   checkbox.addEventListener('change', () => {
-    draft.collections = checkbox.checked ? [...draft.collections, collection.id] : draft.collections.filter(id => id !== collection.id)
-    void preserveDraft()
-   })
-  }
-  const filterCollections = () => {
-   const query = search.value.trim().toLocaleLowerCase()
-   const labels = [...collectionList.querySelectorAll('label')]
-   labels.forEach(label => { label.hidden = !label.dataset.name.includes(query) })
-   empty.hidden = labels.some(label => !label.hidden)
-  }
-  search.addEventListener('input', filterCollections); filterCollections()
+  const syncCollections = collectionPicker(fieldset, 'Collections', () => draft.collections, value => { draft.collections = value })
   syncEditorDraft = () => {
    syncEditorProgress(); notes.value = draft.notes; notes.dispatchEvent(new Event('resize-text')); renderPersonal()
-   collectionList.querySelectorAll('input').forEach(checkbox => { checkbox.checked = draft.collections.includes(checkbox.value) })
+   syncCollections()
   }
   const actions = node('div', '', form); actions.className = 'row editor-actions'
   const save = node('button', 'Save', actions); save.type = 'submit'
@@ -514,7 +538,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   button('Cancel', async () => { await api.deleteValue(draftKey()); clearEditor(); draft = null; showPanel(null) }, actions)
   if (entry && !tile) {
    const recollect = node('span', '', actions); recollect.className = 'field-control'
-   button('Collect metadata', async () => {
+   button('Collect Metadata', async () => {
     const refreshed = await collectWorkPage(doc, href)
     if (!refreshed?.metadata.title) throw new Error('AO3 metadata is unavailable. Reload this work and try again.')
     const result = await rpc('refresh_metadata', { version: entry.version, metadata: refreshed.automaticMetadata, chapters: refreshed.chapters })
@@ -527,12 +551,16 @@ export async function mountLibrary(doc = document, href = location.href, options
   }
   if (entry) {
    const reload = node('span', '', actions); reload.className = 'field-control reload-entry'
-   button('Reload saved entry', async () => { await load(); await reconcileDraft(); message.textContent = 'Saved entry reloaded. Unchanged fields were updated; your local edits are retained.' }, reload)
+   button('Reload Saved Entry', async () => { await load(); await reconcileDraft(); message.textContent = 'Saved entry reloaded. Unchanged fields were updated; your local edits are retained.' }, reload)
    infoHelp(reload, 'reload saved entry', 'Loads this fic’s latest saved information from your hosted library. Newer saved notes and other fields update only fields you have not edited here. Your local edits are kept, and changes to different fields merge automatically. If both devices edited the same field, choose a version or combine notes before saving. Reloading does not save your draft or refresh AO3 metadata.')
   }
   status.focus()
  }
  renderToolbar()
+ api.onEnvironmentChange?.(label => {
+  message.textContent = `Environment changed to ${label}. Reload AO3 to use it. Your draft is preserved for ${config?.label ?? 'this library'}.`
+  root.querySelectorAll('.environment-label').forEach(node => { node.textContent = `${label} · reload AO3`; node.setAttribute('aria-label', `Library environment: ${label}; reload AO3`) })
+ })
  if (connection) await run(load)
  if (page.series) {
   for (const work of page.series.works) {

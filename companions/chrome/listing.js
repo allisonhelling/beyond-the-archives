@@ -87,3 +87,16 @@ export function listingUrl(value, mode = 'full') {
  return { url: url.href, kind, ...(collection ? { collectionUrl: `${url.origin}/collections/${collection[1]}` } : {}) }
 }
 export function listingKey(row) { return row.source_list === 'bookmarks' ? row['bookmark id'] : row.link.match(/\/works\/(\d+)/)?.[1] }
+
+// Chrome and the document can serialize the same query with different escaping/order.
+// Keep the origin, path and every parameter checked before accepting a snapshot.
+export function sameScanUrl(value, expected) {
+ try {
+  const normalize = value => {
+   const url = new URL(value)
+   url.searchParams.sort()
+   return url.href
+  }
+  return normalize(value) === normalize(expected)
+ } catch { return false }
+}

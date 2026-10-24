@@ -16,6 +16,7 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 .toolbar > .library-link { justify-self: start; }
 .toolbar-progress, .reading-summary, .bottom-bar { justify-content: center; }
 .toolbar-progress, .bottom-section { text-align: center; }
+.environment-label { font-size: .8em; font-weight: 600; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
 .toolbar-actions { justify-content: flex-end; }
 .toolbar-disconnected { grid-template-columns: max-content minmax(0, 1fr) max-content; overflow-x: visible; }
 .inline-instructions { margin: 0; min-width: 0; text-align: center; overflow-wrap: anywhere; }
@@ -72,7 +73,10 @@ input[type="checkbox"] { width: var(--checkbox-size, 24px); }
 .field-info > span { font: inherit; position: absolute; z-index: 1; top: 100%; right: 0; width: min(var(--help-width, 280px), var(--help-max-width, 70vw)); padding: 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); box-shadow: 0 3px 12px #0002; }
 .text-toggle { padding: var(--control-padding) 8px; }
 .collection-picker { margin: var(--field-gap) 0; }
-.collection-picker > summary { cursor: pointer; }
+.collection-heading h4 { margin: 0; font: inherit; }
+.collection-edit { display: grid; place-items: center; padding: 4px; }
+.collection-names { margin-block: var(--control-gap); padding-inline-start: 1.5em; }
+.work-details > summary { cursor: pointer; margin-block: var(--field-gap); }
 .collection-picker legend { font: inherit; padding: 0; }
 .collection-picker fieldset { margin-top: var(--field-gap); }
 .collection-picker fieldset label { border: 1px solid var(--border); border-radius: 8px; padding: var(--control-padding); }

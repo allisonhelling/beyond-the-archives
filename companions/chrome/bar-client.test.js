@@ -20,3 +20,11 @@ it('adapts shared companion storage and RPC calls to internal extension messages
  sendMessage.mockResolvedValueOnce({ ok: false, error: 'Storage unavailable' })
  await expect(api.setValue('key', 'value')).rejects.toThrow('Storage unavailable')
 })
+
+it('pins bar requests to their environment and preserves a stale-tab error code', async () => {
+ const sendMessage = vi.fn(async () => ({ ok: false, code: 'ENVIRONMENT_CHANGED', error: 'Environment changed. Reload AO3.' }))
+ vi.stubGlobal('chrome', { runtime: { sendMessage } })
+ const api = createChromeBarApi('hosted')
+ await expect(api.xmlHttpRequest({ data: JSON.stringify({ p_action: 'get' }) })).rejects.toMatchObject({ code: 'ENVIRONMENT_CHANGED', message: 'Environment changed. Reload AO3.' })
+ expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ environment: 'hosted' }))
+})

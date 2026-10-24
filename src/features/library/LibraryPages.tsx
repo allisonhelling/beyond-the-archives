@@ -115,7 +115,7 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
   const favorite = <FavoriteButton selected={story.is_favorite} disabled={blocked} onChange={selected => void change({ is_favorite: selected })} />
   const rec = <BookmarkRec story={story} disabled={blocked} onChange={selected => void change({ is_rec: selected })} />
   const StatusIcon = readingStatusIcons[story.reading_status]
-  const readingStatus = <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label>
+  const readingStatus = <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => e.target.value === 'finished' ? void finishStory() : void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label>
   const actions = <div className="story-quick-actions"><DisplayInfo group="workTile" fields={['favorite', 'rec']}>{{ favorite, rec }}</DisplayInfo>
     <details className="story-menu" ref={menuRef} open={menuOpen} onToggle={event => setMenuOpen(event.currentTarget.open)}>
       <summary aria-label={`Story actions for ${story.metadata.title}`}><MoreHorizontal size={22} /></summary>
@@ -443,15 +443,14 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story}>{({ favorite, rec, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
     <div className="page-heading story-details-heading work-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
+      <DisplayInfo group="workHeader" fields={['series']}>{{ series: story.metadata.series?.length ? <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p> : null }}</DisplayInfo>
       <div className="story-title-row">
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
-        {editing && <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p>}
+        {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p> }}</DisplayInfo>}
+        {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p> }}</DisplayInfo>}
         {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{
-        series: <> {!!story.metadata.series?.length && <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p>} </>,
-        authors: <> <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p> </>,
-        fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p>,
         stats: <> <dl className="details-story-stats">
 <DisplayInfo group="workStats">{{
       words: <> <div><dt>Word Count</dt><dd><strong>{story.metadata.word_count?.toLocaleString() ?? '?'}</strong> words</dd></div> </>,

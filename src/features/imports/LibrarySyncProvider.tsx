@@ -41,7 +41,7 @@ export function LibrarySyncProvider({ children }: { children: ReactNode }) {
   {alertKey && alertKey !== dismissed && <Dialog title={state?.attention === 'login' ? 'AO3 Sign-In Required' : state?.attention === 'rate_limit' ? 'AO3 Request Restriction' : 'AO3 Scan Needs Attention'} onClose={close} busy={opening}>
    <div className="confirmation-description"><p>{state?.error}</p><p>Your scan is paused and saved pages are preserved. Open the scan tab to complete sign-in or check the restriction. After it clears, return to Library Sync and choose Resume Scan.</p></div>
    {openError && <p role="alert" className="error-message">{openError}</p>}
-   <div className="form-actions"><button type="button" className="button primary" disabled={opening} onClick={() => void openTab()}>{opening ? 'Opening…' : 'Open AO3 Scan Tab'}</button><Link className="button secondary" to="/imports" onClick={close}>Review Scan</Link><button type="button" className="button secondary" disabled={opening} onClick={close}>Dismiss</button></div>
+   <div className="form-actions"><button type="button" className="button primary" disabled={opening} onClick={() => void openTab()}>{opening ? 'Opening…' : 'Open Tab'}</button><Link className="button secondary" to="/imports" onClick={close}>Review Scan</Link><button type="button" className="button secondary" disabled={opening} onClick={close}>Dismiss</button></div>
   </Dialog>}
  </Context.Provider>
 }

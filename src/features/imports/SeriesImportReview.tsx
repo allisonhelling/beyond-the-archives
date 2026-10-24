@@ -64,7 +64,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
   } finally { setLoading(undefined) }
  }
  function select(id: number, ids: number[]) { setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(ids) } })) }
- return <section className="story-form settings-card" aria-label="Review series imports">
+ return <section className="story-form series-import-review" aria-label="Review series imports">
   <h2>Choose works from series</h2>
   <p>{series.size} series detected · {direct.size} directly linked works included.</p>
   <p className="field-help">Only selected works are added to your library. Previews are temporary unless you choose to save full series details. Saving details includes information about unsaved works; it does not add them to your library. For extension previews, keep this page open and complete any AO3 sign-in in the requested tab.</p>
@@ -75,7 +75,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
    const preview = review?.preview
    const available = preview?.works.filter(work => !savedIds.has(work.workId) && !direct.has(work.workId)) ?? []
    const disabled = busy || loading !== undefined
-   return <section className="settings-card series-import-preview" key={id} aria-label={preview?.title ?? `Series ${id}`}>
+   return <section className="series-import-preview" key={id} aria-label={preview?.title ?? `Series ${id}`}>
     <div className="series-import-heading"><h3>{preview ? <><a className="clickable-text" href={url} target="_blank" rel="noreferrer">{preview.title}</a> · </> : null}Series {id}</h3>{!review?.skipped && <Tooltip description={review?.detailsSaved ? 'Full series details saved' : 'Load and save full series details from AO3'}>{tooltipId => <button type="button" className="button secondary" aria-describedby={tooltipId} disabled={disabled || review?.detailsSaved} onClick={() => void saveDetails(id, url)}>{review?.detailsSaved ? 'Full series details saved' : 'Save'}</button>}</Tooltip>}</div>
     {preview?.description && <p className="story-summary">{preview.description}</p>}
     {review?.error && <p className="error-message" role="alert">{review.error}</p>}

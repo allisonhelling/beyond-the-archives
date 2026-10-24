@@ -5,7 +5,7 @@ import { listingUrl } from './listing.js'
 let local, session, chrome, sync, user, clock
 const row = id => ({ source_list: 'bookmarks', 'bookmark id': String(id), title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}` })
 const storage = state => ({
- get: vi.fn(async key => ({ [key]: structuredClone(state[key]) })),
+ get: vi.fn(async key => Object.fromEntries((Array.isArray(key) ? key : [key]).map(key => [key, structuredClone(state[key])]))),
  set: vi.fn(async data => Object.assign(state, structuredClone(data))),
  remove: vi.fn(async keys => { for (const key of Array.isArray(keys) ? keys : [keys]) delete state[key] }),
 })
@@ -117,8 +117,7 @@ it('validates and persists the selected request interval across worker restarts'
  const request = { action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full' }
  for (const delaySeconds of [4, 0, 3601, 12.5, '60']) await expect(sync.command({ ...request, delaySeconds })).rejects.toThrow('request interval')
  await sync.command({ ...request, delaySeconds: 60 })
- clock += 59000; await sync.pump(); expect(chrome.tabs.create).not.toHaveBeenCalled()
- clock += 1000; await sync.pump()
+ await sync.pump(); expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
  await sync.pump()
  sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
@@ -270,4 +269,51 @@ it('times out a document that remains pending without losing saved pages', async
  clock += 120001; await sync.pump()
  expect(local.librarySync).toMatchObject({ status: 'paused', pages: 0, error: 'Page load timed out. Check AO3, then resume.' })
  expect(chrome.tabs.update).not.toHaveBeenCalled()
+})
+
+it('wakes an idle scan after releasing the command lock and opens its first tab immediately', async () => {
+ let wake, locked
+ const schedule = vi.fn()
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, schedule, changed: () => { locked = sync.busy(); wake = sync.pump() } })
+ await start(); await wake
+ expect(locked).toBe(false)
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(schedule).toHaveBeenCalledWith(clock + 1000)
+})
+it('respects a recent work request before opening the initial scan tab', async () => {
+ session.ao3LastNavigation = clock
+ await start(); await sync.pump()
+ expect(chrome.tabs.create).not.toHaveBeenCalled()
+ clock += 15000; await sync.pump()
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+})
+it('waits for a missing document capture without reloading and times out safely', async () => {
+ await start(); await sync.pump()
+ chrome.scripting.executeScript.mockResolvedValueOnce([])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'running', pages: 0, error: '' })
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1 })
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+ await sync.command({ action: 'discard' }); clock += 20000; await start(); await sync.pump()
+ chrome.scripting.executeScript.mockResolvedValue([{ result: null }])
+ clock += 120001; await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'paused', error: 'Page load timed out. Check AO3, then resume.' })
+})
+it('accepts equivalent bookmark query encodings from Chrome and the captured document', async () => {
+ await start(); await sync.pump()
+ const url = local.librarySync.requestUrl.replaceAll('%5B', '[').replaceAll('%5D', ']')
+ chrome.tabs.get.mockResolvedValue({ id: 8, status: 'complete', url })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url, rows: [row(1)], skipped: 0, hasNext: false } }])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1 })
+})
+
+it('keeps a previous scan cooldown when starting a new scan', async () => {
+ session.ao3RequestAfter = clock + 60000
+ await start(); await sync.pump()
+ expect(chrome.tabs.create).not.toHaveBeenCalled()
+ clock += 60000; await sync.pump()
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
 })

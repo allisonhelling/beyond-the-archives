@@ -50,11 +50,11 @@ it('leaves the current database mode intact when the extension cannot connect', 
  expect(mocks.save).not.toHaveBeenCalled()
 })
 
-it('explains the automatic local extension and prevents editing its ID', async () => {
+it('allows the shared extension ID on the local app', async () => {
  mocks.local = true
  render(<MetadataSettings />)
  await waitFor(() => expect(screen.getByRole('button', { name: 'Save metadata mode' })).toBeEnabled())
  fireEvent.change(screen.getByLabelText('How to load AO3 metadata'), { target: { value: 'extension' } })
- expect(screen.getByLabelText(/^Extension ID/)).toHaveAttribute('readonly')
- expect(screen.getByText(/This local app uses AO3 Library Companion/)).toBeVisible()
+ expect(screen.getByLabelText(/^Extension ID/)).not.toHaveAttribute('readonly')
+ expect(screen.getByText(/Use AO3 Library Companion with Local selected/)).toBeVisible()
 })

@@ -240,11 +240,10 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .story-section-heading h2 { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .story-details-heading > div { min-width: 0; width: 100%; }
 .work-details-heading > div { display: flex; flex-direction: column; }
-.work-details-heading .story-return-link { order: -2; align-self: flex-start; }
-.work-details-heading > div > .story-series-eyebrow, .work-details-heading > div > .display-grouped-line:has(.story-series-eyebrow) { order: -1; }
+.work-details-heading .story-return-link { align-self: flex-start; }
 .story-title-row { display: grid; grid-template-columns: minmax(0, auto) auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
 .story-title-row h1 { grid-column: 1; grid-row: 1; min-width: 0; margin-top: 0; overflow-wrap: anywhere; }
-.work-details-heading .details-fandom-rating { grid-column: 1 / -1; grid-row: 3; }
+.story-title-row .details-fandom-rating { grid-column: 1 / -1; grid-row: 3; }
 .story-title-row .story-details-authors { grid-column: 1 / -1; grid-row: 2; }
 .story-title-row > .story-title-toggles { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 8px; }
 .story-metadata-actions { grid-column: 3; grid-row: 1; justify-self: end; display: flex; align-items: stretch; gap: 8px; margin-left: auto; }
@@ -328,11 +327,10 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .story-details-page .story-section-heading:not(.story-section-heading-actions) { grid-template-columns: 1fr; }
   .story-title-row { grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
   .story-title-row h1 { grid-column: 1 / -1; }
-  .story-title-row > .story-title-toggles { grid-column: 1; grid-row: 3; margin-top: 10px; }
-  .story-metadata-actions { grid-column: 2; grid-row: 3; justify-self: start; margin: 10px 0 0; }
+  .story-title-row > .story-title-toggles { grid-column: 1; grid-row: 4; margin-top: 10px; }
+  .story-metadata-actions { grid-column: 2; grid-row: 4; justify-self: start; margin: 10px 0 0; }
   .story-metadata-label { display: inline; }
   .story-metadata-edit { max-width: 110px; height: 34px; min-height: 34px; padding: 6px 8px; gap: 6px; }
-  .work-details-heading .story-title-row > .story-title-toggles, .work-details-heading .story-metadata-actions { grid-row: 4; }
   .details-story-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; font-size: 14px; }
   .settings-card.details-progress-panel { padding: 12px; }
   .details-reading-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -340,10 +338,14 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .details-reading-controls .personal-rating legend, .details-reading-controls .details-collections-heading { min-height: 42px; }
   .details-reading-controls .rating-controls { display: grid; justify-items: start; gap: 4px; }
   .details-reading-controls .rating-stars { min-height: 44px; }
-  .series-progress-controls { flex-direction: column; gap: 12px; }
-  .series-import-actions { grid-template-rows: auto; }
-  .series-choose-works { grid-row: auto; }
-  .series-progress-columns { grid-template-columns: minmax(0, 1fr); width: 100%; gap: 12px; }
+  .series-progress-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+  .series-progress-columns, .series-import-actions { display: contents; }
+  .series-progress-state { grid-column: 1; grid-row: 1; }
+  .series-progress-columns > .details-collections { grid-column: 2; grid-row: 1 / 3; grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .series-progress-columns > .details-collections > * { grid-column: 1; }
+  .series-choose-works { grid-column: 1; grid-row: 2; }
+  .series-import-actions > button:not(.series-choose-works) { grid-column: 1 / -1; grid-row: 3; }
+  .series-progress-controls .button { width: fit-content; max-width: 100%; justify-self: start; }
   .details-reading-controls .status-select select { padding-inline: 6px; }
   .story-details-heading h1 { font-size: 24px; margin-bottom: 2px; }
   .story-details-page .story-details-authors { font-size: 15px; line-height: 1.4; }

@@ -1,14 +1,14 @@
 import { captureMetadataPage } from './capture.js'
 import { parseChapterDates } from '../../src/features/imports/chapter-dates.ts'
 import { readAo3Rows, bookmarkReadingState } from '../../src/features/imports/ao3-csv.ts'
-import { captureListingPage, listingKey, listingUrl } from './listing.js'
+import { captureListingPage, listingKey, listingUrl, sameScanUrl } from './listing.js'
 
 // Durable state is separate from work-import leases and credentials. Never persist tokens here.
-export function createLibrarySync({ auth, available, changed }) {
+export function createLibrarySync({ auth, available, changed, schedule = () => {}, storage = chrome.storage }) {
  let busy = false
  const stateKey = sample => sample ? 'sampleLibrarySync' : 'librarySync'
- const read = async () => { const key = stateKey((await auth())?.sample); return (await chrome.storage.local.get(key))[key] }
- const write = state => chrome.storage.local.set({ [stateKey(state.sample)]: state })
+ const read = async () => { const key = stateKey((await auth())?.sample); return (await storage.local.get(key))[key] }
+ const write = state => storage.local.set({ [stateKey(state.sample)]: state })
  const delayMs = state => (state.delaySeconds ?? 15) * 1000
  function requestDelay(value = 15) {
   if (!Number.isInteger(value) || value < 5 || value > 3600) throw new Error('Enter a request interval from 5 to 3,600 whole seconds.')
@@ -24,7 +24,7 @@ export function createLibrarySync({ auth, available, changed }) {
  }
  async function discard(state) {
   if (!state) return
-  await chrome.storage.local.remove(Array.from({ length: state.pages }, (_, i) => pageKey(state, (state.startPage ?? 1) + i)))
+  await storage.local.remove(Array.from({ length: state.pages }, (_, i) => pageKey(state, (state.startPage ?? 1) + i)))
  }
  async function command(message) {
   const { user, state } = await owned()
@@ -40,7 +40,7 @@ export function createLibrarySync({ auth, available, changed }) {
    const identity = listingUrl(message.url, message.mode)
    if ((identity.collectionUrl || identity.kind === 'series') && limited) throw new Error('Page ranges are available for individual work or bookmark lists. Clear the range to scan a collection or series list.')
    const baselineKey = `libraryBaseline:${user.userId}:${identity.url}`
-   const baseline = (await chrome.storage.local.get(baselineKey))[baselineKey] ?? []
+   const baseline = (await storage.local.get(baselineKey))[baselineKey] ?? []
    if (message.mode === 'quick' && !baseline.length) throw new Error('Complete and import a full scan of this list before Quick Sync.')
    await discard(await read())
    const sources = identity.collectionUrl && (identity.kind === 'collection' || message.importToCollection) ? [
@@ -50,8 +50,8 @@ export function createLibrarySync({ auth, available, changed }) {
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
    const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.autoImport ? undefined : message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
-    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now() + delaySeconds * 1000, keys: [], error: '' }
-   await write(next); changed(); return { state: next }
+    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now(), keys: [], error: '' }
+   await write(next); return { state: next }
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
   if (!state) return { state: null }
@@ -71,12 +71,12 @@ export function createLibrarySync({ auth, available, changed }) {
   if (message.action === 'set-delay') {
    state.delaySeconds = requestDelay(message.delaySeconds)
    state.nextAt = Math.max(Date.now(), (state.requestedAt ?? Date.now()) + delayMs(state))
-   await chrome.storage.session.set({ ao3RequestAfter: state.nextAt })
-   await write(state); changed(); return { state }
+   await storage.session.set({ ao3RequestAfter: state.nextAt })
+   await write(state); return { state }
   }
   if (message.action === 'page') {
    if (state.status !== 'ready' || !Number.isInteger(message.page) || message.page < (state.startPage ?? 1) || message.page >= (state.startPage ?? 1) + state.pages) throw new Error('No completed page at that position.')
-   const saved = (await chrome.storage.local.get(pageKey(state, message.page)))[pageKey(state, message.page)]
+   const saved = (await storage.local.get(pageKey(state, message.page)))[pageKey(state, message.page)]
    const rows = Array.isArray(saved) ? saved : saved?.rows
    if (!Array.isArray(rows)) throw new Error('Saved page is missing. Discard this scan and run a full scan again.')
    return { rows, ...(saved?.seriesUrl ? { seriesUrl: saved.seriesUrl } : {}) }
@@ -88,15 +88,15 @@ export function createLibrarySync({ auth, available, changed }) {
   else if (message.action === 'discard') { await discard(state); state.status = 'discarded'; state.keys = []; state.baseline = [] }
   else if (message.action === 'finish' && state.status === 'ready') {
    // Partial scans must not establish or advance a complete-list baseline.
-   if (!state.limited) await chrome.storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
+   if (!state.limited) await storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
    await discard(state); state.status = 'complete'; state.baseline = []; state.keys = []
   } else throw new Error('This action is unavailable for the saved scan.')
-  await write(state); changed(); return { state }
+  await write(state); return { state }
  }
  async function navigate(state, url) {
   state.requestUrl = url; state.requestedAt = Date.now()
   state.nextAt = Date.now() + delayMs(state) + Math.floor(Math.random() * 3000)
-  await chrome.storage.session.set({ ao3RequestAfter: state.nextAt })
+  await storage.session.set({ ao3RequestAfter: state.nextAt })
   if (state.tabId === null) {
    state.tabId = (await chrome.tabs.create({ url, active: false })).id
    await write(state)
@@ -113,17 +113,12 @@ export function createLibrarySync({ auth, available, changed }) {
   try {
    const context = await owned(); state = context.state
    if (state?.status !== 'running' || !await available()) return
-   if (state.retryNavigation) {
-    const gate = (await chrome.storage.session.get('ao3LastNavigation')).ao3LastNavigation ?? 0
-    if (Date.now() < Math.max(state.nextAt, gate + delayMs(state))) return
+   if (state.retryNavigation || state.tabId === null) {
+    const gates = await storage.session.get(['ao3LastNavigation', 'ao3RequestAfter'])
+    const nextAt = Math.max(state.nextAt, (gates.ao3LastNavigation ?? 0) + delayMs(state), gates.ao3RequestAfter ?? 0)
+    if (Date.now() < nextAt) { state.nextAt = nextAt; return }
     try { if (state.tabId !== null) await chrome.tabs.get(state.tabId) } catch { state.tabId = null }
     state.retryNavigation = false
-    const url = new URL(state.chapterRequest ? `https://archiveofourown.org/works/${state.chapterRequest.workId}/navigate` : state.currentUrl ?? state.url); if (!state.chapterRequest) url.searchParams.set('page', String(state.page))
-    await navigate(state, url.href); return
-   }
-   if (state.tabId === null) {
-    const gate = (await chrome.storage.session.get('ao3LastNavigation')).ao3LastNavigation ?? 0
-    if (Date.now() < Math.max(state.nextAt, gate + delayMs(state))) return
     const url = new URL(state.chapterRequest ? `https://archiveofourown.org/works/${state.chapterRequest.workId}/navigate` : state.currentUrl ?? state.url); if (!state.chapterRequest) url.searchParams.set('page', String(state.page))
     await navigate(state, url.href); return
    }
@@ -137,14 +132,14 @@ export function createLibrarySync({ auth, available, changed }) {
     if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
     return
    }
-   if (tab.url !== state.requestUrl) {
+   if (!sameScanUrl(tab.url, state.requestUrl)) {
     state.attention = /\/users\/login(?:[/?#]|$)/.test(tab.url ?? '') ? 'login' : 'page_error'
     throw new Error('AO3 redirected the scan. Complete sign-in or confirmation in its tab, then resume.')
    }
    if (state.chapterRequest) {
     const request = state.chapterRequest
     const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureMetadataPage, args: [false, 'navigation'] }))[0]?.result
-    if (!result || result.url !== state.requestUrl) {
+    if (!result || !sameScanUrl(result.url, state.requestUrl)) {
      const problem = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, args: ['chapter_dates'] }))[0]?.result
      state.attention = problem?.attention ?? 'page_error'
      throw new Error(problem?.error ?? 'Chapter Index could not be read. Check the scan tab and resume.')
@@ -154,10 +149,10 @@ export function createLibrarySync({ auth, available, changed }) {
     try { if (!result.notFound) dates = parseChapterDates(result.html, request.workId, request.published) } catch { /* An ambiguous index leaves progress unconfirmed. */ }
     const complete = Object.keys(dates).length === request.published
     if (complete) {
-     const key = pageKey(state, request.page), saved = (await chrome.storage.local.get(key))[key]
+     const key = pageKey(state, request.page), saved = (await storage.local.get(key))[key]
      if (!saved?.rows?.[request.row]) throw new Error('The saved listing page is missing. Discard this scan and retry.')
      saved.rows[request.row]['chapter dates'] = JSON.stringify(dates)
-     await chrome.storage.local.set({ [key]: saved })
+     await storage.local.set({ [key]: saved })
     } else state.chapterDatesUnavailable++
     state.chapterDatesChecked++; state.chapterQueue.shift(); state.chapterRequest = null
     await write(state); changed(); return
@@ -166,11 +161,11 @@ export function createLibrarySync({ auth, available, changed }) {
     const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, args: [state.kind] }))[0]?.result
     // Tab completion and the injected document can briefly disagree during navigation.
     // Wait for this document without requesting the page again or reporting a login failure.
-    if (result?.pending && result.url === state.requestUrl) {
+    if (!result || result.pending && sameScanUrl(result.url, state.requestUrl)) {
      if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
      return
     }
-    if (!result || result.error || result.url !== state.requestUrl) {
+    if (!result || result.error || !sameScanUrl(result.url, state.requestUrl)) {
      state.attention = result?.attention ?? 'page_error'
      throw new Error(result?.error ?? 'AO3 page could not be captured. Check the tab and resume.')
     }
@@ -192,7 +187,7 @@ export function createLibrarySync({ auth, available, changed }) {
     const known = new Set(state.baseline)
     // Keep observed existing rows for metadata refresh, while still stopping on overlap.
     const rows = result.rows
-    await chrome.storage.local.set({ [pageKey(state, (state.startPage ?? 1) + state.pages)]: { rows, ...(state.kind === 'series_works' ? { seriesUrl: state.currentUrl } : {}) } })
+    await storage.local.set({ [pageKey(state, (state.startPage ?? 1) + state.pages)]: { rows, ...(state.kind === 'series_works' ? { seriesUrl: state.currentUrl } : {}) } })
     if (state.checkChapterDates && (!state.readingStatus || state.readingStatus === 'reading')) {
      state.chapterQueue = readAo3Rows(rows).flatMap((work, row) => work.source === 'bookmarks' && work.workId && work.workStatus !== 'deleted' && work.bookmarkDate && work.metadata.published_chapters && bookmarkReadingState(work).status === 'reading' && !known.has(keys[row]) ? [{ workId: work.workId, published: work.metadata.published_chapters, page: (state.startPage ?? 1) + state.pages, row }] : [])
     }
@@ -220,19 +215,28 @@ export function createLibrarySync({ auth, available, changed }) {
    await navigate(state, url.href)
   } catch (error) {
    if (state?.status === 'running') { state.status = 'paused'; state.error = error.message; state.attention ??= 'page_error'; state.attentionId = crypto.randomUUID(); await write(state) }
-  } finally { busy = false }
+  } finally {
+   busy = false
+   if (state?.status === 'running') schedule(Math.max(Date.now() + 1000, state.tabId === null || state.retryNavigation || state.captured ? state.nextAt : 0))
+  }
  }
- return { async command(message) {
+ return { busy: () => busy, async command(message) {
   const mutation = !['status', 'page'].includes(message.action)
   if (mutation && busy) throw new Error('A page is being saved. Retry shortly.')
   if (mutation) busy = true
+  let updated = false
   try {
    const result = await command(message)
+   updated = mutation
    if (result.state) {
     const { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion } = result.state
     return { state: { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion } }
    }
    return result
-  } finally { if (mutation) busy = false }
+  } finally {
+   if (mutation) busy = false
+   // Wake the processor only after releasing the command lock.
+   if (updated) changed()
+  }
  }, pump, async blocksImports() { const state = await read(); return state?.status === 'running' && state.userId === (await auth())?.userId } }
 }

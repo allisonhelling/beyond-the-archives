@@ -15,6 +15,7 @@ async function send(message, source = sender) {
 beforeEach(() => {
  storage = new Map()
  vi.stubGlobal('__SUPABASE_URL__', backend)
+ vi.stubGlobal('__APP_ORIGIN__', 'https://library.example')
  vi.stubGlobal('__SUPABASE_KEY__', 'sb_publishable_test')
  vi.stubGlobal('chrome', { runtime: { id: 'own-extension', onMessage: { addListener: handler => { listener = handler } } }, storage: { local: {
   get: async key => ({ [key]: storage.get(key) }),
@@ -40,6 +41,22 @@ it('isolates persistent bar storage from import sessions and scan checkpoints', 
  await send({ action: 'delete', key: connectionKey })
  expect(storage.size).toBe(1)
  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('binds RPCs to the selected environment and preserves only drafts from stale tabs', async () => {
+ const hosted = { id: 'hosted', label: 'Hosted', backend, appOrigin: 'https://library.example', publicKey: 'hosted-public' }
+ const local = { id: 'local', label: 'Local', backend: 'http://127.0.0.1:54321', appOrigin: 'http://127.0.0.1:5173', publicKey: 'local-public' }
+ installBarBridge({ ready: Promise.resolve(), current: local, list: () => [hosted, local] })
+ expect((await send({ action: 'configuration' })).value).toEqual(local)
+ const rejected = await send({ action: 'rpc', environment: 'hosted', input })
+ expect(rejected).toMatchObject({ ok: false, code: 'ENVIRONMENT_CHANGED' })
+ expect(fetcher).not.toHaveBeenCalled()
+ const draftKey = `draft:${backend}:alice:123`
+ expect(await send({ action: 'set', environment: 'hosted', key: draftKey, value: { notes: 'Hosted unsaved notes' } })).toMatchObject({ ok: true })
+ expect(storage.get(`ao3-bar:${draftKey}`).notes).toBe('Hosted unsaved notes')
+ expect(await send({ action: 'get', environment: 'local', key: connectionKey })).toMatchObject({ ok: false })
+ expect(await send({ action: 'rpc', environment: 'local', input })).toMatchObject({ ok: true })
+ expect(fetcher).toHaveBeenCalledWith(`${local.backend}/rest/v1/rpc/userscript_library`, expect.objectContaining({ headers: expect.objectContaining({ apikey: 'local-public' }) }))
 })
 
 it('rejects messages from other sites, extensions, frames, and unsupported AO3 pages', async () => {

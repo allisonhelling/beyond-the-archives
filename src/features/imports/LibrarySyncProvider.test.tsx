@@ -12,7 +12,7 @@ beforeEach(() => { vi.clearAllMocks(); mocks.command.mockResolvedValue({ state: 
 it('alerts on other app pages and opens the specific scan tab through the extension', async () => {
  show()
  expect(await screen.findByRole('dialog', { name: 'AO3 Request Restriction' })).toBeVisible()
- fireEvent.click(screen.getByRole('button', { name: 'Open AO3 Scan Tab' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Open Tab' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('open-tab', { scanId: 'scan' }))
  expect(mocks.command.mock.calls.some(([action]) => action === 'resume')).toBe(false)
 })
@@ -33,6 +33,6 @@ it('does not interrupt a manually paused scan and gives guidance if the scan tab
  fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }))
  await screen.findByRole('dialog')
  mocks.command.mockRejectedValueOnce(new Error('The scan tab was closed. Resume the scan.'))
- fireEvent.click(screen.getByRole('button', { name: 'Open AO3 Scan Tab' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Open Tab' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('scan tab was closed')
 })

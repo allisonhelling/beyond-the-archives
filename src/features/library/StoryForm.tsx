@@ -18,6 +18,8 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   const [status, setStatus] = useState<Status>(story?.reading_status ?? (params.get('mode') === 'finished' ? 'finished' : params.get('mode') === 'starting' ? 'reading' : 'to_read'))
   const [statusTouched, setStatusTouched] = useState(Boolean(story) || params.has('mode'))
   const [progress, setProgress] = useState(String(story?.last_read_chapter ?? 0))
+  const finishedChapters = section !== 'metadata' && status === 'finished' ? metadata.published_chapters ?? metadata.total_chapters : null
+  const readProgress = finishedChapters ?? Number(progress)
   const [notes, setNotes] = useState(story?.notes ?? '')
   const [personalRating, setPersonalRating] = useState<number | null>(story?.personal_rating ?? null)
   const [favorite, setFavorite] = useState(story?.is_favorite ?? false)
@@ -57,8 +59,8 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
         if (value !== null && (!Number.isInteger(value) || value < (key === 'total_chapters' ? 1 : 0) || value > 2147483647)) throw new Error('Enter valid whole chapter and word counts, or leave unknown values blank.')
       }
       if (metadata.published_chapters !== null && metadata.total_chapters !== null && metadata.published_chapters > metadata.total_chapters) throw new Error('Published chapters cannot exceed the total.')
-      if (!progress.trim()) throw new Error('Enter the number of fully read chapters.')
-      validateProgress(Number(progress), metadata)
+      if (finishedChapters === null && !progress.trim()) throw new Error('Enter the number of fully read chapters.')
+      validateProgress(readProgress, metadata)
       const authorLinks: Record<string, string> = {}
       if (section !== 'reading') for (const author of parseLines(authors)) {
         const value = metadata.author_links?.[author]?.trim()
@@ -69,7 +71,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
       }
       setBusy(true)
       const nextMetadata: Metadata = section === 'reading' && story ? story.metadata : { ...metadata, manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), author_links: authorLinks, fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
-      const id = await saveStory({ id: story?.id, base, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(initialMetadata!, nextMetadata) : undefined, status, progress: Number(progress), notes, personalRating, favorite, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
+      const id = await saveStory({ id: story?.id, base, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(initialMetadata!, nextMetadata) : undefined, status, progress: readProgress, notes, personalRating, favorite, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
       await saved(id)
     } catch (e) { failed(e) }
     finally { setBusy(false) }
@@ -89,7 +91,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     <label>Series names (one per line, manually entered)<textarea rows={2} value={series} onChange={e => setSeries(e.target.value)} /></label>
     <div className="form-grid"><label>Relationship tags (one per line)<textarea rows={3} value={relationships} onChange={e => setRelationships(e.target.value)} /></label><label>Characters (one per line)<textarea rows={3} value={characters} onChange={e => setCharacters(e.target.value)} /></label><label>Additional tags (one per line)<textarea rows={3} value={additionalTags} onChange={e => setAdditionalTags(e.target.value)} /></label></div>
     {otherTags && <label>Other or uncategorized AO3 tags (one per line)<textarea rows={3} value={otherTags} onChange={e => setOtherTags(e.target.value)} /></label>}</fieldset>}
-    {section !== 'metadata' && <fieldset disabled={busy || Boolean(conflict)}><legend>Your reading & organization</legend><div className="form-grid reading-progress-row"><label>Reading status<select aria-label="Reading status" value={status} onChange={e => { setStatus(e.target.value as Status); setStatusTouched(true) }}>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label>Last fully read chapter<input type="number" required min="0" step="1" value={progress} onChange={e => { setProgress(e.target.value); setStatusTouched(true) }} /><small>of {metadata.total_chapters ?? '?'} · next unread: {Number(progress) + 1}</small></label></div>
+    {section !== 'metadata' && <fieldset disabled={busy || Boolean(conflict)}><legend>Your reading & organization</legend><div className="form-grid reading-progress-row"><label>Reading status<select aria-label="Reading status" value={status} onChange={e => { setStatus(e.target.value as Status); setStatusTouched(true) }}>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label>Last fully read chapter<input type="number" required min="0" step="1" value={finishedChapters ?? progress} disabled={finishedChapters !== null} onChange={e => { setProgress(e.target.value); setStatusTouched(true) }} /><small>of {metadata.total_chapters ?? '?'} · {status === 'finished' ? 'all chapters read' : `next unread: ${Number(progress) + 1}`}</small></label></div>
     <div className="rating-favorite-row"><StarRating value={personalRating} onChange={setPersonalRating} /><div className="favorite-choice"><FavoriteButton selected={favorite} disabled={busy || Boolean(conflict)} onChange={setFavorite} /></div></div>
     <label>Private notes<textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)} /></label>
     <div><span className="filter-name editable-field-heading">Personal tags</span><PersonalTagInput value={tags} onChange={setTags} /></div>

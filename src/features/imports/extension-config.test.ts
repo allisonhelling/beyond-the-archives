@@ -8,12 +8,13 @@ function location(hostname: string) {
  const store = new Map<string, string>([['ao3-library-extension-id', 'a'.repeat(32)]])
  vi.stubGlobal('window', { location: new URL(`http://${hostname}`), localStorage: { getItem: (key: string) => store.get(key), setItem: (key: string, value: string) => store.set(key, value) } })
 }
-it('pins the unpacked local extension identity independently of saved and hosted IDs', () => {
+it('allows a shared extension ID on local origins', () => {
  for (const host of ['127.0.0.1', 'localhost', '[::1]']) {
   location(host); vi.stubEnv('VITE_AO3_EXTENSION_ID', 'b'.repeat(32))
   expect(isLocalApp()).toBe(true)
-  expect(extensionId()).toBe(localExtensionId)
-  expect(() => setExtensionId('a'.repeat(32))).toThrow('local extension')
+  expect(extensionId()).toBe('a'.repeat(32))
+  expect(() => setExtensionId('c'.repeat(32))).not.toThrow()
+  expect(extensionId()).toBe('c'.repeat(32))
   expect(() => setExtensionId(localExtensionId)).not.toThrow()
  }
 })
@@ -35,5 +36,5 @@ it('uses the tokenless local sample connection when sample mode is enabled', asy
  Object.assign(window, { chrome: { runtime: { sendMessage } } })
  const { connectExtension } = await import('./extension')
  expect(await connectExtension()).toBe(true)
- expect(sendMessage).toHaveBeenCalledWith(localExtensionId, { type: 'AO3_LIBRARY_SAMPLE_CONNECT' }, expect.any(Function))
+ expect(sendMessage).toHaveBeenCalledWith('a'.repeat(32), { type: 'AO3_LIBRARY_SAMPLE_CONNECT' }, expect.any(Function))
 })

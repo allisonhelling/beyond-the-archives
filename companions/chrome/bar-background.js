@@ -4,7 +4,8 @@ const maxPayloadLength = 4000000
 
 // Keep bar credentials/drafts separate from scan checkpoints and import sessions.
 // No message can choose a fetch URL, authorization header, or arbitrary storage key.
-export function installBarBridge() {
+export function installBarBridge(environments = null, switching = () => false) {
+ let pending = 0
  chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (message?.type !== 'AO3_LIBRARY_BAR') return
   let page
@@ -12,30 +13,45 @@ export function installBarBridge() {
   if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !Number.isInteger(sender.tab?.id)
    || page.origin !== 'https://archiveofourown.org'
    || !/^\/(works\/[1-9]\d*(?:\/chapters\/[1-9]\d*)?|series\/[1-9]\d*)\/?$/.test(page.pathname)) return
-  void handle(message, page).then(value => respond({ ok: true, value })).catch(() => {
-   respond({ ok: false, error: 'The library bar request failed. Check the extension connection and retry; your draft is preserved.' })
-  })
+  pending += 1
+  void (async () => {
+   await environments?.ready
+   const config = environments?.current ?? { backend: __SUPABASE_URL__, publicKey: __SUPABASE_KEY__, appOrigin: __APP_ORIGIN__ }
+   if (message.action === 'configuration') return config
+   if (switching()) throw new Error('Environment changed. Reload AO3 to use the selected library; your draft is preserved.')
+   if (environments && message.environment !== config.id) {
+    // Open editors may continue preserving drafts for their original environment.
+    const old = environments.list().find(profile => profile.id === message.environment)
+    if (old && message.action === 'set' && message.key?.startsWith(`draft:${old.backend}:`)) return handle(message, page, old)
+    throw new Error('Environment changed. Reload AO3 to use the selected library; your draft is preserved.')
+   }
+   return handle(message, page, config)
+  })().then(value => respond({ ok: true, value })).catch(error => {
+   const changed = error.message.startsWith('Environment changed.')
+   respond({ ok: false, ...(changed && { code: 'ENVIRONMENT_CHANGED' }), error: changed ? error.message : 'The library bar request failed. Check the extension connection and retry; your draft is preserved.' })
+  }).finally(() => { pending -= 1 })
   return true
  })
+ return { busy: () => pending > 0 }
 }
 
-async function handle(message, page) {
+async function handle(message, page, config) {
  if (message.action === 'rpc') {
   const input = message.input
   if (!input || !actions.has(input.p_action) || typeof input.p_secret !== 'string' || input.p_secret.length > 512
    || !Number.isSafeInteger(input.p_work) || input.p_work < 1 || JSON.stringify(input).length > maxPayloadLength) throw new Error('Invalid bar request')
   const seriesPage = page.pathname.startsWith('/series/'), seriesAction = input.p_action.startsWith('series_')
   if (seriesAction && !seriesPage || (!seriesPage || seriesAction) && input.p_work !== Number(page.pathname.split('/')[2])) throw new Error('Work does not match this page')
-  const response = await fetch(`${__SUPABASE_URL__}/rest/v1/rpc/userscript_library`, {
-   method: 'POST', headers: { apikey: __SUPABASE_KEY__, 'Content-Type': 'application/json' },
+  const response = await fetch(`${config.backend}/rest/v1/rpc/userscript_library`, {
+   method: 'POST', headers: { apikey: config.publicKey, 'Content-Type': 'application/json' },
    body: JSON.stringify(input), signal: AbortSignal.timeout(20000), credentials: 'omit', redirect: 'error',
   })
   return { status: response.status, responseText: await response.text() }
  }
  const key = message.key
  if (typeof key !== 'string' || key.length > 300 || !(
-  ['connection', 'theme', 'rating-info'].some(kind => key === `${kind}:${__SUPABASE_URL__}`)
-  || key.startsWith(`draft:${__SUPABASE_URL__}:`))) throw new Error('Invalid bar storage key')
+  ['connection', 'theme', 'rating-info'].some(kind => key === `${kind}:${config.backend}`)
+  || key.startsWith(`draft:${config.backend}:`))) throw new Error('Invalid bar storage key')
  const storageKey = `ao3-bar:${key}`
  if (message.action === 'get') return (await chrome.storage.local.get(storageKey))[storageKey] ?? null
  if (message.action === 'set') {

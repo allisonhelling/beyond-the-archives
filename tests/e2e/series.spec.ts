@@ -15,12 +15,29 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   ]}}})
  })
  await page.goto('/series/77'); await login(page)
+ if (page.viewportSize()!.width <= 600) {
+  const fandoms = (await page.locator('.story-title-row .details-fandom-rating').boundingBox())!
+  const favorite = (await page.locator('.story-title-row .favorite').boundingBox())!
+  const actions = (await page.locator('.story-metadata-actions').boundingBox())!
+  expect(favorite.y).toBeGreaterThanOrEqual(fandoms.y + fandoms.height)
+  expect(actions.y).toBeGreaterThanOrEqual(fandoms.y + fandoms.height)
+  const progress = page.locator('.series-progress-state')
+  const collection = page.getByRole('region', { name: 'Collections', exact: true })
+  const progressBox = (await progress.boundingBox())!, collectionBox = (await collection.boundingBox())!
+  expect(collectionBox.x).toBeGreaterThan(progressBox.x)
+  expect(Math.abs(collectionBox.y - progressBox.y)).toBeLessThan(1)
+  const chooseBox = (await page.getByRole('button', { name: 'Choose Works to Import' }).boundingBox())!
+  expect(chooseBox.y).toBeGreaterThanOrEqual(progressBox.y + progressBox.height)
+  const addBox = (await collection.getByRole('button', { name: 'Add to Collection' }).boundingBox())!
+  expect(addBox.width).toBeLessThanOrEqual(collectionBox.width)
+ }
  await expect(page.getByRole('heading', {name:'Works in your library'})).toBeVisible()
  await expect(page.getByRole('button', {name:'Hide Works Not in Library'})).toHaveCount(0)
  expect(previews).toBe(0)
  expect(tables.library_series).toHaveLength(0)
  await page.getByRole('button', {name:'Choose Works to Import'}).click()
- const dialog = page.getByRole('dialog', {name:'Review series',exact:true})
+ const dialog = page.getByRole('dialog', {name:'Review Series',exact:true})
+ await expect(dialog.locator('.settings-card')).toHaveCount(0)
  await expect(dialog.getByRole('checkbox', {name:'Part 1: Saved fic'})).toBeDisabled()
  await expect(dialog.getByRole('checkbox', {name:'Part 2: Unsaved sequel'})).not.toBeChecked()
  expect(previews).toBe(1)
@@ -154,7 +171,7 @@ test('series preview follows Next pages before offering all works for import', a
  })
  await page.goto('/series/77'); await login(page)
  await page.getByRole('button', { name: 'Choose Works to Import' }).click()
- const dialog = page.getByRole('dialog', { name: 'Review series', exact: true })
+ const dialog = page.getByRole('dialog', { name: 'Review Series', exact: true })
  await expect(dialog.getByRole('checkbox')).toHaveCount(3)
  expect(requested).toEqual([url, `${url}?page=2`, `${url}?page=3`])
  const save = dialog.getByRole('button', { name: 'Save', exact: true })

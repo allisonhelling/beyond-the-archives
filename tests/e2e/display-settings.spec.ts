@@ -443,18 +443,26 @@ test('preview tiles match live tile widths and grouped-line indentation',async({
  expect((await page.locator('.series-card').first().boundingBox())!.width).toBeCloseTo(previewWidths[1],0)
 })
 
-test('editor actions are centered, tile sections separated, and category rows stay aligned',async({page},info)=>{
+test('editor actions are centered, subsection titles interrupt borders, and category rows stay aligned',async({page},info)=>{
  await setup(page)
  const work=editor(page,'Work Tile')
  for(const width of info.project.name==='mobile'?[320,390]:[1280]) {
   await page.setViewportSize({width,height:844})
   const titlePositions:number[]=[],buttonWidths:number[]=[]
   for(const heading of await page.locator('.display-tile-heading').all()) {
-   const button=(await heading.getByRole('button').boundingBox())!,title=(await heading.getByRole('heading').boundingBox())!
-   titlePositions.push(title.x);buttonWidths.push(button.width)
-   expect(title.x-button.x-button.width).toBeGreaterThanOrEqual(8)
-   if(info.project.name==='mobile') expect(title.x-button.x-button.width).toBeCloseTo(8,1)
-   expect(title.width+1).toBeGreaterThanOrEqual(await heading.getByRole('heading').evaluate(node=>node.scrollWidth))
+   const titleNode=heading.getByRole('heading'),title=(await titleNode.boundingBox())!,legend=(await heading.boundingBox())!
+   expect(await heading.evaluate(node=>node.tagName)).toBe('LEGEND')
+   titlePositions.push(title.x)
+   expect(title.width+1).toBeGreaterThanOrEqual(await titleNode.evaluate(node=>node.scrollWidth))
+   for(const control of await heading.locator(':scope > .button').all()) {
+    const bounds=(await control.boundingBox())!
+    if(await control.evaluate(node=>node.tagName==='BUTTON')) buttonWidths.push(bounds.width)
+    expect(bounds.x).toBeGreaterThanOrEqual(legend.x)
+    expect(bounds.x+bounds.width).toBeLessThanOrEqual(legend.x+legend.width+1)
+    expect(await control.evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true)
+    expect(bounds.y).toBeGreaterThanOrEqual(legend.y)
+    expect(bounds.y+bounds.height).toBeLessThanOrEqual(legend.y+legend.height+1)
+   }
   }
   if(info.project.name==='mobile') {
    expect(new Set(titlePositions).size).toBe(1)
@@ -465,29 +473,34 @@ test('editor actions are centered, tile sections separated, and category rows st
   const actions=node.querySelector('.display-editor-actions')!,buttons=[...actions.querySelectorAll('button')].map(button=>button.getBoundingClientRect()),section=actions.getBoundingClientRect()
   const sections=[...node.querySelectorAll('.display-tile-section')],toggle=sections[0].querySelector('.display-tile-heading > button')!,heading=sections[0].querySelector('h3')!
   const grid=node.querySelector('.display-tag-color-grid')!
-  return {allPickerLeft:node.querySelector('.display-all-colors .collection-color-trigger')!.getBoundingClientRect().left,actionCenter:(Math.min(...buttons.map(rect=>rect.left))+Math.max(...buttons.map(rect=>rect.right)))/2,sectionCenter:(section.left+section.right)/2,borders:sections.map(section=>getComputedStyle(section).borderTopWidth),headingCenterX:(heading.getBoundingClientRect().left+heading.getBoundingClientRect().right)/2,headingCenterY:(heading.getBoundingClientRect().top+heading.getBoundingClientRect().bottom)/2,toggleCenterY:(toggle.getBoundingClientRect().top+toggle.getBoundingClientRect().bottom)/2,headingLeft:heading.getBoundingClientRect().left,toggleRight:toggle.getBoundingClientRect().right,afterPreviewGap:sections[1].querySelector('.display-tile-heading > button')!.getBoundingClientRect().top-sections[0].querySelector('article')!.getBoundingClientRect().bottom,columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,rows:[...grid.children].map(row=>{const label=row.querySelector(':scope > .field-help')!.getBoundingClientRect(),picker=row.querySelector('.collection-color-trigger')!.getBoundingClientRect(),tag=row.querySelector('.categorized-tags')!.getBoundingClientRect();return {rowCenter:(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2,labelX:label.right,pickerLeft:picker.left,pickerRight:picker.right,tagLeft:tag.left,labelY:(label.top+label.bottom)/2,pickerY:(picker.top+picker.bottom)/2,tagY:(tag.top+tag.bottom)/2}})}
+  return {allPickerLeft:node.querySelector('.display-all-colors .collection-color-trigger')!.getBoundingClientRect().left,actionCenter:(Math.min(...buttons.map(rect=>rect.left))+Math.max(...buttons.map(rect=>rect.right)))/2,sectionCenter:(section.left+section.right)/2,borders:sections.map(section=>getComputedStyle(section).borderTopWidth),headingCenter:(heading.getBoundingClientRect().top+heading.getBoundingClientRect().bottom)/2,toggleCenter:(toggle.getBoundingClientRect().top+toggle.getBoundingClientRect().bottom)/2,afterPreviewGap:sections[1].querySelector('.display-tile-heading > button')!.getBoundingClientRect().top-sections[0].querySelector('article')!.getBoundingClientRect().bottom,columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,rows:[...grid.children].map(row=>{const label=row.querySelector(':scope > .field-help')!.getBoundingClientRect(),picker=row.querySelector('.collection-color-trigger')!.getBoundingClientRect(),tag=row.querySelector('.categorized-tags')!.getBoundingClientRect();return {rowCenter:(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2,labelX:label.right,pickerLeft:picker.left,pickerRight:picker.right,tagLeft:tag.left,labelY:(label.top+label.bottom)/2,pickerY:(picker.top+picker.bottom)/2,tagTop:tag.top,pickerBottom:picker.bottom}})}
  })
  expect(layout.actionCenter).toBeCloseTo(layout.sectionCenter,0)
  expect(layout.borders).toEqual(['1px','1px'])
- if(info.project.name!=='mobile') expect(layout.headingCenterX).toBeCloseTo(layout.sectionCenter,0)
- expect(layout.headingCenterY).toBeCloseTo(layout.toggleCenterY,0)
- expect(layout.toggleRight).toBeLessThanOrEqual(layout.headingLeft)
+ expect(layout.headingCenter).toBeCloseTo(layout.toggleCenter,0)
  expect(layout.afterPreviewGap).toBeGreaterThanOrEqual(32)
- // The desktop settings outline leaves room for one full category row per line.
- expect(layout.columns).toBe(1)
+ expect(layout.columns).toBe(info.project.name==='mobile'?1:2)
+ if(layout.columns===2) {
+  expect(layout.rows[3].pickerLeft).toBeGreaterThan(layout.rows[0].pickerRight)
+  expect(layout.rows[3].pickerY).toBe(layout.rows[0].pickerY)
+ }
  expect(layout.allPickerLeft).toBe(layout.rows[0].pickerLeft)
  for(const [index,row] of layout.rows.entries()) {
-  expect(row.pickerLeft).toBe(layout.rows[index % layout.columns].pickerLeft)
+  expect(row.pickerLeft).toBe(layout.rows[layout.columns===1?0:index<3?0:3].pickerLeft)
   expect(row.pickerLeft-row.labelX).toBe(8)
-  if(info.project.name!=='mobile') expect(row.pickerRight).toBeLessThanOrEqual(row.tagLeft)
   expect(Math.abs(row.labelY-row.pickerY)).toBeLessThan(1)
-  if(info.project.name!=='mobile') expect(Math.abs(row.tagY-row.pickerY)).toBeLessThan(1)
+  expect(row.tagTop).toBeGreaterThanOrEqual(row.pickerBottom)
  }
  for(const tag of await page.locator('.display-tag-color-grid .metadata-tag').all()) {
   expect(await tag.evaluate(node=>{const range=document.createRange();range.selectNodeContents(node);return range.getClientRects().length})).toBe(1)
  }
  await expect(work.getByRole('button',{name:'Hide/Show Information',exact:true})).toBeVisible()
  await page.getByRole('region',{name:'Site-wide Tag Appearance',exact:true}).screenshot({path:`test-results/tag-category-rows-${info.project.name}.png`})
+ await page.goto('/settings#settings-metadata')
+ const metadataGap=await page.getByRole('group',{name:'Retrieval Mode',exact:true}).evaluate(node=>node.querySelector(':scope > label')!.getBoundingClientRect().top-node.querySelector('legend')!.getBoundingClientRect().bottom)
+ await page.goto('/settings#ao3-browser-bar')
+ const installationGap=await page.getByRole('group',{name:'Install or Update',exact:true}).evaluate(node=>node.querySelector(':scope > p')!.getBoundingClientRect().top-node.querySelector('legend')!.getBoundingClientRect().bottom)
+ expect(metadataGap).toBeCloseTo(installationGap,0)
 })
 
 test('Move Up and Move Down retain the current single or multiple selection',async({page})=>{

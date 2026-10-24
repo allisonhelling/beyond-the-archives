@@ -253,11 +253,13 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
     const title = await page.locator('.story-title-row h1').boundingBox()
     const fandoms = await page.locator('.details-fandom-rating').boundingBox()
     expect(metadataActions!.y).toBeGreaterThanOrEqual(title!.y + title!.height)
-    expect(authorLine!.y).toBeGreaterThanOrEqual(metadataActions!.y + metadataActions!.height)
+    expect(metadataActions!.y).toBeGreaterThanOrEqual(authorLine!.y + authorLine!.height)
     expect(fandoms!.y).toBeGreaterThanOrEqual(authorLine!.y + authorLine!.height)
+    expect(metadataActions!.y).toBeGreaterThanOrEqual(fandoms!.y + fandoms!.height)
     const favorite = (await page.locator('.story-title-row .favorite').boundingBox())!
     expect(favorite.y).toBeGreaterThanOrEqual(title!.y + title!.height)
-    expect(favorite.y + favorite.height).toBeLessThanOrEqual(authorLine!.y)
+    expect(favorite.y).toBeGreaterThanOrEqual(authorLine!.y + authorLine!.height)
+    expect(favorite.y).toBeGreaterThanOrEqual(fandoms!.y + fandoms!.height)
     const stats = page.locator('.details-story-stats')
     const chapters = (await stats.getByText('Published / Total Chapters', { exact: true }).boundingBox())!
     const updated = (await stats.getByText('Date Updated', { exact: true }).boundingBox())!
@@ -3141,4 +3143,21 @@ test('Delete removes empty selected collections and confirms selections containi
   await expect(confirmation).toHaveCount(0)
   expect(tables.collections).toHaveLength(0)
   expect(tables.library_series).toHaveLength(1)
+})
+
+test('Finished status marks every published chapter read and preserves progress when unknown', async ({ page }) => {
+ const tables = await fixture(page)
+ for (const [id, chapters] of [['known', 6], ['unknown', null]] as const) {
+  tables.works.push({ id: `finish-work-${id}`, ao3_work_id: id === 'known' ? 991 : 992, verified_chapters: {}, published_chapters: chapters, total_chapters: chapters })
+  tables.library_entries.push({ id: `finish-entry-${id}`, work_id: `finish-work-${id}`, original_url: `https://archiveofourown.org/works/${id === 'known' ? 991 : 992}`, reading_status: 'reading', last_read_chapter: 2, notes: 'Keep my notes', is_favorite: false, created_at: '2026-10-01T00:00:00Z', metadata_overrides: { title: `Finish ${id}`, authors: [], fandoms: [], ao3_tags: [], published_chapters: chapters, total_chapters: chapters, publication_status: 'unknown' } })
+ }
+ await page.goto('/stories/finish-entry-known'); await login(page)
+ await page.getByRole('combobox', { name: 'Reading status for Finish known' }).selectOption('finished')
+ await expect.poll(() => tables.library_entries[0].last_read_chapter).toBe(6)
+ await expect(page.getByRole('button', { name: 'Chapter 6 of 6 — edit progress' })).toBeVisible()
+ await page.goto('/stories/finish-entry-unknown')
+ await page.getByRole('combobox', { name: 'Reading status for Finish unknown' }).selectOption('finished')
+ await expect.poll(() => tables.library_entries[1].reading_status).toBe('finished')
+ expect(tables.library_entries[1].last_read_chapter).toBe(2)
+ expect(tables.library_entries.map(entry => entry.notes)).toEqual(['Keep my notes', 'Keep my notes'])
 })

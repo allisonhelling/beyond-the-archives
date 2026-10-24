@@ -61,6 +61,8 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
   <div className="page-heading story-details-heading"><div>
    <Link className="story-return-link clickable-text" to={returnTo} aria-label="Back to Series"><ArrowLeft size={16} aria-hidden="true" />Series</Link>
    <div className="story-title-row"><h1><a href={series.normalizedUrl} target="_blank" rel="noreferrer">{series.title}</a></h1>
+    <DisplayInfo group="seriesHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> }}</DisplayInfo>
+    <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> }}</DisplayInfo>
     <div className="story-title-toggles">{favorite}</div>
     <div className="story-metadata-actions"><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')
@@ -68,9 +70,6 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
     }}>Remove</button>}</Tooltip>}</div>
    </div>
 <DisplayInfo group="seriesHeader">{{
-authors: <> <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> </>,
-fandoms: <>    <p className="details-fandom-rating">{series.fandoms.join(' · ') || 'Fandom unknown'}</p>
- </>,
 stats: <>    <dl className="details-story-stats"><DisplayInfo group="seriesStats">{{
 words: <> <div><dt>{basic ? 'Words in your library' : 'Word count'}</dt><dd><strong>{series.wordCount?.toLocaleString() ?? '?'}</strong> words</dd></div> </>,
 publication: <> <div><dt>Publication Status</dt><dd><strong>{seriesCompletionLabel(series)}</strong></dd></div> </>,
@@ -84,7 +83,7 @@ source: <>
 
   {!review && errorMessage}
 
-  {review && <Dialog title="Review series" className="series-review-dialog" busy={busy || reviewBusy} onClose={() => setReview(false)}>{errorMessage}<SeriesImportReview key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} autoLoad busy={busy} onBusyChange={setReviewBusy} onConfirm={async (works, status, seriesIds) => {
+  {review && <Dialog title="Review Series" className="series-review-dialog" busy={busy || reviewBusy} onClose={() => setReview(false)}>{errorMessage}<SeriesImportReview key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} autoLoad busy={busy} onBusyChange={setReviewBusy} onConfirm={async (works, status, seriesIds) => {
    setBusy(true); setError('')
    try { const batch = await submitImport(works.map(work => work.url).join('\n'), false, status, seriesIds); if (batch) { const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'}); await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : [])) }; await refreshSeries(seriesId); setReview(false) } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') } finally { setBusy(false) }
   }} onCancel={() => setReview(false)} /></Dialog>}

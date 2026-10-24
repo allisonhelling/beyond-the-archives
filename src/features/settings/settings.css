@@ -10,7 +10,8 @@
 .settings-content .section-title h2 { margin: 0; }
 .settings-content :is(h3, legend):not(.display-edit-surface *) { font: 600 18px/1.5 var(--font-sans); }
 .settings-content :is(h4, h5):not(.display-edit-surface *) { font: 600 var(--settings-text-size)/1.5 var(--font-sans); }
-.settings-subsection > h3 { margin: 0 0 16px; }
+.settings-subsection > legend + label, .settings-subsection > legend + form > label:first-child { margin-top: 0; }
+.settings-subsection > legend > h3 { margin: 0; font: inherit; }
 .settings-subsection > p + p { margin-top: 12px; }
 .settings-subsection > :last-child { margin-bottom: 0; }
 .settings-card > p + .settings-subsection { margin-top: 24px; }

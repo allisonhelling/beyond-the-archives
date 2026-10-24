@@ -13,15 +13,10 @@ function runtime(): ExtensionRuntime | undefined {
  return (window as Window & { chrome?: { runtime?: ExtensionRuntime } }).chrome?.runtime
 }
 export function extensionId() {
- if (isLocalApp()) return localExtensionId
- try { return window.localStorage.getItem?.('ao3-library-extension-id') ?? import.meta.env.VITE_AO3_EXTENSION_ID ?? '' }
- catch { return import.meta.env.VITE_AO3_EXTENSION_ID ?? '' }
+ try { return window.localStorage.getItem?.('ao3-library-extension-id') ?? (isLocalApp() ? localExtensionId : import.meta.env.VITE_AO3_EXTENSION_ID ?? '') }
+ catch { return isLocalApp() ? localExtensionId : import.meta.env.VITE_AO3_EXTENSION_ID ?? '' }
 }
 export function setExtensionId(id: string) {
- if (isLocalApp()) {
-  if (id !== localExtensionId) throw new Error('The local app uses the local extension. Run npm run build:extension:local and load extension/local/dist in Chrome.')
-  return
- }
  if (!/^[a-p]{32}$/.test(id)) throw new Error('Enter the 32-letter extension ID from your browser’s Extensions page.')
  window.localStorage.setItem('ao3-library-extension-id', id)
 }
