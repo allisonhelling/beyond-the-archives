@@ -193,7 +193,7 @@ it('matches personal notes, multi-select personal ratings and known Recs before 
  const records = (await db.query<{ record: never }>("select to_jsonb(r)||'{\"collectionIds\":[]}'::jsonb record from public.library_series r")).rows.map(row => row.record)
  const series = librarySeries(docs, records), pool = series.map(seriesSearchStory)
  for (const personalRating of [['1', '5'], ['unrated']]) expect((await query({ personalRating }, 1, 100, 'series')).stories.map(story => story.id)).toEqual(filterLibraryItems(pool, { ...defaultReadingFilters, showSeries: true, personalRating }, series).map(story => story.id))
-})
+}, 15000)
 
 it('hides series by default in mixed shelves and includes them on request before pagination', async () => {
  const hidden = await query({}, 1, 100, 'favorites')

@@ -109,7 +109,7 @@ describe('private app access and navigation', () => {
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('button', { name: 'Cancel selection' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Select collections' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Done Editing' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Done editing' })).toHaveFocus()
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('button', { name: 'Select collections' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit Collections' })).toHaveFocus()

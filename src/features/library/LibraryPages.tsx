@@ -371,16 +371,16 @@ function LibraryContent() {
       return { ...item, count: works + seriesCount, countLabel: seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
     })
 
-  return <><LibraryBoundary><ReadingDashboard renderHeader={refreshButton => <><div className="page-heading library-heading"><div><div className="library-title-row"><h1>Your Library</h1>
+  return <><LibraryBoundary><ReadingDashboard renderHeader={refreshButton => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection selection">
       <Tooltip description="View Hidden">{descriptionId => <button aria-describedby={descriptionId} type="button" className="button secondary" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>}</Tooltip>
       <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel selection' : 'Select collections'}</button>
       <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip description={collectionControlHelp} placement="bottom">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
-      {selectingCollections && <button type="button" className="button secondary" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit selected</button>}
+      {selectingCollections && <button type="button" className="button secondary collection-bulk-edit" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit selected</button>}
     </div>}
     <div className="library-heading-actions">{!editingCollections && <>{refreshButton}
       <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></>}
-      <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
+      <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done editing' : 'Edit Collections'}</button>
       <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
     </div></div></div></div>
     <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = new URLSearchParams(previous); next.set('shelf', key); next.set('page', '1'); return next })} />

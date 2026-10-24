@@ -1,3 +1,4 @@
+import { ConfirmationDialog } from '../../../components/ConfirmationDialog'
 import { displaySettingsSection } from './settings-sections'
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -27,21 +28,29 @@ function useDisplayDraft(groups: DisplayGroup[], editTags = false) {
   const dirty = groups.some(group => JSON.stringify(draft[group]) !== JSON.stringify(baseline[group])) || editTags && JSON.stringify(draft.tagAppearance) !== JSON.stringify(baseline.tagAppearance)
   function change(next: DisplayPreferences) { setDraft(next); setMessage(''); setError('') }
   function cancel() { const saved = displayPreferences(); setBaseline(saved); setDraft(saved); setVersion(value => value + 1); setMessage('Changes discarded.'); setError('') }
+  function commit(source: DisplayPreferences, message: string) {
+    const next = displayPreferences()
+    for (const group of groups) next[group] = source[group]
+    if (editTags) next.tagAppearance = source.tagAppearance
+    saveDisplay(next); setBaseline(next); setDraft(next); setMessage(message); setError('')
+  }
+  function restoreDefaults() {
+    commit(displayPreferences('{}'), 'Default settings restored.')
+    setVersion(value => value + 1)
+  }
   function save() {
     if (editTags && Object.values(draft.tagAppearance.colors).some(color => !/^#[a-fA-F0-9]{6}$/.test(color))) { setError('Enter a tag color as # followed by six hexadecimal digits before saving.'); return false }
     try {
-      const next = displayPreferences()
-      for (const group of groups) next[group] = draft[group]
-      if (editTags) next.tagAppearance = draft.tagAppearance
-      saveDisplay(next); setBaseline(next); setDraft(next); setMessage('Display settings saved.'); setError('')
+      commit(draft, 'Display settings saved.')
       return true
     } catch { setError('Could not save display settings. Check browser storage permissions and try again.'); return false }
   }
-  return { draft, change, dirty, version, message, error, cancel, save }
+  return { draft, change, dirty, version, message, error, cancel, restoreDefaults, save }
 }
 type Draft = ReturnType<typeof useDisplayDraft>
 function SaveControls({ state, onCancel, onSave }: { state: Draft; onCancel?: () => void; onSave?: () => void }) {
-  return <div className="display-save-bar"><div className="form-actions"><button className="button primary" type="button" disabled={!state.dirty} onClick={() => { if (state.save()) onSave?.() }}>Save</button><button className="button secondary" type="button" disabled={!onCancel && !state.dirty} onClick={() => { state.cancel(); onCancel?.() }}>Cancel</button></div><p role="status" className="field-help">{state.message || (state.dirty ? 'Unsaved changes' : 'No unsaved changes')}</p>{state.error && <p role="alert" className="error-message">{state.error}</p>}</div>
+  const [confirmRestore, setConfirmRestore] = useState(false)
+  return <><div className="display-save-bar"><div className="form-actions"><button className="button primary" type="button" disabled={!state.dirty} onClick={() => { if (state.save()) onSave?.() }}>Save</button><button className="button secondary" type="button" disabled={!onCancel && !state.dirty} onClick={() => { state.cancel(); onCancel?.() }}>Cancel</button><button className="button secondary" type="button" onClick={() => setConfirmRestore(true)}>Restore to Default</button></div><p role="status" className="field-help">{state.message || (state.dirty ? 'Unsaved changes' : 'No unsaved changes')}</p>{state.error && <p role="alert" className="error-message">{state.error}</p>}</div>{confirmRestore && <ConfirmationDialog title="Restore to Default?" confirmLabel="Restore to Default" pendingLabel="Restoring…" onClose={() => setConfirmRestore(false)} onConfirm={async () => state.restoreDefaults()}><p>Reset this editor to its original defaults? This immediately replaces all saved customizations and discards unsaved changes.</p></ConfirmationDialog>}</>
 }
 
 /** Adds editing behavior around the site's actual tiles and information pages. */

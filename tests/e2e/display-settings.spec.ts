@@ -669,3 +669,48 @@ test('AO3 Category and statistics can be added to work tiles and information pag
  await expect(details).toContainText('1,234 hits')
  await expect(details).toContainText('English')
 })
+
+for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'page'] as const) test(`restores ${kind} ${layout} saved and unsaved customizations after confirmation`, async ({ page }) => {
+ await setup(page)
+ const group = layout === 'tile' ? `${kind}Tile` : `${kind}Info`
+ const hiddenField = layout === 'tile' ? 'authors' : kind === 'work' ? 'summary' : 'begun'
+ const saved = {
+  [group]: { order: ['divider:custom', hiddenField], hidden: [hiddenField], lines: {} },
+  tagAppearance: { shape: 'sharp', colors: { tags: '#123456' } },
+  ...(kind === 'work' ? { seriesHeader: { order: ['source', 'authors'], hidden: ['authors'] } } : { workHeader: { order: ['stats', 'authors'], hidden: ['authors'] } }),
+ }
+ await page.evaluate(value => localStorage.setItem('between-chapters:display:v1', JSON.stringify(value)), saved)
+ await page.reload()
+ async function open() {
+  if (layout === 'page') await page.getByRole('link', { name: `Edit ${kind === 'work' ? 'Work' : 'Series'} Info Page`, exact: true }).click()
+  else await page.getByRole('button', { name: `Edit ${kind === 'work' ? 'Work' : 'Series'} Tiles`, exact: true }).click()
+ }
+ await open()
+ const controls = layout === 'page' ? page.locator('.display-example-page > .display-save-bar') : page.locator(`#display-${kind}-editor .display-save-bar`)
+ const preview = editor(page, layout === 'page' ? `Example ${kind === 'work' ? 'Work' : 'Series'} Info Page` : `${kind === 'work' ? 'Work' : 'Series'} Tile`)
+ await expect(field(preview, group, hiddenField)).toHaveCount(0)
+ await preview.getByRole('button', { name: 'Add Divider', exact: true }).click()
+ await controls.getByRole('button', { name: 'Restore to Default', exact: true }).click()
+ const confirmation = page.getByRole('dialog', { name: 'Restore to Default?', exact: true })
+ await expect(confirmation).toBeVisible()
+ await expect(field(preview, group, hiddenField)).toHaveCount(0)
+ expect(JSON.parse((await stored(page))!)).toEqual(saved)
+ await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+ await expect(controls.getByRole('button', { name: 'Save', exact: true })).toBeEnabled()
+ expect(JSON.parse((await stored(page))!)).toEqual(saved)
+ await controls.getByRole('button', { name: 'Restore to Default', exact: true }).click()
+ await confirmation.getByRole('button', { name: 'Restore to Default', exact: true }).click()
+ await expect(confirmation).toHaveCount(0)
+ await expect(field(preview, group, hiddenField)).toBeVisible()
+ await expect(field(preview, group, 'divider:custom')).toHaveCount(0)
+ await expect(controls.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+ const result = JSON.parse((await stored(page))!)
+ expect(result[group].hidden).not.toContain(hiddenField)
+ expect(result[group].order.some((key: string) => key.startsWith('divider:'))).toBe(false)
+ expect(result.tagAppearance).toEqual(saved.tagAppearance)
+ expect(result[kind === 'work' ? 'seriesHeader' : 'workHeader'].hidden).toContain('authors')
+ await page.reload()
+ if (layout === 'tile') await open()
+ await expect(field(preview, group, hiddenField)).toBeVisible()
+ expect(JSON.parse((await stored(page))!)).toEqual(result)
+})

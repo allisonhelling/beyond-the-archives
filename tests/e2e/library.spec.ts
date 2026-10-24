@@ -275,7 +275,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(recBounds.x).toBeGreaterThanOrEqual(favoriteBounds!.x + favoriteBounds!.width)
   expect(recBounds.x + recBounds.width).toBeLessThanOrEqual(metadataActions!.x)
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator('.details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All tags', /^Personal tags/i, 'Saved', 'Estimated reading time', 'Last edited', 'Other metadata'])
+  await expect(ficSection.locator('.details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal tags/i, 'Saved', 'Estimated reading time', 'Last edited', 'Other metadata'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -457,7 +457,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await editor.getByRole('button', { name: 'Delete', exact: true }).click()
   await page.getByRole('dialog', { name: 'Delete collection?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'My corrected title' })).toBeVisible()
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
   await page.getByLabel('Story actions for My corrected title').click()
   await page.getByRole('button', { name: 'Remove from Library', exact: true }).click()
@@ -792,7 +792,8 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await expect(progressMenu).toHaveAttribute('aria-modal', 'false')
   const compactMenuBounds = await progressMenu.boundingBox()
   expect(compactMenuBounds!.width).toBeLessThanOrEqual(200)
-  expect(compactMenuBounds!.height).toBeLessThan(200)
+  // Desktop tiles use a larger minimum font, so labels and actions can wrap.
+  expect(compactMenuBounds!.height).toBeLessThan(info.project.name === 'desktop' ? 240 : 200)
   await expect(page.locator('dialog')).toHaveCount(0)
   const trigger = card.getByRole('button', { name: 'Chapter 0 of 5 — edit progress', exact: true })
   const triggerBounds = await trigger.boundingBox(), menuBounds = await progressMenu.boundingBox()
@@ -1506,7 +1507,7 @@ test('default collections reorder by keyboard and drag and retain their order af
   await page.mouse.up()
   await expect(defaults.first()).toHaveAttribute('data-collection-id', 'all')
   await reading.press('Alt+ArrowLeft')
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await page.reload()
   await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
   await expect(defaults.first()).toHaveAttribute('data-collection-id', 'currently_reading')
@@ -1565,10 +1566,10 @@ test('edits, reorders, and deletes custom collections without moving default she
   await expect(page.getByRole('dialog', { name: 'Delete collection?', exact: true })).toHaveCount(0)
   await expect(editor).toHaveCount(0)
   await expect(shelf.getByRole('button', { name: 'Zed', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Done Editing', exact: true })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Done editing', exact: true })).toBeFocused()
   await expect(shelf.getByRole('button', { name: 'New collection', exact: true }).last()).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width)
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await expect(shelf.locator('.collection-spine-editor')).toHaveCount(0)
 })
 
@@ -1780,7 +1781,7 @@ test('collection sort modes preserve manual order across switches, creation, and
   await shelf.getByRole('button', { name: 'Middle', exact: true }).press('Alt+ArrowLeft')
   await expect(titles).toHaveText(['Zebra', 'Middle', 'Apple'])
   const manualPositions = tables.collections.map(collection => collection.sort_position)
-  await actions.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await actions.getByRole('button', { name: 'Done editing', exact: true }).click()
   await expect(actions.getByRole('button', { name: 'Mass refresh all stories on page', exact: true })).toBeVisible()
   await choose('Alphabetical (A–Z)')
   await expect(titles).toHaveText(['Apple', 'Middle', 'Zebra'])
@@ -1851,7 +1852,7 @@ test('Paused Reading pauses stories without losing progress and uses the selecte
     await expect(shelf.getByRole('button', {name,exact:true})).toHaveAttribute('data-spine-design',design)
   }
   await shelf.screenshot({ path: `test-results/paused-reading-spines-${info.project.name}.png` })
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await selectLibraryShelf(page, 'Paused Reading')
   await expect(page.getByRole('heading', { name: 'Paused story', exact: true })).toBeVisible()
   await selectLibraryShelf(page, 'Currently Reading')
@@ -1886,7 +1887,7 @@ test('collection spines show total story counts independently of search filters'
     await expect(spine).toHaveAttribute('aria-description', `${count} ${count === 1 ? 'story' : 'stories'}`)
   }
   await expect(shelf.getByRole('button', { name: 'New collection', exact: true }).last().locator('.collection-spine-count')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await selectLibraryShelf(page, 'Shared reads')
   await expect(page.locator('.story-card')).toHaveCount(2)
   await page.getByLabel('Search title or author', { exact: true }).fill('No matching story')
@@ -2004,6 +2005,18 @@ test('selects collections for bulk appearance edits without changing summaries a
   const shelf = page.getByRole('navigation', { name: 'Library shelves', exact: true })
   if (info.project.name === 'mobile') {
     await page.getByRole('button', { name: 'Select collections', exact: true }).click()
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      for (const [left, right] of [
+        [page.getByRole('button', { name: 'Done editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
+        [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit selected', exact: true })],
+      ]) {
+        const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
+        expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width)
+        expect(Math.abs(leftBox.y + leftBox.height / 2 - rightBox.y - rightBox.height / 2)).toBeLessThan(1)
+      }
+      await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
+    }
     for (const name of ['First', 'Second', 'Third']) await shelf.getByRole('button', { name, exact: true }).click()
   } else {
     await shelf.getByRole('button', { name: 'First', exact: true }).click({ modifiers: ['Shift'] })
@@ -2314,7 +2327,7 @@ test('automatic collections can be hidden and restored without losing stories', 
   await hide.getByRole('button', { name: 'Hide', exact: true }).click()
   await expect(shelf.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
   await expect(page).toHaveURL(url => url.pathname === '/library' && url.searchParams.get('shelf') === 'all')
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await page.reload()
   await expect(shelf.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
@@ -2329,7 +2342,7 @@ test('automatic collections can be hidden and restored without losing stories', 
   await expect(hiddenEditor.locator('.confirmation-description strong')).toHaveText('This collection is hidden from your shelves.')
   await hiddenEditor.getByRole('button', { name: 'Unhide', exact: true }).click()
   await expect(shelf.getByRole('button', { name: 'To Read', exact: true })).not.toHaveClass(/collection-spine-hidden/)
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await selectLibraryShelf(page, 'To Read')
   await expect(page.locator('.story-card')).toHaveCount(1)
   await openFilters(page)
@@ -2357,7 +2370,7 @@ test('Escape leaves mass collection selection before leaving collection editing'
   await expect(page.getByRole('button', { name: 'Select collections', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Edit selected', exact: true })).toHaveCount(0)
   await expect(shelf.locator('.collection-spine-selected')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Done Editing', exact: true })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Done editing', exact: true })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Edit Collections', exact: true })).toBeFocused()
   await expect(shelf.locator('.collection-spine-editor')).toHaveCount(0)
@@ -2917,7 +2930,7 @@ test('default and custom collections can share any shelf position', async ({ pag
   await custom.press('Alt+ArrowLeft')
   const ids = () => shelf.locator('[data-collection-id]').evaluateAll(nodes => nodes.map(node => (node as HTMLElement).dataset.collectionId))
   await expect.poll(async () => (await ids()).slice(-2)).toEqual(['custom-1', 'favorites'])
-  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click()
   await page.reload()
   await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
   expect((await ids()).slice(-2)).toEqual(['custom-1', 'favorites'])
