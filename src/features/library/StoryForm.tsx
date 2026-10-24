@@ -7,7 +7,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { authorPageUrl, blankMetadata, changedMetadata, initialProgress, isOneShot, parseLines, parseWorkUrl, ratingLabel, ratings, savedWorkUrl, statuses, tagNames, validateProgress, type Metadata, type Status, type Story } from './model'
 import { saveStory } from './repository'
 import { StarRating } from './StarRating'
-import { FavoriteButton } from './FavoriteButton'
+import { FavoriteButton, PersonalToggleButton } from './FavoriteButton'
 import { useLibrary } from './LibraryProvider'
 import { CollectionChoices, NewCollectionButton } from './collections/CollectionChoices'
 import { PersonalTagInput } from './PersonalTagInput'
@@ -22,6 +22,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   const readProgress = finishedChapters ?? Number(progress)
   const [notes, setNotes] = useState(story?.notes ?? '')
   const [personalRating, setPersonalRating] = useState<number | null>(story?.personal_rating ?? null)
+  const [rec, setRec] = useState(story?.is_rec ?? false)
   const [favorite, setFavorite] = useState(story?.is_favorite ?? false)
   const [collections, setCollections] = useState(story?.collectionIds ?? [])
   const [tags, setTags] = useState(story?.personalTags ?? [])
@@ -71,7 +72,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
       }
       setBusy(true)
       const nextMetadata: Metadata = section === 'reading' && story ? story.metadata : { ...metadata, manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), author_links: authorLinks, fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
-      const id = await saveStory({ id: story?.id, base, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(initialMetadata!, nextMetadata) : undefined, status, progress: readProgress, notes, personalRating, favorite, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
+      const id = await saveStory({ id: story?.id, base, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(initialMetadata!, nextMetadata) : undefined, status, progress: readProgress, notes, personalRating, favorite, rec, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
       await saved(id)
     } catch (e) { failed(e) }
     finally { setBusy(false) }
@@ -92,7 +93,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     <div className="form-grid"><label>Relationship tags (one per line)<textarea rows={3} value={relationships} onChange={e => setRelationships(e.target.value)} /></label><label>Characters (one per line)<textarea rows={3} value={characters} onChange={e => setCharacters(e.target.value)} /></label><label>Additional tags (one per line)<textarea rows={3} value={additionalTags} onChange={e => setAdditionalTags(e.target.value)} /></label></div>
     {otherTags && <label>Other or uncategorized AO3 tags (one per line)<textarea rows={3} value={otherTags} onChange={e => setOtherTags(e.target.value)} /></label>}</fieldset>}
     {section !== 'metadata' && <fieldset disabled={busy || Boolean(conflict)}><legend>Your reading & organization</legend><div className="form-grid reading-progress-row"><label>Reading status<select aria-label="Reading status" value={status} onChange={e => { setStatus(e.target.value as Status); setStatusTouched(true) }}>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label>Last fully read chapter<input type="number" required min="0" step="1" value={finishedChapters ?? progress} disabled={finishedChapters !== null} onChange={e => { setProgress(e.target.value); setStatusTouched(true) }} /><small>of {metadata.total_chapters ?? '?'} · {status === 'finished' ? 'all chapters read' : `next unread: ${Number(progress) + 1}`}</small></label></div>
-    <div className="rating-favorite-row"><StarRating value={personalRating} onChange={setPersonalRating} /><div className="favorite-choice"><FavoriteButton selected={favorite} disabled={busy || Boolean(conflict)} onChange={setFavorite} /></div></div>
+    <div className="rating-favorite-row"><StarRating value={personalRating} onChange={setPersonalRating} /><div className="favorite-choice"><FavoriteButton selected={favorite} disabled={busy || Boolean(conflict)} onChange={setFavorite} /><PersonalToggleButton kind="rec" selected={rec} disabled={busy || Boolean(conflict)} onChange={setRec} /></div></div>
     <label>Private notes<textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)} /></label>
     <div><span className="filter-name editable-field-heading">Personal tags</span><PersonalTagInput value={tags} onChange={setTags} /></div>
     <div className="collection-choices"><div className="collection-heading"><strong>Custom collections</strong><NewCollectionButton iconOnly disabled={busy || Boolean(conflict)} onCreated={id => setCollections(current => [...current, id])} /></div><CollectionChoices collections={library.collections} selected={collections} onChange={setCollections} />{!library.collections.length && <p className="muted">Create a collection above to organize this story.</p>}</div></fieldset>}

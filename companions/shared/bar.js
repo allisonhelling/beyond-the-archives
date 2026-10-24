@@ -1,11 +1,11 @@
+import { defaultRatingInfo } from '../../src/features/library/rating-info'
+import { resumeReadingStatus } from '../../src/features/library/reading-history'
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { blankMetadata, parseLines, statuses, validateProgress } from '../../src/features/library/model'
 import { collectWorkPage, readPage } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
-
-const defaultRatingInfo = 'Add how your personal rating system corresponds to the stars here! Edit this text in settings. To hide the info symbol, leave the box blank.'
 
 export async function mountLibrary(doc = document, href = location.href, options = {}) {
  const { tile = null, api, browser = 'safari', config } = options
@@ -46,10 +46,10 @@ export async function mountLibrary(doc = document, href = location.href, options
   else doc.querySelector('#workskin')?.after(bottomHost)
  }
  bottomHost.hidden = true
- const storageKey = `connection:${backendUrl}`, themeKey = `theme:${backendUrl}`, ratingInfoKey = `rating-info:${backendUrl}`
+ const storageKey = `connection:${backendUrl}`, themeKey = `theme:${backendUrl}`
  const preferredTheme = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
- let [connection, theme, ratingInfo] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme), api.getValue(ratingInfoKey, defaultRatingInfo)])
- ratingInfo = typeof ratingInfo === 'string' ? ratingInfo : defaultRatingInfo
+ let [connection, theme, previousRatingInfo] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme), api.getValue(`rating-info:${backendUrl}`, null)])
+ let ratingInfo = defaultRatingInfo, savedRatingInfo = null
  theme = ['light', 'dark'].includes(theme) ? theme : preferredTheme
  const applyTheme = () => [host, bottomHost].forEach(surface => { surface.dataset.theme = theme })
  applyTheme()
@@ -151,12 +151,20 @@ export async function mountLibrary(doc = document, href = location.href, options
    }
    const conflict = conflictFromError(data, (values, base) => rpc(action, { ...input, ...values, base }))
    if (conflict) { conflict.action = action; throw conflict }
+   if (data.code === '40001' && action === 'rating_save') throw new Error('This rating explanation changed on another device. Close and reopen Rating Info to load it before saving again. Your text is kept here.')
    if (data.code === '40001') throw new Error('This entry changed elsewhere. Reload Saved Entry, review your draft, then save again.')
    throw new Error('Could not save or load. Check your connection and chapter count, then retry. Your draft is preserved.')
   }
   return data
  }
- function accept(data) { savedWorks = data.savedWorks ?? []; entry = data.entry; collections = data.collections; loaded = true }
+ function acceptRatingInfo(data) {
+  if (!Object.hasOwn(data, 'ratingInfo')) return
+  savedRatingInfo = data.ratingInfo
+  ratingInfo = typeof savedRatingInfo === 'string' ? savedRatingInfo : defaultRatingInfo
+  personalControls?.updateRatingInfo(ratingInfo)
+  seriesControls.forEach(control => control.updateRatingInfo(ratingInfo))
+ }
+ function accept(data) { acceptRatingInfo(data); savedWorks = data.savedWorks ?? []; entry = data.entry; collections = data.collections; loaded = true }
  function entryPosition() {
   const chapter = Math.min(entry.progress + 1, page.metadata.published_chapters || entry.progress + 1)
   return { chapter, chapterFinished: entry.progress >= chapter }
@@ -216,6 +224,10 @@ export async function mountLibrary(doc = document, href = location.href, options
   node('strong', entry.status === 'reading' ? 'Currently Reading' : statuses[entry.status], summary)
   const bullet = node('span', '•', summary); bullet.className = 'status-bullet'; bullet.dataset.status = entry.status; bullet.setAttribute('aria-hidden', 'true')
   infoHelp(summary, 'chapters read', 'chapters read', `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`)
+  if (browser === 'chrome' && ['reading', 're_reading', 'waiting_for_updates', 'paused_reading'].includes(entry.status)) {
+   const paused = entry.status === 'paused_reading'
+   button(paused ? 'Resume Reading' : 'Pause Reading', () => progress(entry.progress, paused ? resumeReadingStatus({ reading_history: entry.readingHistory }) : 'paused_reading'), parent)
+  }
   if (!page.current) return
   const read = entry.progress >= page.current
   if (read) {
@@ -223,7 +235,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
    node('span', 'Read', indicator)
   } else {
-   const final = page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
+   const final = entry.status !== 'to_read' && page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
    const complete = button(final ? 'Finished' : `Ch. ${page.current}`, () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading'), parent)
    if (!final) complete.setAttribute('aria-label', `Mark through chapter ${page.current} as read`)
    complete.className = 'complete-chapter'
@@ -285,7 +297,11 @@ export async function mountLibrary(doc = document, href = location.href, options
    node('span', theme === 'light' ? 'Dark Mode' : 'Light Mode', themeToggle)
   }
   renderThemeToggle()
-  const ratingToggle = button('Rating Info', () => {
+  let ratingBase = savedRatingInfo
+  const ratingToggle = button('Rating Info', async () => {
+   if (ratingEditor.hidden && connection) {
+    acceptRatingInfo(await rpc('rating_get')); ratingText.value = ratingInfo; ratingBase = savedRatingInfo
+   }
    ratingEditor.hidden = !ratingEditor.hidden
    ratingToggle.setAttribute('aria-expanded', String(!ratingEditor.hidden))
    if (!ratingEditor.hidden) ratingText.focus()
@@ -294,15 +310,16 @@ export async function mountLibrary(doc = document, href = location.href, options
   const ratingEditor = node('div', '', connectionPanel); ratingEditor.id = 'library-rating-info'; ratingEditor.className = 'rating-info-editor'; ratingEditor.hidden = true
   const ratingLabel = node('label', 'Rating info text', ratingEditor), ratingText = node('textarea', '', ratingLabel)
   ratingText.rows = 4; ratingText.value = ratingInfo
-  node('p', 'Saved on this device. Leave blank and save to hide the rating info icon.', ratingEditor)
+  ratingText.maxLength = 10000
+  node('p', 'Saved to your library account across devices. Leave blank and save to hide the rating info icon.', ratingEditor)
+  if (typeof previousRatingInfo === 'string' && savedRatingInfo === null) button('Use this device’s previous explanation', () => { ratingText.value = previousRatingInfo }, ratingEditor)
   button('Save Rating Info', async () => {
    const next = ratingText.value
-   try { await api.setValue(ratingInfoKey, next) }
-   catch { throw new Error('Could not save your rating info. Try again.') }
-   ratingInfo = next
-   personalControls?.updateRatingInfo(ratingInfo)
-   seriesControls.forEach(control => control.updateRatingInfo(ratingInfo))
-   message.textContent = 'Rating info saved on this device.'
+   if (!connection) throw new Error('Connect your library before saving rating info.')
+   try { acceptRatingInfo(await rpc('rating_save', { text: next, base: ratingBase })) }
+   catch (error) { throw new Error(`Could not save your rating info. ${error.message}`) }
+   ratingBase = savedRatingInfo
+   message.textContent = 'Rating info saved to your library account.'
   }, ratingEditor)
   const libraryLink = node('a', `Library Settings (${appOrigin})`, connectionPanel)
   libraryLink.href = `${appOrigin}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
@@ -560,6 +577,9 @@ export async function mountLibrary(doc = document, href = location.href, options
  api.onEnvironmentChange?.(label => {
   message.textContent = `Environment changed to ${label}. Reload AO3 to use it. Your draft is preserved for ${config?.label ?? 'this library'}.`
   root.querySelectorAll('.environment-label').forEach(node => { node.textContent = `${label} · reload AO3`; node.setAttribute('aria-label', `Library environment: ${label}; reload AO3`) })
+ })
+ doc.defaultView?.addEventListener('focus', () => {
+  if (host.isConnected && connection && !busy) void run(async () => { acceptRatingInfo(await rpc('rating_get')) })
  })
  if (connection) await run(load)
  if (page.series) {

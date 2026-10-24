@@ -9,3 +9,5 @@ export const metadataSettingsSection = {
   title: 'AO3 Metadata Retrieval',
   description: 'Choose how story information is retrieved',
 }
+
+export const seriesImportSettingsSection = { id: 'settings-series-imports', title: 'Series Imports', description: 'Choose whether to save all series works or select them each time' }

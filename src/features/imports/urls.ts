@@ -55,3 +55,16 @@ export function importFinished(history: { items: { status: string; metadata_stat
  const active = ['pending', 'processing']
  return history.items.length > 0 && !history.items.some(item => active.includes(item.status) || active.includes(item.metadata_status ?? '')) && !(history.jobs ?? []).some(job => active.includes(job.status))
 }
+
+/** Combine pages captured in one operation without requesting those pages again. */
+export function mergeSeriesPreviews(pages: SeriesPreview[]): SeriesPreview {
+ if (!pages.length) throw new Error('Series preview is unavailable.')
+ const first = pages[0], works = new Map<number, SeriesPreview['works'][number]>()
+ for (const page of pages) {
+  if (page.seriesId !== first.seriesId) throw new Error('Series preview pages belong to different series.')
+  for (const work of page.works) if (!works.has(work.workId)) works.set(work.workId, work)
+ }
+ const preview = { ...first, works: [...works.values()], workCount: Math.max(works.size, ...pages.map(page => page.workCount ?? 0)), fetchedAt: first.fetchedAt ?? new Date().toISOString(), ...(pages.some(page => page.basic) ? { basic: true } : {}) }
+ delete preview.nextUrl
+ return preview
+}

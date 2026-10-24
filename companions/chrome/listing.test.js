@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { captureListingPage, sameScanUrl } from './listing.js'
+import { captureListingPage, listingUrl, sameScanUrl } from './listing.js'
 import { JSDOM } from 'jsdom'
 import { vi } from 'vitest'
 function page(html, path = '/users/alice/bookmarks') {
@@ -77,9 +77,34 @@ it('matches equivalent scan queries while rejecting different pages, filters, pa
  for (const other of [url.replace('page=1', 'page=2'), url.replace('created_at', 'revised_at'), url.replace('/alice/', '/bob/'), url.replace('archiveofourown.org', 'example.com'), undefined]) expect(sameScanUrl(other, url)).toBe(false)
 })
 
-// An exception inside Chrome's injected function otherwise looks like a missing capture.
-it.each(['work link', 'pagination link'])('reports a malformed %s without losing the capture error', target => {
- page('<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_12"><h4 class="heading"><a href="/works/34">Title</a></h4></li></ol><ol class="pagination"><li><a href="?page=2">Next</a></li></ol></div>')
- document.querySelector(target === 'work link' ? 'h4 a' : '.pagination a').setAttribute('href', 'http://[')
- expect(captureListingPage('bookmarks')).toMatchObject({ url: location.href, attention: 'page_error', error: expect.stringMatching(/^AO3 listing capture failed: .+Saved pages are preserved\.$/) })
+it('ignores pagination anchors without href and resolves relative page links', () => {
+ page('<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_12"><h4 class="heading"><a href="/works/34">Title</a></h4></li></ol><ol class="pagination"><li><a name="page-navigation">Pages</a></li><li><a href="">Current</a></li><li><a href="?page=2">Next</a></li></ol></div>')
+ expect(captureListingPage('bookmarks')).toMatchObject({ rows: [{ link: 'https://archiveofourown.org/works/34' }], skipped: 0, hasNext: true })
+ document.querySelector('.pagination a[href="?page=2"]').setAttribute('href', 'bookmarks?page=3')
+ expect(captureListingPage('bookmarks')).toMatchObject({ hasNext: true })
+})
+
+it('counts malformed work links as skipped and retains the remaining bookmarks', () => {
+ page('<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_12"><h4 class="heading"><a href="http://[">Malformed</a></h4></li><li class="bookmark" id="bookmark_13"><h4 class="heading"><a href="/works/35">Valid</a></h4></li></ol></div>')
+ expect(captureListingPage('bookmarks')).toMatchObject({ rows: [{ link: 'https://archiveofourown.org/works/35', 'bookmark id': '13' }], skipped: 1, hasNext: false })
+})
+
+it.each(['http://[', 'https://example.com/?page=2', '/users/bob/bookmarks?page=2'])('stops safely on an invalid pagination destination %s', href => {
+ page('<div id="main" class="bookmarks-index"><ol class="bookmark index"></ol><ol class="pagination"><li><a href="?page=2">Next</a></li></ol></div>')
+ document.querySelector('.pagination a').setAttribute('href', href)
+ expect(captureListingPage('bookmarks')).toMatchObject({ attention: 'page_error', error: expect.stringContaining('pagination') })
+})
+
+it('discovers unique series memberships in primary lists without following other memberships recursively', () => {
+ page('<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_12"><h4 class="heading"><a href="/works/34">Title</a></h4><ul class="series"><li>Part 1 of <a href="/series/7">Series seven</a></li><li><a href="/series/7">Duplicate</a></li><li><a href="https://example.com/series/8">Other site</a></li><li><a href="http://[">Malformed</a></li></ul></li></ol></div>')
+ expect(captureListingPage('bookmarks')).toMatchObject({ seriesUrls: ['https://archiveofourown.org/series/7'], rows: [{ link: 'https://archiveofourown.org/works/34' }] })
+ document.querySelector('#main').className = 'series-show'
+ expect(captureListingPage('series_works')).toMatchObject({ seriesUrls: [] })
+})
+
+it('accepts filtered root bookmark URLs for Full Scan and preserves their filter parameters', () => {
+ const url = 'https://archiveofourown.org/bookmarks?commit=Sort+and+Filter&bookmark_search%5Bsort_column%5D=created_at&bookmark_search%5Bother_tag_names%5D=&bookmark_search%5Bbookmarkable_query%5D=blackkat&bookmark_search%5Brec%5D=0&user_id=AlmiH'
+ expect(listingUrl(url)).toEqual({ kind: 'bookmarks', url })
+ expect(() => listingUrl(url, 'quick')).toThrow()
+ expect(() => listingUrl('https://archiveofourown.org/tags/Example/bookmarks', 'quick')).toThrow()
 })

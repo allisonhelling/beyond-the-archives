@@ -89,7 +89,7 @@ export function inReadingSection(story: Story, section: string) {
   if (section === 'complete') return reading && story.metadata.publication_status === 'complete'
   if (section === 'in_progress') return reading && story.metadata.publication_status === 'in_progress'
   if (section === 'waiting') return story.reading_status === 'waiting_for_updates'
-  if (section === 'new') return hasNewChapter(story)
+  if (section === 'new') return story.reading_status !== 'paused_reading' && hasNewChapter(story)
   return active(story)
 }
 export function searchText(story: Story, scope: SearchScope) {

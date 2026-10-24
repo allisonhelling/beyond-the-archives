@@ -4,8 +4,8 @@ import { localExtensionId, localExtensionKey } from './extension-config'
 import { extensionId, setExtensionId } from './extension'
 import { isLocalApp } from '../../lib/local-app'
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
-function location(hostname: string) {
- const store = new Map<string, string>([['ao3-library-extension-id', 'a'.repeat(32)]])
+function location(hostname: string, savedId: string | null = 'a'.repeat(32)) {
+ const store = new Map<string, string>(savedId ? [['ao3-library-extension-id', savedId]] : [])
  vi.stubGlobal('window', { location: new URL(`http://${hostname}`), localStorage: { getItem: (key: string) => store.get(key), setItem: (key: string, value: string) => store.set(key, value) } })
 }
 it('allows a shared extension ID on local origins', () => {
@@ -37,4 +37,12 @@ it('uses the tokenless local sample connection when sample mode is enabled', asy
  const { connectExtension } = await import('./extension')
  expect(await connectExtension()).toBe(true)
  expect(sendMessage).toHaveBeenCalledWith('a'.repeat(32), { type: 'AO3_LIBRARY_SAMPLE_CONNECT' }, expect.any(Function))
+})
+
+it('prefers a configured shared extension on local origins and retains the legacy fallback', () => {
+ location('127.0.0.1', null)
+ vi.stubEnv('VITE_AO3_EXTENSION_ID', 'b'.repeat(32))
+ expect(extensionId()).toBe('b'.repeat(32))
+ vi.stubEnv('VITE_AO3_EXTENSION_ID', '')
+ expect(extensionId()).toBe(localExtensionId)
 })

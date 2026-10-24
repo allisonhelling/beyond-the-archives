@@ -27,8 +27,7 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
  expect(screen.getByRole('dialog', { name: 'Related Series' })).toBeVisible()
  expect(screen.getByText('Saved fic')).toBeVisible()
- expect(mocks.refresh).toHaveBeenCalledOnce(); expect(mocks.preview).not.toHaveBeenCalled()
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Related series' })) })
+ expect(mocks.refresh).toHaveBeenCalledOnce()
  expect(mocks.preview).toHaveBeenCalledWith('https://archiveofourown.org/series/77')
  expect(screen.getByRole('checkbox', { name: 'Part 1: Fic 101' })).toBeDisabled()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()
@@ -39,8 +38,7 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
 })
 
 it('saves the full preview only on request without importing its works', async () => {
- render(<ImportedSeriesNotice stories={mocks.stories as never} />)
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Related series' })) })
+ await act(async () => { render(<ImportedSeriesNotice stories={mocks.stories as never} />) })
  expect(mocks.remember).not.toHaveBeenCalled()
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' }))
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })) })
@@ -53,18 +51,18 @@ it('saves the full preview only on request without importing its works', async (
 })
 it('deduplicates shared series and stays dismissed when the library refreshes', async () => {
  const stories = [...mocks.stories, { ...mocks.stories[0], id: 'second', metadata: { ...mocks.stories[0].metadata, title: 'Other fic' } }]
- const view = render(<ImportedSeriesNotice stories={stories as never} />)
- expect(screen.getAllByRole('button', { name: 'Related series' })).toHaveLength(1)
+ let view!: ReturnType<typeof render>
+ await act(async () => { view = render(<ImportedSeriesNotice stories={stories as never} />) })
+ expect(screen.getAllByRole('link', { name: 'Related series' })).toHaveLength(1)
  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
  view.rerender(<ImportedSeriesNotice stories={[...stories] as never} />)
  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
- expect(mocks.preview).not.toHaveBeenCalled()
+ expect(mocks.preview).toHaveBeenCalledOnce()
  expect(mocks.remember).not.toHaveBeenCalled()
 })
 it('keeps the preview and selections available after a failed full-details save', async () => {
  mocks.remember.mockRejectedValue(new Error('Save unavailable'))
- render(<ImportedSeriesNotice stories={mocks.stories as never} />)
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Related series' })) })
+ await act(async () => { render(<ImportedSeriesNotice stories={mocks.stories as never} />) })
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })) })
  expect(screen.getByRole('alert')).toHaveTextContent('Save unavailable')
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).toBeEnabled()

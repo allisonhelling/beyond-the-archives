@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createLibrarySync } from './library-sync.js'
 import { listingUrl } from './listing.js'
@@ -375,4 +376,57 @@ it('retains the loading timeout for documents that explicitly report pending', a
  chrome.scripting.executeScript.mockResolvedValue([{ result: { url: local.librarySync.requestUrl, pending: true } }])
  clock += 120001; await sync.pump()
  expect(local.librarySync).toMatchObject({ status: 'paused', error: 'Page load timed out. Check AO3, then resume.' })
+})
+
+it('separates primary list pages from expanded series pages across restarts', async () => {
+ await start()
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: {
+  url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: false,
+  ...(local.librarySync.kind === 'bookmarks' ? { seriesUrls: ['https://archiveofourown.org/series/99'] } : {}),
+ } }])
+ await collect()
+ expect((await sync.command({ action: 'status' })).state).toMatchObject({ pages: 1, listPages: 1 })
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ await collect(); await sync.pump()
+ expect((await sync.command({ action: 'status' })).state).toMatchObject({ status: 'ready', pages: 2, listPages: 1 })
+ // An in-progress scan from an older extension recovers its count from checkpoints.
+ delete local.librarySync.listPages
+ expect((await sync.command({ action: 'status' })).state).toMatchObject({ pages: 2, listPages: 1 })
+})
+
+it('persists the series behavior with the scan and rejects invalid values', async () => {
+ await expect(sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', seriesBehavior: 'invalid' })).rejects.toThrow('series import behavior')
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', seriesBehavior: 'all' })
+ const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await restarted.command({ action: 'status' })).state).toMatchObject({ seriesBehavior: 'all' })
+})
+
+it('checkpoints full series previews from the scan tab without opening an additional tab', async () => {
+ const html = readFileSync(new URL('../../server/ao3/fixtures/series.html', import.meta.url), 'utf8')
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full' })
+ chrome.scripting.executeScript.mockImplementation(async ({ func }) => [{ result: func.name === 'captureMetadataPage' ? { url: local.librarySync.requestUrl, html } : {
+  url: local.librarySync.requestUrl, rows: [row(101)], skipped: 0, hasNext: false,
+  ...(local.librarySync.kind === 'bookmarks' ? { seriesUrls: ['https://archiveofourown.org/series/77'] } : {}),
+ } }])
+ await collect(); await collect(); await sync.pump()
+ const page = await sync.command({ action: 'page', page: 2 })
+ expect(page.seriesPreview).toMatchObject({ seriesId: 77, title: 'A & B', works: [{ workId: 101, position: 1 }, { workId: 102, position: 4 }] })
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.update).toHaveBeenCalledTimes(1)
+ const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await restarted.command({ action: 'page', page: 2 })).seriesPreview).toEqual(page.seriesPreview)
+})
+
+it('keeps filtered bookmark queries on every page of a ranged scan', async () => {
+ const url = 'https://archiveofourown.org/bookmarks?bookmark_search%5Bbookmarkable_query%5D=blackkat&user_id=AlmiH'
+ await sync.command({ action: 'start', url, mode: 'full', endPage: 2 })
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
+ await collect(); await collect()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 2 })
+ for (const request of [chrome.tabs.create.mock.calls[0][0].url, chrome.tabs.update.mock.calls[0][1].url]) {
+  const parsed = new URL(request)
+  expect(parsed.pathname).toBe('/bookmarks')
+  expect(parsed.searchParams.get('bookmark_search[bookmarkable_query]')).toBe('blackkat')
+  expect(parsed.searchParams.get('user_id')).toBe('AlmiH')
+ }
 })

@@ -13,8 +13,9 @@ function runtime(): ExtensionRuntime | undefined {
  return (window as Window & { chrome?: { runtime?: ExtensionRuntime } }).chrome?.runtime
 }
 export function extensionId() {
- try { return window.localStorage.getItem?.('ao3-library-extension-id') ?? (isLocalApp() ? localExtensionId : import.meta.env.VITE_AO3_EXTENSION_ID ?? '') }
- catch { return isLocalApp() ? localExtensionId : import.meta.env.VITE_AO3_EXTENSION_ID ?? '' }
+ const fallback = import.meta.env.VITE_AO3_EXTENSION_ID || (isLocalApp() ? localExtensionId : '')
+ try { return window.localStorage.getItem?.('ao3-library-extension-id') ?? fallback }
+ catch { return fallback }
 }
 export function setExtensionId(id: string) {
  if (!/^[a-p]{32}$/.test(id)) throw new Error('Enter the 32-letter extension ID from your browser’s Extensions page.')
@@ -56,8 +57,8 @@ function previewPageWithExtension(url: string, type: 'AO3_LIBRARY_PREVIEW_SERIES
 export function previewSeriesWithExtension(url: string) { return previewPageWithExtension(url, 'AO3_LIBRARY_PREVIEW_SERIES') }
 export function captureWorkWithExtension(url: string) { return previewPageWithExtension(url, 'AO3_LIBRARY_CAPTURE_WORK') }
 
-export type LibrarySyncState = { id: string; status: 'running' | 'paused' | 'ready' | 'complete' | 'discarded'; url: string; mode: string; pages: number; count: number; skipped: number; error: string; startPage?: number; endPage?: number; limited?: boolean; partial?: boolean; delaySeconds?: number; attention?: 'login' | 'rate_limit' | 'page_error'; attentionId?: string; autoImport?: boolean; checkChapterDates?: boolean; chapterDatesChecked?: number; chapterDatesUnavailable?: number; readingStatus?: import('../library/model').Status; seenSeries?: string[]; seriesReviewVersion?: number; importToCollection?: boolean; collectionId?: string; collection?: { name: string; description: string } }
-export function librarySyncCommand(action: string, options: { url?: string; mode?: string; page?: number; scanId?: string; startPage?: number; endPage?: number; delaySeconds?: number; autoImport?: boolean; checkChapterDates?: boolean; readingStatus?: import('../library/model').Status; importToCollection?: boolean; collectionId?: string } = {}): Promise<{ state?: LibrarySyncState | null; rows?: Record<string, string>[]; seriesUrl?: string }> {
+export type LibrarySyncState = { id: string; status: 'running' | 'paused' | 'ready' | 'complete' | 'discarded'; url: string; mode: string; pages: number; listPages?: number; count: number; skipped: number; error: string; startPage?: number; endPage?: number; limited?: boolean; partial?: boolean; delaySeconds?: number; attention?: 'login' | 'rate_limit' | 'page_error'; attentionId?: string; autoImport?: boolean; checkChapterDates?: boolean; chapterDatesChecked?: number; chapterDatesUnavailable?: number; readingStatus?: import('../library/model').Status; seenSeries?: string[]; seriesReviewVersion?: number; seriesBehavior?: import('./series-import-preferences').SeriesImportBehavior; importToCollection?: boolean; collectionId?: string; collection?: { name: string; description: string } }
+export function librarySyncCommand(action: string, options: { url?: string; mode?: string; page?: number; scanId?: string; startPage?: number; endPage?: number; delaySeconds?: number; autoImport?: boolean; checkChapterDates?: boolean; readingStatus?: import('../library/model').Status; importToCollection?: boolean; collectionId?: string; seriesBehavior?: import('./series-import-preferences').SeriesImportBehavior } = {}): Promise<{ state?: LibrarySyncState | null; rows?: Record<string, string>[]; seriesUrl?: string; seriesPreview?: import('./urls').SeriesPreview }> {
  const api = runtime(), id = extensionId()
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) return Promise.reject(new Error('Connect AO3 Library Companion in Settings first.'))
  return new Promise((resolve, reject) => {

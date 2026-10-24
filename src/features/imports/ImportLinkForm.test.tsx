@@ -83,7 +83,7 @@ it('reviews a series in place without creating a work',async()=>{
  show()
  fireEvent.change(screen.getByRole('textbox',{name:'AO3 work or series link'}),{target:{value:'https://archiveofourown.org/series/77'}})
  fireEvent.click(screen.getByRole('button',{name:'Import from link'}))
- expect(await screen.findByRole('heading',{name:'Choose works from series'})).toBeVisible()
+ expect(await screen.findByRole('heading',{name:'Choose Works From Series'})).toBeVisible()
  expect(mocks.submit).not.toHaveBeenCalled()
  expect(screen.queryByRole('heading',{name:'Choose series works'})).not.toBeInTheDocument()
  expect(await screen.findByRole('checkbox',{name:'Part 1: First fic'})).not.toBeChecked()

@@ -1,3 +1,4 @@
+import { parseSeries } from '../../src/features/imports/ao3-series.ts'
 import { captureMetadataPage } from './capture.js'
 import { parseChapterDates } from '../../src/features/imports/chapter-dates.ts'
 import { readAo3Rows, bookmarkReadingState } from '../../src/features/imports/ao3-csv.ts'
@@ -20,6 +21,13 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   if (!user || user.expiresAt * 1000 <= Date.now()) throw new Error('Reconnect the extension in Settings.')
   if (state && state.startPage === undefined) { state.startPage = 1; if (state.limited) state.endPage = state.maxPages }
   if (state && state.userId !== user.userId) return { user, state: undefined }
+  // Older scans already distinguish series checkpoints by seriesUrl. Recover
+  // their primary-list count without changing checkpoint numbering or contents.
+  if (state && state.listPages === undefined && ['running', 'paused', 'ready'].includes(state.status)) {
+   const keys = Array.from({ length: state.pages }, (_, i) => pageKey(state, (state.startPage ?? 1) + i))
+   const saved = await storage.local.get(keys)
+   if (keys.every(key => saved[key] !== undefined)) state.listPages = keys.filter(key => !saved[key]?.seriesUrl).length
+  }
   return { user, state }
  }
  async function discard(state) {
@@ -31,6 +39,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   if (message.action === 'status') return { state: state ?? null }
   if (message.action === 'start') {
    if (state && ['running', 'paused', 'ready'].includes(state.status)) throw new Error('Finish or discard the saved scan first.')
+   if (message.seriesBehavior !== undefined && !['choose', 'all'].includes(message.seriesBehavior)) throw new Error('Choose a valid series import behavior.')
    const startPage = message.startPage ?? 1, endPage = message.endPage
    if (message.maxPages !== undefined) throw new Error('Use Start page and End page instead of a page limit.')
    if (!Number.isInteger(startPage) || startPage < 1 || startPage > 500 || endPage !== undefined && (!Number.isInteger(endPage) || endPage < startPage || endPage > 500)) throw new Error('Enter whole page numbers from 1 to 500, with End page at or after Start page.')
@@ -49,8 +58,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    ] : [{ url: identity.url, kind: identity.kind }]
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
-   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.autoImport ? undefined : message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
-    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now(), keys: [], error: '' }
+   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.autoImport ? undefined : message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
+    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now(), keys: [], error: '' }
    await write(next); return { state: next }
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
@@ -79,7 +88,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const saved = (await storage.local.get(pageKey(state, message.page)))[pageKey(state, message.page)]
    const rows = Array.isArray(saved) ? saved : saved?.rows
    if (!Array.isArray(rows)) throw new Error('Saved page is missing. Discard this scan and run a full scan again.')
-   return { rows, ...(saved?.seriesUrl ? { seriesUrl: saved.seriesUrl } : {}) }
+   return { rows, ...(saved?.seriesUrl ? { seriesUrl: saved.seriesUrl, ...(saved.seriesPreview ? { seriesPreview: saved.seriesPreview } : {}) } : {}) }
   }
   if (message.action === 'resume' && state.status === 'paused') {
    if (message.delaySeconds !== undefined) state.delaySeconds = requestDelay(message.delaySeconds)
@@ -192,11 +201,19 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     const known = new Set(state.baseline)
     // Keep observed existing rows for metadata refresh, while still stopping on overlap.
     const rows = result.rows
-    await storage.local.set({ [pageKey(state, (state.startPage ?? 1) + state.pages)]: { rows, ...(state.kind === 'series_works' ? { seriesUrl: state.currentUrl } : {}) } })
+    let seriesPreview
+    if (state.kind === 'series_works') {
+     const snapshot = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureMetadataPage, injectImmediately: true, args: [false, 'series'] }))[0]?.result
+     if (snapshot?.html && sameScanUrl(snapshot.url, state.requestUrl)) {
+      seriesPreview = { ...parseSeries(snapshot.html, snapshot.url), fetchedAt: new Date().toISOString() }
+     }
+    }
+    await storage.local.set({ [pageKey(state, (state.startPage ?? 1) + state.pages)]: { rows, ...(state.kind === 'series_works' ? { seriesUrl: state.currentUrl, ...(seriesPreview ? { seriesPreview } : {}) } : {}) } })
     if (state.checkChapterDates && (!state.readingStatus || state.readingStatus === 'reading')) {
      state.chapterQueue = readAo3Rows(rows).flatMap((work, row) => work.source === 'bookmarks' && work.workId && work.workStatus !== 'deleted' && work.bookmarkDate && work.metadata.published_chapters && bookmarkReadingState(work).status === 'reading' && !known.has(keys[row]) ? [{ workId: work.workId, published: work.metadata.published_chapters, page: (state.startPage ?? 1) + state.pages, row }] : [])
     }
     state.keys.push(...keys.map(key => state.kind === 'series_works' ? `series-work:${key}` : key)); state.pages++; state.count += rows.length; state.skipped += result.skipped
+    if (state.kind !== 'series_works') state.listPages = (state.listPages ?? 0) + 1
     state.captured = true
     state.done = !result.hasNext || state.mode === 'quick' && state.kind !== 'series_works' && keys.some(key => known.has(key))
     if (!state.done && state.kind !== 'series_works' && state.limited && state.page >= (state.endPage ?? state.maxPages ?? Infinity)) { state.partial = true; state.done = true }
@@ -234,8 +251,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion } = result.state
-    return { state: { id, status, url, mode, pages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion } }
+    const { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior } = result.state
+    return { state: { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior } }
    }
    return result
   } finally {

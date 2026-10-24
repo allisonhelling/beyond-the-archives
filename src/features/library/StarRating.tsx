@@ -1,8 +1,11 @@
-import { useId, useState, type ReactNode } from 'react'
-import { Check, Pencil, Star } from 'lucide-react'
+import { RatingInfoContext } from './rating-info'
+import { useContext, useId, useState, type ReactNode } from 'react'
+import { Check, Info, Pencil, Star } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
 
 export function StarRating({ value, onChange, onSave, onEdit, disabled = false, headingClassName = '', info, clearLabel = 'Clear rating' }: { value: number | null; onChange?: (value: number | null) => void; onSave?: (value: number | null) => Promise<boolean>; onEdit?: () => void; disabled?: boolean; headingClassName?: string; info?: ReactNode; clearLabel?: string }) {
+  const ratingInfo = useContext(RatingInfoContext)
+  const help = info === undefined && ratingInfo.trim() ? <span className="personal-rating-info"><Tooltip description={ratingInfo}>{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Personal rating info" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span> : info
   const id = useId()
   const [hovered, setHovered] = useState<number | null>(null)
   const [editing, setEditing] = useState(false), [draft, setDraft] = useState(value)
@@ -25,6 +28,6 @@ export function StarRating({ value, onChange, onSave, onEdit, disabled = false, 
       {starIcons[number - 1]}
     </label>)}</div> : savedStars}
     <span className="rating-value" aria-live="polite">{rating ? `${rating}/5` : 'Unrated'}</span>
-    {info ? <span className="rating-actions">{clearRating}{info}</span> : clearRating}
+    {help ? <span className="rating-actions">{clearRating}{help}</span> : clearRating}
   </div></fieldset>
 }

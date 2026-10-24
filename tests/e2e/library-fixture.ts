@@ -18,6 +18,15 @@ export async function fixture(page: Page) {
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
+    if (table === 'personal_rating_settings') {
+      let settings = tables.metadata_preferences.find(row => row.user_id === user.id)
+      const input = body?.p_input as Row | undefined
+      if (input && Object.hasOwn(input, 'text')) {
+        if (!settings) { settings = { user_id: user.id, retrieval_mode: 'direct' }; tables.metadata_preferences.push(settings) }
+        settings.personal_rating_info = input.text
+      }
+      return route.fulfill({ json: { ratingInfo: settings?.personal_rating_info ?? null } })
+    }
     if (['library_catalog','library_story_details','query_library','paged_import_history'].includes(table)) return route.fulfill({ json: libraryQueryFixture(table,body??{},tables) })
     if (table === 'ensure_library_series' && body) {
       if (!tables.library_series.some(series => series.ao3_series_id === body.p_series)) tables.library_series.push({id:crypto.randomUUID(),user_id:user.id,ao3_series_id:body.p_series,notes:'',is_favorite:false,reading_status:'to_read',created_at:now,updated_at:now,metadata:{seriesId:body.p_series,title:body.p_title,normalizedUrl:`https://archiveofourown.org/series/${body.p_series}`,description:'',works:[],basic:true}})
@@ -49,7 +58,7 @@ export async function fixture(page: Page) {
         recordReadingTransition(entry! as unknown as Story, previous, now)
         return route.fulfill({ status: 204 })
       }
-      Object.assign(body, { p_metadata: values.metadata, p_status: values.status, p_progress: values.progress, p_notes: values.notes, p_rating: values.rating, p_favorite: values.favorite, p_collections: values.collections, p_tags: values.tags })
+      Object.assign(body, { p_metadata: values.metadata, p_status: values.status, p_progress: values.progress, p_notes: values.notes, p_rating: values.rating, p_favorite: values.favorite, p_rec: values.rec, p_collections: values.collections, p_tags: values.tags })
     }
     if (['save_library_story', 'save_library_story_checked'].includes(table) && body) {
       let entry = tables.library_entries.find(e => e.id === body.p_id)
@@ -61,7 +70,7 @@ export async function fixture(page: Page) {
         entry = { id: crypto.randomUUID(), user_id: user.id, work_id: work.id, original_url: body.p_url, created_at: now }
         tables.library_entries.push(entry)
       }
-      Object.assign(entry, { metadata_overrides: { ...entry.metadata_overrides as Row, ...body.p_metadata as Row }, reading_status: body.p_status, last_read_chapter: body.p_progress, notes: body.p_notes, is_favorite: body.p_favorite, personal_rating: body.p_rating, updated_at: now })
+      Object.assign(entry, { metadata_overrides: { ...entry.metadata_overrides as Row, ...body.p_metadata as Row }, reading_status: body.p_status, last_read_chapter: body.p_progress, notes: body.p_notes, is_favorite: body.p_favorite, is_rec: body.p_rec ?? entry.is_rec ?? false, personal_rating: body.p_rating, updated_at: now })
       const selected = body.p_collections as string[]
       tables.collection_works = tables.collection_works.filter(m => m.library_entry_id !== entry.id || selected.includes(String(m.collection_id)))
       for (const id of selected) if (!tables.collection_works.some(m => m.library_entry_id === entry.id && m.collection_id === id)) {

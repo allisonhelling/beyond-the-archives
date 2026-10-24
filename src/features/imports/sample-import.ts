@@ -1,3 +1,4 @@
+import { localExtensionConnectionHelp } from './extension-config'
 import { load } from 'cheerio'
 import { blankMetadata, initialProgress, type Metadata, type Status } from '../library/model'
 import { ensureSampleSeries, loadSampleLibrary, saveSampleStory } from '../library/sample/repository'
@@ -9,7 +10,7 @@ import { groupWorks, parseWorkUrl } from './urls'
 export async function importSampleWorkUrls(urls: string[], status: Status, seriesIds: number[], updateReadingLocation = true) {
  const groups = groupWorks(urls)
  if (!groups.size) throw new Error('Paste at least one valid AO3 work URL, or select works from a series.')
- if (!await connectExtension()) throw new Error('Load or reload AO3 Library Companion (Local), then retry the import.')
+ if (!await connectExtension()) throw new Error(localExtensionConnectionHelp)
  const saved = new Set((await loadSampleLibrary()).stories.map(story => story.work.ao3_work_id))
  let requested = false
  for (const [workId, links] of groups) {

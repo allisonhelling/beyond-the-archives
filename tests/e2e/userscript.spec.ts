@@ -22,7 +22,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    // it. Production and the source-level privacy tests use a closed root.
    const attach = Element.prototype.attachShadow
    Element.prototype.attachShadow = function (options) { return attach.call(this, { ...options, mode: 'open' }) }
-   const state: { entry: Record<string, unknown> | null; fail: boolean; requests: Record<string, unknown>[] } = { entry: null, fail: true, requests: [] }
+   const state: { entry: Record<string, unknown> | null; fail: boolean; ratingInfo: string | null; requests: Record<string, unknown>[] } = { entry: null, fail: true, ratingInfo: null, requests: [] }
    const storage = new Map<string, unknown>([['connection:https://userscript-test.supabase.co', { userId: 'alice', secret: 'fixture-device-secret' }]])
    Object.assign(window, { userscriptTestState: state, userscriptTestApi: {
     getValue: async (key: string, fallback: unknown) => storage.get(key) ?? fallback,
@@ -30,6 +30,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
     deleteValue: async (key: string) => storage.delete(key),
     xmlHttpRequest: async ({ data }: { data: string }) => {
      const body = JSON.parse(data); state.requests.push(body)
+     if (body.p_action === 'rating_save') state.ratingInfo = body.p_input.text
      if (state.entry && ['save', 'progress'].includes(body.p_action) && body.p_input.base) {
       const saved = Object.fromEntries(['status', 'progress', 'notes', 'rating', 'tags', 'collections'].map(key => [key, state.entry![key]])) as EditValues
       const local = Object.fromEntries((body.p_action === 'progress' ? ['status', 'progress'] : ['status', 'progress', 'notes', 'rating', 'tags', 'collections']).map(key => [key, body.p_input[key]])) as EditValues
@@ -43,7 +44,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
       state.entry = { ...body.p_input, id: 'fic-entry', version: 'v1' }
      }
      if (body.p_action === 'progress') state.entry = { ...state.entry, ...body.p_input, version: 'v2' }
-     return { status: 200, responseText: JSON.stringify({ entry: state.entry, collections: [{ id: 'weekend', name: 'Weekend reads' }, { id: 'night', name: 'Night reads' }] }) }
+     return { status: 200, responseText: JSON.stringify({ entry: state.entry, ratingInfo: state.ratingInfo, collections: [{ id: 'weekend', name: 'Weekend reads' }, { id: 'night', name: 'Night reads' }] }) }
     },
    } })
   })
@@ -387,7 +388,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   const customRatingInfo = '1 star: Not for me\n5 stars: A favorite <3'
   await ratingText.fill(customRatingInfo)
   await page.getByRole('button', { name: 'Save Rating Info', exact: true }).click()
-  await expect(top.getByRole('status')).toHaveText('Rating info saved on this device.')
+  await expect(top.getByRole('status')).toHaveText('Rating info saved to your library account.')
   await expect(mode.locator('svg')).toHaveAttribute('aria-hidden', 'true')
   await mode.click()
   for (const surface of [top, bottom]) {

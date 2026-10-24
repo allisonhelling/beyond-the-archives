@@ -304,7 +304,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    expect(await command({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: 'https://archiveofourown.org/works/123' })).toMatchObject({ ok: true, page: { url: expect.stringMatching(/^https:\/\/archiveofourown\.org\/works\/123(?:\/chapters\/[1-9]\d*)?(?:[?#].*)?$/) } })
    const listing = 'https://archiveofourown.org/users/alice/bookmarks'
    slowImage = new Promise<void>(resolve => { releaseImage = resolve })
-   await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<html><body><div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a href="?page=3">Next</a></li></ol></div><img src="/slow-image-listing.png"></body></html>' }))
+   await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<html><body><div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a name="page-navigation">Pages</a></li><li><a href="?page=3">Next</a></li></ol></div><img src="/slow-image-listing.png"></body></html>' }))
    const openedScan = context.waitForEvent('page', { timeout: 45000 })
    const started = await command({ type: 'AO3_LIBRARY_SYNC', action: 'start', url: listing, mode: 'full', startPage: 2, endPage: 2 })
    expect(started).toMatchObject({ ok: true, state: { startPage: 2, endPage: 2, limited: true } })
@@ -326,7 +326,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    expect(await command({ type: 'AO3_LIBRARY_SYNC', action: 'open-tab' })).toMatchObject({ ok: true })
    expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'finish' })).ok).toBe(true)
    // Exercise the packaged capture function through Chrome's isolated world.
-   await scan.locator('h4.heading > a').first().evaluate(element => element.setAttribute('href', 'http://['))
+   await scan.locator('.pagination a[href]').first().evaluate(element => element.setAttribute('href', 'http://['))
    const backgroundSource = await readFile(join(extension, 'background.js'), 'utf8')
    const captureFunction = backgroundSource.slice(backgroundSource.indexOf('function captureListingPage('), backgroundSource.indexOf('function listingUrl('))
    expect(captureFunction).toContain('AO3 listing capture failed:')
@@ -334,7 +334,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
     const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/users/alice/bookmarks*' });
     return chrome.scripting.executeScript({ target: { tabId: tabs[0].id }, func: ${captureFunction}, args: ['bookmarks'] });
    })()`)
-   expect(failedCapture).toMatchObject([{ result: { attention: 'page_error', error: expect.stringMatching(/^AO3 listing capture failed:/) } }])
+   expect(failedCapture).toMatchObject([{ result: { attention: 'page_error', error: expect.stringContaining('pagination link could not be read') } }])
    expect(uploads).toHaveLength(2)
   }
 

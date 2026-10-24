@@ -1,3 +1,7 @@
+import { mergeSeriesPreviews, parseSeriesUrl, type SeriesPreview } from './urls'
+import { SeriesImportOptions } from './SeriesImportOptions'
+import { useSeriesImportBehavior } from './series-import-preferences'
+import { localExtensionConnectionHelp } from './extension-config'
 import { BookmarkChapterDatesOption } from './BookmarkChapterDatesOption'
 import { ImportReadingStatus } from './ImportReadingStatus'
 import type { Status } from '../library/model'
@@ -18,6 +22,7 @@ import { submitLibrarySync } from './repository'
 import { SeriesImportReview } from './SeriesImportReview'
 
 export function LibrarySyncForm({ onImported }: { onImported: (batch: string | null) => Promise<void> }) {
+ const seriesBehavior = useSeriesImportBehavior()
  const usernamePreference = useAo3Username()
  const [usernameKind, setUsernameKind] = useState<'bookmarks' | 'marked_for_later' | null>(null)
  const [username, setUsername] = useState(''), [rememberUsername, setRememberUsername] = useState(false)
@@ -45,7 +50,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  const interval = delayDraft ?? String(state?.delaySeconds ?? 15)
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
  const [conflicts, setConflicts] = useState<CsvConflict[]>([])
- const [seriesReview, setSeriesReview] = useState<{ scanId: string; text: string } | null>(null)
+ const [seriesReview, setSeriesReview] = useState<{ scanId: string; text: string; previews: SeriesPreview[] } | null>(null)
  const selection = useRef<{ scanId: string; ids: Set<number> } | null>(null)
  const pending = useRef(false)
  useEffect(() => {
@@ -55,10 +60,11 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   if (pending.current) return
   pending.current = true; setBusy(true); setError(''); setMessage('')
   try {
-   if (name === 'start' && !await connectExtension()) throw new Error(sampleMode ? 'Load or reload AO3 Library Companion (Local) from extension/local/dist in Chrome, then retry.' : 'Connect the extension in Settings, then try again.')
+   if (name === 'start' && !await connectExtension()) throw new Error(sampleMode ? localExtensionConnectionHelp : 'Connect the extension in Settings, then try again.')
+   if (name === 'discard') seriesBehavior.reset()
    if (name === 'start' || name === 'discard') { setSeriesReview(null); selection.current = null }
    if (name === 'start') { setCollectionName(null); setCreatedCollection(null) }
-   const reply = await librarySyncCommand(name, name === 'start' ? { url: listUrl.trim(), mode, ...(withChapterDates ? { checkChapterDates: true } : {}), ...(!autoImport ? { readingStatus } : {}), ...(autoImport ? { autoImport: true } : {}), ...(/^https:\/\/archiveofourown\.org\/collections\//.test(listUrl.trim()) && importToCollection ? { importToCollection: true } : {}), delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
+   const reply = await librarySyncCommand(name, name === 'start' ? { url: listUrl.trim(), mode, seriesBehavior: seriesBehavior.behavior, ...(withChapterDates ? { checkChapterDates: true } : {}), ...(!autoImport ? { readingStatus } : {}), ...(autoImport ? { autoImport: true } : {}), ...(/^https:\/\/archiveofourown\.org\/collections\//.test(listUrl.trim()) && importToCollection ? { importToCollection: true } : {}), delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
    if (name === 'start' && withChapterDates && reply.state && reply.state.checkChapterDates !== true) {
     const discarded = await librarySyncCommand('discard', { scanId: reply.state.id })
     setState(discarded.state ?? null)
@@ -76,15 +82,35 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   try {
    if (state.seriesReviewVersion !== 1) throw new Error('This scan predates series work selection. Discard it and run a new scan with the updated extension.')
    const links = new Set(state.seenSeries)
+   const all = (state.seriesBehavior ?? seriesBehavior.behavior) === 'all'
+   const seriesIds = new Set<number>()
+   const previews = new Map<number, SeriesPreview[]>()
    // Inspect every checkpoint before importing anything; direct works stay included.
    for (let offset = 0; offset < state.pages; offset++) {
     const reply = await librarySyncCommand('page', { page: (state.startPage ?? 1) + offset, scanId: state.id })
-    if (reply.seriesUrl) continue
+    if (reply.seriesUrl) {
+     const identity = parseSeriesUrl(reply.seriesUrl)
+     const works = readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork & { workId: number } => typeof row.workId === 'number')
+     if (all) for (const row of works) seriesIds.add(row.workId)
+     else {
+      // Legacy checkpoints still contain the full scanned work list. Only an
+      // explicit Save Series Details needs to fetch missing series-level data.
+      const preview: SeriesPreview = reply.seriesPreview ?? { ...identity, basic: true, title: `Series ${identity.seriesId}`, description: '', works: works.map(row => ({
+       workId: row.workId, url: row.url, title: row.metadata.title ?? `AO3 work ${row.workId}`, position: null, authors: row.metadata.authors ?? [], fandoms: row.metadata.fandoms ?? [],
+       summary: row.metadata.summary ?? '', summary_html: row.metadata.summary_html, tags: row.metadata.ao3_tags ?? [], wordCount: row.metadata.word_count ?? null,
+       chapters: row.metadata.published_chapters == null ? '' : `${row.metadata.published_chapters}/${row.metadata.total_chapters ?? '?'}`, complete: row.metadata.is_complete ?? null,
+      })) }
+      previews.set(identity.seriesId, [...previews.get(identity.seriesId) ?? [], preview])
+     }
+     continue
+    }
     for (const row of readAo3Rows(reply.rows ?? [])) if (typeof row.workId === 'number') links.add(row.url)
    }
-   setSeriesReview({ scanId: state.id, text: [...links].join('\n') })
+   if (all) selection.current = { scanId: state.id, ids: seriesIds }
+   else setSeriesReview({ scanId: state.id, text: [...links].join('\n'), previews: [...previews.values()].map(mergeSeriesPreviews) })
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not prepare series selection.') }
   finally { pending.current = false; setBusy(false) }
+  if (selection.current?.scanId === state.id) await save()
  }
  async function save() {
   if (!state || pending.current) return
@@ -119,7 +145,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     imported += result.imported; kept += result.kept; batch = result.batch ?? batch
    }
    const reply = await librarySyncCommand('finish', { scanId: state.id }); setState(reply.state ?? null)
-   setSeriesReview(null); selection.current = null
+   setSeriesReview(null); selection.current = null; seriesBehavior.reset()
    setMessage(`Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.`)
    await onImported(batch)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Import failed. Retry to continue safely.'); setMessage('Saved pages remain available. Retrying keeps works already imported.') }
@@ -133,6 +159,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  }, [state?.id, state?.status, state?.autoImport])
  const saved = state && ['running', 'paused', 'ready'].includes(state.status)
  const selectedMode = saved && state.mode ? state.mode : mode
+ const listName = state?.autoImport ? (/\/bookmarks(?:[?#]|$)/.test(state.url ?? '') ? 'Bookmark' : 'Marked for Later') : 'List'
  return <section className="settings-card story-form" aria-labelledby="library-sync-heading">
   <h2 id="library-sync-heading">AO3 Library Sync</h2>
   {sampleMode && <p className="field-help">Sample imports use the extension with Local selected and save only to this browser’s sample library. No library account or background worker is needed. Select Local in the companion’s extension settings and enter its ID in this app’s Settings before starting.</p>}
@@ -153,10 +180,11 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
      <label>End Page<input type="number" min={startPage ? Number(startPage) : 1} max={500} step={1} value={endPage} placeholder="Leave Blank" disabled={busy || Boolean(saved)} onChange={event => setEndPage(event.target.value)} /></label>
     </div>
    </fieldset>}</div>
+   <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={saved && state.seriesBehavior ? state.seriesBehavior !== seriesBehavior.defaultBehavior : seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || Boolean(saved)} />
    </fieldset>
    <div className="form-actions"><button type="button" className="button secondary" disabled={busy || Boolean(saved)} onClick={() => importUsername('bookmarks')}>Import Bookmarks</button><button type="button" className="button secondary" disabled={busy || Boolean(saved)} onClick={() => importUsername('marked_for_later')}>Import Marked for Later</button></div>
    <div className="form-controls-row list-import-controls">
-   <div className="form-control list-url-control"><div className="editable-field-heading"><label htmlFor={urlId}>AO3 List URL</label><Tooltip description="Accepts a full user or pseud's Works, Series, or Bookmarks URL, tag Works/Bookmarks URL, work search URL, or an AO3 collection URL.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="AO3 List URL information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><input id={urlId} type="url" required value={url} placeholder="https://archiveofourown.org/users/USERNAME/bookmarks" disabled={busy || Boolean(saved)} onChange={event => setUrl(event.target.value)} /></div>
+   <div className="form-control list-url-control"><div className="editable-field-heading"><label htmlFor={urlId}>AO3 List URL</label><Tooltip description="Accepts a full user or pseud's Works, Series, or Bookmarks URL, filtered Bookmarks URL, tag Works/Bookmarks URL, work search URL, or an AO3 collection URL. Full Scan preserves URL filters; Quick Sync requires an unfiltered user list.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="AO3 List URL information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><input id={urlId} type="url" required value={url} placeholder="https://archiveofourown.org/users/USERNAME/bookmarks" disabled={busy || Boolean(saved)} onChange={event => setUrl(event.target.value)} /></div>
    <ImportReadingStatus description="Applies to new works imported from this list URL. Existing reading progress is preserved." ariaLabel="Reading status for AO3 list URL" value={saved ? state.readingStatus ?? readingStatus : readingStatus} onChange={setReadingStatus} disabled={busy || Boolean(saved)} />
    <button className="button primary" disabled={busy || Boolean(saved)}>Import from List</button>
    </div>
@@ -165,7 +193,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    {state && ['running', 'paused'].includes(state.status) && <button type="button" className="button secondary" disabled={busy} onClick={() => void action('set-delay')}>Apply Request Interval</button>}
   </form>
   <p className="field-help">Uses one scan tab with your selected request interval; background alarms may make it slower. Existing work imports finish first. Keep Chrome running. If sign-in or a request restriction blocks the scan, an alert lets you open the scan tab. Resolve the issue there, then resume manually. Checkpoints stay on this device until imported or discarded.</p>
-  {state && <p role="status">{state.status} · {state.pages} pages saved · {state.count} works collected · {state.skipped} unsupported entries skipped</p>}
+  {state && <p role="status">{state.status} · {state.listPages !== undefined && <>{state.listPages} {listName} pages saved · </>}{state.pages} total pages saved · {state.count} works collected · {state.skipped} unsupported entries skipped</p>}
   {state?.checkChapterDates && <p className="field-help">Chapter dates: {state.chapterDatesChecked ?? 0} indexes checked · {state.chapterDatesUnavailable ?? 0} unavailable or incomplete.</p>}
   {state?.limited && <p className="field-help">Partial scan · pages {state.startPage ?? 1}–{state.endPage ?? 'end of list'}{state.partial ? " · stopped at the selected end page; more pages remain on AO3" : ""}. Importing this range will not update the Quick Sync baseline.</p>}
   {state?.error && <p role="alert" className="error-message">{state.error}</p>}
@@ -176,7 +204,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    {state?.status === 'ready' && seriesReview?.scanId !== state.id && <button className="button primary" disabled={busy} onClick={() => void requestSave()}>Import Scanned Works</button>}
    {saved && <button className="button secondary" disabled={busy} onClick={() => void action('discard')}>Discard Scan</button>}
   </div>
-  {state?.status === 'ready' && seriesReview?.scanId === state.id && <SeriesImportReview key={state.id} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty confirmLabel="Import selected scanned works" cancelLabel="Back to scan" onConfirm={works => {
+  {state?.status === 'ready' && seriesReview?.scanId === state.id && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty confirmLabel="Import selected scanned works" cancelLabel="Back to scan" onConfirm={works => {
    selection.current = { scanId: state.id, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
@@ -191,6 +219,6 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   }}>{usernameKind === 'bookmarks' && <p className="field-help">Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.</p>}{error && <p role="alert" className="error-message">{error}</p>}<label>AO3 Username<input required pattern={ao3UsernamePattern} value={username} onChange={event => setUsername(event.target.value)} autoComplete="off" /></label><div className="editable-field-heading"><label className="check-label"><input type="checkbox" checked={rememberUsername} onChange={event => setRememberUsername(event.target.checked)} />Save my AO3 username for future imports</label><Tooltip description="View, change, or delete your saved username in Settings.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Saved username information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div>
    {usernameKind === 'bookmarks' && <BookmarkChapterDatesOption scan checked={checkChapterDates} disabled={busy} onChange={setCheckChapterDates} />}
    {usernameKind === 'marked_for_later' && <p className="field-help">New Marked for Later works are saved as To Read. Marked for Later requires signing in to AO3 in the scan browser.</p>}<button className="button primary" disabled={busy}>Start Import</button></form></Dialog>}
-  {message && <p role="status">{message}</p>}{error && !usernameKind && <p role="alert" className="error-message">{error}</p>}
+  {message && <p role="status">{message}</p>}{error && !usernameKind && (!seriesReview || seriesReview.scanId !== state?.id) && <p role="alert" className="error-message">{error}</p>}
  </section>
 }

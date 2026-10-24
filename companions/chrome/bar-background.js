@@ -1,4 +1,4 @@
-const actions = new Set(['claim', 'disconnect', 'get', 'save', 'progress', 'refresh_metadata', 'series_get', 'series_save'])
+const actions = new Set(['claim', 'disconnect', 'get', 'save', 'progress', 'refresh_metadata', 'series_get', 'series_save', 'rating_get', 'rating_save'])
 // Allow the existing series RPC's 3 MB input plus its request envelope.
 const maxPayloadLength = 4000000
 

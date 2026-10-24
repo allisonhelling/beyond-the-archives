@@ -60,6 +60,28 @@ function matchingWork(url, workId) {
  try { return parseWorkUrl(url).workId === workId && new URL(url).origin === 'https://archiveofourown.org' }
  catch { return false }
 }
+// Each capture lane reuses its own extension-created tab. A matching user tab
+// may be read, but is never claimed or redirected for a later request.
+async function captureTab(targetUrl, matches, key, version) {
+ const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
+ if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the capture.')
+ const matching = tabs.find(candidate => matches(candidate.url))
+ if (matching) return matching
+ const stored = await storage.session.get(key)
+ let owned
+ if (stored[key] !== undefined) {
+  try {
+   const tab = await chrome.tabs.get(stored[key])
+   if (new URL(tab.url).origin === 'https://archiveofourown.org') owned = tab
+  } catch { /* Closed or repurposed tabs are left alone. */ }
+ }
+ if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the capture.')
+ await storage.session.set({ ao3LastNavigation: Date.now() })
+ if (owned) return chrome.tabs.update(owned.id, { url: targetUrl })
+ const tab = await chrome.tabs.create({ url: targetUrl, active: false })
+ await storage.session.set({ [key]: tab.id })
+ return tab
+}
 async function pump() {
  await ready
  if (switching) return
@@ -105,13 +127,7 @@ async function pump() {
     return
    }
   } else {
-   const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
-   if (version !== connectionVersion) return
-   tab = tabs.find(candidate => matchingWork(candidate.url, active.workId))
-   if (!tab) {
-    await storage.session.set({ ao3LastNavigation: Date.now() })
-    tab = await chrome.tabs.create({ url: `https://archiveofourown.org/works/${active.workId}`, active: false })
-   }
+   tab = await captureTab(`https://archiveofourown.org/works/${active.workId}`, candidate => matchingWork(candidate, active.workId), 'workTabId', version)
    active.tabId = tab.id
    await storage.session.set({ active })
   }
@@ -179,13 +195,7 @@ async function previewPage(url, pageType = 'series') {
   const matches = candidate => {
    try { return work ? matchingWork(candidate, identity.workId) : seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
   }
-  const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
-  if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
-  let tab = tabs.find(candidate => matches(candidate.url))
-  if (!tab) {
-   await storage.session.set({ ao3LastNavigation: Date.now() })
-   tab = await chrome.tabs.create({ url: targetUrl, active: false })
-  }
+  const tab = await captureTab(targetUrl, matches, 'previewTabId', version)
   const deadline = Date.now() + 120000
   while (Date.now() < deadline) {
    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')

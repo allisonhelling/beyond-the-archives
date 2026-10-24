@@ -5,7 +5,7 @@ import { mountLibrary as mountSharedLibrary } from './bar'
 
 const mountLibrary = (doc, href, options = {}) => mountSharedLibrary(doc, href, { api: GM, ...options })
 
-let root, bottomRoot, storage, network, entry
+let root, bottomRoot, storage, network, entry, accountRatingInfo
 beforeEach(() => {
  document.body.innerHTML = '<main id="main"><div id="workskin"><h2 class="title">Test</h2><div class="summary module"><blockquote><p>Work summary.</p></blockquote></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104">4. Fourth</option></select></div><div id="kudos">Kudos list</div></main>'
  const attach = Element.prototype.attachShadow
@@ -16,8 +16,12 @@ beforeEach(() => {
  vi.stubGlobal('__SCRIPT_VERSION__', '0.1.0')
  vi.stubGlobal('__BRAND_ICON__', '<svg aria-hidden="true" viewBox="0 0 24 24"></svg>')
  storage = new Map([['connection:https://backend.test', { secret: 'device-secret', userId: 'alice' }]])
- entry = null
- network = vi.fn(async () => ({ status: 200, responseText: JSON.stringify({ entry, collections: [] }) }))
+ entry = null; accountRatingInfo = null
+ network = vi.fn(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'rating_save') accountRatingInfo = request.p_input.text
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [], ratingInfo: accountRatingInfo }) }
+ })
  vi.stubGlobal('GM', { getValue: async (key, fallback) => storage.get(key) ?? fallback, setValue: async (key, value) => storage.set(key, structuredClone(value)), deleteValue: async key => storage.delete(key), xmlHttpRequest: network })
 })
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
@@ -474,7 +478,7 @@ it('edits rating info beside color mode, persists it, and preserves personal dra
  expect(within(root).queryByRole('textbox', { name: 'Rating info text' })).not.toBeInTheDocument()
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
- expect(root.getElementById('library-rating-info').hidden).toBe(false)
+ await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
  const input = await within(root).findByLabelText('Rating info text')
  expect(input).toHaveValue(defaultRatingInfo)
  expect(root.activeElement).toBe(input)
@@ -482,12 +486,12 @@ it('edits rating info beside color mode, persists it, and preserves personal dra
  fireEvent.input(input, { target: { value: custom } })
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
  fireEvent.click(ratingInfoSave())
- await waitFor(() => expect(storage.get('rating-info:https://backend.test')).toBe(custom))
+ await waitFor(() => expect(accountRatingInfo).toBe(custom))
  await toggle('Add to Library', true)
  expect(root.querySelector('.rating-info > span').textContent).toBe(custom)
  expect(within(root).getByRole('radio', { name: '4 out of 5 stars' })).toBeChecked()
  expect(within(root).getByRole('textbox', { name: 'Personal tags', exact: true })).toHaveValue('Unfinished tag')
- expect(network).toHaveBeenCalledTimes(1)
+ expect(network.mock.calls.some(([request]) => JSON.parse(request.data).p_action === 'rating_save')).toBe(true)
  document.getElementById('ao3-library-companion').remove()
  await mount(); await toggle('Add to Library', true)
  expect(root.querySelector('.rating-info > span').textContent).toBe(custom)
@@ -499,12 +503,12 @@ it.each(['', ' \n '])('hides rating info when saved text is blank (%j), includin
  await toggle('Connection', true)
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
- expect(root.getElementById('library-rating-info').hidden).toBe(false)
+ await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
  const input = await within(root).findByLabelText('Rating info text')
  fireEvent.input(input, { target: { value: blank } })
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
  fireEvent.click(ratingInfoSave())
- await waitFor(() => expect(storage.get('rating-info:https://backend.test')).toBe(blank))
+ await waitFor(() => expect(accountRatingInfo).toBe(blank))
  await toggle('Add to Library', true)
  expect(within(root).queryByRole('button', { name: 'Personal rating info' })).not.toBeInTheDocument()
  document.getElementById('ao3-library-companion').remove()
@@ -516,23 +520,23 @@ it.each(['', ' \n '])('hides rating info when saved text is blank (%j), includin
  expect(within(root).queryByRole('button', { name: 'Personal rating info' })).not.toBeInTheDocument()
 })
 
-it('keeps saved rating info on storage failure and allows retry', async () => {
- storage.set('rating-info:https://backend.test', 'Original explanation')
+it('keeps saved rating info on network failure and allows retry', async () => {
+ accountRatingInfo = 'Original explanation'
  await mount(); await toggle('Add to Library', true); await toggle('Connection', true)
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
- expect(root.getElementById('library-rating-info').hidden).toBe(false)
+ await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
  const input = await within(root).findByLabelText('Rating info text')
  fireEvent.input(input, { target: { value: 'New explanation' } })
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
- vi.spyOn(GM, 'setValue').mockRejectedValueOnce(new Error('Unavailable'))
+ network.mockResolvedValueOnce({ status: 503, responseText: '{}' })
  fireEvent.click(ratingInfoSave())
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save your rating info'))
- expect(storage.get('rating-info:https://backend.test')).toBe('Original explanation')
+ expect(accountRatingInfo).toBe('Original explanation')
  expect(root.querySelector('.rating-info > span')).toHaveTextContent('Original explanation')
  expect(input).toHaveValue('New explanation')
  fireEvent.click(ratingInfoSave())
- await waitFor(() => expect(storage.get('rating-info:https://backend.test')).toBe('New explanation'))
+ await waitFor(() => expect(accountRatingInfo).toBe('New explanation'))
  expect(root.querySelector('.rating-info > span')).toHaveTextContent('New explanation')
 })
 
@@ -681,4 +685,77 @@ it.each(['safari', 'chrome'])('places series work disclosures below names and ex
  fireEvent.click(help)
  expect(help.closest('details')).toHaveTextContent('Reloading does not save your draft or refresh AO3 metadata.')
  expect(findButton('Save Series and Selected Works')).toBeVisible()
+})
+
+it.each(['safari', 'chrome'])('marks To Read and Paused chapters as read in both bars on %s', async browser => {
+ for (const status of ['reading', 'paused_reading', 'to_read']) {
+  document.getElementById('ao3-library-companion')?.remove()
+  entry = { version: 'v1', status, progress: 1, notes: 'Keep', rating: 3, tags: [], collections: [] }
+  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
+  const label = 'Mark through chapter 4 as read'
+  expect(within(root).getByRole('button', { name: label })).toBeVisible()
+  const complete = within(bottomRoot).getByRole('button', { name: label })
+  network.mockImplementationOnce(async ({ data }) => {
+   const request = JSON.parse(data)
+   expect(request.p_input).toMatchObject({ status: 'reading', progress: 4 })
+   entry = { ...entry, ...request.p_input, version: 'v2' }
+   return { status: 200, responseText: JSON.stringify({ entry, collections: [], ratingInfo: null }) }
+  })
+  fireEvent.click(complete)
+  await waitFor(() => expect(root.querySelector('.completion-indicator')).toHaveTextContent('Read'))
+  expect(bottomRoot.querySelector('.completion-indicator')).toHaveTextContent('Read')
+  expect(within(root).queryByRole('button', { name: label })).not.toBeInTheDocument()
+ }
+})
+it('starts a To Read one-shot as Currently Reading when its chapter is marked read', async () => {
+ document.querySelector('dd.chapters').textContent = '1/1'
+ document.querySelector('#selected_id').remove()
+ entry = { version: 'v1', status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }
+ await mountLibrary(document, 'https://archiveofourown.org/works/123')
+ fireEvent.click(findButton('Mark through chapter 1 as read'))
+ await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'reading', progress: 1 })
+})
+it.each(['reading', 're_reading'])('pauses and resumes %s in Chrome without changing chapters or personal fields', async status => {
+ entry = { version: 'v1', status, progress: 2, notes: 'Keep', rating: 5, tags: ['mine'], collections: [] }
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser: 'chrome' })
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  expect(Object.keys(request.p_input).sort()).toEqual(['base', 'progress', 'status', 'version'])
+  const previous = entry.status
+  entry = { ...entry, ...request.p_input, version: 'v2', readingHistory: [{ action: 'paused_reading', previous_status: previous === 'paused_reading' ? status : previous }] }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ fireEvent.click(findButton('Pause Reading'))
+ await waitFor(() => expect(findButton('Resume Reading')).toBeEnabled())
+ expect(entry).toMatchObject({ status: 'paused_reading', progress: 2, notes: 'Keep', rating: 5 })
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Resume Reading' }))
+ await waitFor(() => expect(entry.status).toBe(status))
+ expect(entry.progress).toBe(2)
+})
+it('keeps pause controls out of Safari bars', async () => {
+ entry = { version: 'v1', status: 'reading', progress: 2, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ for (const surface of [root, bottomRoot]) expect(within(surface).queryByRole('button', { name: 'Pause Reading' })).not.toBeInTheDocument()
+})
+it('loads account rating text on focus and never replaces unsaved story fields', async () => {
+ await mount(); await toggle('Add to Library', true)
+ const notes = within(root).getByLabelText('Private Notes')
+ fireEvent.input(notes, { target: { value: 'My draft' } })
+ accountRatingInfo = 'Changed in the app'
+ window.dispatchEvent(new Event('focus'))
+ await waitFor(() => expect(root.querySelector('.rating-info > span')).toHaveTextContent(accountRatingInfo))
+ expect(notes).toHaveValue('My draft')
+})
+it('can explicitly copy an older device-only explanation into the shared account setting', async () => {
+ storage.set('rating-info:https://backend.test', 'My previous stars')
+ await mount(); await toggle('Connection', true)
+ fireEvent.click(findButton('Rating Info'))
+ await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
+ fireEvent.click(within(root).getByText('Use this device’s previous explanation', { selector: 'button' }))
+ expect(within(root).getByLabelText('Rating info text')).toHaveValue('My previous stars')
+ expect(accountRatingInfo).toBeNull()
+ await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
+ fireEvent.click(ratingInfoSave())
+ await waitFor(() => expect(accountRatingInfo).toBe('My previous stars'))
 })

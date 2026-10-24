@@ -375,7 +375,8 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
 .list-import-controls > .list-url-control { flex: 1 1 360px; }
 .story-form .list-import-controls > .button { align-self: flex-end; width: auto; min-height: 44px; margin: 0 0 16px; }
 
-.story-form > .form-control, .form-controls-row > .form-control { display: grid; gap: 7px; margin: 16px 0; }
+.story-form > .form-control, .form-controls-row > .form-control, .series-import-options { display: grid; gap: 7px; margin: 16px 0; }
+.story-form .series-import-options > * { margin: 0; }
 .form-control .editable-field-heading > label { margin: 0; }
 .form-controls-row .editable-field-heading { min-height: 24px; }
 .story-form input.input-fit { width: 8ch; min-width: 84px; }
@@ -627,6 +628,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .story-form .reading-progress-row input, .story-form .reading-progress-row select, .form-controls-row input, .form-controls-row select { height: 44px; min-height: 44px; margin-top: 0; }
 .story-form .reading-progress-row select { align-self: start; }
 .story-form .reading-progress-row small { font-size: 13px; }
+.personal-rating-info .action-tooltip-content { white-space: pre-wrap; overflow-wrap: anywhere; text-align: left; max-width: min(420px, var(--tooltip-boundary-width, calc(100vw - 32px))); }
 .rating-favorite-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 8px 0 24px; }
 .story-form .favorite-choice { align-self: flex-start; margin-top: 29px; }
 .story-form > .form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); align-items: stretch; gap: 12px; }
@@ -851,21 +853,21 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 /* Import history reuses form, card, button and error styles. */
 .import-status-filters { display: flex; flex-wrap: wrap; gap: 0 8px; }
 .import-status-filters [aria-pressed=true] { font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
-.series-import-preview { --series-preview-text-size: 14px; font-size: var(--series-preview-text-size); }
+.series-import-preview { --series-preview-text-size: 14px; --series-work-heading-size: 16px; font-size: var(--series-preview-text-size); padding-block: var(--space-4, 1rem); border-bottom: 3px solid var(--color-border); }
 .series-import-preview :is(.field-help, .story-summary, .text-button) { font-size: var(--series-preview-text-size); }
 .series-import-preview .series-import-skip { font-size: 16px; }
 .series-import-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .series-import-preview h3 { font-size: 18px; margin: 0; }
 .form-actions.series-preview-controls { justify-content: flex-start; flex-wrap: nowrap; gap: 8px; max-width: 100%; overflow-x: auto; }
 .series-preview-controls .text-button { white-space: nowrap; }
-.series-import-work summary { font-size: 16px; cursor: pointer; }
+.series-import-work summary { font-size: var(--series-work-heading-size); cursor: pointer; }
 .series-import-work-title { display: flex; align-items: baseline; gap: .5rem; }
 .series-import-work-title .action-tooltip { flex-shrink: 0; }
 .series-import-work-title + .field-help { margin-top: 2px; }
 .series-import-result > .series-import-finished { padding-bottom: 24px; }
 .series-import-result > ul { margin-bottom: 36px; }
 .series-import-work { padding-block: var(--space-4, 1rem); border-bottom: 1px solid var(--color-border); overflow-wrap: anywhere; }
-.series-import-work .series-work-choice { display: flex; align-items: baseline; gap: .5rem; margin-block: 4px 0; font-size: var(--series-preview-text-size); }
+.series-import-work .series-work-choice { display: flex; align-items: baseline; gap: .5rem; margin-block: 4px 0; font-size: var(--series-work-heading-size); font-weight: 650; }
 .series-import-work .series-work-choice input { width: auto; flex-shrink: 0; }
 .import-results { overflow-x: auto; margin-top: var(--space-4, 1rem); }
 .import-results caption { letter-spacing: .08em; word-spacing: .16em; }

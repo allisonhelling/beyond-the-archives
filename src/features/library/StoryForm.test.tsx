@@ -17,3 +17,13 @@ it.each([6, null])('finishes the published chapters, preserving progress when co
  await waitFor(() => expect(mocks.save).toHaveBeenCalled())
  expect(mocks.save.mock.calls[0][0]).toMatchObject({ status: 'finished', progress: published ?? 2, notes: story.notes })
 })
+
+it('includes rating help and a Rec choice in manual entry and sends the saved choice', async () => {
+ render(<MemoryRouter><StoryForm /></MemoryRouter>)
+ expect(screen.getByRole('button', { name: 'Personal rating info' })).toBeVisible()
+ fireEvent.change(screen.getByLabelText('AO3 URL'), { target: { value: 'https://archiveofourown.org/works/456' } })
+ fireEvent.change(screen.getByLabelText('Title', { exact: true }), { target: { value: 'Manual story' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Mark as Rec' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Save story' }))
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ rec: true })))
+})

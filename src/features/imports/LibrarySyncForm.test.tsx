@@ -1,3 +1,4 @@
+import { saveSeriesImportBehavior } from './series-import-preferences'
 import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -48,7 +49,7 @@ it('offers optional start/end pages in the full app and sends the inclusive rang
  fireEvent.change(screen.getByLabelText(/End Page/), { target: { value: '10' } })
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/alice/bookmarks' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
- await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', readingStatus: 'to_read', delaySeconds: 15, startPage: 2, endPage: 10 }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', seriesBehavior: 'choose', readingStatus: 'to_read', delaySeconds: 15, startPage: 2, endPage: 10 }))
 })
 it('shows page limits only for Full Library Scan and clears them for Quick Sync', () => {
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
@@ -86,7 +87,7 @@ it('sends the chosen request interval and explains bookmark sorting and reading 
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/alice/bookmarks' } })
  fireEvent.change(screen.getByLabelText(/^Time Between Page Requests/), { target: { value: '60' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
- await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', readingStatus: 'to_read', delaySeconds: 60 }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', seriesBehavior: 'choose', readingStatus: 'to_read', delaySeconds: 60 }))
  expect(screen.getByText(/Ensure that bookmarks are sorted by "Date Bookmarked"/)).toBeVisible()
  expect(screen.queryByText(/Earlier or same-day bookmarks/)).not.toBeInTheDocument()
  expect(screen.queryByText(/CSV importer’s reading-status rules/)).not.toBeInTheDocument()
@@ -178,7 +179,7 @@ function scannedSeries(autoImport = false, direct = true) {
  mocks.command.mockImplementation(async (action, options) => {
   if (action === 'status') return { state }
   if (action === 'page') return options.page === 1 ? { rows: direct ? [{ title: 'Direct work', link: 'https://archiveofourown.org/works/1', source_list: 'marked_for_later' }] : [] } : {
-   seriesUrl, rows: [1, 2, 3].map(id => ({ title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'marked_for_later' })),
+   seriesUrl, seriesPreview: { seriesId: 99, normalizedUrl: seriesUrl, title: 'Series example', description: '', works: [1, 2, 3].map(id => ({ workId: id, url: `https://archiveofourown.org/works/${id}`, title: `Work ${id}`, position: id, authors: [], summary: '', tags: [], wordCount: null, chapters: '1/1', complete: true })) }, rows: [1, 2, 3].map(id => ({ title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'marked_for_later' })),
   }
   return { state: { ...state, status: 'complete' } }
  })
@@ -189,9 +190,9 @@ it('reviews scanned series with the shared picker before importing only chosen i
  scannedSeries()
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
- expect(await screen.findByRole('heading', { name: 'Choose works from series' })).toBeVisible()
+ expect(await screen.findByRole('heading', { name: 'Choose Works From Series' })).toBeVisible()
+ expect(mocks.preview).not.toHaveBeenCalled()
  expect(mocks.submit).not.toHaveBeenCalled()
- fireEvent.click(screen.getByRole('button', { name: 'Load works' }))
  expect(await screen.findByRole('checkbox', { name: 'Part 1: Work 1' })).toBeDisabled()
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import selected scanned works' }))
@@ -199,10 +200,26 @@ it('reviews scanned series with the shared picker before importing only chosen i
  expect(mocks.submit.mock.calls.map(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([[1], [2]])
 })
 
+it('combines older series checkpoints without fetching previews again', async () => {
+ const state = { ...ready, seenSeries: [seriesUrl], seriesReviewVersion: 1 }
+ mocks.command.mockImplementation(async (action, options) => {
+  if (action === 'status') return { state }
+  if (action === 'page') return { seriesUrl, rows: [options.page, options.page + 1].map(id => ({ title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'marked_for_later' })) }
+  return { state: { ...state, status: 'complete' } }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ expect(await screen.findByRole('link', { name: 'Series 99' })).toHaveAttribute('href', seriesUrl)
+ expect(within(screen.getByRole('dialog')).getAllByRole('checkbox')).toHaveLength(3)
+ expect(screen.getByRole('checkbox', { name: 'Work 3' })).toBeEnabled()
+ expect(mocks.preview).not.toHaveBeenCalled()
+ expect(mocks.submit).not.toHaveBeenCalled()
+})
+
 it('pauses automatic username imports for series review and preserves the scan when canceled', async () => {
  scannedSeries(true)
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
- await screen.findByRole('heading', { name: 'Choose works from series' })
+ await screen.findByRole('heading', { name: 'Choose Works From Series' })
  expect(mocks.submit).not.toHaveBeenCalled()
  fireEvent.click(screen.getByRole('button', { name: 'Back to scan' }))
  expect(screen.getByRole('button', { name: 'Import Scanned Works' })).toBeEnabled()
@@ -224,7 +241,6 @@ it('keeps the chosen series works through an interrupted upload and retry', asyn
  mocks.submit.mockResolvedValueOnce({ imported: 1, kept: 0, batch: 'first' }).mockRejectedValueOnce(new Error('Connection lost'))
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
- fireEvent.click(await screen.findByRole('button', { name: 'Load works' }))
  fireEvent.click(await screen.findByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import selected scanned works' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
@@ -259,7 +275,7 @@ it('does not import direct works if a later checkpoint cannot be prepared for se
 it('leaves chapter-date checks off by default and includes the option for an opted-in bookmark scan', async () => {
  mocks.command.mockResolvedValue({ state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
- expect(within(screen.getByRole('group', { name: 'Scan Options' })).queryByRole('checkbox')).not.toBeInTheDocument()
+ expect(within(screen.getByRole('group', { name: 'Scan Options' })).getByRole('checkbox', { name: 'Automatically save all series works for this import only' })).not.toBeChecked()
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
  const dialog = screen.getByRole('dialog', { name: 'Import Bookmarks' })
  expect(within(dialog).getByText('Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.')).toBeVisible()
@@ -305,4 +321,40 @@ it('does not carry bookmark chapter checks into Marked for Later or list URL imp
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  await waitFor(() => expect(mocks.command.mock.calls.filter(([name]) => name === 'start')).toHaveLength(2))
  expect(mocks.command.mock.calls.filter(([name]) => name === 'start')[1][1]).not.toHaveProperty('checkChapterDates')
+})
+
+it.each([
+ [true, 'https://archiveofourown.org/users/alice/bookmarks', 'Bookmark'],
+ [true, 'https://archiveofourown.org/users/alice/readings?show=to-read', 'Marked for Later'],
+ [false, 'https://archiveofourown.org/users/alice/bookmarks', 'List'],
+])('shows separate primary and total page counts for autoImport=%s, %s', async (autoImport, url, label) => {
+ mocks.command.mockResolvedValue({ state: { ...ready, status: 'running', autoImport, url, listPages: 2, pages: 4 } })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ expect(await screen.findByText(`running · 2 ${label} pages saved · 4 total pages saved · 2 works collected · 0 unsupported entries skipped`)).toBeVisible()
+})
+
+it('shows only the total when an older extension cannot supply a primary-list count', async () => {
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ expect(await screen.findByText('ready · 2 total pages saved · 2 works collected · 0 unsupported entries skipped')).toBeVisible()
+})
+
+it('imports all series checkpoints with the all default without reopening series previews', async () => {
+ saveSeriesImportBehavior('all')
+ scannedSeries()
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
+ expect(mocks.submit.mock.calls.flatMap(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([1, 1, 2, 3])
+ expect(mocks.preview).not.toHaveBeenCalled()
+ expect(screen.queryByRole('heading', { name: 'Choose Works From Series' })).not.toBeInTheDocument()
+})
+
+it('can temporarily choose works when the saved default imports all', async () => {
+ saveSeriesImportBehavior('all')
+ mocks.command.mockResolvedValue({ state: null })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Choose series works for this import only' }))
+ fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/alice/bookmarks' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', expect.objectContaining({ seriesBehavior: 'choose' })))
 })

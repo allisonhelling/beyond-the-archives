@@ -1,3 +1,4 @@
+import { PersonalRatingProvider } from '../features/settings/PersonalRatingSettings'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { LibrarySyncProvider } from '../features/imports/LibrarySyncProvider'
 import { DisplayExamplePage } from '../features/library/display/DisplaySettings'
@@ -86,10 +87,10 @@ function Shell() {
 
 function AuthGate() {
   const { session, loading, needsPassword } = useAuth()
-  if (sampleMode) return <LibraryProvider><LibrarySyncProvider><SamplePreview /><Shell /></LibrarySyncProvider></LibraryProvider>
+  if (sampleMode) return <LibraryProvider><LibrarySyncProvider><PersonalRatingProvider><SamplePreview /><Shell /></PersonalRatingProvider></LibrarySyncProvider></LibraryProvider>
   if (loading) return <div className="loading-state" role="status"><BookOpen size={32} strokeWidth={1.4} /><p>Opening your reading space…</p></div>
   if (!session || needsPassword) return <AuthScreen />
-  return <LibraryProvider key={session.user.id} userId={session.user.id}><LibrarySyncProvider><Shell /></LibrarySyncProvider></LibraryProvider>
+  return <LibraryProvider key={session.user.id} userId={session.user.id}><LibrarySyncProvider><PersonalRatingProvider userId={session.user.id}><Shell /></PersonalRatingProvider></LibrarySyncProvider></LibraryProvider>
 }
 
 function SamplePreview() {

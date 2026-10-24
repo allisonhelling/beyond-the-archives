@@ -16,3 +16,9 @@ export const comingSoonSettingsSection = {
   title: 'More in a Later Chapter',
   description: 'Upcoming settings and features',
 }
+
+export const personalRatingSettingsSection = {
+  id: 'settings-personal-rating',
+  title: 'Personal Rating',
+  description: 'Your star rating explanation, shared across devices',
+}

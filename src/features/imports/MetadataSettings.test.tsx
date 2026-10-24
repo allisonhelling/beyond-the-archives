@@ -2,7 +2,8 @@ import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), connect: vi.fn(), id: vi.fn(), local: false, auth: { session: { user: { id: 'alice' } } as Session | null, loading: false } }))
+const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), connect: vi.fn(), id: vi.fn(), local: false, sample: false, auth: { session: { user: { id: 'alice' } } as Session | null, loading: false } }))
+vi.mock('../../lib/sample-mode', () => ({ get sampleMode() { return mocks.sample } }))
 vi.mock('../../lib/local-app', () => ({ isLocalApp: () => mocks.local }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => mocks.auth }))
 vi.mock('../../lib/supabase', () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.load }) }), upsert: mocks.save }) } }))
@@ -12,6 +13,7 @@ import { MetadataSettings } from './MetadataSettings'
 beforeEach(() => {
  vi.clearAllMocks()
  mocks.local = false
+ mocks.sample = false
  mocks.auth = { session: { user: { id: 'alice' } } as Session, loading: false }
  mocks.load.mockResolvedValue({ data: null, error: null })
  mocks.save.mockResolvedValue({ error: null })
@@ -57,4 +59,19 @@ it('allows the shared extension ID on the local app', async () => {
  fireEvent.change(screen.getByLabelText('How to load AO3 metadata'), { target: { value: 'extension' } })
  expect(screen.getByLabelText(/^Extension ID/)).not.toHaveAttribute('readonly')
  expect(screen.getByText(/Use AO3 Library Companion with Local selected/)).toBeVisible()
+})
+
+it('connects the shared companion in local sample mode without saving backend preferences', async () => {
+ mocks.local = true; mocks.sample = true; mocks.auth.session = null
+ render(<MetadataSettings />)
+ const id = screen.getByLabelText(/^Extension ID/)
+ expect(id).toBeEnabled()
+ fireEvent.change(id, { target: { value: 'b'.repeat(32) } })
+ fireEvent.click(screen.getByRole('button', { name: 'Reconnect extension' }))
+ await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Extension connected.'))
+ expect(mocks.id).toHaveBeenCalledWith('b'.repeat(32))
+ expect(mocks.connect).toHaveBeenCalledOnce()
+ expect(mocks.load).not.toHaveBeenCalled()
+ expect(mocks.save).not.toHaveBeenCalled()
+ expect(screen.queryByRole('button', { name: 'Save metadata mode' })).not.toBeInTheDocument()
 })

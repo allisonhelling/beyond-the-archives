@@ -53,6 +53,7 @@ try {
       remember_library_series: { Args: { p_metadata: Json }; Returns: string }
       save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
+      personal_rating_settings: { Args: { p_input?: Json }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       preview_ao3_csv_import: { Args: { p_work_ids: number[]; p_bookmark_ids?: number[] }; Returns: Json }
       submit_ao3_csv_import: { Args: { p_rows: Json }; Returns: Json }

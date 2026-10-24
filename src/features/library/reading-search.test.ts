@@ -78,7 +78,7 @@ describe('reading filters and sections', () => {
   })
 })
 
-it.each(['reading', 're_reading', 'waiting_for_updates', 'to_read', 'finished', 'did_not_finish'] as const)('publication tiles include only actively read works (%s)', status => {
+it.each(['reading', 're_reading', 'waiting_for_updates', 'paused_reading', 'to_read', 'finished', 'did_not_finish'] as const)('publication tiles include only actively read works (%s)', status => {
   for (const publication of ['complete', 'in_progress', 'unknown'] as const) {
     const entry = story('Publication rules', { reading_status: status, metadata: { ...blankMetadata, title: 'Publication rules', publication_status: publication } })
     const activelyReading = status === 'reading' || status === 're_reading'
@@ -200,4 +200,10 @@ it('keeps standalone works and confirmed first installments while excluding late
  const filters = { ...defaultReadingFilters, excludeLaterSeries: true }
  expect(filterReading(entries, filters).map(work => work.id).sort()).toEqual(['First in another series', 'Part 1', 'Standalone'])
  expect(filterReading(entries, { ...filters, inSeries: true }).map(work => work.id).sort()).toEqual(['First in another series', 'Part 1'])
+})
+
+it('keeps paused works out of every active reading section even with verified unread updates', () => {
+ const entry = story('Paused with updates', { reading_status: 'paused_reading', last_update_notification_at: '2026-10-15T23:00:00Z', metadata: { ...blankMetadata, publication_status: 'complete', published_chapters: 5 }, work: { verified_chapters: { 1: '101' } } as unknown as Story['work'] })
+ for (const section of ['complete', 'in_progress', 'new', 'view_all', 'waiting', 're_reading']) expect(inReadingSection(entry, section)).toBe(false)
+ expect(inReadingSection(entry, 'paused_reading')).toBe(true)
 })

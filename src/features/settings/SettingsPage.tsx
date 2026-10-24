@@ -1,8 +1,10 @@
+import { PersonalRatingSettings } from './PersonalRatingSettings'
+import { SeriesImportSettings } from '../imports/SeriesImportOptions'
 import { displaySettingsSection } from '../library/display/settings-sections'
 import { browsingSettingsSection } from '../library/browsing/settings-sections'
 import { backupSettingsSection, csvExportSettingsSection } from '../backups/settings-sections'
-import { ao3UsernameSettingsSection, metadataSettingsSection } from '../imports/settings-sections'
-import { accountSettingsSection, browserBarSettingsSection, comingSoonSettingsSection } from './settings-sections'
+import { ao3UsernameSettingsSection, metadataSettingsSection, seriesImportSettingsSection } from '../imports/settings-sections'
+import { accountSettingsSection, browserBarSettingsSection, comingSoonSettingsSection, personalRatingSettingsSection } from './settings-sections'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
@@ -18,9 +20,11 @@ import './settings.css'
 
 const settingsSections: { id: string; title: string; description: string; component: () => ReactNode; aliases?: string[] }[] = [
   { ...accountSettingsSection, component: AccountSettings },
+  { ...personalRatingSettingsSection, component: PersonalRatingSettings },
   { ...browsingSettingsSection, component: BrowsingSettings },
   { ...displaySettingsSection, component: DisplaySettings },
   { ...ao3UsernameSettingsSection, component: Ao3UsernameSettings },
+  { ...seriesImportSettingsSection, component: SeriesImportSettings },
   { ...metadataSettingsSection, component: MetadataSettings },
   { ...browserBarSettingsSection, component: BrowserBarSettings },
   { ...backupSettingsSection, component: BackupSettings },

@@ -1,10 +1,11 @@
+import { localExtensionConnectionHelp } from './extension-config'
 import { bookmarkConflicts, bookmarkReadingState, csvWorkKey } from './ao3-csv'
 import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { sampleMode } from '../../lib/sample-mode'
 import { supabase } from '../../lib/supabase'
 import { addStoriesToCollections, allRows } from '../library/repository'
-import { classifyUrl, extractUrls, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
+import { classifyUrl, extractUrls, mergeSeriesPreviews, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
 import { connectExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
 type Row<K extends keyof Database['public']['Tables']> = Database['public']['Tables'][K]['Row']
@@ -68,7 +69,7 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
  const identity = parseSeriesUrl(url)
  let useExtension = sampleMode
  if (sampleMode) {
-  if (!await connectExtension()) throw new Error('Load or reload the local extension to preview series in sample mode.')
+  if (!await connectExtension()) throw new Error(localExtensionConnectionHelp)
  } else {
   const db = client()
   const { data: session } = await db.auth.getSession()
@@ -78,8 +79,8 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
   useExtension = preferences?.retrieval_mode === 'extension'
  }
  let nextUrl: string | undefined = identity.normalizedUrl
- let preview: SeriesPreview | undefined
- const visited = new Set<string>(), works = new Map<number, SeriesPreview['works'][number]>()
+ const pages: SeriesPreview[] = []
+ const visited = new Set<string>()
  while (nextUrl) {
   const pageUrl = seriesPageUrl(nextUrl, identity.seriesId)
   if (visited.has(pageUrl)) throw new Error('Series preview returned a repeated page. Retry the preview.')
@@ -100,17 +101,11 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
    if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
    page = data.preview as SeriesPreview; nextPageDelayMs = data.nextPageDelayMs
   }
-  preview ??= { ...page }
-  for (const work of page.works) if (!works.has(work.workId)) works.set(work.workId, work)
+  pages.push(page)
   nextUrl = page.nextUrl
   if (nextUrl && !useExtension && nextPageDelayMs === 35_000) await new Promise(resolve => setTimeout(resolve, nextPageDelayMs))
  }
- if (!preview) throw new Error('Series preview is unavailable.')
- delete preview.nextUrl
- preview.works = [...works.values()]
- preview.workCount = Math.max(preview.workCount ?? 0, preview.works.length)
-
- return { ...preview, fetchedAt: new Date().toISOString() }
+ return mergeSeriesPreviews(pages)
 }
 
 

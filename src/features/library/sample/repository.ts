@@ -214,7 +214,7 @@ export async function saveSampleStory(input: StoryInput, verifiedChapters?: Reco
     original_url: existing?.original_url ?? input.url, work, work_status: existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
     source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), ...csvBookmark(bookmark) } : existing?.source_bookmark ?? {},
     reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
-    is_favorite: input.favorite, is_rec: existing?.is_rec ?? (bookmark?.bookmarkRec === true), personal_rating: input.personalRating,
+    is_favorite: input.favorite, is_rec: input.rec ?? existing?.is_rec ?? (bookmark?.bookmarkRec === true), personal_rating: input.personalRating,
     metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: automaticMetadata ? {} : existing && input.metadataChanges ? { ...(existing.metadata_overrides as object), ...input.metadataChanges } : input.metadata, extension_metadata: automaticMetadata ? { ...nonemptyMetadata(automaticMetadata), publication_status: input.metadata.publication_status } as Json : existing?.extension_metadata ?? {}, extension_chapters: existing?.extension_chapters ?? {},
     collectionIds: input.collections, personalTags: input.tags,
     created_at: existing?.created_at ?? now, updated_at: now,

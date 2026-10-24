@@ -28,7 +28,7 @@ beforeEach(async () => {
   action: { setBadgeText: vi.fn().mockResolvedValue(undefined), onClicked: event() },
   alarms: { create: vi.fn().mockResolvedValue(undefined), onAlarm: event() },
   webNavigation: { onDOMContentLoaded: event() },
-  tabs: { query: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 7, status: 'loading', url: '' }), get: vi.fn().mockResolvedValue({ id: 7, status: 'complete', url: workUrl }), onUpdated: event() },
+  tabs: { update: vi.fn(async (id, change) => ({ id, status: 'loading', ...change })), query: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 7, status: 'loading', url: '' }), get: vi.fn().mockResolvedValue({ id: 7, status: 'complete', url: workUrl }), onUpdated: event() },
   scripting: { executeScript: vi.fn().mockResolvedValue([{ result: { url: workUrl, html: '<h2 class="title">Loaded</h2>' } }]) },
  }
  fetcher = vi.fn(async url => {
@@ -129,8 +129,8 @@ it('opens the next queued work after three seconds without waiting for the alarm
  await vi.waitFor(() => expect(chrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: 'OK' }))
  expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
  await vi.advanceTimersByTimeAsync(3000)
- expect(chrome.tabs.create).toHaveBeenCalledTimes(2)
- expect(chrome.tabs.create).toHaveBeenLastCalledWith({ url: 'https://archiveofourown.org/works/456', active: false })
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.update).toHaveBeenCalledWith(7, { url: 'https://archiveofourown.org/works/456' })
  expect(state.active.id).toBe('next-job')
 })
 
@@ -324,4 +324,23 @@ it.each(['work', 'series'])('captures an explicit %s preview while the parsed ta
  await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2>Parsed metadata</h2>' } }))
  expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ injectImmediately: true, args: [true, kind] }))
  expect(chrome.tabs.create).not.toHaveBeenCalled()
+})
+
+it('reuses an owned tab for successive series previews without redirecting browsing tabs', async () => {
+ state.auth = { token: 'session', userId: 'alice', expiresAt: Date.now() / 1000 + 3600 }
+ let current = { id: 9, url: 'https://archiveofourown.org/series/77', status: 'complete' }
+ chrome.tabs.query.mockResolvedValue([{ id: 20, url: workUrl, status: 'complete' }])
+ chrome.tabs.create.mockImplementation(async ({ url }) => { current = { ...current, url }; return current })
+ chrome.tabs.get.mockImplementation(async () => current)
+ chrome.tabs.update.mockImplementation(async (id, { url }) => { current = { id, url, status: 'complete' }; return current })
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: current.url, html: '<h2>Metadata</h2>' } }])
+ const listener = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]
+ for (const url of ['https://archiveofourown.org/series/77', 'https://archiveofourown.org/series/77?page=2', 'https://archiveofourown.org/series/88']) {
+  const respond = vi.fn()
+  listener({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, { url: origin }, respond)
+  await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2>Metadata</h2>' } }))
+ }
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.update).toHaveBeenCalledTimes(2)
+ expect(chrome.tabs.update.mock.calls.every(([id]) => id === 9)).toBe(true)
 })

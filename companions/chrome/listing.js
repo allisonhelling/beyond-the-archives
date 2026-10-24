@@ -12,6 +12,11 @@ export function captureListingPage(kind) {
    if (/^\/users\/login/.test(location.pathname) || document.querySelector('input[name="user[login]"], form#new_user')) return { attention: 'login', error: 'AO3 sign-in is required. Sign in in the scan tab, then resume manually.' }
    return { attention: 'page_error', error: 'AO3 returned a login, restriction, error, or unexpected page. Check the scan tab, then resume manually.' }
   }
+  const linkUrl = node => {
+   const href = node?.getAttribute('href')
+   if (href == null) return null
+   try { return new URL(href, location.href) } catch { return null }
+  }
   const text = node => node?.textContent.trim().replace(/\s+/g, ' ') ?? ''
   const join = (node, selector) => [...node.querySelectorAll(selector)].map(text).filter(Boolean).join(', ')
   const lines = node => {
@@ -33,12 +38,16 @@ export function captureListingPage(kind) {
   let skipped = 0
   for (const item of main.querySelectorAll('li.work, li.bookmark, li.series')) {
    const title = item.querySelector('h4.heading > a')
-   const link = title && new URL(title.getAttribute('href'), location.origin)
+   const link = linkUrl(title)
    if (link?.origin === location.origin && /^\/series\/[1-9]\d*$/.test(link.pathname)) { seriesUrls.push(link.origin + link.pathname); continue }
    // AO3 renders an explicit direct-child deletion message, with no work link.
    // Missing links alone can also mean hidden/restricted works and are not evidence.
    const deleted = kind === 'bookmarks' && (item.classList.contains('deleted') || /^this (?:work |item )?has been deleted[, .!]/i.test(text(item.querySelector(':scope > p.message'))))
    if (!deleted && (!link || link.origin !== location.origin || !/^\/works\/[1-9]\d*$/.test(link.pathname))) { skipped++; continue }
+   if (kind !== 'series_works') for (const anchor of item.querySelectorAll('.series a[href]')) {
+    const membership = linkUrl(anchor)
+    if (membership?.origin === location.origin && /^\/series\/[1-9]\d*$/.test(membership.pathname)) seriesUrls.push(membership.origin + membership.pathname)
+   }
    const workLink = link?.origin === location.origin && /^\/works\/[1-9]\d*$/.test(link.pathname) ? link.origin + link.pathname : ''
    const row = { title: workLink ? text(title) : '', link: workLink, source_list: kind === 'bookmarks' ? kind : 'marked_for_later', work_status: deleted ? 'deleted' : 'available',
     author: join(item, 'h4.heading > a[rel="author"]'), fandoms: join(item, '.fandoms a'),
@@ -65,8 +74,16 @@ export function captureListingPage(kind) {
   // Never interpret an error page or a missing list as a successfully empty library.
   if (!main.querySelector('ol.bookmark, ol.work, ul.bookmark, ul.work, ol.series, ul.series') && !/no (?:bookmarks|works|results|series)|haven.t marked any|no marked/i.test(main.textContent)) return { error: 'AO3 listing structure was not recognized. Scan stopped safely.' }
   const current = Number(new URL(location.href).searchParams.get('page') ?? 1)
-  const pages = [...main.querySelectorAll('.pagination a')].map(a => Number(new URL(a.href).searchParams.get('page'))).filter(Number.isFinite)
-  return { url: location.href, rows, seriesUrls, skipped, hasNext: pages.some(page => page > current) }
+  const pages = []
+  // Named anchors are not navigation links. Resolve actual hrefs against this
+  // page, without relying on the DOM's href property or a page-provided base.
+  for (const anchor of main.querySelectorAll('.pagination a[href]')) {
+   const link = linkUrl(anchor)
+   if (!link || link.origin !== location.origin || link.pathname !== location.pathname) return { url: location.href, attention: 'page_error', error: 'AO3 pagination link could not be read. Scan stopped; saved pages are preserved.' }
+   const page = Number(link.searchParams.get('page'))
+   if (Number.isFinite(page)) pages.push(page)
+  }
+  return { url: location.href, rows, seriesUrls: [...new Set(seriesUrls)], skipped, hasNext: pages.some(page => page > current) }
  } catch (error) {
   // Chrome can return a null result for an uncaught injected-script exception.
   // Report the parsing failure instead of retrying it as an unfinished document.
@@ -80,11 +97,11 @@ export function listingUrl(value, mode = 'full') {
  url.pathname = url.pathname.replace(/\/$/, '')
  const collection = url.pathname.match(/^\/collections\/([^/]+)(?:\/(works|bookmarks|profile))?$/)
  const user = /^\/users\/[^/]+(?:\/pseuds\/[^/]+)?\/(bookmarks|readings|works|series)$/.test(url.pathname)
- const other = /^\/(?:tags\/[^/]+|collections\/[^/]+)\/(works|bookmarks)$/.test(url.pathname) || /^\/works(?:\/search)?$/.test(url.pathname)
+ const other = /^\/(?:tags\/[^/]+|collections\/[^/]+)\/(works|bookmarks)$/.test(url.pathname) || /^\/works(?:\/search)?$/.test(url.pathname) || url.pathname === '/bookmarks'
  if (!collection && !user && !other) throw new Error('Use an AO3 user or pseud Works, Series, Bookmarks, Marked for Later, tag listing, or collection URL.')
  const kind = (collection && !collection[2] || collection?.[2] === 'profile') ? 'collection' : url.pathname.endsWith('/bookmarks') ? 'bookmarks' : url.pathname.endsWith('/readings') ? 'marked_for_later' : url.pathname.endsWith('/series') ? 'series' : 'works'
  if (kind === 'marked_for_later' && url.searchParams.get('show') !== 'to-read') throw new Error('Marked for Later URLs must include ?show=to-read.')
- if (mode === 'quick' && (collection || !['bookmarks', 'marked_for_later'].includes(kind))) throw new Error('Use Full scan for works, series, and collections.')
+ if (mode === 'quick' && (!user || collection || !['bookmarks', 'marked_for_later'].includes(kind))) throw new Error('Use Full scan for works, series, and collections.')
  // Normalize to a complete, newest-first collection; filtered lists are not safe Quick Sync baselines.
  for (const key of [...url.searchParams.keys()]) if (mode === 'quick' && (key !== 'show' || kind !== 'marked_for_later') || key === 'page') throw new Error('Use the unfiltered list URL without page or sort parameters.')
  if (kind === 'bookmarks' && !url.search) { url.searchParams.set('bookmark_search[sort_column]', 'created_at'); url.searchParams.set('bookmark_search[sort_direction]', 'desc') }

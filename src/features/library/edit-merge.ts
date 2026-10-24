@@ -62,8 +62,8 @@ export function conflictFromError<T>(error: { code?: string; details?: string } 
 }
 
 export function storyEdits(input: StoryInput): EditValues {
-  return { metadata: input.metadataChanges ?? input.metadata, status: input.status, progress: input.progress, notes: input.notes, rating: input.personalRating, favorite: input.favorite, collections: input.collections, tags: input.tags }
+  return { metadata: input.metadataChanges ?? input.metadata, status: input.status, progress: input.progress, notes: input.notes, rating: input.personalRating, favorite: input.favorite, ...(input.rec !== undefined && { rec: input.rec }), collections: input.collections, tags: input.tags }
 }
 export function applyStoryEdits(input: StoryInput, values: EditValues, base: EditValues): StoryInput {
-  return { ...input, base, status: values.status as StoryInput['status'], progress: values.progress as number, notes: values.notes as string, personalRating: values.rating as number | null, favorite: values.favorite as boolean, collections: values.collections as string[], tags: values.tags as string[], metadata: { ...input.metadata, ...(values.metadata as object) }, metadataChanges: values.metadata as StoryInput['metadataChanges'] }
+  return { ...input, base, status: values.status as StoryInput['status'], progress: values.progress as number, notes: values.notes as string, personalRating: values.rating as number | null, favorite: values.favorite as boolean, ...(values.rec !== undefined && { rec: values.rec as boolean }), collections: values.collections as string[], tags: values.tags as string[], metadata: { ...input.metadata, ...(values.metadata as object) }, metadataChanges: values.metadata as StoryInput['metadataChanges'] }
 }

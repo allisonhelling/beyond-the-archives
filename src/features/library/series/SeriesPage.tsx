@@ -1,3 +1,5 @@
+import { SeriesImportOptions } from '../../imports/SeriesImportOptions'
+import { useSeriesImportBehavior } from '../../imports/series-import-preferences'
 import { workMetadataFields } from '../display/WorkMetadataFields'
 import { MetadataTags } from '../MetadataTags'
 import { DisplayInfo } from '../display/DisplayInfo'
@@ -23,6 +25,7 @@ import { sampleMode } from '../../../lib/sample-mode'
 import type { SeriesPreview } from '../../imports/urls'
 
 export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
+ const seriesBehavior = useSeriesImportBehavior()
  const { id } = useParams(), library = useLibrary(), seriesId = example?.seriesId ?? Number(id)
  const valid = Boolean(example) || /^[1-9]\d*$/.test(id ?? '') && Number.isSafeInteger(seriesId)
  const { refreshSeries, loadDetails, retainDetails } = library
@@ -83,9 +86,9 @@ source: <>
 
   {!review && errorMessage}
 
-  {review && <Dialog title="Review Series" className="series-review-dialog" busy={busy || reviewBusy} onClose={() => setReview(false)}>{errorMessage}<SeriesImportReview key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} autoLoad busy={busy} onBusyChange={setReviewBusy} onConfirm={async (works, status, seriesIds) => {
+  {review && <Dialog title="Review Series" className="series-review-dialog" busy={busy || reviewBusy} onClose={() => setReview(false)}>{errorMessage}<SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} embedded automatic={seriesBehavior.behavior === 'all'} key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} busy={busy} onBusyChange={setReviewBusy} onConfirm={async (works, status, seriesIds) => {
    setBusy(true); setError('')
-   try { const batch = await submitImport(works.map(work => work.url).join('\n'), false, status, seriesIds); if (batch) { const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'}); await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : [])) }; await refreshSeries(seriesId); setReview(false) } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') } finally { setBusy(false) }
+   try { const batch = await submitImport(works.map(work => work.url).join('\n'), false, status, seriesIds); if (batch) { const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'}); await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : [])) }; await refreshSeries(seriesId); setReview(false); seriesBehavior.reset() } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') } finally { setBusy(false) }
   }} onCancel={() => setReview(false)} /></Dialog>}
 <DisplayInfo group="seriesPage">{{
 description: <>   {(series.description || series.creatorNotes) && <section className="settings-card details-fic-panel" aria-label="Series description"><dl className="metadata-list details-fic-fields">
@@ -95,7 +98,7 @@ creatorNotes: <>    {series.creatorNotes && <div><dt>Creator Notes</dt><dd class
 }}</DisplayInfo>
   </dl></section>} </>,
 progress: <>
-  <section className="settings-card details-progress-panel" aria-label="Reading and organization"><div className="series-progress-controls"><div className="series-progress-columns"><div className="series-progress-state"><div className="story-section-heading"><h2>Your progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}</div><div className="series-import-actions">{!basic && series.savedStories.length !== series.workCount && <button className="button secondary" aria-pressed={hideUnsaved} onClick={() => setHideUnsaved(!hideUnsaved)}>{hideUnsaved ? 'Show Works Not in Library' : 'Hide Works Not in Library'}</button>}<button className="button secondary series-choose-works" disabled={busy || sampleMode} onClick={() => setReview(!review)}>Choose Works to Import</button></div></div></section> </>,
+  <section className="settings-card details-progress-panel" aria-label="Reading and organization"><SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || review || sampleMode} /><div className="series-progress-controls"><div className="series-progress-columns"><div className="series-progress-state"><div className="story-section-heading"><h2>Your progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}</div><div className="series-import-actions">{!basic && series.savedStories.length !== series.workCount && <button className="button secondary" aria-pressed={hideUnsaved} onClick={() => setHideUnsaved(!hideUnsaved)}>{hideUnsaved ? 'Show Works Not in Library' : 'Hide Works Not in Library'}</button>}<button className="button secondary series-choose-works" disabled={busy || sampleMode} onClick={() => setReview(!review)}>{seriesBehavior.behavior === 'all' ? 'Import All Series Works' : 'Choose Works to Import'}</button></div></div></section> </>,
 notes: <>   <section className="details-private-notes" aria-label="Private notes"><PersonalNote key={seriesId} notes={record?.notes ?? ''} disabled={busy} onSave={async (notes, base) => { await ensureSeries(series); await saveSeriesNote(seriesId, notes, base) }} onRefresh={() => refreshSeries(seriesId)} /></section> </>,
 works: <>   <section aria-label="Works in series"><h2>{basic ? 'Works in your library' : 'Works in this series'}</h2><div className="story-grid">{visibleWorks.map(work => {
    const saved = savedById.get(work.workId)

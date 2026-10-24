@@ -1,3 +1,5 @@
 // Public manifest identity for the unpacked local extension. No private key is stored.
 export const localExtensionKey = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuuDSRNxPv02KYrt+MPtVvhLvrvhV7ba16bZjohz/QknyuRu5szGbyrcmnlKEQb5Om81GzBionJRaXzETbBfaDSPiRVgoIdQhbCMJYSYn9aFVXlOjLLi2S094givCVdyeFm8Jt9nGXm6RJDA42oZn1FnLZZ/YPKP0Dce6h7KROgrMRhOpjN75/JpONlLoblfLCTVI7btPDlPMod2V7Wt/6DP2gynpE8UwOtKQfrALXxlGVzee7738+OH1ixkA9ZwdsHnV4i37lojn6rX3dC0cdbGjbv//rmTNnY6YtmzTURa3hQ+7kS5ZtaDQN8mQgNo0l3zvseUvyHvWZ2tEDH170wIDAQAB'
 export const localExtensionId = 'cilmealpgfjohgkciepmgflhmdplhngd'
+
+export const localExtensionConnectionHelp = 'Select Local in AO3 Library Companion’s extension settings, then enter its extension ID and reconnect in Settings → AO3 Metadata Retrieval.'

@@ -1,3 +1,5 @@
+import { SeriesImportOptions } from './SeriesImportOptions'
+import { useSeriesImportBehavior } from './series-import-preferences'
 import { SeriesImportReview } from './SeriesImportReview'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -10,6 +12,7 @@ import { importHistory, submitImport } from './repository'
 type ImportItem = Awaited<ReturnType<typeof importHistory>>['items'][number]
 
 export function ImportLinkForm() {
+ const seriesBehavior = useSeriesImportBehavior()
   const library = useLibrary(), { refresh } = library
   const location = useLocation()
   const navigate = useNavigate()
@@ -33,7 +36,7 @@ export function ImportLinkForm() {
           if (alive) { setFinishedBatch(finished); setEntries(history.items.flatMap(item => item.entry_id ? [item.entry_id] : [])); setItem(next); setError('') }
         } else if (next?.entry_id) {
           await refresh([next.entry_id])
-          if (alive) navigate(`/stories/${next.entry_id}`, { replace: true, state: { importBatchId: batch } })
+          if (alive) navigate(`/stories/${next.entry_id}`, { replace: true, state: { importBatchId: batch, seriesImportBehavior: seriesBehavior.behavior } })
           return
         }
         failures = 0
@@ -43,7 +46,7 @@ export function ImportLinkForm() {
     }
     void check()
     return () => { alive = false; clearTimeout(timer) }
-  }, [batch, refresh, navigate, multiple])
+  }, [batch, refresh, navigate, multiple, seriesBehavior.behavior])
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true)
     try {
@@ -61,12 +64,13 @@ export function ImportLinkForm() {
       const id = await submitImport(selectedImportText(reviewing, works), true, readingStatus, seriesIds)
       if (!id) throw new Error('No works were selected for import.')
       for (const seriesId of seriesIds) await library.refreshSeries(seriesId)
-      setMultiple(true); setFinishedBatch(false); setBatch(id); setReviewing('')
+      setMultiple(true); setFinishedBatch(false); setBatch(id); setReviewing(''); seriesBehavior.reset()
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') }
     finally { setBusy(false) }
   }
   return <>
-    {sampleMode ? <section className="settings-card import-link-form"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a story manually</Link></section> : reviewing ? <SeriesImportReview key={reviewing} text={reviewing} savedIds={new Set((library.stories ?? []).flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} autoLoad busy={busy} onConfirm={(works, status, seriesIds) => void importSelected(works, status, seriesIds)} onCancel={() => setReviewing('')} /> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
+    {!sampleMode && <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || Boolean(reviewing) || Boolean(batch)} />}
+    {sampleMode ? <section className="settings-card import-link-form"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a story manually</Link></section> : reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} key={reviewing} text={reviewing} savedIds={new Set((library.stories ?? []).flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} busy={busy} onConfirm={(works, status, seriesIds) => void importSelected(works, status, seriesIds)} onCancel={() => setReviewing('')} /> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
       <label>AO3 work or series link<input type="url" required value={url} disabled={busy} onChange={event => setUrl(event.target.value)} placeholder="https://archiveofourown.org/works/123" /></label>
       <button className="button primary" disabled={busy}>{busy ? 'Importing…' : 'Import from link'}</button>
     </form> : multiple ? <section className="settings-card series-import-result" aria-label="Series import result"><h2>{finishedBatch ? 'Series Import Finished' : 'Importing selected works'}</h2><p className={finishedBatch ? 'series-import-finished' : undefined} role="status">{finishedBatch ? 'Your selected works have finished processing.' : 'Your selected works are saved. Retrieving their metadata…'}</p><ul>{entries.map(id => <li key={id}><Link className="clickable-text" to={`/stories/${id}`} state={{ importBatchId: batch }}>{library.stories?.find(story => story.id === id)?.metadata.title ?? 'View saved work'}</Link></li>)}</ul><div className="form-actions"><Link className="button secondary" to="/library?shelf=series">View Series collection</Link><button className="button secondary" onClick={() => { setBatch(''); setMultiple(false); setItem(undefined); setEntries([]) }}>Add another story</button></div></section> : <>
@@ -77,6 +81,6 @@ export function ImportLinkForm() {
         <Link className="clickable-text" to="/imports">View import history</Link>
       </section>}
     </>}
-    {error && <p className="error-message" role="alert">{error}</p>}
+    {error && !reviewing && <p className="error-message" role="alert">{error}</p>}
   </>
 }

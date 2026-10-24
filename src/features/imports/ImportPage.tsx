@@ -1,3 +1,5 @@
+import { SeriesImportOptions } from './SeriesImportOptions'
+import { useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { LibrarySyncForm } from './LibrarySyncForm'
 import { CsvImportForm } from './CsvImportForm'
 import { formatDateTime } from '../../lib/dates'
@@ -16,10 +18,12 @@ import { importFinished, classifyUrl, extractUrls, selectedImportText, type Seri
 const activeStatuses=['pending','processing']
 const reviewStatuses=['failed','skipped','cancelled']
 export function ImportPage() {
+ const seriesBehavior = useSeriesImportBehavior()
  const location=useLocation()
  const [readingStatus,setReadingStatus]=useState<Status>('to_read')
  const [reviewing,setReviewing]=useState(false)
  const library=useLibrary()
+ const [relatedBehavior, setRelatedBehavior] = useState<SeriesImportBehavior>()
  const [relatedBatch, setRelatedBatch] = useState<string>()
  const [resultPage,setResultPage]=useState(1)
  const [resultView,setResultView]=useState<{batchId?:string;finished:boolean;status:string}>({finished:false,status:'all'})
@@ -37,7 +41,7 @@ export function ImportPage() {
  const urls=extractUrls(text), ignored=urls.filter(url=>classifyUrl(url).kind==='unrelated').length
  const seriesCount=new Set(urls.flatMap(url=>{const result=classifyUrl(url);return result.kind==='series'?[result.identity.seriesId]:[]})).size
  function saveImport(works?:SeriesPreview['works'], status:Status=readingStatus, seriesIds:number[]=[]) {
-  void action(async()=>{const id=await submitImport(works?selectedImportText(text,works):text,true,status,seriesIds);for(const seriesId of seriesIds) await library.refreshSeries(seriesId);setMessage(sampleMode?'Works saved to this browser’s sample library. Existing works were kept.':id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.');if(id){setSelected(id);setRelatedBatch(works ? undefined : id);setText('');setReviewing(false)}})
+  void action(async()=>{const id=await submitImport(works?selectedImportText(text,works):text,true,status,seriesIds);for(const seriesId of seriesIds) await library.refreshSeries(seriesId);setMessage(sampleMode?'Works saved to this browser’s sample library. Existing works were kept.':id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.');setReviewing(false);setText('');setRelatedBehavior(seriesBehavior.behavior);seriesBehavior.reset();if(id){setSelected(id);setRelatedBatch(works ? undefined : id)}})
  }
  const visibleItems=data.summary ? data.items : statusFilter==='review'?reviewItems:data.items.filter(item=>statusFilter==='all'||item.status===statusFilter)
  const total=data.summary?.total??data.items.length
@@ -47,20 +51,23 @@ export function ImportPage() {
  const jobsByEntry=new Map(data.jobs.map(job=>[job.entry_id,job]))
  const counts=data.summary?.counts??Object.fromEntries(['pending','processing','completed','failed','skipped','cancelled'].map(status=>[status,data.items.filter(i=>i.status===status).length]))
  const resultPagination = data.summary&&<Pagination page={data.summary.page} pages={data.summary.pages} total={visibleCount} size={50} onPage={setResultPage}/>
- return <div className="mass-import-page"><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Paste work or series links. Choose which series works to import. Valid work identities are saved immediately; metadata arrives gradually.</p></div></div>
+ return <div className="mass-import-page"><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Paste work or series links. Import series using your default or the option chosen for this import. Valid work identities are saved immediately; metadata arrives gradually.</p></div></div>
  <LibrarySyncForm onImported={async id=>{if(id)setSelected(id);await library.refresh();if(!sampleMode)await reload()}} />
  {!sampleMode && <CsvImportForm onImported={async id=>{if(id)setSelected(id);await library.refresh();await reload()}} />}
- {reviewing ? <SeriesImportReview text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
+ {reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
  <h2>Import Work or Series Links</h2>
  <label>AO3 URLs<textarea rows={10} value={text} onChange={event=>setText(event.target.value)} placeholder={"Paste work or series links here one per line\nhttps://archiveofourown.org/works/123"} disabled={busy} /></label>
+ <div className="form-controls-row">
  <ImportReadingStatus description="Applies to all links imported." value={readingStatus} onChange={setReadingStatus} disabled={busy} />
- <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; review and select their works before importing.`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
- <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount?'Review series':'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
+ <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || reviewing} />
+ </div>
+ <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; ${seriesBehavior.behavior === 'all' ? 'all available works will be included.' : 'review and select their works before importing.'}`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
+ <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount ? seriesBehavior.behavior === 'all' ? 'Import all series works' : 'Review series' : 'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
  </form>}
  {!sampleMode && <p className="muted">Processing uses the metadata mode selected in Settings: the hosted worker or the connected browser extension. For extension requests, keep your browser running and complete any AO3 confirmation in the requested tab. This page checks persisted progress every five seconds. Closing it does not cancel jobs.</p>}
- {sampleMode && <p className="muted">Pasted links use the extension with Local selected and save to this browser’s sample library. Keep this page open while importing and complete any AO3 sign-in in the requested tab. Series use the same work picker; existing saved works are kept. New work-page requests wait 15 seconds between captures. Retry interrupted imports with the same links to continue safely.</p>}
- {message&&<p role="status">{message}</p>}{(error||history.error)&&<p className="error-message" role="alert">{error||history.error}</p>}
- {finished && batch?.id === relatedBatch && <ImportedSeriesNotice stories={(library.stories ?? []).filter(story => batchEntries.has(story.id))} onImported={id => { setSelected(id); setRelatedBatch(undefined) }} />}
+ {sampleMode && <p className="muted">Pasted links use the extension with Local selected and save to this browser’s sample library. Keep this page open while importing and complete any AO3 sign-in in the requested tab. Series follow the default and temporary option shown above; existing saved works are kept. New work-page requests wait 15 seconds between captures. Retry interrupted imports with the same links to continue safely.</p>}
+ {message&&<p role="status">{message}</p>}{!reviewing&&(error||history.error)&&<p className="error-message" role="alert">{error||history.error}</p>}
+ {finished && batch?.id === relatedBatch && <ImportedSeriesNotice initialBehavior={relatedBehavior} stories={(library.stories ?? []).filter(story => batchEntries.has(story.id))} onImported={id => { setSelected(id); setRelatedBatch(undefined) }} />}
  {!sampleMode && <section className="settings-card"><h2>Previous Batches</h2>{loading?<p role="status">Loading import history…</p>:!data.batches.length?<p>No imports yet. Paste your first batch above.</p>:<label>Batch<select value={batch?.id??''} onChange={event=>{setResultPage(1);setSelected(event.target.value)}}>{data.batches.map(b=><option key={b.id} value={b.id}>{formatDateTime(b.created_at)}{b.cancelled_at?' · Cancelled':''}</option>)}</select></label>}
  {batch&&<><p>{total} tracked URLs · {data.summary?.imported??data.items.filter(i=>i.result==='imported'&&i.status==='completed').length} imported with metadata · {data.summary?.alreadySaved??data.items.filter(i=>i.result==='already_saved').length} already saved</p><div className="import-status-filters" role="group" aria-label="Filter import results by status"><button className="text-button" aria-pressed={statusFilter==='all'} aria-controls="import-result-table" onClick={()=>setStatusFilter('all')}>All results: {total}</button>{finished&&<button className="text-button" aria-pressed={statusFilter==='review'} aria-controls="import-result-table" onClick={()=>setStatusFilter('review')}>Review: {reviewCount}</button>}{Object.entries(counts).map(([name,n])=><button key={name} className="text-button" aria-pressed={statusFilter===name} aria-controls="import-result-table" onClick={()=>setStatusFilter(name)}>{name}: {n}</button>)}</div>
  <p className="muted" role="status">{statusFilter==='review'?(reviewCount?`Batch finished. Showing failed, skipped, and cancelled results for your review. ${visibleCount} of ${total} results.`:'Batch finished. No failed, skipped, or cancelled results to review.'):`Showing ${visibleCount} of ${total} results${statusFilter!=='all'?` · ${statusFilter}`:''}`}</p>
