@@ -299,7 +299,7 @@ it('waits for a missing document capture without reloading and times out safely'
  await sync.command({ action: 'discard' }); clock += 20000; await start(); await sync.pump()
  chrome.scripting.executeScript.mockResolvedValue([{ result: null }])
  clock += 120001; await sync.pump()
- expect(local.librarySync).toMatchObject({ status: 'paused', error: 'Page load timed out. Check AO3, then resume.' })
+ expect(local.librarySync).toMatchObject({ status: 'paused', error: 'The extension received no capture from the AO3 listing. Check the extension’s service worker errors, then resume.' })
 })
 it('accepts equivalent bookmark query encodings from Chrome and the captured document', async () => {
  await start(); await sync.pump()
@@ -355,4 +355,24 @@ it('can focus the scan tab while a capture is being saved without releasing its 
  finish([{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: false } }])
  await capture
  expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1 })
+})
+
+it('pauses on a reported capture exception without waiting for a page-load timeout', async () => {
+ await start(); await sync.pump()
+ chrome.scripting.executeScript.mockResolvedValueOnce([{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
+ await sync.pump()
+ clock += 20000; await sync.pump()
+ const error = 'AO3 listing capture failed: Invalid URL. Saved pages are preserved.'
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: local.librarySync.requestUrl, attention: 'page_error', error } }])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'paused', page: 2, pages: 1, error })
+ expect(local[`librarySync:${local.librarySync.id}:1`].rows).toEqual([row(1)])
+ expect(chrome.tabs.update).toHaveBeenCalledTimes(1)
+})
+
+it('retains the loading timeout for documents that explicitly report pending', async () => {
+ await start(); await sync.pump()
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: local.librarySync.requestUrl, pending: true } }])
+ clock += 120001; await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'paused', error: 'Page load timed out. Check AO3, then resume.' })
 })

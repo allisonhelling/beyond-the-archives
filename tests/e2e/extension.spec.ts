@@ -325,6 +325,16 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    expect(scan.url()).toContain('page=2')
    expect(await command({ type: 'AO3_LIBRARY_SYNC', action: 'open-tab' })).toMatchObject({ ok: true })
    expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'finish' })).ok).toBe(true)
+   // Exercise the packaged capture function through Chrome's isolated world.
+   await scan.locator('h4.heading > a').first().evaluate(element => element.setAttribute('href', 'http://['))
+   const backgroundSource = await readFile(join(extension, 'background.js'), 'utf8')
+   const captureFunction = backgroundSource.slice(backgroundSource.indexOf('function captureListingPage('), backgroundSource.indexOf('function listingUrl('))
+   expect(captureFunction).toContain('AO3 listing capture failed:')
+   const failedCapture = await worker.evaluate(`(async () => {
+    const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/users/alice/bookmarks*' });
+    return chrome.scripting.executeScript({ target: { tabId: tabs[0].id }, func: ${captureFunction}, args: ['bookmarks'] });
+   })()`)
+   expect(failedCapture).toMatchObject([{ result: { attention: 'page_error', error: expect.stringMatching(/^AO3 listing capture failed:/) } }])
    expect(uploads).toHaveLength(2)
   }
 

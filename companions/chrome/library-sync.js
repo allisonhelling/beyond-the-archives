@@ -167,7 +167,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     // Tab completion and the injected document can briefly disagree during navigation.
     // Wait for this document without requesting the page again or reporting a login failure.
     if (!result || result.pending && sameScanUrl(result.url, state.requestUrl)) {
-     if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
+     if (Date.now() - state.requestedAt > 120000) throw new Error(!result ? 'The extension received no capture from the AO3 listing. Check the extension’s service worker errors, then resume.' : 'Page load timed out. Check AO3, then resume.')
      return
     }
     if (!result || result.error || !sameScanUrl(result.url, state.requestUrl)) {

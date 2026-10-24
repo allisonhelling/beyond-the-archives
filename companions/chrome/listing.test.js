@@ -76,3 +76,10 @@ it('matches equivalent scan queries while rejecting different pages, filters, pa
  expect(sameScanUrl('https://archiveofourown.org/users/alice/bookmarks?page=1&bookmark_search[sort_column]=created_at', url)).toBe(true)
  for (const other of [url.replace('page=1', 'page=2'), url.replace('created_at', 'revised_at'), url.replace('/alice/', '/bob/'), url.replace('archiveofourown.org', 'example.com'), undefined]) expect(sameScanUrl(other, url)).toBe(false)
 })
+
+// An exception inside Chrome's injected function otherwise looks like a missing capture.
+it.each(['work link', 'pagination link'])('reports a malformed %s without losing the capture error', target => {
+ page('<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_12"><h4 class="heading"><a href="/works/34">Title</a></h4></li></ol><ol class="pagination"><li><a href="?page=2">Next</a></li></ol></div>')
+ document.querySelector(target === 'work link' ? 'h4 a' : '.pagination a').setAttribute('href', 'http://[')
+ expect(captureListingPage('bookmarks')).toMatchObject({ url: location.href, attention: 'page_error', error: expect.stringMatching(/^AO3 listing capture failed: .+Saved pages are preserved\.$/) })
+})
