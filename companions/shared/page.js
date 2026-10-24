@@ -43,5 +43,7 @@ export async function collectWorkPage(doc, href, fetcher = globalThis.fetch) {
  const first = readPage(new DOMParser().parseFromString(await response.text(), 'text/html'), response.url)
  if (!first?.metadata?.title) throw new Error('Complete AO3 sign-in or confirmation, then retry. Your draft is preserved.')
  const automaticMetadata = { ...first.automaticMetadata, ...current.automaticMetadata }
+ // An empty summary block on this chapter must not erase the fetched work summary.
+ if (first.automaticMetadata.summary) Object.assign(automaticMetadata, { summary: first.automaticMetadata.summary, summary_html: first.automaticMetadata.summary_html })
  return { ...current, metadata: workMetadata(automaticMetadata), automaticMetadata }
 }

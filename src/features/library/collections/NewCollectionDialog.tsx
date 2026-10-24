@@ -2,7 +2,7 @@ import { automaticCollectionRules, collectionRules } from './automatic-collectio
 import { defaultReadingFilters, type ReadingFilters } from '../reading-search'
 import { ReadingFilterControls } from '../ReadingFilterControls'
 import { CollectionVisibilityButton } from './CollectionVisibility'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { useDismissible } from '../../../components/useDismissible'
 import { ConfirmationDialog } from '../../../components/ConfirmationDialog'
@@ -12,9 +12,8 @@ import { CollectionColorPicker } from './CollectionColorPicker'
 import { CollectionSpineLabel } from './CollectionSpineLabel'
 import { collectionColorPattern, collectionColors, collectionSymbols, getCollectionColors, type CollectionAppearance } from './collection-appearance'
 import { useLibrary } from '../LibraryProvider'
-import { deleteCollection, deleteCollections, saveCollection, updateCollections } from '../repository'
-
-const deleteLabel = <><Trash2 size={16} aria-hidden="true" />Delete</>
+import { saveCollection, updateCollections } from '../repository'
+import { collectionDeleteLabel as deleteLabel, useCollectionDeletion } from './useCollectionDeletion'
 
 function AppearanceOptions({ label, disabled, children }: { label: string; disabled: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -30,11 +29,10 @@ function AppearanceOptions({ label, disabled, children }: { label: string; disab
 }
 
 export function NewCollectionDialog({ onClose, onCreated, collection, selectedCollections, onDeleted, hidden = false, onVisibilityChange }: { onClose: () => void; onCreated?: (id: string) => void; collection?: Collection; selectedCollections?: Collection[]; onDeleted?: () => void; hidden?: boolean; onVisibilityChange?: () => void }) {
-  const { refreshCollections: refresh, collections, stories, series } = useLibrary()
+  const { refreshCollections: refresh, collections, stories } = useLibrary()
   const bulk = selectedCollections !== undefined
   const targets = selectedCollections ?? (collection ? [collection] : [])
   const targetIds = targets.map(item => item.id)
-  const hasStories = stories.some(story => [...story.collectionIds, ...(story.automaticCollectionIds ?? [])].some(id => targetIds.includes(id))) || (series ?? []).some(series => series.collectionIds?.some(id => targetIds.includes(id)))
   const [automatic, setAutomatic] = useState(Boolean(collection?.automatic_rules))
   const [filters, setFilters] = useState<ReadingFilters>(() => ({ ...defaultReadingFilters, ...collectionRules(collection ?? {})?.filters }))
   const [summary, setSummary] = useState(collection?.description ?? '')
@@ -42,12 +40,12 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
   const colors = getCollectionColors(collections)
   const [name, setName] = useState(collection?.name ?? ''), [color, setColor] = useState<string>(targets[0]?.color ?? collectionColors[0].value)
   const [symbol, setSymbol] = useState<string>(targets[0]?.symbol ?? collectionSymbols[0].value)
-  const [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [saving, setSaving] = useState(false), [error, setError] = useState('')
+  const deletion = useCollectionDeletion(targets, bulk, () => { onDeleted?.(); onClose() })
+  const { removed, confirming: confirmDelete } = deletion
+  const busy = saving || deletion.busy
   const [confirmStopAutomatic, setConfirmStopAutomatic] = useState(false)
   const deleteRef = useRef<HTMLButtonElement>(null)
-  const deleted = useRef(false)
-  const [removed, setRemoved] = useState(false)
   const wasConfirmingDelete = useRef(false)
   useEffect(() => {
     if (wasConfirmingDelete.current && !confirmDelete) deleteRef.current?.focus()
@@ -57,7 +55,7 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
   const [createdId, setCreatedId] = useState<string | null>(null)
   const selectedSymbol = collectionSymbols.find(option => option.value === symbol)!
   async function create(event: FormEvent) {
-    event.preventDefault(); event.stopPropagation(); setBusy(true); setError('')
+    event.preventDefault(); event.stopPropagation(); setSaving(true); setError('')
     try {
       // A reload failure can be retried without creating the same collection twice.
       let id = createdId
@@ -74,25 +72,10 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
       if (!bulk && !automatic) onCreated?.(id)
       onClose()
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not save collection.') }
-    finally { setBusy(false) }
+    finally { setSaving(false) }
   }
-  async function remove() {
-    if (!deleted.current) {
-      if (bulk) await deleteCollections(targetIds)
-      else await deleteCollection(collection!.id)
-      deleted.current = true
-      setRemoved(true)
-    }
-    await refresh()
-  }
-  function closeEditor() { if (deleted.current) onDeleted?.(); onClose() }
-  async function requestDelete() {
-    if (hasStories && !deleted.current) { setConfirmDelete(true); return }
-    setBusy(true); setError('')
-    try { await remove(); closeEditor() }
-    catch (error) { setError(error instanceof Error ? error.message : 'Could not delete collection.') }
-    finally { setBusy(false) }
-  }
+  function closeEditor() { if (removed) onDeleted?.(); onClose() }
+  function requestDelete() { setError(''); return deletion.requestDelete() }
   const fieldsDisabled = busy || createdId !== null || removed
   return <><Dialog title={bulk ? `Edit ${targets.length} collections` : collection ? 'Edit collection' : 'New collection'} className="collection-dialog" titleAction={collection && onVisibilityChange ? <CollectionVisibilityButton hidden={hidden} disabled={busy || createdId !== null} onClick={onVisibilityChange} /> : undefined} busy={busy} onClose={closeEditor} initialFocusRef={nameRef}>
     <form onSubmit={event => void create(event)}>
@@ -114,8 +97,8 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
           <AppearanceOptions label="Symbol" disabled={!applySymbol}><div className="collection-symbol-options">{collectionSymbols.map(({ value, label, Icon }) => <label className="collection-symbol-option" key={value} title={label}><input type="radio" name="collection-symbol" value={value} checked={symbol === value} onChange={() => setSymbol(value)} /><Icon size={20} strokeWidth={1.5} aria-hidden="true" /><span className="sr-only">{label}</span></label>)}</div></AppearanceOptions>
         </fieldset>
       </div>
-      {error && <p role="alert" className="error-message">{error}</p>}
+      {(error || deletion.error) && <p role="alert" className="error-message">{error || deletion.error}</p>}
       <div className="form-actions">{targets.length > 0 && <button ref={deleteRef} className="button secondary" type="button" disabled={busy || createdId !== null} onClick={() => void requestDelete()}>{deleteLabel}</button>}<button className="button secondary" type="button" disabled={busy} onClick={closeEditor}>Cancel</button><button className="button primary" type="submit" disabled={busy || removed || (bulk && !applyColor && !applySymbol)}>{busy ? (targets.length ? 'Saving…' : 'Creating…') : createdId ? 'Try again' : targets.length ? 'Save changes' : 'Create collection'}</button></div>
     </form>
-  </Dialog>{confirmStopAutomatic && <ConfirmationDialog title="Turn Off Automatic Collection?" confirmLabel="Keep Works and Turn Off" pendingLabel="Updating…" onClose={() => setConfirmStopAutomatic(false)} onConfirm={async () => { setAutomatic(false); setFilters({ ...defaultReadingFilters }) }}><p>Saving will remove this collection’s filter settings and keep the works that currently match. New works will no longer be added automatically.</p><p>This takes effect when you save the collection. Canceling the editor leaves it automatic.</p></ConfirmationDialog>}{targets.length > 0 && confirmDelete && <ConfirmationDialog title={bulk ? 'Delete collections?' : 'Delete collection?'} confirmLabel={deleteLabel} onClose={() => { setConfirmDelete(false); if (deleted.current) closeEditor() }} onConfirm={remove}><p>{bulk ? `Delete ${targets.length} collections?` : `Delete “${collection!.name}”?`}</p><p>Stories will stay in your library.</p></ConfirmationDialog>}</>
+  </Dialog>{confirmStopAutomatic && <ConfirmationDialog title="Turn Off Automatic Collection?" confirmLabel="Keep Works and Turn Off" pendingLabel="Updating…" onClose={() => setConfirmStopAutomatic(false)} onConfirm={async () => { setAutomatic(false); setFilters({ ...defaultReadingFilters }) }}><p>Saving will remove this collection’s filter settings and keep the works that currently match. New works will no longer be added automatically.</p><p>This takes effect when you save the collection. Canceling the editor leaves it automatic.</p></ConfirmationDialog>}{deletion.confirmation}</>
 }

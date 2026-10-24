@@ -49,15 +49,17 @@ export function BackupSettings() {
   const disabled = Boolean(busy || sampleMode || deleting || restoring)
   return <section id={backupSettingsSection.id} tabIndex={-1} className="settings-card">
     <div className="section-title"><Download size={21} /><h2>{backupSettingsSection.title}</h2></div>
+    <section className="settings-subsection" aria-labelledby="backup-export-title"><h3 id="backup-export-title">Export or Save Backup</h3>
     <p>Download or save your complete library, including all works and their metadata, reading progress, private notes, ratings, tags, collections, saved series, import history, and settings. Every saved work is included, across all pages.</p>
     <div className="form-actions">
       <button className="button secondary" disabled={disabled} onClick={() => void run('export', exportBackup, 'Your backup download has started. Keep the file somewhere safe; it includes your private notes.')}><Download size={17} />{busy === 'export' ? 'Preparing backup…' : 'Export Backup'}</button>
       <button className="button secondary" disabled={disabled} onClick={() => void run('save', async () => { await saveBackup(); await refreshSaved() }, 'Your backup was saved privately in Supabase.')}><CloudUpload size={17} />{busy === 'save' ? 'Saving backup…' : 'Save Backup to Supabase'}</button>
     </div>
+    </section>
     {sampleMode && <p className="muted">Backups are unavailable in the local sample preview.</p>}
     {message && <p role="status" className="muted">{message}</p>}
     {error && <p role="alert">{error}</p>}
-    <h3>Saved Backups</h3>
+    <section className="settings-subsection" aria-labelledby="saved-backups-title"><h3 id="saved-backups-title">Saved Backups</h3>
     <p className="muted">Your three most recent successful backups are kept privately in Supabase. After a new backup uploads successfully, older copies are removed automatically. You can save once per minute, up to 50 MiB per file. Downloaded backups are unrestricted. Keep a downloaded copy outside Supabase too.</p>
     {loading && <p role="status" className="muted">Loading saved backups…</p>}
     {listError && <p role="alert">{listError}</p>}
@@ -69,6 +71,7 @@ export function BackupSettings() {
         <button className="button secondary compact" disabled={disabled || loading} aria-label={`Delete backup from ${formatDateTime(backup.createdAt)}`} onClick={() => setDeleting(backup)}>Delete</button>
       </dd>
     </div>)}</dl>
+    </section>
     <RestoreBackupSettings backups={backups} disabled={Boolean(busy || sampleMode || deleting)} onActiveChange={setRestoring} onRestored={refreshSaved} />
     {deleting && <ConfirmationDialog title="Delete saved backup?" confirmLabel="Delete Backup" onClose={() => setDeleting(null)} onConfirm={async () => {
       await deleteSavedBackup(deleting)

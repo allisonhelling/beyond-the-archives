@@ -61,8 +61,8 @@ it('reads series listings with the shared parser and excludes unrelated page con
 })
 
 
-it('collects a missing work summary from the first page without sending chapter summaries or story text', async () => {
- const doc = new DOMParser().parseFromString('<h2 class="title">Later chapter</h2><dl class="work meta"><dd class="chapters">6/?</dd></dl><select id="selected_id"><option value="940">4. Fourth</option></select><div id="chapters"><div class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div>PRIVATE STORY TEXT</div></div>', 'text/html')
+it.each(['', '<div class="summary module"><blockquote></blockquote></div>', '<div class="summary module"><blockquote> \n </blockquote></div>'])('collects a missing or empty work summary from the first page without sending chapter summaries or story text (%s)', async placeholder => {
+ const doc = new DOMParser().parseFromString(placeholder + '<h2 class="title">Later chapter</h2><dl class="work meta"><dd class="chapters">6/?</dd></dl><select id="selected_id"><option value="940">4. Fourth</option></select><div id="chapters"><div class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div>PRIVATE STORY TEXT</div></div>', 'text/html')
  const fetcher = vi.fn().mockResolvedValue({ ok: true, url: 'https://archiveofourown.org/works/123?view_adult=true', text: async () => fixture.replace('<dl>', '<dl class="work meta">') })
  const result = await collectWorkPage(doc, 'https://archiveofourown.org/works/123/chapters/940', fetcher)
  expect(fetcher).toHaveBeenCalledExactlyOnceWith('https://archiveofourown.org/works/123?view_adult=true', expect.objectContaining({ credentials: 'same-origin' }))

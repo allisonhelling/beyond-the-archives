@@ -13,7 +13,8 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
   // Userscripts supplies GM in the script's scope, without exposing it on globalThis.
   const script = `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);`
-  await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></div><div id="kudos">Kudos list</div></main></body></html>' }))
+  await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><div class="summary module"><blockquote></blockquote></div><div id="chapters"><div class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div>PRIVATE CHAPTER TEXT</div></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></div><div id="kudos">Kudos list</div></main></body></html>' }))
+  await page.route('https://archiveofourown.org/works/123?view_adult=true', route => route.fulfill({ contentType: 'text/html', body: '<h2 class="title">Test story</h2><div class="summary module"><blockquote><p>Work <em>summary</em>.</p><p>Second<br>line.</p></blockquote></div><dl class="work meta"><dd class="chapters">6/?</dd></dl>' }))
   await page.goto('https://archiveofourown.org/works/123/chapters/104')
   await page.exposeFunction('mergeLibraryEdits', mergeEdits)
   await page.evaluate(() => {
@@ -199,6 +200,10 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByRole('status')).toHaveText('Saved')
+  const saved = await page.evaluate(() => (window as Window & { userscriptTestState: { entry: Record<string, unknown> } }).userscriptTestState.entry)
+  expect(saved).toMatchObject({ status: 'reading', progress: 3, metadata: { summary: 'Work summary.\n\nSecond\nline.', summary_html: '<p>Work <em>summary</em>.</p><p>Second<br>line.</p>', published_chapters: 10, total_chapters: 10 } })
+  expect(JSON.stringify(saved)).not.toMatch(/Chapter summary only|PRIVATE CHAPTER TEXT/)
+
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in between chapters library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
   await expect(top.locator('.library-link')).toHaveText('')

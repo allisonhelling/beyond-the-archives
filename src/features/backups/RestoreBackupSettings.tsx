@@ -28,8 +28,8 @@ export function RestoreBackupSettings({ backups, disabled, onActiveChange, onRes
   }
   function close() { setPrepared(null); onActiveChange(false) }
   const locked = disabled || loading || Boolean(prepared || message)
-  return <>
-    <h3>Restore Backup</h3>
+  return <section className="settings-subsection" aria-labelledby="restore-backup-title">
+    <h3 id="restore-backup-title">Restore Backup</h3>
     <p className="muted">Restore a JSON or JSON.gz backup from your own account. Preview the changes before replacing your library. A safety copy of your current library is saved privately in Supabase first; restoration stops if that copy cannot be saved.</p>
     <FilePicker className="backup-source-field" label="Choose backup file" accept=".json,.gz,application/json,application/gzip" disabled={locked} onChange={files => void preview(files[0])} />
     {backups.length > 0 && <div className="form-actions">
@@ -57,5 +57,5 @@ export function RestoreBackupSettings({ backups, disabled, onActiveChange, onRes
       </div>)}</dl>
       <p>AO3 metadata from the file is restored privately to your account. Sign-in credentials and paired devices are kept. A safety copy of the current library will appear in Saved Backups, under the normal three-backup retention policy.</p>
     </ConfirmationDialog>}
-  </>
+  </section>
 }

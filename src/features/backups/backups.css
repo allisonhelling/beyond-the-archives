@@ -1,4 +1,2 @@
-.csv-export-settings { font-size: 14px; }
-.csv-export-settings :is(p, label, legend, small, .button) { font-size: inherit; line-height: 1.8; }
 .backup-source-field { display: grid; gap: 8px; min-width: 0; flex: 1 1 240px; margin-block: 15px; }
 .backup-source-field input { min-width: 0; max-width: 100%; }

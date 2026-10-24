@@ -1,10 +1,21 @@
-.userscript-intro { color: #000; }
-
 /* Settings navigation and section headings. */
-.settings-page :is(h2, h3, h4, legend):not(.display-edit-surface *) { color: var(--color-brand); }
+.settings-content { min-width: 0; --settings-text-size: max(var(--work-tile-min-font-size, 0px), 14px); font-size: var(--settings-text-size); line-height: 1.8; color: #000; }
+.settings-content :is(p, label, small, li, dt, dd):not(.display-edit-surface *) { font-size: var(--settings-text-size); line-height: inherit; }
+.settings-content :is(p, label, li, dd):not(.display-edit-surface *) { color: #000; }
+.settings-content :is(.muted, .field-help, small, dt):not(.display-edit-surface *) { color: #756363; font-size: var(--settings-text-size); font-weight: 500; }
+.settings-content p.error-message:not(.display-edit-surface *) { color: var(--color-brand); }
+.settings-page :is(h2, h3, h4, h5, legend):not(.display-edit-surface *) { color: var(--color-brand); }
+.settings-content h2:not(.display-edit-surface *) { font: 400 23px/1.3 var(--font-serif); margin: 0 0 16px; }
+.settings-content .section-title { margin-bottom: 16px; }
+.settings-content .section-title h2 { margin: 0; }
+.settings-content :is(h3, legend):not(.display-edit-surface *) { font: 600 18px/1.5 var(--font-sans); }
+.settings-content :is(h4, h5):not(.display-edit-surface *) { font: 600 var(--settings-text-size)/1.5 var(--font-sans); }
+.settings-subsection > h3 { margin: 0 0 16px; }
+.settings-subsection > p + p { margin-top: 12px; }
+.settings-subsection > :last-child { margin-bottom: 0; }
+.settings-card > p + .settings-subsection { margin-top: 24px; }
 .settings-content .settings-section > .settings-card { scroll-margin-top: 110px; }
 .settings-page { display: grid; grid-template-columns: 230px minmax(0, 1fr); align-items: start; gap: 20px; }
-.settings-content { min-width: 0; }
 .settings-outline { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; padding: 20px 0; border-right: 1px solid var(--color-border); }
 .settings-outline h2 { font: 20px var(--font-serif); margin-bottom: 16px; }
 .settings-outline ul { list-style: none; margin: 0; padding: 0; }

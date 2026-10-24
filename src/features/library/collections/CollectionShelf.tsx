@@ -86,7 +86,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   const rowSize = mobile && !showAll ? shelfContents.length : capacity
   const rows = Array.from({ length: Math.ceil(shelfContents.length / rowSize) }, (_, index) => shelfContents.slice(index * rowSize, (index + 1) * rowSize))
   return <nav className={`collection-shelves${showAll ? ' collection-shelves-expanded' : ''}${editing ? ' collection-shelves-editing' : ''}`} aria-label="Library shelves" style={{ '--collection-shelf-capacity': capacity } as CSSProperties} onClickCapture={preventDragClick}>
-    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder collections in any position. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging. Shift-click or Shift-drag to select collections for bulk editing. Start Shift-drag on a selected collection to deselect a range. Drag a selected collection to move the selected group.</span>}
+    {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder collections in any position. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging. Shift-click or Shift-drag to select collections for bulk editing. Start Shift-drag on a selected collection to deselect a range. Drag a selected collection to move the selected group. Press Delete or Backspace to delete selected collections; non-empty collections require confirmation.</span>}
     <div id={shelfId} className="collection-shelf-rows" ref={shelfRef}>{rows.map((row, index) => <div className="collection-shelf-row" key={index}>{row}{index === 0 && !mobile && bookend}</div>)}</div>
   </nav>
 }

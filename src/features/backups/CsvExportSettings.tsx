@@ -15,10 +15,10 @@ export function CsvExportSettings() {
     catch { setError('Could not export your library. Check your connection and try again.') }
     finally { pending.current = false; setBusy(false) }
   }
-  return <section id={csvExportSettingsSection.id} tabIndex={-1} className="settings-card csv-export-settings">
+  return <section id={csvExportSettingsSection.id} tabIndex={-1} className="settings-card">
     <div className="section-title"><Download size={21} /><h2>{csvExportSettingsSection.title}</h2></div>
     <p>Choose the files to include in one ZIP download. Exports include every saved item across all pages, including private notes and ratings.</p>
-    <fieldset disabled={busy}>
+    <fieldset className="settings-subsection" disabled={busy}>
       <legend>Files to export</legend>
       <label className="check-label"><input type="checkbox" checked={selection.length === csvFiles.length} onChange={event => setSelection(event.target.checked ? csvFiles.map(file => file.name) : [])} />Export all</label>
       <div className="collection-options collection-options-expanded">{csvFiles.map(file => <label className="check-label" key={file.name}>
