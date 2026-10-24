@@ -1,6 +1,6 @@
-# Large-library performance and regression checks
+# Large-Library Performance and Regression Checks
 
-## Acceptance targets
+## Acceptance Targets
 
 Local measurements use three libraries of 10,000 works each, 5,000 authors, 100 fandoms, 500 tags, 12 tags per work, variable summaries, 20 collections per user, and 200 series per user. Local targets are: catalog under 1 second; first, last, and broad-search page queries under 2 seconds; series pages under 5 seconds; exact counts under 100 ms. These are local development gates, not hosted service guarantees.
 
@@ -8,7 +8,7 @@ Browser targets are initial results under 8 seconds with the synthetic transport
 
 Hosted release targets remain to be verified: p95 page response under 500 ms, exact count under 100 ms, first display under 2.5 seconds, and no cross-user rows during concurrent reads of representative libraries. Measure network and database time separately. Do not treat the embedded database or mocked browser transport as evidence of hosted latency, concurrent database capacity, AO3 throughput or mobile-device CPU performance.
 
-## Recorded local results (20 October 2026)
+## Recorded Local Results (20 October 2026)
 
 The final embedded run used the full fixture described above. Timings are single-run observations, not latency percentiles.
 
@@ -41,7 +41,7 @@ The performance workflow issued three page queries: the initial 50 results, 250 
 
 Reports go to ignored `artifacts/performance/`. Browser checks use mocked Auth/PostgREST; SQL tests independently exercise actual projections, search parity, source updates, grants, RLS, pagination boundaries and series behavior. Run `npm run check` and the relevant Playwright checks as well.
 
-## Query and cache decisions
+## Query and Cache Decisions
 
 The initial live metadata-join implementation took roughly 1.4 seconds for a 1,000-work catalog. A private, transactionally maintained `library_search_documents` table now derives from the existing entry/work/relationship tables. Entry, work, author, fandom, tag and membership changes rebuild only affected documents. The projection has forced RLS, read-only owner access, and no callable authenticated write helper. Browser/extension metadata and manual corrections retain their original precedence. Unchanged tag/fandom imports skip entity updates. Metadata job completion and userscript refreshes collect affected entry IDs and rebuild each final document once per operation; ordinary shared-entity edits still update related works. Unchanged shared entities skip projection rebuilds, and unchanged projected documents skip writes. Normalized search fields are stored once per source change; wildcard, quoting, exclusion and OR behavior use the existing browser parser's literal substring groups.
 
@@ -51,7 +51,7 @@ Numbered pages use an offset after complete filtering and deterministic ordering
 
 Indexes cover owner/added/identity traversal, import-history ownership/order, and eligible queue work. Existing relationship and source-tag-order indexes are reused. Inspect the recorded inner page-query plans and exact-count plans before tuning further; no speculative full-text or trigram dependency was added. Very large migration backfills and projection write amplification need measurement on the intended hosted database before rollout.
 
-## Retrieval capacity and fairness
+## Retrieval Capacity and Fairness
 
 The hosted Edge Function handles exactly one job per invocation. The supplied one-minute Cron schedule therefore has a nominal maximum of 60 jobs/hour globally, before retrieval latency, failures, pauses and lease recovery. The global gate also enforces at least 15 seconds between eligible hosted requests; running a more frequent scheduler cannot exceed its nominal 240 requests/hour limit. The continuous Node worker waits 15 seconds after each attempt, in addition to attempt time. These are code-derived upper bounds, not measured AO3 throughput.
 

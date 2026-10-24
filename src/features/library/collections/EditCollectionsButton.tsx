@@ -32,7 +32,7 @@ export function EditCollectionsButton({ selectedIds, onSave, disabled = false, o
 
   {open && <Dialog title="Edit Collections" onClose={close} busy={busy}>
    {description && <p>{description}</p>}
-   <form onSubmit={event => { event.preventDefault(); if (!conflict) void save() }}><fieldset disabled={busy || Boolean(conflict)}><CollectionChoices collections={collections} selected={selected} onChange={setSelected} /><NewCollectionButton onCreated={id => setSelected(current => [...current, id])} /><div className="form-actions"><button className="button primary">{busy ? 'Saving…' : 'Save collections'}</button><button type="button" className="button secondary" onClick={close}>Cancel</button></div></fieldset></form>
+   <form onSubmit={event => { event.preventDefault(); if (!conflict) void save() }}><fieldset disabled={busy || Boolean(conflict)}><CollectionChoices collections={collections} selected={selected} onChange={setSelected} /><NewCollectionButton onCreated={id => setSelected(current => [...current, id])} /><div className="form-actions"><button className="button primary">{busy ? 'Saving…' : 'Save Collections'}</button><button type="button" className="button secondary" onClick={close}>Cancel</button></div></fieldset></form>
    {conflict && <EditConflictReview key={JSON.stringify(conflict.review)} conflict={conflict} collections={collections} onSaved={async () => { await (onRefresh ?? refresh)(); close() }} onError={failed} onCancel={() => setConflict(null)} />}
    {error && <p role="alert" className="error-message">{error}</p>}
   </Dialog>}

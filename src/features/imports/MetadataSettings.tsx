@@ -51,15 +51,15 @@ export function MetadataSettings() {
   <form className="story-form" onSubmit={event => void save(event)}>
    <fieldset className="settings-subsection" disabled={busy || (!sampleMode && !ready)}>
     <legend>{sampleMode ? 'Extension Connection' : 'Retrieval Mode'}</legend>
-    {!sampleMode && <label>How to load AO3 metadata<select value={mode} onChange={event => setMode(event.target.value)}>
-     <option value="direct">Direct retrieval (hosted worker)</option>
-     <option value="extension">Browser extension (requested works and series)</option>
+    {!sampleMode && <label>How to Load AO3 Metadata<select value={mode} onChange={event => setMode(event.target.value)}>
+     <option value="direct">Direct Retrieval (Hosted Worker)</option>
+     <option value="extension">Browser Extension (Requested Works and Series)</option>
     </select></label>}
     {(sampleMode || mode === 'extension') && <label>Extension ID<input value={id} onChange={event => setId(event.target.value)} autoComplete="off" spellCheck={false} /><small className="muted">Copy the ID from chrome://extensions or edge://extensions after installing AO3 Library Companion. Select the matching Hosted or Local environment in the extension settings.</small></label>}
     <p className="muted">The extension reads only works requested by Import URLs or Refresh metadata and series explicitly requested for import preview. Library listing scans are started separately from Mass Import from AO3. It reuses a matching AO3 tab or opens one, then waits for the work to load. Complete any sign-in or confirmation in that tab. Metadata imports are explicit. If you pair the AO3 Browser Bar separately, visiting a work or series loads its saved library details; saving changes still requires your action.</p>
     <p className="muted">Browser metadata stays private and preserves manual corrections and reading progress. Keep this app open for long batches. If you close it, processing continues until the current sign-in token expires. After restarting the browser or signing in again, open this app to reconnect.</p>
-    {!sampleMode && <button className="button secondary" type="submit">{busy ? 'Connecting and saving…' : 'Save metadata mode'}</button>}
-    {(sampleMode || mode === 'extension') && <button className="button secondary" type="button" onClick={() => { setBusy(true); void connect().then(() => setMessage('Extension connected. Requested imports will resume.')).catch(error => setMessage(error instanceof Error ? error.message : 'Connection failed. Sign in again.')).finally(() => setBusy(false)) }}>Reconnect extension</button>}
+    {!sampleMode && <button className="button secondary" type="submit">{busy ? 'Connecting and Saving…' : 'Save Metadata Mode'}</button>}
+    {(sampleMode || mode === 'extension') && <button className="button secondary" type="button" onClick={() => { setBusy(true); void connect().then(() => setMessage('Extension connected. Requested imports will resume.')).catch(error => setMessage(error instanceof Error ? error.message : 'Connection failed. Sign in again.')).finally(() => setBusy(false)) }}>Reconnect Extension</button>}
    </fieldset>
   </form>
   {sampleMode && <p className="muted">Local sample imports use this extension connection. Retrieval preferences require the connected application.</p>}

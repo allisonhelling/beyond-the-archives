@@ -24,7 +24,7 @@ export function SeriesWorkList({ series }: { series: LibrarySeries }) {
   <ol className="series-work-list">{works.map(({ work, saved }) => {
    const Icon = readingStatusIcons[saved.reading_status]
    return <li key={work.workId}><details open={!closed.has(work.workId)} onToggle={event => { const open = event.currentTarget.open; setClosed(current => { if (current.has(work.workId) === !open) return current; const next = new Set(current); if (open) next.delete(work.workId); else next.add(work.workId); return next }) }}>
-    <summary><span className="series-work-title">{work.position ? `Part ${work.position}: ` : ''}{work.title}</span>{' '}<Tooltip description="View saved work">{id => <Link className="clickable-text series-work-link" to={`/stories/${saved.id}`} state={{ returnTo: location.pathname + location.search }} aria-label={`View saved work: ${work.title}`} aria-describedby={id} onClick={event => event.stopPropagation()}><Icon size={18} aria-hidden="true" /></Link>}</Tooltip></summary>
+    <summary><span className="series-work-title">{work.position ? `Part ${work.position}: ` : ''}{work.title}</span>{' '}<Tooltip description="View Saved Work">{id => <Link className="clickable-text series-work-link" to={`/stories/${saved.id}`} state={{ returnTo: location.pathname + location.search }} aria-label={`View Saved Work: ${work.title}`} aria-describedby={id} onClick={event => event.stopPropagation()}><Icon size={18} aria-hidden="true" /></Link>}</Tooltip></summary>
     {work.summary && <div className="story-summary"><WorkSummary metadata={work} /></div>}
    </details></li>
   })}</ol></>
@@ -57,6 +57,6 @@ creatorNotes: <p className="story-summary">{series.creatorNotes || 'No creator n
 updated: <p className="story-facts">Updated: {ao3Date(series.updated)}</p>,
 begun: <p className="story-facts">Series Begun: {ao3Date(series.begun)}</p>,
 works: <>   <SeriesWorkList series={series} /> </>
-}}</DisplayInfo>  <Link className="story-details-link clickable-text" to={`/series/${series.seriesId}`} state={origin}>View series details</Link>
+}}</DisplayInfo>  <Link className="story-details-link clickable-text" to={`/series/${series.seriesId}`} state={origin}>View Series Details</Link>
  </>}</SeriesControls></article>
 }

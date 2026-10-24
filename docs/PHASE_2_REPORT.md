@@ -1,8 +1,8 @@
-# Phase 2 implementation report
+# Phase 2 Implementation Report
 
 Phase 2 provides a persistent, manually managed AO3 library and reading dashboard, building on the existing Phase 1 authentication, schema, navigation, and RLS. Requirements follow the supplied Implementation Plan Phase 2 (pages 2–3), Specification sections 2–3 and 13, and the detailed Phase 2 request. Custom collections and personal tags are included now as explicitly requested, although the broader plan also discusses collections in Phase 4.
 
-## Implemented features
+## Implemented Features
 
 - Library with all saved works, title/author search, story details, Add Story, editing, and confirmed removal.
 - Prominent Add menu with Save for Later and Starting a Fic. Import History is a disabled, labeled Phase 3 placeholder.
@@ -15,7 +15,7 @@ Phase 2 provides a persistent, manually managed AO3 library and reading dashboar
 - Responsive desktop/mobile forms, navigation, cards, empty/loading/error states, and destructive-action confirmations.
 - Transactional save of private metadata, progress, collections, and personal tags through Supabase. Reads paginate through the API response cap, including memberships, to avoid silent truncation.
 
-## Database migration and security
+## Database Migration and Security
 
 Added `supabase/migrations/20261015000100_core_library.sql`; the Phase 1 migration is unchanged.
 
@@ -28,7 +28,7 @@ The new migration was applied with `supabase migration up --local` to the existi
 
 Manual titles, authors, fandoms, tags, counts, publication status, and summaries are private `metadata_overrides`; they are never written into another account’s shared metadata. JSON keys provide field-level overrides. Updates merge those keys so unrelated override fields survive. Future refreshes must use this precedence and leave private overrides untouched. Normalized shared authors/fandoms/tags tables remain available for a later metadata adapter.
 
-## Chapter links and conservative decisions
+## Chapter Links and Conservative Decisions
 
 AO3 chapter identifiers are not chapter positions. URL parsing and progress inference are tested separately: a verified chapter 1 yields To Read / 0; verified chapter 4 yields Reading / 3; unverified chapter identifiers yield no inferred progress. The manual form permits explicit reading status and progress, including Starting a Fic’s explicit Reading default.
 
@@ -38,7 +38,7 @@ Published chapter counts entered by the reader are saved snapshots. Unread count
 
 Move to Library explicitly moves a tracked story to To Read and retains progress and notes; this behavior is explained beside the menu action. Collection names and confirmations use browser-native prompts/dialogs. AO3 URL variants for the same work can be edited and are stored as a private `manual_url` override; the original submitted URL remains separate and accessible. Updated destinations are validated against the saved AO3 work identity before being linked. Work identity is immutable during edits; correcting the saved work to a different AO3 identity requires a separate entry. No importer, email, series, statistics, extension, or backup pipeline is included.
 
-## Verification results
+## Verification Results
 
 | Check | Result |
 | --- | --- |
@@ -57,7 +57,7 @@ Browser coverage uses mocked Auth/REST contracts and checks persistence through 
 
 The source workspace contains cloud-backed files that stalled initial dependency reads and caused startup timeouts. A temporary verification copy with fresh dependencies from the unchanged lockfile confirmed the cause. The ignored original `node_modules` was then restored from that locked installation, and final frontend/build/browser checks passed in the original project using its normal scripts. Local Supabase migration/lint/live checks also passed; a fresh-client persistence run additionally passed from the temporary copy against the same local stack. Early startup timeouts and one ambiguous test selector were resolved; they are not passing results counted above.
 
-## Files created
+## Files Created
 
 - `src/features/library/model.ts`
 - `src/features/library/model.test.ts`
@@ -71,7 +71,7 @@ The source workspace contains cloud-backed files that stalled initial dependency
 - `tests/e2e/library.spec.ts`
 - `docs/PHASE_2_REPORT.md`
 
-## Files modified
+## Files Modified
 
 - `src/app/App.tsx`: connects library routes and Add menu; updates roadmap content.
 - `src/app/App.test.tsx`: retains Phase 1 auth coverage and updates Add expectations.
@@ -84,7 +84,7 @@ The source workspace contains cloud-backed files that stalled initial dependency
 
 The pre-existing user modification to `docs/Phase_1_Steps_Followed.md` was left untouched. Dependency manifests, lockfile, credentials, Phase 1 auth implementation, and original PDFs were not changed.
 
-## Configuration and remaining limits
+## Configuration and Remaining Limits
 
 The local development database is migrated. For a hosted Supabase project, review and apply the versioned migrations with `supabase db push --dry-run`, then `supabase db push`. Hosted application behavior, invitation/recovery email delivery, production deployment, and real tablet hardware have not been tested. Desktop and mobile browser emulation pass; the responsive layout also adapts at intermediate widths. The live integration suite validates local Auth rather than external email delivery.
 

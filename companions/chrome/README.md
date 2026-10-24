@@ -4,7 +4,7 @@ For the inline library controls in iOS Safari's free Userscripts app, see [the u
 
 This Manifest V3 extension is part of the hosted library project. It captures metadata for explicitly requested work imports, refreshes, series previews, and library listing scans on the connected website. It also adds the shared Safari library bar directly to AO3 work, chapter, and series pages. Visiting a page never creates an import job or automatically saves a work. Once paired, the bar loads your saved details for that page.
 
-## Deploy the hosted boundary
+## Deploy the Hosted Boundary
 
 1. Apply the project migrations through `20261016000800_existing_import_reading_location.sql` to your Supabase project using your normal migration workflow (`supabase db push` for a linked project). Existing direct imports keep their behavior.
 2. Deploy `supabase functions deploy extension-metadata`. Keep the supplied `verify_jwt = false` function setting: the handler itself verifies every bearer token with Supabase Auth, including projects with modern signing keys. Service-role credentials stay inside the Edge Function.
@@ -12,7 +12,7 @@ This Manifest V3 extension is part of the hosted library project. It captures me
 
 These instructions describe deployment; building locally does not apply migrations or publish the function or website.
 
-## Build and install
+## Build and Install
 
 Configure the public hosted Supabase settings and exact website origin (no path) in `.env.local.hosted`:
 
@@ -50,7 +50,7 @@ The extension can connect to Supabase Auth while this handler is stopped, but up
 
 For local use, run `npm run dev` and open `http://127.0.0.1:5173/settings` (use the port printed by Vite). After rebuilding the extension, click **Reload** on its card in the browser's extensions page. `https://library-extension-test.example` is intercepted only inside the automated browser test; opening it normally produces a DNS error. Tests build their extension in a temporary directory so your installed `extension/dist` keeps its configured origin.
 
-## Pair the AO3 bar
+## Pair the AO3 Bar
 
 Use one installed **AO3 Library Companion** for both environments. Click its toolbar icon (or open **Extension options** on its Extensions card) and choose **Hosted** or **Local**, then click **Switch environment**. The selector lists the configured website, defaults to Hosted, and remembers your choice. Disable the older separate local extension to avoid two companions competing for the AO3 bar.
 
@@ -72,7 +72,7 @@ Bar pairing is separate from the website’s import/scan connection. It lasts up
 
 The content script runs in Chrome’s isolated world with a closed shadow root. It communicates only with the extension’s internal message handler. That handler restricts requests to AO3 work/series tabs, bar-specific storage keys, and the fixed library RPC. Credentials and drafts use extension-local storage; import tokens and scan checkpoints are not exposed by the bar bridge. Nothing uses AO3 local/session storage or page messaging.
 
-## Behavior and connection lifetime
+## Behavior and Connection Lifetime
 
 - New import/refresh jobs snapshot your selected mode. Changing Settings does not move existing jobs between modes; cancel an old batch and submit again to change its mode.
 - The website sends the extension a short-lived Supabase access token through the browser's external-messaging API. The manifest and background worker both restrict the sender to your configured website origin. AO3 pages never receive that token. It is stored only in `chrome.storage.session`, with no refresh token.
@@ -87,11 +87,11 @@ The content script runs in Chrome’s isolated world with a closed shadow root. 
 
 `npm test` includes real PostgreSQL migration/RLS tests, the Edge handler boundary, metadata capture, extension request gating, cancellation, session expiry, and service-worker restart recovery. `npm run build:extension` creates the installable artifact. Live AO3 access, your deployed Supabase environment, and store publication require their respective environments.
 
-### Series previews
+### Series Previews
 
 Rebuild and reload the extension after updating. In the importer, explicitly loading an AO3 series preview reuses or opens the first series page, captures its listing, description and work blurbs, then follows each Next link in its extension-owned preview tab and combines the work previews. Successive series and sample work previews reuse this tab; queued work imports have their own reusable tab so active captures do not redirect one another. It does not open the listed works or create imports. Previews also capture parsed HTML without waiting for images or other resources, and use a two-minute elapsed-time deadline. Complete sign-in/confirmation in the AO3 tab within two minutes, or retry/skip the preview. Deploy the `series-preview` function and apply the series-preview migration before using this feature. Link imports keep previews for Back and retry within the current import, and saving series details reuses a complete preview. Selected linked works use the existing import queue after confirmation.
 
-## Bookmarks and Marked for Later sync
+## Bookmarks and Marked for Later Sync
 
 Apply migrations through `20261022000400_library_sync.sql`, deploy the updated website, rebuild with `npm run build:extension`, and reload the unpacked extension in Chrome. Accept the added `unlimitedStorage` permission, used for durable large-library checkpoints. Reconnect in Settings with the extension ID. No new Edge Function or Python installation is required for listing sync.
 
@@ -112,7 +112,7 @@ Pause, resume, or discard from the importer. Error, login, redirect, missing-tab
 
 Each successful page is saved in extension local storage, scoped to the connected library account. Tokens remain session-only. Checkpoints survive service-worker/browser restarts; reconnect the same account to continue. Saved private notes stay on this device until imported or discarded. Completed baseline IDs remain until extension storage is cleared/uninstalled. Page-sized database transactions permit libraries larger than the CSV form's 2,000-work submission limit. An interrupted upload can be retried safely: existing works are kept, and baseline IDs advance only after all saved pages have been acknowledged. Different website tabs cannot acknowledge a replacement scan by accident. Closing the website does not cancel scanning while the session is valid.
 
-### Local build, page ranges, and sample imports
+### Local Build, Page Ranges, and Sample Imports
 
 Run `npm run build:extension:local` with the local app's public Supabase configuration in `.env.local`. This reads development configuration, ignores the hosted `EXTENSION_APP_ORIGIN`, and writes **AO3 Library Companion (Local)** to `extension/local/dist`. The standard shared extension in `extension/dist` is preserved; using its environment selector is the recommended testing workflow. The public manifest key gives the local companion a stable ID, selected automatically by the app on loopback hostnames; both local and hosted Settings accept the shared extension ID, while the local build ID remains a fallback.
 
@@ -125,7 +125,7 @@ For sample-library imports, run `npm run dev:sample` with the local extension lo
 Bookmark scans also capture `bookmark rec`: `true` for a visible Rec icon, `false` for a normal public bookmark icon, and `unknown` for private/hidden bookmarks or missing evidence. On first import, a visible true Rec initializes the tracker’s editable Rec status; false or unknown starts unselected. Click the heart on a work tile or its details page to change it. The Recs shelf, filters, automatic collections, and CSV rec column use this personal status independently of Favorites. Later imports refresh the source observation without changing your choice. Apply migration 20261022001100_editable_recs.sql for this behavior. Personal Notes filters require non-whitespace private notes. Content Rating filters AO3 ratings; Rating independently selects personal star ratings (including Unrated), with multiple selections combined using OR. These conditions also work in automatic collections.
 
 
-### Repeat imports and other AO3 lists
+### Repeat Imports and Other AO3 Lists
 
 **Import Bookmarks** and **Import Marked for Later** ask for an AO3 username, with an optional save checkbox. Saved usernames prefill the Bookmarks dialog so chapter-date checks remain available; Marked for Later skips the prompt on later imports. Settings → AO3 Username lets you view, change, or delete this browser preference; accounts and sample mode have separate values. These buttons start the selected scan mode and automatically import completed pages while the importer is open. Return to the importer to upload scans completed while it was closed. Existing library entries and personal edits are preserved.
 
@@ -133,7 +133,7 @@ Bookmark scans also capture `bookmark rec`: `true` for a visible Rec icon, `fals
 
 A collection home or profile URL scans both its Works and Bookmarks. A direct collection Works/Bookmarks URL scans that particular list and preserves filters. **Import to New Collection** scans the unfiltered collection profile, Works, and Bookmarks and creates a manual custom collection containing new and existing imported works. The description combines the AO3 summary and Intro as plain text. You can change the new collection name before importing, including when a previous collection already uses the AO3 title. Page ranges and Quick Sync are unavailable for combined collection scans and series indexes. Scans share the existing single tab, request pacing, checkpoints, and 500-page safety limit across every source; rebuild/reload the extension after updating.
 
-## Shared rating explanations and reading controls
+## Shared Rating Explanations and Reading Controls
 
 Apply `20261024000100_shared_personal_rating_info.sql`, deploy the web app, and rebuild/reload the companion. **Connection → Rating Info** now reads and saves the same account setting as the app’s **Settings → Personal Rating**. Blank text hides the info icon across devices. Reloading the bar, returning to its AO3 tab, or opening Rating Info refreshes the saved explanation. Existing local explanations remain available through **Use this device’s previous explanation**; saving that text shares it with the account. Concurrent edits are rejected rather than overwriting a newer explanation.
 

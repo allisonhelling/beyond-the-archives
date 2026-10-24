@@ -14,7 +14,7 @@ function PersonalControls({ draft, onChange, ratingInfo }: { draft: Draft; onCha
   const [tags, setTags] = useState(parseLines(draft.tags)), [rating, setRating] = useState<number | null>(draft.rating === '' ? null : Number(draft.rating))
   return <div className="companion-personal-controls">
     <div className="personal-tags-field"><p>Personal Tags</p><PersonalTagInput inlineHelp value={tags} onChange={value => { setTags(value); draft.tags = value.join('\n'); onChange() }} /></div>
-    <StarRating clearLabel="Clear Rating" value={rating} info={ratingInfo.trim() ? <details className="field-info rating-info"><summary role="button" aria-label="Personal rating info"><Info aria-hidden="true" /></summary><span>{ratingInfo}</span></details> : null} onChange={value => { setRating(value); draft.rating = value ?? ''; onChange() }} />
+    <StarRating clearLabel="Clear Rating" value={rating} info={ratingInfo.trim() ? <details className="field-info rating-info"><summary role="button" aria-label="Personal Rating Info"><Info aria-hidden="true" /></summary><span>{ratingInfo}</span></details> : null} onChange={value => { setRating(value); draft.rating = value ?? ''; onChange() }} />
   </div>
 }
 

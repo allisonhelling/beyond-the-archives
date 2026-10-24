@@ -54,7 +54,7 @@ it('keeps failed notes across reload, confirms only after success, and stores no
 it('marks this chapter finished without transmitting or replacing personal fields', async () => {
  entry = { version: 'v1', status: 'reading', progress: 1, notes: 'Private', rating: 4, tags: ['Tag'], collections: [] }
  await mount()
- fireEvent.click(findButton('Mark through chapter 4 as read'))
+ fireEvent.click(findButton('Mark Through Chapter 4 as Read'))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading' })
 
@@ -70,7 +70,7 @@ it('offers reconnection on expired authorization without showing a false save co
 it.each(['safari', 'chrome'])('identifies the target library after rejected pairing on %s and keeps the code and draft', async browser => {
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  await toggle('Add to Library', true)
- fireEvent.input(within(root).getByLabelText('Private Notes'), { target: { value: 'Keep my draft' } })
+ fireEvent.input(within(root).getByLabelText('Private Notes'), { target: { value: 'Keep My Draft' } })
  await toggle('Connection', true)
  expect(within(root).getByRole('link', { name: 'Library Settings (https://library.test)' })).toHaveAttribute('href', 'https://library.test/settings#ao3-browser-bar')
  const code = within(root).getByLabelText('One-Time Pairing Code')
@@ -81,7 +81,7 @@ it.each(['safari', 'chrome'])('identifies the target library after rejected pair
  if (browser === 'chrome') expect(within(root).getByRole('status')).toHaveTextContent('Check the selected Hosted / Local environment')
  expect(code).toHaveValue('fresh-pairing-code')
  expect(storage.get('connection:https://backend.test')).toEqual({ secret: 'device-secret', userId: 'alice' })
- expect(storage.get('draft:https://backend.test:alice:123').notes).toBe('Keep my draft')
+ expect(storage.get('draft:https://backend.test:alice:123').notes).toBe('Keep My Draft')
 })
 
 async function toggle(name, expanded) {
@@ -99,10 +99,10 @@ it('collapses and switches panels without losing editor fields or a pairing code
  fireEvent.click(fields.getByLabelText('This Chapter Is Finished'))
  fireEvent.input(fields.getByLabelText('Private Notes'), { target: { value: 'Keep my notes' } })
  for (const tag of ['Comfort', 'Weekend']) {
-  fireEvent.change(fields.getByLabelText('Personal tags'), { target: { value: tag } })
-  fireEvent.keyDown(fields.getByLabelText('Personal tags'), { key: 'Enter' })
+  fireEvent.change(fields.getByLabelText('Personal Tags'), { target: { value: tag } })
+  fireEvent.keyDown(fields.getByLabelText('Personal Tags'), { key: 'Enter' })
  }
- fireEvent.click(fields.getByRole('radio', { name: '4 out of 5 stars' }))
+ fireEvent.click(fields.getByRole('radio', { name: '4 Out of 5 Stars' }))
  fireEvent.click(within(root).getByRole('button', { name: 'Add to Collection' }))
  fireEvent.click(fields.getByLabelText('Weekend reads'))
  await toggle('Add to Library', false)
@@ -122,9 +122,9 @@ it('collapses and switches panels without losing editor fields or a pairing code
  expect(fields.getByLabelText('Current Chapter')).toHaveValue(7)
  expect(fields.getByLabelText('This Chapter Is Finished')).toBeChecked()
  expect(fields.getByLabelText('Private Notes')).toHaveValue('Keep my notes')
- expect(fields.getByRole('button', { name: 'Delete personal tag Comfort' })).toBeVisible()
- expect(fields.getByRole('button', { name: 'Delete personal tag Weekend' })).toBeVisible()
- expect(fields.getByRole('radio', { name: '4 out of 5 stars' })).toBeChecked()
+ expect(fields.getByRole('button', { name: 'Delete Personal Tag Comfort' })).toBeVisible()
+ expect(fields.getByRole('button', { name: 'Delete Personal Tag Weekend' })).toBeVisible()
+ expect(fields.getByRole('radio', { name: '4 Out of 5 Stars' })).toBeChecked()
  expect(fields.getByLabelText('Weekend reads')).toBeChecked()
  expect(network).toHaveBeenCalledTimes(1)
  fireEvent.click(findButton('Cancel'))
@@ -140,17 +140,17 @@ it('reloads unchanged fields, retains local edits, and blocks conflicting notes 
  fireEvent.input(notes, { target: { value: 'My unsaved draft' } })
  entry = { ...entry, version: 'v2', notes: 'Changed elsewhere', rating: 5 }
  fireEvent.click(findButton('Reload Saved Entry'))
- const review = await within(root).findByRole('region', { name: 'Review conflicting edits' })
+ const review = await within(root).findByRole('region', { name: 'Review Conflicting Edits' })
  expect(within(review).getByText('My unsaved draft')).toBeInTheDocument()
  expect(within(review).getByText('Changed elsewhere')).toBeInTheDocument()
  expect(notes).toHaveValue('My unsaved draft')
  expect(storage.get('draft:https://backend.test:alice:123').version).toBe('v1')
  expect(findButton('Save')).toBeDisabled()
- expect(within(root).getByRole('radio', { name: '5 out of 5 stars' })).toBeChecked()
- expect(within(review).getByRole('button', { name: 'Save resolved changes' })).toBeDisabled()
- fireEvent.click(within(review).getByLabelText('Edit or combine notes'))
- fireEvent.change(within(review).getByLabelText('Notes to save'), { target: { value: 'Both notes combined' } })
- fireEvent.click(within(review).getByRole('button', { name: 'Save resolved changes' }))
+ expect(within(root).getByRole('radio', { name: '5 Out of 5 Stars' })).toBeChecked()
+ expect(within(review).getByRole('button', { name: 'Save Resolved Changes' })).toBeDisabled()
+ fireEvent.click(within(review).getByLabelText('Edit or Combine Notes'))
+ fireEvent.change(within(review).getByLabelText('Notes to Save'), { target: { value: 'Both notes combined' } })
+ fireEvent.click(within(review).getByRole('button', { name: 'Save Resolved Changes' }))
  await waitFor(() => expect(JSON.parse(network.mock.lastCall[0].data).p_action).toBe('save'))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ base: { notes: 'Changed elsewhere' }, notes: 'Both notes combined', rating: 5 })
  await waitFor(() => expect(storage.has('draft:https://backend.test:alice:123')).toBe(false))
@@ -158,15 +158,15 @@ it('reloads unchanged fields, retains local edits, and blocks conflicting notes 
 it('reloads remote notes into an untouched editor without losing a local rating', async () => {
  entry = { version: 'v1', status: 'reading', progress: 1, notes: 'Original', rating: null, tags: [], collections: [] }
  await mount(); await toggle('Edit', true)
- fireEvent.click(within(root).getByRole('radio', { name: '4 out of 5 stars' }))
+ fireEvent.click(within(root).getByRole('radio', { name: '4 Out of 5 Stars' }))
  entry = { ...entry, version: 'v2', notes: 'Desktop notes', tags: ['Desktop tag'], progress: 3 }
  fireEvent.click(findButton('Reload Saved Entry'))
  await waitFor(() => expect(within(root).getByLabelText('Private Notes')).toHaveValue('Desktop notes'))
- expect(within(root).getByRole('radio', { name: '4 out of 5 stars' })).toBeChecked()
- expect(within(root).getByRole('button', { name: 'Delete personal tag Desktop tag' })).toBeVisible()
+ expect(within(root).getByRole('radio', { name: '4 Out of 5 Stars' })).toBeChecked()
+ expect(within(root).getByRole('button', { name: 'Delete Personal Tag Desktop tag' })).toBeVisible()
  expect(within(root).getByLabelText('Current Chapter')).toHaveValue(4)
  expect(storage.get('draft:https://backend.test:alice:123')).toMatchObject({ version: 'v2', base: { notes: 'Desktop notes' }, notes: 'Desktop notes', rating: 4 })
- expect(within(root).queryByRole('region', { name: 'Review conflicting edits' })).not.toBeInTheDocument()
+ expect(within(root).queryByRole('region', { name: 'Review Conflicting Edits' })).not.toBeInTheDocument()
 })
 it('clears cached panels when changing accounts even if the following load fails', async () => {
  await mount()
@@ -232,17 +232,17 @@ it('synchronizes an editor draft from the reading bar and keeps progress control
  await mount()
  await toggle('Edit', true)
  const fields = within(root)
- fireEvent.input(fields.getByLabelText('Private Notes'), { target: { value: 'Keep my draft' } })
+ fireEvent.input(fields.getByLabelText('Private Notes'), { target: { value: 'Keep My Draft' } })
  await toggle('Connection', true)
  const pairing = root.getElementById('library-connection')
  expect(within(pairing).getAllByRole('button').map(button => button.textContent)).toEqual(['Dark Mode', 'Rating Info', 'Connect', 'Disconnect Device', 'Close'])
  expect(within(pairing).queryByLabelText('Adjust reading progress')).not.toBeInTheDocument()
- fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark through chapter 4 as read' }))
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Through Chapter 4 as Read' }))
  await waitFor(() => expect(fields.getByText('Ch. 4 / 10')).toBeInTheDocument())
  await toggle('Edit', true)
  expect(fields.getByLabelText('Current Chapter')).toHaveValue(5)
- expect(fields.getByLabelText('Private Notes')).toHaveValue('Keep my draft')
- expect(storage.get('draft:https://backend.test:alice:123')).toMatchObject({ chapter: 5, chapterFinished: false, version: 'v2', notes: 'Keep my draft' })
+ expect(fields.getByLabelText('Private Notes')).toHaveValue('Keep My Draft')
+ expect(storage.get('draft:https://backend.test:alice:123')).toMatchObject({ chapter: 5, chapterFinished: false, version: 'v2', notes: 'Keep My Draft' })
 })
 it('offers Finish Fic on the actual final AO3 chapter even when tracked progress is earlier', async () => {
  document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}. Chapter</option>`).join('')
@@ -268,14 +268,14 @@ it.each([false, true])('keeps one logo in the main bar when panels open (saved e
  const footer = within(root).getByText(/AO3 Library v/)
  expect(footer.querySelector('a')).toHaveAttribute('href', 'https://library.test/settings#ios-safari-userscript')
  expect(footer.hidden).toBe(true)
- expect(within(root).getByRole('link', { name: 'View in between chapters library' })).toHaveAttribute('href', saved ? 'https://library.test/stories/fic-entry' : 'https://library.test/library')
+ expect(within(root).getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', saved ? 'https://library.test/stories/fic-entry' : 'https://library.test/library')
  const toolbar = root.querySelector('.library-link').parentElement
  if (saved) {
   const summary = root.querySelector('.reading-summary')
   expect([...summary.children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10chapters read'])
   expect([...bottomRoot.querySelector('.reading-summary').children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10chapters read'])
   expect(summary.querySelector('.status-bullet')).toHaveAttribute('aria-hidden', 'true')
-  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Mark through chapter 4 as read'))
+  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Mark Through Chapter 4 as Read'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Edit'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Connection'))
  }
@@ -296,7 +296,7 @@ it('marks the latest WIP chapter read without finishing the fic', async () => {
   return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
  })
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/110')
- fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark through chapter 10 as read' }))
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Through Chapter 10 as Read' }))
  await waitFor(() => expect(entry).toMatchObject({ status: 'reading', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 10 / 10')).toBeInTheDocument()
@@ -312,7 +312,7 @@ it('places only progress controls before kudos and immediately updates both bars
  expect(within(bottomRoot).queryByRole('button', { name: 'Connection' })).not.toBeInTheDocument()
  let finish
  network.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
- fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark through chapter 4 as read' }))
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Through Chapter 4 as Read' }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 4 / 10')).toBeInTheDocument()
   expect(within(surface).getByText('Read')).toBeInTheDocument()
@@ -321,7 +321,7 @@ it('places only progress controls before kudos and immediately updates both bars
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save'))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 2 / 10')).toBeInTheDocument()
-  expect(within(surface).getByRole('button', { name: 'Mark through chapter 4 as read' })).toBeEnabled()
+  expect(within(surface).getByRole('button', { name: 'Mark Through Chapter 4 as Read' })).toBeEnabled()
  }
  expect(within(bottomRoot).getByText(/Could not save/)).toBeInTheDocument()
 })
@@ -405,7 +405,7 @@ it('requires review for restored legacy drafts without a baseline instead of tru
  storage.set('draft:https://backend.test:alice:123', { version: 'v1', status: 'reading', chapter: 2, chapterFinished: false, notes: 'Saved notes', rating: '', tags: 'Old tag', collections: [] })
  await mount(); await toggle('Edit', true)
  fireEvent.click(findButton('Reload Saved Entry'))
- const review = await within(root).findByRole('region', { name: 'Review conflicting edits' })
+ const review = await within(root).findByRole('region', { name: 'Review Conflicting Edits' })
  expect(within(review).getByText('Old tag')).toBeVisible()
  expect(within(review).getByText('New tag')).toBeVisible()
  expect(findButton('Save')).toBeDisabled()
@@ -467,19 +467,19 @@ const ratingInfoSave = () => within(root).getByText('Save Rating Info', { select
 const defaultRatingInfo = 'Add how your personal rating system corresponds to the stars here! Edit this text in settings. To hide the info symbol, leave the box blank.'
 it('edits rating info beside color mode, persists it, and preserves personal drafts', async () => {
  await mount(); await toggle('Add to Library', true)
- fireEvent.click(within(root).getByRole('radio', { name: '4 out of 5 stars' }))
- fireEvent.change(within(root).getByRole('textbox', { name: 'Personal tags', exact: true }), { target: { value: 'Unfinished tag' } })
+ fireEvent.click(within(root).getByRole('radio', { name: '4 Out of 5 Stars' }))
+ fireEvent.change(within(root).getByRole('textbox', { name: 'Personal Tags', exact: true }), { target: { value: 'Unfinished tag' } })
  expect(root.querySelector('.rating-info > span')).toHaveTextContent(defaultRatingInfo)
  expect(root.querySelector('.rating-info').previousElementSibling).toHaveTextContent('Clear Rating')
  await toggle('Connection', true)
  const settings = root.querySelector('.connection-settings')
  expect(within(settings).getByRole('button', { name: 'Dark Mode' })).toBeVisible()
  expect(within(settings).getByRole('button', { name: 'Rating Info' })).toBeVisible()
- expect(within(root).queryByRole('textbox', { name: 'Rating info text' })).not.toBeInTheDocument()
+ expect(within(root).queryByRole('textbox', { name: 'Rating Info Text' })).not.toBeInTheDocument()
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
  await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
- const input = await within(root).findByLabelText('Rating info text')
+ const input = await within(root).findByLabelText('Rating Info Text')
  expect(input).toHaveValue(defaultRatingInfo)
  expect(root.activeElement).toBe(input)
  const custom = '1 star: Not for me\n5 stars: A favorite <3'
@@ -489,8 +489,8 @@ it('edits rating info beside color mode, persists it, and preserves personal dra
  await waitFor(() => expect(accountRatingInfo).toBe(custom))
  await toggle('Add to Library', true)
  expect(root.querySelector('.rating-info > span').textContent).toBe(custom)
- expect(within(root).getByRole('radio', { name: '4 out of 5 stars' })).toBeChecked()
- expect(within(root).getByRole('textbox', { name: 'Personal tags', exact: true })).toHaveValue('Unfinished tag')
+ expect(within(root).getByRole('radio', { name: '4 Out of 5 Stars' })).toBeChecked()
+ expect(within(root).getByRole('textbox', { name: 'Personal Tags', exact: true })).toHaveValue('Unfinished tag')
  expect(network.mock.calls.some(([request]) => JSON.parse(request.data).p_action === 'rating_save')).toBe(true)
  document.getElementById('ao3-library-companion').remove()
  await mount(); await toggle('Add to Library', true)
@@ -499,25 +499,25 @@ it('edits rating info beside color mode, persists it, and preserves personal dra
 
 it.each(['', ' \n '])('hides rating info when saved text is blank (%j), including after remount', async blank => {
  await mount(); await toggle('Add to Library', true)
- expect(within(root).getByRole('button', { name: 'Personal rating info' })).toBeVisible()
+ expect(within(root).getByRole('button', { name: 'Personal Rating Info' })).toBeVisible()
  await toggle('Connection', true)
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
  await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
- const input = await within(root).findByLabelText('Rating info text')
+ const input = await within(root).findByLabelText('Rating Info Text')
  fireEvent.input(input, { target: { value: blank } })
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
  fireEvent.click(ratingInfoSave())
  await waitFor(() => expect(accountRatingInfo).toBe(blank))
  await toggle('Add to Library', true)
- expect(within(root).queryByRole('button', { name: 'Personal rating info' })).not.toBeInTheDocument()
+ expect(within(root).queryByRole('button', { name: 'Personal Rating Info' })).not.toBeInTheDocument()
  document.getElementById('ao3-library-companion').remove()
  await mount(); await toggle('Connection', true)
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
- expect(await within(root).findByLabelText('Rating info text')).toHaveValue(blank)
+ expect(await within(root).findByLabelText('Rating Info Text')).toHaveValue(blank)
  await toggle('Add to Library', true)
- expect(within(root).queryByRole('button', { name: 'Personal rating info' })).not.toBeInTheDocument()
+ expect(within(root).queryByRole('button', { name: 'Personal Rating Info' })).not.toBeInTheDocument()
 })
 
 it('keeps saved rating info on network failure and allows retry', async () => {
@@ -526,7 +526,7 @@ it('keeps saved rating info on network failure and allows retry', async () => {
  await waitFor(() => expect(findButton('Rating Info')).toBeEnabled())
  fireEvent.click(findButton('Rating Info'))
  await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
- const input = await within(root).findByLabelText('Rating info text')
+ const input = await within(root).findByLabelText('Rating Info Text')
  fireEvent.input(input, { target: { value: 'New explanation' } })
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
  network.mockResolvedValueOnce({ status: 503, responseText: '{}' })
@@ -650,7 +650,7 @@ it('preserves a later-chapter draft and does not save when the work summary requ
  expect(findButton('Save')).toBeEnabled()
 })
 
-it.each(['safari', 'chrome'])('uses Add/Edit collection controls without an Add heading in %s', async browser => {
+it.each(['safari', 'chrome'])('uses Add/Edit Collection controls without an Add heading in %s', async browser => {
  network.mockResolvedValue({ status: 200, responseText: JSON.stringify({ entry: null, collections: [{ id: 'weekend', name: 'Weekend reads' }] }) })
  await mountLibrary(document, 'https://archiveofourown.org/works/123', { browser })
  await toggle('Add to Library', true)
@@ -680,7 +680,7 @@ it.each(['safari', 'chrome'])('places series work disclosures below names and ex
  expect(root.querySelector('#library-editor h3')).toBeNull()
  const choice = root.querySelector('[data-work-choice]').closest('label')
  expect(choice.nextElementSibling.tagName).toBe('DETAILS')
- expect(choice.nextElementSibling.querySelector('summary')).toHaveTextContent('Details below apply only to this work when selected.')
+ expect(choice.nextElementSibling.querySelector('summary')).toHaveTextContent('Details Below Apply Only to This Work When Selected.')
  const help = within(root).getByLabelText('About Reload Saved Series')
  fireEvent.click(help)
  expect(help.closest('details')).toHaveTextContent('Reloading does not save your draft or refresh AO3 metadata.')
@@ -692,7 +692,7 @@ it.each(['safari', 'chrome'])('marks To Read and Paused chapters as read in both
   document.getElementById('ao3-library-companion')?.remove()
   entry = { version: 'v1', status, progress: 1, notes: 'Keep', rating: 3, tags: [], collections: [] }
   await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
-  const label = 'Mark through chapter 4 as read'
+  const label = 'Mark Through Chapter 4 as Read'
   expect(within(root).getByRole('button', { name: label })).toBeVisible()
   const complete = within(bottomRoot).getByRole('button', { name: label })
   network.mockImplementationOnce(async ({ data }) => {
@@ -712,7 +712,7 @@ it('starts a To Read one-shot as Currently Reading when its chapter is marked re
  document.querySelector('#selected_id').remove()
  entry = { version: 'v1', status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }
  await mountLibrary(document, 'https://archiveofourown.org/works/123')
- fireEvent.click(findButton('Mark through chapter 1 as read'))
+ fireEvent.click(findButton('Mark Through Chapter 1 as Read'))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'reading', progress: 1 })
 })
@@ -752,8 +752,8 @@ it('can explicitly copy an older device-only explanation into the shared account
  await mount(); await toggle('Connection', true)
  fireEvent.click(findButton('Rating Info'))
  await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
- fireEvent.click(within(root).getByText('Use this device’s previous explanation', { selector: 'button' }))
- expect(within(root).getByLabelText('Rating info text')).toHaveValue('My previous stars')
+ fireEvent.click(within(root).getByText('Use This Device’s Previous Explanation', { selector: 'button' }))
+ expect(within(root).getByLabelText('Rating Info Text')).toHaveValue('My previous stars')
  expect(accountRatingInfo).toBeNull()
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
  fireEvent.click(ratingInfoSave())

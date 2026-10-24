@@ -6,7 +6,7 @@ import { Plus } from 'lucide-react'
 export function CollectionChoices({ collections, selected, onChange }: {
   collections: Collection[]; selected: string[]; onChange: (selected: string[]) => void
 }) {
-  return <SearchableChoices options={collections.filter(collection => !collection.default_key && !collection.automatic_rules)} selected={selected} onChange={onChange} label="Search collections" />
+  return <SearchableChoices options={collections.filter(collection => !collection.default_key && !collection.automatic_rules)} selected={selected} onChange={onChange} label="Search Collections" />
 }
 
 export function SearchableChoices({ options, selected, onChange, label, disabledIds = [] }: {
@@ -20,7 +20,7 @@ export function SearchableChoices({ options, selected, onChange, label, disabled
   </label>)}{!choices.length && <p className="muted">No matches found.</p>}</div></div>
 }
 
-export function NewCollectionButton({ label = 'New collection', disabled = false, className = 'button secondary', iconOnly = false, onCreated }: { label?: ReactNode; disabled?: boolean; className?: string; iconOnly?: boolean; onCreated?: (id: string) => void }) {
+export function NewCollectionButton({ label = 'New Collection', disabled = false, className = 'button secondary', iconOnly = false, onCreated }: { label?: ReactNode; disabled?: boolean; className?: string; iconOnly?: boolean; onCreated?: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
@@ -29,5 +29,5 @@ export function NewCollectionButton({ label = 'New collection', disabled = false
     wasOpen.current = open
   }, [open])
   function close() { setOpen(false) }
-  return <><button ref={trigger} type="button" className={iconOnly ? 'icon-button inline-edit-icon' : className} aria-label={iconOnly ? 'New collection' : undefined} title={iconOnly ? 'New collection' : undefined} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>{iconOnly ? <Plus size={16} aria-hidden="true" /> : label}</button>{open && <NewCollectionDialog onClose={close} onCreated={onCreated} />}</>
+  return <><button ref={trigger} type="button" className={iconOnly ? 'icon-button inline-edit-icon' : className} aria-label={iconOnly ? 'New Collection' : undefined} title={iconOnly ? 'New Collection' : undefined} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>{iconOnly ? <Plus size={16} aria-hidden="true" /> : label}</button>{open && <NewCollectionDialog onClose={close} onCreated={onCreated} />}</>
 }

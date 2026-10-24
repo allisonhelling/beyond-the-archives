@@ -66,14 +66,14 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
     <DisplayInfo group="seriesHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> }}</DisplayInfo>
     <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> }}</DisplayInfo>
     <div className="story-title-toggles">{favorite}</div>
-    <div className="story-metadata-actions"><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
+    <div className="story-metadata-actions"><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')
      try { await removeSeriesDetails(seriesId); await refreshSeries(seriesId) } catch (error) { setError(error instanceof Error ? error.message : 'Could not remove series details.') } finally { setBusy(false) }
     }}>Remove</button>}</Tooltip>}</div>
    </div>
 <DisplayInfo group="seriesHeader">{{
 stats: <>    <dl className="details-story-stats"><DisplayInfo group="seriesStats">{{
-words: <> <div><dt>{basic ? 'Words in your library' : 'Word count'}</dt><dd><strong>{series.wordCount?.toLocaleString() ?? '?'}</strong> words</dd></div> </>,
+words: <> <div><dt>{basic ? 'Words in Your Library' : 'Word Count'}</dt><dd><strong>{series.wordCount?.toLocaleString() ?? '?'}</strong> words</dd></div> </>,
 publication: <> <div><dt>Publication Status</dt><dd><strong>{seriesCompletionLabel(series)}</strong></dd></div> </>,
 updated: <> <div><dt>AO3 Series Updated</dt><dd><strong>{ao3Date(series.updated)}</strong></dd></div> </>,
 works: <> <div><dt>Works</dt><dd> <strong>{series.savedStories.length}</strong> in your library{!basic && <> · <strong>{series.workCount ?? '?'}</strong> works total</>}</dd></div> </>
@@ -90,23 +90,23 @@ source: <>
    try { const batch = await submitImport(works.map(work => work.url).join('\n'), false, status, seriesIds); if (batch) { const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'}); await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : [])) }; await refreshSeries(seriesId); setReview(false); seriesBehavior.reset() } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') } finally { setBusy(false) }
   }} onCancel={() => setReview(false)} /></Dialog>}
 <DisplayInfo group="seriesPage">{{
-description: <>   {(series.description || series.creatorNotes) && <section className="settings-card details-fic-panel" aria-label="Series description"><dl className="metadata-list details-fic-fields">
+description: <>   {(series.description || series.creatorNotes) && <section className="settings-card details-fic-panel" aria-label="Series Description"><dl className="metadata-list details-fic-fields">
 <DisplayInfo group="seriesDescription">{{
 description: <>    {series.description && <div><dt>Description</dt><dd className="story-summary story-details-summary">{series.description}</dd></div>} </>,
 creatorNotes: <>    {series.creatorNotes && <div><dt>Creator Notes</dt><dd className="story-summary">{series.creatorNotes}</dd></div>} </>
 }}</DisplayInfo>
   </dl></section>} </>,
 progress: <>
-  <section className="settings-card details-progress-panel" aria-label="Reading and organization"><div className="series-progress-controls"><div className="series-progress-columns"><div className="series-progress-state"><div className="story-section-heading"><h2>Your progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}</div><div className="series-import-actions">{!basic && series.savedStories.length !== series.workCount && <button className="button secondary" aria-pressed={hideUnsaved} onClick={() => setHideUnsaved(!hideUnsaved)}>{hideUnsaved ? 'Show Works Not in Library' : 'Hide Works Not in Library'}</button>}<button className="button secondary series-choose-works" disabled={busy || sampleMode} onClick={() => setReview(!review)}>Choose Works to Import</button></div></div></section> </>,
-notes: <>   <section className="details-private-notes" aria-label="Private notes"><PersonalNote key={seriesId} notes={record?.notes ?? ''} disabled={busy} onSave={async (notes, base) => { await ensureSeries(series); await saveSeriesNote(seriesId, notes, base) }} onRefresh={() => refreshSeries(seriesId)} /></section> </>,
-works: <>   <section aria-label="Works in series"><h2>{basic ? 'Works in your library' : 'Works in this series'}</h2><div className="story-grid">{visibleWorks.map(work => {
+  <section className="settings-card details-progress-panel" aria-label="Reading and Organization"><div className="series-progress-controls"><div className="series-progress-columns"><div className="series-progress-state"><div className="story-section-heading"><h2>Your Progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}</div><div className="series-import-actions">{!basic && series.savedStories.length !== series.workCount && <button className="button secondary" aria-pressed={hideUnsaved} onClick={() => setHideUnsaved(!hideUnsaved)}>{hideUnsaved ? 'Show Works Not in Library' : 'Hide Works Not in Library'}</button>}<button className="button secondary series-choose-works" disabled={busy || sampleMode} onClick={() => setReview(!review)}>Choose Works to Import</button></div></div></section> </>,
+notes: <>   <section className="details-private-notes" aria-label="Private Notes"><PersonalNote key={seriesId} notes={record?.notes ?? ''} disabled={busy} onSave={async (notes, base) => { await ensureSeries(series); await saveSeriesNote(seriesId, notes, base) }} onRefresh={() => refreshSeries(seriesId)} /></section> </>,
+works: <>   <section aria-label="Works in Series"><h2>{basic ? 'Works in Your Library' : 'Works in This Series'}</h2><div className="story-grid">{visibleWorks.map(work => {
    const saved = savedById.get(work.workId)
    return saved ? <StoryCard key={work.workId} story={saved} /> : <article className="story-card work-card" key={work.workId}><h2><a href={work.url} target="_blank" rel="noreferrer">{work.position ? `Part ${work.position}: ` : ''}{work.title}</a></h2><DisplayInfo group="workTile">{{
     ...workMetadataFields({ metadata: seriesWorkMetadata(work, series), original_url: work.url, work: { ao3_work_id: work.workId, language: work.language ?? null, ao3_published_at: null, ao3_updated_at: work.updated ?? null } }, 'tile'),
   }}</DisplayInfo><Link className="story-details-link clickable-text" to="/add" state={{ workUrl: work.url }}>Add to Library</Link></article>
   })}</div>{!visibleWorks.length && <p>{busy ? 'Loading the series work list…' : hideUnsaved ? 'No works from this series are in your library.' : 'No available works saved for this series.'}</p>}</section> </>,
 information: <>
-  <section className="settings-card details-fic-panel" aria-label="Series information"><dl className="metadata-list details-fic-fields">
+  <section className="settings-card details-fic-panel" aria-label="Series Information"><dl className="metadata-list details-fic-fields">
 <DisplayInfo group="seriesInfo">{{
 category: <div><dt>Category</dt><dd><MetadataTags values={info.categories} /></dd></div>,
 libraryCount: <div><dt>Works in Library</dt><dd>{series.savedStories.length}</dd></div>,
@@ -118,7 +118,7 @@ warnings: <div><dt>AO3 Warnings</dt><dd><MetadataTags values={info.warnings} cat
 kudos: <div><dt>AO3 Kudos</dt><dd>{seriesKudosLabel(info)}</dd></div>,
 begun: <>    <div><dt>Series Begun</dt><dd>{formatDate(series.begun)}</dd></div> </>,
 saved: <>    <div><dt>Saved</dt><dd>{record ? formatDateTime(record.created_at) : 'Not saved yet'}</dd></div> </>,
-edited: <>    <div><dt>Last edited</dt><dd>{record ? formatDateTime(record.updated_at) : 'Not saved yet'}</dd></div> </>
+edited: <>    <div><dt>Last Edited</dt><dd>{record ? formatDateTime(record.updated_at) : 'Not saved yet'}</dd></div> </>
 }}</DisplayInfo>
   </dl></section> </>
 }}</DisplayInfo>

@@ -310,14 +310,14 @@ it('seeds every play it again work and reuses their metadata for the fully loade
 it('adds the new series to older previews once, preserving edits and removed stories', async () => {
   const library = await loadSampleLibrary(), removed = library.stories[0]
   const edited = library.stories.find(story => story.work.ao3_work_id === 862320)!
-  edited.notes = 'Keep my draft'; edited.metadata.title = 'My title'; edited.last_read_chapter = 1
+  edited.notes = 'Keep My Draft'; edited.metadata.title = 'My title'; edited.last_read_chapter = 1
   library.stories = library.stories.filter(story => story.id !== removed.id && story.work.ao3_work_id !== 2034597)
   library.series[0].notes = 'Existing series note'
   delete library.sampleVersion
   window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
   const upgraded = await loadSampleLibrary()
   expect(upgraded.stories.some(story => story.id === removed.id)).toBe(false)
-  expect(upgraded.stories.find(story => story.id === edited.id)).toMatchObject({ notes: 'Keep my draft', last_read_chapter: 1, metadata: { title: 'My title' } })
+  expect(upgraded.stories.find(story => story.id === edited.id)).toMatchObject({ notes: 'Keep My Draft', last_read_chapter: 1, metadata: { title: 'My title' } })
   expect(upgraded.stories.filter(story => story.work.ao3_work_id === 2034597)).toHaveLength(1)
   expect(upgraded.series).toHaveLength(4)
   expect(upgraded.series[0].notes).toBe('Existing series note')

@@ -39,7 +39,7 @@ test('previews a compressed backup and saves the current library before a confir
   await page.goto('/settings#settings-backup')
   await login(page)
   const section = page.locator('#settings-backup')
-  await section.getByLabel('Choose backup file').setInputFiles({ name: 'library.json.gz', mimeType: 'application/gzip', buffer: gzipSync(JSON.stringify(old)) })
+  await section.getByLabel('Choose Backup File').setInputFiles({ name: 'library.json.gz', mimeType: 'application/gzip', buffer: gzipSync(JSON.stringify(old)) })
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   expect(events).toEqual(['preview'])

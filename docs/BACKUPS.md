@@ -1,4 +1,4 @@
-# Library backups
+# Library Backups
 
 DNF cleanup adds compact reading records and account cleanup preferences to JSON backups, and `reading_records.csv` to CSV exports. Apply `20261024000200_dnf_cleanup.sql` for these fields. Older version-1 files remain accepted with an empty compact archive. See [DNF cleanup](DNF_CLEANUP.md) for retention and recovery behavior.
 
@@ -8,7 +8,7 @@ Included: all library entries and their original URLs, source metadata and norma
 
 Excluded: Auth accounts/passwords/sessions, API keys, paired-device secrets, active worker lease credentials, global worker throttling/fairness state, backup save cooldown/leases, and derived search documents. Recreate Auth accounts and reconnect paired devices as needed. The application schema, policies and functions come from migrations, rather than the data file. This is an account data export, not a whole Supabase project dump. Future incompatible schema changes must bump the backup version and add a format migration before accepting older files.
 
-## Restore your own account in the app
+## Restore Your Own Account in the App
 
 Under Settings → Export Backup → Restore Backup, choose a local JSON/JSON.gz file or preview a saved Supabase backup. Files must use backup version 1 and belong to the signed-in account. CSV ZIP exports are for spreadsheets and cannot be restored here. The file limit is 50 MiB, with a 128 MiB expanded limit for compressed files.
 
@@ -22,7 +22,7 @@ After a successful database restore, the app applies the five allowlisted browse
 
 This uses the existing authenticated client, Storage bucket, and `save-backup` Edge Function; there is no new endpoint to deploy. The account-restore migration must be applied before releasing this frontend. The safety copy also remains if the replacement fails after upload.
 
-## Administrator restore of application tables
+## Administrator Restore of Application Tables
 
 Use a trusted terminal with this repository and installed dependencies. Configure `SUPABASE_URL` and the server-only `SUPABASE_SECRET_KEY` in the environment or `.env.worker`. Never put the secret in a `VITE_*` variable. Apply the migrations to the destination project first, and create/invite the target Auth account. Use its UUID from Supabase Authentication, which may differ from the exported account UUID.
 
@@ -43,7 +43,7 @@ New Auth accounts receive starter collections automatically, so normally require
 
 In-flight metadata jobs resume as pending with fresh leases; an interrupted fourth attempt can run again. Completed and failed history stays intact. Restart workers after successful restoration, and reload the application. The administrator function remains restricted to the service role. Browser users can invoke only the account-scoped preview and restore wrappers described above.
 
-## Restore browser preferences
+## Restore Browser Preferences
 
 Database restore cannot access browser storage. To restore preferences from the companion `<backup.json>.browser-preferences.json` file written by the restore command, open the app's developer console and run this snippet. Choose that companion file when prompted (it remaps hidden collection IDs for the destination account); the page reloads after applying its five allowlisted settings. Other local storage, including sign-in credentials, is untouched.
 
@@ -65,7 +65,7 @@ picker.onchange = async () => {
 picker.click();
 ```
 
-## Backend storage
+## Backend Storage
 
 Choose **Save Backup to Supabase** to create a timestamped, immutable object under your account's folder in the private `library-backups` bucket. Native browser gzip compression is used when available; otherwise plain JSON is saved. Saved copies appear with their date/size and Download/Delete actions. Deletion uses the shared confirmation dialog. A new backup never overwrites an older copy, and users cannot list, download, upload into, or delete another account's backups. Creation and retention run through the authenticated `save-backup` Edge Function. Direct browser uploads are denied by Storage policies. Downloads and manual deletion use owner-scoped Storage access; no public or signed URLs are created.
 

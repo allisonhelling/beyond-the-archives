@@ -31,7 +31,7 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
   }
   return Object.fromEntries(Object.entries(values).map(([key, value]) => {
     const label = ao3MetadataLabels[key as keyof typeof ao3MetadataLabels]
-    if (layout === 'info') return [key, <div key={key}><dt className={key === 'allTags' ? 'sr-only' : undefined}>{label}</dt><dd className={key === 'summary' ? 'story-summary story-details-summary' : undefined}>{key === 'allTags' ? <details className="details-disclosure"><summary>All tags</summary>{value}</details> : value}</dd></div>]
+    if (layout === 'info') return [key, <div key={key}><dt className={key === 'allTags' ? 'sr-only' : undefined}>{label}</dt><dd className={key === 'summary' ? 'story-summary story-details-summary' : undefined}>{key === 'allTags' ? <details className="details-disclosure"><summary>All Tags</summary>{value}</details> : value}</dd></div>]
     if (key === 'summary') return [key, <>{metadata.summary && <><hr className="story-summary-divider" /><div className="story-summary">{value}</div></>}</>]
     if (key === 'authors') return [key, <p className="authors">By {value}</p>]
     if (key === 'fandoms') return [key, <p className="muted">{value}</p>]

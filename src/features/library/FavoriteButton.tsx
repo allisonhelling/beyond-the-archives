@@ -3,7 +3,7 @@ import { Tooltip } from '../../components/Tooltip'
 
 type ToggleProps = { selected: boolean; disabled?: boolean; onChange: (selected: boolean) => void; menu?: boolean }
 const kinds = {
- favorite: { Icon: Star, className: 'favorite', description: 'Favorite', mark: 'Mark favorite', unmark: 'Unmark favorite' },
+ favorite: { Icon: Star, className: 'favorite', description: 'Favorite', mark: 'Mark Favorite', unmark: 'Unmark Favorite' },
  rec: { Icon: Heart, className: 'bookmark-rec', description: 'Rec', mark: 'Mark as Rec', unmark: 'Remove Rec' },
 }
 export function PersonalToggleButton({ kind, selected, disabled, onChange, menu = false }: ToggleProps & { kind: keyof typeof kinds }) {

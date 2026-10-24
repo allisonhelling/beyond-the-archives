@@ -6,7 +6,7 @@ Phase 2 implements a private, manually managed library: story creation and editi
 
 The additive Phase 2 migration was applied to the local development Supabase stack. No hosted database was changed or deployed during this phase.
 
-## Code organization
+## Code Organization
 
 Keep components, behavior, styles, and unit tests beside the feature that owns them:
 
@@ -25,7 +25,7 @@ Keep components, behavior, styles, and unit tests beside the feature that owns t
 
 Build commands remain in `scripts/`. Installable output still goes to `userscript/dist/`, `extension/dist/`, and `extension/local/dist/`. Shared card, form, and layout primitives stay in `src/styles.css`. Feature-only styles live beside their components; browsing, display, and summary styles load through `src/main.tsx`. Browser integration tests stay in `tests/e2e/`. Extend these feature boundaries incrementally when changing related code.
 
-## AO3 metadata capture and display
+## AO3 Metadata Capture and Display
 
 The browser bar rereads work metadata when saving a new work. If a later chapter omits the work summary, it retrieves the first work page on AO3 before saving. Chapter summaries and chapter text are excluded from the saved metadata. Existing entries can use **Collect metadata** to refresh the same fields while keeping personal edits.
 
@@ -33,17 +33,17 @@ Settings → Tile and Page Information offers **Category** (AO3 relationship cat
 
 Apply `20261023000500_complete_ao3_metadata.sql` for language and companion statistics, deploy the updated app/worker, and reload the rebuilt Chrome companion (v0.6.2). Existing incomplete records need a metadata refresh or **Collect metadata**; this change does not queue unsolicited refreshes.
 
-## Summary formatting and tile text
+## Summary Formatting and Tile Text
 
 Desktop work tiles (above the 1100px mobile-layout breakpoint) use the same 15px minimum text size as work info summaries. Mobile tile and summary typography keeps its existing sizes. Imported summaries retain semantic formatting (including emphasis, bold, paragraphs, line breaks, lists, and links) in a separate `summary_html` metadata field; plain summaries remain available for search and manual editing. The shared renderer strips active content and unsafe attributes. Plain-text manual corrections take precedence over older formatted metadata.
 
 Apply `20261023000400_formatted_work_summaries.sql` and deploy the updated metadata worker and website. Rebuild/reload the Chrome extension or Safari userscript for imports from those companions. Refresh metadata for previously saved works to recover formatting; formatting discarded by older imports cannot be reconstructed from their plain text. Local builds do not deploy or apply these changes automatically.
 
-## Run locally
+## Run Locally
 
 Run commands from `FanficTrackerLibrary/`. Requires Node **22.12+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
 
-### First-time setup and database upgrades
+### First-Time Setup and Database Upgrades
 
 ```sh
 npm ci
@@ -72,7 +72,7 @@ Without valid public configuration, the app shows a setup screen. Server secret/
 
 Open local Studio at `http://127.0.0.1:54323` to invite a development user. Invitation and recovery emails appear at `http://127.0.0.1:54324`. Follow the invitation to set a password; public registration is disabled. The [Supabase setup section](#set-up-supabase) covers Auth configuration and operator invitations.
 
-### Start each local session
+### Start Each Local Session
 
 Start Docker Desktop, then ensure Supabase is running:
 
@@ -92,7 +92,7 @@ Use the URL printed by Vite. For extension mode, it must match `EXTENSION_APP_OR
 
 **Extension mode needs both the website and the Edge Function handler.** A successful “Extension connected” message confirms authentication but does not prove the handler is running. If it is stopped, metadata uploads fail and older requests can hold up the queue. A `503` with `name resolution failed` from `/functions/v1/extension-metadata` means the local function runtime is unavailable; start terminal 2 and reconnect in Settings.
 
-### Build and connect the local browser extension
+### Build and Connect the Local Browser Extension
 
 With `.env.local` pointing to local Supabase, build into the local directory so the hosted extension build is preserved:
 
@@ -104,7 +104,7 @@ In Chrome/Edge, open `chrome://extensions` or `edge://extensions`, enable Develo
 
 Import one work with **Add → Add Story**, which opens **Add Story → Import from link**, or use **Add → Import History from AO3** for batches. Importing a verified chapter link opens the existing fic when already saved and sets its reading location: chapter 10 means chapters 1–9 read. This also supports returning to an earlier chapter. Metadata-only refreshes preserve reading location; edits made while retrieval is pending take precedence. Existing queued requests keep their original retrieval mode. See [the extension guide](companions/chrome/README.md) for hosted builds and detailed behavior.
 
-### Configure the direct metadata worker
+### Configure the Direct Metadata Worker
 
 For **Direct retrieval** in Settings, create the ignored `.env.worker` with these server-only values from local Supabase status:
 
@@ -121,7 +121,7 @@ npm run worker -- --once
 
 The worker processes direct jobs; the extension and Edge Function handler process extension jobs. Run the service for the mode being tested. Neither service changes the mode of already queued requests.
 
-### Test a production build locally
+### Test a Production Build Locally
 
 ```sh
 npm run build
@@ -130,7 +130,7 @@ npm run preview
 
 Open the preview URL printed by Vite, normally `http://127.0.0.1:4173`. Preview serves the built frontend; Supabase and the selected metadata service must still be running. To test extension imports there, run `EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:4173 npm run build:extension:local`, reload the local extension, and reconnect in Settings. The local extension ID is selected automatically. Settings stored under port 5173 do not carry over to port 4173.
 
-### Stop local services
+### Stop Local Services
 
 Press **Ctrl+C** in the Vite, function-handler, preview, and worker terminals that you started. When finished with the local database:
 
@@ -140,7 +140,7 @@ npx supabase stop
 
 The default stop keeps a database backup for the next start. Avoid `--no-backup` when keeping development data.
 
-### Optional: reset disposable local data
+### Optional: Reset Disposable Local Data
 
 Only when you deliberately want to erase and recreate the local database:
 
@@ -150,7 +150,7 @@ npx supabase db reset --local
 
 This deletes local library entries and test accounts and reapplies migrations. Use `npx supabase migration up --local` for normal upgrades instead.
 
-## Preview with sample stories
+## Preview With Sample Stories
 
 Both `npm run dev` and `npm run dev:sample` show a **Local preview** toolbar on localhost. Select **Mobile · 390px** to test the existing responsive layout in a narrow viewport, then **Desktop** to expand it again. Save edits before entering mobile preview for the first time, which reloads the app in an embedded viewport. Subsequent switches keep that viewport mounted. These controls are excluded from production builds.
 
@@ -168,7 +168,7 @@ The underlying AO3 metadata snapshots were captured October 15–21, 2026. The s
 
 Two works require AO3 sign-in: **On My Love** (8577016) and **Something’s Different About You Lately** (24973237). Their title, author, and fandom come from [a public reference for On My Love](https://fanfics.me/ftf213074) and [a public recommendation listing Something’s Different About You Lately](https://www.tumgik.com/tag/reset%20rewind%20rewrite). Their summary, tags, rating, dates, chapter counts, and publication status remain unknown. Their original chapter links are preserved, and you can fill in details in preview. No AO3 account credentials are used.
 
-## Use the manual library
+## Use the Manual Library
 
 1. Sign in with your invited account. Choose **Library → Add Story**, or **Add → Add Story**. Add Story opens with link import selected; choose **Enter manually** to use the manual form.
 2. Enter an AO3 work URL and title. Enter optional authors, fandoms, tags, summary, rating, and chapter counts by hand. Each entered author has an optional AO3 author-page URL field; saved links make their name clickable on work cards and story details. These links are private manual metadata and can also be edited with the story's metadata. Leave unknown counts blank.
@@ -189,13 +189,15 @@ Work-card author lines use smaller “By …” text. Story details use a larger
 
 Work cards show maroon publication status, favorite and action-menu controls at the top, then the summary, full-details link, read/caught-up actions, and clickable chapter progress. The read button has square corners and fills the available row width; Mark as Caught Up shows button styling on hover or keyboard focus. Reading status and metadata dates remain available in full details. Details pages return to the originating Currently Reading tile or Library shelf, including after a refresh or edit. Canonical, original provided, and updated provided URLs are clickable metadata rows; verified chapter links are visibly underlined. **Mark as Finished** marks a fic Finished and all known published chapters read. If only the total is known it uses that count; if both counts are unknown it preserves progress. Notes stay unchanged. The action offers the same two-minute Undo notice. Unverified chapter destinations use a Read on AO3 button pointing to the saved link.
 
-## Shared UI templates
+## Shared UI Templates
+
+Use title case for authored page and dialog titles, section and subsection headings, control titles, button labels (including pending states), and documentation headings. Keep the app, Chrome/Edge extension, and Safari userscript consistent, including accessible action names. Preserve explicitly all-caps labels, acronyms, intentional brand styling, and user-provided or imported titles, names, and tags. Descriptive sentences remain in sentence case. Set casing in the source labels and update affected tests rather than masking it with CSS.
 
 Add `menu-surface` to a popup menu container to give its enabled buttons, links, and checkbox rows a shared hover and keyboard-focus background. Customize `--menu-hover-background` and `--menu-hover-color` on the container when needed. Story, Add, profile, filter, fandom, and suggestion menus all use it.
 
 `src/components/UndoNotice.tsx` provides a reusable Undo banner. Pass an `id`, `message`, async `onUndo`, and stable `onDismiss(id)` callback. Optional `durationMs` (default 120,000), `undoLabel`, and `dismissLabel` adapt it to other actions. It handles expiry, dismissal, pending state, and retryable errors. LibraryProvider owns reading snapshots so Undo survives route and shelf changes.
 
-## Library and Currently Reading search and filters
+## Library and Currently Reading Search and Filters
 
 Library and Currently Reading share the same filters, suggestions, sorting, grouping, and browser-saved display preferences. Library filters apply within the selected shelf or collection and include every reading status.
 
@@ -211,11 +213,11 @@ Search within results supports `*` wildcards, spaces for AND, `||` for OR, quote
 
 Grouping supports fandom, author, and manually saved series names. Edit series names in story details; this is private manual metadata, not automated series retrieval or a series navigation system. Works with several authors, fandoms, or series appear in each relevant group. Missing group metadata is labeled explicitly. Filters are held in page state and are reset after leaving/reloading the page.
 
-## Set up Supabase
+## Set Up Supabase
 
 Choose either a hosted project or a local Docker stack. Database changes always use versioned migrations under `supabase/migrations/`.
 
-### Hosted project
+### Hosted Project
 
 1. Create a Supabase project in your own account. Keep the database password and secret/service-role keys outside this repository.
 2. Authenticate the CLI interactively with `npx supabase login`, then link with `npx supabase link --project-ref YOUR_PROJECT_REF`.
@@ -239,7 +241,7 @@ These templates target the configured Site URL; use separate development/product
 
 For operator invitations, `npm run invite` is an alternative to the Dashboard. Supply `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_EMAIL`, and `APP_ORIGIN` through your trusted terminal's environment/secret manager. It calls the Admin API from `server/` with session persistence disabled. Never store the secret in frontend env files, paste it into chat, or prefix it with `VITE_`.
 
-### Local stack
+### Local Stack
 
 Follow [Run locally](#run-locally) for the complete startup, environment, extension, worker, preview, and shutdown commands. Use [Verify](#verify) for automated checks. Local Studio is at port 54323; the email inbox is at port 54324.
 
@@ -251,7 +253,7 @@ The live integration script reads local keys into process memory, creates two te
 
 If startup fails, retry `npm run db:start -- --debug` after confirming Docker Desktop is running. Already downloaded images are reused. If that returns success but lists Auth, Kong or PostgREST under **Stopped services**, run `npx supabase stop` (the default keeps a database backup), then `npm run db:start -- --debug` again. Do not use `--no-backup` for this recovery. The integration runner accepts both legacy flat status JSON and newer CLI status responses containing an `env` map. If it reports a missing API URL or keys, complete startup before retrying `npm run test:integration`; do not substitute your hosted project's credentials.
 
-## Server boundary
+## Server Boundary
 
 `server/invite-user.mjs` is a trusted operator utility, never a frontend import. No browser-accessible endpoint can create accounts or mutate shared AO3 metadata. The authenticated `save_library_story` PostgreSQL function can create a bare shared work identity and atomically save only the caller’s private manual metadata and organization.
 
@@ -265,7 +267,7 @@ npx supabase functions deploy account-status
 
 Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. The Phase 3 importer runs in a separate trusted worker; email handlers remain future work. Phase 2 library writes use a narrow authenticated PostgreSQL RPC; the account-status function remains optional.
 
-## Schema and access model
+## Schema and Access Model
 
 | Tables | Purpose and browser access |
 | --- | --- |
@@ -293,7 +295,7 @@ Key modeling decisions:
 - `collection_works.library_entry_id` intentionally references an owned library entry rather than a bare global work.
 - No later-phase import/job, series, notification, or history tables are created.
 
-## Project layout
+## Project Layout
 
 ```text
 src/
@@ -373,7 +375,7 @@ Security checks inspect frontend boundaries, reject a deliberately mislabeled pr
 
 GitHub Actions runs lint/build/tests/security/audit/browser checks and a separate Docker Supabase migration/lint/live-integration job. It also type-checks the Edge Function with Deno. No GitHub repository was supplied or connected for this project, so this workflow has not run remotely.
 
-## Vercel deployment
+## Vercel Deployment
 
 Connect your eventual GitHub repository to Vercel, choose Vite, and use `npm run build` with output `dist`. Set **only** the two public environment variables for the frontend. `vercel.json` supplies SPA route fallback, CSP and other security headers. Hosted Supabase uses `*.supabase.co`; update CSP deliberately if using a custom Supabase domain. Configure the exact production Auth URL/redirect and server `APP_ORIGIN` before inviting your production account. Verify an invite, sign-in, refresh, recovery, sign-out, unauthenticated API denial, and isolation using two accounts before relying on production.
 
@@ -383,13 +385,13 @@ Nothing was pushed, committed, migrated to a hosted database, or deployed during
 
 Requirements come from the two PDFs in this folder: Implementation Plan Phase 1 (pages 1–2), and Specification sections 2, 3, 8, 9, 11.6, and 13. Implementation references: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Supabase user management](https://supabase.com/docs/guides/auth/managing-user-data), [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [Vite environment variables](https://vite.dev/guide/env-and-mode).
 
-## Phase 3: persistent AO3 imports
+## Phase 3: Persistent AO3 Imports
 
 Open **Add → Import History from AO3** or `/imports` to submit batches of up to 2,000 URL tokens. Valid identities save immediately, independently of metadata retrieval. Run `npm run worker` in a separate terminal with ignored `.env.worker` server configuration to process persistent jobs locally; closing the import page does not stop that process. Hosted processing requires the supplied Supabase Edge Function and optional Cron/Vault setup.
 
 See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cancellation behavior, manual override protection, complete setup instructions, validation results and deployment limitations.
 
-## AO3 bookmark and Marked for Later CSV imports
+## AO3 Bookmark and Marked for Later CSV Imports
 
 On `/imports`, choose **AO3 CSV files** to review one or more scraper exports (including combined exports with `source_list`, or older separate files). Up to 2,000 unique works and 20 MB can be reviewed per import. Series bookmarks use the same work picker as mass imports: load each series, explicitly select its installments or skip it, then continue to conflict review. No series works are preselected. Bookmark notes, including saved summaries, become personal notes; bookmark tags become personal tags. Work summaries remain separate.
 
@@ -397,7 +399,7 @@ Bookmarks later than the CSV work update date become Finished, with the historic
 
 Apply migrations through `20261022000300_ao3_csv_import.sql`, deploy the updated app and `extension-metadata` Edge Function, and restart the metadata worker. Extension users must rebuild and reload the extension for chapter-index snapshots. CSV imports remain available alongside browser-tab library sync described below.
 
-## Browser-tab library sync
+## Browser-Tab Library Sync
 
 On `/imports`, **AO3 Library Sync** scans a complete unfiltered Bookmarks or Marked for Later list using AO3 Library Companion. Run each list separately. Start with **Full library scan**, then **Import scanned works**; later **Quick Sync** runs stop at previously imported record IDs. Existing personal edits are kept. Non-empty AO3 metadata on every observed work refreshes automatically, including previously saved works; empty values preserve saved fields, while zero counts and false completion flags remain valid. Explicit manual metadata corrections retain precedence. Quick Sync refreshes known rows on the overlap page, but cannot refresh works on pages it does not visit or detect removals/additions behind that boundary. Bookmark conflicts concern notes, personal tags, status, progress, or finished date—not title, summary, or AO3 statistics. Scans report these differences and keep personal data; CSV review offers Keep/Overwrite choices independently of the automatic work metadata refresh. The latest received non-empty observation wins; CSV files do not provide reliable capture timestamps to order historical snapshots.
 
@@ -415,11 +417,11 @@ Library Sync offers optional **Start page** and **End page** fields in the full 
 
 Sample mode also supports **Library Sync** through the local extension. Build/load `extension/local/dist`, run `npm run dev:sample`, and open the importer. Connecting is automatic when opening the form or starting a scan; no Supabase login or worker is needed. Scanned works save to the browser’s sample library using existing sample-story validation, keeping saved edits and ignoring duplicates. Sample scan checkpoints and baseline IDs are separate from signed-in library scans, and the extension does not claim database work while connected in sample mode. The same **Import Work or Series Links** form is also available in sample mode: paste work/chapter and series URLs, use the existing series work picker, and import selected works through the local extension. Sample work imports keep existing works, verify chapter progress from captured navigation, and wait 15 seconds between new work captures. Keep the app page open; retry interrupted imports with the same links to continue safely. CSV imports and account import history still use the connected app. After resetting sample data, run a full scan to reimport works that a prior Quick Sync baseline already knows.
 
-## Browser extension mode
+## Browser Extension Mode
 
 Chrome/Edge can retrieve metadata for your hosted library through app-requested AO3 tabs. Choose the mode in Settings; the existing direct worker remains available. The extension processes explicit work imports, metadata refreshes, series previews, and library listing scans, keeps browser results private, and preserves manual corrections. Explicit chapter-link imports update reading location; metadata-only refreshes preserve it. Build with `npm run build:extension` and follow [extension setup and deployment](companions/chrome/README.md).
 
-## Series import previews
+## Series Import Previews
 
 Paste AO3 `/series/…` links into Add Story or the bulk importer. Add Story keeps its review and results on the same page. Choose individual works, use Select all/Clear selection, or skip a series. No works are imported before confirmation. Previews stay in memory; **Load** explicitly saves a private metadata snapshot, including unsaved works, without adding those works to the library. Already-saved works are marked, overlapping selections are deduplicated, and directly pasted chapter links retain their progress-verification behavior. Summaries/tags help distinguish stories from extras without automatically excluding art or short works.
 
@@ -440,17 +442,17 @@ One-shots are detected from complete one-chapter works or exact AO3/personal tag
 
 Sort menus include reverse choices for fic and collection ordering, including **Alphabetical (Z–A)**. **Random** shuffles fic and series results and retains its seed while paging or reloading. Select another sort and then Random again for a fresh shuffle. Choices persist in the existing browser preferences. Reverse collection sorting changes only the display order; saved manual positions stay intact.
 
-## Large libraries
+## Large Libraries
 
 Library and Reading now query numbered server pages of 50 works by default. Choose 25, 50, 100 or 250 in Settings or the results toolbar. URLs preserve the selected collection, filters, grouping, sorting, page and effective size. Large pages reuse the cards with variable-height virtualization. Edits refresh affected works, and completed import batches stop polling.
 
 Apply migrations through `20261020000200_import_history_and_fairness.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
 
-## Export and restore backups
+## Export and Restore Backups
 
 Settings → Export CSV lets readers select `works.csv`, `series.csv`, `collections.csv`, and `collection_memberships.csv`, or Export all, for one ZIP download. The export includes every saved item across all pages, private notes, ratings, tags, metadata, and collection appearance and ordering. Automatic collections retain their rules and current membership; works and series include collection names. Lists and structured values use JSON inside CSV cells. Text that could be evaluated as a spreadsheet formula is prefixed with an apostrophe. This spreadsheet export reuses the existing library API and needs no additional migration or Edge Function.
 
 Settings → Export Backup downloads all of the signed-in account's application data and this browser's preferences, or saves a private compressed copy in Supabase. Saved backups can be downloaded or deleted from the same settings section. Restore Backup previews local JSON/JSON.gz files or saved copies, requires explicit replacement confirmation, and automatically saves a safety copy before restoring the signed-in account. Restores preserve other accounts and shared AO3 metadata, and reject library changes made since preview. Supabase keeps the three most recent successful copies per account, with one save attempt per minute and a 50 MiB per-file limit; local downloads are unrestricted. Apply migrations through `20261021001000_account_backup_restore.sql` and serve/deploy the existing `save-backup` Edge Function first. An administrator can still restore empty tables or replace an account's data with `npm run backup:restore`; run `npm run perf:backup` for the 10,000-work administrator round-trip check. See [backup contents, restore commands, and backend storage notes](docs/BACKUPS.md).
-## DNF cleanup
+## DNF Cleanup
 
 Settings → DNF Cleanup can automatically remove DNF fic details while preserving compact reading records. It defaults to off with a **7-day** retention period. Choose **24 hours / 7 / 30 / 60 days** or a custom duration in hours or days. Preview cleanup, protect personal details, and browse archived activity from Settings. Apply the new migration and install the hourly schedule described in [DNF cleanup setup](docs/DNF_CLEANUP.md) before expecting background cleanup.

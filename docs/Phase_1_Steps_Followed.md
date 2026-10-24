@@ -4,7 +4,7 @@ Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specificat
 
 The code foundation is implemented; a hosted Supabase project and production deployment have **not** been provisioned. Phase 2 has not started. Navigation destinations deliberately show planned features rather than story-management controls.
 
-## Run locally
+## Run Locally
 
 Requires Node **22.12+** (Node 22 LTS recommended) and npm.
 
@@ -17,11 +17,11 @@ npm run dev
 
 Open the URL printed by Vite, normally `http://127.0.0.1:5173`. Without environment configuration, the app shows a setup screen and makes no Supabase requests. The only browser configuration is the Supabase project URL and **publishable** key, or a legacy **anon** key. Never put a secret/service-role key, database password, or connection string in a `VITE_` variable. Build-time validation rejects privileged keys, even if mislabeled as public.
 
-## Set up Supabase
+## Set Up Supabase
 
 Choose either a hosted project or a local Docker stack. Database changes always use the versioned migration under `supabase/migrations/`.
 
-### Hosted project
+### Hosted Project
 
 1. Create a Supabase project in your own account. Keep the database password and secret/service-role keys outside this repository.
 2. Authenticate the CLI interactively with `npx supabase login`, then link with `npx supabase link --project-ref YOUR_PROJECT_REF`.
@@ -45,7 +45,7 @@ These templates target the configured Site URL; use separate development/product
 
 For operator invitations, `npm run invite` is an alternative to the Dashboard. Supply `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_EMAIL`, and `APP_ORIGIN` through your trusted terminal's environment/secret manager. It calls the Admin API from `server/` with session persistence disabled. Never store the secret in frontend env files, paste it into chat, or prefix it with `VITE_`.
 
-### Local stack
+### Local Stack
 
 Install and start Docker Desktop or a compatible Docker engine, then:
 
@@ -66,7 +66,7 @@ The live integration script reads local keys into process memory, creates two te
 
 If startup fails, retry `npm run db:start -- --debug` after confirming Docker Desktop is running. Already downloaded images are reused. If that returns success but lists Auth, Kong or PostgREST under **Stopped services**, run `npx supabase stop` (the default keeps a database backup), then `npm run db:start -- --debug` again. Do not use `--no-backup` for this recovery. The integration runner accepts both legacy flat status JSON and newer CLI status responses containing an `env` map. If it reports a missing API URL or keys, complete startup before retrying `npm run test:integration`; do not substitute your hosted project's credentials.
 
-## Server boundary
+## Server Boundary
 
 `server/invite-user.mjs` is a trusted operator utility, never a frontend import. No browser-accessible endpoint can create accounts or mutate shared metadata.
 
@@ -80,7 +80,7 @@ npx supabase functions deploy account-status
 
 Supabase supplies its server URL and anon key. The function is optional for rendering the Phase 1 shell; future privileged operations must remain in trusted server code and must validate authorization for each operation. Importers, library-writing endpoints, and email handlers are deliberately absent in Phase 1.
 
-## Schema and access model
+## Schema and Access Model
 
 | Tables | Purpose and browser access |
 | --- | --- |
@@ -106,7 +106,7 @@ Key modeling decisions:
 - `collection_works.library_entry_id` intentionally references an owned library entry rather than a bare global work.
 - No later-phase import/job, series, notification, or history tables are created.
 
-## Project layout
+## Project Layout
 
 ```text
 src/
@@ -148,7 +148,7 @@ Security checks inspect frontend boundaries, reject a deliberately mislabeled pr
 
 GitHub Actions runs lint/build/tests/security/audit/browser checks and a separate Docker Supabase migration/lint/live-integration job. It also type-checks the Edge Function with Deno. No GitHub repository was supplied or connected for this project, so this workflow has not run remotely.
 
-## Vercel deployment
+## Vercel Deployment
 
 Connect your eventual GitHub repository to Vercel, choose Vite, and use `npm run build` with output `dist`. Set **only** the two public environment variables for the frontend. `vercel.json` supplies SPA route fallback, CSP and other security headers. Hosted Supabase uses `*.supabase.co`; update CSP deliberately if using a custom Supabase domain. Configure the exact production Auth URL/redirect and server `APP_ORIGIN` before inviting your production account. Verify an invite, sign-in, refresh, recovery, sign-out, unauthenticated API denial, and isolation using two accounts before relying on production.
 

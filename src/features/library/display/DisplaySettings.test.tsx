@@ -169,10 +169,10 @@ it('uses the chosen tag appearance for removable filter bubbles', () => {
  const preferences = displayPreferences(), remove = vi.fn()
  preferences.tagAppearance = { shape: 'sharp', colors: { relationships: '#123abc' } }
  act(() => saveDisplay(preferences))
- const view = render(<MetadataTags values={['A/B']} category="relationships" onRemove={remove} removeLabel={value => `Remove Relationships filter ${value}`} />)
+ const view = render(<MetadataTags values={['A/B']} category="relationships" onRemove={remove} removeLabel={value => `Remove Relationships Filter ${value}`} />)
  expect(view.container.querySelector('[data-tag-shape]')).toHaveAttribute('data-tag-shape', 'sharp')
  expect(view.container.querySelector('[data-tag-category]')).toHaveStyle('--tag-color: #123abc')
- fireEvent.click(screen.getByRole('button', { name: 'Remove Relationships filter A/B' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Remove Relationships Filter A/B' }))
  expect(remove).toHaveBeenCalledWith('A/B')
 })
 
@@ -181,7 +181,7 @@ it('colors active filter tags by category and updates them when settings are sav
  preferences.tagAppearance = { shape: 'sharp', colors: { relationships: '#123abc', characters: '#456def', tags: '#789abc' } }
  act(() => saveDisplay(preferences))
  render(<ReadingFilterControls stories={[]} filters={{ ...defaultReadingFilters, relationship: 'A/B', characters: 'A', tags: 'Fluff', rating: ['Teen And Up Audiences'], personalRating: ['1'] }} onChange={vi.fn()} />)
- const active = within(screen.getByLabelText('Active filters'))
+ const active = within(screen.getByLabelText('Active Filters'))
  const tag = (label: string) => active.getByText(label).closest('.categorized-tags')
  for (const [label, color] of [['Relationships: A/B', '#123abc'], ['Characters: A', '#456def'], ['Tags: Fluff', '#789abc'], ['Content Rating: Teen and Up', 'var(--color-link)'], ['Rating: 1/5', 'var(--color-link)']]) {
   expect(tag(label)).toHaveStyle(`--tag-color: ${color}`)
@@ -227,14 +227,14 @@ it('renders fixed tile controls without duplicating grouped lines and dividers f
 it('labels hidden series in active library filters and switches to Show Series when selected', () => {
  const props = { stories: [], filters: { ...defaultReadingFilters }, onChange: vi.fn() }
  const view = render(<ReadingFilterControls {...props} />)
- expect(screen.getByLabelText('Active filters')).toHaveTextContent('Hide Series')
+ expect(screen.getByLabelText('Active Filters')).toHaveTextContent('Hide Series')
  view.rerender(<ReadingFilterControls {...props} filters={{ ...props.filters, showSeries: true }} />)
- expect(screen.getByLabelText('Active filters')).toHaveTextContent('Show Series')
- expect(screen.getByLabelText('Active filters')).not.toHaveTextContent('Hide Series')
+ expect(screen.getByLabelText('Active Filters')).toHaveTextContent('Show Series')
+ expect(screen.getByLabelText('Active Filters')).not.toHaveTextContent('Hide Series')
  view.rerender(<ReadingFilterControls {...props} mode="reading" />)
- expect(screen.queryByLabelText('Active filters')).not.toBeInTheDocument()
+ expect(screen.queryByLabelText('Active Filters')).not.toBeInTheDocument()
  view.rerender(<ReadingFilterControls {...props} automaticCollection />)
- expect(screen.queryByLabelText('Active filters')).not.toBeInTheDocument()
+ expect(screen.queryByLabelText('Active Filters')).not.toBeInTheDocument()
 })
 
 it.each(['tile', 'info'] as const)('renders every selectable AO3 field in the %s layout, including known zero statistics', layout => {
@@ -261,7 +261,7 @@ it('keeps added AO3 fields hidden until selected, preserving saved layouts', () 
 
 it('expands other metadata in the example and fills it with AO3 fields omitted elsewhere', () => {
  render(<MemoryRouter><OtherWorkMetadata story={exampleWork} expanded /></MemoryRouter>)
- expect(screen.getByText('Other metadata', { selector: 'summary' }).parentElement).toHaveAttribute('open')
+ expect(screen.getByText('Other Metadata', { selector: 'summary' }).parentElement).toHaveAttribute('open')
  expect(screen.getByText('AO3 Warnings')).toBeVisible()
  expect(screen.getByText('Date Published')).toBeVisible()
  expect(screen.getByText('Language')).toBeVisible()

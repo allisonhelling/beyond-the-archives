@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test'
 // Shared by the app and Safari companion, which render the same tag editor.
 export async function verifyPersonalTagControls(page: Page) {
   const editor = page.locator('.personal-tag-editor')
-  const input = editor.getByRole('textbox', { name: 'Personal tags', exact: true })
+  const input = editor.getByRole('textbox', { name: 'Personal Tags', exact: true })
   await input.fill('')
   const placeholderWidth = (await input.boundingBox())!.width
   const measureWidth = (await editor.locator('.tag-input-measure').boundingBox())!.width
@@ -16,13 +16,13 @@ export async function verifyPersonalTagControls(page: Page) {
   expect((await input.boundingBox())!.width).toBeLessThan((await editor.boundingBox())!.width)
   await input.fill('')
   expect(Math.abs((await input.boundingBox())!.width - placeholderWidth)).toBeLessThan(2)
-  const handle = editor.getByRole('button', { name: 'Move tag typing position' })
+  const handle = editor.getByRole('button', { name: 'Move Tag Typing Position' })
   if (!await handle.isVisible()) return
   const first = (await editor.locator('.removable-tag').first().textContent())!
   const last = (await editor.locator('.removable-tag').last().textContent())!
   await input.fill('Held draft')
   await handle.scrollIntoViewIfNeeded()
-  const source = (await handle.boundingBox())!, target = (await editor.getByRole('button', { name: 'Insert tag at start', exact: true }).boundingBox())!
+  const source = (await handle.boundingBox())!, target = (await editor.getByRole('button', { name: 'Insert Tag at Start', exact: true }).boundingBox())!
   const touch = await page.context().newCDPSession(page)
   let touching = false
   try {
@@ -37,7 +37,7 @@ export async function verifyPersonalTagControls(page: Page) {
     await expect(editor.locator('.tag-input-entry')).toHaveAttribute('data-tag-position', '0')
     expect(await editor.locator('.tag-input-entry').evaluate(element => element.nextElementSibling?.textContent)).toBe(first)
     await input.fill('')
-    await editor.getByRole('button', { name: `Insert tag after ${last}`, exact: true }).click()
+    await editor.getByRole('button', { name: `Insert Tag After ${last}`, exact: true }).click()
     await expect(editor.locator('.tag-input-entry')).toHaveAttribute('data-tag-position', String(await editor.locator('.removable-tag').count()))
   } finally {
     if (touching) await touch.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })

@@ -159,7 +159,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await bar.getByLabel('Private Notes', { exact: true }).fill('Edited directly from Chrome')
   await bar.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(bar.getByRole('status')).toHaveText('Saved')
-  await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark through chapter 1 as read', exact: true }).click()
+  await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Through Chapter 1 as Read', exact: true }).click()
   await expect(bar.getByText('Ch. 1 / 6', { exact: true })).toBeVisible()
   expect(barEntries.get(123)).toMatchObject({ notes: 'Edited directly from Chrome', status: 'reading', progress: 1 })
   expect(await ao3.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
@@ -245,7 +245,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
 
    async function switchTo(environment: string) {
     await options.getByLabel('Library environment').selectOption(environment)
-    await options.getByRole('button', { name: 'Switch environment' }).click()
+    await options.getByRole('button', { name: 'Switch Environment' }).click()
     await expect(options.getByRole('status')).toContainText('Environment saved.')
    }
    await options.evaluate(async () => {
@@ -253,7 +253,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
     await api.storage.local.set({ librarySync: { id: 'hosted-paused-scan', userId: 'alice', status: 'running' } })
    })
    await options.getByLabel('Library environment').selectOption('local')
-   await options.getByRole('button', { name: 'Switch environment' }).click()
+   await options.getByRole('button', { name: 'Switch Environment' }).click()
    await expect(options.getByRole('status')).toContainText('Pause the running scan')
    await options.evaluate(async () => {
     const api = (window as Window & { chrome: { storage: { local: { set(values: object): Promise<void> } } } }).chrome

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
-export function UndoNotice({ id, message, dismissLabel = 'Dismiss undo notification', durationMs = 120_000, undoLabel = 'Undo', onUndo, onDismiss }: {
+export function UndoNotice({ id, message, dismissLabel = 'Dismiss Undo Notification', durationMs = 120_000, undoLabel = 'Undo', onUndo, onDismiss }: {
   id: string; message: string; dismissLabel?: string; durationMs?: number; undoLabel?: string
   onUndo: () => Promise<void>; onDismiss: (id: string) => void
 }) {

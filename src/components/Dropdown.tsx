@@ -14,7 +14,7 @@ export function Dropdown(props: DropdownProps) {
   const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false))
   const isSelected = (option: DropdownOption) => Array.isArray(value) ? value.includes(option.value) : value === option.value
   const selected = options.filter(isSelected)
-  const valueLabel = selected.length > 1 ? `${selected.length} selected` : selected[0]?.label ?? (props.multiple ? 'All' : 'Select an option')
+  const valueLabel = selected.length > 1 ? `${selected.length} selected` : selected[0]?.label ?? (props.multiple ? 'All' : 'Select an Option')
   const optionSelector = props.multiple ? 'input[type=checkbox]' : '[role=option]'
   function focusOption(index: number) {
     const buttons = ref.current?.querySelectorAll<HTMLElement>(optionSelector)

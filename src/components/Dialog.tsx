@@ -15,7 +15,7 @@ export function Dialog({ title, children, onClose, busy = false, initialFocusRef
   }, [initialFocusRef])
   function close() { dialog.current?.close(); onClose() }
   return createPortal(<dialog ref={dialog} className={`confirmation-dialog ${className}`} aria-labelledby={titleId} aria-describedby={describedBy} aria-busy={busy} onCancel={event => { event.preventDefault(); if (!busy) close() }}>
-    <div className="confirmation-heading"><div className="dialog-title"><h2 id={titleId}>{title}</h2>{titleAction}</div><button type="button" className="icon-button" aria-label="Close dialog" disabled={busy} onClick={close}><X size={20} aria-hidden="true" /></button></div>
+    <div className="confirmation-heading"><div className="dialog-title"><h2 id={titleId}>{title}</h2>{titleAction}</div><button type="button" className="icon-button" aria-label="Close Dialog" disabled={busy} onClick={close}><X size={20} aria-hidden="true" /></button></div>
     {children}
   </dialog>, document.body)
 }

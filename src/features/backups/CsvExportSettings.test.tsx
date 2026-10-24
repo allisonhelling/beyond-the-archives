@@ -8,7 +8,7 @@ beforeEach(() => vi.mocked(exportLibraryCsv).mockReset())
 
 it('supports export all, individual file selection, and prevents empty downloads', async () => {
   render(<CsvExportSettings />)
-  const all = screen.getByRole('checkbox', { name: 'Export all' })
+  const all = screen.getByRole('checkbox', { name: 'Export All' })
   const button = screen.getByRole('button', { name: 'Download CSV ZIP' })
   expect(all).toBeChecked()
   fireEvent.click(all)
@@ -29,7 +29,7 @@ it('locks selection while exporting, prevents repeated downloads, and supports r
   fireEvent.click(screen.getByRole('button', { name: 'Download CSV ZIP' }))
   const pending = screen.getByRole('button', { name: 'Preparing ZIP…' })
   expect(pending).toBeDisabled()
-  expect(screen.getByRole('checkbox', { name: 'Export all' })).toBeDisabled()
+  expect(screen.getByRole('checkbox', { name: 'Export All' })).toBeDisabled()
   fireEvent.click(pending)
   expect(exportLibraryCsv).toHaveBeenCalledOnce()
   reject(new Error('private error'))

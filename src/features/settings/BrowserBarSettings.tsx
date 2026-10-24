@@ -51,9 +51,9 @@ export function BrowserBarSettings() {
   </fieldset>
   <fieldset className="settings-subsection" aria-labelledby="browser-bar-pair-title"><legend><h3 id="browser-bar-pair-title">Pair a Browser</h3></legend>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void manage('create') }}>
-   <label>Device name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>
-   <div className="form-actions"><button className="button secondary" disabled={busy || sampleMode}>Create pairing code</button><button className="button secondary" type="button" disabled={busy || sampleMode} onClick={() => void manage('list')}>Refresh devices</button></div>
-   {code && <label>One-time pairing code<input readOnly value={code} title="Click to copy pairing code" onClick={() => void copyCode()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void copyCode() } }} onFocus={event => event.target.select()} autoComplete="off" spellCheck={false} /></label>}
+   <label>Device Name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>
+   <div className="form-actions"><button className="button secondary" disabled={busy || sampleMode}>Create Pairing Code</button><button className="button secondary" type="button" disabled={busy || sampleMode} onClick={() => void manage('list')}>Refresh Devices</button></div>
+   {code && <label>One-Time Pairing Code<input readOnly value={code} title="Click to Copy Pairing Code" onClick={() => void copyCode()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void copyCode() } }} onFocus={event => event.target.select()} autoComplete="off" spellCheck={false} /></label>}
   </form>
   {message && <p role="status" className="muted">{message}</p>}
   </fieldset>

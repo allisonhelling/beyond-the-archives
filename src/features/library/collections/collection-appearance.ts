@@ -26,7 +26,7 @@ export const collectionSymbols = [
   { value: 'bookmark', label: 'Bookmark', Icon: Bookmark }, { value: 'heart', label: 'Heart', Icon: Heart },
   { value: 'check', label: 'Check', Icon: Check }, { value: 'cross', label: 'Cross', Icon: X },
   { value: 'library', label: 'Library', Icon: Library },
-  { value: 'sparkle', label: 'Four-pointed Star', Icon: Sparkle }, { value: 'scroll', label: 'Scroll With Text', Icon: ScrollText },
+  { value: 'sparkle', label: 'Four-Pointed Star', Icon: Sparkle }, { value: 'scroll', label: 'Scroll With Text', Icon: ScrollText },
 ] as const
 
 export type CollectionAppearance = { color: string; symbol: string }
@@ -46,16 +46,16 @@ export function compareCollections(a: { created_at?: string; sort_position?: num
 }
 
 export const collectionOrderOptions = [
-  { value: 'manual', label: 'Manual order' },
-  { value: 'manual_reverse', label: 'Manual order (reversed)' },
+  { value: 'manual', label: 'Manual Order' },
+  { value: 'manual_reverse', label: 'Manual Order (Reversed)' },
   { value: 'alphabetical', label: 'Alphabetical (A–Z)' },
   { value: 'alphabetical_reverse', label: 'Alphabetical (Z–A)' },
-  { value: 'created', label: 'Date created (oldest first)' },
-  { value: 'created_newest', label: 'Date added' },
-  { value: 'edited', label: 'Last edited (story added)' },
-  { value: 'edited_reverse', label: 'Last edited (oldest first)' },
-  { value: 'updated', label: 'Last story updated (newest first)' },
-  { value: 'updated_reverse', label: 'Last story updated (oldest first)' },
+  { value: 'created', label: 'Date Created (Oldest First)' },
+  { value: 'created_newest', label: 'Date Added' },
+  { value: 'edited', label: 'Last Edited (Story Added)' },
+  { value: 'edited_reverse', label: 'Last Edited (Oldest First)' },
+  { value: 'updated', label: 'Last Story Updated (Newest First)' },
+  { value: 'updated_reverse', label: 'Last Story Updated (Oldest First)' },
 ] as const
 export type CollectionOrder = typeof collectionOrderOptions[number]['value']
 

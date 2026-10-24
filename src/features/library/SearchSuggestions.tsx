@@ -38,10 +38,10 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   }
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
     <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'sr-only' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
-    {focused && <div className="search-suggestions menu-surface" id={id} aria-label={`${label} suggestions`}>
-      {suggestions.map(group => <section key={group.label} aria-label={`${group.label} suggestions`}>{!hideHeadings && <span className="suggestion-heading">{group.label}</span>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
+    {focused && <div className="search-suggestions menu-surface" id={id} aria-label={`${label} Suggestions`}>
+      {suggestions.map(group => <section key={group.label} aria-label={`${group.label} Suggestions`}>{!hideHeadings && <span className="suggestion-heading">{group.label}</span>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
     </div>}
-    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} selected filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
+    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} Selected Filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} Filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
     {help && <small className="suggestion-help">{help}</small>}
   </div>
 }

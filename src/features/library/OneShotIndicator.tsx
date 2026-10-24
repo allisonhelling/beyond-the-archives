@@ -9,5 +9,5 @@ const OneShotDiamond = createLucideIcon('OneShotDiamond', [
 
 export function OneShotIndicator({ story }: { story: Pick<Story, 'metadata' | 'personalTags'> }) {
   if (!isOneShot(story.metadata, story.personalTags)) return null
-  return <>{'\u00a0'}<Tooltip description="One-shot">{descriptionId => <span className="publication-icon" role="img" aria-label="One-shot" aria-describedby={descriptionId} tabIndex={0}><OneShotDiamond size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></>
+  return <>{'\u00a0'}<Tooltip description="One-Shot">{descriptionId => <span className="publication-icon" role="img" aria-label="One-Shot" aria-describedby={descriptionId} tabIndex={0}><OneShotDiamond size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></>
 }

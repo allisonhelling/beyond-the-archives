@@ -1,4 +1,4 @@
-# DNF cleanup
+# DNF Cleanup
 
 Apply `supabase/migrations/20261024000200_dnf_cleanup.sql` before deploying the updated app. Cleanup is account scoped and off by default. Settings → DNF Cleanup offers **24 hours, 7 days, 30 days, 60 days**, or a custom whole number of hours/days. The default is **7 days**; custom durations range from 24 hours to 3650 days.
 
@@ -6,13 +6,13 @@ Save settings to authorize future automatic cleanup. Changing the duration can m
 
 Favorites/recommendations, personal notes/ratings/tags, and manual collection memberships are protected by default. Pending or processing metadata jobs always protect an entry. Changing notes or refreshing metadata does not reset the DNF clock. Leaving DNF clears it; returning to DNF starts a new period. Existing records use a known DNF transition when available, otherwise the migration establishes a new baseline. No historical dates are guessed.
 
-## Enable background execution
+## Enable Background Execution
 
 Enable pg_cron in the target Supabase project, then run `supabase/scheduling/dnf-cleanup.sql` as the database administrator. This installs the `dnf-cleanup` job at minute 17 of every hour. It calls the same transactional implementation used by manual cleanup, with up to 100 entries per opted-in account per invocation. Cleanup runs while the app is closed; it makes no AO3 requests. Timing depends on scheduler availability and remaining batches. Run `select cron.unschedule('dnf-cleanup');` to remove the job. Account settings can independently disable cleanup without removing the schedule.
 
 The service-role-only `run_scheduled_dnf_cleanup()` function can also be invoked by an existing trusted scheduler. Browser accounts cannot call it or write reading records directly. No schedule or production migration is installed by the frontend.
 
-## Preserved data and recovery
+## Preserved Data and Recovery
 
 `reading_records` preserves each removed entry's UUID as a reading-lifecycle identity, account ownership, AO3 work/bookmark identity, URL, title/authors, fandoms/language/AO3 rating, known reading dates, DNF/archive dates, recorded chapter progress, word/chapter-count context, and the existing reading timeline. It has no dependency on the deleted library entry or shared work. Archiving and deletion commit together; failure preserves the detailed entries. Shared AO3 work data and separately saved series are not deleted.
 

@@ -11,8 +11,8 @@ export function LocalViewportPreview({ children }: { children: ReactNode }) {
     setView('mobile')
   }
   return <>
-    <aside className="local-viewport-toolbar" aria-label="Local viewport preview">
-      <strong>Local preview</strong>
+    <aside className="local-viewport-toolbar" aria-label="Local Viewport Preview">
+      <strong>Local Preview</strong>
       <div role="group" aria-label="Viewport">
         <button className={`button ${view === 'mobile' ? 'secondary' : 'primary'} compact`} aria-pressed={view !== 'mobile'} onClick={() => setView(view === 'browser' ? 'browser' : 'desktop')}>Desktop</button>
         <button className={`button ${view === 'mobile' ? 'primary' : 'secondary'} compact`} aria-pressed={view === 'mobile'} onClick={previewMobile}>Mobile · 390px</button>
@@ -20,7 +20,7 @@ export function LocalViewportPreview({ children }: { children: ReactNode }) {
       <span className="muted">Entering mobile preview reloads the page. Save edits first.</span>
     </aside>
     {view === 'browser' ? children : <div className="local-viewport-stage" data-view={view}>
-      <iframe className="local-viewport-frame" title="Local app viewport" src={source} />
+      <iframe className="local-viewport-frame" title="Local App Viewport" src={source} />
     </div>}
   </>
 }

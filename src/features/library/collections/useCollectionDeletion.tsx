@@ -36,6 +36,6 @@ export function useCollectionDeletion(selectedTargets: Collection[], bulk: boole
     catch (error) { setFailure({ key: targetKey, message: error instanceof Error ? error.message : 'Could not delete collection.' }) }
     finally { pending.current = false; setBusy(false) }
   }
-  const confirmation = confirming && <ConfirmationDialog title={bulk ? 'Delete collections?' : 'Delete collection?'} confirmLabel={collectionDeleteLabel} onClose={() => { setConfirmationTargets(null); if (deleted.current === targetKey) onDeleted() }} onConfirm={remove}><p>{bulk ? `Delete ${targets.length} collections?` : `Delete “${targets[0].name}”?`}</p><p>Stories will stay in your library.</p></ConfirmationDialog>
+  const confirmation = confirming && <ConfirmationDialog title={bulk ? 'Delete Collections?' : 'Delete Collection?'} confirmLabel={collectionDeleteLabel} onClose={() => { setConfirmationTargets(null); if (deleted.current === targetKey) onDeleted() }} onConfirm={remove}><p>{bulk ? `Delete ${targets.length} collections?` : `Delete “${targets[0].name}”?`}</p><p>Stories will stay in your library.</p></ConfirmationDialog>
   return { requestDelete, busy, error, removed, confirming, confirmation }
 }

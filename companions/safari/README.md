@@ -6,7 +6,7 @@ Chrome and Edge use the same bar and editor through the [native AO3 Library Comp
 
 On series pages, the series bar appears after the series information and stats, immediately before the works list. Every recognized work tile has its own library bar below its metadata and statistics.
 
-## Deploy and build
+## Deploy and Build
 
 Apply migrations through `20261019000100_userscript_metadata_refresh.sql` to the intended Supabase project (`supabase db push` using your normal linked-project workflow), then deploy the website. No additional Edge Function is required. Local builds do not deploy these changes.
 
@@ -24,7 +24,7 @@ npm run build:userscript
 
 Output: `userscript/dist/ao3-library.user.js` and a metadata file. Every userscript build loads `.env.local.hosted` and requires hosted HTTPS backend and app origins. Localhost builds are rejected before writing files. Explicit environment variables can supply hosted public settings in CI. `npm run build:userscript:hosted` is an alias of the same build command; there is no local userscript build mode.
 
-## Install and connect
+## Install and Connect
 
 1. Install Userscripts, open its app, and select a scripts directory accessible in Files.
 2. Copy the generated `ao3-library.user.js` into that directory. Alternatively host it at an HTTPS URL ending in `.user.js`, visit that URL in Safari, and use the Userscripts popup's install prompt. The build does not host the file automatically.
@@ -33,13 +33,13 @@ Output: `userscript/dist/ao3-library.user.js` and a metadata file. Every userscr
 5. Sign into your library website and open **Settings → iOS Safari userscript**. Name the device and create a code. Copy the full code into **Connect Library** on AO3 within five minutes. Codes are single-use and creating another replaces unused codes. Never paste a password, AO3 credential, or Supabase session token.
 6. Refresh devices in Settings to see the paired device. Disconnect there to revoke access remotely, or use **Connection → Disconnect device** on AO3. Local disconnect requires backend confirmation; if offline, revoke from Settings on a connected device. Device authorization expires after 90 days; create another code to reconnect. Website sign-out does not revoke paired devices.
 
-## Connection troubleshooting
+## Connection Troubleshooting
 
 If the AO3 panel cannot reach the backend, rebuild with `npm run build:userscript` and replace the installed file. Open the Userscripts popup, then reload AO3. Old development builds may point at localhost and cannot connect to your Mac from an iPhone. All new builds require the hosted backend. If switching from a development build, create a fresh pairing code on the hosted library website; device connections are scoped to each backend. Never share the code.
 
 For a hosted build, check the phone's connection and Userscripts' network permission for the configured Supabase host. Rebuilds do not update the file already installed in Userscripts.
 
-## Reading controls
+## Reading Controls
 
 - Chapter 1 defaults to To Read, a middle chapter to Currently Reading with the preceding chapters completed, and a known final chapter of a complete multi-chapter work to Finished. A one-shot remains To Read when first opened; the latest published chapter of an unfinished work remains Reading. Defaults are editable.
 - The toolbar and editor use the same current chapter, separate from completed chapters: chapter 4 means three fully read chapters, or four when **This chapter is finished** is checked. To Read saves zero completed chapters; Finished saves all published chapters. These two statuses hide the chapter fields. Currently Reading and Re-Reading show the current chapter and its finished checkbox; Re-Reading indicates a previous read while tracking the new one. Tap the info icons beside Reading status and Current chapter for these rules. For chapter URLs, position comes from AO3's chapter selector, never the numeric chapter ID. When position is unavailable or full-work view is ambiguous, enter the current chapter explicitly.
@@ -52,7 +52,7 @@ For a hosted build, check the phone's connection and Userscripts' network permis
 - The **View in** button with the library logo opens a saved fic’s details page. Before the fic is saved, the button shows only the logo and opens the library. The top bar places this button on the left, chapter completion, Edit, and Connection on the right, and reading status and chapter count centered between the left and right controls. The top bar stays on one row at every width and scrolls sideways on narrow screens. A colored bullet separates reading status from chapter count. For saved works, the bottom bar centers its reading status, colored bullet, chapter count, and completion control. For unsaved works, the bottom bar mirrors the top bar, including Add to Library; its buttons open the shared editor or connection panel at the top. Both reading bars use 20px text; editor and connection panels use the Reading status label’s 17px font size; chapter counts show “chapters read” help on tap or hover; help icons sit to the right of their fields. Collection search uses a placeholder without repeated headings. Once connected, version and update instructions appear only while an editor or Connection panel is open. The instructions link opens Settings directly at the iOS Safari userscript section.
 - “Saved” appears only after the backend confirms. Text drafts are preserved in Userscripts storage while typing and across failed requests/reloads, scoped to backend, account and work. Cancel discards the draft. Reconnecting to another account does not display the previous account's draft. Stale edits from another tab/device are rejected; use **Reload Saved Entry**, review the retained draft, then save. A response lost after saving can produce the same stale-entry prompt: reload to check the saved values first.
 
-## Privacy and updates
+## Privacy and Updates
 
 The script uses `@inject-into content` and the privileged `GM` storage/network APIs. Device credentials and drafts are never stored in AO3 local/session storage, page attributes or messages. Its closed shadow panel limits exposure of rendered private fields to page scripts. Anyone with access to the browser/device or Userscripts storage may still access saved drafts. Revoking a device prevents backend access; it does not erase its local drafts. The backend stores credential hashes and grants credentials access only to this companion's library operations. It does not grant a Supabase login/session or general database access.
 

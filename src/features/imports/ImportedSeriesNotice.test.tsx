@@ -32,8 +32,8 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  expect(screen.getByRole('checkbox', { name: 'Part 1: Fic 101' })).toBeDisabled()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()
  expect(mocks.submit).not.toHaveBeenCalled(); expect(mocks.remember).not.toHaveBeenCalled()
- fireEvent.click(screen.getAllByRole('button', { name: 'Select all' })[0])
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import selected' })) })
+ fireEvent.click(screen.getAllByRole('button', { name: 'Select All' })[0])
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected' })) })
  expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false, 'to_read', [77])
 })
 
@@ -45,7 +45,7 @@ it('saves the full preview only on request without importing its works', async (
  expect(mocks.preview).toHaveBeenCalledOnce()
  expect(mocks.remember).toHaveBeenCalledWith(expect.objectContaining({ seriesId: 77, works: expect.arrayContaining([expect.objectContaining({ workId: 102 })]) }))
  expect(mocks.refresh).toHaveBeenCalledWith(77)
- expect(screen.getByRole('button', { name: 'Full series details saved' })).toBeDisabled()
+ expect(screen.getByRole('button', { name: 'Full Series Details Saved' })).toBeDisabled()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).toBeChecked()
  expect(mocks.submit).not.toHaveBeenCalled()
 })
@@ -54,7 +54,7 @@ it('deduplicates shared series and stays dismissed when the library refreshes', 
  let view!: ReturnType<typeof render>
  await act(async () => { view = render(<ImportedSeriesNotice stories={stories as never} />) })
  expect(screen.getAllByRole('link', { name: 'Related series • Series 77' })).toHaveLength(1)
- fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Close Dialog' }))
  view.rerender(<ImportedSeriesNotice stories={[...stories] as never} />)
  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
  expect(mocks.preview).toHaveBeenCalledOnce()

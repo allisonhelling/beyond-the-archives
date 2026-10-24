@@ -52,8 +52,8 @@ export function BackupSettings() {
     <fieldset className="settings-subsection" aria-labelledby="backup-export-title"><legend><h3 id="backup-export-title">Export or Save Backup</h3></legend>
     <p>Download or save your complete library, including all works and their metadata, reading progress, private notes, ratings, tags, collections, saved series, import history, and settings. Every saved work is included, across all pages.</p>
     <div className="form-actions">
-      <button className="button secondary" disabled={disabled} onClick={() => void run('export', exportBackup, 'Your backup download has started. Keep the file somewhere safe; it includes your private notes.')}><Download size={17} />{busy === 'export' ? 'Preparing backup…' : 'Export Backup'}</button>
-      <button className="button secondary" disabled={disabled} onClick={() => void run('save', async () => { await saveBackup(); await refreshSaved() }, 'Your backup was saved privately in Supabase.')}><CloudUpload size={17} />{busy === 'save' ? 'Saving backup…' : 'Save Backup to Supabase'}</button>
+      <button className="button secondary" disabled={disabled} onClick={() => void run('export', exportBackup, 'Your backup download has started. Keep the file somewhere safe; it includes your private notes.')}><Download size={17} />{busy === 'export' ? 'Preparing Backup…' : 'Export Backup'}</button>
+      <button className="button secondary" disabled={disabled} onClick={() => void run('save', async () => { await saveBackup(); await refreshSaved() }, 'Your backup was saved privately in Supabase.')}><CloudUpload size={17} />{busy === 'save' ? 'Saving Backup…' : 'Save Backup to Supabase'}</button>
     </div>
     </fieldset>
     {sampleMode && <p className="muted">Backups are unavailable in the local sample preview.</p>}
@@ -67,13 +67,13 @@ export function BackupSettings() {
     <dl>{backups.map(backup => <div key={backup.path}>
       <dt>{formatDateTime(backup.createdAt)} · {(backup.size / 1_048_576).toFixed(2)} MiB</dt>
       <dd className="form-actions">
-        <button className="button secondary compact" disabled={disabled || loading} aria-label={`Download backup from ${formatDateTime(backup.createdAt)}`} onClick={() => void run(`download:${backup.path}`, () => downloadSavedBackup(backup), 'Your saved backup download has started.')}>{busy === `download:${backup.path}` ? 'Downloading…' : 'Download'}</button>
-        <button className="button secondary compact" disabled={disabled || loading} aria-label={`Delete backup from ${formatDateTime(backup.createdAt)}`} onClick={() => setDeleting(backup)}>Delete</button>
+        <button className="button secondary compact" disabled={disabled || loading} aria-label={`Download Backup from ${formatDateTime(backup.createdAt)}`} onClick={() => void run(`download:${backup.path}`, () => downloadSavedBackup(backup), 'Your saved backup download has started.')}>{busy === `download:${backup.path}` ? 'Downloading…' : 'Download'}</button>
+        <button className="button secondary compact" disabled={disabled || loading} aria-label={`Delete Backup from ${formatDateTime(backup.createdAt)}`} onClick={() => setDeleting(backup)}>Delete</button>
       </dd>
     </div>)}</dl>
     </fieldset>
     <RestoreBackupSettings backups={backups} disabled={Boolean(busy || sampleMode || deleting)} onActiveChange={setRestoring} onRestored={refreshSaved} />
-    {deleting && <ConfirmationDialog title="Delete saved backup?" confirmLabel="Delete Backup" onClose={() => setDeleting(null)} onConfirm={async () => {
+    {deleting && <ConfirmationDialog title="Delete Saved Backup?" confirmLabel="Delete Backup" onClose={() => setDeleting(null)} onConfirm={async () => {
       await deleteSavedBackup(deleting)
       setBackups(current => current.filter(backup => backup.path !== deleting.path))
       setMessage('Saved backup deleted. Your library is unchanged.')

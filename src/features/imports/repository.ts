@@ -65,11 +65,11 @@ export async function markWorkDeleted(entryId: string, jobId: string) {
  if (error) throw new Error('Could not mark the work as deleted. Apply the latest migrations and retry.')
 }
 
-export async function previewSeries(url: string, options: { firstPageOnly?: boolean } = {}): Promise<SeriesPreview> {
+export async function previewSeries(url: string, options: { firstPageOnly?: boolean; viaExtension?: boolean } = {}): Promise<SeriesPreview> {
  const identity = parseSeriesUrl(url)
- let useExtension = sampleMode
- if (sampleMode) {
-  if (!await connectExtension()) throw new Error(localExtensionConnectionHelp)
+ let useExtension = sampleMode || Boolean(options.viaExtension)
+ if (useExtension) {
+  if (!await connectExtension()) throw new Error(sampleMode ? localExtensionConnectionHelp : 'Connect the extension in Settings, then retry the series preview.')
  } else {
   const db = client()
   const { data: session } = await db.auth.getSession()
@@ -88,7 +88,7 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
   let body: { url: string; html?: string } = { url: pageUrl }
   if (useExtension) body = await previewSeriesWithExtension(pageUrl)
   let page: SeriesPreview, nextPageDelayMs: number | undefined
-  if (sampleMode) {
+  if (sampleMode || options.viaExtension) {
    const { parseSeries } = await import('./ao3-series')
    page = parseSeries(body.html ?? '', body.url)
   } else {

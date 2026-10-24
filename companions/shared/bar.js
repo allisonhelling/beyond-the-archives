@@ -37,7 +37,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  bottomHost.dataset.browser = browser
  if (ao3FontSize) bottomHost.style.setProperty('--ao3-font-size', ao3FontSize)
  const bottomRoot = bottomHost.attachShadow({ mode: 'closed' }); bottomRoot.append(style.cloneNode(true))
- const bottomSection = doc.createElement('section'); bottomSection.className = 'bottom-section'; bottomSection.setAttribute('aria-label', 'Reading progress'); bottomRoot.append(bottomSection)
+ const bottomSection = doc.createElement('section'); bottomSection.className = 'bottom-section'; bottomSection.setAttribute('aria-label', 'Reading Progress'); bottomRoot.append(bottomSection)
  const bottomBar = doc.createElement('div'); bottomBar.className = 'row bottom-bar'; bottomBar.setAttribute('aria-live', 'polite'); bottomSection.append(bottomBar)
  const bottomMessage = doc.createElement('p'); bottomMessage.setAttribute('aria-live', 'polite'); bottomSection.append(bottomMessage)
  if (!tile && !page.series) {
@@ -237,13 +237,13 @@ export async function mountLibrary(doc = document, href = location.href, options
   } else {
    const final = entry.status !== 'to_read' && page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
    const complete = button(final ? 'Finished' : `Ch. ${page.current}`, () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading'), parent)
-   if (!final) complete.setAttribute('aria-label', `Mark through chapter ${page.current} as read`)
+   if (!final) complete.setAttribute('aria-label', `Mark Through Chapter ${page.current} as Read`)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
  }
  function libraryLink(parent) {
-  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in between chapters library')
+  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in Between Chapters Library')
   // Trusted, build-time Lucide logo markup; no page or user content is injected.
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }
@@ -276,7 +276,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
   const settings = panelButton('', 'connection', showConnection, actions)
-  settings.className = 'settings-button'; settings.setAttribute('aria-label', 'Connection'); settings.title = 'Connection settings'
+  settings.className = 'settings-button'; settings.setAttribute('aria-label', 'Connection'); settings.title = 'Connection Settings'
   icon(['M3 6h4m4 0h10M3 12h10m4 0h4M3 18h6m4 0h8M7 3v6m10 0v6M9 15v6'], settings)
  }
  function showConnection() {
@@ -308,11 +308,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   }, settingsActions)
   ratingToggle.setAttribute('aria-expanded', 'false'); ratingToggle.setAttribute('aria-controls', 'library-rating-info')
   const ratingEditor = node('div', '', connectionPanel); ratingEditor.id = 'library-rating-info'; ratingEditor.className = 'rating-info-editor'; ratingEditor.hidden = true
-  const ratingLabel = node('label', 'Rating info text', ratingEditor), ratingText = node('textarea', '', ratingLabel)
+  const ratingLabel = node('label', 'Rating Info Text', ratingEditor), ratingText = node('textarea', '', ratingLabel)
   ratingText.rows = 4; ratingText.value = ratingInfo
   ratingText.maxLength = 10000
   node('p', 'Saved to your library account across devices. Leave blank and save to hide the rating info icon.', ratingEditor)
-  if (typeof previousRatingInfo === 'string' && savedRatingInfo === null) button('Use this device’s previous explanation', () => { ratingText.value = previousRatingInfo }, ratingEditor)
+  if (typeof previousRatingInfo === 'string' && savedRatingInfo === null) button('Use This Device’s Previous Explanation', () => { ratingText.value = previousRatingInfo }, ratingEditor)
   button('Save Rating Info', async () => {
    const next = ratingText.value
    if (!connection) throw new Error('Connect your library before saving rating info.')
@@ -424,7 +424,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    if (!saved) checkbox.dataset.workChoice = String(work.workId)
    if (saved) continue
    const disclosure = node('details', '', row); disclosure.className = 'work-details'
-   node('summary', 'Details below apply only to this work when selected.', disclosure)
+   node('summary', 'Details Below Apply Only to This Work When Selected.', disclosure)
    const status = input(disclosure, `Reading Status: ${work.title}`, 'select', details.status, value => { details.status = value })
    for (const [key, title] of Object.entries(statuses)) { const option = node('option', title, status); option.value = key }
    status.value = details.status

@@ -8,7 +8,7 @@ const BookQuestion = createLucideIcon('BookQuestion', [
 
 export const publicationStatuses = {
   complete: { label: 'Complete on AO3', Icon: BookCheck },
-  in_progress: { label: 'In progress on AO3', Icon: NotebookPen },
+  in_progress: { label: 'In Progress on AO3', Icon: NotebookPen },
   abandoned: { label: 'Abandoned', Icon: BookX },
   deleted: { label: 'Deleted', Icon: Trash2 },
   unknown: { label: 'AO3 Status Unknown', Icon: BookQuestion },

@@ -6,7 +6,7 @@ import { Dropdown } from './Dropdown'
 
 function PublicationFilter() {
   const [value, setValue] = useState<string[]>([])
-  return <><Dropdown label="Publication status" multiple value={value} onChange={setValue} options={[
+  return <><Dropdown label="Publication Status" multiple value={value} onChange={setValue} options={[
     { value: 'complete', label: 'Complete' }, { value: 'abandoned', label: 'Abandoned' },
   ]} /><button>Outside</button></>
 }
@@ -14,7 +14,7 @@ function PublicationFilter() {
 it('supports multiple checkbox selections, keyboard navigation, dismissal, and clearing', async () => {
   const user = userEvent.setup()
   render(<PublicationFilter />)
-  const trigger = screen.getByRole('button', { name: 'Publication status' })
+  const trigger = screen.getByRole('button', { name: 'Publication Status' })
   expect(trigger).toHaveTextContent('All')
   trigger.focus()
   await user.keyboard('{ArrowDown}')

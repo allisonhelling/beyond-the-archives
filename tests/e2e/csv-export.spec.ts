@@ -33,7 +33,7 @@ test('downloads selected CSVs and the whole library in one ZIP on desktop and mo
   const text = archive.toString('utf8')
   for (const content of ['works.csv', 'series.csv', 'collections.csv', 'collection_memberships.csv', 'reading_records.csv', 'Archived DNF title', 'Private note 1001', 'Private series note', 'My custom shelf', 'automatic_rules', 'All favorites']) expect(text).toContain(content)
   await expect(page.locator('#settings-csv-export').getByRole('status')).toHaveText('Your ZIP download has started.')
-  await page.getByRole('checkbox', { name: 'Export all' }).uncheck()
+  await page.getByRole('checkbox', { name: 'Export All' }).uncheck()
   await expect(page.getByRole('button', { name: 'Download CSV ZIP' })).toBeDisabled()
   await page.getByRole('checkbox', { name: /^collections.csv/ }).check()
   const selectedDownload = page.waitForEvent('download')

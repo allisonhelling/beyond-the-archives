@@ -23,3 +23,16 @@ it('keeps action tooltips transient when their buttons are clicked', () => {
  fireEvent.mouseLeave(button)
  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 })
+
+
+it('places portaled tooltips inside their dialog and outside scrolling controls', () => {
+ render(<dialog open><div data-testid="controls"><Tooltip portal description="Applies to all series">{id => <button aria-describedby={id}>Select All</button>}</Tooltip></div></dialog>)
+ const button = screen.getByRole('button', { name: 'Select All' })
+ expect(button).toHaveAccessibleDescription('Applies to all series')
+ fireEvent.focus(button)
+ const tooltip = screen.getByRole('tooltip')
+ expect(tooltip.parentElement).toBe(screen.getByRole('dialog'))
+ expect(screen.getByTestId('controls')).not.toContainElement(tooltip)
+ fireEvent.blur(button)
+ expect(tooltip).not.toBeVisible()
+})

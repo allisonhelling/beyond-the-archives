@@ -15,8 +15,8 @@ function show() {
   </Routes></MemoryRouter>)
 }
 async function submit() {
-  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work or series link' }), { target: { value: 'https://archiveofourown.org/works/123' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Import from link' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' }), { target: { value: 'https://archiveofourown.org/works/123' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Import from Link' }))
 }
 beforeEach(() => {
   vi.resetAllMocks()
@@ -28,20 +28,20 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 it('validates a single AO3 link and retains it if submission fails', async () => {
   show()
-  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work or series link' }), { target: { value: 'https://example.com/works/123' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Import from link' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' }), { target: { value: 'https://example.com/works/123' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Import from Link' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Enter a supported AO3 work URL')
   expect(mocks.submit).not.toHaveBeenCalled()
   mocks.submit.mockRejectedValue(new Error('Import unavailable'))
   await submit()
   expect(await screen.findByRole('alert')).toHaveTextContent('Import unavailable')
-  expect(screen.getByRole('textbox', { name: 'AO3 work or series link' })).toHaveValue('https://archiveofourown.org/works/123')
+  expect(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' })).toHaveValue('https://archiveofourown.org/works/123')
 })
 it('submits the complete chapter URL so retrieval can verify reading progress', async () => {
   show()
   const url = 'https://archiveofourown.org/works/123/chapters/960?view_adult=true'
-  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 work or series link' }), { target: { value: url } })
-  fireEvent.click(screen.getByRole('button', { name: 'Import from link' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' }), { target: { value: url } })
+  fireEvent.click(screen.getByRole('button', { name: 'Import from Link' }))
   await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith(url))
 })
 it('opens the saved fic while retrieval is pending', async () => {
@@ -81,8 +81,8 @@ it('shows an unsuccessful import without a saved entry', async () => {
 
 it('reviews a series in place without creating a work',async()=>{
  show()
- fireEvent.change(screen.getByRole('textbox',{name:'AO3 work or series link'}),{target:{value:'https://archiveofourown.org/series/77'}})
- fireEvent.click(screen.getByRole('button',{name:'Import from link'}))
+ fireEvent.change(screen.getByRole('textbox',{name:'AO3 Work or Series Link'}),{target:{value:'https://archiveofourown.org/series/77'}})
+ fireEvent.click(screen.getByRole('button',{name:'Import from Link'}))
  expect(await screen.findByRole('heading',{name:'Choose Works From Series'})).toBeVisible()
  expect(mocks.submit).not.toHaveBeenCalled()
  expect(screen.queryByRole('heading',{name:'Choose series works'})).not.toBeInTheDocument()
@@ -90,7 +90,7 @@ it('reviews a series in place without creating a work',async()=>{
  expect(screen.getByRole('combobox',{name:'Reading Status'})).toHaveValue('to_read')
  fireEvent.change(screen.getByRole('combobox',{name:'Reading Status'}),{target:{value:'finished'}})
  fireEvent.click(screen.getByRole('checkbox',{name:'Part 1: First fic'}))
- fireEvent.click(screen.getByRole('button',{name:'Import selected'}))
+ fireEvent.click(screen.getByRole('button',{name:'Import Selected'}))
  await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/101',true,'finished',[77]))
- expect(screen.getByRole('heading',{name:'Importing selected works'})).toBeVisible()
+ expect(screen.getByRole('heading',{name:'Importing Selected Works'})).toBeVisible()
 })

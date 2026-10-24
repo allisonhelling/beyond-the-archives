@@ -16,8 +16,8 @@ export function PersonalTagHelp({ inline = false }: { inline?: boolean }) {
     return () => query.removeEventListener?.('change', update)
   }, [])
   const description = mobile ? mobileTagInstructions : tagInstructions
-  if (inline) return <details className="field-info personal-tag-help"><summary aria-label="Personal tags help" role="button"><Info aria-hidden="true" /></summary><span>{description}</span></details>
-  return <Tooltip pinOnClick description={description}>{descriptionId => <button type="button" className="icon-button inline-edit-icon personal-tag-help-button" aria-label="Personal tags help" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip>
+  if (inline) return <details className="field-info personal-tag-help"><summary aria-label="Personal Tags Help" role="button"><Info aria-hidden="true" /></summary><span>{description}</span></details>
+  return <Tooltip pinOnClick description={description}>{descriptionId => <button type="button" className="icon-button inline-edit-icon personal-tag-help-button" aria-label="Personal Tags Help" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip>
 }
 
 export function PersonalTagInput({ value, onChange, inlineHelp = false }: { value: string[]; onChange: (tags: string[]) => void; inlineHelp?: boolean }) {
@@ -104,12 +104,12 @@ export function PersonalTagInput({ value, onChange, inlineHelp = false }: { valu
       {Array.from({ length: value.length + 1 }, (_, index) => index).flatMap(index => [
         cursor === index ? <span key="typing-field" className="tag-input-entry" data-tag-position={index} data-drop-target={dropPosition === index || undefined}>
           <span className="tag-input-measure" aria-hidden="true"><span>Type a tag…</span><span>{draft}{'\u200b'}</span></span>
-          <input ref={input} size={1} aria-label="Personal tags" placeholder="Type a tag…" value={draft} onChange={event => { setDraft(event.target.value); setSelected(null) }} onKeyDown={keyboard} />
-          <button type="button" className="tag-cursor-handle" aria-label="Move tag typing position" aria-pressed={dropPosition !== null} onPointerDown={startCursorMove} onPointerMove={updateCursorMove} onPointerUp={event => finishCursorMove(event, true)} onPointerCancel={event => finishCursorMove(event, false)} onLostPointerCapture={event => finishCursorMove(event, false)} onContextMenu={event => event.preventDefault()} onKeyDown={event => {
+          <input ref={input} size={1} aria-label="Personal Tags" placeholder="Type a tag…" value={draft} onChange={event => { setDraft(event.target.value); setSelected(null) }} onKeyDown={keyboard} />
+          <button type="button" className="tag-cursor-handle" aria-label="Move Tag Typing Position" aria-pressed={dropPosition !== null} onPointerDown={startCursorMove} onPointerMove={updateCursorMove} onPointerUp={event => finishCursorMove(event, true)} onPointerCancel={event => finishCursorMove(event, false)} onLostPointerCapture={event => finishCursorMove(event, false)} onContextMenu={event => event.preventDefault()} onKeyDown={event => {
             if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); move(Math.max(0, Math.min(value.length, cursor + (event.key === 'ArrowLeft' ? -1 : 1)))) }
           }}><GripVertical aria-hidden="true" /></button>
-        </span> : <button key={`gap-${index}`} type="button" className="tag-insertion-point" data-tag-position={index} data-drop-target={dropPosition === index || undefined} aria-label={`Insert tag ${index === 0 ? 'at start' : `after ${value[index - 1]}`}`} onClick={() => move(index)} />,
-        index < value.length ? <button key={`tag-${value[index]}`} type="button" className={`metadata-tag removable-tag${selected === index ? ' tag-selected' : ''}`} aria-label={`Delete personal tag ${value[index]}`} aria-pressed={selected === index} onClick={() => activateTag(index)}><span className="tag-label">{value[index]}</span><span className="tag-remove-cap"><X size={13} aria-hidden="true" /></span></button> : null,
+        </span> : <button key={`gap-${index}`} type="button" className="tag-insertion-point" data-tag-position={index} data-drop-target={dropPosition === index || undefined} aria-label={`Insert Tag ${index === 0 ? 'at Start' : `After ${value[index - 1]}`}`} onClick={() => move(index)} />,
+        index < value.length ? <button key={`tag-${value[index]}`} type="button" className={`metadata-tag removable-tag${selected === index ? ' tag-selected' : ''}`} aria-label={`Delete Personal Tag ${value[index]}`} aria-pressed={selected === index} onClick={() => activateTag(index)}><span className="tag-label">{value[index]}</span><span className="tag-remove-cap"><X size={13} aria-hidden="true" /></span></button> : null,
       ])}
     </div>
     <PersonalTagHelp inline={inlineHelp} />

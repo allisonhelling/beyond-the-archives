@@ -3,7 +3,7 @@ import { EditConflict, type EditValues } from './edit-merge'
 import { ratingLabel, statuses } from './model'
 import type { Json } from '../../types/database'
 
-const labels: Record<string, string> = { reading: 'Reading progress', notes: 'Private notes', status: 'Reading status', progress: 'Chapters read', rating: 'Personal rating', favorite: 'Favorite', rec: 'Rec', tags: 'Personal tags', collections: 'Custom collections' }
+const labels: Record<string, string> = { reading: 'Reading Progress', notes: 'Private Notes', status: 'Reading Status', progress: 'Chapters Read', rating: 'Personal Rating', favorite: 'Favorite', rec: 'Rec', tags: 'Personal Tags', collections: 'Custom Collections' }
 function display(field: string, value: Json) {
   if (field === 'reading' && value && typeof value === 'object' && !Array.isArray(value)) return `${statuses[value.status as keyof typeof statuses] ?? value.status} · ${value.progress} chapters read`
   if (field === 'metadata.rating' && typeof value === 'string') return ratingLabel(value)
@@ -25,15 +25,15 @@ export function EditConflictReview({ conflict, onSaved, onError, onCancel, colle
     } catch (error) { onError(error) }
     finally { setBusy(false) }
   }
-  return <section ref={region} tabIndex={-1} className="edit-conflict-review" aria-label="Review conflicting edits" role="region">
-    <h3>Changes saved on another device</h3><p>Other changes can be merged automatically. Choose what to save for each conflicting field. Nothing is saved until you confirm.</p>
+  return <section ref={region} tabIndex={-1} className="edit-conflict-review" aria-label="Review Conflicting Edits" role="region">
+    <h3>Changes Saved on Another Device</h3><p>Other changes can be merged automatically. Choose what to save for each conflicting field. Nothing is saved until you confirm.</p>
     {conflict.review.conflicts.map(item => <fieldset key={item.field} disabled={busy}>
-      <legend>{labels[item.field] ?? item.field.replace('metadata.', '').replaceAll('_', ' ')}</legend>
-      <div className="edit-conflict-versions"><div><strong>Your draft</strong><pre>{format(item.field, item.local)}</pre></div><div><strong>Currently saved</strong><pre>{format(item.field, item.saved)}</pre></div></div>
-      <label><input type="radio" name={`${id}-resolve-${item.field}`} checked={choices[item.field] === 'local'} onChange={() => setChoices(current => ({ ...current, [item.field]: 'local' }))} />Keep my draft</label>
-      <label><input type="radio" name={`${id}-resolve-${item.field}`} checked={choices[item.field] === 'saved'} onChange={() => setChoices(current => ({ ...current, [item.field]: 'saved' }))} />Use saved version</label>
-      {item.field === 'notes' && <><label><input type="radio" name={`${id}-resolve-${item.field}`} checked={choices[item.field] === 'combined'} onChange={() => setChoices(current => ({ ...current, [item.field]: 'combined' }))} />Edit or combine notes</label>{choices[item.field] === 'combined' && <label>Notes to save<textarea aria-label="Notes to save" rows={6} value={combined[item.field] ?? String(item.local ?? '')} onChange={event => setCombined(current => ({ ...current, [item.field]: event.target.value }))} /></label>}</>}
+      <legend>{labels[item.field] ?? item.field.replace('metadata.', '').replace(/^ao3_/, 'AO3_').replaceAll('_', ' ').replace(/\b[a-z]/g, letter => letter.toUpperCase())}</legend>
+      <div className="edit-conflict-versions"><div><strong>Your Draft</strong><pre>{format(item.field, item.local)}</pre></div><div><strong>Currently Saved</strong><pre>{format(item.field, item.saved)}</pre></div></div>
+      <label><input type="radio" name={`${id}-resolve-${item.field}`} checked={choices[item.field] === 'local'} onChange={() => setChoices(current => ({ ...current, [item.field]: 'local' }))} />Keep My Draft</label>
+      <label><input type="radio" name={`${id}-resolve-${item.field}`} checked={choices[item.field] === 'saved'} onChange={() => setChoices(current => ({ ...current, [item.field]: 'saved' }))} />Use Saved Version</label>
+      {item.field === 'notes' && <><label><input type="radio" name={`${id}-resolve-${item.field}`} checked={choices[item.field] === 'combined'} onChange={() => setChoices(current => ({ ...current, [item.field]: 'combined' }))} />Edit or Combine Notes</label>{choices[item.field] === 'combined' && <label>Notes to Save<textarea aria-label="Notes to Save" rows={6} value={combined[item.field] ?? String(item.local ?? '')} onChange={event => setCombined(current => ({ ...current, [item.field]: event.target.value }))} /></label>}</>}
     </fieldset>)}
-    <div className="form-actions row"><button type="button" className="button primary" disabled={busy || conflict.review.conflicts.some(item => !choices[item.field])} onClick={() => void save()}>{busy ? 'Saving…' : 'Save resolved changes'}</button><button type="button" className="button secondary" disabled={busy} onClick={onCancel}>Back to editing</button></div>
+    <div className="form-actions row"><button type="button" className="button primary" disabled={busy || conflict.review.conflicts.some(item => !choices[item.field])} onClick={() => void save()}>{busy ? 'Saving…' : 'Save Resolved Changes'}</button><button type="button" className="button secondary" disabled={busy} onClick={onCancel}>Back to Editing</button></div>
   </section>
 }

@@ -9,7 +9,7 @@ vi.mock('./repository',async importOriginal=>({...(await importOriginal<typeof i
 import { LibraryProvider, useLibrary } from './LibraryProvider'
 const query={mode:'library' as const,shelf:'all',filters:defaultReadingFilters}
 const result={stories:[],series:[],total:0,page:1,pages:1,sections:{},fandoms:[]}
-const story=(id:string,title=id)=>({id,metadata:{...blankMetadata,title,summary:'Full summary'},notes:'Private notes',personalTags:['Personal tag'],work:{ao3_work_id:1,verified_chapters:{'1':'910'}},collectionIds:[],reading_status:'reading',last_read_chapter:0}) as unknown as Story
+const story=(id:string,title=id)=>({id,metadata:{...blankMetadata,title,summary:'Full summary'},notes:'Private Notes',personalTags:['Personal tag'],work:{ao3_work_id:1,verified_chapters:{'1':'910'}},collectionIds:[],reading_status:'reading',last_read_chapter:0}) as unknown as Story
 const wrapper=({children}:{children:ReactNode})=><MemoryRouter><LibraryProvider userId="reader-1">{children}</LibraryProvider></MemoryRouter>
 beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.query.mockResolvedValue(result)})
 it('serializes targeted refreshes and preserves unrelated works without reloading the catalog',async()=>{
@@ -70,7 +70,7 @@ it('bounds repeated detail navigation and targeted refreshes while retaining mou
  }
  expect(view.result.current.stories.filter(s=>s.detailsLoaded!==false).map(s=>s.id)).toEqual(expect.arrayContaining(['0','1','2','3','179']))
  expect(view.result.current.stories.find(s=>s.id==='4')).toMatchObject({detailsLoaded:false,notes:'',personalTags:[],metadata:{summary:''}})
- expect(view.result.current.stories.find(s=>s.id==='0')).toMatchObject({notes:'Private notes',metadata:{summary:'Full summary'}})
+ expect(view.result.current.stories.find(s=>s.id==='0')).toMatchObject({notes:'Private Notes',metadata:{summary:'Full summary'}})
  // Overlapping mounted owners and a series larger than the budget stay usable.
  let releaseOverlap!:()=>void,releaseLarge!:()=>void
  await act(async()=>{
@@ -95,7 +95,7 @@ it('applies the same limit when a catalog contains full details',async()=>{
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
  expect(view.result.current.stories.filter(s=>s.detailsLoaded!==false)).toHaveLength(100)
  expect(view.result.current.stories[0]).toMatchObject({id:'0',detailsLoaded:false,notes:'',metadata:{summary:''}})
- expect(view.result.current.stories[139]).toMatchObject({id:'139',notes:'Private notes'})
+ expect(view.result.current.stories[139]).toMatchObject({id:'139',notes:'Private Notes'})
 })
 
 
@@ -118,8 +118,8 @@ it('retains only the newest three notifications across reading and removal actio
  for (const id of ['first', 'second', 'third']) await act(() => view.result.current.markFinished(story(id)))
  await act(() => view.result.current.removeStory(story('fourth')))
  expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
- expect(screen.queryByRole('button', { name: 'Dismiss undo notification for first' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for first' })).not.toBeInTheDocument()
  await act(() => view.result.current.markFinished(story('fifth')))
  expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
- expect(screen.queryByRole('button', { name: 'Dismiss undo notification for second' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for second' })).not.toBeInTheDocument()
 })

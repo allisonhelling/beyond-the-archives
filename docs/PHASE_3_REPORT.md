@@ -1,8 +1,8 @@
-# Phase 3 implementation and operations report
+# Phase 3 Implementation and Operations Report
 
 Implemented against `AO3_Implementation_Plan.pdf` (Phase 3, steps 3.1–3.5) and `AO3_Project_Specification.pdf`. Code is ready for review; production migrations, worker deployment and scheduling have **not** been performed.
 
-## Delivered behavior
+## Delivered Behavior
 
 - `/imports`, main/mobile navigation, the Add menu and the Library toolbar expose the importer.
 - Paste 100+ links, including links embedded in text. The explicit maximum is 2,000 URL tokens per batch. Preview shows detected and unrelated URL counts.
@@ -13,7 +13,7 @@ Implemented against `AO3_Implementation_Plan.pdf` (Phase 3, steps 3.1–3.5) and
 - Individual results link to existing story details and metadata editing. Eligible failed jobs have Retry Metadata controls. Existing work progress requires a separate explicit approval action.
 - Story details offer Retry / Update Metadata, retrieval timestamps and removal of individual manual overrides. Imported stories use the same Library, Currently Reading, details, notes, ratings, favorites, collections and reading controls as manual stories.
 
-## Identity, deduplication and chapter verification
+## Identity, Deduplication and Chapter Verification
 
 `src/features/imports/urls.ts` is the shared TypeScript parser used by manual entry and imports. It accepts HTTP/HTTPS AO3 work links, optional `www`, collection-qualified work links, chapters, trailing slashes, query parameters and fragments. It rejects unsafe numeric IDs, unsupported paths, credentials and custom ports. Standalone chapter links cannot establish a work identity and are unsupported.
 
@@ -25,7 +25,7 @@ Only explicit numbered AO3 chapter selector options establish a chapter-position
 
 For a newly created, untouched entry, the maximum verified position across every occurrence of that work in the batch sets fully read chapters to `position - 1`. Thus chapter 6 followed by chapter 2 produces five read chapters. Chapter 1 and unverified links remain To Read at zero. Existing entries retain their reading status and progress. The explicit approval action advances with `greatest(existing, position - 1)` and leaves status unchanged. Any user edit while initial retrieval is pending suppresses automatic initial progress.
 
-## Database migration and security
+## Database Migration and Security
 
 New migration: `supabase/migrations/20261016000200_bulk_imports.sql`.
 
@@ -40,7 +40,7 @@ New migration: `supabase/migrations/20261016000200_bulk_imports.sql`.
 
 The generated database types include the new tables and authenticated RPCs. Regenerate authoritative Supabase types after applying the migration to a running local stack.
 
-## Metadata adapter and conflict policy
+## Metadata Adapter and Conflict Policy
 
 The server implementation has separate responsibilities:
 
@@ -55,7 +55,7 @@ A canonical URL is written only after a successful parsed page provides matching
 
 Private `metadata_overrides` remain the source of manual field provenance: key present means manually managed; key absent means automatic. Effective metadata overlays these private fields on shared automatic metadata. Existing overrides survive migration unchanged. Editing reading or organization data sends no automatic metadata as new overrides. Editing metadata sends only changed fields. Users can remove individual overrides to restore automatic management.
 
-## Worker execution, scheduling and recovery
+## Worker Execution, Scheduling and Recovery
 
 The locally runnable worker is `server/import-worker.ts`, invoked with `npm run worker`. It runs independently of browser navigation. Each execution claims **one** job; the continuous local process waits 15 seconds between executions. The PostgreSQL gate allows only one active retrieval across worker hosts and at least 15 seconds between claims. Bounded same-work redirects also wait 15 seconds between requests.
 
@@ -77,7 +77,7 @@ Resume behavior:
 
 The minute-based hosted schedule processes at most one work per minute (100 works therefore take at least roughly 100 minutes). The local continuous worker is faster but remains conservative. Delays, timeouts, retries and blocks can extend these times.
 
-## Local setup and verification
+## Local Setup and Verification
 
 From `FanficTrackerLibrary`:
 
@@ -110,7 +110,7 @@ npm run test:integration
 
 Use a disposable local database for integration tests. The live runner creates temporary accounts, cleans them up, and now includes real parallel worker claim requests. Stop other workers and finish/cancel pre-existing local jobs before queue integration tests; it refuses to claim unrelated pending work.
 
-## Validation and limitations
+## Validation and Limitations
 
 - `npm run check`: passed (lint; TypeScript and production build; 208 Vitest tests; 7 integration-configuration tests; browser/server boundary, privileged-key rejection and production-secret canary checks).
 - Embedded PostgreSQL migration/RLS/library/import suite: 69 tests passed. This executes all versioned migrations in PGlite, including ownership, anonymous access, worker-only privileges, cancellation, recovery, deduplication, retries and preservation checks.
@@ -125,7 +125,7 @@ Use a disposable local database for integration tests. The live runner creates t
 - No application secrets were added to source or exposed to browser code. Security canary checks passed. No Git commit was created; deployment credentials remain a configuration task.
 - Phase 4–6 features were not added: no advanced search parser, dedicated series/statistics pages, email ingestion, extension or full backup/restore workflow. Verified series metadata is stored only for the Phase 3 adapter.
 
-## Files created
+## Files Created
 
 - `docs/PHASE_3_REPORT.md`
 - `src/features/imports/urls.ts`, `urls.test.ts`, `repository.ts`, `ImportPage.tsx`, `ImportPage.test.tsx`, `MetadataControls.tsx`
@@ -137,7 +137,7 @@ Use a disposable local database for integration tests. The live runner creates t
 - `supabase/functions/import-worker/index.ts`
 - `supabase/scheduling/import-worker.sql`
 
-## Existing files modified
+## Existing Files Modified
 
 - `.env.example`, `package.json`, `package-lock.json`, `tsconfig.json`, `README.md`
 - `scripts/generate-test-types.mjs`, `scripts/test-supabase.mjs`
@@ -149,7 +149,7 @@ Use a disposable local database for integration tests. The live runner creates t
 
 The only new runtime dependency is Cheerio, used on the server for HTML parsing. Existing React, Supabase, routing, form styles, library repository, metadata overrides and database relationships are reused.
 
-## Local configuration follow-up
+## Local Configuration Follow-Up
 
 The first one-link submission failed because `.env.local` targeted hosted Supabase, where `submit_import_urls` was absent (`PGRST202`), while `.env.worker` targeted local Supabase. The local app and worker have now been configured for the same local instance. Previous hosted browser settings are preserved in ignored `.env.local.hosted`; the hosted database was not changed.
 
@@ -164,6 +164,6 @@ Both are applied locally. Database lint now reports no schema errors. The 28 liv
 
 Restart both the Vite development process and metadata worker after changing environment files. Local authentication is separate from hosted authentication; the local database initially had no accounts and needs a local account before interactive use. No hosted account or library was copied.
 
-## Preserving AO3 tag order
+## Preserving AO3 Tag Order
 
 Migration `20261016000500_preserve_source_tag_order.sql` adds nullable `work_tags.source_position` and an index for ordered reads. The metadata commit function records the position of each tag within its AO3 category using PostgreSQL ordinality; the library reads those positions before tag IDs. This preserves additional-tag order through persistence and refresh without duplicating metadata or changing private overrides. The migration is applied locally and database lint passes. Existing rows have unknown positions until their next successful metadata refresh. Parser fixtures and database tests cover nonalphabetical order and later source reordering.

@@ -1,9 +1,10 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-const {rpc,session,settings,invoke}=vi.hoisted(()=>({rpc:vi.fn(),session:vi.fn(),settings:vi.fn(),invoke:vi.fn()}))
+const {rpc,session,settings,invoke,connect,extensionPreview}=vi.hoisted(()=>({rpc:vi.fn(),session:vi.fn(),settings:vi.fn(),invoke:vi.fn(),connect:vi.fn(),extensionPreview:vi.fn()}))
 vi.mock('../../lib/supabase',()=>({supabase:{rpc,auth:{getSession:session},from:()=>({select:()=>({eq:()=>({maybeSingle:settings})})}),functions:{invoke}}}))
+vi.mock('./extension',()=>({connectExtension:connect,previewSeriesWithExtension:extensionPreview}))
 vi.mock('../library/repository',()=>({allRows:vi.fn()}))
 import { previewSeries, submitImport } from './repository'
-beforeEach(()=>{rpc.mockReset();invoke.mockReset()})
+beforeEach(()=>{rpc.mockReset();invoke.mockReset();session.mockReset();settings.mockReset();connect.mockReset().mockResolvedValue(true);extensionPreview.mockReset()})
 it('explains a missing Phase 3 migration instead of suggesting a one-link batch is too large',async()=>{
  rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'Internal database details'}})
  await expect(submitImport('https://archiveofourown.org/works/123')).rejects.toThrow('The connected Supabase database is missing the Phase 3 importer.')
@@ -108,4 +109,27 @@ it('respects the hosted retrieval gate between series pages', async () => {
   await result
   expect(invoke).toHaveBeenCalledTimes(2)
  } finally { vi.useRealTimers() }
+})
+
+
+it('loads a legacy scan series name directly through the connected extension without backend settings or functions', async () => {
+ const { readFile } = await import('node:fs/promises')
+ const html = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('</div>', '<ol class="pagination"><li class="next"><a href="/series/77?page=2">Next</a></li></ol></div>')
+ const url = 'https://archiveofourown.org/series/77'
+ extensionPreview.mockResolvedValue({ url, html })
+ const preview = await previewSeries(url, { firstPageOnly: true, viaExtension: true })
+ expect(preview).toMatchObject({ title: 'A & B', basic: true })
+ expect(preview.works.map(work => work.workId)).toEqual([101, 102])
+ expect(extensionPreview).toHaveBeenCalledExactlyOnceWith(url)
+ expect(session).not.toHaveBeenCalled()
+ expect(settings).not.toHaveBeenCalled()
+ expect(invoke).not.toHaveBeenCalled()
+})
+
+it('retains connection and capture errors when retrieving missing scan names', async () => {
+ connect.mockResolvedValueOnce(false)
+ await expect(previewSeries('https://archiveofourown.org/series/77', { viaExtension: true, firstPageOnly: true })).rejects.toThrow('Connect the extension')
+ extensionPreview.mockRejectedValue(new Error('Complete AO3 sign-in in the capture tab.'))
+ await expect(previewSeries('https://archiveofourown.org/series/77', { viaExtension: true, firstPageOnly: true })).rejects.toThrow('Complete AO3 sign-in')
+ expect(invoke).not.toHaveBeenCalled()
 })

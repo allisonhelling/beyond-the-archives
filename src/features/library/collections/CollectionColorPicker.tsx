@@ -38,11 +38,11 @@ export function CollectionColorPicker({ value, onChange, disabled = false, showH
   return <div className="collection-custom-color" ref={ref} style={{ '--picker-hue': current.h } as CSSProperties} onKeyDown={event => {
     if (open && (event.key === 'Escape' || event.key === 'Enter')) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus() }
   }}>
-    <button ref={trigger} type="button" className="button secondary collection-color-trigger" disabled={disabled} aria-label="Custom color" title={value} aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>
-      <span className="collection-color-swatch" style={{ '--cover-color': validHex.test(value) ? value : toHex(current) } as CSSProperties} aria-hidden="true" />{showHex || customColor ? value : 'Custom color'}
+    <button ref={trigger} type="button" className="button secondary collection-color-trigger" disabled={disabled} aria-label="Custom Color" title={value} aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>
+      <span className="collection-color-swatch" style={{ '--cover-color': validHex.test(value) ? value : toHex(current) } as CSSProperties} aria-hidden="true" />{showHex || customColor ? value : 'Custom Color'}
     </button>
     <div id={panelId} className="collection-color-picker" hidden={!open} data-open={open || undefined}>
-      {open && <div className="collection-color-controls" role="group" aria-label="Color picker">
+      {open && <div className="collection-color-controls" role="group" aria-label="Color Picker">
         <div className="collection-color-shade" style={{ '--picker-saturation': `${current.s * 100}%`, '--picker-darkness': `${(1 - current.v) * 100}%` } as CSSProperties} onPointerDown={event => {
           if (disabled || event.button !== 0) return
           event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); shade(event)
@@ -55,7 +55,7 @@ export function CollectionColorPicker({ value, onChange, disabled = false, showH
         </div>
         <input className="collection-color-hue" type="range" aria-label="Hue" min="0" max="360" value={current.h} disabled={disabled} onChange={event => change({ ...current, h: Number(event.target.value) })} />
       </div>}
-      <label className="collection-color-hex"><span className="sr-only">Custom color (hex)</span><input ref={hexInput} type="text" required pattern={collectionColorPattern} maxLength={7} placeholder="#970000" title="Enter # followed by six hexadecimal digits." autoCapitalize="none" spellCheck={false} value={value} disabled={disabled} onInvalid={event => { event.preventDefault(); setOpen(true); requestAnimationFrame(() => hexInput.current?.focus()) }} onChange={event => onChange(event.target.value)} /></label>
+      <label className="collection-color-hex"><span className="sr-only">Custom Color (Hex)</span><input ref={hexInput} type="text" required pattern={collectionColorPattern} maxLength={7} placeholder="#970000" title="Enter # followed by six hexadecimal digits." autoCapitalize="none" spellCheck={false} value={value} disabled={disabled} onInvalid={event => { event.preventDefault(); setOpen(true); requestAnimationFrame(() => hexInput.current?.focus()) }} onChange={event => onChange(event.target.value)} /></label>
     </div>
   </div>
 }

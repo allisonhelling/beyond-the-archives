@@ -1,8 +1,8 @@
-# Phase 1 implementation report
+# Phase 1 Implementation Report
 
 Implemented October 14, 2026, from the supplied AO3 Implementation Plan and AO3 Project Specification. Original PDFs were read and left unchanged. No Phase 2 functionality was implemented.
 
-## Requirements and evidence
+## Requirements and Evidence
 
 | Phase 1 requirement | Delivered |
 | --- | --- |
@@ -17,7 +17,7 @@ Implemented October 14, 2026, from the supplied AO3 Implementation Plan and AO3 
 | Navigation/responsive layout | Currently Reading, Library, Stats, Settings, Features; mobile menu; phase-labeled disabled Add options; keyboard access |
 | Important architecture decisions | Unique AO3 work IDs, exact original URLs separate from verified canonical URLs, unknown chapter/completion values, personal overrides separate from automatic metadata, UTC timestamps |
 
-## Verification results
+## Verification Results
 
 - `npm run lint`: passed with zero warnings.
 - `npm run build`: TypeScript and production Vite build passed. Vendor splitting keeps every output chunk below Vite's warning threshold.
@@ -30,7 +30,7 @@ Implemented October 14, 2026, from the supplied AO3 Implementation Plan and AO3 
 - `npx --yes deno check supabase/functions/account-status/index.ts`: passed, including the pinned Supabase SDK. Edge Function handler behavior is also unit-tested. Deployed runtime verification remains outstanding; type-checking is included in CI.
 - Screenshots were captured and visually inspected for desktop sign-in and mobile reading shell. Browser tests mock Supabase Auth; they do not establish that a hosted backend exists.
 
-## Manual setup remaining
+## Manual Setup Remaining
 
 1. Create/link your Supabase project and review/apply the migration using the README instructions.
 2. Configure hosted Auth: disable public/anonymous signup, set password policy, Site URL, exact callback allowlist, email templates and SMTP; invite your account.
@@ -41,7 +41,7 @@ Implemented October 14, 2026, from the supplied AO3 Implementation Plan and AO3 
 
 No approval was deferred for code work. Remote provisioning/deployment requires your own project/account configuration. The project is ready for that setup; it is not yet a live production library.
 
-## Changed-file inventory
+## Changed-File Inventory
 
 All implementation files are new; the original PDFs are unchanged.
 
@@ -62,7 +62,7 @@ All implementation files are new; the original PDFs are unchanged.
 
 Ignored generated artifacts include `node_modules/`, `dist/`, TypeScript build info, Playwright `test-results/`, and Supabase temporary state. These should not be committed.
 
-## Local-stack follow-up — October 15, 2026
+## Local-Stack Follow-Up — October 15, 2026
 
 Docker was subsequently installed and the user successfully ran the migration/reset and database lint (`No schema errors found`). A failed initial startup left only PostgreSQL running. A normal, data-preserving `supabase stop` followed by `supabase start` restored the complete stack.
 
