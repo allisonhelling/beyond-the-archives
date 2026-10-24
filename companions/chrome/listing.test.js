@@ -63,11 +63,11 @@ it('reads collection summary and intro from AO3 collection profile markup', () =
 
 it('reports an unfinished document as pending rather than a sign-in failure', () => {
  page('<div id="main" class="bookmarks-index"><ol class="bookmark index"></ol></div>')
- for (const value of ['loading', 'interactive']) {
+ for (const value of ['loading']) {
   Object.defineProperty(document, 'readyState', { value, configurable: true })
   expect(captureListingPage('bookmarks')).toEqual({ url: location.href, pending: true })
  }
- Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true })
+ Object.defineProperty(document, 'readyState', { value: 'interactive', configurable: true })
  expect(captureListingPage('bookmarks')).toMatchObject({ rows: [], hasNext: false })
 })
 

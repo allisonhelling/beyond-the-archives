@@ -88,7 +88,8 @@ it('abandons an early wait when the requested document navigates away', async ()
  expect(await pending).toBeNull()
 })
 
-it('captures a requested series listing without scripts or images', async () => {
+it.each(['interactive', 'complete'])('captures a parsed series without waiting for resources (%s)', async ready => {
+ vi.spyOn(document, 'readyState', 'get').mockReturnValue(ready)
  document.body.innerHTML = '<div id="main"><h2 class="heading">Series</h2><dl class="series meta"><dt>Description:</dt><dd>Extras</dd></dl><ul class="series work index"><li class="work blurb"><h4 class="heading"><a href="/works/123">Story</a></h4><img src="private"><script>secret</script><blockquote class="summary">A story.</blockquote></li></ul></div>'
  const result = await captureMetadataPage(false, 'series')
  expect(result?.html).toContain('A story.')
@@ -96,9 +97,9 @@ it('captures a requested series listing without scripts or images', async () => 
  expect(result?.html).not.toContain('<script')
 })
 
-it('captures only the requested chapter release index for bookmark progress', async () => {
+it.each(['interactive', 'complete'])('captures only the parsed chapter release index (%s)', async ready => {
  vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123/navigate'))
- vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
+ vi.spyOn(document, 'readyState', 'get').mockReturnValue(ready)
  document.body.innerHTML = '<div id="main"><ol class="chapter index"><li><a href="/works/123/chapters/456">1. Chapter</a><span class="datetime">(2026-10-01)</span><script>secret()</script></li></ol><div>Private account details</div></div>'
  const snapshot = await captureMetadataPage(false, 'navigation')
  expect(snapshot.html).toContain('2026-10-01')
@@ -109,9 +110,16 @@ it('captures only the requested chapter release index for bookmark progress', as
 
 it('returns only explicit missing-page evidence when a chapter index is unavailable', async () => {
  vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123/navigate'))
- Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true })
+ vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
  document.body.innerHTML = '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div><div>Private navigation</div>'
  const page = await captureMetadataPage(false, 'navigation')
  expect(page.notFound).toBe(true)
  expect(page.html).not.toContain('Private navigation')
+})
+
+it.each(['series', 'navigation'])('never captures an unparsed %s document', async kind => {
+ vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
+ vi.stubGlobal('location', new URL('https://archiveofourown.org/works/123/navigate'))
+ document.body.innerHTML = '<div id="main"><h2 class="heading">Series</h2><dl class="series meta"></dl><ol class="series work index chapter"></ol></div>'
+ expect(await captureMetadataPage(false, kind)).toBeNull()
 })

@@ -1,7 +1,7 @@
 /** Serialized by chrome.scripting; selectors ported from ao3_scraper/ao3_export.py. */
 export function captureListingPage(kind) {
  if (location.origin !== 'https://archiveofourown.org') return null
- if (document.readyState !== 'complete') return { url: location.href, pending: true }
+ if (document.readyState === 'loading') return { url: location.href, pending: true }
  const main = document.querySelector('#main')
  const classes = { bookmarks: ['bookmarks-index'], marked_for_later: ['readings-index'], works: ['works-index', 'works-search'], series: ['series-index'], series_works: ['series-show'] }
  const recognized = kind === 'collection_profile' ? main?.querySelector('.collection.profile') : classes[kind]?.some(name => main?.classList.contains(name))

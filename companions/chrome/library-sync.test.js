@@ -317,3 +317,42 @@ it('keeps a previous scan cooldown when starting a new scan', async () => {
  clock += 60000; await sync.pump()
  expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
 })
+
+it('saves a parsed listing while Chrome is still waiting for resources', async () => {
+ await start(); await sync.pump()
+ chrome.tabs.get.mockImplementation(async () => ({ id: 8, status: 'loading', url: local.librarySync.requestUrl }))
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1, count: 1 })
+ expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ injectImmediately: true }))
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+})
+it('waits for unparsed chapter indexes and captures them before resources finish', async () => {
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates: true })
+ chrome.tabs.get.mockImplementation(async () => ({ id: 8, status: 'loading', url: local.librarySync.requestUrl }))
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [datedRow()], skipped: 0, hasNext: false } }])
+ await collect(); clock += 20000; await sync.pump()
+ expect(local.librarySync.chapterRequest.workId).toBe(1)
+ chrome.scripting.executeScript.mockResolvedValueOnce([{ result: null }]).mockResolvedValueOnce([{ result: { url: local.librarySync.requestUrl, pending: true } }])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'running', pages: 1, chapterDatesChecked: 0 })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: local.librarySync.requestUrl, html: chapterIndex } }])
+ await sync.pump(); await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1, chapterDatesChecked: 1 })
+})
+
+it('can focus the scan tab while a capture is being saved without releasing its lock', async () => {
+ await start(); await sync.pump()
+ chrome.tabs.get.mockImplementation(async () => ({ id: 8, windowId: 12, status: 'loading', url: local.librarySync.requestUrl }))
+ chrome.windows = { update: vi.fn().mockResolvedValue(undefined) }
+ let finish
+ chrome.scripting.executeScript.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+ const capture = sync.pump()
+ await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+ await expect(sync.command({ action: 'open-tab', scanId: local.librarySync.id })).resolves.toHaveProperty('state')
+ expect(sync.busy()).toBe(true)
+ expect(chrome.tabs.update).toHaveBeenCalledWith(8, { active: true })
+ finish([{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: false } }])
+ await capture
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 1 })
+})

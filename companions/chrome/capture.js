@@ -1,13 +1,13 @@
 /** Serialized by chrome.scripting; keep this function self-contained. */
 export async function captureMetadataPage(waitForReady = false, pageType = 'work') {
  if (location.origin !== 'https://archiveofourown.org') return null
- if (pageType !== 'series' && document.readyState === 'complete' && !document.querySelector('h2.title') && /Error\s+404/i.test(document.querySelector('#main h2, #main h1')?.textContent ?? '') && /The page you were looking for doesn['’]t exist\./i.test(document.querySelector('#main')?.textContent ?? '')) {
+ if (pageType !== 'series' && document.readyState !== 'loading' && !document.querySelector('h2.title') && /Error\s+404/i.test(document.querySelector('#main h2, #main h1')?.textContent ?? '') && /The page you were looking for doesn['’]t exist\./i.test(document.querySelector('#main')?.textContent ?? '')) {
   // Send only the error evidence; account navigation and other page content stay private.
   return { url: location.href, html: '<div id="main"><h2>Error 404</h2><p>The page you were looking for doesn\'t exist.</p></div>', notFound: true }
  }
  const navigation = pageType === 'navigation'
  if (navigation) {
-  if (document.readyState !== 'complete' || !/^\/works\/[1-9]\d*\/navigate$/.test(location.pathname)) return null
+  if (document.readyState === 'loading' || !/^\/works\/[1-9]\d*\/navigate$/.test(location.pathname)) return null
   const index = document.querySelector('#main .chapter.index, #main ol.chapter, #main .chapter-index')
   if (!index) return null
   const clone = index.cloneNode(true)
@@ -16,7 +16,7 @@ export async function captureMetadataPage(waitForReady = false, pageType = 'work
   return new TextEncoder().encode(html).byteLength <= 400_000 ? { url: location.href, html } : null
  }
  const series = pageType === 'series'
- if (series && (document.readyState !== 'complete' || !document.querySelector('.series.work.index') || !document.querySelector('dl.series.meta'))) return null
+ if (series && (document.readyState === 'loading' || !document.querySelector('.series.work.index') || !document.querySelector('dl.series.meta'))) return null
  if (waitForReady && !series) {
   // Finish parsing the document before trusting optional fields or chapter
   // navigation. This still avoids waiting for images and other load resources.

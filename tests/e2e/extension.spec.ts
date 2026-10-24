@@ -135,7 +135,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await expect(bar.locator('.brand-icon svg')).toHaveCSS('width', '18px')
   await connectButton.click()
   await expect(bar.locator('.inline-instructions')).toHaveCount(0)
-  await bar.getByLabel('One-time pairing code', { exact: true }).fill('one-time-code')
+  await bar.getByLabel('One-Time Pairing Code', { exact: true }).fill('one-time-code')
   await bar.getByRole('button', { name: 'Connect', exact: true }).click()
   await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
   await bar.getByLabel('Private Notes', { exact: true }).fill('Saved directly from Chrome')
@@ -191,9 +191,10 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   // Series previews reuse the same explicit-request boundary and never queue works.
   const seriesUrl = 'https://archiveofourown.org/series/77'
   const seriesFixture = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')
-  await context.route(seriesUrl, route => route.fulfill({ contentType: 'text/html', body: seriesFixture }))
+  slowImage = new Promise<void>(resolve => { releaseImage = resolve })
+  await context.route(seriesUrl, route => route.fulfill({ contentType: 'text/html', body: `<html><body>${seriesFixture}<img src="/slow-image-series.png"></body></html>` }))
   const series = await context.newPage()
-  await series.goto(seriesUrl)
+  await series.goto(seriesUrl, { waitUntil: 'domcontentloaded' })
   await series.addStyleTag({ content: '.work.blurb { border: 1px solid #ccc; padding: 8px; } .work.blurb > dl.stats { float: right; margin: 0; }' })
   const preview = await app.evaluate(({ id, url }) => new Promise(resolve => {
    const api = (window as Window & { chrome?: { runtime: { sendMessage(id: string, body: object, callback: (result: unknown) => void): void } } }).chrome
@@ -201,6 +202,9 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   }), { id: extensionId, url: seriesUrl })
   expect(preview).toMatchObject({ ok: true, page: { url: seriesUrl } })
   expect((preview as { page: { html: string } }).page.html).toContain('The first story')
+  expect(await series.evaluate(() => document.readyState)).toBe('interactive')
+  releaseImage!()
+  await series.waitForLoadState('load')
   expect(uploads).toHaveLength(2)
   await expect(series.locator('#ao3-library-companion').getByRole('button', { name: 'Add to Library', exact: true })).toBeVisible()
   expect(await series.locator('#series-stats').evaluate(element => element.nextElementSibling?.id)).toBe('ao3-library-companion')
@@ -266,7 +270,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    await ao3.reload()
    await expect(bar.getByLabel('Library environment: Local')).toBeVisible()
    await bar.getByRole('button', { name: 'Connect Library', exact: true }).click()
-   await bar.getByLabel('One-time pairing code', { exact: true }).fill('local-pairing-code')
+   await bar.getByLabel('One-Time Pairing Code', { exact: true }).fill('local-pairing-code')
    await bar.getByRole('button', { name: 'Connect', exact: true }).click()
    await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
    await bar.getByLabel('Private Notes', { exact: true }).fill('Local draft retained')
@@ -299,14 +303,15 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    await expect.poll(() => command({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })).toEqual({ ok: true })
    expect(await command({ type: 'AO3_LIBRARY_CAPTURE_WORK', url: 'https://archiveofourown.org/works/123' })).toMatchObject({ ok: true, page: { url: expect.stringMatching(/^https:\/\/archiveofourown\.org\/works\/123(?:\/chapters\/[1-9]\d*)?(?:[?#].*)?$/) } })
    const listing = 'https://archiveofourown.org/users/alice/bookmarks'
-   await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a href="?page=3">Next</a></li></ol></div>' }))
+   slowImage = new Promise<void>(resolve => { releaseImage = resolve })
+   await context.route('https://archiveofourown.org/users/alice/bookmarks*', route => route.fulfill({ contentType: 'text/html', body: '<html><body><div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_987"><h4 class="heading"><a href="/works/789">Sample scanned work</a></h4></li><li class="bookmark blurb group" id="bookmark_988"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Keep this bookmark note</p></div></div></li></ol><ol class="pagination"><li><a href="?page=3">Next</a></li></ol></div><img src="/slow-image-listing.png"></body></html>' }))
    const openedScan = context.waitForEvent('page', { timeout: 45000 })
    const started = await command({ type: 'AO3_LIBRARY_SYNC', action: 'start', url: listing, mode: 'full', startPage: 2, endPage: 2 })
    expect(started).toMatchObject({ ok: true, state: { startPage: 2, endPage: 2, limited: true } })
    const scan = await openedScan
    const scanUrl = new URL(listing)
    scanUrl.searchParams.set('bookmark_search[sort_column]', 'created_at'); scanUrl.searchParams.set('bookmark_search[sort_direction]', 'desc'); scanUrl.searchParams.set('page', '2')
-   await scan.goto(scanUrl.href)
+   await scan.goto(scanUrl.href, { waitUntil: 'domcontentloaded' })
    // The initial extension-created navigation can precede fixture interception
    // and hit the intentionally blocked live host. Resume through the same tab
    // once Playwright has attached, as a user would after resolving an outage.
@@ -314,8 +319,11 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    if (captured.state?.status === 'paused') expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'resume' })).ok).toBe(true)
    await expect.poll(async () => (await command({ type: 'AO3_LIBRARY_SYNC', action: 'status' })).state?.status, { timeout: 40000 }).toBe('ready')
    expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'page', page: 2 })).rows).toEqual([expect.objectContaining({ title: 'Sample scanned work', work_status: 'available' }), expect.objectContaining({ work_status: 'deleted', title: '', link: 'https://archiveofourown.org/bookmarks/988', 'bookmark id': '988', 'bookmark notes': 'Keep this bookmark note' })])
+   expect(await scan.evaluate(() => document.readyState)).toBe('interactive')
+   releaseImage!()
+   await scan.waitForLoadState('load')
    expect(scan.url()).toContain('page=2')
-   expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'open-tab' })).ok).toBe(true)
+   expect(await command({ type: 'AO3_LIBRARY_SYNC', action: 'open-tab' })).toMatchObject({ ok: true })
    expect((await command({ type: 'AO3_LIBRARY_SYNC', action: 'finish' })).ok).toBe(true)
    expect(uploads).toHaveLength(2)
   }

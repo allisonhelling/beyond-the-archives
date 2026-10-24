@@ -308,3 +308,20 @@ it('does not allow the sample-only work capture path to replace authenticated wo
  await vi.waitFor(() => expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false })))
  expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
 })
+
+it.each(['work', 'series'])('captures an explicit %s preview while the parsed tab is still loading resources', async kind => {
+ const localOrigin = 'http://127.0.0.1:5173'
+ vi.stubGlobal('__APP_ORIGIN__', localOrigin)
+ chrome.runtime.onMessageExternal.addListener.mockClear()
+ vi.resetModules(); await import('./background.js')
+ state.syncSample = true; state.sampleAuth = { userId: 'local-sample-reader', expiresAt: Date.now() / 1000 + 3600 }
+ const url = kind === 'work' ? workUrl : 'https://archiveofourown.org/series/77'
+ chrome.tabs.query.mockResolvedValue([{ id: 8, status: 'loading', url }])
+ chrome.tabs.get.mockResolvedValue({ id: 8, status: 'loading', url })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url, html: '<h2>Parsed metadata</h2>' } }])
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls.at(-1)[0]({ type: kind === 'work' ? 'AO3_LIBRARY_CAPTURE_WORK' : 'AO3_LIBRARY_PREVIEW_SERIES', url }, { url: localOrigin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2>Parsed metadata</h2>' } }))
+ expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ injectImmediately: true, args: [true, kind] }))
+ expect(chrome.tabs.create).not.toHaveBeenCalled()
+})

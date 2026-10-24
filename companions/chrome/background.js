@@ -186,11 +186,12 @@ async function previewPage(url, pageType = 'series') {
    await storage.session.set({ ao3LastNavigation: Date.now() })
    tab = await chrome.tabs.create({ url: targetUrl, active: false })
   }
-  for (let attempt = 0; attempt < 120; attempt++) {
+  const deadline = Date.now() + 120000
+  while (Date.now() < deadline) {
    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
    const current = await chrome.tabs.get(tab.id)
-   if (current.status === 'complete' && matches(current.url)) {
-    const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, args: [false, pageType] })
+   if (matches(current.url)) {
+    const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: [current.status !== 'complete', pageType] })
     const page = results[0]?.result
     if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')
     if (page && matches(page.url)) return page

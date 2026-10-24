@@ -8,7 +8,7 @@
 :host([data-theme="dark"]) ::placeholder { color: var(--personal-control-muted-color); opacity: 1; }
 * { box-sizing: border-box; font-size: var(--font-size); }
 :host([hidden]), :host [hidden] { display: none; }
-section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field-gap)) 0 var(--bar-space-after, var(--field-gap)); border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field-gap)) 0 var(--bar-space-after, var(--field-gap)); border: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--text); }
 .toolbar, .bottom-bar { --font-size: var(--ao3-font-size, 20px); }
 .toolbar { display: grid; grid-template-columns: max-content minmax(max-content, 1fr) max-content; align-items: center; gap: var(--control-gap); overflow-x: auto; }
 .toolbar > .row, .reading-summary { flex-wrap: nowrap; }

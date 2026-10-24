@@ -128,21 +128,26 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     await navigate(state, `https://archiveofourown.org/works/${state.chapterRequest.workId}/navigate`); return
    }
    const tab = await chrome.tabs.get(state.tabId)
-   if (tab.status !== 'complete') {
-    if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
-    return
-   }
    if (!sameScanUrl(tab.url, state.requestUrl)) {
+    // Chrome may still report the previous URL while the requested document starts.
+    if (tab.status !== 'complete') {
+     if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
+     return
+    }
     state.attention = /\/users\/login(?:[/?#]|$)/.test(tab.url ?? '') ? 'login' : 'page_error'
     throw new Error('AO3 redirected the scan. Complete sign-in or confirmation in its tab, then resume.')
    }
    if (state.chapterRequest) {
     const request = state.chapterRequest
-    const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureMetadataPage, args: [false, 'navigation'] }))[0]?.result
+    const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureMetadataPage, injectImmediately: true, args: [false, 'navigation'] }))[0]?.result
     if (!result || !sameScanUrl(result.url, state.requestUrl)) {
-     const problem = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, args: ['chapter_dates'] }))[0]?.result
-     state.attention = problem?.attention ?? 'page_error'
-     throw new Error(problem?.error ?? 'Chapter Index could not be read. Check the scan tab and resume.')
+     const problem = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, injectImmediately: true, args: ['chapter_dates'] }))[0]?.result
+     if (!problem || problem.pending && sameScanUrl(problem.url, state.requestUrl)) {
+      if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
+      return
+     }
+     state.attention = problem.attention ?? 'page_error'
+     throw new Error(problem.error ?? 'Chapter Index could not be read. Check the scan tab and resume.')
     }
     if ((await auth())?.userId !== state.userId) return
     let dates = {}
@@ -158,7 +163,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     await write(state); changed(); return
    }
    if (!state.captured) {
-    const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, args: [state.kind] }))[0]?.result
+    const result = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureListingPage, injectImmediately: true, args: [state.kind] }))[0]?.result
     // Tab completion and the injected document can briefly disagree during navigation.
     // Wait for this document without requesting the page again or reporting a login failure.
     if (!result || result.pending && sameScanUrl(result.url, state.requestUrl)) {
@@ -221,7 +226,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   }
  }
  return { busy: () => busy, async command(message) {
-  const mutation = !['status', 'page'].includes(message.action)
+  const mutation = !['status', 'page', 'open-tab'].includes(message.action)
   if (mutation && busy) throw new Error('A page is being saved. Retry shortly.')
   if (mutation) busy = true
   let updated = false
