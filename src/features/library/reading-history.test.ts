@@ -32,3 +32,8 @@ it('excludes an open pause and tracks a resumed re-read in sample mode without r
  expect(edited.finished_at).toBe(finished.finished_at)
  expect(edited.reading_history).toEqual(finished.reading_history)
 })
+
+it('stops elapsed calendar duration at DNF rather than letting archived reading time grow', () => {
+ const story = { ...exampleWork, reading_status: 'did_not_finish' as const, created_at: '2026-10-01T00:00:00Z', dnf_since: '2026-10-03T00:00:00Z', reading_history: [] }
+ expect(readingMilliseconds(story, Date.parse('2026-12-01T00:00:00Z'))).toBe(2 * 86400000)
+})

@@ -19,7 +19,7 @@ it('supports export all, individual file selection, and prevents empty downloads
   expect(exportLibraryCsv).toHaveBeenCalledWith(['collections.csv'])
   fireEvent.click(all)
   fireEvent.click(button)
-  await waitFor(() => expect(exportLibraryCsv).toHaveBeenLastCalledWith(['works.csv', 'series.csv', 'collections.csv', 'collection_memberships.csv']))
+  await waitFor(() => expect(exportLibraryCsv).toHaveBeenLastCalledWith(['works.csv', 'series.csv', 'collections.csv', 'collection_memberships.csv', 'reading_records.csv']))
 })
 
 it('locks selection while exporting, prevents repeated downloads, and supports retry after failure', async () => {

@@ -1,5 +1,7 @@
 # Library backups
 
+DNF cleanup adds compact reading records and account cleanup preferences to JSON backups, and `reading_records.csv` to CSV exports. Apply `20261024000200_dnf_cleanup.sql` for these fields. Older version-1 files remain accepted with an empty compact archive. See [DNF cleanup](DNF_CLEANUP.md) for retention and recovery behavior.
+
 Apply migrations through `supabase/migrations/20261021001000_account_backup_restore.sql` before deploying the frontend. In Settings → Export Backup, download a versioned JSON file or choose **Save Backup to Supabase** to store a private copy. Both use the same consistent database snapshot of the signed-in account, independent of loaded pages and PostgREST's row limit.
 
 Included: all library entries and their original URLs, source metadata and normalized authors/fandoms/tags, chapter verification data, personal/extension overrides, reading progress and dates, notes, favorites, ratings, personal tags, collections and memberships (including appearance, order, visibility and automatic rules), saved series and memberships, metadata preferences, import batches/items/jobs/logs, and timestamps. Works referenced only by retained import jobs are included too. Browser display/date/page-size/reading/collection-sort preferences come from the exporting browser and are stored separately as `browser_preferences`.

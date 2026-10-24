@@ -1,12 +1,16 @@
 import { downloadFile } from '../../lib/download'
 import { createZip } from '../../lib/zip'
-import { loadLibrary } from '../library/repository'
+import { allRows, loadLibrary } from '../library/repository'
+import { supabase } from '../../lib/supabase'
+import { sampleMode } from '../../lib/sample-mode'
+import type { Database } from '../../types/database'
 
 export const csvFiles = [
   { name: 'works.csv', description: 'Saved works, metadata, reading progress, notes, ratings, and personal tags' },
   { name: 'series.csv', description: 'Saved series, metadata, notes, and personal settings' },
   { name: 'collections.csv', description: 'Collection names, descriptions, colors, symbols, ordering, and automatic rules' },
   { name: 'collection_memberships.csv', description: 'Links between collections and saved works or series, including automatic membership' },
+  { name: 'reading_records.csv', description: 'Compact reading records preserved by DNF cleanup' },
 ] as const
 export type CsvFile = typeof csvFiles[number]['name']
 type Row = Record<string, unknown>
@@ -25,7 +29,7 @@ function csv(rows: Row[], required: string[]): string {
   return '\ufeff' + [columns.map(csvCell).join(','), ...rows.map(row => columns.map(column => csvCell(row[column])).join(','))].join('\r\n') + '\r\n'
 }
 
-export function libraryCsvFiles(library: Awaited<ReturnType<typeof loadLibrary>>, selection: readonly CsvFile[]) {
+export function libraryCsvFiles(library: Awaited<ReturnType<typeof loadLibrary>>, selection: readonly CsvFile[], readingRecords: Database['public']['Tables']['reading_records']['Row'][] = []) {
   const { stories, series, collections } = library
   const names = new Map(collections.map(collection => [collection.id, collection.name]))
   const collectionNames = (ids: string[]) => ids.map(id => names.get(id) ?? id)
@@ -42,6 +46,9 @@ export function libraryCsvFiles(library: Awaited<ReturnType<typeof loadLibrary>>
   const seriesCollections = new Map(series.map(record => [record.id, memberIds(record, 'series')]))
   return [...new Set(selection)].map(name => {
     switch (name) {
+      case 'reading_records.csv': return { name, content: csv(readingRecords.map(record => ({ ...record,
+        ...(record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata) ? record.metadata : {}),
+      })), ['id', 'ao3_work_id', 'title', 'authors', 'reading_status', 'last_read_chapter', 'dnf_since', 'archived_at', 'reading_history']) }
       case 'works.csv': return { name, content: csv(stories.map(story => {
         const { work, metadata, is_rec, collectionIds: manualIds, automaticCollectionIds, personalTags, detailsLoaded, ...entry } = story
         void detailsLoaded
@@ -66,6 +73,14 @@ export function libraryCsvFiles(library: Awaited<ReturnType<typeof loadLibrary>>
 export async function exportLibraryCsv(selection: readonly CsvFile[]) {
   if (!selection.length) throw new Error('Choose at least one CSV file.')
   // Use the complete paginated loader, never the UI's partial catalog/cache.
-  const files = libraryCsvFiles(await loadLibrary(), selection)
+  const [library, records] = await Promise.all([
+    loadLibrary(),
+    selection.includes('reading_records.csv') && !sampleMode
+      ? allRows((from, to) => {
+        if (!supabase) throw new Error('Database is not configured.')
+        return supabase.from('reading_records').select('*').order('id').range(from, to)
+      }) : Promise.resolve([]),
+  ])
+  const files = libraryCsvFiles(library, selection, records)
   downloadFile(createZip(files), `between-chapters-export-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`)
 }

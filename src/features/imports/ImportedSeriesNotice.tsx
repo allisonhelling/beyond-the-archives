@@ -1,4 +1,3 @@
-import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { useEffect, useState } from 'react'
 import { Dialog } from '../../components/Dialog'
@@ -32,7 +31,6 @@ export function ImportedSeriesNotice({ stories, onImported, initialBehavior }: {
   finally { setBusy(false) }
  }
  return <Dialog title="Related Series" className="series-review-dialog" busy={busy || reviewBusy} onClose={() => setDismissed(signature)}>
-  <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || reviewBusy} />
   {suggestions.map(({ story }) => <p key={story.id}><strong>{story.metadata.title}</strong> is part of the following series. {seriesBehavior.behavior === 'all' ? 'All available works from these series will be imported.' : 'Choose which of its series works to add below.'}</p>)}
   {reviewText && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} embedded automatic={seriesBehavior.behavior === 'all'} key={reviewText} text={reviewText} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} busy={busy} onBusyChange={setReviewBusy} onConfirm={(works, status, seriesIds) => void confirm(works, status, seriesIds)} onCancel={() => setDismissed(signature)} />}
   {message && <p role="status">{message}</p>}{error && <p className="error-message" role="alert">{error}</p>}

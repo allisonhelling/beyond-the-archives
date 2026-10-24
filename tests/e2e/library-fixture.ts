@@ -13,11 +13,12 @@ export async function fixture(page: Page) {
     return route.fulfill({ json: path.endsWith('/token') ? { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } : path.endsWith('/user') ? user : {} })
   })
   type Row = Record<string, unknown>
-  const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
+  const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], reading_records: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
   const snapshot = (entry: Row): EditValues => ({ status: entry.reading_status as string, progress: entry.last_read_chapter as number, notes: entry.notes as string, rating: entry.personal_rating as number | null, favorite: entry.is_favorite as boolean, rec: (entry.is_rec ?? false) as boolean, metadata: entry.metadata_overrides as EditValues, tags: tables.library_entry_tags.filter(link => link.library_entry_id === entry.id).map(link => String(tables.personal_tags.find(tag => tag.id === link.personal_tag_id)?.name)), collections: tables.collection_works.filter(link => link.library_entry_id === entry.id).map(link => String(link.collection_id)) })
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
+    if (table === 'dnf_cleanup') return route.fulfill({ json: { settings: { enabled: false, hours: 168, protect_favorites: true, protect_personal: true, protect_collections: true }, eligible: 0, protected: 0, waiting: 0, removed: 0 } })
     if (table === 'personal_rating_settings') {
       let settings = tables.metadata_preferences.find(row => row.user_id === user.id)
       const input = body?.p_input as Row | undefined

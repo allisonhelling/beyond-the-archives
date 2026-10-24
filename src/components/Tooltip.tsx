@@ -1,8 +1,10 @@
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
-export function Tooltip({ description, children, placement = 'top' }: { description: string; placement?: 'top' | 'bottom'; children: (descriptionId: string) => ReactNode }) {
+export function Tooltip({ description, children, placement = 'top', pinOnClick = false }: { description: string; placement?: 'top' | 'bottom'; pinOnClick?: boolean; children: (descriptionId: string) => ReactNode }) {
   const id = useId()
-  const [open, setOpen] = useState(false)
+  const [visible, setOpen] = useState(false)
+  const [pinned, setPinned] = useState(false)
+  const open = visible || pinned
   const anchor = useRef<HTMLSpanElement>(null), tooltip = useRef<HTMLSpanElement>(null)
   const [shift, setShift] = useState({ x: 0, y: 0 })
   useLayoutEffect(() => {
@@ -22,7 +24,7 @@ export function Tooltip({ description, children, placement = 'top' }: { descript
     position(); window.addEventListener('resize', position)
     return () => window.removeEventListener('resize', position)
   }, [open, description, placement])
-  return <span ref={anchor} className="action-tooltip" data-placement={placement} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); event.stopPropagation() } }}>
+  return <span ref={anchor} className="action-tooltip" data-placement={placement} onClick={pinOnClick ? event => { if (event.target instanceof Element && event.target.closest('button')) { setPinned(!pinned); setOpen(false) } } : undefined} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); setPinned(false); event.stopPropagation() } }}>
     {children(id)}
     <span ref={tooltip} id={id} role="tooltip" className="action-tooltip-content" style={{ '--tooltip-shift': `${shift.x}px`, '--tooltip-y-shift': `${shift.y}px` } as CSSProperties} hidden={!open}>{description}</span>
   </span>

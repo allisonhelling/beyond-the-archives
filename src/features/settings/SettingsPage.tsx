@@ -1,4 +1,6 @@
 import { PersonalRatingSettings } from './PersonalRatingSettings'
+import { DnfCleanupSettings } from './DnfCleanupSettings'
+import { dnfCleanupSettingsSection } from './settings-sections'
 import { SeriesImportSettings } from '../imports/SeriesImportOptions'
 import { displaySettingsSection } from '../library/display/settings-sections'
 import { browsingSettingsSection } from '../library/browsing/settings-sections'
@@ -21,6 +23,7 @@ import './settings.css'
 const settingsSections: { id: string; title: string; description: string; component: () => ReactNode; aliases?: string[] }[] = [
   { ...accountSettingsSection, component: AccountSettings },
   { ...personalRatingSettingsSection, component: PersonalRatingSettings },
+  { ...dnfCleanupSettingsSection, component: DnfCleanupSettings },
   { ...browsingSettingsSection, component: BrowsingSettings },
   { ...displaySettingsSection, component: DisplaySettings },
   { ...ao3UsernameSettingsSection, component: Ao3UsernameSettings },

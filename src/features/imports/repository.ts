@@ -65,7 +65,7 @@ export async function markWorkDeleted(entryId: string, jobId: string) {
  if (error) throw new Error('Could not mark the work as deleted. Apply the latest migrations and retry.')
 }
 
-export async function previewSeries(url: string): Promise<SeriesPreview> {
+export async function previewSeries(url: string, options: { firstPageOnly?: boolean } = {}): Promise<SeriesPreview> {
  const identity = parseSeriesUrl(url)
  let useExtension = sampleMode
  if (sampleMode) {
@@ -102,10 +102,11 @@ export async function previewSeries(url: string): Promise<SeriesPreview> {
    page = data.preview as SeriesPreview; nextPageDelayMs = data.nextPageDelayMs
   }
   pages.push(page)
+  if (options.firstPageOnly) break
   nextUrl = page.nextUrl
   if (nextUrl && !useExtension && nextPageDelayMs === 35_000) await new Promise(resolve => setTimeout(resolve, nextPageDelayMs))
  }
- return mergeSeriesPreviews(pages)
+ return { ...mergeSeriesPreviews(pages), ...(options.firstPageOnly && pages[0].nextUrl ? { basic: true } : {}) }
 }
 
 
@@ -132,7 +133,7 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
 
 export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status) {
  if (readingStatus) works = works.map(work => ({ ...work, importReadingStatus: readingStatus }))
- const conflicts = !readingStatus && works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
+ const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
  let result: { batch: string | null; imported: number; kept: number }
  if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works)
  else {

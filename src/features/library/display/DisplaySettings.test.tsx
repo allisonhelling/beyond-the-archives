@@ -1,3 +1,4 @@
+import { OtherWorkMetadata } from './OtherWorkMetadata'
 import { MemoryRouter } from 'react-router-dom'
 import { exampleWork } from './display-examples'
 import { workMetadataFields } from './WorkMetadataFields'
@@ -255,4 +256,26 @@ it('keeps added AO3 fields hidden until selected, preserving saved layouts', () 
  expect(screen.queryByText('M/M')).not.toBeInTheDocument()
  expect(screen.queryByText(/English/)).not.toBeInTheDocument()
  expect(screen.getByText(/66,463 words/)).toBeVisible()
+})
+
+
+it('expands other metadata in the example and fills it with AO3 fields omitted elsewhere', () => {
+ render(<MemoryRouter><OtherWorkMetadata story={exampleWork} expanded /></MemoryRouter>)
+ expect(screen.getByText('Other metadata', { selector: 'summary' }).parentElement).toHaveAttribute('open')
+ expect(screen.getByText('AO3 Warnings')).toBeVisible()
+ expect(screen.getByText('Date Published')).toBeVisible()
+ expect(screen.getByText('Language')).toBeVisible()
+ expect(screen.queryByText('Authors')).not.toBeInTheDocument()
+ expect(screen.queryByText('Date Updated')).not.toBeInTheDocument()
+})
+
+it('uses the same editable fields and grouped lines for other metadata', () => {
+ const draft = displayPreferences('{}')
+ draft.workInfo.hidden = draft.workInfo.hidden.filter(field => field !== 'language')
+ draft.workOther = { ...draft.workOther, hidden: ['warnings'], order: ['line:stats', ...draft.workOther.order.filter(field => !['kudos', 'bookmarks'].includes(field))], lines: { 'line:stats': ['kudos', 'bookmarks'] } }
+ const { container } = render(<MemoryRouter><DisplayEditorContext value={{ preferences: draft, groups: ['workOther'], selected: null }}><OtherWorkMetadata story={exampleWork} expanded /></DisplayEditorContext></MemoryRouter>)
+ expect(screen.queryByText('AO3 Warnings')).not.toBeInTheDocument()
+ expect(screen.queryByText('Language')).not.toBeInTheDocument()
+ expect(container.querySelector('[data-display-group="workOther"][data-display-field="kudos"]')).toBeVisible()
+ expect(container.querySelector('[data-display-line="line:stats"]')).toBeVisible()
 })

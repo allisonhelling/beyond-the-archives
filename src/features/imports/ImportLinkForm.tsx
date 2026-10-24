@@ -1,4 +1,3 @@
-import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior } from './series-import-preferences'
 import { SeriesImportReview } from './SeriesImportReview'
 import { useEffect, useState, type FormEvent } from 'react'
@@ -69,7 +68,6 @@ export function ImportLinkForm() {
     finally { setBusy(false) }
   }
   return <>
-    {!sampleMode && <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || Boolean(reviewing) || Boolean(batch)} />}
     {sampleMode ? <section className="settings-card import-link-form"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a story manually</Link></section> : reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} key={reviewing} text={reviewing} savedIds={new Set((library.stories ?? []).flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} busy={busy} onConfirm={(works, status, seriesIds) => void importSelected(works, status, seriesIds)} onCancel={() => setReviewing('')} /> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
       <label>AO3 work or series link<input type="url" required value={url} disabled={busy} onChange={event => setUrl(event.target.value)} placeholder="https://archiveofourown.org/works/123" /></label>
       <button className="button primary" disabled={busy}>{busy ? 'Importing…' : 'Import from link'}</button>

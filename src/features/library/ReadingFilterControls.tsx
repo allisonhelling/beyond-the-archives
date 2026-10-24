@@ -34,8 +34,8 @@ function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: st
   const label = authorOnly ? 'Search author' : 'Search title or author'
   return <SearchSuggestions label={label} placeholder={label} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
-export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false }: {
-  stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode
+export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, actions, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false }: {
+  stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode; actions?: ReactNode
   suggestions?: { relationships: string[]; characters: string[]; tags: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
 }) {
   const [expanded, setExpanded] = useState(alwaysExpanded)
@@ -59,7 +59,6 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
   const publicationLabel = (value: keyof typeof publicationStatuses) => filterPublicationLabel(value, mode === 'series')
   const activeFilters = readingFilterTags(filters, { authorOnly: automaticCollection, series: mode === 'series', seriesVisibility: mode === 'library' })
   const membershipToggles = <>
-      {mode === 'library' && !automaticCollection && <button type="button" className={`button ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
       <button type="button" className={`button ${filters.excludeLaterSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.excludeLaterSeries)} onClick={() => change('excludeLaterSeries', !filters.excludeLaterSeries)}><Layers3 size={17} />Exclude Later Series Works</button>
       <button type="button" className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a Series</button>
       <button type="button" className={`button favorite ${filters.favorites ? 'primary' : 'secondary'}`} aria-pressed={filters.favorites} onClick={() => change('favorites', !filters.favorites)}><Star size={17} fill={filters.favorites ? 'currentColor' : 'none'} />Favorites</button>
@@ -72,6 +71,9 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
       <FandomSelect options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       {!alwaysExpanded && <button type="button" className={`button ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
+      {(actions || mode === 'library' && !automaticCollection) && <div className="form-actions reading-toolbar-actions">{actions}
+      {mode === 'library' && !automaticCollection && <button type="button" className={`button ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
+      </div>}
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series filters' : mode === 'library' ? 'Library filters' : 'Reading filters'}><div className="filter-grid">
       <SearchSuggestions label="Relationships" tagCategory="relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />

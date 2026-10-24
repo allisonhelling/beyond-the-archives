@@ -6,7 +6,7 @@ const descriptions = { choose: 'Choose works from each series', all: 'Automatica
 export function SeriesImportOptions({ defaultBehavior, override, onChange, disabled = false }: {
  defaultBehavior: SeriesImportBehavior; override: boolean; onChange(value: boolean): void; disabled?: boolean
 }) {
- return <div className="form-control series-import-options"><label className="check-label"><input type="checkbox" checked={override} disabled={disabled} onChange={event => onChange(event.target.checked)} />{defaultBehavior === 'all' ? 'Choose series works for this import only' : 'Automatically save all series works for this import only'}</label><p className="field-help">Current series default: {descriptions[defaultBehavior]}. {override && <>This import: {descriptions[defaultBehavior === 'all' ? 'choose' : 'all']}.</>}</p></div>
+ return <div className="form-control series-import-options"><p className="field-help">Current series default: {descriptions[defaultBehavior]}.</p><label className="check-label"><input type="checkbox" checked={override} disabled={disabled} onChange={event => onChange(event.target.checked)} />{defaultBehavior === 'all' ? 'Choose series works for this import only' : 'Automatically save all series works for this import only'}</label></div>
 }
 export function SeriesImportSettings() {
  const { defaultBehavior } = useSeriesImportBehavior()

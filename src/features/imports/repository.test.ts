@@ -81,6 +81,18 @@ it('rejects repeated pagination instead of returning an incomplete preview', asy
  expect(invoke).toHaveBeenCalledTimes(1)
 })
 
+it('can retrieve the series name from one page without following pagination or claiming full details', async () => {
+ session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
+ settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})
+ const url = 'https://archiveofourown.org/series/77'
+ invoke.mockResolvedValue({data:{preview:{seriesId:77,normalizedUrl:url,title:'The named series',works:[{workId:101}],nextUrl:url+'?page=2'},nextPageDelayMs:35_000},error:null})
+ const preview = await previewSeries(url, { firstPageOnly: true })
+ expect(preview).toMatchObject({title:'The named series',basic:true,works:[{workId:101}]})
+ expect(preview.nextUrl).toBeUndefined()
+ expect(invoke).toHaveBeenCalledExactlyOnceWith('series-preview',{body:{url}})
+ expect(rpc).not.toHaveBeenCalled()
+})
+
 it('respects the hosted retrieval gate between series pages', async () => {
  vi.useFakeTimers()
  try {

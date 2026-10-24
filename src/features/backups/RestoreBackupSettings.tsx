@@ -7,7 +7,7 @@ import { type SavedBackup } from './repository'
 import { prepareRestore, restoreBackup, type PreparedRestore } from './restore'
 
 const previewLabels: Record<string, string> = {
-  library_entries: 'Saved works', library_series: 'Saved series', collections: 'Collections', personal_tags: 'Personal tags',
+  reading_records: 'Archived reading records', library_entries: 'Saved works', library_series: 'Saved series', collections: 'Collections', personal_tags: 'Personal tags',
   collection_works: 'Work memberships', collection_series: 'Series memberships', library_entry_tags: 'Personal tag links',
   metadata_preferences: 'Metadata settings', import_batches: 'Import batches', import_items: 'Import items', metadata_jobs: 'Metadata jobs', processing_logs: 'Processing logs',
 }

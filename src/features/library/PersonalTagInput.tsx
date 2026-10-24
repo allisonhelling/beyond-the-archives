@@ -17,7 +17,7 @@ export function PersonalTagHelp({ inline = false }: { inline?: boolean }) {
   }, [])
   const description = mobile ? mobileTagInstructions : tagInstructions
   if (inline) return <details className="field-info personal-tag-help"><summary aria-label="Personal tags help" role="button"><Info aria-hidden="true" /></summary><span>{description}</span></details>
-  return <Tooltip description={description}>{descriptionId => <button type="button" className="icon-button inline-edit-icon personal-tag-help-button" aria-label="Personal tags help" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip>
+  return <Tooltip pinOnClick description={description}>{descriptionId => <button type="button" className="icon-button inline-edit-icon personal-tag-help-button" aria-label="Personal tags help" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip>
 }
 
 export function PersonalTagInput({ value, onChange, inlineHelp = false }: { value: string[]; onChange: (tags: string[]) => void; inlineHelp?: boolean }) {

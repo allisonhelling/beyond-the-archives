@@ -110,3 +110,16 @@ it('dismisses undo notifications when navigating to a new page', async () => {
  act(() => view.result.current.navigate('/settings'))
  expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
 })
+
+it('retains only the newest three notifications across reading and removal actions', async () => {
+ const view = renderHook(() => useLibrary(), { wrapper })
+ await waitFor(() => expect(view.result.current.loading).toBe(false))
+ mocks.stories.mockImplementation(async (ids: string[]) => ids.map(id => story(id)))
+ for (const id of ['first', 'second', 'third']) await act(() => view.result.current.markFinished(story(id)))
+ await act(() => view.result.current.removeStory(story('fourth')))
+ expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
+ expect(screen.queryByRole('button', { name: 'Dismiss undo notification for first' })).not.toBeInTheDocument()
+ await act(() => view.result.current.markFinished(story('fifth')))
+ expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
+ expect(screen.queryByRole('button', { name: 'Dismiss undo notification for second' })).not.toBeInTheDocument()
+})

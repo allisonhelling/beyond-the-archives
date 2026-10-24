@@ -312,6 +312,7 @@ export type Database = {
           work_status: string
           source_bookmark: Json
           is_rec: boolean
+          dnf_since: string | null
         }
         Insert: {
           id?: string
@@ -336,6 +337,7 @@ export type Database = {
           work_status?: string
           source_bookmark?: Json
           is_rec?: boolean
+          dnf_since?: string | null
         }
         Update: {
           id?: string
@@ -360,6 +362,7 @@ export type Database = {
           work_status?: string
           source_bookmark?: Json
           is_rec?: boolean
+          dnf_since?: string | null
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -565,16 +568,19 @@ export type Database = {
           user_id: string
           retrieval_mode: string
           personal_rating_info: string | null
+          dnf_cleanup: Json
         }
         Insert: {
           user_id?: string
           retrieval_mode?: string
           personal_rating_info?: string | null
+          dnf_cleanup?: Json
         }
         Update: {
           user_id?: string
           retrieval_mode?: string
           personal_rating_info?: string | null
+          dnf_cleanup?: Json
         }
         Relationships: [
         ]
@@ -673,6 +679,80 @@ export type Database = {
         }
         Relationships: [
           { foreignKeyName: 'processing_logs_job_id_user_id_fkey'; columns: ['job_id', 'user_id']; isOneToOne: false; referencedRelation: 'metadata_jobs'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
+      reading_activity: {
+        Row: {
+          id: string | null
+          user_id: string | null
+          record: Json | null
+        }
+        Insert: {
+          id?: string | null
+          user_id?: string | null
+          record?: Json | null
+        }
+        Update: {
+          id?: string | null
+          user_id?: string | null
+          record?: Json | null
+        }
+        Relationships: [
+        ]
+      }
+      reading_records: {
+        Row: {
+          id: string
+          user_id: string
+          ao3_work_id: number | null
+          original_url: string
+          bookmark_id: string | null
+          reading_status: Database['public']['Enums']['reading_status']
+          last_read_chapter: number
+          created_at: string
+          started_at: string | null
+          finished_at: string | null
+          dnf_since: string | null
+          archived_at: string
+          reading_history: Json
+          metadata: Json
+          format_version: number
+        }
+        Insert: {
+          id: string
+          user_id: string
+          ao3_work_id?: number | null
+          original_url: string
+          bookmark_id?: string | null
+          reading_status: Database['public']['Enums']['reading_status']
+          last_read_chapter: number
+          created_at: string
+          started_at?: string | null
+          finished_at?: string | null
+          dnf_since?: string | null
+          archived_at?: string
+          reading_history: Json
+          metadata: Json
+          format_version?: number
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          ao3_work_id?: number | null
+          original_url?: string
+          bookmark_id?: string | null
+          reading_status?: Database['public']['Enums']['reading_status']
+          last_read_chapter?: number
+          created_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          dnf_since?: string | null
+          archived_at?: string
+          reading_history?: Json
+          metadata?: Json
+          format_version?: number
+        }
+        Relationships: [
         ]
       }
       tags: {
@@ -886,6 +966,8 @@ export type Database = {
       remember_library_series: { Args: { p_metadata: Json }; Returns: string }
       save_library_series_note: { Args: { p_series: number; p_notes: string; p_base: string }; Returns: undefined }
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
+      dnf_cleanup: { Args: { p_action?: string; p_input?: Json; p_page?: number }; Returns: Json }
+      run_scheduled_dnf_cleanup: { Args: Record<string, never>; Returns: number }
       personal_rating_settings: { Args: { p_input?: Json }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       preview_ao3_csv_import: { Args: { p_work_ids: number[]; p_bookmark_ids?: number[] }; Returns: Json }

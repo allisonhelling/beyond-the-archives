@@ -285,7 +285,7 @@ export async function importSampleWorks(works: CsvWork[]) {
    progress: reading.progress, notes: row.notes, tags: row.tags, personalRating: null, favorite: false, collections: [] }, undefined, incoming, row)
   const saved = read(), story = find(saved, id)
   if (story.work.ao3_work_id === null && !row.metadata.title) story.metadata.title = deletedWorkTitle(story)
-  if (finished && row.bookmarkDate) {
+  if (finished && !row.importReadingStatus && row.bookmarkDate) {
    story.finished_at = `${row.bookmarkDate}T00:00:00Z`
    story.reading_history = story.reading_history?.map(event => event.action === 'finished' ? { ...event, at: story.finished_at! } : event)
   }

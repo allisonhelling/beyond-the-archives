@@ -32,6 +32,7 @@ async function manage(scope: Locator, open: boolean) {
 }
 
 async function applyTileDrafts(page: Page, name: 'Save' | 'Cancel') {
+  for (const picker of await page.locator('.display-settings .collection-color-trigger[aria-expanded="true"]').all()) await picker.click()
   for (const bar of await page.locator('.display-settings .display-save-bar').all()) {
     const button = bar.getByRole('button', { name, exact: true })
     if (await button.isVisible() && await button.isEnabled()) await button.click()
@@ -532,7 +533,7 @@ test('desktop settings outline shows descriptions and jumps to every section', a
  await expect(page.getByRole('navigation', { name: 'Settings Quick Access', exact: true })).toHaveCount(0)
  const outline = page.getByRole('navigation', { name: 'Settings Section Outline', exact: true })
  await expect(outline).toBeVisible()
- await expect(outline.getByRole('link')).toHaveCount(9)
+ await expect(outline.getByRole('link')).toHaveCount(await page.locator('.settings-section').count())
  const outlineBox = (await outline.boundingBox())!, contentBox = (await page.locator('.settings-content').boundingBox())!
  expect(outlineBox.x + outlineBox.width).toBeLessThanOrEqual(contentBox.x)
  const links = await outline.getByRole('link').evaluateAll(nodes => nodes.map(node => ({ title: node.getAttribute('aria-label')!, href: node.getAttribute('href')! })))
@@ -566,7 +567,7 @@ test('mobile settings list opens sections, supports back, and retains display dr
  const list = page.getByRole('navigation', { name: 'Settings sections', exact: true })
  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
  await expect(page.getByText('MAKE YOURSELF AT HOME')).toHaveCount(0)
- await expect(list.getByRole('link')).toHaveCount(9)
+ await expect(list.getByRole('link')).toHaveCount(await page.locator('.settings-section').count())
  await page.setViewportSize({ width: 320, height: 844 })
  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
  await expect(page.getByRole('navigation', { name: 'Settings Quick Access', exact: true })).toHaveCount(0)
@@ -726,4 +727,31 @@ for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'p
  if (layout === 'tile') await open()
  await expect(field(preview, group, hiddenField)).toBeVisible()
  expect(JSON.parse((await stored(page))!)).toEqual(result)
+})
+
+test('example work expands editable other metadata and preserves its own field choices', async ({ page }) => {
+ await setup(page)
+ await page.goto('/settings/example-work')
+ const info = editor(page, 'Example Work Info Page')
+ const other = info.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Other metadata$/ }) })
+ await expect(other).toHaveAttribute('open', '')
+ await expect(field(other, 'workOther', 'language')).toBeVisible()
+ await expect(field(other, 'workOther', 'warnings')).toBeVisible()
+ await expect(field(other, 'workOther', 'authors')).toHaveCount(0)
+ await field(other, 'workOther', 'language').click()
+ await info.getByRole('button', { name: 'Hide/Delete Selected', exact: true }).click()
+ await expect(field(other, 'workOther', 'language')).toHaveCount(0)
+ await manage(info, true)
+ const addLanguage = info.getByRole('button', { name: /^Add Language/ }).filter({ hasText: 'Other Metadata' })
+ await addLanguage.click()
+ await manage(info, false)
+ await expect(field(other, 'workOther', 'language')).toBeVisible()
+ await field(other, 'workOther', 'canonical').click()
+ await info.getByRole('button', { name: 'Hide/Delete Selected', exact: true }).click()
+ await page.locator('.display-example-page > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+ await expect(page).toHaveURL(/\/settings#settings-display$/)
+ await page.goto('/settings/example-work')
+ await expect(field(editor(page, 'Example Work Info Page'), 'workOther', 'language')).toBeVisible()
+ await expect(field(editor(page, 'Example Work Info Page'), 'workOther', 'canonical')).toHaveCount(0)
+ await page.screenshot({ path: test.info().outputPath('expanded-other-metadata.png') })
 })

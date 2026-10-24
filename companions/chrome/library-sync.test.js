@@ -22,6 +22,26 @@ beforeEach(() => {
 })
 const start = (mode = 'full') => sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode })
 async function collect() { clock += 20000; await sync.pump(); await sync.pump() }
+it('clears persisted scan errors and attention on discard without changing the completed baseline', async () => {
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', startPage: 2, endPage: 3 })
+ await collect()
+ const { id, baselineKey } = local.librarySync
+ local[baselineKey] = ['previous-baseline']
+ Object.assign(local.librarySync, { status: 'paused', error: 'AO3 listing capture failed: Invalid URL. Saved pages are preserved.', attention: 'page_error', attentionId: 'old-alert' })
+ expect(local[`librarySync:${id}:2`]).toBeDefined()
+ const reply = await sync.command({ action: 'discard', scanId: id })
+ expect(reply.state).toMatchObject({ status: 'discarded', error: '' })
+ expect(reply.state.attention).toBeUndefined()
+ expect(reply.state.attentionId).toBeUndefined()
+ expect(local[`librarySync:${id}:2`]).toBeUndefined()
+ expect(local[baselineKey]).toEqual(['previous-baseline'])
+ const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await restarted.command({ action: 'status' })).state).toMatchObject({ status: 'discarded', error: '' })
+ chrome.tabs.create.mockClear(); chrome.tabs.update.mockClear()
+ await restarted.pump()
+ expect(chrome.tabs.create).not.toHaveBeenCalled()
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+})
 it('validates list identity and rejects histories, foreign origins, filters, and quick sync without a baseline', async () => {
  for (const url of ['https://evil.example/users/alice/bookmarks', 'https://archiveofourown.org/users/alice/readings', 'https://archiveofourown.org/users/alice/bookmarks?page=2']) expect(() => listingUrl(url)).toThrow()
  expect(listingUrl('https://archiveofourown.org/users/alice/readings?show=to-read').kind).toBe('marked_for_later')
@@ -203,19 +223,24 @@ it('resumes a collection across profile, works, bookmarks, and expanded series w
  expect(Object.keys(local).filter(key => key.startsWith('librarySync:'))).toHaveLength(0)
 })
 
-it('persists URL reading status through checkpoints and omits it for username imports', async () => {
+it('persists explicit reading status for URL and username scans and leaves defaults unspecified', async () => {
  const request = { action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', readingStatus: 'paused_reading' }
  await sync.command(request)
  expect((await sync.command({ action: 'status' })).state.readingStatus).toBe('paused_reading')
  await sync.command({ action: 'discard' })
  await sync.command({ ...request, autoImport: true })
+ expect((await sync.command({ action: 'status' })).state.readingStatus).toBe('paused_reading')
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await sync.command({ action: 'status' })).state.readingStatus).toBe('paused_reading')
+ await sync.command({ action: 'discard' })
+ await sync.command({ ...request, autoImport: true, readingStatus: undefined })
  expect((await sync.command({ action: 'status' })).state.readingStatus).toBeUndefined()
 })
 
 const datedRow = (id = 1) => ({ ...row(id), chapters: '3/3', date: '2026-10-20', 'bookmark date': '2026-10-10' })
 const chapterIndex = '<ol class="chapter index"><li><a href="/works/1/chapters/101">1. First</a><span class="datetime">(2026-09-01)</span></li><li><a href="/works/1/chapters/102">2. Second</a><span class="datetime">(2026-10-01)</span></li><li><a href="/works/1/chapters/103">3. Third</a><span class="datetime">(2026-10-10)</span></li></ol>'
-it('checks opted-in chapter indexes in the paced scan tab and resumes from durable checkpoints', async () => {
- await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates: true, delaySeconds: 5 })
+it.each([undefined, 'reading'])('checks bookmark chapter dates for the %s status and resumes from durable checkpoints', async readingStatus => {
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates: true, delaySeconds: 5, readingStatus })
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: local.librarySync.requestUrl.endsWith('/navigate') ? { url: local.librarySync.requestUrl, html: chapterIndex } : { url: local.librarySync.requestUrl, rows: [datedRow()], skipped: 0, hasNext: false } }])
  await collect()
  expect(local.librarySync).toMatchObject({ status: 'running', pages: 1, chapterQueue: [{ workId: 1, published: 3, page: 1, row: 0 }] })
@@ -237,7 +262,7 @@ it('checks opted-in chapter indexes in the paced scan tab and resumes from durab
  expect(JSON.parse(rows[0]['chapter dates'])).toEqual({ '1': '2026-09-01', '2': '2026-10-01', '3': '2026-10-10' })
  expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
 })
-it.each([{ checkChapterDates: false }, { checkChapterDates: true, readingStatus: 'paused_reading' }])('keeps listing-only scans free of chapter requests when the check does not apply: %j', async options => {
+it.each([{ checkChapterDates: false }, { checkChapterDates: true, readingStatus: 'paused_reading' }, { checkChapterDates: true, readingStatus: 'finished' }, { checkChapterDates: true, readingStatus: 'to_read' }])('keeps listing-only scans free of chapter requests when the check does not apply: %j', async options => {
  await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', ...options })
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [datedRow()], skipped: 0, hasNext: false } }])
  await collect()

@@ -13,9 +13,10 @@ export function resumeReadingStatus(story: Pick<Story, 'reading_history'>): Stat
 }
 
 /** Elapsed calendar time since saving, excluding recorded pauses; not time spent on-page. */
-export function readingMilliseconds(story: Pick<Story, 'created_at' | 'finished_at' | 'reading_status' | 'reading_history'>, now = Date.now()): number {
+export function readingMilliseconds(story: Pick<Story, 'created_at' | 'finished_at' | 'reading_status' | 'reading_history' | 'dnf_since'>, now = Date.now()): number {
   const start = Date.parse(story.created_at)
-  const end = story.reading_status === 'finished' && story.finished_at ? Date.parse(story.finished_at) : now
+  const stopped = story.reading_status === 'finished' ? story.finished_at : story.reading_status === 'did_not_finish' ? story.dnf_since : null
+  const end = stopped ? Date.parse(stopped) : now
   let pausedAt: number | null = null, paused = 0
   for (const event of story.reading_history ?? []) {
     const at = Math.max(start, Math.min(end, Date.parse(event.at)))
@@ -40,5 +41,6 @@ export function recordReadingTransition(story: Story, previous?: Story, at = new
   const action = status === 'finished' ? 'finished' : status === 'paused_reading' ? 'paused_reading' : previous?.reading_status === 'paused_reading' ? 'resumed' : 'status'
   story.reading_history.push({ action, at, status, ...(previous && { previous_status: previous.reading_status }) })
   if (status === 'finished') story.finished_at = at
+  story.dnf_since = status === 'did_not_finish' ? at : null
   if (['reading', 're_reading'].includes(status)) story.started_at ??= at
 }

@@ -32,7 +32,7 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  expect(screen.getByRole('checkbox', { name: 'Part 1: Fic 101' })).toBeDisabled()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()
  expect(mocks.submit).not.toHaveBeenCalled(); expect(mocks.remember).not.toHaveBeenCalled()
- fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+ fireEvent.click(screen.getAllByRole('button', { name: 'Select all' })[0])
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import selected' })) })
  expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false, 'to_read', [77])
 })
@@ -53,7 +53,7 @@ it('deduplicates shared series and stays dismissed when the library refreshes', 
  const stories = [...mocks.stories, { ...mocks.stories[0], id: 'second', metadata: { ...mocks.stories[0].metadata, title: 'Other fic' } }]
  let view!: ReturnType<typeof render>
  await act(async () => { view = render(<ImportedSeriesNotice stories={stories as never} />) })
- expect(screen.getAllByRole('link', { name: 'Related series' })).toHaveLength(1)
+ expect(screen.getAllByRole('link', { name: 'Related series • Series 77' })).toHaveLength(1)
  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
  view.rerender(<ImportedSeriesNotice stories={[...stories] as never} />)
  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

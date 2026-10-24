@@ -73,7 +73,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   {busy && <p role="status">{message || 'Processing CSV import…'}</p>}
   {!busy && message && <p role="status">{message}</p>}
   {error && !seriesSources && <p className="error-message" role="alert">{error}</p>}
-  {seriesSources && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={seriesSources.map(row => row.url).join('\n')} savedIds={new Set()} busy={busy} showReadingStatus={false} confirmLabel="Review CSV conflicts" cancelLabel="Back to CSV files" onConfirm={(_works, _status, _seriesIds, selections) => void reviewSeries(selections)} onCancel={() => { setSeriesSources(undefined); setError('') }} />}
+  {seriesSources && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={seriesSources.map(row => row.url).join('\n')} savedIds={new Set()} busy={busy} showReadingStatus={false} confirmLabel="Review CSV conflicts" onConfirm={(_works, _status, _seriesIds, selections) => void reviewSeries(selections)} onCancel={() => { setSeriesSources(undefined); setError('') }} />}
   {prepared && <>
    <p>{prepared.works.length} unique works · {conflicts.length} bookmark conflicts · {laterSkipped} existing Marked for Later works will keep personal data.</p>
    {conflicts.length > 0 && <>

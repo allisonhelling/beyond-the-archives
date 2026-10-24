@@ -24,7 +24,7 @@
 .display-example-page > .display-save-bar { position: sticky; top: 12px; }
 .display-tile-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
 .display-tile-heading > .button { width: auto; max-width: 100%; }
-@media (max-width: 650px) { .display-tile-heading > button { width: 110px; padding-inline: 6px; font-size: 11px; white-space: nowrap; } }
+@media (max-width: 650px) { .display-tile-heading > button { width: 110px; flex: 0 0 110px; padding-inline: 6px; font-size: 11px; white-space: nowrap; } }
 
 .display-grouped-line, .metadata-list > .display-grouped-line { display: block; min-width: 0; }
 .display-line-item { display: inline; overflow-wrap: anywhere; }

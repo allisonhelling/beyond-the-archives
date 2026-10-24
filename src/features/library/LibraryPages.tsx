@@ -1,4 +1,5 @@
 import { useCollectionDeletion } from './collections/useCollectionDeletion'
+import { OtherWorkMetadata } from './display/OtherWorkMetadata'
 import { workMetadataFields } from './display/WorkMetadataFields'
 import { isDisplayFieldHidden } from './display/display-settings'
 import { WorkStatusBadge } from './WorkStatusBadge'
@@ -54,14 +55,6 @@ export function LibraryBoundary({ children }: { children: ReactNode }) {
   if (loading) return <p role="status">Loading your library…</p>
   if (error) return <div role="alert" className="error-message">{error}<button className="button secondary" onClick={() => void refresh().catch(() => {})}>Retry loading</button></div>
   return children
-}
-function ExternalUrl({ url, fallback = 'Unverified' }: { url: string | null; fallback?: string }) {
-  let clickable = false
-  try {
-    const parsed = new URL(url ?? '')
-    clickable = parsed.protocol === 'https:' || parsed.protocol === 'http:'
-  } catch { /* Missing or invalid legacy URLs remain plain text. */ }
-  return clickable ? <a className="metadata-link" href={url!} target="_blank" rel="noreferrer">{url}</a> : <>{fallback}</>
 }
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; rec: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode; collectionsField: ReactNode }
 function StoryControls({ story, children }: { story: Story; children: (controls: CardControls) => ReactNode }) {
@@ -183,7 +176,7 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
 const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'],] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
-  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={refreshButton => <div className="page-heading"><div><h1>Currently Reading</h1></div><div className="library-heading-actions">{refreshButton}<Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
+  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={() => <div className="page-heading"><div><h1>Currently Reading</h1></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
   return <LibraryContent />
 }
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nDelete or Backspace: delete selected collections; non-empty collections ask for confirmation.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
@@ -371,22 +364,21 @@ function LibraryContent() {
       return { ...item, count: works + seriesCount, countLabel: seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
     })
 
-  return <><LibraryBoundary><ReadingDashboard renderHeader={refreshButton => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
+  return <><LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={() => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection selection">
       <Tooltip description="View Hidden">{descriptionId => <button aria-describedby={descriptionId} type="button" className="button secondary" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>}</Tooltip>
       <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel selection' : 'Select collections'}</button>
-      <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip description={collectionControlHelp} placement="bottom">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
+      <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip pinOnClick description={collectionControlHelp} placement="bottom">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
       {selectingCollections && <button type="button" className="button secondary collection-bulk-edit" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit selected</button>}
     </div>}
-    <div className="library-heading-actions">{!editingCollections && <>{refreshButton}
-      <Link className="button primary library-create-action" to="/add?mode=finished">Add Story</Link></>}
+    <div className="library-heading-actions">
       <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done editing' : 'Edit Collections'}</button>
       <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
     </div></div></div></div>
     <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = new URLSearchParams(previous); next.set('shelf', key); next.set('page', '1'); return next })} />
     {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.automatic_rules && <p className="field-help">Automatic collection · Matching works are included as your library changes.</p>}{collection.description && <p className="collection-summary">{collection.description}</p>}{collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}</div>}
     {(error || collectionDeletion.error) && <p role="alert" className="error-message">{error || collectionDeletion.error}</p>}
-</>} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={!editingCollections && collection && !collection.default_key && !collection.automatic_rules && <button ref={addStoriesTrigger} type="button" className="button secondary button-small" onClick={() => setAddingToCollection(collection)}>Add Story</button>} />
+</>} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={!editingCollections && collection && !collection.default_key && !collection.automatic_rules && <Tooltip description="Add Stories to Collection">{id => <button ref={addStoriesTrigger} type="button" className="button secondary button-small" aria-describedby={id} onClick={() => setAddingToCollection(collection)}>Add Story</button>}</Tooltip>} />
   </LibraryBoundary>{collectionDeletion.confirmation}{visibilityTarget && <CollectionVisibilityDialog collection={visibilityTarget} onClose={closeVisibility} onConfirm={async () => { setCollectionHidden(visibilityTarget.id, !visibilityTarget.hidden); setEditingCollection(null) }} />}{addingToCollection && <CollectionMembershipDialog collection={addingToCollection} onClose={() => { setAddingToCollection(null); addStoriesTrigger.current?.focus() }} />}{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} hidden={collectionSort.hiddenCustom.includes(editingCollection.id)} onVisibilityChange={changeEditedCollectionVisibility} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
 }
 export function AddStoryPage() {
@@ -478,14 +470,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       personalTags: <> <div><PersonalStoryField key={story.id} story={story} /></div> </>,
       saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>{story.finished_at && <div><dt>Finished</dt><dd>{formatDateTime(story.finished_at)}</dd></div>}<div><dt>Estimated reading time</dt><dd>{readingDuration(story)}</dd></div>{story.reading_history?.filter(event => ['paused_reading', 'resumed'].includes(event.action)).map((event, index) => <div key={index}><dt>{event.action === 'resumed' ? 'Resumed' : 'Paused'}</dt><dd>{formatDateTime(event.at)}</dd></div>)} </>,
       edited: <> <div><dt>Last edited</dt><dd>{formatDateTime(story.updated_at)}</dd></div> </>,
-      other: <> <div><dt className="sr-only">Other metadata</dt><dd><details className="details-disclosure"><summary>Other metadata</summary><p className="muted">Manually entered values are private field-level overrides.</p>
-        <dl className="metadata-list">
-          <div><dt>AO3 work ID</dt><dd>{story.work.ao3_work_id}</dd></div>
-          <div><dt>Metadata last checked</dt><dd>{story.work.last_metadata_check ? formatDateTime(story.work.last_metadata_check) : 'Never'}</dd></div>
-          <div><dt>Verified canonical URL</dt><dd><ExternalUrl url={story.work.canonical_url} /></dd></div>
-          <div><dt>Original provided URL</dt><dd><ExternalUrl url={story.original_url} fallback="Unavailable" /></dd></div>
-          {savedWorkUrl(story) !== story.original_url && <div><dt>Updated provided URL</dt><dd><ExternalUrl url={savedWorkUrl(story)} /></dd></div>}
-        </dl></details></dd></div> </>
+      other: <OtherWorkMetadata story={story} expanded={Boolean(example)} />
     }}</DisplayInfo>
         </dl>
 

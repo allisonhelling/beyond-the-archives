@@ -118,3 +118,33 @@ it('uses captured chapter dates for new sample bookmarks while keeping existing 
  await submitLibrarySync(rows)
  expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)?.last_read_chapter).toBe(2)
 })
+
+it('uses default bookmark date logic and saves Marked for Later works as To Read when no status is selected', async () => {
+ const rows = readAo3Rows([
+  { title: 'Finished bookmark', link: 'https://archiveofourown.org/works/9990090', source_list: 'bookmarks', chapters: '3/3', date: '2026-10-01', 'bookmark date': '2026-10-20' },
+  { title: 'Earlier bookmark', link: 'https://archiveofourown.org/works/9990091', source_list: 'bookmarks', chapters: '3/3', date: '2026-10-20', 'bookmark date': '2026-10-10', 'chapter dates': '{"1":"2026-10-01","2":"2026-10-09","3":"2026-10-20"}' },
+  { title: 'Other list', link: 'https://archiveofourown.org/works/9990092', source_list: 'marked_for_later' },
+ ]) as CsvWork[]
+ await submitLibrarySync(rows)
+ const saved = (await loadSampleLibrary()).stories
+ expect(saved.find(story => story.work.ao3_work_id === 9990090)).toMatchObject({ reading_status: 'finished', last_read_chapter: 3, finished_at: '2026-10-20T00:00:00Z' })
+ expect(saved.find(story => story.work.ao3_work_id === 9990091)).toMatchObject({ reading_status: 'reading', last_read_chapter: 2, finished_at: null })
+ expect(saved.find(story => story.work.ao3_work_id === 9990092)).toMatchObject({ reading_status: 'to_read', last_read_chapter: 0 })
+})
+
+
+it.each(['to_read', 'paused_reading', 'finished'] as const)('honors an explicit %s status for bookmark and Marked for Later imports', async status => {
+ vi.useFakeTimers({ toFake: ['Date'] })
+ vi.setSystemTime(new Date('2026-10-24T12:00:00Z'))
+ try {
+  const rows = readAo3Rows([
+   { title: 'Bookmark', link: 'https://archiveofourown.org/works/9990093', source_list: 'bookmarks', chapters: '3/3', date: '2026-10-01', 'bookmark date': '2026-10-20' },
+   { title: 'Marked for Later', link: 'https://archiveofourown.org/works/9990094', source_list: 'marked_for_later', chapters: '3/3' },
+  ]) as CsvWork[]
+  await submitLibrarySync(rows, undefined, status)
+  const saved = (await loadSampleLibrary()).stories
+  for (const id of [9990093, 9990094]) expect(saved.find(story => story.work.ao3_work_id === id)).toMatchObject({ reading_status: status, last_read_chapter: status === 'finished' ? 3 : 0, finished_at: status === 'finished' ? '2026-10-24T12:00:00.000Z' : null })
+  await submitLibrarySync(rows, undefined, status === 'finished' ? 'to_read' : 'finished')
+  expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990093)?.reading_status).toBe(status)
+ } finally { vi.useRealTimers() }
+})

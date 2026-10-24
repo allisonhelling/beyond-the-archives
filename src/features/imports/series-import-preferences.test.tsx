@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SeriesImportOptions, SeriesImportSettings } from './SeriesImportOptions'
 import { saveSeriesImportBehavior, useSeriesImportBehavior } from './series-import-preferences'
@@ -69,6 +69,40 @@ it('opens a popup, loads every series, and provides bulk controls without import
  await waitFor(() => expect(saveAll).toBeEnabled())
  expect(mocks.preview).toHaveBeenCalledTimes(2)
  expect(screen.queryByRole('button', { name: 'Load works' })).not.toBeInTheDocument()
+ const globalTop = within(screen.getByRole('group', { name: 'All series top controls' }))
+ expect(globalTop.getAllByRole('button').map(button => button.textContent)).toEqual(['Select all', 'Clear selection', 'View all', 'Hide all'])
+ for (const button of globalTop.getAllByRole('button')) expect(button).toHaveAccessibleDescription('Applies to all series')
+ fireEvent.mouseEnter(globalTop.getByRole('button', { name: 'Hide all' }).parentElement!)
+ expect(screen.getByRole('tooltip')).toHaveTextContent('Applies to all series')
+ fireEvent.mouseLeave(globalTop.getByRole('button', { name: 'Hide all' }).parentElement!)
+ fireEvent.click(globalTop.getByRole('button', { name: 'Select all' }))
+ expect(screen.getAllByRole('checkbox', { name: 'Work 2' }).every(input => (input as HTMLInputElement).checked)).toBe(true)
+ fireEvent.click(globalTop.getByRole('button', { name: 'Clear selection' }))
+ expect(screen.getAllByRole('checkbox', { name: 'Work 2' }).every(input => !(input as HTMLInputElement).checked)).toBe(true)
+ fireEvent.click(globalTop.getByRole('button', { name: 'Hide all' }))
+ await waitFor(() => expect(screen.getAllByText('Summary').every(node => !node.parentElement!.hasAttribute('open'))).toBe(true))
+ fireEvent.click(globalTop.getByRole('button', { name: 'View all' }))
+ await waitFor(() => expect(screen.getAllByText('Summary').every(node => node.parentElement!.hasAttribute('open'))).toBe(true))
+ const firstSeries = within(screen.getByRole('region', { name: 'Series • Series 7' }))
+ const top = within(firstSeries.getByRole('group', { name: 'Series selection controls' }))
+ const footer = within(firstSeries.getByRole('group', { name: 'Series footer controls' }))
+ for (const button of top.getAllByRole('button')) expect(button).toHaveAccessibleDescription('Applies to Series')
+ fireEvent.focus(top.getByRole('button', { name: 'Select all' }))
+ expect(screen.getByRole('tooltip')).toHaveTextContent('Applies to Series')
+ fireEvent.blur(top.getByRole('button', { name: 'Select all' }))
+ fireEvent.click(top.getByRole('button', { name: 'Select all' }))
+ expect(firstSeries.getByRole('checkbox', { name: 'Work 2' })).toBeChecked()
+ fireEvent.click(footer.getByRole('button', { name: 'Clear selection' }))
+ expect(firstSeries.getByRole('checkbox', { name: 'Work 2' })).not.toBeChecked()
+ fireEvent.click(top.getByRole('button', { name: 'Hide all' }))
+ await waitFor(() => expect(footer.getByRole('button', { name: 'View all' })).toHaveAttribute('aria-expanded', 'false'))
+ expect(top.queryByRole('button', { name: 'Hide all' })).not.toBeInTheDocument()
+ fireEvent.click(footer.getByRole('button', { name: 'View all' }))
+ await waitFor(() => expect(top.getByRole('button', { name: 'Hide all' })).toHaveAttribute('aria-expanded', 'true'))
+ expect(footer.getByRole('button', { name: 'Skip series' })).toBeEnabled()
+ const allControls = document.querySelector('[aria-label="All series controls"]')!
+ expect(within(allControls as HTMLElement).getAllByRole('button').map(button => button.textContent)).toEqual(['Save All Series', 'Hide All', 'Select All'])
+ for (const name of ['Hide All', 'Select All']) expect(within(allControls as HTMLElement).getByRole('button', { name })).toHaveAccessibleDescription('Applies to all series')
  const save = screen.getAllByRole('button', { name: 'Save' })[0]
  expect(saveAll).toHaveAccessibleDescription(save.getAttribute('aria-describedby') ? document.getElementById(save.getAttribute('aria-describedby')!)!.textContent! : '')
  fireEvent.click(screen.getByRole('button', { name: 'Hide All' }))

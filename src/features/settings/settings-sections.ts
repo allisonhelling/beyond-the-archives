@@ -22,3 +22,9 @@ export const personalRatingSettingsSection = {
   title: 'Personal Rating',
   description: 'Your star rating explanation, shared across devices',
 }
+
+export const dnfCleanupSettingsSection = {
+  id: 'settings-dnf-cleanup',
+  title: 'DNF Cleanup',
+  description: 'Automatically remove DNF details and preserve compact reading records',
+}

@@ -58,7 +58,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    ] : [{ url: identity.url, kind: identity.kind }]
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
-   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.autoImport ? undefined : message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
+   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
     startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now(), keys: [], error: '' }
    await write(next); return { state: next }
   }
@@ -94,8 +94,11 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    if (message.delaySeconds !== undefined) state.delaySeconds = requestDelay(message.delaySeconds)
    state.status = 'running'; state.error = ''; state.attention = undefined; state.retryNavigation = true; state.nextAt = Math.max(state.nextAt, Date.now() + delayMs(state))
   } else if (message.action === 'pause' && state.status === 'running') state.status = 'paused'
-  else if (message.action === 'discard') { await discard(state); state.status = 'discarded'; state.keys = []; state.baseline = [] }
-  else if (message.action === 'finish' && state.status === 'ready') {
+  else if (message.action === 'discard') {
+   await discard(state)
+   state.status = 'discarded'; state.keys = []; state.baseline = []
+   state.error = ''; state.attention = undefined; state.attentionId = undefined
+  } else if (message.action === 'finish' && state.status === 'ready') {
    // Partial scans must not establish or advance a complete-list baseline.
    if (!state.limited) await storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
    await discard(state); state.status = 'complete'; state.baseline = []; state.keys = []
