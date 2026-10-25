@@ -67,7 +67,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  expect(content).toContain('mode: "closed"')
  await writeFile(contentPath, content.replaceAll('mode: "closed"', 'mode: "open"'))
  const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'utf8'))
- expect(manifest.content_scripts).toEqual([{ matches: ['https://archiveofourown.org/works/*', 'https://archiveofourown.org/series/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }])
+ expect(manifest.content_scripts).toEqual([{ matches: ['https://archiveofourown.org/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }])
  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [
   `--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
   // Extension-created tabs can navigate before Playwright attaches its routes.
@@ -80,7 +80,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
   const extensionId = new URL(worker.url()).host
   if (local) expect(extensionId).toBe(localExtensionId)
-  const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">').replace('</head>', '<style>.summary blockquote { font-size: 14px; }</style></head>').replace('<h2 class="title heading">', '<main id="main"><div id="workskin"><h2 class="title heading">').replace('</body>', '<div id="chapters"><div class="userstuff"><p>Only three words.</p></div><div class="notes">Private author notes</div></div></div><div id="kudos">Kudos</div></main></body>')
+  const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">').replace('<select id="selected_id">', '<ul class="work navigation actions"><li class="chapter"><select id="selected_id">').replace('</select>', '</select></li></ul>').replace('</head>', '<style>.summary blockquote { font-size: 14px; }</style></head>').replace('<h2 class="title heading">', '<main id="main"><div id="workskin"><h2 class="title heading">').replace('</body>', '<div id="chapters"><div class="userstuff"><p>Only three words.</p></div><div class="notes">Private author notes</div></div></div><div id="kudos">Kudos</div></main></body>')
   await context.route(`${appOrigin}/**`, route => route.fulfill({ contentType: 'text/html', body: '<html><body>Hosted library test</body></html>' }))
   let slowImage = new Promise<void>(resolve => { releaseImage = resolve })
   await context.route('https://archiveofourown.org/**', async route => {
@@ -148,6 +148,9 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   expect(summaryFont).toBe('14px')
   for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
    await expect(surface.locator('.reading-summary strong')).toHaveCSS('font-size', summaryFont)
+   await expect(surface.locator('button.chapter-progress')).toHaveText('Ch. 0 / 6')
+   await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
+   await expect(surface.getByLabel('About chapters read', { exact: true })).toHaveCount(0)
   }
   await expect(bar.getByRole('button', { name: 'Edit', exact: true })).toHaveCSS('font-size', summaryFont)
   await expect(bar.locator('.settings-button')).toHaveCSS('width', '32px')
@@ -160,9 +163,22 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await bar.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(bar.getByRole('status')).toHaveText('Saved')
   await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Read', exact: true }).click()
+  await expect(bar.getByRole('status')).toHaveText('Saved')
   await expect(bar.getByText('Ch. 1 / 6', { exact: true })).toBeVisible()
   expect(barEntries.get(123)).toMatchObject({ notes: 'Edited directly from Chrome', status: 'reading', progress: 1 })
   expect(barRequests.at(-1)!.p_input.chapter_read).toEqual({ chapter: 1, chapter_id: '910', word_count: 3 })
+  for (const surface of [bar, ao3.locator('#ao3-library-progress')]) await expect(surface.getByText('Read', { exact: true })).toBeVisible()
+  for (const [surface, value] of [[ao3.locator('#ao3-library-progress'), '2'], [bar, '1']] as const) {
+   await surface.getByRole('button', { name: 'Edit Chapters Read' }).click()
+   const popup = bar.getByRole('dialog', { name: 'Edit Chapter Progress' })
+   await expect(popup.getByRole('spinbutton', { name: 'Chapters Read' })).toBeFocused()
+   await popup.getByRole('spinbutton').fill(value)
+   await popup.getByRole('button', { name: 'Save Progress' }).click()
+   await expect(popup).toBeHidden()
+   for (const readingBar of [bar, ao3.locator('#ao3-library-progress')]) await expect(readingBar.locator('.chapter-progress')).toHaveText(`Ch. ${value} / 6`)
+   expect(barEntries.get(123)).toMatchObject({ progress: Number(value), notes: 'Edited directly from Chrome' })
+   expect(barRequests.at(-1)!.p_input).not.toHaveProperty('chapter_read')
+  }
   expect(await ao3.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
   expect(await ao3.evaluate(() => document.body.textContent)).not.toContain('paired-chrome-secret')
   // Saving from a later chapter retrieves the work summary from the first page.
@@ -228,6 +244,21 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await expect(tile.getByRole('status')).toHaveText('Saved')
   expect(barEntries.get(101)).toMatchObject({ notes: 'Saved from a series tile' })
   expect(barRequests.some(request => request.p_action === 'series_get' && request.p_work === 77)).toBe(true)
+  const listing = await context.newPage()
+  for (const path of ['/tags/Naruto/works', '/users/Reader/pseuds/Reader']) {
+   const url = `https://archiveofourown.org${path}`
+   await context.route(url, route => route.fulfill({ contentType: 'text/html', body: seriesFixture }))
+   await listing.goto(url)
+   const work = listing.locator('#ao3-library-work-102')
+   await expect(listing.locator('[data-work-tile]')).toHaveCount(2)
+   if (path.startsWith('/tags')) {
+    await expect(work.getByRole('button', { name: 'To Read', exact: true })).toBeVisible()
+    await work.getByRole('button', { name: 'To Read', exact: true }).click()
+    await expect(work.getByRole('status')).toHaveText('Saved')
+    expect(barEntries.get(102)).toMatchObject({ status: 'to_read', progress: 0, metadata: { title: 'Art extras' } })
+   } else await expect(work.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
+  }
+  await listing.close()
   if (!local) {
    queued = false
    await bar.getByRole('button', { name: 'Edit', exact: true }).click()

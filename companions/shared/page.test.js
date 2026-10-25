@@ -2,7 +2,7 @@ import fixture from '../../server/ao3/fixtures/work.html?raw'
 import { parseMetadata } from '../../server/ao3/adapter.ts'
 import { captureMetadataPage } from '../chrome/capture.js'
 import { expect, it, vi } from 'vitest'
-import { captureChapterRead, collectWorkPage, readPage } from './page'
+import { captureChapterRead, collectWorkPage, readPage, readWorkTiles } from './page'
 
 function page(chapter, total = '10', full = false) {
  const doc = new DOMParser().parseFromString(`<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/${total}</dd></dl><select id="selected_id">${Array.from({ length: 10 }, (_, i) => `<option value="${100 + i}">${i + 1}. Title</option>`).join('')}</select><div id="chapters">PRIVATE CHAPTER TEXT</div>`, 'text/html')
@@ -100,4 +100,20 @@ it('refuses to save metadata from a different work after a redirect', async () =
  const doc = new DOMParser().parseFromString('<h2 class="title">Test</h2>', 'text/html')
  const fetcher = vi.fn().mockResolvedValue({ ok: true, url: 'https://archiveofourown.org/works/999', text: vi.fn() })
  await expect(collectWorkPage(doc, 'https://archiveofourown.org/works/123/chapters/940', fetcher)).rejects.toThrow('Could not collect')
+})
+
+it('reads chapter navigation inside AO3 chapter action items without capturing chapter content', () => {
+ const doc = new DOMParser().parseFromString('<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/10</dd></dl><ul class="work navigation actions"><li class="chapter"><ul id="chapter_index"><li><select id="selected_id"><option value="104">4. Fourth</option></select></li></ul></li></ul><div id="chapters"><div id="chapter-4" class="chapter"><div class="userstuff">PRIVATE CHAPTER TEXT</div></div></div>', 'text/html')
+ const result = readPage(doc, 'https://archiveofourown.org/works/123/chapters/104')
+ expect(result).toMatchObject({ current: 4, chapters: { '4': '104' }, defaults: { chapter: 4, status: 'reading' } })
+ expect(JSON.stringify(result)).not.toContain('PRIVATE CHAPTER TEXT')
+})
+
+it('reads listing tiles through the shared blurb parser without inventing series memberships', async () => {
+ const doc = new DOMParser().parseFromString((await import('../../server/ao3/fixtures/series.html?raw')).default, 'text/html')
+ const tiles = readWorkTiles(doc, 'https://archiveofourown.org/tags/Naruto/works')
+ expect(tiles).toHaveLength(2)
+ expect(tiles[0].page).toMatchObject({ work: 101, current: null, metadata: { title: 'The first story', authors: ['One'], published_chapters: 2, total_chapters: 2 } })
+ expect(tiles[0].page.metadata).not.toHaveProperty('series_memberships')
+ expect(readWorkTiles(doc, 'https://evil.test/works')).toEqual([])
 })

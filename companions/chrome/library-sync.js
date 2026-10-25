@@ -1,3 +1,4 @@
+import { isLibrarySyncSafetyLimit, librarySyncSafetyLimitError } from '../../src/features/imports/library-sync-state.ts'
 import { parseSeries } from '../../src/features/imports/ao3-series.ts'
 import { captureMetadataPage } from './capture.js'
 import { parseChapterDates } from '../../src/features/imports/chapter-dates.ts'
@@ -42,7 +43,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    if (message.seriesBehavior !== undefined && !['choose', 'all'].includes(message.seriesBehavior)) throw new Error('Choose a valid series import behavior.')
    const startPage = message.startPage ?? 1, endPage = message.endPage
    if (message.maxPages !== undefined) throw new Error('Use Start page and End page instead of a page limit.')
-   if (!Number.isInteger(startPage) || startPage < 1 || startPage > 500 || endPage !== undefined && (!Number.isInteger(endPage) || endPage < startPage || endPage > 500)) throw new Error('Enter whole page numbers from 1 to 500, with End page at or after Start page.')
+   if (!Number.isSafeInteger(startPage) || startPage < 1 || endPage !== undefined && (!Number.isSafeInteger(endPage) || endPage < startPage)) throw new Error('Enter positive whole page numbers, with End page at or after Start page.')
    const limited = startPage > 1 || endPage !== undefined
    if (message.mode === 'quick' && limited) throw new Error('Quick Sync must start at page 1 with no End page. Use a full scan for page ranges.')
    const delaySeconds = requestDelay(message.delaySeconds)
@@ -59,11 +60,29 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
    const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
-    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, diagnosticsVersion: 1, skippedEntries: [], chapterDateIssues: [], tabId: null, nextAt: Date.now(), keys: [], error: '' }
+    batchStart: 0, hasMore: false, startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, diagnosticsVersion: 1, skippedEntries: [], chapterDateIssues: [], tabId: null, nextAt: Date.now(), keys: [], error: '' }
    await write(next); return { state: next }
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
   if (!state) return { state: null }
+  if (message.action === 'prepare-batch') {
+   if (state.status !== 'paused' || !isLibrarySyncSafetyLimit(state) || !state.pages) throw new Error('No saved batch is available.')
+   // Old safety-limit checkpoints may still need chapter dates for their final page.
+   state.hasMore = true; state.batchStart ??= 0
+   state.status = state.chapterQueue?.length || state.chapterRequest ? 'running' : 'ready'
+   state.error = ''; state.attention = undefined; state.attentionId = undefined
+   await write(state); return { state }
+  }
+  if (message.action === 'finish-batch') {
+   if (state.status !== 'ready' || !state.hasMore || message.batchStart !== (state.batchStart ?? 0) || message.batchEnd !== state.pages) throw new Error('The saved batch changed. Refresh before continuing.')
+   const previous = state.batchStart ?? 0
+   state.batchStart = state.pages; state.hasMore = false; state.status = 'running'
+   state.error = ''; state.attention = undefined; state.attentionId = undefined
+   // Acknowledge durably before cleanup. A restart must never replay this batch.
+   await write(state)
+   await storage.local.remove(Array.from({ length: state.pages - previous }, (_, i) => pageKey(state, (state.startPage ?? 1) + previous + i)))
+   return { state }
+  }
   if (message.action === 'set-collection') {
    if (state.status !== 'ready' || !state.importToCollection || typeof message.collectionId !== 'string' || !/^[0-9a-f-]{36}$/i.test(message.collectionId)) throw new Error('Collection assignment unavailable.')
    state.collectionId = message.collectionId
@@ -84,13 +103,14 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    await write(state); return { state }
   }
   if (message.action === 'page') {
-   if (state.status !== 'ready' || !Number.isInteger(message.page) || message.page < (state.startPage ?? 1) || message.page >= (state.startPage ?? 1) + state.pages) throw new Error('No completed page at that position.')
+   if (state.status !== 'ready' || !Number.isInteger(message.page) || message.page < (state.startPage ?? 1) + (state.batchStart ?? 0) || message.page >= (state.startPage ?? 1) + state.pages) throw new Error('No completed page at that position.')
    const saved = (await storage.local.get(pageKey(state, message.page)))[pageKey(state, message.page)]
    const rows = Array.isArray(saved) ? saved : saved?.rows
    if (!Array.isArray(rows)) throw new Error('Saved page is missing. Discard this scan and run a full scan again.')
    return { rows, ...(saved?.seriesUrl ? { seriesUrl: saved.seriesUrl, ...(saved.seriesPreview ? { seriesPreview: saved.seriesPreview } : {}) } : {}) }
   }
   if (message.action === 'resume' && state.status === 'paused') {
+   if (isLibrarySyncSafetyLimit(state)) throw new Error(librarySyncSafetyLimitError)
    if (message.delaySeconds !== undefined) state.delaySeconds = requestDelay(message.delaySeconds)
    state.status = 'running'; state.error = ''; state.attention = undefined; state.retryNavigation = true; state.nextAt = Math.max(state.nextAt, Date.now() + delayMs(state))
   } else if (message.action === 'pause' && state.status === 'running') state.status = 'paused'
@@ -98,7 +118,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    await discard(state)
    state.status = 'discarded'; state.keys = []; state.baseline = []
    state.error = ''; state.attention = undefined; state.attentionId = undefined
-  } else if (message.action === 'finish' && state.status === 'ready') {
+  } else if (message.action === 'finish' && state.status === 'ready' && !state.hasMore) {
    // Partial scans must not establish or advance a complete-list baseline.
    if (!state.limited) await storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
    await discard(state); state.status = 'complete'; state.baseline = []; state.keys = []
@@ -228,12 +248,16 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     state.captured = true
     state.done = !result.hasNext || state.mode === 'quick' && state.kind !== 'series_works' && keys.some(key => known.has(key))
     if (!state.done && state.kind !== 'series_works' && state.limited && state.page >= (state.endPage ?? state.maxPages ?? Infinity)) { state.partial = true; state.done = true }
-    if (!state.done && (state.page >= 500 || state.pages >= 500)) throw new Error('Reached the 500-page safety limit. The scan is incomplete; nothing has been imported.')
     await write(state)
     if (state.chapterQueue?.length) return
    }
+   // Complete chapter checks before exposing an importable batch. Keep the
+   // captured page and source queue intact so continuation advances exactly once.
+   if (state.captured && (!state.done || state.sources?.length) && (state.hasMore || state.pages - (state.batchStart ?? 0) >= 500)) {
+    state.status = 'ready'; state.hasMore = true; state.error = ''
+    await write(state); changed(); return
+   }
    if (state.done && state.sources?.length) {
-    if (state.pages >= 500) throw new Error('Reached the 500-page safety limit. Discard this incomplete scan.')
     if (Date.now() < state.nextAt) return
     const source = state.sources.shift()
     state.currentUrl = source.url; state.kind = source.kind; state.page = 1; state.captured = false; state.done = false
@@ -242,12 +266,11 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    }
    if (state.done) { state.status = 'ready'; state.error = ''; await write(state); changed(); return }
    if (Date.now() < state.nextAt) return
-   if (state.page >= 500 || state.pages >= 500) throw new Error('Reached the 500-page safety limit. Discard this incomplete scan.')
    const url = new URL(state.currentUrl ?? state.url); url.searchParams.set('page', String(state.page + 1))
    state.page++; state.captured = false
    await navigate(state, url.href)
   } catch (error) {
-   if (state?.status === 'running') { state.status = 'paused'; state.error = error.message; state.attention ??= 'page_error'; state.attentionId = crypto.randomUUID(); await write(state) }
+   if (state?.status === 'running') { state.status = 'paused'; state.error = error.message; state.attention = isLibrarySyncSafetyLimit(state) ? 'safety_limit' : state.attention ?? 'page_error'; state.attentionId = crypto.randomUUID(); await write(state) }
   } finally {
    busy = false
    if (state?.status === 'running') schedule(Math.max(Date.now() + 1000, state.tabId === null || state.retryNavigation || state.captured ? state.nextAt : 0))
@@ -262,8 +285,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } = result.state
-    return { state: { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } }
+    const { id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } = result.state
+    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } }
    }
    return result
   } finally {

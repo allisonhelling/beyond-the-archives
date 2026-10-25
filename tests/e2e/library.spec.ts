@@ -74,12 +74,13 @@ async function openAddStory(page: Page) {
   if ((page.viewportSize()?.width ?? 1280) <= 1100) {
     await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Add', exact: true }).click()
   } else {
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await page.getByRole('button', { name: 'Add Story', exact: true }).click()
+    await page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true }).click()
   }
 }
 async function ordering(page: Page) {
-  return page.locator('.reading-toolbar')
+  const reading = new URL(page.url()).pathname === '/reading'
+  await expect(page.getByRole('heading', { name: reading ? 'Currently Reading' : 'Your Library', exact: true })).toBeVisible()
+  return page.locator(reading ? '.library-heading-actions, .reading-toolbar' : '.reading-toolbar')
 }
 
 test('personal notes, ratings and Recs filter works without scrolling and share tag formatting', async ({ page }) => {
@@ -161,8 +162,9 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   for (const name of ['Comfort reads', 'Long fics']) {
     await page.getByRole('navigation', { name: 'Library Shelves', exact: true }).getByRole('button', { name: 'New Collection', exact: true }).last().click(); await completeCollectionDialog(page, name); await expect.poll(() => tables.collections.some(collection => collection.name === name)).toBe(true)
   }
-  const addStory = page.locator('.reading-toolbar-actions a.library-create-action')
-  await expect(addStory).toBeVisible()
+  const addStory = page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true, includeHidden: true })
+  if (info.project.name === 'mobile') await expect(addStory).toBeHidden()
+  else await expect(addStory).toBeVisible()
   await expect(addStory).toHaveAttribute('href', '/add?mode=finished')
   if (info.project.name === 'mobile') await openAddStory(page)
   else await addStory.click()
@@ -589,12 +591,10 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   }
   await page.goto('/reading'); await login(page)
   const cards = page.locator('.story-card')
-  await expect(page.locator('main a.library-create-action')).toHaveAttribute('href', '/add?mode=finished')
+  await expect(page.locator('main a.library-create-action')).toHaveCount(0)
   if (info.project.name === 'desktop') {
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toBeVisible()
-    await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-    await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toHaveCount(0)
+    await expect(page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true })).toHaveAttribute('href', '/add?mode=finished')
+    await expect(page.locator('.add-menu')).toHaveCount(0)
   } else {
     await expect(page.locator('.app-header .add-wrapper')).toBeHidden()
     await expect(page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Add', exact: true })).toHaveAttribute('href', '/add')
@@ -621,9 +621,9 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(toolbar.locator('.filter-name')).toHaveCount(0)
   await expect(toolbar.getByLabel('Search Title or Author', { exact: true })).toBeVisible()
   if (info.project.name === 'mobile') {
-    await expect(toolbar.getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+    await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
     await expect(toolbar.getByRole('button', { name: 'Group', exact: true })).toBeVisible()
-    await expect(toolbar.getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
+    await expect(page.locator('.library-heading-actions').getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
     await expect(toolbar.getByRole('button',{name:'Group',exact:true})).toHaveAttribute('title','Group')
 
     await expect(page.locator('.reading-tiles strong').first()).toHaveCSS('font-size', '13px')
@@ -635,16 +635,16 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     for (const box of bounds) expect(Math.abs(box!.y - bounds[0]!.y)).toBeLessThan(1)
   }
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).press('ArrowDown')
-  await expect(page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Date Added', exact: true })).toBeFocused()
+  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Date Added', exact: true })).toBeFocused()
   await page.keyboard.press('End')
   await page.keyboard.press('ArrowUp')
   await page.keyboard.press('Enter')
-  await expect(page.locator('.reading-toolbar, .reading-filters').getByRole('listbox')).toBeVisible()
+  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('listbox')).toBeVisible()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Alphabetical')
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-  await expect(page.locator('.reading-toolbar, .reading-filters').getByRole('listbox')).toHaveCount(0)
+  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('listbox')).toHaveCount(0)
   await toolbar.getByPlaceholder('Search Title or Author').click()
   await expect(page.getByRole('region', { name: 'Titles Suggestions' })).toBeVisible()
   for (const heading of await page.locator('.search-suggestions .suggestion-heading').all()) {
@@ -761,7 +761,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(page.getByRole('alert')).toContainText('Close the quotation marks')
   await clear()
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Series', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Series', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect(page.getByRole('heading', { name: 'Garden series (1)' })).toBeVisible()
   await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('placeholder', 'mm/dd/yyyy')
@@ -1028,10 +1028,10 @@ test('sort and grouping preferences persist across navigation and refresh', asyn
   const toolbar = page.getByRole('region', { name: 'Reading Toolbar' })
   await expect(toolbar.getByRole('button', { name: 'Work Status', exact: true })).toHaveCount(0)
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Date Added', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Date Added', exact: true }).click()
   await page.keyboard.press('Escape')
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Author', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
   await openFilters(page)
   const panel = page.getByRole('region', { name: 'Reading Filters' })
@@ -1147,11 +1147,11 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(page.getByRole('navigation', { name: 'Dashboard Sections' })).toHaveCount(0)
   await expect(page.getByLabel('Search Title or Author', { exact: true })).toHaveCount(1)
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Date Added', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Date Added', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(cards.locator('h2 a')).toHaveText(['Library story 4', 'Library story 3', 'Library story 2', 'Library story 1'])
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters').getByRole('option', { name: 'Author', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('heading', { name: 'Saved author (1)', exact: true })).toBeVisible()
   await openFilters(page)
@@ -1429,11 +1429,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
     expect((await controls.getByRole('button', { name: 'Sort', exact: true }).boundingBox())!.x).toBeLessThan((await controls.getByRole('button', { name: 'Edit Collections', exact: true }).boundingBox())!.x)
   }
   await shelf.screenshot({ path: `test-results/medallion-bookend-${page.viewportSize()!.width}.png` })
-  const add = page.getByRole('link', { name: 'Add Story', exact: true })
-  if (page.viewportSize()!.width > 650) {
-    const filterBounds = (await page.locator('.reading-toolbar-actions').boundingBox())!, addBounds = (await add.boundingBox())!
-    expect(addBounds.y).toBeGreaterThanOrEqual(filterBounds.y)
-  }
+  await expect(page.locator('.library-heading-actions').getByRole('link', { name: 'Add Story', exact: true })).toHaveCount(0)
   await shelf.getByRole('button', { name: 'Show All Collections', exact: true }).click()
   await expect(shelf.getByRole('button', { name: 'Show Fewer Collections', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await expect(rows.first().getByRole('button', { name: 'Show Fewer Collections', exact: true })).toHaveText('SEE LESS')
@@ -1820,8 +1816,8 @@ test('collection sort modes preserve manual order across switches, creation, and
     await expect(sort).toContainText(label)
     await expand()
   }
-  await expect(page.locator('.reading-toolbar-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
-  await expect(page.locator('.reading-toolbar-actions').getByRole('link', { name: 'Add Story', exact: true })).toBeVisible()
+  await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
+  await expect(page.locator('.library-heading-actions').getByRole('link', { name: 'Add Story', exact: true })).toHaveCount(0)
   await expect(actions.getByRole('button', { name: 'Edit Collections', exact: true })).toBeVisible()
   await expect(sort).toBeVisible()
   await expect(sort.locator('.dropdown-label svg')).toHaveCount(1)
@@ -1833,7 +1829,7 @@ test('collection sort modes preserve manual order across switches, creation, and
   await expect(titles).toHaveText(['Zebra', 'Middle', 'Apple'])
   const manualPositions = tables.collections.map(collection => collection.sort_position)
   await actions.getByRole('button', { name: 'Done Editing', exact: true }).click()
-  await expect(page.locator('.reading-toolbar-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
+  await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
   await choose('Alphabetical (A–Z)')
   await expect(titles).toHaveText(['Apple', 'Middle', 'Zebra'])
   await choose('Alphabetical (Z–A)')
@@ -2289,7 +2285,7 @@ test('adds stories to custom collections from story actions and collection pages
   await dialog.getByRole('button', { name: 'Add to Collections' }).click()
   await expect(dialog).toHaveCount(0)
   await selectLibraryShelf(page, 'Night reads')
-  const addToCollection = page.locator('.reading-toolbar-actions').getByRole('button', { name: 'Add Story', exact: true })
+  const addToCollection = page.locator('.library-heading-actions').getByRole('button', { name: 'Add Story', exact: true })
   await expect(addToCollection).toBeVisible()
   await expect(page.locator('.results-count')).toHaveCount(0)
   await expect(addToCollection.locator('svg')).toHaveCount(0)
@@ -3150,12 +3146,12 @@ test(`mass metadata refresh respects filters and pagination on ${route}`, async 
   await page.goto(`${route}${route.includes('?') ? '&' : '?'}query=Matching&sort=alpha&page=2&size=25`)
   await login(page)
   await expect(page.locator('.work-card')).toHaveCount(2)
-  const refresh = page.locator('.reading-toolbar-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })
+  const refresh = page.locator('.library-heading-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })
   await expect(refresh).toBeEnabled()
   await refresh.hover()
   await expect(refresh).toHaveAccessibleDescription('Mass Refresh All Stories on Page')
   if (route.includes('refresh-collection')) {
-    await expect(page.locator('.reading-toolbar-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
+    await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
   }
   await refresh.click()
   await expect.poll(() => submitted).toEqual({ p_urls: ['https://archiveofourown.org/works/126', 'https://archiveofourown.org/works/127'], p_update_reading_location: false })
@@ -3259,16 +3255,14 @@ test('account rating explanations appear in manual entry and personal editors wi
 test('library actions precede the series filter and information stays open after clicking', async ({ page }) => {
  await fixture(page)
  await page.goto('/library'); await login(page)
- const actions = page.locator('.reading-toolbar-actions')
- const add = actions.getByRole('link', { name: 'Add Story', exact: true })
- await expect(add).toHaveAccessibleDescription('Add Story to Library')
- const series = actions.getByRole('button', { name: 'Show Series', exact: true })
+ const actions = page.locator('.library-heading-actions')
+ await expect(actions.locator('a.library-create-action')).toHaveCount(0)
+ const series = page.locator('.reading-toolbar').getByRole('button', { name: 'Show Series', exact: true })
  const refresh = actions.getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })
- expect(await add.evaluate((node, next) => Boolean(node.compareDocumentPosition(next as Node) & Node.DOCUMENT_POSITION_FOLLOWING), await series.elementHandle())).toBe(true)
- expect(await refresh.evaluate((node, next) => Boolean(node.compareDocumentPosition(next as Node) & Node.DOCUMENT_POSITION_FOLLOWING), await add.elementHandle())).toBe(true)
+ expect(await refresh.evaluate((node, next) => Boolean(node.compareDocumentPosition(next as Node) & Node.DOCUMENT_POSITION_FOLLOWING), await series.elementHandle())).toBe(true)
  const info = page.getByRole('button', { name: 'Works per Page Information', exact: true }).first()
  await info.click()
- await add.focus()
+ await refresh.focus()
  await page.mouse.move(0, 0)
  const description = page.locator(`[id="${await info.getAttribute('aria-describedby')}"]`)
  await expect(description).toBeVisible()

@@ -10,7 +10,7 @@ import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, Layers3, ArrowDownWideNarrow } from 'lucide-react'
+import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
 import { Dropdown } from '../../components/Dropdown'
@@ -52,7 +52,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: () => ReactNode; filterItems?: typeof filterReading }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode) => ReactNode; filterItems?: typeof filterReading }) {
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileQuery)
@@ -108,17 +108,18 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   error ||= remote.error ?? ''
   const pagination = (inlinePage = false) => <Pagination inlinePage={inlinePage} page={currentPage} pages={pages} total={total} size={size} onPage={changePage} trailing={<><Tooltip pinOnClick description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per Page Information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per Page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
   const orderingControls = <>
-    <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
-    <Dropdown label="Group" icon={Layers3} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
+    {mode !== 'reading' && <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />}
+    <Dropdown label="Group" icon={ListTree} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
   </>
+  const headerActions = <>{showActions && <>{refreshButton}<span className="library-add-actions">{resultsActions}</span></>}{mode === 'reading' && <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />}</>
   return <>
-    {renderHeader?.()}
+    {renderHeader ? renderHeader(headerActions) : <div className="library-heading-actions">{headerActions}</div>}
     {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View Import History</Link></p>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard Sections">{displayedSections.map(([key, title, description, Icon]) => {
       const label = mobile && key === 'waiting' ? 'Waiting' : title
       return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, filters, urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : sampleMode ? filtered.filter(story => inReadingSection(story, key)).length : remote.result?.sections[key] ?? '—'}</span></button>
     })}</nav>}
-    <ReadingFilterControls stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} actions={showActions && <>{refreshButton}<Tooltip description="Add Story to Library">{id => <Link className="button primary library-create-action" aria-describedby={id} to="/add?mode=finished">Add Story</Link>}</Tooltip>{resultsActions}</>} suggestions={remote.suggestions} fandomOptions={remote.result?.fandoms} />
+    <ReadingFilterControls stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.result?.fandoms} />
     {pagination(true)}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <div role="alert" className="error-message">{error}{remote.error && <button className="button secondary" onClick={remote.retry}>Retry Loading</button>}</div>}

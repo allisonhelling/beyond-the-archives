@@ -34,8 +34,8 @@ function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: st
   const label = authorOnly ? 'Search Author' : 'Search Title or Author'
   return <SearchSuggestions label={label} placeholder={label} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
-export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, actions, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false }: {
-  stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode; actions?: ReactNode
+export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false }: {
+  stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode
   suggestions?: { relationships: string[]; characters: string[]; tags: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
 }) {
   const [expanded, setExpanded] = useState(alwaysExpanded)
@@ -66,14 +66,12 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <button type="button" className={`button ${filters.recs ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.recs)} onClick={() => change('recs', !filters.recs)}><Heart size={17} fill={filters.recs ? 'currentColor' : 'none'} />Recs</button>
   </>
   return <>
-    <section className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series Toolbar' : mode === 'library' ? 'Library Toolbar' : 'Reading Toolbar'}>
+    <section data-mode={mode} className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series Toolbar' : mode === 'library' ? 'Library Toolbar' : 'Reading Toolbar'}>
       {orderingControls}
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
       <FandomSelect options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
-      {!alwaysExpanded && <button type="button" className={`button ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
-      {(actions || mode === 'library' && !automaticCollection) && <div className="form-actions reading-toolbar-actions">{actions}
-      {mode === 'library' && !automaticCollection && <button type="button" className={`button ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
-      </div>}
+      {mode === 'library' && !automaticCollection && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
+      {!alwaysExpanded && <button type="button" className={`button filter-toggle ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series Filters' : mode === 'library' ? 'Library Filters' : 'Reading Filters'}><div className="filter-grid">
       <SearchSuggestions label="Relationships" tagCategory="relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />

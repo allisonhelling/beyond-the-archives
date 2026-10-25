@@ -1,3 +1,4 @@
+import { isLibrarySyncSafetyLimit } from './library-sync-state'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Dialog } from '../../components/Dialog'
@@ -28,6 +29,7 @@ export function LibrarySyncProvider({ children }: { children: ReactNode }) {
   const requests = version
   return () => { alive.current = false; requests.current++; clearInterval(timer) }
  }, [refresh])
+ const safetyLimit = isLibrarySyncSafetyLimit(state)
  const alertKey = state?.status === 'paused' && state.error ? state.attentionId ?? `${state.id}:${state.pages}:${state.error}` : ''
  async function openTab() {
   setOpening(true); setOpenError('')
@@ -38,10 +40,10 @@ export function LibrarySyncProvider({ children }: { children: ReactNode }) {
  const close = () => { setDismissed(alertKey); setOpenError('') }
  return <Context.Provider value={{ state, setState, refresh }}>
   {children}
-  {alertKey && alertKey !== dismissed && <Dialog title={state?.attention === 'login' ? 'AO3 Sign-In Required' : state?.attention === 'rate_limit' ? 'AO3 Request Restriction' : 'AO3 Scan Needs Attention'} onClose={close} busy={opening}>
-   <div className="confirmation-description"><p>{state?.error}</p><p>Your scan is paused and saved pages are preserved. Open the scan tab to complete sign-in or check the restriction. After it clears, return to Library Sync and choose Resume Scan.</p></div>
+  {alertKey && alertKey !== dismissed && <Dialog title={safetyLimit ? 'AO3 Scan Limit Reached' : state?.attention === 'login' ? 'AO3 Sign-In Required' : state?.attention === 'rate_limit' ? 'AO3 Request Restriction' : 'AO3 Scan Needs Attention'} onClose={close} busy={opening}>
+   <div className="confirmation-description"><p>{state?.error}</p><p>{safetyLimit ? 'Saved pages are preserved. Return to Library Sync and choose Prepare Saved Batch, then import the batch to continue scanning. Rebuild and reload the companion first if that action is unavailable.' : 'Your scan is paused and saved pages are preserved. Open the scan tab to complete sign-in or check the restriction. After it clears, return to Library Sync and choose Resume Scan.'}</p></div>
    {openError && <p role="alert" className="error-message">{openError}</p>}
-   <div className="form-actions"><button type="button" className="button primary" disabled={opening} onClick={() => void openTab()}>{opening ? 'Opening…' : 'Open Tab'}</button><Link className="button secondary" to="/imports" onClick={close}>Review Scan</Link><button type="button" className="button secondary" disabled={opening} onClick={close}>Dismiss</button></div>
+   <div className="form-actions">{!safetyLimit && <button type="button" className="button primary" disabled={opening} onClick={() => void openTab()}>{opening ? 'Opening…' : 'Open Tab'}</button>}<Link className="button secondary" to="/imports" onClick={close}>Review Scan</Link><button type="button" className="button secondary" disabled={opening} onClick={close}>Dismiss</button></div>
   </Dialog>}
  </Context.Provider>
 }

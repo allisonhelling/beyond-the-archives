@@ -11,8 +11,7 @@ export function installBarBridge(environments = null, switching = () => false) {
   let page
   try { page = new URL(sender.url) } catch { return }
   if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !Number.isInteger(sender.tab?.id)
-   || page.origin !== 'https://archiveofourown.org'
-   || !/^\/(works\/[1-9]\d*(?:\/chapters\/[1-9]\d*)?|series\/[1-9]\d*)\/?$/.test(page.pathname)) return
+   || page.origin !== 'https://archiveofourown.org') return
   pending += 1
   void (async () => {
    await environments?.ready
@@ -40,8 +39,10 @@ async function handle(message, page, config) {
   const input = message.input
   if (!input || !actions.has(input.p_action) || typeof input.p_secret !== 'string' || input.p_secret.length > 512
    || !Number.isSafeInteger(input.p_work) || input.p_work < 1 || JSON.stringify(input).length > maxPayloadLength) throw new Error('Invalid bar request')
-  const seriesPage = page.pathname.startsWith('/series/'), seriesAction = input.p_action.startsWith('series_')
-  if (seriesAction && !seriesPage || (!seriesPage || seriesAction) && input.p_work !== Number(page.pathname.split('/')[2])) throw new Error('Work does not match this page')
+  const seriesId = page.pathname.match(/^\/series\/([1-9]\d*)\/?$/)?.[1]
+  const workId = page.pathname.match(/^\/works\/([1-9]\d*)(?:\/chapters\/[1-9]\d*)?\/?$/)?.[1]
+  const seriesAction = input.p_action.startsWith('series_')
+  if (seriesAction ? !seriesId || input.p_work !== Number(seriesId) : workId && input.p_work !== Number(workId)) throw new Error('Work does not match this page')
   const response = await fetch(`${config.backend}/rest/v1/rpc/userscript_library`, {
    method: 'POST', headers: { apikey: config.publicKey, 'Content-Type': 'application/json' },
    body: JSON.stringify(input), signal: AbortSignal.timeout(20000), credentials: 'omit', redirect: 'error',

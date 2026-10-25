@@ -34,9 +34,13 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 .status-bullet[data-status="to_read"] { color: var(--status-to-read); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--control-gap); }
 .chapter-progress, .complete-chapter, .completion-indicator { white-space: nowrap; }
+.progress-dialog { width: min(320px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: var(--field-gap); border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface); text-align: start; }
+.progress-dialog::backdrop { background: #0005; }
+.progress-dialog h3 { margin: 0; font-weight: 600; }
+.progress-dialog [role="alert"] { color: var(--accent); }
 .completion-indicator { display: inline-flex; align-items: center; gap: 4px; color: var(--status-read); min-height: var(--control-size); }
 .completion-indicator svg, button:not(.removable-tag) svg { width: var(--button-icon-size); height: var(--button-icon-size); fill: none; stroke: currentColor; stroke-width: 1.8; }
-.library-link, .edit-button, .complete-chapter, .theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--control-gap); }
+.library-link, .edit-button, .complete-chapter, .theme-toggle, .reading-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--control-gap); }
 .library-link { min-height: var(--control-size); padding: var(--control-padding); border: 1px solid var(--border); border-radius: 5px; color: var(--color-brand); text-decoration: none; }
 .library-link:hover { border-color: var(--accent); }
 .connection-settings { padding-top: var(--field-gap); }
@@ -68,8 +72,6 @@ input[type="checkbox"] { width: var(--checkbox-size, 24px); }
 .rating-info { position: static; --help-width: 420px; --help-max-width: 100%; }
 .rating-info > span { white-space: pre-wrap; overflow-wrap: anywhere; }
 .field-info summary { cursor: pointer; list-style: none; color: var(--accent); display: grid; place-items: center; width: var(--control-size); min-height: var(--control-size); }
-.field-info.chapter-progress summary { display: block; width: auto; min-height: 0; color: inherit; }
-.field-info.chapter-progress > span { position: static; display: block; width: max-content; max-width: 70vw; padding: 4px 8px; white-space: normal; }
 .field-info summary::-webkit-details-marker { display: none; }
 .field-info > span { font: inherit; position: absolute; z-index: 1; top: 100%; right: 0; width: min(var(--help-width, 280px), var(--help-max-width, 70vw)); padding: 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); box-shadow: 0 3px 12px #0002; }
 .text-toggle { padding: var(--control-padding) 8px; }

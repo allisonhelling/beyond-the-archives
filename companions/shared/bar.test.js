@@ -7,7 +7,7 @@ const mountLibrary = (doc, href, options = {}) => mountSharedLibrary(doc, href, 
 
 let root, bottomRoot, storage, network, entry, accountRatingInfo
 beforeEach(() => {
- document.body.innerHTML = '<main id="main"><div id="workskin"><h2 class="title">Test</h2><div class="summary module"><blockquote><p>Work summary.</p></blockquote></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104">4. Fourth</option></select></div><div id="kudos">Kudos list</div></main>'
+ document.body.innerHTML = '<main id="main"><div id="workskin"><h2 class="title">Test</h2><div class="summary module"><blockquote><p>Work summary.</p></blockquote></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><ul class="work navigation actions"><li class="chapter"><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104">4. Fourth</option></select></li></ul></div><div id="kudos">Kudos list</div></main>'
  const attach = Element.prototype.attachShadow
  vi.spyOn(Element.prototype, 'attachShadow').mockImplementation(function (options) { const surface = attach.call(this, options); if (this.id === 'ao3-library-companion') root = surface; else bottomRoot = surface; return surface })
  vi.stubGlobal('__SUPABASE_URL__', 'https://backend.test')
@@ -31,6 +31,11 @@ it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => 
  document.querySelector('#workskin').insertAdjacentHTML('beforeend', '<div id="chapters"><div id="chapter-4" class="chapter"><div class="summary">Private summary</div><div class="userstuff"><p>Only three words.</p></div><div class="notes">Private note</div></div></div>')
  entry = { version: 'v1', status: 're_reading', progress: 3, notes: '', rating: null, tags: [], collections: [] }
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
+ for (const surface of [root, bottomRoot]) {
+  expect(surface.querySelector('button.chapter-progress')).toHaveTextContent('Ch. 3 / 10')
+  expect(surface.querySelector('.chapter-progress')).not.toHaveAttribute('title')
+  expect(within(surface).queryByLabelText('About chapters read')).not.toBeInTheDocument()
+ }
  fireEvent.click(within(fromBottom ? bottomRoot : root).getByRole('button', { name: 'Mark Read' }))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  const request = JSON.parse(network.mock.lastCall[0].data)
@@ -345,8 +350,13 @@ it.each([false, true])('keeps one logo in the main bar when panels open (saved e
  const toolbar = root.querySelector('.library-link').parentElement
  if (saved) {
   const summary = root.querySelector('.reading-summary')
-  expect([...summary.children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10chapters read'])
-  expect([...bottomRoot.querySelector('.reading-summary').children].map(element => element.textContent)).toEqual(['Currently Reading', '•', 'Ch. 1 / 10chapters read'])
+  expect([...summary.children].map(element => element.textContent)).toEqual(['Reading', '•', 'Ch. 1 / 10'])
+  expect([...bottomRoot.querySelector('.reading-summary').children].map(element => element.textContent)).toEqual(['Reading', '•', 'Ch. 1 / 10'])
+  for (const surface of [root, bottomRoot]) {
+   expect(surface.querySelector('button.chapter-progress')).not.toHaveAttribute('title')
+   expect(surface.querySelector('.chapter-progress')).toHaveAttribute('aria-label', 'Edit Chapters Read')
+   expect(within(surface).queryByLabelText('About chapters read')).not.toBeInTheDocument()
+  }
   expect(summary.querySelector('.status-bullet')).toHaveAttribute('aria-hidden', 'true')
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Mark Read'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Edit'))
@@ -373,7 +383,7 @@ it('marks the latest WIP chapter read without finishing the fic', async () => {
  await waitFor(() => expect(entry).toMatchObject({ status: 'reading', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 10 / 10')).toBeInTheDocument()
-  expect(within(surface).getByText('Ch. 10 Read')).toBeInTheDocument()
+  expect(within(surface).getByText('Read')).toBeInTheDocument()
  }
 })
 
@@ -388,7 +398,7 @@ it('places only progress controls before kudos and immediately updates both bars
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Read' }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 4 / 10')).toBeInTheDocument()
-  expect(within(surface).getByText('Ch. 4 Read')).toBeInTheDocument()
+  expect(within(surface).getByText('Read')).toBeInTheDocument()
  }
  finish({ status: 503, responseText: '{}' })
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save'))
@@ -399,11 +409,14 @@ it('places only progress controls before kudos and immediately updates both bars
  expect(within(bottomRoot).getByText(/Could not save/)).toBeInTheDocument()
 })
 
-it.each([4, 7])('shows a non-clickable completion indicator on a revisited chapter when saved progress is %s', async progress => {
+it.each(['safari', 'chrome'].flatMap(browser => [4, 7].map(progress => ({ browser, progress }))))('shows a non-clickable completion indicator beside the chapter count on $browser when saved progress is $progress', async ({ browser, progress }) => {
  entry = { version: 'v1', status: 'reading', progress, notes: '', rating: null, tags: [], collections: [] }
- await mount()
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  for (const surface of [root, bottomRoot]) {
-  expect(within(surface).getByText('Ch. 4 Read')).toBeInTheDocument()
+  const indicator = surface.querySelector('.completion-indicator')
+  expect(indicator).toHaveTextContent(/^Read$/)
+  expect(indicator.previousElementSibling).toHaveClass('chapter-progress')
+  expect(surface.querySelector('.reading-summary')).toContainElement(indicator)
   expect(within(surface).queryByRole('button', { name: /Mark Read/ })).not.toBeInTheDocument()
  }
  expect(network).toHaveBeenCalledTimes(1)
@@ -789,9 +802,9 @@ it('finishes a To Read one-shot when its chapter is marked read', async () => {
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'finished', progress: 1 })
 })
-it.each(['reading', 're_reading'])('pauses and resumes %s in Chrome without changing chapters or personal fields', async status => {
+it.each(['safari', 'chrome'].flatMap(browser => ['reading', 're_reading', 'waiting_for_updates'].map(status => ({ browser, status }))))('pauses and resumes $status in $browser without changing chapters or personal fields', async ({ browser, status }) => {
  entry = { version: 'v1', status, progress: 2, notes: 'Keep', rating: 5, tags: ['mine'], collections: [] }
- await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser: 'chrome' })
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  network.mockImplementation(async ({ data }) => {
   const request = JSON.parse(data)
   expect(Object.keys(request.p_input).sort()).toEqual(['base', 'progress', 'status', 'version'])
@@ -799,15 +812,21 @@ it.each(['reading', 're_reading'])('pauses and resumes %s in Chrome without chan
   entry = { ...entry, ...request.p_input, version: 'v2', readingHistory: [{ action: 'paused_reading', previous_status: previous === 'paused_reading' ? status : previous }] }
   return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
  })
+ for (const surface of [root, bottomRoot]) {
+  const pause = within(surface).getByRole('button', { name: 'Pause Reading' })
+  expect(pause.textContent).toBe(browser === 'safari' ? '' : 'Pause Reading')
+  expect(pause.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+ }
+ expect(findButton('Pause Reading').nextElementSibling).toBe(findButton('Edit'))
  fireEvent.click(findButton('Pause Reading'))
  await waitFor(() => expect(findButton('Resume Reading')).toBeEnabled())
  expect(entry).toMatchObject({ status: 'paused_reading', progress: 2, notes: 'Keep', rating: 5 })
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Resume Reading' }))
- await waitFor(() => expect(entry.status).toBe(status))
+ await waitFor(() => expect(entry.status).toBe(status === 're_reading' ? 're_reading' : 'reading'))
  expect(entry.progress).toBe(2)
 })
-it('keeps pause controls out of Safari bars', async () => {
- entry = { version: 'v1', status: 'reading', progress: 2, notes: '', rating: null, tags: [], collections: [] }
+it.each(['to_read', 'finished'])('keeps pause controls out of Safari bars for %s', async status => {
+ entry = { version: 'v1', status, progress: 2, notes: '', rating: null, tags: [], collections: [] }
  await mount()
  for (const surface of [root, bottomRoot]) expect(within(surface).queryByRole('button', { name: 'Pause Reading' })).not.toBeInTheDocument()
 })
@@ -831,4 +850,151 @@ it('can explicitly copy an older device-only explanation into the shared account
  await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
  fireEvent.click(ratingInfoSave())
  await waitFor(() => expect(accountRatingInfo).toBe('My previous stars'))
+})
+
+it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => ({ browser, fromBottom }))))('edits chapters read from the $browser count (bottom: $fromBottom) without saving personal edits', async ({ browser, fromBottom }) => {
+ entry = { version: 'v1', status: 'reading', progress: 1, notes: 'Saved notes', rating: 4, tags: ['Mine'], collections: [] }
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'progress') entry = { ...entry, ...request.p_input, version: 'v2' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
+ fireEvent.click(findButton('Edit'))
+ const notes = await within(root).findByLabelText('Private Notes')
+ fireEvent.input(notes, { target: { value: 'Unsaved notes' } })
+ await waitFor(() => expect(findButton('Edit')).toBeEnabled())
+ fireEvent.click(within(fromBottom ? bottomRoot : root).getByRole('button', { name: 'Edit Chapters Read' }))
+ const dialog = await within(root).findByRole('dialog', { name: 'Edit Chapter Progress' })
+ const chapters = within(dialog).getByRole('spinbutton', { name: 'Chapters Read' })
+ expect(chapters).toHaveValue(1)
+ expect(chapters).toHaveAttribute('min', '0')
+ expect(chapters).toHaveAttribute('max', '10')
+ await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Save Progress' })).toBeEnabled())
+ fireEvent.input(chapters, { target: { value: '4' } })
+ fireEvent.submit(chapters.closest('form'))
+ await waitFor(() => expect(dialog).not.toHaveAttribute('open'))
+ expect(JSON.parse(network.mock.lastCall[0].data)).toMatchObject({ p_action: 'progress', p_input: { version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading' } })
+ expect(Object.keys(JSON.parse(network.mock.lastCall[0].data).p_input).sort()).toEqual(['base', 'progress', 'status', 'version'])
+ for (const surface of [root, bottomRoot]) {
+  expect(surface.querySelector('.chapter-progress')).toHaveTextContent('Ch. 4 / 10')
+  expect(surface.querySelector('.completion-indicator')).toHaveTextContent('Read')
+ }
+ expect(notes).toHaveValue('Unsaved notes')
+ expect(within(root).getByLabelText('Current Chapter')).toHaveValue(5)
+ expect(entry.notes).toBe('Saved notes')
+})
+
+it('keeps invalid and failed progress edits open for correction and retry', async () => {
+ entry = { version: 'v1', status: 'reading', progress: 1, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ fireEvent.click(findButton('Edit Chapters Read'))
+ const dialog = await within(root).findByRole('dialog', { name: 'Edit Chapter Progress' })
+ const chapters = within(dialog).getByRole('spinbutton', { name: 'Chapters Read' })
+ await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Save Progress' })).toBeEnabled())
+ for (const value of ['', '-1', '2.5', '11']) {
+  fireEvent.input(chapters, { target: { value } })
+  fireEvent.submit(chapters.closest('form'))
+  await waitFor(() => expect(within(dialog).getByRole('alert')).not.toBeEmptyDOMElement())
+  expect(dialog).toHaveAttribute('open')
+  expect(network).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Save Progress' })).toBeEnabled())
+ }
+ network.mockResolvedValueOnce({ status: 503, responseText: '{}' })
+ fireEvent.input(chapters, { target: { value: '4' } })
+ fireEvent.submit(chapters.closest('form'))
+ await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('Could not save'))
+ expect(dialog).toHaveAttribute('open')
+ expect(chapters).toHaveValue(4)
+ expect(root.querySelector('.chapter-progress')).toHaveTextContent('Ch. 1 / 10')
+ network.mockImplementationOnce(async ({ data }) => ({ status: 200, responseText: JSON.stringify({ entry: { ...entry, ...JSON.parse(data).p_input, version: 'v2' }, collections: [] }) }))
+ await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Save Progress' })).toBeEnabled())
+ fireEvent.submit(chapters.closest('form'))
+ await waitFor(() => expect(dialog).not.toHaveAttribute('open'))
+ expect(root.querySelector('.chapter-progress')).toHaveTextContent('Ch. 4 / 10')
+})
+
+it.each(['Cancel', 'Escape'])('dismisses the chapter editor with %s without saving', async dismissal => {
+ entry = { version: 'v1', status: 'reading', progress: 2, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ fireEvent.click(findButton('Edit Chapters Read'))
+ const dialog = await within(root).findByRole('dialog', { name: 'Edit Chapter Progress' })
+ await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeEnabled())
+ fireEvent.input(within(dialog).getByRole('spinbutton'), { target: { value: '5' } })
+ if (dismissal === 'Cancel') fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+ else fireEvent(dialog, new Event('cancel', { cancelable: true }))
+ await waitFor(() => expect(dialog).not.toHaveAttribute('open'))
+ expect(network).toHaveBeenCalledTimes(1)
+ expect(root.querySelector('.chapter-progress')).toHaveTextContent('Ch. 2 / 10')
+})
+
+it.each([{ status: 'to_read', progress: 0, value: '3', expected: 'reading' }, { status: 'finished', progress: 10, value: '3', expected: 'reading' }, { status: 'paused_reading', progress: 2, value: '3', expected: 'paused_reading' }, { status: 're_reading', progress: 2, value: '0', expected: 're_reading' }])('keeps a consistent reading status when changing $status progress to $value', async ({ status, progress, value, expected }) => {
+ entry = { version: 'v1', status, progress, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ fireEvent.click(findButton('Edit Chapters Read'))
+ const dialog = await within(root).findByRole('dialog', { name: 'Edit Chapter Progress' })
+ await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Save Progress' })).toBeEnabled())
+ const input = within(dialog).getByRole('spinbutton')
+ fireEvent.input(input, { target: { value } })
+ fireEvent.submit(input.closest('form'))
+ await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ progress: Number(value), status: expected })
+})
+
+it('closes the progress popup so conflicting edits can be reviewed', async () => {
+ entry = { version: 'v1', status: 'reading', progress: 1, notes: '', rating: null, tags: [], collections: [] }
+ await mount()
+ fireEvent.click(findButton('Edit Chapters Read'))
+ const dialog = await within(root).findByRole('dialog', { name: 'Edit Chapter Progress' })
+ await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Save Progress' })).toBeEnabled())
+ const base = { status: 'reading', progress: 2 }, local = { status: 'reading', progress: 4 }
+ network.mockResolvedValueOnce({ status: 409, responseText: JSON.stringify({ code: '40001', details: JSON.stringify({ base, merged: local, conflicts: [{ field: 'reading', base: { status: 'reading', progress: 1 }, saved: base, local }] }) }) })
+ const input = within(dialog).getByRole('spinbutton')
+ fireEvent.input(input, { target: { value: '4' } })
+ fireEvent.submit(input.closest('form'))
+ const review = await within(root).findByRole('region', { name: 'Review Conflicting Edits' })
+ expect(dialog).not.toHaveAttribute('open')
+ expect(review).toBeVisible()
+ expect(findButton('Edit Chapters Read')).toBeDisabled()
+ expect(input).toHaveValue(4)
+})
+
+it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => ({ browser, fromBottom }))))('quick-saves an unsaved work as To Read on $browser (bottom: $fromBottom)', async ({ browser, fromBottom }) => {
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'save') entry = { ...request.p_input, id: 'quick-entry', version: 'v1' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
+ const surface = fromBottom ? bottomRoot : root
+ const add = within(surface).getByRole('button', { name: 'Add to Library' })
+ const toRead = within(surface).getByRole('button', { name: 'To Read', exact: true })
+ expect(add.nextElementSibling).toBe(toRead)
+ fireEvent.click(toRead)
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ expect(entry).toMatchObject({ status: 'to_read', progress: 0, notes: '', tags: [], collections: [], metadata: { title: 'Test' } })
+ for (const bar of [root, bottomRoot]) expect(within(bar).queryByRole('button', { name: 'To Read', exact: true })).not.toBeInTheDocument()
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).not.toHaveProperty('chapter_read')
+})
+
+it.each(['safari', 'chrome'].flatMap(browser => ['/tags/Naruto/works', '/users/Reader/pseuds/Reader', '/works/search', '/users/Reader/bookmarks'].map(path => ({ browser, path }))))('mounts reusable work tile bars on $browser $path without duplicates', async ({ browser, path }) => {
+ document.body.innerHTML = (await import('../../server/ao3/fixtures/series.html?raw')).default
+ document.querySelector('.series.work.index').className = 'work index'
+ const first = document.querySelector('li.work.blurb')
+ first.after(first.cloneNode(true))
+ const surfaces = new Map()
+ const attach = vi.mocked(Element.prototype.attachShadow).getMockImplementation()
+ vi.mocked(Element.prototype.attachShadow).mockImplementation(function (options) { const surface = attach.call(this, options); surfaces.set(this.id, surface); return surface })
+ await mountLibrary(document, `https://archiveofourown.org${path}`, { browser })
+ const hosts = [...document.querySelectorAll('[data-work-tile]')]
+ expect(hosts).toHaveLength(3)
+ expect(new Set(hosts.map(host => host.id)).size).toBe(3)
+ expect(document.getElementById('ao3-library-companion')).toBeNull()
+ for (const host of hosts) {
+  expect(within(surfaces.get(host.id)).getByRole('button', { name: 'Add to Library' })).toBeVisible()
+  expect(within(surfaces.get(host.id)).getByRole('button', { name: 'To Read', exact: true })).toBeVisible()
+ }
+ await mountLibrary(document, `https://archiveofourown.org${path}`, { browser })
+ expect(document.querySelectorAll('[data-work-tile]')).toHaveLength(3)
+ expect(network).toHaveBeenCalledTimes(3)
 })

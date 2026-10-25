@@ -13,7 +13,7 @@ it('builds a standalone installable file with a leading Userscripts header and p
   const script = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
   expect(script.startsWith('// ==UserScript==\n')).toBe(true)
   expect(script).toContain('// @inject-into content')
-  expect(script).toContain('// @match https://archiveofourown.org/works/*')
+  expect(script).toContain('// @match https://archiveofourown.org/*')
   expect(script).toContain('// @grant GM.xmlHttpRequest')
   expect(script).not.toMatch(/__SUPABASE_|__APP_ORIGIN__|do_not_embed_this_canary|@require|@match \*/)
   expect(script).not.toContain('process.env.NODE_ENV')

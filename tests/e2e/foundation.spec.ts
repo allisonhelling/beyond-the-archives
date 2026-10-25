@@ -84,12 +84,10 @@ test('Add controls are available and layouts fit the viewport', async ({ page })
     await add.click()
     await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
   } else {
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Add Story', exact: true })).toBeEnabled()
-    await expect(page.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
-    await expect(page.locator('.add-menu button')).toHaveCount(2)
-    await expect(page.locator('.add-option-label svg')).toHaveCount(2)
-    await page.locator('.app-header .brand').click()
+    const add = page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true })
+    await expect(add).toHaveAttribute('href', '/add?mode=finished')
+    await add.click()
+    await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
     await expect(page.locator('.add-menu')).toHaveCount(0)
   }
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
@@ -120,8 +118,7 @@ test('large imports show persisted results and fit the viewport after returning 
     await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
     await page.getByRole('link', { name: 'Import History from AO3', exact: true }).click()
   } else {
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await page.getByRole('button', { name: 'Import History from AO3', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Main Navigation' }).getByRole('link', { name: 'Import', exact: true }).click()
   }
   await expect(page.getByRole('heading', { name: 'Mass Import from AO3', exact: true })).toBeVisible()
   await page.getByLabel('AO3 URLs', { exact: true }).fill(Array.from({ length: 110 }, (_, n) => `https://archiveofourown.org/works/${n + 1}`).join('\n') + '\nhttps://example.com')

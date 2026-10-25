@@ -619,3 +619,73 @@ it('places manual bookmark status below chapter dates, disables date checks, and
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', expect.objectContaining({ autoImport: true, readingStatus: 'reading' })))
  expect(mocks.command.mock.calls.find(([action]) => action === 'start')![1]).not.toHaveProperty('checkChapterDates')
 })
+it('preserves a legacy safety-limit scan and explains that recovery requires an updated companion', async () => {
+ mocks.command.mockImplementation(async action => ({ state: { ...ready, status: action === 'discard' ? 'discarded' : 'paused', error: 'Reached the 500-page safety limit. Discard this incomplete scan.', attention: 'page_error' } }))
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ await screen.findByRole('dialog', { name: 'AO3 Scan Limit Reached' })
+ fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+ expect(screen.getByRole('button', { name: 'Prepare Saved Batch' })).toBeDisabled()
+ expect(screen.getByText(/Rebuild and reload AO3 Library Companion to recover/)).toBeVisible()
+ expect(screen.queryByRole('button', { name: 'Resume Scan' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Import Scanned Works' })).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button', { name: 'Discard Scan' }))
+ expect(await screen.findByText('Scan discarded.')).toBeVisible()
+ expect(mocks.command).toHaveBeenCalledWith('discard', { scanId: 'scan' })
+})
+
+it('prepares a saved legacy batch through the updated companion', async () => {
+ mocks.command.mockImplementation(async action => ({ state: { ...ready, batchVersion: 1, status: action === 'prepare-batch' ? 'ready' : 'paused', hasMore: action === 'prepare-batch', error: action === 'prepare-batch' ? '' : 'Reached the 500-page safety limit. Discard this incomplete scan.' } }))
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ await screen.findByRole('dialog')
+ fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Prepare Saved Batch' }))
+ expect(await screen.findByRole('button', { name: 'Import Batch and Continue' })).toBeEnabled()
+ expect(mocks.command).toHaveBeenCalledWith('prepare-batch', { scanId: 'scan' })
+})
+
+it('imports only the current batch, retries a failure safely, and continues only after all pages save', async () => {
+ const state = { ...ready, pages: 502, batchStart: 500, hasMore: true }
+ mocks.command.mockImplementation(async (action, options) => {
+  if (action === 'page') return { rows: [{ title: `Work ${options.page}`, link: `https://archiveofourown.org/works/${options.page}`, source_list: 'marked_for_later' }] }
+  return { state: action === 'finish-batch' ? { ...state, status: 'running', batchStart: 502, hasMore: false } : state }
+ })
+ mocks.submit.mockResolvedValueOnce({ imported: 1, kept: 0 }).mockRejectedValueOnce(new Error('Connection lost'))
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Batch and Continue' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
+ expect(mocks.command.mock.calls.some(([action]) => action === 'finish-batch')).toBe(false)
+ fireEvent.click(screen.getByRole('button', { name: 'Import Batch and Continue' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish-batch', { scanId: 'scan', batchStart: 500, batchEnd: 502 }))
+ expect(mocks.command.mock.calls.filter(([action]) => action === 'page').map(([, options]) => options.page)).toEqual([501, 502, 501, 502])
+ expect(mocks.reports).not.toHaveBeenCalledWith(1, state)
+ expect(screen.queryByRole('button', { name: 'Import Batch and Continue' })).not.toBeInTheDocument()
+})
+
+it('does not fetch pending series while importing a batch of direct list works', async () => {
+ const state = { ...ready, hasMore: true, seenSeries: [seriesUrl], seriesReviewVersion: 1, seriesBehavior: 'all' }
+ mocks.command.mockImplementation(async (action, options) => {
+  if (action === 'page') return { rows: [{ title: `Work ${options.page}`, link: `https://archiveofourown.org/works/${options.page}`, source_list: 'marked_for_later' }] }
+  return { state: { ...state, status: action === 'finish-batch' ? 'running' : 'ready' } }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Batch and Continue' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish-batch', { scanId: 'scan', batchStart: 0, batchEnd: 2 }))
+ expect(mocks.submit).toHaveBeenCalledTimes(2)
+ expect(mocks.preview).not.toHaveBeenCalled()
+})
+
+it('reviews only saved series works in a later batch and leaves pending series untouched', async () => {
+ const preview = { seriesId: 99, normalizedUrl: seriesUrl, title: 'Saved Series', description: '', works: [2, 3].map(id => ({ workId: id, url: `https://archiveofourown.org/works/${id}`, title: `Work ${id}`, position: id, authors: [], summary: '', tags: [], wordCount: null, chapters: '1/1', complete: true })) }
+ const state = { ...ready, batchStart: 500, pages: 501, hasMore: true, seenSeries: [seriesUrl, 'https://archiveofourown.org/series/100'], seriesReviewVersion: 1, seriesBehavior: 'choose' }
+ mocks.command.mockImplementation(async action => {
+  if (action === 'page') return { seriesUrl, seriesPreview: preview, rows: [2, 3].map(id => ({ title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'marked_for_later' })) }
+  return { state: { ...state, status: action === 'finish-batch' ? 'running' : 'ready' } }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Batch and Continue' }))
+ fireEvent.click(await screen.findByRole('checkbox', { name: 'Part 2: Work 2' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Batch and Continue' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish-batch', { scanId: 'scan', batchStart: 500, batchEnd: 501 }))
+ expect(mocks.submit.mock.calls.map(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([[2]])
+ expect(mocks.preview).not.toHaveBeenCalled()
+})

@@ -180,7 +180,7 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
 const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'],] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
-  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={() => <div className="page-heading"><div><h1>Currently Reading</h1></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
+  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={actions => <div className="page-heading library-heading"><div className="library-title-row"><h1>Currently Reading</h1><div className="library-heading-actions">{actions}</div></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
   return <LibraryContent />
 }
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nDelete or Backspace: delete selected collections; non-empty collections ask for confirmation.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
@@ -370,7 +370,7 @@ function LibraryContent() {
     })
 
   const hiddenButton = (descriptionId?: string) => <button aria-describedby={descriptionId} type="button" className="button secondary collection-hidden" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>
-  return <><LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={() => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
+  return <><LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={actions => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection Selection">
       {layout === 'mobile' ? hiddenButton() : <Tooltip description="View Hidden">{hiddenButton}</Tooltip>}
       <button type="button" className="button secondary collection-select" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
@@ -379,6 +379,7 @@ function LibraryContent() {
     </div>}
     <div className="library-heading-actions">
       <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
+      {actions}
       <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
     </div></div></div></div>
     <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = new URLSearchParams(previous); next.set('shelf', key); next.set('page', '1'); return next })} />

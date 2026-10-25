@@ -83,7 +83,7 @@ describe('private app access and navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
-  it('provides mobile navigation and an enabled bulk import option', async () => {
+  it('provides mobile navigation and a direct header Add Story link', async () => {
     auth.session = fakeSession
     const user = userEvent.setup()
     render(<App />)
@@ -95,9 +95,12 @@ describe('private app access and navigation', () => {
     await user.click(within(mobileNav).getByRole('link', { name: 'Library' }))
     expect(await screen.findByRole('heading', { name: 'Your Library' })).toBeVisible()
     expect(mobileNav).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Add' }))
-    expect(screen.getByRole('button', { name: 'Add Story' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /Import History from AO3/ })).toBeEnabled()
+    const add = screen.getByRole('link', { name: 'Add Story' })
+    expect(add).toHaveAttribute('href', '/add?mode=finished')
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Add to Your Library')).not.toBeInTheDocument()
+    await user.click(add)
+    expect(await screen.findByRole('heading', { name: 'Add Story' })).toBeVisible()
   })
   it('backs out of collection selection and then editing with successive Escape presses', async () => {
     auth.session = fakeSession

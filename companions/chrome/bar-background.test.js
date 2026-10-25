@@ -59,8 +59,8 @@ it('binds RPCs to the selected environment and preserves only drafts from stale 
  expect(fetcher).toHaveBeenCalledWith(`${local.backend}/rest/v1/rpc/userscript_library`, expect.objectContaining({ headers: expect.objectContaining({ apikey: 'local-public' }) }))
 })
 
-it('rejects messages from other sites, extensions, frames, and unsupported AO3 pages', async () => {
- for (const patch of [{ id: 'other' }, { frameId: 1 }, { tab: undefined }, { url: 'https://evil.example/works/123' }, { url: 'https://archiveofourown.org/users/alice/bookmarks' }]) {
+it('rejects messages from other sites, extensions, frames, and insecure AO3 pages', async () => {
+ for (const patch of [{ id: 'other' }, { frameId: 1 }, { tab: undefined }, { url: 'https://evil.example/works/123' }, { url: 'http://archiveofourown.org/users/alice/bookmarks' }]) {
   expect(await send({ action: 'rpc', input }, { ...sender, ...patch })).toBeUndefined()
  }
  expect(fetcher).not.toHaveBeenCalled()
@@ -88,4 +88,13 @@ it('supports series controls and individual work controls on the same series pag
  }
  expect(await send({ action: 'rpc', input: { ...input, p_action: 'series_save' } }, source)).toMatchObject({ ok: false })
  expect(fetcher).toHaveBeenCalledTimes(3)
+})
+
+it.each(['/tags/Naruto/works', '/users/alice/pseuds/alice', '/works/search', '/users/alice/bookmarks'])('supports individual work controls on listing page %s', async path => {
+ const source = { ...sender, url: `https://archiveofourown.org${path}` }
+ expect(await send({ action: 'configuration' }, source)).toMatchObject({ ok: true })
+ expect(await send({ action: 'rpc', input }, source)).toMatchObject({ ok: true })
+ expect(await send({ action: 'rpc', input: { ...input, p_action: 'save', p_input: { status: 'to_read', progress: 0 } } }, source)).toMatchObject({ ok: true })
+ expect(await send({ action: 'rpc', input: { ...input, p_action: 'series_save' } }, source)).toMatchObject({ ok: false })
+ expect(fetcher).toHaveBeenCalledTimes(2)
 })

@@ -63,3 +63,46 @@ test('screen presets and custom sizes apply to tile, info-page and local develop
  await toolbar.getByRole('button', { name: 'Mobile · 430px', exact: true }).click()
  await expect.poll(() => page.frameLocator('iframe[title="Local App Viewport"]').locator('body').evaluate(node => node.ownerDocument.defaultView!.innerWidth)).toBe(430)
 })
+
+test('library and reading actions fit their headers and filters across viewport sizes', async ({ page }) => {
+ const tables = await fixture(page)
+ for (let index = 1; index <= 113; index++) {
+  tables.works.push({ id: `layout-work-${index}`, ao3_work_id: index, title: `Layout work ${index}`, verified_chapters: {} })
+  tables.library_entries.push({ id: `layout-entry-${index}`, work_id: `layout-work-${index}`, reading_status: 'reading', last_read_chapter: 1, notes: '', original_url: `https://archiveofourown.org/works/${index}`, metadata_overrides: { published_chapters: 10, total_chapters: 10, fandoms: [index % 2 ? 'Naruto' : 'Supernatural'] } })
+ }
+ await page.goto('/library?size=50'); await login(page)
+ for (const width of [1440, 1024, 430, 375, 320]) {
+  await page.setViewportSize({ width, height: 900 })
+  const header = page.locator('.library-heading-actions'), toolbar = page.locator('.reading-toolbar')
+  const refresh = header.getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })
+  await expect(refresh).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Mass Refresh All Stories on Page' })).toHaveCount(0)
+  await expect(header.getByRole('link', { name: 'Add Story', exact: true })).toHaveCount(0)
+  await expect(page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true })).toBeVisible({ visible: width > 1100 })
+  const series = (await toolbar.getByRole('button', { name: 'Show Series', exact: true }).boundingBox())!
+  const filters = (await toolbar.getByRole('button', { name: 'Filters', exact: true }).boundingBox())!
+  expect(series.y).toBeCloseTo(filters.y, 0)
+  expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
+  if (width > 1100) {
+   const controls = await toolbar.locator(':scope > .custom-dropdown, :scope > .suggestion-search, :scope > .fandom-select, :scope > button').all()
+   for (const control of controls) expect((await control.boundingBox())!.y).toBeCloseTo(series.y, 0)
+  }
+  const status = page.locator('.pagination-inline [role=status]')
+  await expect(status).toContainText('1–50 of 113 works')
+  await expect(status).toHaveCSS('white-space', 'nowrap')
+  expect(await status.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+ }
+ await page.locator('.fandom-trigger').click()
+ const rows = page.locator('.fandom-options .check-label')
+ await expect(rows).toHaveCount(2)
+ await expect(rows.nth(1)).toHaveCSS('border-top-width', '1px')
+ await expect(rows.nth(1)).toHaveCSS('padding-top', '7px')
+ await page.goto('/reading')
+ await expect(page.getByRole('heading', { name: 'Currently Reading', exact: true })).toBeVisible()
+ await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+ await expect(page.locator('.reading-toolbar').getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
+ await page.locator('.library-heading-actions').getByRole('button', { name: 'Sort', exact: true }).click()
+ await page.getByRole('option', { name: 'Alphabetical', exact: true }).click()
+ await expect(page).toHaveURL(/sort=alpha/)
+})

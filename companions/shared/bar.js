@@ -1,18 +1,24 @@
+import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
-import { seriesWorkMetadata } from '../../src/features/library/series/series'
-import { blankMetadata, parseLines, statuses, validateProgress } from '../../src/features/library/model'
-import { captureChapterRead, collectWorkPage, readPage } from './page'
+import { parseLines, statuses, validateProgress } from '../../src/features/library/model'
+import { captureChapterRead, collectWorkPage, readPage, readWorkTiles } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
 
 export async function mountLibrary(doc = document, href = location.href, options = {}) {
  const { tile = null, api, browser = 'safari', config } = options
+ const readingLabel = browser === 'safari' ? 'Reading' : 'Currently Reading'
  const backendUrl = config?.backend ?? __SUPABASE_URL__, appOrigin = config?.appOrigin ?? __APP_ORIGIN__, publicKey = config?.publicKey ?? __SUPABASE_KEY__
  const page = tile?.page ?? readPage(doc, href)
- const hostId = tile ? `ao3-library-work-${page.work}` : 'ao3-library-companion'
- if (!page || doc.getElementById(hostId)) return
+ if (!page) {
+  for (const workTile of readWorkTiles(doc, href)) await mountLibrary(doc, workTile.url, { ...options, tile: workTile })
+  return
+ }
+ const baseId = tile ? `ao3-library-work-${page.work}` : 'ao3-library-companion'
+ if (tile ? tile.element.querySelector(':scope > [data-work-tile]') : doc.getElementById(baseId)) return
+ const hostId = doc.getElementById(baseId) ? `${baseId}-${doc.querySelectorAll('[data-work-tile]').length}` : baseId
  const host = doc.createElement('div')
  host.id = hostId
  host.dataset.browser = browser
@@ -83,15 +89,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   for (const d of paths) { const path = doc.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path) }
   parent.append(svg); return svg
  }
- function infoHelp(parent, title, description, summaryText) {
+ function infoHelp(parent, title, description) {
   const info = node('details', '', parent); info.className = 'field-info'
   const summary = node('summary', '', info); summary.setAttribute('aria-label', `About ${title}`)
-  if (summaryText) {
-   summary.textContent = summaryText; summary.title = description; info.classList.add('chapter-progress')
-  } else {
-   const infoIcon = icon(['M12 11v6', 'M12 7h.01'], summary)
-   const circle = doc.createElementNS(infoIcon.namespaceURI, 'circle'); circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '10'); infoIcon.prepend(circle)
-  }
+  const infoIcon = icon(['M12 11v6', 'M12 7h.01'], summary)
+  const circle = doc.createElementNS(infoIcon.namespaceURI, 'circle'); circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '10'); infoIcon.prepend(circle)
   node('span', description, info)
  }
  function clearConflict() {
@@ -223,15 +225,72 @@ export async function mountLibrary(doc = document, href = location.href, options
    syncEditorProgress?.(); await reconcileDraft()
   }
  }
+ let progressEditor = null, progressSurface = root
+ function closeProgressEditor() {
+  progressEditor.dialog.close()
+  requestAnimationFrame(() => progressSurface.querySelector('.chapter-progress')?.focus())
+ }
+ function openProgressEditor(surface) {
+  progressSurface = surface
+  if (!progressEditor) {
+   const dialog = node('dialog', '', section); dialog.className = 'progress-dialog'; dialog.setAttribute('aria-label', 'Edit Chapter Progress')
+   const form = node('form', '', dialog), fieldset = node('fieldset', '', form)
+   node('h3', 'Edit Chapter Progress', fieldset)
+   const label = node('label', 'Chapters Read', fieldset), input = node('input', '', label)
+   input.type = 'number'; input.min = '0'; input.step = '1'; input.required = true; input.setAttribute('aria-label', 'Chapters Read')
+   const error = node('p', '', fieldset); error.setAttribute('role', 'alert')
+   const actions = node('div', '', fieldset); actions.className = 'row'
+   const save = node('button', 'Save Progress', actions); save.type = 'submit'
+   button('Cancel', closeProgressEditor, actions)
+   progressEditor = { dialog, input, error }
+   dialog.addEventListener('cancel', event => { event.preventDefault(); if (!busy) closeProgressEditor() })
+   dialog.addEventListener('click', event => {
+    if (event.target !== dialog || busy) return
+    const bounds = dialog.getBoundingClientRect()
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeProgressEditor()
+   })
+   form.addEventListener('submit', event => {
+    event.preventDefault()
+    if (busy || pendingConflict) return
+    void run(async () => {
+     error.textContent = ''; fieldset.disabled = true; dialog.setAttribute('aria-busy', 'true')
+     try {
+      if (!input.value.trim()) throw new Error('Enter chapters read.')
+      const value = validateProgress(Number(input.value), page.metadata)
+      const status = (entry.status === 'to_read' && value > 0) || (entry.status === 'finished' && value < entry.progress) ? 'reading' : entry.status
+      await progress(value, status)
+      closeProgressEditor()
+     } catch (failure) {
+      error.textContent = failure instanceof Error ? failure.message : 'Could not save progress. Try again.'
+      if (failure instanceof EditConflict) closeProgressEditor()
+      throw failure
+     } finally { fieldset.disabled = false; dialog.setAttribute('aria-busy', 'false') }
+    })
+   })
+  }
+  const { dialog, input, error } = progressEditor
+  input.value = String(entry.progress); error.textContent = ''
+  const maximum = page.metadata.published_chapters ?? page.metadata.total_chapters
+  if (maximum !== null) input.max = String(maximum)
+  else input.removeAttribute('max')
+  dialog.showModal(); input.focus(); input.select()
+ }
+ function renderReadingToggle(parent) {
+  if (['reading', 're_reading', 'waiting_for_updates', 'paused_reading'].includes(entry.status)) {
+   const paused = entry.status === 'paused_reading'
+   const label = paused ? 'Resume Reading' : 'Pause Reading'
+   const toggle = button(browser === 'safari' ? '' : label, () => progress(entry.progress, paused ? resumeReadingStatus({ reading_history: entry.readingHistory }) : 'paused_reading'), parent)
+   toggle.className = `reading-toggle${browser === 'safari' ? ' settings-button' : ''}`
+   toggle.setAttribute('aria-label', label); toggle.title = label
+   toggle.prepend(icon(paused ? ['m9 5 11 7-11 7V5Z'] : ['M6 4h4v16H6z', 'M14 4h4v16h-4z'], toggle))
+  }
+ }
  function renderProgress(parent, summaryParent = parent) {
   const summary = node('div', '', summaryParent); summary.className = 'row reading-summary'
-  node('strong', entry.status === 'reading' ? 'Currently Reading' : statuses[entry.status], summary)
+  node('strong', entry.status === 'reading' ? readingLabel : statuses[entry.status], summary)
   const bullet = node('span', '•', summary); bullet.className = 'status-bullet'; bullet.dataset.status = entry.status; bullet.setAttribute('aria-hidden', 'true')
-  infoHelp(summary, 'chapters read', 'chapters read', `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`)
-  if (browser === 'chrome' && ['reading', 're_reading', 'waiting_for_updates', 'paused_reading'].includes(entry.status)) {
-   const paused = entry.status === 'paused_reading'
-   button(paused ? 'Resume Reading' : 'Pause Reading', () => progress(entry.progress, paused ? resumeReadingStatus({ reading_history: entry.readingHistory }) : 'paused_reading'), parent)
-  }
+  const chapterCount = `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`
+  const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), summary); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
   if (!page.current) return
   if (entry.status === 'finished') {
    const reread = button('Re-Read', () => progress(page.current - 1, 're_reading'), parent)
@@ -241,9 +300,9 @@ export async function mountLibrary(doc = document, href = location.href, options
   }
   const read = entry.progress >= page.current
   if (read) {
-   const indicator = node('span', '', parent); indicator.className = 'completion-indicator'
+   const indicator = node('span', '', summary); indicator.className = 'completion-indicator'
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
-   node('span', `Ch. ${page.current} Read`, indicator)
+   node('span', 'Read', indicator)
   } else {
    const final = page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
    const complete = button(final ? 'Finish Fic' : 'Mark Read', () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading', true), parent)
@@ -267,7 +326,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   footer.classList.toggle('inline-instructions', inlineInstructions)
   if (inlineInstructions) toolbar.querySelector('.toolbar-progress').append(footer)
   else section.append(footer)
-  if (entry && !page.series) renderProgress(bottomBar)
+  if (entry && !page.series) { renderProgress(bottomBar); renderReadingToggle(bottomBar) }
   else renderBar(bottomBar)
  }
  function renderBar(parent) {
@@ -277,10 +336,18 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (config?.label) { const label = node('span', config.label, actions); label.className = 'environment-label'; label.setAttribute('aria-label', `Library environment: ${config.label}`) }
   if (!connection) { panelButton('Connect Library', 'connection', showConnection, actions); return }
   if (!loaded) button('Load Saved Entry', load, center)
-  else if (!entry) panelButton('Add to Library', 'editor', openEditor, center)
+  else if (!entry) {
+   panelButton('Add to Library', 'editor', openEditor, center)
+   if (!page.series) button('To Read', async () => {
+    if (!tile) Object.assign(page, await collectWorkPage(doc, href))
+    accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }))
+    await syncProgressDraft()
+    message.textContent = 'Saved'
+   }, center)
+  }
   else {
    if (page.series) node('span', 'Series saved', center)
-   else renderProgress(actions, center)
+   else { renderProgress(actions, center); renderReadingToggle(actions) }
    const edit = panelButton('Edit', 'editor', openEditor, actions); edit.className = 'edit-button'
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
@@ -495,7 +562,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    infoHelp(control, title, description)
   }
   const status = field('Reading Status', 'select', 'status')
-  for (const key of [...new Set(['to_read', 'reading', 'paused_reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? 'Currently Reading' : statuses[key], status); option.value = key }
+  for (const key of [...new Set(['to_read', 'reading', 'paused_reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? readingLabel : statuses[key], status); option.value = key }
   status.value = draft.status
   help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current Chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
@@ -593,11 +660,6 @@ export async function mountLibrary(doc = document, href = location.href, options
  })
  if (connection) await run(load)
  if (page.series) {
-  for (const work of page.series.works) {
-   const element = [...doc.querySelectorAll('.series.work.index li.work')].find(item => [...item.querySelectorAll('h4.heading a')].some(link => new URL(link.getAttribute('href'), href).href === work.url))
-   if (!element) continue
-   const automaticMetadata = seriesWorkMetadata(work, page.series)
-   await mountLibrary(doc, work.url, { ...options, tile: { element, page: { work: work.workId, metadata: { ...blankMetadata, ...automaticMetadata }, automaticMetadata, chapters: {}, current: null, defaults: { status: 'to_read', chapter: 1, chapterFinished: false } } } })
-  }
+  for (const workTile of readWorkTiles(doc, href, page.series)) await mountLibrary(doc, workTile.url, { ...options, tile: workTile })
  }
 }

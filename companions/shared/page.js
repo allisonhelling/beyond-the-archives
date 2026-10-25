@@ -1,4 +1,5 @@
-import { parseSeries } from '../../src/features/imports/ao3-series'
+import { seriesWorkMetadata } from '../../src/features/library/series/series'
+import { parseSeries, parseWorkBlurbs } from '../../src/features/imports/ao3-series'
 import { load } from 'cheerio'
 import { extractWorkMetadata } from '../../src/features/imports/ao3-metadata.ts'
 import { blankMetadata, initialProgress, parseWorkUrl } from '../../src/features/library/model'
@@ -40,7 +41,8 @@ export function readPage(doc, href) {
  try { url = new URL(href); identity = parseWorkUrl(href) } catch { return null }
  if (url.origin !== 'https://archiveofourown.org' || !url.pathname.startsWith('/works/') || !doc.querySelector('h2.title')) return null
  // Parse only the metadata sections; chapter text and account forms stay out.
- const html = [...doc.querySelectorAll('h2.title, h3.byline, .summary.module, dl.work.meta, #selected_id')].filter(node => !node.closest('#chapters, .chapter')).map(node => node.outerHTML).join('')
+ // AO3 nests its chapter selector inside a navigation li.chapter, not story text.
+ const html = [...doc.querySelectorAll('h2.title, h3.byline, .summary.module, dl.work.meta, #selected_id')].filter(node => node.id === 'selected_id' || !node.closest('#chapters, .chapter')).map(node => node.outerHTML).join('')
  const { metadata: captured, chapters: chapterMap } = extractWorkMetadata(load(html), href)
  const published = captured.published_chapters ?? null
  const total = captured.total_chapters ?? null
@@ -68,4 +70,15 @@ export async function collectWorkPage(doc, href, fetcher = globalThis.fetch) {
  // An empty summary block on this chapter must not erase the fetched work summary.
  if (first.automaticMetadata.summary) Object.assign(automaticMetadata, { summary: first.automaticMetadata.summary, summary_html: first.automaticMetadata.summary_html })
  return { ...current, metadata: workMetadata(automaticMetadata), automaticMetadata }
+}
+
+/** Reuse series tile metadata on every AO3 page that lists works. */
+export function readWorkTiles(doc, href, series) {
+ if (new URL(href).origin !== 'https://archiveofourown.org') return []
+ return [...doc.querySelectorAll('#main li.work.blurb, #main li.bookmark.blurb')].flatMap(element => {
+  const work = parseWorkBlurbs(element.outerHTML, href, series?.seriesId)[0]
+  if (!work) return []
+  const automaticMetadata = seriesWorkMetadata(work, series)
+  return [{ element, url: work.url, page: { work: work.workId, metadata: automaticMetadata, automaticMetadata, chapters: {}, current: null, defaults: { status: 'to_read', chapter: 1, chapterFinished: false } } }]
+ })
 }

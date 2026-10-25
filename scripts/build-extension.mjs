@@ -71,7 +71,7 @@ await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  externally_connectable: { matches: Object.values(profiles).map(profile => `${profile.appOrigin}/*`) },
  options_ui: { page: 'options.html', open_in_tab: true },
  background: { service_worker: 'background.js', type: 'module' },
- content_scripts: [{ matches: ['https://archiveofourown.org/works/*', 'https://archiveofourown.org/series/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }],
+ content_scripts: [{ matches: ['https://archiveofourown.org/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }],
  action: { default_title: 'Choose Hosted or Local Library' },
 }, null, 2) + '\n')
 console.log(`Extension built in ${outDir} for ${appOrigin}.${values.local ? ` Local extension ID: ${localExtensionId}` : ''}`)

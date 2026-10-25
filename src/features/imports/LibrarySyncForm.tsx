@@ -1,3 +1,4 @@
+import { isLibrarySyncSafetyLimit } from './library-sync-state'
 import { mergeSeriesPreviews, parseSeriesUrl, type SeriesPreview } from './urls'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior } from './series-import-preferences'
@@ -54,8 +55,8 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  const interval = delayDraft ?? String(state?.delaySeconds ?? 15)
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
  const [conflicts, setConflicts] = useState<CsvConflict[]>([])
- const [seriesReview, setSeriesReview] = useState<{ scanId: string; text: string; previews: SeriesPreview[] } | null>(null)
- const selection = useRef<{ scanId: string; ids: Set<number> } | null>(null)
+ const [seriesReview, setSeriesReview] = useState<{ scanId: string; batchStart: number; text: string; previews: SeriesPreview[] } | null>(null)
+ const selection = useRef<{ scanId: string; batchStart: number; ids: Set<number> } | null>(null)
  const pending = useRef(false)
  useEffect(() => {
   if (sampleMode) void connectExtension().then(connected => { if (connected) return refresh() }).catch(() => {})
@@ -86,18 +87,19 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  }
  async function requestSave() {
   if (!state || pending.current) return
-  if (!state.seenSeries?.length || selection.current?.scanId === state.id) { await save(); return }
+  if (!state.seenSeries?.length || (selection.current?.scanId === state.id && selection.current.batchStart === (state.batchStart ?? 0))) { await save(); return }
   pending.current = true; setBusy(true); setError(''); setMessage('')
   try {
    if (state.seriesReviewVersion !== 1) throw new Error('This scan predates series work selection. Discard it and run a new scan with the updated extension.')
-   const links = new Set(state.seenSeries)
+   const links = new Set<string>()
    const all = (state.seriesBehavior ?? seriesBehavior.behavior) === 'all'
    const seriesIds = new Set<number>()
    const previews = new Map<number, SeriesPreview[]>()
    // Inspect every checkpoint before importing anything; direct works stay included.
-   for (let offset = 0; offset < state.pages; offset++) {
+   for (let offset = state.batchStart ?? 0; offset < state.pages; offset++) {
     const reply = await librarySyncCommand('page', { page: (state.startPage ?? 1) + offset, scanId: state.id })
     if (reply.seriesUrl) {
+     links.add(reply.seriesUrl)
      const identity = parseSeriesUrl(reply.seriesUrl)
      const works = readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork & { workId: number } => typeof row.workId === 'number')
      if (all) for (const row of works) seriesIds.add(row.workId)
@@ -120,15 +122,15 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     }
     for (const row of readAo3Rows(reply.rows ?? [])) if (typeof row.workId === 'number') links.add(row.url)
    }
-   if (all) selection.current = { scanId: state.id, ids: seriesIds }
-   else setSeriesReview({ scanId: state.id, text: [...links].join('\n'), previews: [...previews.values()].map(mergeSeriesPreviews) })
+   if (all) selection.current = { scanId: state.id, batchStart: state.batchStart ?? 0, ids: seriesIds }
+   else setSeriesReview({ scanId: state.id, batchStart: state.batchStart ?? 0, text: [...links].join('\n'), previews: [...previews.values()].map(mergeSeriesPreviews) })
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not prepare series selection.') }
   finally { pending.current = false; setBusy(false) }
-  if (selection.current?.scanId === state.id) await save()
+  if (selection.current?.scanId === state.id && selection.current.batchStart === (state.batchStart ?? 0)) await save()
  }
  async function save() {
   if (!state || pending.current) return
-  if (state.seenSeries?.length && selection.current?.scanId !== state.id) return
+  if (state.seenSeries?.length && (selection.current?.scanId !== state.id || selection.current.batchStart !== (state.batchStart ?? 0))) return
   pending.current = true; setBusy(true); setError(''); setMessage('')
   let imported = 0, kept = 0, batch: string | null = null
   const differences = new Map<string, CsvConflict>()
@@ -147,9 +149,9 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     }
    }
    // Page-sized transactions support large libraries and safe, idempotent retry.
-   for (let offset = 0; offset < state.pages; offset++) {
+   for (let offset = state.batchStart ?? 0; offset < state.pages; offset++) {
     const page = (state.startPage ?? 1) + offset
-    setMessage(`Importing saved page ${offset + 1} of ${state.pages}…`)
+    setMessage(`Importing saved page ${offset - (state.batchStart ?? 0) + 1} of ${state.pages - (state.batchStart ?? 0)}…`)
     const reply = await librarySyncCommand('page', { page, scanId: state.id })
     const rows = uniqueCsvWorks(readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork => row.workId !== undefined && (!reply.seriesUrl || typeof row.workId === 'number' && selection.current?.ids.has(row.workId) === true)))
     if (!rows.length) continue
@@ -159,10 +161,10 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     imported += result.imported; kept += result.kept; batch = result.batch ?? batch
    }
    // Save the report before acknowledging: finish deletes the scan checkpoints.
-   await librarySyncReports(1, state)
-   const reply = await librarySyncCommand('finish', { scanId: state.id }); setState(reply.state ?? null)
+   if (!state.hasMore) await librarySyncReports(1, state)
+   const reply = await librarySyncCommand(state.hasMore ? 'finish-batch' : 'finish', { scanId: state.id, ...(state.hasMore ? { batchStart: state.batchStart ?? 0, batchEnd: state.pages } : {}) }); setState(reply.state ?? null)
    setSeriesReview(null); selection.current = null; seriesBehavior.reset()
-   setMessage(`Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.`)
+   setMessage(`Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.${state.hasMore ? ' Scanning continues with the remaining pages.' : ''}`)
    await onImported(batch)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Import failed. Retry to continue safely.'); setMessage('Saved pages remain available. Retrying keeps works already imported.') }
   finally { pending.current = false; setBusy(false) }
@@ -192,8 +194,8 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    {selectedMode === 'full' && <fieldset className="scan-page-limits" aria-label="Limit Full Library Scan (Optional)">
     <legend><span className="editable-field-heading">Limit Full Library Scan (Optional)<Tooltip pinOnClick description="Enter page numbers only; both endpoints are included. Leave Start Page blank for page 1 and End Page blank to scan to the list’s end. Selected ranges are partial scans and do not update the Quick Sync baseline.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Page Limits Information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></span></legend>
     <div className="form-grid form-grid-two-columns">
-     <label>Start Page<input type="number" min={1} max={500} step={1} value={startPage} placeholder="1" disabled={busy || Boolean(saved)} onChange={event => setStartPage(event.target.value)} /></label>
-     <label>End Page<input type="number" min={startPage ? Number(startPage) : 1} max={500} step={1} value={endPage} placeholder="Leave Blank" disabled={busy || Boolean(saved)} onChange={event => setEndPage(event.target.value)} /></label>
+     <label>Start Page<input type="number" min={1} step={1} value={startPage} placeholder="1" disabled={busy || Boolean(saved)} onChange={event => setStartPage(event.target.value)} /></label>
+     <label>End Page<input type="number" min={startPage ? Number(startPage) : 1} step={1} value={endPage} placeholder="Leave Blank" disabled={busy || Boolean(saved)} onChange={event => setEndPage(event.target.value)} /></label>
     </div>
    </fieldset>}</div>
    <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={saved && state.seriesBehavior ? state.seriesBehavior !== seriesBehavior.defaultBehavior : seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || Boolean(saved)} />
@@ -212,17 +214,19 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   <p className="field-help">Uses one scan tab with your selected request interval; background alarms may make it slower. Existing work imports finish first. Keep Chrome running. If sign-in or a request restriction blocks the scan, an alert lets you open the scan tab. Resolve the issue there, then resume manually. Checkpoints stay on this device until imported or discarded.</p>
   {state?.status === 'discarded' ? <p role="status">Scan discarded.</p> : <>
   {state && <LibrarySyncSummary key={state.id} state={state} />}
+  {state?.status === 'paused' && isLibrarySyncSafetyLimit(state) && state.batchVersion !== 1 && <p className="field-help">Rebuild and reload AO3 Library Companion to recover this saved scan. Keep the scan saved while updating.</p>}
   {state?.error && <p role="alert" className="error-message">{state.error}</p>}
   </>}
   {state?.status === 'ready' && state.importToCollection && state.collection && <label>New Collection Name<input value={collectionName ?? state.collection.name} disabled={busy || Boolean(state.collectionId) || createdCollection?.scanId === state.id} onChange={event => setCollectionName(event.target.value)} /></label>}
   <div className="form-actions">
    {state?.status === 'running' && <button className="button secondary" disabled={busy} onClick={() => void action('pause')}>Pause Scan</button>}
-   {state?.status === 'paused' && <button className="button secondary" disabled={busy} onClick={() => void action('resume')}>Resume Scan</button>}
-   {state?.status === 'ready' && seriesReview?.scanId !== state.id && <button className="button primary" disabled={busy} onClick={() => void requestSave()}>Import Scanned Works</button>}
+   {state?.status === 'paused' && isLibrarySyncSafetyLimit(state) && <button className="button primary" disabled={busy || state.batchVersion !== 1} onClick={() => void action('prepare-batch')}>Prepare Saved Batch</button>}
+   {state?.status === 'paused' && !isLibrarySyncSafetyLimit(state) && <button className="button secondary" disabled={busy} onClick={() => void action('resume')}>Resume Scan</button>}
+   {state?.status === 'ready' && (seriesReview?.scanId !== state.id || seriesReview.batchStart !== (state.batchStart ?? 0)) && <button className="button primary" disabled={busy} onClick={() => void requestSave()}>{state.hasMore ? 'Import Batch and Continue' : 'Import Scanned Works'}</button>}
    {saved && <button className="button secondary" disabled={busy} onClick={() => void action('discard')}>Discard Scan</button>}
   </div>
-  {state?.status === 'ready' && seriesReview?.scanId === state.id && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty confirmLabel="Import Selected Works" onConfirm={works => {
-   selection.current = { scanId: state.id, ids: new Set(works.map(work => work.workId)) }
+  {state?.status === 'ready' && seriesReview?.scanId === state.id && seriesReview.batchStart === (state.batchStart ?? 0) && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty confirmLabel={state.hasMore ? 'Import Batch and Continue' : 'Import Selected Works'} onConfirm={works => {
+   selection.current = { scanId: state.id, batchStart: state.batchStart ?? 0, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
   <LibrarySyncReportHistory key={`${state?.id}:${state?.status}`} latest={state?.status === 'complete' ? state : undefined} />

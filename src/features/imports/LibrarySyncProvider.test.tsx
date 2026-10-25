@@ -36,3 +36,12 @@ it('does not interrupt a manually paused scan and gives guidance if the scan tab
  fireEvent.click(screen.getByRole('button', { name: 'Open Tab' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('scan tab was closed')
 })
+it.each(['safety_limit', 'page_error'])('gives recovery guidance for current and legacy safety-limit scans: %s', async attention => {
+ mocks.command.mockResolvedValue({ state: { ...paused, attention, error: 'Reached the 500-page safety limit. Discard this incomplete scan.' } })
+ show()
+ expect(await screen.findByRole('dialog', { name: 'AO3 Scan Limit Reached' })).toBeVisible()
+ expect(screen.getByText(/choose Prepare Saved Batch/)).toBeVisible()
+ expect(screen.getByRole('link', { name: 'Review Scan' })).toHaveAttribute('href', '/imports')
+ expect(screen.queryByRole('button', { name: 'Open Tab' })).not.toBeInTheDocument()
+ expect(screen.queryByText(/Your scan is paused and saved pages are preserved/)).not.toBeInTheDocument()
+})

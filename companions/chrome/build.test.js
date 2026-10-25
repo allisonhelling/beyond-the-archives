@@ -21,6 +21,7 @@ it('loads hosted settings by default, preserves local builds, and rejects mixed 
   expect(hosted.host_permissions).toContain('https://extension-test.supabase.co/*')
   expect(hosted.externally_connectable.matches).toEqual(['https://library-test.example/*', 'http://127.0.0.1:5173/*'])
   expect(hosted.options_ui.page).toBe('options.html')
+  expect(hosted.content_scripts[0].matches).toEqual(['https://archiveofourown.org/*'])
   for (const file of ['background.js', 'content.js']) {
    const source = await readFile(join(directory, 'extension/dist', file), 'utf8')
    expect(source).toContain('https://extension-test.supabase.co')

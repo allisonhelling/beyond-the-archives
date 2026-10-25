@@ -94,7 +94,7 @@ it('fences account switches and never exposes another user’s scan', async () =
 
 it('validates ranges in both app builds and rejects ranges for Quick Sync', async () => {
  const request = { action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full' }
- for (const range of [{ startPage: 0 }, { startPage: 1.5 }, { startPage: 501 }, { endPage: '2' }, { endPage: 0 }, { startPage: 8, endPage: 7 }, { endPage: 501 }]) await expect(sync.command({ ...request, ...range })).rejects.toThrow('whole page numbers')
+ for (const range of [{ startPage: 0 }, { startPage: 1.5 }, { startPage: Number.MAX_SAFE_INTEGER + 1 }, { endPage: '2' }, { endPage: 0 }, { startPage: 8, endPage: 7 }, { endPage: Number.MAX_SAFE_INTEGER + 1 }]) await expect(sync.command({ ...request, ...range })).rejects.toThrow('whole page numbers')
  await expect(sync.command({ ...request, mode: 'quick', startPage: 2 })).rejects.toThrow('Quick Sync must start')
  expect(chrome.tabs.create).not.toHaveBeenCalled()
 })
@@ -470,4 +470,134 @@ it('keeps filtered bookmark queries on every page of a ranged scan', async () =>
   expect(parsed.searchParams.get('bookmark_search[bookmarkable_query]')).toBe('blackkat')
   expect(parsed.searchParams.get('user_id')).toBe('AlmiH')
  }
+})
+it.each(['listing', 'sources', 'navigation'])('exposes a saved batch at the safety boundary without navigating ahead: %s', async stage => {
+ await start(); await collect()
+ Object.assign(local.librarySync, { status: 'running', pages: 500, page: 500, nextAt: 0, captured: stage !== 'listing', done: stage === 'sources', sources: stage === 'sources' ? [{ url: 'https://archiveofourown.org/series/9', kind: 'series_works' }] : [] })
+ if (stage === 'listing') {
+  local.librarySync.pages = 499
+  chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(2)], skipped: 0, hasNext: true } }])
+ }
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 500, hasMore: true })
+ expect(local[local.librarySync.baselineKey]).toBeUndefined()
+ const navigations = chrome.tabs.update.mock.calls.length
+ await expect(sync.command({ action: 'finish' })).rejects.toThrow('unavailable')
+ await sync.pump()
+ expect(chrome.tabs.update).toHaveBeenCalledTimes(navigations)
+})
+it('rejects resuming a safety-limit checkpoint from an older companion', async () => {
+ await start(); await collect()
+ Object.assign(local.librarySync, { status: 'paused', attention: 'page_error', error: 'Reached the 500-page safety limit. The scan is incomplete; nothing has been imported.' })
+ await expect(sync.command({ action: 'resume' })).rejects.toThrow('Prepare the saved batch')
+})
+it('allows a complete list ending exactly at the safety boundary to be imported', async () => {
+ await start(); await collect()
+ Object.assign(local.librarySync, { status: 'running', pages: 499, page: 500, captured: false, done: false })
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 500, error: '' })
+})
+
+it('imports three durable batches across page 500 and 1000 without replaying checkpoints or committing an early baseline', async () => {
+ user.expiresAt += 86400
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(local.librarySync.page)], skipped: 0, hasNext: local.librarySync.page < 1001 } }])
+ await start()
+ const id = local.librarySync.id, baseline = local.librarySync.baselineKey
+ local[baseline] = ['previous']; local.librarySync.baseline = ['previous']
+ for (let batchStart = 0; batchStart < 1001; batchStart += 500) {
+  const end = Math.min(batchStart + 500, 1001)
+  for (let page = batchStart + 1; page <= end; page++) await collect()
+  expect(local.librarySync).toMatchObject({ id, status: 'ready', pages: end, batchStart, hasMore: end < 1001 })
+  const rows = []
+  for (let page = batchStart + 1; page <= end; page++) rows.push(...(await sync.command({ action: 'page', page })).rows)
+  expect(rows.map(item => Number(item['bookmark id']))).toEqual(Array.from({ length: end - batchStart }, (_, index) => batchStart + index + 1))
+  expect(local[baseline]).toEqual(['previous'])
+  if (end < 1001) {
+   const acknowledgment = { action: 'finish-batch', scanId: id, batchStart, batchEnd: end }
+   await sync.command(acknowledgment)
+   expect(local[`librarySync:${id}:${end}`]).toBeUndefined()
+   expect(local.librarySync).toMatchObject({ status: 'running', batchStart: end })
+   sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+   await expect(sync.command(acknowledgment)).rejects.toThrow('saved batch changed')
+  } else await sync.command({ action: 'finish', scanId: id })
+ }
+ expect(local.librarySync.status).toBe('complete')
+ expect(local[baseline]).toEqual(['previous', ...Array.from({ length: 1001 }, (_, i) => String(i + 1))])
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.update).toHaveBeenCalledTimes(1000)
+})
+
+it('recovers an old limit checkpoint and retains pending series and collection assignment across import', async () => {
+ await start(); await collect()
+ const id = local.librarySync.id
+ const seriesUrl = 'https://archiveofourown.org/series/99'
+ Object.assign(local.librarySync, { status: 'paused', error: 'Reached the 500-page safety limit. Discard this incomplete scan.', attention: 'page_error', done: true, pages: 500, sources: [{ url: seriesUrl, kind: 'series_works' }], seenSeries: [seriesUrl], importToCollection: true, collectionId: '12345678-1234-1234-1234-123456789012' })
+ expect((await sync.command({ action: 'status' })).state.batchVersion).toBe(1)
+ const prepared = await sync.command({ action: 'prepare-batch', scanId: id })
+ expect(prepared.state).toMatchObject({ id, status: 'ready', hasMore: true, error: '' })
+ expect((await sync.command({ action: 'page', page: 1 })).rows).toEqual([row(1)])
+ await sync.command({ action: 'finish-batch', scanId: id, batchStart: 0, batchEnd: 500 })
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ await collect()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 501, batchStart: 500, hasMore: false, currentUrl: seriesUrl, collectionId: '12345678-1234-1234-1234-123456789012', seenSeries: [seriesUrl], sources: [] })
+ expect((await sync.command({ action: 'page', page: 501 })).seriesUrl).toBe(seriesUrl)
+ await expect(sync.command({ action: 'page', page: 1 })).rejects.toThrow('No completed page')
+})
+
+it('retains all checkpoint pages if acknowledging an imported batch fails', async () => {
+ await start(); await collect()
+ const id = local.librarySync.id
+ Object.assign(local.librarySync, { hasMore: true })
+ chrome.storage.local.set.mockRejectedValueOnce(new Error('Storage unavailable'))
+ const acknowledgment = { action: 'finish-batch', batchStart: 0, batchEnd: 1 }
+ await expect(sync.command(acknowledgment)).rejects.toThrow('Storage unavailable')
+ expect(local.librarySync).toMatchObject({ status: 'ready', batchStart: 0 })
+ expect(local[`librarySync:${id}:1`]).toBeDefined()
+ await sync.command(acknowledgment)
+ expect(local.librarySync).toMatchObject({ status: 'running', batchStart: 1 })
+ expect(local[`librarySync:${id}:1`]).toBeUndefined()
+})
+
+it.each([false, true])('finishes final-page chapter checks before exposing a new or recovered batch (legacy: %s)', async legacy => {
+ await start(); await collect()
+ const id = local.librarySync.id
+ const key = `librarySync:${id}:500`
+ local[key] = { rows: [row(1)] }
+ Object.assign(local.librarySync, { status: legacy ? 'paused' : 'running', pages: 500, captured: true, done: false, error: legacy ? 'Reached the 500-page safety limit. Discard this incomplete scan.' : '', chapterQueue: [{ workId: 1, published: 1, page: 500, row: 0 }], nextAt: 0 })
+ if (legacy) expect((await sync.command({ action: 'prepare-batch' })).state.status).toBe('running')
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, notFound: true } }])
+ await sync.pump()
+ expect(local.librarySync.status).toBe('running')
+ expect(local.librarySync.chapterRequest.workId).toBe(1)
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'running', chapterDatesChecked: 1, chapterQueue: [] })
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', hasMore: true, pages: 500 })
+})
+
+it('accepts ranges beyond the first batch and preserves their partial-scan baseline behavior', async () => {
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', startPage: 501, endPage: 502 })
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(local.librarySync.page)], skipped: 0, hasNext: true } }])
+ await collect(); await collect()
+ expect(local.librarySync).toMatchObject({ status: 'ready', pages: 2, hasMore: false, limited: true, partial: true, page: 502 })
+ await sync.command({ action: 'finish' })
+ expect(local[local.librarySync.baselineKey]).toBeUndefined()
+})
+
+it('continues a series split across batches before visiting the next queued series', async () => {
+ await start(); await collect()
+ const seriesUrl = 'https://archiveofourown.org/series/99', pendingUrl = 'https://archiveofourown.org/series/100'
+ Object.assign(local.librarySync, { status: 'running', pages: 499, page: 9, captured: false, done: false, kind: 'series_works', currentUrl: seriesUrl, sources: [{ url: pendingUrl, kind: 'series_works' }], seenSeries: [seriesUrl, pendingUrl] })
+ chrome.scripting.executeScript.mockImplementation(async ({ func }) => [{ result: func.name === 'captureMetadataPage' ? {} : { url: local.librarySync.requestUrl, rows: [row(local.librarySync.page)], skipped: 0, hasNext: local.librarySync.currentUrl === seriesUrl && local.librarySync.page === 9 } }])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({ status: 'ready', hasMore: true, page: 9, pages: 500 })
+ expect((await sync.command({ action: 'page', page: 500 })).seriesUrl).toBe(seriesUrl)
+ await sync.command({ action: 'finish-batch', batchStart: 0, batchEnd: 500 })
+ await collect()
+ expect(local.librarySync).toMatchObject({ status: 'running', page: 10, pages: 501, currentUrl: seriesUrl, sources: [{ url: pendingUrl, kind: 'series_works' }] })
+ await collect()
+ expect(local.librarySync).toMatchObject({ status: 'ready', hasMore: false, pages: 502, currentUrl: pendingUrl, sources: [] })
+ expect((await sync.command({ action: 'page', page: 501 })).seriesUrl).toBe(seriesUrl)
+ expect((await sync.command({ action: 'page', page: 502 })).seriesUrl).toBe(pendingUrl)
+ await expect(sync.command({ action: 'finish-batch', batchStart: 0, batchEnd: 500 })).rejects.toThrow('saved batch changed')
 })
