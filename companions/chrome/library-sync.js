@@ -2,7 +2,7 @@ import { isLibrarySyncSafetyLimit, librarySyncSafetyLimitError } from '../../src
 import { parseSeries } from '../../src/features/imports/ao3-series.ts'
 import { captureMetadataPage } from './capture.js'
 import { parseChapterDates } from '../../src/features/imports/chapter-dates.ts'
-import { readAo3Rows, bookmarkReadingState } from '../../src/features/imports/ao3-csv.ts'
+import { readAo3Rows, bookmarkReadingState, scraperDate } from '../../src/features/imports/ao3-csv.ts'
 import { captureListingPage, listingKey, listingUrl, sameScanUrl } from './listing.js'
 
 // Durable state is separate from work-import leases and credentials. Never persist tokens here.
@@ -59,7 +59,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    ] : [{ url: identity.url, kind: identity.kind }]
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
-   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
+   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesBookmarkDates: {}, bookmarkedWorkIds: [], ...([first, ...sources].every(source => source.kind === 'bookmarks') ? { bookmarkedSeries: [] } : {}), seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
     batchStart: 0, hasMore: false, startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, diagnosticsVersion: 1, skippedEntries: [], chapterDateIssues: [], tabId: null, nextAt: Date.now(), keys: [], error: '' }
    await write(next); return { state: next }
   }
@@ -225,11 +225,29 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
       state.seenSeries.push(seriesUrl); state.sources.push({ url: seriesUrl, kind: 'series_works' })
      }
     }
+    if (state.kind === 'bookmarks' && state.bookmarkedSeries) for (const seriesUrl of result.bookmarkedSeriesUrls ?? []) {
+     if (!result.seriesUrls?.includes(seriesUrl)) throw new Error('Unexpected bookmarked series URL in listing.')
+     if (!state.bookmarkedSeries.includes(seriesUrl)) state.bookmarkedSeries.push(seriesUrl)
+    }
+    if (state.kind === 'bookmarks') {
+     state.seriesBookmarkDates ??= {}
+     for (const [url, date] of Object.entries(result.seriesBookmarkDates ?? {})) {
+      if (!result.bookmarkedSeriesUrls?.includes(url) || !result.seriesUrls?.includes(url) || typeof date !== 'string') throw new Error('Unexpected series bookmark date in listing.')
+      const cutoff = scraperDate(date) ?? ''
+      if (state.seriesBookmarkDates[url] === undefined || cutoff > state.seriesBookmarkDates[url]) state.seriesBookmarkDates[url] = cutoff
+     }
+     const bookmarked = new Set(state.bookmarkedWorkIds ?? [])
+     for (const work of readAo3Rows(result.rows)) if (typeof work.workId === 'number') bookmarked.add(work.workId)
+     state.bookmarkedWorkIds = [...bookmarked]
+    }
     const keys = result.rows.map(listingKey)
     if (keys.some(key => !key)) throw new Error('Missing stable record identifier.')
     const known = new Set(state.baseline)
     // Keep observed existing rows for metadata refresh, while still stopping on overlap.
-    const rows = result.rows
+    const cutoff = state.kind === 'series_works' ? state.seriesBookmarkDates?.[state.currentUrl] : undefined
+    const bookmarked = new Set(state.bookmarkedWorkIds ?? [])
+    // Inherit only the date, never the series bookmark ID or personal fields.
+    const rows = cutoff === undefined ? result.rows : result.rows.map(row => bookmarked.has(Number(listingKey(row))) ? row : { ...row, source_list: 'bookmarks', 'bookmark date': cutoff })
     let seriesPreview
     if (state.kind === 'series_works') {
      const snapshot = (await chrome.scripting.executeScript({ target: { tabId: state.tabId }, func: captureMetadataPage, injectImmediately: true, args: [false, 'series'] }))[0]?.result
@@ -285,8 +303,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } = result.state
-    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } }
+    const { id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } = result.state
+    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } }
    }
    return result
   } finally {

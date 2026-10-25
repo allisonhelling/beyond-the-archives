@@ -183,3 +183,23 @@ it('keeps an earlier known finish even when a newer bookmark overwrites personal
  expect(saved.notes).toBe('Approved note')
  expect(new Date(saved.finished_at!).toISOString()).toBe('2026-10-10T00:00:00.000Z')
 })
+
+it('uses inherited series bookmark dates for reading state without sharing a bookmark identity or replacing an individual bookmark', async () => {
+ const dates = { '1': '2026-09-01', '2': '2026-10-01', '3': '2026-10-10' }
+ const rows = [
+  row(1995, { notes: '', tags: [] }),
+  row(1996, { notes: '', tags: [], bookmarkDate: '2026-10-10', updatedDate: '2026-10-20', metadata: { title: 'Series work', published_chapters: 3, total_chapters: 3, chapter_dates: dates } }),
+  row(1997, { notes: '', tags: [], bookmarkDate: null }),
+  row(1998, { bookmarkId: 91998, bookmarkDate: '2026-10-25' }),
+ ]
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify(rows)])
+ expect(await entry(1995)).toMatchObject({ reading_status: 'finished', last_read_chapter: 3, notes: '' })
+ expect(await entry(1996)).toMatchObject({ reading_status: 'reading', last_read_chapter: 2, notes: '' })
+ expect(await entry(1997)).toMatchObject({ reading_status: 'reading', last_read_chapter: 0 })
+ const original = await entry(1998)
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(1998, { source: 'marked_for_later', notes: '', tags: [], bookmarkDate: null, updatedDate: '2026-10-20' })])])
+ expect(await entry(1998)).toMatchObject({ reading_status: original.reading_status, last_read_chapter: original.last_read_chapter, notes: original.notes })
+ const sources = await db.query<{ ao3_work_id: number; source_bookmark: object }>('select w.ao3_work_id,e.source_bookmark from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id between 1995 and 1998 order by w.ao3_work_id')
+ expect(sources.rows.slice(0, 3).every(row => !Object.hasOwn(row.source_bookmark, 'id'))).toBe(true)
+ expect(sources.rows[3].source_bookmark).toMatchObject({ id: '91998', date: '2026-10-25' })
+})

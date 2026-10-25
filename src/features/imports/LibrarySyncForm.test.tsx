@@ -259,8 +259,11 @@ it('reviews scanned series with the shared picker before importing only chosen i
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
  expect(await screen.findByRole('heading', { name: 'Choose Works From Series' })).toBeVisible()
+ expect(screen.queryByRole('heading', { name: 'Bookmarked Series' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('heading', { name: 'Series Containing Bookmarked Works' })).not.toBeInTheDocument()
  expect(mocks.preview).not.toHaveBeenCalled()
  expect(mocks.submit).not.toHaveBeenCalled()
+ fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
  expect(await screen.findByRole('checkbox', { name: 'Part 1: Work 1' })).toBeDisabled()
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
@@ -279,6 +282,7 @@ it('loads the name once for older series checkpoints and preserves their combine
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
  expect(await screen.findByRole('link', { name: 'The actual series name • Series 99' })).toHaveAttribute('href', seriesUrl)
+ fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  expect(within(screen.getByRole('dialog')).getAllByRole('checkbox')).toHaveLength(3)
  expect(screen.getByRole('checkbox', { name: 'Work 3' })).toBeEnabled()
  expect(screen.queryByRole('checkbox', { name: 'New unscanned work' })).not.toBeInTheDocument()
@@ -293,6 +297,7 @@ it('keeps scanned works available when an older checkpoint’s series name canno
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
  expect(await screen.findByRole('link', { name: 'Series Name Unavailable • Series 99' })).toHaveAttribute('href', seriesUrl)
+ fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  expect(screen.getByRole('checkbox', { name: 'Saved installment' })).toBeEnabled()
  expect(screen.getByRole('alert')).toHaveTextContent('Your scanned works are still available')
  expect(screen.getByRole('alert')).toHaveTextContent('AO3 unavailable')
@@ -309,11 +314,12 @@ it('pauses automatic username imports for series review and preserves the scan w
  expect(mocks.command.mock.calls.some(([action]) => ['finish', 'discard'].includes(action))).toBe(false)
 })
 
-it('can skip every series without importing any installments', async () => {
+it('can leave every series unselected without importing any installments', async () => {
  scannedSeries(false, false)
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
- fireEvent.click(await screen.findByRole('button', { name: 'Skip Series' }))
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Import Selected Works' })).toBeEnabled())
+ expect(screen.queryByRole('button', { name: 'Skip Series' })).not.toBeInTheDocument()
  fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
  expect(mocks.submit).not.toHaveBeenCalled()
@@ -324,6 +330,7 @@ it('keeps the chosen series works through an interrupted upload and retry', asyn
  mocks.submit.mockResolvedValueOnce({ imported: 1, kept: 0, batch: 'first' }).mockRejectedValueOnce(new Error('Connection lost'))
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
  fireEvent.click(await screen.findByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
@@ -366,7 +373,7 @@ it('leaves chapter-date checks off by default and includes the option for an opt
  const option = within(dialog).getByRole('checkbox', { name: 'Check chapter publication dates' })
  expect(option).not.toBeChecked()
  fireEvent.focus(within(dialog).getByRole('button', { name: 'Chapter Publication Dates Information' }))
- expect(screen.getByRole('tooltip')).toHaveTextContent('Estimates chapters read by comparing each chapter’s publication date with the bookmark date. Chapters published on the bookmark date or with missing dates remain unconfirmed. Uses the scan tab to open eligible works’ Chapter Index pages so scans will take longer than usual.')
+ expect(screen.getByRole('tooltip')).toHaveTextContent('Estimates chapters read by comparing each chapter’s publication date with the bookmark date. Series works without an individual bookmark use the series bookmark date. Chapters published on the bookmark date or with missing dates remain unconfirmed. Uses the scan tab to open eligible works’ Chapter Index pages so scans will take longer than usual.')
  fireEvent.blur(within(dialog).getByRole('button', { name: 'Chapter Publication Dates Information' }))
  fireEvent.focus(within(dialog).getByRole('button', { name: 'Saved Username Information' }))
  expect(screen.getByRole('tooltip')).toHaveTextContent('View, change, or delete your saved username in Settings.')
@@ -683,9 +690,28 @@ it('reviews only saved series works in a later batch and leaves pending series u
  })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Batch and Continue' }))
+ fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
  fireEvent.click(await screen.findByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import Batch and Continue' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish-batch', { scanId: 'scan', batchStart: 500, batchEnd: 501 }))
  expect(mocks.submit.mock.calls.map(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([[2]])
  expect(mocks.preview).not.toHaveBeenCalled()
+})
+
+it('passes bookmark provenance from saved scans to the shared series review', async () => {
+ const urls = [99, 100].map(id => `https://archiveofourown.org/series/${id}`)
+ const state = { ...ready, seenSeries: urls, bookmarkedSeries: [urls[1]], seriesReviewVersion: 1 }
+ mocks.command.mockImplementation(async (action, options) => {
+  if (action === 'status') return { state }
+  if (action === 'page') {
+   const id = options.page === 1 ? 99 : 100
+   return { seriesUrl: `https://archiveofourown.org/series/${id}`, seriesPreview: { seriesId: id, title: `Series ${id}`, works: [] }, rows: [] }
+  }
+  return { state }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ expect(await screen.findByRole('heading', { name: 'Bookmarked Series' })).toBeVisible()
+ expect(screen.getByRole('heading', { name: 'Series Containing Bookmarked Works' })).toBeVisible()
+ expect(screen.getAllByRole('region', { name: /• Series/ }).map(region => region.getAttribute('aria-label'))).toEqual(['Series 100 • Series 100', 'Series 99 • Series 99'])
 })

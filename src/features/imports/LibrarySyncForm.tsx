@@ -55,7 +55,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  const interval = delayDraft ?? String(state?.delaySeconds ?? 15)
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
  const [conflicts, setConflicts] = useState<CsvConflict[]>([])
- const [seriesReview, setSeriesReview] = useState<{ scanId: string; batchStart: number; text: string; previews: SeriesPreview[] } | null>(null)
+ const [seriesReview, setSeriesReview] = useState<{ scanId: string; batchStart: number; text: string; previews: SeriesPreview[]; bookmarkedSeriesIds?: Set<number> } | null>(null)
  const selection = useRef<{ scanId: string; batchStart: number; ids: Set<number> } | null>(null)
  const pending = useRef(false)
  useEffect(() => {
@@ -123,7 +123,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     for (const row of readAo3Rows(reply.rows ?? [])) if (typeof row.workId === 'number') links.add(row.url)
    }
    if (all) selection.current = { scanId: state.id, batchStart: state.batchStart ?? 0, ids: seriesIds }
-   else setSeriesReview({ scanId: state.id, batchStart: state.batchStart ?? 0, text: [...links].join('\n'), previews: [...previews.values()].map(mergeSeriesPreviews) })
+   else setSeriesReview({ scanId: state.id, batchStart: state.batchStart ?? 0, text: [...links].join('\n'), previews: [...previews.values()].map(mergeSeriesPreviews), bookmarkedSeriesIds: state.bookmarkedSeries ? new Set(state.bookmarkedSeries.map(url => parseSeriesUrl(url).seriesId)) : undefined })
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not prepare series selection.') }
   finally { pending.current = false; setBusy(false) }
   if (selection.current?.scanId === state.id && selection.current.batchStart === (state.batchStart ?? 0)) await save()
@@ -225,7 +225,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    {state?.status === 'ready' && (seriesReview?.scanId !== state.id || seriesReview.batchStart !== (state.batchStart ?? 0)) && <button className="button primary" disabled={busy} onClick={() => void requestSave()}>{state.hasMore ? 'Import Batch and Continue' : 'Import Scanned Works'}</button>}
    {saved && <button className="button secondary" disabled={busy} onClick={() => void action('discard')}>Discard Scan</button>}
   </div>
-  {state?.status === 'ready' && seriesReview?.scanId === state.id && seriesReview.batchStart === (state.batchStart ?? 0) && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty fitActions={state.hasMore} confirmLabel={state.hasMore ? 'Import Batch and Continue' : 'Import Selected Works'} onConfirm={works => {
+  {state?.status === 'ready' && seriesReview?.scanId === state.id && seriesReview.batchStart === (state.batchStart ?? 0) && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} bookmarkedSeriesIds={seriesReview.bookmarkedSeriesIds} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty fitActions={state.hasMore} confirmLabel={state.hasMore ? 'Import Batch and Continue' : 'Import Selected Works'} onConfirm={works => {
    selection.current = { scanId: state.id, batchStart: state.batchStart ?? 0, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}

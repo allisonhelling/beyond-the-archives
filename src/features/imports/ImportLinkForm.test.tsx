@@ -86,6 +86,7 @@ it('reviews a series in place without creating a work',async()=>{
  expect(await screen.findByRole('heading',{name:'Choose Works From Series'})).toBeVisible()
  expect(mocks.submit).not.toHaveBeenCalled()
  expect(screen.queryByRole('heading',{name:'Choose series works'})).not.toBeInTheDocument()
+ fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
  expect(await screen.findByRole('checkbox',{name:'Part 1: First fic'})).not.toBeChecked()
  expect(screen.getByRole('combobox',{name:'Reading Status'})).toHaveValue('to_read')
  fireEvent.change(screen.getByRole('combobox',{name:'Reading Status'}),{target:{value:'finished'}})

@@ -869,7 +869,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .series-import-preview { --series-preview-text-size: 14px; --series-work-heading-size: 16px; --series-preview-divider: 3px solid var(--color-border); font-size: var(--series-preview-text-size); padding-block: var(--space-4, 1rem); border-bottom: var(--series-preview-divider); }
 .series-import-review > .series-import-preview:first-of-type { border-top: var(--series-preview-divider); }
 .series-import-preview :is(.field-help, .story-summary, .text-button) { font-size: var(--series-preview-text-size); }
-.series-import-preview .series-import-skip { font-size: 16px; }
 .series-import-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .series-import-preview h3 { font-size: 18px; margin: 0; }
 .form-actions.series-preview-controls { display: flex; justify-content: flex-start; flex-wrap: nowrap; gap: 8px; max-width: 100%; overflow-x: auto; }

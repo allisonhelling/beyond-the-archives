@@ -33,14 +33,22 @@ export function captureListingPage(kind) {
    if (!name) return { error: 'AO3 collection profile was not recognized.' }
    return { url: location.href, rows: [], skipped: 0, hasNext: false, collection: { name, description: [lines(summary), lines(intro)].filter(Boolean).join('\n\n') } }
   }
-  const seriesUrls = []
+  const seriesUrls = [], bookmarkedSeriesUrls = [], seriesBookmarkDates = {}
   const rows = []
   const skippedEntries = []
   let skipped = 0
   for (const item of main.querySelectorAll('li.work, li.bookmark, li.series')) {
    const title = item.querySelector('h4.heading > a')
    const link = linkUrl(title)
-   if (link?.origin === location.origin && /^\/series\/[1-9]\d*$/.test(link.pathname)) { seriesUrls.push(link.origin + link.pathname); continue }
+   if (link?.origin === location.origin && /^\/series\/[1-9]\d*$/.test(link.pathname)) {
+    const url = link.origin + link.pathname
+    seriesUrls.push(url)
+    if (kind === 'bookmarks') {
+     bookmarkedSeriesUrls.push(url)
+     seriesBookmarkDates[url] = text(item.querySelector('.user .datetime'))
+    }
+    continue
+   }
    // AO3 renders an explicit direct-child deletion message, with no work link.
    // Missing links alone can also mean hidden/restricted works and are not evidence.
    const deleted = kind === 'bookmarks' && (item.classList.contains('deleted') || /^this (?:work |item )?has been deleted[, .!]/i.test(text(item.querySelector(':scope > p.message'))))
@@ -91,7 +99,7 @@ export function captureListingPage(kind) {
    const page = Number(link.searchParams.get('page'))
    if (Number.isFinite(page)) pages.push(page)
   }
-  return { url: location.href, rows, seriesUrls: [...new Set(seriesUrls)], skipped, skippedEntries, hasNext: pages.some(page => page > current) }
+  return { url: location.href, rows, seriesUrls: [...new Set(seriesUrls)], ...(kind === 'bookmarks' ? { bookmarkedSeriesUrls: [...new Set(bookmarkedSeriesUrls)], seriesBookmarkDates } : {}), skipped, skippedEntries, hasNext: pages.some(page => page > current) }
  } catch (error) {
   // Chrome can return a null result for an uncaught injected-script exception.
   // Report the parsing failure instead of retrying it as an unfinished document.

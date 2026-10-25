@@ -305,7 +305,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    node('span', 'Read', indicator)
   } else {
    const final = page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
-   const complete = button(final ? 'Finish Fic' : 'Mark Read', () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading', true), parent)
+   const complete = button(final ? 'Finish Fic' : 'Mark Read', () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading', true), browser === 'chrome' ? summary : parent)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }

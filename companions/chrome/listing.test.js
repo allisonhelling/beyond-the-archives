@@ -112,3 +112,20 @@ it('accepts filtered root bookmark URLs for Full Scan and preserves their filter
  expect(() => listingUrl(url, 'quick')).toThrow()
  expect(() => listingUrl('https://archiveofourown.org/tags/Example/bookmarks', 'quick')).toThrow()
 })
+
+it('distinguishes bookmarked series from memberships and recognizes a series present in both', () => {
+ page(`<div id="main" class="bookmarks-index"><ol class="bookmark index">
+  <li class="bookmark" id="bookmark_1"><h4 class="heading"><a href="/works/34">Work</a></h4><ul class="series"><li><a href="/series/7">Both</a></li><li><a href="/series/9">Related only</a></li></ul></li>
+  <li class="bookmark" id="bookmark_2"><h4 class="heading"><a href="/series/8">Bookmarked series</a></h4><div class="user"><span class="datetime">10 Oct 2026</span></div></li>
+  <li class="bookmark" id="bookmark_3"><h4 class="heading"><a href="/series/7">Both</a></h4></li>
+  <li class="bookmark" id="bookmark_4"><h4 class="heading"><a href="/series/8">Duplicate</a></h4><div class="user"><span class="datetime">10 Oct 2026</span></div></li>
+ </ol></div>`)
+ expect(captureListingPage('bookmarks')).toMatchObject({
+  seriesUrls: ['https://archiveofourown.org/series/7', 'https://archiveofourown.org/series/9', 'https://archiveofourown.org/series/8'],
+  bookmarkedSeriesUrls: ['https://archiveofourown.org/series/8', 'https://archiveofourown.org/series/7'],
+  seriesBookmarkDates: { 'https://archiveofourown.org/series/8': '10 Oct 2026', 'https://archiveofourown.org/series/7': '' },
+  rows: [{ link: 'https://archiveofourown.org/works/34' }],
+ })
+ document.querySelector('#main').className = 'series-index'
+ expect(captureListingPage('series')).not.toHaveProperty('bookmarkedSeriesUrls')
+})

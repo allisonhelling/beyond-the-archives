@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createLibrarySync } from './library-sync.js'
 import { listingUrl } from './listing.js'
+import { readAo3Rows, bookmarkReadingState } from '../../src/features/imports/ao3-csv.ts'
 let local, session, chrome, sync, user, clock
 const row = id => ({ source_list: 'bookmarks', 'bookmark id': String(id), title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}` })
 const storage = state => ({
@@ -600,4 +601,71 @@ it('continues a series split across batches before visiting the next queued seri
  expect((await sync.command({ action: 'page', page: 501 })).seriesUrl).toBe(seriesUrl)
  expect((await sync.command({ action: 'page', page: 502 })).seriesUrl).toBe(pendingUrl)
  await expect(sync.command({ action: 'finish-batch', batchStart: 0, batchEnd: 500 })).rejects.toThrow('saved batch changed')
+})
+
+it('persists explicit series bookmarks across restarts and upgrades a previously discovered membership', async () => {
+ const related = 'https://archiveofourown.org/series/99', explicit = 'https://archiveofourown.org/series/100'
+ await start()
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: {
+  url: local.librarySync.requestUrl, rows: [], skipped: 0, hasNext: local.librarySync.kind === 'bookmarks' && local.librarySync.page === 1,
+  ...(local.librarySync.kind === 'bookmarks' ? { seriesUrls: [related, explicit], bookmarkedSeriesUrls: local.librarySync.page === 1 ? [explicit] : [related, explicit] } : {}),
+ } }])
+ await collect()
+ expect(local.librarySync.bookmarkedSeries).toEqual([explicit])
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await sync.command({ action: 'status' })).state.bookmarkedSeries).toEqual([explicit])
+ for (let index = 0; index < 6; index++) await collect()
+ expect((await sync.command({ action: 'status' })).state).toMatchObject({ status: 'ready', seenSeries: [related, explicit], bookmarkedSeries: [explicit, related] })
+})
+
+it('does not guess bookmark provenance for older saved scans', async () => {
+ await start()
+ delete local.librarySync.bookmarkedSeries
+ const url = 'https://archiveofourown.org/series/99'
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { rows: [], seriesUrls: [url], bookmarkedSeriesUrls: [url], skipped: 0, hasNext: false } }])
+ await collect()
+ expect((await sync.command({ action: 'status' })).state.bookmarkedSeries).toBeUndefined()
+})
+
+it.each([
+ { label: 'chapter checks off', cutoff: '10 Oct 2026', checkChapterDates: false, expectedStatus: 'reading', progress: 0, checks: 0 },
+ { label: 'chapter checks on', cutoff: '10 Oct 2026', checkChapterDates: true, expectedStatus: 'reading', progress: 2, checks: 1 },
+ { label: 'explicit Reading override', cutoff: '10 Oct 2026', checkChapterDates: true, readingStatus: 'reading', expectedStatus: 'reading', progress: 2, checks: 1 },
+ { label: 'manual Paused override', cutoff: '10 Oct 2026', checkChapterDates: true, readingStatus: 'paused_reading', expectedStatus: 'reading', progress: 0, checks: 0 },
+ { label: 'bookmark after the latest update', cutoff: '25 Oct 2026', checkChapterDates: true, expectedStatus: 'finished', progress: 3, checks: 0 },
+ { label: 'individual bookmark uses its own earlier cutoff', cutoff: '25 Oct 2026', ownCutoff: '2026-10-10', ownStatus: 'reading', ownProgress: 2, checkedWork: 2, checkChapterDates: true, expectedStatus: 'finished', progress: 3, checks: 1 },
+ { label: 'individual bookmark with no date stays unconfirmed', cutoff: '10 Oct 2026', ownCutoff: '', ownStatus: 'reading', ownProgress: 0, checkChapterDates: true, expectedStatus: 'reading', progress: 2, checks: 1 },
+ { label: 'missing bookmark date', cutoff: '', checkChapterDates: true, expectedStatus: 'reading', progress: 0, checks: 0 },
+ { label: 'membership without a series bookmark', checkChapterDates: true, expectedStatus: 'to_read', progress: 0, checks: 0 },
+])('inherits series bookmark reading dates and respects individual bookmarks: $label', async ({ cutoff, checkChapterDates, readingStatus, expectedStatus, progress, checks, ownCutoff = '2026-10-25', ownStatus = 'finished', ownProgress = 3, checkedWork = 1 }) => {
+ const seriesUrl = 'https://archiveofourown.org/series/77'
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates, readingStatus, delaySeconds: 5 })
+ const individual = { ...datedRow(2), 'bookmark date': ownCutoff }
+ const seriesRows = [1, 2].map(id => ({ title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'marked_for_later', chapters: '3/3', date: '2026-10-20' }))
+ chrome.scripting.executeScript.mockImplementation(async ({ func }) => {
+  const url = local.librarySync.requestUrl
+  if (func.name === 'captureMetadataPage') return [{ result: { url, html: url.endsWith('/navigate') ? chapterIndex.replaceAll('/works/1/', `/works/${url.match(/works\/(\d+)/)[1]}/`) : '' } }]
+  return [{ result: { url, rows: local.librarySync.kind === 'bookmarks' ? [individual] : seriesRows, skipped: 0, hasNext: false,
+   ...(local.librarySync.kind === 'bookmarks' ? { seriesUrls: [seriesUrl], ...(cutoff === undefined ? {} : { bookmarkedSeriesUrls: [seriesUrl], seriesBookmarkDates: { [seriesUrl]: cutoff } }) } : {}),
+  } }]
+ })
+ await collect()
+ // Bookmark observations and cutoffs must survive the background worker restarting.
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ for (let step = 0; step < 12 && local.librarySync.status === 'running'; step++) await collect()
+ expect(local.librarySync).toMatchObject({ status: 'ready', chapterDatesChecked: checks })
+ const direct = readAo3Rows((await sync.command({ action: 'page', page: 1 })).rows)[0]
+ expect(bookmarkReadingState(direct)).toMatchObject({ status: ownStatus, progress: ownProgress })
+ expect(direct).toMatchObject({ bookmarkId: 2, bookmarkDate: ownCutoff || null })
+ const savedRows = (await sync.command({ action: 'page', page: 2 })).rows
+ const [inherited, alsoBookmarked] = readAo3Rows(savedRows)
+ expect(bookmarkReadingState(inherited)).toMatchObject({ status: expectedStatus, progress })
+ expect(inherited.bookmarkId).toBeUndefined()
+ expect(inherited.notes).toBe('')
+ expect(inherited.tags).toEqual([])
+ expect(alsoBookmarked.source).toBe('marked_for_later')
+ expect(alsoBookmarked.bookmarkDate).toBeNull()
+ expect(savedRows[1]['chapter dates']).toBeUndefined()
+ const requests = chrome.tabs.update.mock.calls.map(([, options]) => options.url).filter(url => url.endsWith('/navigate'))
+ expect(requests).toEqual(checks ? [`https://archiveofourown.org/works/${checkedWork}/navigate`] : [])
 })

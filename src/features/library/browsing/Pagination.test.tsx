@@ -24,3 +24,8 @@ it('commits valid page numbers only on Enter and follows external navigation', (
  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
  expect(onPage).toHaveBeenCalledWith(2)
 })
+
+it('shows supplied entry ranges for pages with variable sizes', () => {
+ render(<Pagination page={2} pages={2} total={44} size={30} range={{ start: 29, end: 44 }} onPage={() => {}} />)
+ expect(screen.getByRole('status')).toHaveTextContent('29–44 of 44 works')
+})

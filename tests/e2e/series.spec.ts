@@ -39,6 +39,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await page.getByRole('button', {name:'Choose Works to Import'}).click()
  const dialog = page.getByRole('dialog', {name:'Review Series',exact:true})
  await expect(dialog.locator('.settings-card')).toHaveCount(0)
+ await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
  await expect(dialog.getByRole('checkbox', {name:'Part 1: Saved fic'})).toBeDisabled()
  await expect(dialog.getByRole('checkbox', {name:'Part 2: Unsaved sequel'})).not.toBeChecked()
  expect(previews).toBe(1)
@@ -171,6 +172,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  const related = page.getByRole('dialog', {name:'Related Series',exact:true})
  await expect(related).toBeVisible()
  await expect(related).toContainText('Saved fic')
+ await related.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
  await expect(related.getByRole('checkbox', {name:'Part 2: Unsaved sequel'})).not.toBeChecked()
  expect(previews).toBe(3)
  await related.getByRole('button', {name:'Close Dialog'}).click()
@@ -196,14 +198,15 @@ test('series preview follows Next pages before offering all works for import', a
  await page.getByRole('textbox', { name: 'AO3 URLs', exact: true }).fill(url)
  await page.getByRole('button', { name: 'Review Series', exact: true }).click()
  const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
  await expect(dialog.getByRole('checkbox')).toHaveCount(3)
  expect(requested).toEqual([url, `${url}?page=2`, `${url}?page=3`])
- const save = dialog.getByRole('button', { name: 'Save', exact: true })
+ const save = dialog.getByRole('button', { name: 'Save', exact: true }).first()
  await expect(save).toHaveAccessibleDescription('Load and save full series details from AO3')
  const heading = dialog.locator('.series-import-heading')
  await expect(heading.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
  await save.click()
- await expect(dialog.getByRole('button', { name: 'Full Series Details Saved' })).toBeDisabled()
+ await expect(dialog.getByRole('button', { name: 'Full Series Details Saved' }).first()).toBeDisabled()
  expect(tables.library_series).toHaveLength(1)
  expect(tables.library_entries).toHaveLength(0)
 })
@@ -230,7 +233,7 @@ test('series import defaults persist while each import can choose a temporary ov
  await expect(setting).toHaveValue('all')
 })
 
-test('series review tooltips escape scrolling controls and Skip Series comes first', async ({ page }) => {
+test('series review tooltips escape scrolling controls and Save comes first', async ({ page }) => {
  await fixture(page)
  await page.route('**/functions/v1/series-preview', route => route.fulfill({ json: { preview: {
   seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Series with visible tooltips', description: '',
@@ -255,7 +258,7 @@ test('series review tooltips escape scrolling controls and Skip Series comes fir
  }
  for (const name of ['Select All', 'Clear Selection', 'View All', 'Hide All']) await assertTooltip(top.getByRole('button', { name, exact: true }))
  const footer = dialog.getByRole('group', { name: 'Series Footer Controls' })
- await expect(footer.getByRole('button').first()).toHaveText('Skip Series')
+ await expect(footer.getByRole('button').first()).toHaveText('Save')
  await assertTooltip(footer.getByRole('button', { name: 'Select All', exact: true }))
  await dialog.evaluate(node => { node.scrollTop += 20 })
  await expect(page.getByRole('tooltip')).toBeVisible()

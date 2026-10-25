@@ -2644,14 +2644,22 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  await page.getByRole('textbox', { name: 'AO3 Work or Series Link' }).fill(seriesPreview.normalizedUrl)
  await page.getByRole('button', { name: 'Import from Link', exact: true }).click()
  const picker = page.getByRole('region', { name: 'Review Series Imports' })
+ await picker.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
  await expect(picker.getByRole('checkbox', { name: 'Part 1: The story' })).not.toBeChecked()
  await expect(page).toHaveURL(/\/add$/)
  await expect(picker.getByRole('link', { name: 'Stories and art • Series 77', exact: true })).toHaveAttribute('href', seriesPreview.normalizedUrl)
  expect(submitted).toEqual([])
  await expect(picker.getByRole('combobox', { name: 'Reading Status', exact: true })).toHaveValue('to_read')
  await picker.getByRole('combobox', { name: 'Reading Status', exact: true }).selectOption('finished')
- await picker.getByRole('button', { name:'Save', exact:true }).click()
- await expect(picker.getByRole('button', { name:'Full Series Details Saved', exact:true })).toBeDisabled()
+ const seriesFooter = picker.getByRole('group', { name: 'Series Footer Controls' })
+ expect((await seriesFooter.getByRole('button').allTextContents()).slice(0, 2)).toEqual(['Save', 'Hide Series Works'])
+ await seriesFooter.getByRole('button', { name: 'Hide Series Works', exact: true }).click()
+ await expect(picker.getByRole('button', { name: 'Show Series Works', exact: true })).toHaveCount(2)
+ await seriesFooter.getByRole('button', { name: 'Show Series Works', exact: true }).click()
+ await expect(picker.getByRole('button', { name: 'Hide Series Works', exact: true })).toHaveCount(2)
+ await expect(seriesFooter.getByRole('button', { name: 'Save', exact: true })).toHaveAccessibleDescription('Load and save full series details from AO3')
+ await seriesFooter.getByRole('button', { name: 'Save', exact: true }).click()
+ await expect(picker.getByRole('button', { name:'Full Series Details Saved', exact:true }).first()).toBeDisabled()
  await picker.getByRole('checkbox', { name: 'Part 1: The story' }).check()
  await picker.getByRole('button', { name: 'Import Selected', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Series Import Finished' })).toBeVisible()
@@ -2775,6 +2783,7 @@ test('a completed direct fic import offers its related series and imports only s
  await expect(notice).toBeVisible({ timeout: 12000 })
  await expect(notice).toContainText('is part of the following series')
  await expect(notice.getByRole('link', { name: 'Stories and art • Series 77', exact: true })).toHaveAttribute('href', 'https://archiveofourown.org/series/77')
+ await notice.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
  await expect(notice.getByRole('checkbox', { name: 'Part 1: The story' })).toBeDisabled()
  await expect(notice.getByRole('checkbox', { name: 'Part 4: Art extras' })).not.toBeChecked()
  await notice.getByRole('group', { name: 'Series Selection Controls' }).getByRole('button', { name: 'Select All', exact: true }).click()
@@ -3039,7 +3048,7 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   await chapterOption.check()
   await expect(chapterOption).toBeChecked()
   await bookmarkDialog.getByRole('button', { name: 'Chapter Publication Dates Information' }).focus()
-  await expect(page.getByRole('tooltip')).toHaveText('Estimates chapters read by comparing each chapter’s publication date with the bookmark date. Chapters published on the bookmark date or with missing dates remain unconfirmed. Uses the scan tab to open eligible works’ Chapter Index pages so scans will take longer than usual.')
+  await expect(page.getByRole('tooltip')).toHaveText('Estimates chapters read by comparing each chapter’s publication date with the bookmark date. Series works without an individual bookmark use the series bookmark date. Chapters published on the bookmark date or with missing dates remain unconfirmed. Uses the scan tab to open eligible works’ Chapter Index pages so scans will take longer than usual.')
   await bookmarkDialog.getByRole('button', { name: 'Saved Username Information' }).focus()
   await expect(page.getByRole('tooltip')).toHaveText('View, change, or delete your saved username in Settings.')
   const tooltipBounds = (await page.getByRole('tooltip').boundingBox())!
@@ -3349,32 +3358,67 @@ test('Dynamic Bookmarks is available only for library list sync and reveals opti
  expect(await sync.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 })
 
-test('long series review dialogs page works and preserve selections across pages', async ({ page }) => {
+for (const preceding of [20, 28]) test(`series reviews keep series together after ${preceding} entries and preserve selections`, async ({ page }) => {
  await fixture(page)
- const preview = { ...seriesPreview, works: Array.from({ length: 45 }, (_, index) => ({ ...seriesPreview.works[0], workId: index + 1, position: index + 1, title: `Paged Work ${index + 1}`, url: `https://archiveofourown.org/works/${index + 1}` })) }
+ let offset = 0
+ const previews = [preceding, 12, 5].map((count, index) => {
+  const preview = { ...seriesPreview, seriesId: 77 + index, normalizedUrl: `https://archiveofourown.org/series/${77 + index}`, title: `Paged Series ${index + 1}`, works: Array.from({ length: count }, (_, position) => ({ ...seriesPreview.works[0], workId: offset + position + 1, position: position + 1, title: `Paged Work ${offset + position + 1}`, url: `https://archiveofourown.org/works/${offset + position + 1}` })) }
+  offset += count
+  return preview
+ })
  const submitted: string[][] = []
- await page.route('**/functions/v1/series-preview', route => route.fulfill({ json: { preview } }))
+ await page.route('**/functions/v1/series-preview', route => route.fulfill({ json: { preview: previews.find(preview => preview.normalizedUrl === route.request().postDataJSON().url) } }))
  await page.route('**/rest/v1/rpc/submit_import_urls', route => {
   submitted.push(route.request().postDataJSON().p_urls)
   return route.fulfill({ json: 'paged-series-batch' })
  })
  await page.goto('/imports'); await login(page)
- await page.getByLabel('AO3 URLs', { exact: true }).fill(preview.normalizedUrl)
+ await page.getByLabel('AO3 URLs', { exact: true }).fill(previews.map(preview => preview.normalizedUrl).join('\n'))
  await page.getByRole('button', { name: 'Review Series', exact: true }).click()
  const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
- await expect(dialog.getByRole('checkbox')).toHaveCount(20)
+ await expect(dialog.getByRole('button', { name: 'Save All Series', exact: true })).toBeEnabled()
+ await expect(dialog.getByRole('checkbox')).toHaveCount(0)
+ const firstPage = preceding === 20 ? 32 : 28
  const pages = dialog.getByRole('navigation', { name: 'Result Pages' }).first()
+ await expect(pages.getByRole('status')).toContainText(`1–${firstPage} of ${offset}`)
+ while (await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).count()) await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
+ await expect(dialog.getByRole('checkbox')).toHaveCount(firstPage)
  await dialog.getByRole('checkbox', { name: 'Part 1: Paged Work 1', exact: true }).check()
- await pages.getByRole('spinbutton', { name: 'Go to Page' }).fill('3')
- await pages.getByRole('spinbutton', { name: 'Go to Page' }).press('Enter')
- await expect(dialog.getByRole('checkbox')).toHaveCount(5)
- await dialog.getByRole('checkbox', { name: 'Part 45: Paged Work 45', exact: true }).check()
- await pages.getByRole('button', { name: 'Prev', exact: true }).click()
- await dialog.getByRole('checkbox', { name: 'Part 21: Paged Work 21', exact: true }).check()
+ await pages.getByRole('button', { name: 'Next', exact: true }).click()
+ await expect(dialog.getByRole('region', { name: 'Paged Series 2 • Series 78', exact: true })).toHaveCount(preceding === 28 ? 1 : 0)
+ while (await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).count()) await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
+ await expect(dialog.getByRole('checkbox')).toHaveCount(offset - firstPage)
+ await expect(pages.getByRole('status')).toContainText(`${firstPage + 1}–${offset} of ${offset}`)
+ await dialog.getByRole('checkbox', { name: `Part 5: Paged Work ${offset}`, exact: true }).check()
  await pages.getByRole('button', { name: 'Prev', exact: true }).click()
  await expect(dialog.getByRole('checkbox', { name: 'Part 1: Paged Work 1', exact: true })).toBeChecked()
  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
  await dialog.getByRole('button', { name: 'Import Selected', exact: true }).click()
  await expect(dialog).toHaveCount(0)
- expect(submitted).toEqual([['https://archiveofourown.org/works/1', 'https://archiveofourown.org/works/21', 'https://archiveofourown.org/works/45']])
+ expect(submitted).toEqual([['https://archiveofourown.org/works/1', `https://archiveofourown.org/works/${offset}`]])
+})
+
+test('bookmark scans show explicitly bookmarked series before series containing bookmarked works', async ({ page }) => {
+ await fixture(page)
+ const previews = [77, 78].map((id, index) => ({ ...seriesPreview, seriesId: id, normalizedUrl: `https://archiveofourown.org/series/${id}`, title: index ? 'Explicitly bookmarked series' : 'Related series', works: [{ ...seriesPreview.works[0], workId: index + 501, title: `Grouped Work ${index + 1}`, url: `https://archiveofourown.org/works/${index + 501}` }] }))
+ await page.addInitScript(({ previews }) => {
+  localStorage.setItem('ao3-library-extension-id', 'a'.repeat(32))
+  const state = { id: 'grouped-scan', status: 'ready', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', pages: 2, count: 2, skipped: 0, error: '', seriesReviewVersion: 1, seenSeries: previews.map(preview => preview.normalizedUrl), bookmarkedSeries: [previews[1].normalizedUrl] }
+  Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime: { sendMessage: (_id: string, message: { type: string; action?: string; page?: number }, callback: (reply: unknown) => void) => {
+   if (message.action === 'page') {
+    const preview = previews[message.page! - 1]
+    callback({ ok: true, seriesUrl: preview.normalizedUrl, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) })
+   } else callback({ ok: true, state })
+  } } } })
+ }, { previews })
+ await page.goto('/imports'); await login(page)
+ await page.getByRole('button', { name: 'Import Scanned Works', exact: true }).click()
+ const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ await expect(dialog.getByRole('heading', { name: 'Bookmarked Series', exact: true })).toBeVisible()
+ await expect(dialog.getByRole('heading', { name: 'Series Containing Bookmarked Works', exact: true })).toBeVisible()
+ await expect(dialog.locator('.series-import-preview')).toHaveCount(2)
+ expect(await dialog.locator('.series-import-preview').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')))).toEqual(['Explicitly bookmarked series • Series 78', 'Related series • Series 77'])
+ const ordered = await dialog.locator('.series-import-review').evaluate(node => Array.from(node.children).filter(child => child.tagName === 'H2' || child.classList.contains('series-import-preview')).map(child => child.getAttribute('aria-label') ?? child.textContent))
+ expect(ordered).toEqual(['Bookmarked Series', 'Explicitly bookmarked series • Series 78', 'Series Containing Bookmarked Works', 'Related series • Series 77'])
+ expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 })

@@ -409,6 +409,19 @@ it('places only progress controls before kudos and immediately updates both bars
  expect(within(bottomRoot).getByText(/Could not save/)).toBeInTheDocument()
 })
 
+it.each(['safari', 'chrome'].flatMap(browser => [4, 10].map(chapter => ({ browser, chapter }))))('positions chapter completion actions on $browser at chapter $chapter', async ({ browser, chapter }) => {
+ document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}. Chapter</option>`).join('')
+ entry = { version: 'v1', status: 'reading', progress: chapter - 1, notes: '', rating: null, tags: [], collections: [] }
+ await mountLibrary(document, `https://archiveofourown.org/works/123/chapters/${100 + chapter}`, { browser })
+ for (const surface of [root, bottomRoot]) {
+  const action = within(surface).getByRole('button', { name: chapter === 10 ? 'Finish Fic' : 'Mark Read' })
+  if (browser === 'chrome') {
+   expect(action.previousElementSibling).toHaveClass('chapter-progress')
+   expect(surface.querySelector('.reading-summary')).toContainElement(action)
+  } else expect(surface.querySelector('.reading-summary')).not.toContainElement(action)
+ }
+})
+
 it.each(['safari', 'chrome'].flatMap(browser => [4, 7].map(progress => ({ browser, progress }))))('shows a non-clickable completion indicator beside the chapter count on $browser when saved progress is $progress', async ({ browser, progress }) => {
  entry = { version: 'v1', status: 'reading', progress, notes: '', rating: null, tags: [], collections: [] }
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
