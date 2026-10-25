@@ -83,6 +83,18 @@ describe('private app access and navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
+  it.each([
+    ['/imports', 'Mass Import from AO3'],
+    ['/settings/example-work', 'Example Work Info Page'],
+    ['/settings/example-series', 'Example Series Info Page'],
+  ])('opens the secondary page %s directly inside the shell', async (path, title) => {
+    auth.session = fakeSession
+    window.history.replaceState(null, '', path)
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: title })).toBeVisible()
+    expect(screen.getByRole('navigation', { name: 'Main Navigation' })).toBeVisible()
+    expect(screen.queryByText('Loading page…')).not.toBeInTheDocument()
+  })
   it('provides mobile navigation and a direct header Add Story link', async () => {
     auth.session = fakeSession
     const user = userEvent.setup()

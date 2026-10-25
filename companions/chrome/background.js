@@ -61,25 +61,37 @@ function matchingWork(url, workId) {
  catch { return false }
 }
 // Each capture lane reuses its own extension-created tab. A matching user tab
-// may be read, but is never claimed or redirected for a later request.
-async function captureTab(targetUrl, matches, key, version) {
- const tabs = await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
+// may be read for work captures, but is never claimed or redirected. Series
+// previews always stay in their own extension-created window.
+async function captureTab(targetUrl, matches, key, version, windowKey) {
+ const tabs = windowKey ? [] : await chrome.tabs.query({ url: 'https://archiveofourown.org/*' })
  if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the capture.')
  const matching = tabs.find(candidate => matches(candidate.url))
  if (matching) return matching
- const stored = await storage.session.get(key)
+ const stored = await storage.session.get(windowKey ? [key, windowKey] : key)
  let owned
  if (stored[key] !== undefined) {
   try {
    const tab = await chrome.tabs.get(stored[key])
-   if (new URL(tab.url).origin === 'https://archiveofourown.org') owned = tab
+   if (new URL(tab.url).origin === 'https://archiveofourown.org' && (!windowKey || tab.windowId === stored[windowKey])) owned = tab
   } catch { /* Closed or repurposed tabs are left alone. */ }
  }
  if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the capture.')
+ if (owned && matches(owned.url)) return owned
  await storage.session.set({ ao3LastNavigation: Date.now() })
  if (owned) return chrome.tabs.update(owned.id, { url: targetUrl })
- const tab = await chrome.tabs.create({ url: targetUrl, active: false })
- await storage.session.set({ [key]: tab.id })
+ let windowId
+ if (windowKey && stored[windowKey] !== undefined) {
+  try { windowId = (await chrome.windows.get(stored[windowKey])).id } catch { /* Recreate a closed preview window. */ }
+ }
+ let tab
+ if (windowKey && windowId === undefined) {
+  const window = await chrome.windows.create({ url: targetUrl, type: 'normal', focused: false })
+  tab = window.tabs?.[0]
+  if (!Number.isInteger(tab?.id)) throw new Error('Could not open the series preview window. Retry the preview.')
+  windowId = window.id
+ } else tab = await chrome.tabs.create({ url: targetUrl, active: false, ...(windowKey ? { windowId } : {}) })
+ await storage.session.set({ [key]: tab.id, ...(windowKey ? { [windowKey]: windowId } : {}) })
  return tab
 }
 async function pump() {
@@ -195,7 +207,7 @@ async function previewPage(url, pageType = 'series') {
   const matches = candidate => {
    try { return work ? matchingWork(candidate, identity.workId) : seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
   }
-  const tab = await captureTab(targetUrl, matches, 'previewTabId', version)
+  const tab = await captureTab(targetUrl, matches, work ? 'previewTabId' : 'seriesPreviewTabId', version, work ? undefined : 'seriesPreviewWindowId')
   const deadline = Date.now() + 120000
   while (Date.now() < deadline) {
    if (version !== connectionVersion) throw new Error('Extension connection changed. Retry the preview.')

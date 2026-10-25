@@ -61,6 +61,12 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const path = join(extension, file)
   await writeFile(path, (await readFile(path, 'utf8')).replaceAll(buildBackend, backend))
  }
+ // New windows can navigate before Playwright attaches its fixture routes.
+ // Open only the test artifact's preview window blank, then navigate it below;
+ // the controller tests verify that installed builds request the AO3 URL.
+ const backgroundPath = join(extension, 'background.js'), background = await readFile(backgroundPath, 'utf8')
+ expect(background).toContain('chrome.windows.create({ url: targetUrl,')
+ await writeFile(backgroundPath, background.replace('chrome.windows.create({ url: targetUrl,', 'chrome.windows.create({ url: "about:blank",'))
  // Only this temporary test artifact opens the shadow roots for Playwright.
  // The installed artifact keeps the same closed roots as the Safari companion.
  const contentPath = join(extension, 'content.js'), content = await readFile(contentPath, 'utf8')
@@ -213,10 +219,20 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const series = await context.newPage()
   await series.goto(seriesUrl, { waitUntil: 'domcontentloaded' })
   await series.addStyleTag({ content: '.work.blurb { border: 1px solid #ccc; padding: 8px; } .work.blurb > dl.stats { float: right; margin: 0; }' })
-  const preview = await app.evaluate(({ id, url }) => new Promise(resolve => {
+  const openedPreview = context.waitForEvent('page')
+  const previewPromise = app.evaluate(({ id, url }) => new Promise(resolve => {
    const api = (window as Window & { chrome?: { runtime: { sendMessage(id: string, body: object, callback: (result: unknown) => void): void } } }).chrome
    api?.runtime.sendMessage(id, { type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, resolve)
   }), { id: extensionId, url: seriesUrl })
+  const previewTab = await openedPreview
+  await previewTab.goto(seriesUrl, { waitUntil: 'domcontentloaded' })
+  const preview = await previewPromise
+  const previewTabs = await worker.evaluate(async () => {
+   const api = (globalThis as unknown as { chrome: { tabs: { query(input: object): Promise<{ url?: string; windowId: number }[]> } } }).chrome
+   return api.tabs.query({})
+  })
+  expect(new Set(previewTabs.filter(tab => tab.url === seriesUrl).map(tab => tab.windowId)).size).toBe(2)
+  expect(series.url()).toBe(seriesUrl)
   expect(preview).toMatchObject({ ok: true, page: { url: seriesUrl } })
   expect((preview as { page: { html: string } }).page.html).toContain('The first story')
   expect(await series.evaluate(() => document.readyState)).toBe('interactive')

@@ -636,6 +636,8 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .story-form .favorite-choice { align-self: flex-start; margin-top: 29px; }
 .story-form > .form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); align-items: stretch; gap: 12px; }
 .story-form > .form-actions > .button { width: 100%; min-height: 44px; margin: 0; }
+.story-form > .form-actions.form-actions-fit { display: flex; flex-wrap: wrap; }
+.story-form > .form-actions.form-actions-fit > .button { width: auto; white-space: nowrap; }
 @media (max-width: 650px) {
   .story-form .reading-progress-row label { font-size: 13px; }
   .story-form .reading-progress-row input, .story-form .reading-progress-row select { padding-inline: 7px; font-size: 13px; }

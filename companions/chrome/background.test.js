@@ -29,6 +29,7 @@ beforeEach(async () => {
   alarms: { create: vi.fn().mockResolvedValue(undefined), onAlarm: event() },
   webNavigation: { onDOMContentLoaded: event() },
   tabs: { update: vi.fn(async (id, change) => ({ id, status: 'loading', ...change })), query: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 7, status: 'loading', url: '' }), get: vi.fn().mockResolvedValue({ id: 7, status: 'complete', url: workUrl }), onUpdated: event() },
+  windows: { create: vi.fn(async ({ url }) => ({ id: 88, tabs: [{ id: 8, windowId: 88, url, status: 'loading' }] })), get: vi.fn(async id => ({ id })) },
   scripting: { executeScript: vi.fn().mockResolvedValue([{ result: { url: workUrl, html: '<h2 class="title">Loaded</h2>' } }]) },
  }
  fetcher = vi.fn(async url => {
@@ -191,7 +192,7 @@ it('ignores DOM-ready events from unrelated tabs and child frames', async () => 
  expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
 })
 
-it('previews only a specifically requested series from the trusted library without claiming works', async () => {
+it('opens requested series in a separate window without claiming matching user tabs or works', async () => {
  state.auth = { token: 'session', userId: 'alice', expiresAt: Math.floor(Date.now() / 1000) + 3600 }
  const url = 'https://archiveofourown.org/series/77'
  chrome.tabs.query.mockResolvedValue([{ id: 8, status: 'complete', url }])
@@ -202,6 +203,9 @@ it('previews only a specifically requested series from the trusted library witho
  await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2 class="heading">Series</h2>' } }))
  expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 8 }, args: [false, 'series'] }))
  expect(chrome.tabs.create).not.toHaveBeenCalled()
+ expect(chrome.windows.create).toHaveBeenCalledWith({ url, type: 'normal', focused: false })
+ expect(state).toMatchObject({ seriesPreviewTabId: 8, seriesPreviewWindowId: 88 })
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
  expect(fetcher).not.toHaveBeenCalled()
 })
 it('rejects series previews from unrelated sites, invalid URLs and disconnected sessions', async () => {
@@ -222,13 +226,13 @@ it('opens the requested next page instead of reusing another page of the series'
  state.auth = { token: 'session', userId: 'alice', expiresAt: Math.floor(Date.now() / 1000) + 3600 }
  const url = 'https://archiveofourown.org/series/77', next = url + '?page=2'
  chrome.tabs.query.mockResolvedValue([{ id: 8, status: 'complete', url }])
- chrome.tabs.create.mockResolvedValue({ id: 9, status: 'complete', url: next })
+ chrome.windows.create.mockResolvedValue({ id: 88, tabs: [{ id: 9, windowId: 88, status: 'complete', url: next }] })
  chrome.tabs.get.mockResolvedValue({ id: 9, status: 'complete', url: next })
  chrome.scripting.executeScript.mockResolvedValue([{ result: { url: next, html: '<h2 class="heading">Series page two</h2>' } }])
  const respond = vi.fn()
  chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url: next }, { url: origin }, respond)
  await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url: next, html: '<h2 class="heading">Series page two</h2>' } }))
- expect(chrome.tabs.create).toHaveBeenCalledWith({ url: next, active: false })
+ expect(chrome.windows.create).toHaveBeenCalledWith({ url: next, type: 'normal', focused: false })
  expect(chrome.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 9 } }))
 })
 
@@ -328,11 +332,11 @@ it.each(['work', 'series'])('captures an explicit %s preview while the parsed ta
 
 it('reuses an owned tab for successive series previews without redirecting browsing tabs', async () => {
  state.auth = { token: 'session', userId: 'alice', expiresAt: Date.now() / 1000 + 3600 }
- let current = { id: 9, url: 'https://archiveofourown.org/series/77', status: 'complete' }
+ let current = { id: 9, windowId: 88, url: 'https://archiveofourown.org/series/77', status: 'complete' }
  chrome.tabs.query.mockResolvedValue([{ id: 20, url: workUrl, status: 'complete' }])
- chrome.tabs.create.mockImplementation(async ({ url }) => { current = { ...current, url }; return current })
+ chrome.windows.create.mockImplementation(async ({ url }) => { current = { ...current, url }; return { id: 88, tabs: [current] } })
  chrome.tabs.get.mockImplementation(async () => current)
- chrome.tabs.update.mockImplementation(async (id, { url }) => { current = { id, url, status: 'complete' }; return current })
+ chrome.tabs.update.mockImplementation(async (id, { url }) => { current = { id, windowId: 88, url, status: 'complete' }; return current })
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: current.url, html: '<h2>Metadata</h2>' } }])
  const listener = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]
  for (const url of ['https://archiveofourown.org/series/77', 'https://archiveofourown.org/series/77?page=2', 'https://archiveofourown.org/series/88']) {
@@ -340,7 +344,29 @@ it('reuses an owned tab for successive series previews without redirecting brows
   listener({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, { url: origin }, respond)
   await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2>Metadata</h2>' } }))
  }
- expect(chrome.tabs.create).toHaveBeenCalledTimes(1)
+ expect(chrome.windows.create).toHaveBeenCalledTimes(1)
+ expect(chrome.tabs.create).not.toHaveBeenCalled()
  expect(chrome.tabs.update).toHaveBeenCalledTimes(2)
  expect(chrome.tabs.update.mock.calls.every(([id]) => id === 9)).toBe(true)
+})
+
+it.each([false, true])('recovers a closed series tab in its separate window (window also closed: %s)', async windowClosed => {
+ state.auth = { token: 'session', userId: 'alice', expiresAt: Date.now() / 1000 + 3600 }
+ Object.assign(state, { seriesPreviewTabId: 9, seriesPreviewWindowId: 88 })
+ const url = 'https://archiveofourown.org/series/77'
+ chrome.tabs.get.mockImplementation(async id => {
+  if (id === 9) throw new Error('Tab closed')
+  return { id: 10, windowId: windowClosed ? 89 : 88, status: 'complete', url }
+ })
+ if (windowClosed) chrome.windows.get.mockRejectedValue(new Error('Window closed'))
+ chrome.windows.create.mockResolvedValue({ id: 89, tabs: [{ id: 10, windowId: 89, url }] })
+ chrome.tabs.create.mockResolvedValue({ id: 10, windowId: 88, url })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url, html: '<h2>Series</h2>' } }])
+ const respond = vi.fn()
+ chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]({ type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, { url: origin }, respond)
+ await vi.waitFor(() => expect(respond).toHaveBeenCalledWith({ ok: true, page: { url, html: '<h2>Series</h2>' } }))
+ if (windowClosed) expect(chrome.windows.create).toHaveBeenCalledWith({ url, type: 'normal', focused: false })
+ else expect(chrome.tabs.create).toHaveBeenCalledWith({ url, active: false, windowId: 88 })
+ expect(state.seriesPreviewTabId).toBe(10)
+ expect(state.seriesPreviewWindowId).toBe(windowClosed ? 89 : 88)
 })

@@ -119,3 +119,38 @@ it('opens a popup, loads every series, and provides bulk controls without import
  expect(confirm).not.toHaveBeenCalled()
  expect(screen.getAllByRole('button', { name: 'Full Series Details Saved' })).toHaveLength(2)
 })
+
+function longPreview(seriesId = 7, count = 45) {
+ return { seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: `Series ${seriesId}`, description: '', works: Array.from({ length: count }, (_, index) => ({ workId: index + 1, url: `https://archiveofourown.org/works/${index + 1}`, title: `Work ${index + 1}`, position: index + 1, authors: [], tags: [], summary: '', wordCount: null, chapters: '1/1', complete: true })) }
+}
+it('pages long series without losing selections and imports selections from every page', () => {
+ const preview = longPreview(), confirm = vi.fn()
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={confirm} onCancel={vi.fn()} />)
+ const pages = () => within(screen.getAllByRole('navigation', { name: 'Result Pages' })[0])
+ expect(screen.getAllByRole('checkbox')).toHaveLength(20)
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 1: Work 1' }))
+ fireEvent.click(pages().getByRole('button', { name: 'Next' }))
+ expect(screen.queryByRole('checkbox', { name: 'Part 1: Work 1' })).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 21: Work 21' }))
+ fireEvent.click(pages().getByRole('button', { name: 'Next' }))
+ expect(screen.getAllByRole('checkbox')).toHaveLength(5)
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 45: Work 45' }))
+ fireEvent.click(pages().getByRole('button', { name: 'Prev' }))
+ expect(screen.getByRole('checkbox', { name: 'Part 21: Work 21' })).toBeChecked()
+ fireEvent.click(pages().getByRole('button', { name: 'Prev' }))
+ expect(screen.getByRole('checkbox', { name: 'Part 1: Work 1' })).toBeChecked()
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([1, 21, 45])
+ expect(mocks.preview).not.toHaveBeenCalled()
+})
+it('applies bulk selection and saving across hidden series pages and deduplicates overlapping works', async () => {
+ const previews = Array.from({ length: 25 }, (_, index) => longPreview(index + 1, 1)), confirm = vi.fn()
+ render(<SeriesImportReview text={previews.map(preview => preview.normalizedUrl).join('\n')} initialPreviews={previews} savedIds={new Set()} busy={false} onConfirm={confirm} onCancel={vi.fn()} />)
+ expect(screen.getAllByRole('region', { name: /• Series/ })).toHaveLength(20)
+ fireEvent.click(within(screen.getByRole('group', { name: 'All Series Top Controls' })).getByRole('button', { name: 'Select All' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Save All Series' }))
+ await waitFor(() => expect(mocks.remember).toHaveBeenCalledTimes(25))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ expect(confirm.mock.calls[0][0]).toHaveLength(1)
+ expect(confirm.mock.calls[0][2]).toHaveLength(25)
+})

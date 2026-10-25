@@ -1,4 +1,5 @@
 import { Dialog } from '../../components/Dialog'
+import { Pagination } from '../library/browsing/Pagination'
 import { WorkSummary } from '../library/summaries/WorkSummary'
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
@@ -13,17 +14,18 @@ import { classifyUrl, extractUrls, groupWorks, type SeriesPreview } from './urls
 export type SeriesWorkSelection = { seriesId: number; works: SeriesPreview['works'] }
 
 type Review = { preview?: SeriesPreview; selected: Set<number>; error?: string; skipped?: boolean; closed?: Partial<Record<'summary' | 'tags', Set<number>>>; detailsSaved?: boolean }
+const reviewPageSize = 20
 
 function SeriesScopeAction({ label, scope, disabled, expanded, onClick }: { label: string; scope: string; disabled?: boolean; expanded?: boolean; onClick(): void }) {
  return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className="text-button clickable-text" aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
 }
 
-export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview }: {
+export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview }: {
  previewCache?: ReadonlyMap<number, SeriesPreview>; onPreview?(preview: SeriesPreview): void
  embedded?: boolean; singleSeries?: boolean; error?: string
  automatic?: boolean
  allowEmpty?: boolean
- showReadingStatus?: boolean; confirmLabel?: string; cancelLabel?: string
+ showReadingStatus?: boolean; fitActions?: boolean; confirmLabel?: string; cancelLabel?: string
  onBusyChange?(busy: boolean): void
  initialReadingStatus?: Status; onReadingStatusChange?(status: Status): void
  text: string; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
@@ -39,6 +41,8 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
  const [reviews, setReviews] = useState<Record<number, Review>>(() => Object.fromEntries([...initialPreviews, ...(previewCache?.values() ?? [])].map(preview => [preview.seriesId, { preview, selected: new Set<number>() }])))
  const [loading, setLoading] = useState<number>()
  const [savingAll, setSavingAll] = useState(false)
+ const [page, setPage] = useState(1)
+ const contentRef = useRef<HTMLElement>(null)
  const saveDescription = 'Load and save full series details from AO3'
  const selections: SeriesWorkSelection[] = [...series.keys()].filter(id => !reviews[id]?.skipped).map(id => ({
   seriesId: id,
@@ -110,12 +114,30 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
  function select(id: number, ids: number[]) { setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(ids) } })) }
  const title = automatic ? 'Import All Series Works' : 'Choose Works From Series'
  const disabled = busy || loading !== undefined || savingAll
- const content = <section className="story-form series-import-review" aria-label="Review Series Imports">
+ const items: { id: number; url: string; work?: SeriesPreview['works'][number] }[] = []
+ for (const [id, url] of series) {
+  const works = reviews[id]?.skipped ? [] : reviews[id]?.preview?.works ?? []
+  if (works.length) for (const work of works) items.push({ id, url, work })
+  else items.push({ id, url })
+ }
+ const pages = Math.max(1, Math.ceil(items.length / reviewPageSize)), currentPage = Math.min(page, pages)
+ const visible = new Map<number, { url: string; works: SeriesPreview['works'] }>()
+ for (const item of items.slice((currentPage - 1) * reviewPageSize, currentPage * reviewPageSize)) {
+  if (!visible.has(item.id)) visible.set(item.id, { url: item.url, works: [] })
+  if (item.work) visible.get(item.id)!.works.push(item.work)
+ }
+ const pagination = pages > 1 && <Pagination inlinePage page={currentPage} pages={pages} total={items.length} size={reviewPageSize} itemLabel="review entries" onPage={next => {
+  setPage(next)
+  const dialog = contentRef.current?.closest('dialog')
+  if (dialog) dialog.scrollTo?.({ top: 0 })
+  else contentRef.current?.scrollIntoView?.({ block: 'start' })
+ }} />
+ const content = <section ref={contentRef} className="story-form series-import-review" aria-label="Review Series Imports">
   {embedded && <h2>{title}</h2>}
   {error && <p role="alert" className="error-message">{error}</p>}
   {automatic && ready && !canConfirm && <p role="status">No new available series works to import. Already saved works are kept.</p>}
   {!singleSeries && <p>{series.size} series detected · {direct.size} directly linked works included.</p>}
-  <p className="field-help">{automatic ? 'All available series works are included automatically.' : 'Only selected works are added to your library.'}{!singleSeries && ' Previews are temporary unless you choose to save full series details. Saving details includes information about unsaved works; it does not add them to your library.'} For extension previews, keep this page open and complete any AO3 sign-in in the requested tab.</p>
+  <p className="field-help">{automatic ? 'All available series works are included automatically.' : 'Only selected works are added to your library.'}{!singleSeries && ' Previews are temporary unless you choose to save full series details. Saving details includes information about unsaved works; it does not add them to your library.'} For extension previews, keep this page open and complete any AO3 sign-in in the separate series preview window.</p>
   {showReadingStatus && <><ImportReadingStatus value={readingStatus} disabled={disabled} onChange={status => { setReadingStatus(status); onReadingStatusChange?.(status) }} />
   <p className="field-help">Applies to the reviewed series and all works imported from these links.</p></>}
   {!singleSeries && <div className="form-actions series-preview-controls" role="group" aria-label="All Series Top Controls">
@@ -124,7 +146,8 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
    <SeriesScopeAction label="View All" scope="all series" disabled={disabled} onClick={() => setVisibility(true)} />
    <SeriesScopeAction label="Hide All" scope="all series" disabled={disabled} onClick={() => setVisibility(false)} />
   </div>}
-  {[...series].map(([id, url]) => {
+  {pagination}
+  {[...visible].map(([id, { url, works: visibleWorks }]) => {
    const review = reviews[id]
    const preview = review?.preview
    const seriesLabel = preview?.title ? `${preview.title} • Series ${id}` : `Series ${id}`
@@ -146,7 +169,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
       <p>{preview.works.length} visible works · {automatic ? available.length : available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>
       {!automatic && <div className="form-actions series-preview-controls" role="group" aria-label="Series Selection Controls">{selectionControls}</div>}
       {!preview.works.length && <p>No available works were found in this listing.</p>}
-      {preview.works.map(work => {
+      {visibleWorks.map(work => {
        const saved = savedIds.has(work.workId), linked = direct.has(work.workId)
        return <div className="series-import-work" key={work.workId}>
         <div className="series-import-work-title"><label className="series-work-choice"><input type="checkbox" disabled={automatic || disabled || saved || linked} checked={automatic || saved || linked || review.selected.has(work.workId)} onChange={event => select(id, event.target.checked ? [...review.selected, work.workId] : [...review.selected].filter(value => value !== work.workId))} />{work.position ? `Part ${work.position}: ` : ''}{work.title}</label><Tooltip description="View on AO3">{tooltipId => <a className="clickable-text series-work-link" href={work.url} target="_blank" rel="noreferrer" aria-label={`View on AO3: ${work.title}`} aria-describedby={tooltipId}><ExternalLink size={18} aria-hidden="true" /></a>}</Tooltip></div>
@@ -160,13 +183,14 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
     </>}
    </section>
   })}
-  <p className="field-help">Overlapping selections are imported once. Original series part numbers are preserved when work metadata loads.</p>
+  {pagination}
+  <p className="field-help">Selections and bulk actions apply across all pages. Overlapping selections are imported once. Original series part numbers are preserved when work metadata loads.</p>
   {!singleSeries && <div className="form-actions series-preview-controls" aria-label="All Series Controls">
    <Tooltip portal description={saveDescription}>{id => <button type="button" className="button secondary" aria-describedby={id} disabled={disabled || !ready || [...series.keys()].every(id => reviews[id]?.skipped || reviews[id]?.detailsSaved)} onClick={() => void saveAllDetails()}>Save All Series</button>}</Tooltip>
    <SeriesScopeAction label="Hide All" scope="all series" disabled={disabled} onClick={() => setVisibility(false)} />
    <SeriesScopeAction label="Select All" scope="all series" disabled={disabled || automatic} onClick={() => setAllSelected(true)} />
   </div>}
-  <div className="form-actions"><button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={disabled} onClick={onCancel}>{cancelLabel}</button></div>
+  <div className={`form-actions${fitActions ? ' form-actions-fit' : ''}`}><button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={disabled} onClick={onCancel}>{cancelLabel}</button></div>
  </section>
  return embedded ? content : <Dialog title={title} className="series-review-dialog" busy={disabled} onClose={onCancel}>{content}</Dialog>
 }

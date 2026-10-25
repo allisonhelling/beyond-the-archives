@@ -1,12 +1,8 @@
 import { PersonalRatingProvider } from '../features/settings/PersonalRatingSettings'
-import { SettingsPage } from '../features/settings/SettingsPage'
 import { LibrarySyncProvider } from '../features/imports/LibrarySyncProvider'
-import { DisplayExamplePage } from '../features/library/display/DisplaySettings'
 import { BrowsingPosition } from '../features/library/browsing/BrowsingPosition'
-import { SeriesPage } from '../features/library/series/SeriesPage'
-import { ImportPage } from '../features/imports/ImportPage'
 import { ExtensionConnection } from '../features/imports/ExtensionConnection'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { ArrowRight, BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, Layers, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
 import { LibraryProvider } from '../features/library/LibraryProvider'
@@ -18,6 +14,12 @@ import { useAuth } from '../features/auth/auth-context'
 import { AuthScreen } from '../features/auth/AuthScreen'
 import { supabase } from '../lib/supabase'
 import { sampleMode } from '../lib/sample-mode'
+
+// Keep the reading and library routes eager; load secondary pages when visited.
+const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then(module => ({ default: module.SettingsPage })))
+const ImportPage = lazy(() => import('../features/imports/ImportPage').then(module => ({ default: module.ImportPage })))
+const SeriesPage = lazy(() => import('../features/library/series/SeriesPage').then(module => ({ default: module.SeriesPage })))
+const DisplayExamplePage = lazy(() => import('../features/library/display/DisplaySettings').then(module => ({ default: module.DisplayExamplePage })))
 
 const navigation = [
   { to: '/reading', label: 'Currently Reading', mobileLabel: 'Reading', icon: BookOpen },
@@ -78,7 +80,7 @@ function Shell() {
   return <div className="app-shell"><BrowsingPosition /><a className="skip-link" href="#main">Skip to content</a><header className="app-header"><Brand /><nav className="desktop-nav" aria-label="Main Navigation">{navigation.filter(item => item.to !== '/features' && item.to !== '/add').map(({ to, label }) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav><div className="header-actions"><div className="add-wrapper"><NavLink className="button primary compact" to="/add?mode=finished">Add Story</NavLink></div><div className="profile-wrapper" ref={profileRef}><button className="avatar profile-trigger" aria-label="Profile Menu" aria-expanded={profileOpen} aria-controls="profile-options" title={session?.user.email} onClick={() => setProfileOpen(!profileOpen)}>{String(profileName).slice(0, 1).toUpperCase()}</button>{profileOpen && <section className="profile-menu menu-surface" id="profile-options" aria-label="Profile Menu"><div className="profile-identity"><strong>{profileName}</strong><p>{session?.user.email}</p></div><NavLink className="profile-action mobile-profile-action" to="/imports" onClick={() => setProfileOpen(false)}><History size={17} />Import History from AO3</NavLink><NavLink className="profile-action" to="/features" onClick={() => setProfileOpen(false)}><Sparkles size={17} />Features</NavLink><NavLink className="profile-action" to="/settings" onClick={() => setProfileOpen(false)}><Settings size={17} />Settings</NavLink><button className="profile-action" disabled={signingOut || sampleMode} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? 'Logging Out…' : 'Log Out'}</button></section>}</div></div></header>
     <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile Navigation">{navigation.filter(item => item.mobileLabel).map(({ to, mobileLabel, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setProfileOpen(false)}><Icon size={21} aria-hidden="true" />{mobileLabel}</NavLink>)}</nav>
 
-    <main id="main" className="app-main" tabIndex={-1}>{error && <p role="alert" className="error-message">{error}</p>}<Routes><Route path="/reading" element={<LibraryPage reading />} /><Route path="/library" element={<LibraryPage />} /><Route path="/imports" element={<ImportPage />} /><Route path="/import-fic" element={<Navigate to="/add?import=link" replace />} /><Route path="/add" element={<AddStoryPage />} /><Route path="/series/:id" element={<SeriesPage />} /><Route path="/stories/:id" element={<StoryDetailsPage />} /><Route path="/stats" element={<FoundationPage kind="stats" />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/settings/example-work" element={<DisplayExamplePage kind="work" />} /><Route path="/settings/example-series" element={<DisplayExamplePage kind="series" />} /><Route path="/features" element={<FeaturesPage />} /><Route path="*" element={<Navigate to="/reading" replace />} /></Routes></main><footer className="app-footer"><span>For the stories you can’t put down.</span><span><LockKeyhole size={12} /> A private AO3 reading companion</span></footer>
+    <main id="main" className="app-main" tabIndex={-1}>{error && <p role="alert" className="error-message">{error}</p>}<Suspense fallback={<p role="status">Loading page…</p>}><Routes><Route path="/reading" element={<LibraryPage reading />} /><Route path="/library" element={<LibraryPage />} /><Route path="/imports" element={<ImportPage />} /><Route path="/import-fic" element={<Navigate to="/add?import=link" replace />} /><Route path="/add" element={<AddStoryPage />} /><Route path="/series/:id" element={<SeriesPage />} /><Route path="/stories/:id" element={<StoryDetailsPage />} /><Route path="/stats" element={<FoundationPage kind="stats" />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/settings/example-work" element={<DisplayExamplePage kind="work" />} /><Route path="/settings/example-series" element={<DisplayExamplePage kind="series" />} /><Route path="/features" element={<FeaturesPage />} /><Route path="*" element={<Navigate to="/reading" replace />} /></Routes></Suspense></main><footer className="app-footer"><span>For the stories you can’t put down.</span><span><LockKeyhole size={12} /> A private AO3 reading companion</span></footer>
   </div>
 }
 

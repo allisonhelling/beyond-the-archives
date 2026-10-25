@@ -3348,3 +3348,33 @@ test('Dynamic Bookmarks is available only for library list sync and reveals opti
  await expect(check).toBeChecked()
  expect(await sync.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 })
+
+test('long series review dialogs page works and preserve selections across pages', async ({ page }) => {
+ await fixture(page)
+ const preview = { ...seriesPreview, works: Array.from({ length: 45 }, (_, index) => ({ ...seriesPreview.works[0], workId: index + 1, position: index + 1, title: `Paged Work ${index + 1}`, url: `https://archiveofourown.org/works/${index + 1}` })) }
+ const submitted: string[][] = []
+ await page.route('**/functions/v1/series-preview', route => route.fulfill({ json: { preview } }))
+ await page.route('**/rest/v1/rpc/submit_import_urls', route => {
+  submitted.push(route.request().postDataJSON().p_urls)
+  return route.fulfill({ json: 'paged-series-batch' })
+ })
+ await page.goto('/imports'); await login(page)
+ await page.getByLabel('AO3 URLs', { exact: true }).fill(preview.normalizedUrl)
+ await page.getByRole('button', { name: 'Review Series', exact: true }).click()
+ const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ await expect(dialog.getByRole('checkbox')).toHaveCount(20)
+ const pages = dialog.getByRole('navigation', { name: 'Result Pages' }).first()
+ await dialog.getByRole('checkbox', { name: 'Part 1: Paged Work 1', exact: true }).check()
+ await pages.getByRole('spinbutton', { name: 'Go to Page' }).fill('3')
+ await pages.getByRole('spinbutton', { name: 'Go to Page' }).press('Enter')
+ await expect(dialog.getByRole('checkbox')).toHaveCount(5)
+ await dialog.getByRole('checkbox', { name: 'Part 45: Paged Work 45', exact: true }).check()
+ await pages.getByRole('button', { name: 'Prev', exact: true }).click()
+ await dialog.getByRole('checkbox', { name: 'Part 21: Paged Work 21', exact: true }).check()
+ await pages.getByRole('button', { name: 'Prev', exact: true }).click()
+ await expect(dialog.getByRole('checkbox', { name: 'Part 1: Paged Work 1', exact: true })).toBeChecked()
+ expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+ await dialog.getByRole('button', { name: 'Import Selected', exact: true }).click()
+ await expect(dialog).toHaveCount(0)
+ expect(submitted).toEqual([['https://archiveofourown.org/works/1', 'https://archiveofourown.org/works/21', 'https://archiveofourown.org/works/45']])
+})

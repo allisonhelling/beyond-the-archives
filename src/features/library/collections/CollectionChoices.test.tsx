@@ -38,7 +38,8 @@ it('reuses saved custom colors as swatches without duplicates or default-collect
   expect(screen.getAllByRole('radio', { name: 'Burgundy' })).toHaveLength(1)
   expect(screen.queryByRole('radio', { name: '#654321' })).not.toBeInTheDocument()
   expect(screen.queryByRole('radio', { name: 'red' })).not.toBeInTheDocument()
-  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Shared color')
+  // Set up the name once; this test exercises color reuse, selection, and saving.
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Shared color' } })
   await user.click(screen.getByRole('radio', { name: '#abcdef' }))
   expect(screen.getByRole('radio', { name: '#abcdef' })).toBeChecked()
   expect(screen.getByLabelText('Collection Preview').querySelector('.collection-spine')).toHaveStyle('--cover-color: #abcdef')

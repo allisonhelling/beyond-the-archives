@@ -218,14 +218,14 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   {state?.error && <p role="alert" className="error-message">{state.error}</p>}
   </>}
   {state?.status === 'ready' && state.importToCollection && state.collection && <label>New Collection Name<input value={collectionName ?? state.collection.name} disabled={busy || Boolean(state.collectionId) || createdCollection?.scanId === state.id} onChange={event => setCollectionName(event.target.value)} /></label>}
-  <div className="form-actions">
+  <div className={`form-actions${state?.hasMore ? ' form-actions-fit' : ''}`}>
    {state?.status === 'running' && <button className="button secondary" disabled={busy} onClick={() => void action('pause')}>Pause Scan</button>}
    {state?.status === 'paused' && isLibrarySyncSafetyLimit(state) && <button className="button primary" disabled={busy || state.batchVersion !== 1} onClick={() => void action('prepare-batch')}>Prepare Saved Batch</button>}
    {state?.status === 'paused' && !isLibrarySyncSafetyLimit(state) && <button className="button secondary" disabled={busy} onClick={() => void action('resume')}>Resume Scan</button>}
    {state?.status === 'ready' && (seriesReview?.scanId !== state.id || seriesReview.batchStart !== (state.batchStart ?? 0)) && <button className="button primary" disabled={busy} onClick={() => void requestSave()}>{state.hasMore ? 'Import Batch and Continue' : 'Import Scanned Works'}</button>}
    {saved && <button className="button secondary" disabled={busy} onClick={() => void action('discard')}>Discard Scan</button>}
   </div>
-  {state?.status === 'ready' && seriesReview?.scanId === state.id && seriesReview.batchStart === (state.batchStart ?? 0) && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty confirmLabel={state.hasMore ? 'Import Batch and Continue' : 'Import Selected Works'} onConfirm={works => {
+  {state?.status === 'ready' && seriesReview?.scanId === state.id && seriesReview.batchStart === (state.batchStart ?? 0) && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} key={state.id} initialPreviews={seriesReview.previews} text={seriesReview.text} savedIds={new Set()} busy={busy} showReadingStatus={false} allowEmpty fitActions={state.hasMore} confirmLabel={state.hasMore ? 'Import Batch and Continue' : 'Import Selected Works'} onConfirm={works => {
    selection.current = { scanId: state.id, batchStart: state.batchStart ?? 0, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
