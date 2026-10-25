@@ -80,7 +80,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
   const extensionId = new URL(worker.url()).host
   if (local) expect(extensionId).toBe(localExtensionId)
-  const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">').replace('</head>', '<style>.summary blockquote { font-size: 14px; }</style></head>').replace('<h2 class="title heading">', '<main id="main"><div id="workskin"><h2 class="title heading">').replace('</body>', '</div><div id="kudos">Kudos</div></main></body>')
+  const fixture = (await readFile('server/ao3/fixtures/work.html', 'utf8')).replace('<dl>', '<dl class="work meta">').replace('</head>', '<style>.summary blockquote { font-size: 14px; }</style></head>').replace('<h2 class="title heading">', '<main id="main"><div id="workskin"><h2 class="title heading">').replace('</body>', '<div id="chapters"><div class="userstuff"><p>Only three words.</p></div><div class="notes">Private author notes</div></div></div><div id="kudos">Kudos</div></main></body>')
   await context.route(`${appOrigin}/**`, route => route.fulfill({ contentType: 'text/html', body: '<html><body>Hosted library test</body></html>' }))
   let slowImage = new Promise<void>(resolve => { releaseImage = resolve })
   await context.route('https://archiveofourown.org/**', async route => {
@@ -159,9 +159,10 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await bar.getByLabel('Private Notes', { exact: true }).fill('Edited directly from Chrome')
   await bar.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(bar.getByRole('status')).toHaveText('Saved')
-  await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Through Chapter 1 as Read', exact: true }).click()
+  await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Read', exact: true }).click()
   await expect(bar.getByText('Ch. 1 / 6', { exact: true })).toBeVisible()
   expect(barEntries.get(123)).toMatchObject({ notes: 'Edited directly from Chrome', status: 'reading', progress: 1 })
+  expect(barRequests.at(-1)!.p_input.chapter_read).toEqual({ chapter: 1, chapter_id: '910', word_count: 3 })
   expect(await ao3.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
   expect(await ao3.evaluate(() => document.body.textContent)).not.toContain('paired-chrome-secret')
   // Saving from a later chapter retrieves the work summary from the first page.

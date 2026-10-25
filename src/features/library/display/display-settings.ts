@@ -1,3 +1,4 @@
+import type { DisplayLayout } from '../../../lib/use-layout'
 import { ao3MetadataLabels, metadataLabels, newWorkInfoFields, newWorkTileFields } from './ao3-fields'
 export const displaySettingsKey = 'between-chapters:display:v1'
 const changeEvent = 'between-chapters:display-changed'
@@ -7,7 +8,7 @@ export const displayGroups = {
   workHeader: { title: 'Work Pages · Header', fields: { series: 'Series', authors: 'Authors', fandoms: 'Fandoms and AO3 Rating', stats: 'Statistics' } },
   workStats: { title: 'Work Pages · Statistics', fields: { words: 'Word Count', chapters: 'Chapters', publication: 'Publication Status', updated: 'Date Updated' } },
   workPage: { title: 'Work Pages · Sections', fields: { progress: 'Reading and Organization', notes: 'Private Notes', information: 'Story Information', metadata: 'Metadata Controls' } },
-  workInfo: { title: 'Work Pages · Story Information', fields: { summary: ao3MetadataLabels.summary, relationships: ao3MetadataLabels.relationships, characters: ao3MetadataLabels.characters, tags: ao3MetadataLabels.tags, allTags: ao3MetadataLabels.allTags, personalTags: 'Personal Tags', saved: 'Saved Date', edited: 'Last Edited', other: 'Other Metadata', ...metadataLabels(newWorkInfoFields) } },
+  workInfo: { title: 'Work Pages · Story Information', fields: { summary: ao3MetadataLabels.summary, relationships: ao3MetadataLabels.relationships, characters: ao3MetadataLabels.characters, tags: ao3MetadataLabels.tags, allTags: ao3MetadataLabels.allTags, personalTags: 'Personal Tags', saved: 'Saved Date', chapterHistory: 'Chapter Reading History', edited: 'Last Edited', other: 'Other Metadata', ...metadataLabels(newWorkInfoFields) } },
   workOther: { title: 'Work Pages · Other Metadata', fields: { ...ao3MetadataLabels, checked: 'Metadata Last Checked', canonical: 'Verified Canonical URL', original: 'Original Provided URL', provided: 'Updated Provided URL' } },
   seriesTile: { title: 'Series Tiles', fields: { ...metadataLabels(['category']), favorite: 'Favorite Icon', rec: 'Recommended Icon', authors: 'Authors', fandoms: 'Fandoms', reading: 'Reading Status', count: 'Works in Library', words: 'Word Count', relationships: 'Relationships', characters: 'Characters', tags: 'Additional Tags', warnings: 'AO3 Warnings', personalRating: 'Personal Rating (Average)', collections: 'Custom Collections', kudos: 'AO3 Kudos', description: 'Description', notes: 'Private Notes', creatorNotes: 'Creator Notes', updated: 'Date Updated', begun: 'Series Begun', works: 'Work List' } },
   seriesHeader: { title: 'Series Pages · Header', fields: { authors: 'Authors', fandoms: 'Fandoms', stats: 'Statistics', source: 'Details Source and Last Fetched' } },
@@ -41,6 +42,35 @@ export function subscribeDisplay(listener: () => void) {
   window.addEventListener('storage', listener)
   return () => { window.removeEventListener(changeEvent, listener); window.removeEventListener('storage', listener) }
 }
+
+export const viewportPresets = {
+ 'iphone-se': { label: 'iPhone SE', width: 320, height: 568 },
+ 'iphone-13': { label: 'iPhone 13 / 14', width: 390, height: 844 },
+ 'iphone-14-pro': { label: 'iPhone 14 Pro', width: 393, height: 852 },
+ 'pixel-7': { label: 'Pixel 7', width: 412, height: 915 },
+ tablet: { label: 'Tablet', width: 768, height: 1024 },
+ laptop: { label: 'Laptop', width: 1280, height: 800 },
+ desktop: { label: 'Desktop', width: 1440, height: 900 },
+} as const
+export type PreviewViewport = { width: number; height: number }
+export function previewViewports(raw = displaySnapshot()): Record<DisplayLayout, PreviewViewport> {
+ let saved: { previewViewports?: Partial<Record<DisplayLayout, PreviewViewport>> } = {}
+ try { saved = JSON.parse(raw) ?? {} } catch { /* Use standard viewport sizes. */ }
+ return Object.fromEntries((['mobile', 'desktop'] as const).map(layout => {
+  const value = saved.previewViewports?.[layout]
+  const size = value && validViewport(value) ? value : viewportPresets[layout === 'mobile' ? 'iphone-13' : 'desktop']
+  return [layout, { width: size.width, height: size.height }]
+ })) as Record<DisplayLayout, PreviewViewport>
+}
+export function validViewport(value: PreviewViewport) {
+ return Number.isInteger(value.width) && value.width >= 280 && value.width <= 3840 && Number.isInteger(value.height) && value.height >= 320 && value.height <= 3840
+}
+export function savePreviewViewports(viewports: Record<DisplayLayout, PreviewViewport>) {
+ if (!Object.values(viewports).every(validViewport)) throw new Error('Enter whole widths from 280 to 3,840 and heights from 320 to 3,840 pixels.')
+ let saved: Record<string, unknown> = {}
+ try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
+ writeDisplay({ ...saved, previewViewports: viewports })
+}
 const tileFacts: Partial<Record<DisplayGroup, string[]>> = { workTile: ['series', 'rating', 'words'], seriesTile: ['reading', 'count', 'words'] }
 export const displayDivider = (key: string) => /^divider:[a-zA-Z0-9-]{1,80}$/.test(key)
 export const displayLine = (key: string) => /^line:[a-zA-Z0-9-]{1,80}$/.test(key)
@@ -48,10 +78,12 @@ export function displayFieldLabel(group: DisplayGroup, field: string) {
   return displayLine(field) ? 'Grouped Line' : shortDisplayDivider(field) ? 'Short Divider' : displayDivider(field) ? 'Divider' : (displayGroups[group].fields as Record<string, string>)[field]
 }
 
-export function displayPreference(group: DisplayGroup, raw: string): DisplayPreference {
+export function displayPreference(group: DisplayGroup, raw: string, layout: DisplayLayout = 'desktop'): DisplayPreference {
   const keys = Object.keys(displayGroups[group].fields)
   let saved: Record<string, { order?: unknown; hidden?: unknown; lines?: unknown }> = {}
   try { saved = JSON.parse(raw) ?? {} } catch { /* Malformed preferences use defaults. */ }
+  const profiles = saved as unknown as { mobile?: Record<string, { order?: unknown; hidden?: unknown; lines?: unknown }> }
+  if (layout === 'mobile' && profiles.mobile && typeof profiles.mobile === 'object') saved = { ...saved, ...profiles.mobile }
   const value = saved[group]
   const strings = (input: unknown) => Array.isArray(input) ? input.filter((key): key is string => typeof key === 'string') : []
   let order = strings(value?.order)
@@ -99,12 +131,23 @@ export function tagAppearance(raw: string): TagAppearance {
   const colors = global ? global.colors : Object.assign({}, ...legacy.map(value => value?.colors ?? {}).reverse())
   return { shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
 }
-export function displayPreferences(raw = displaySnapshot()): DisplayPreferences {
-  return { ...Object.fromEntries((Object.keys(displayGroups) as DisplayGroup[]).map(group => [group, displayPreference(group, raw)])), tagAppearance: tagAppearance(raw) } as DisplayPreferences
+export function displayPreferences(raw = displaySnapshot(), layout: DisplayLayout = 'desktop'): DisplayPreferences {
+  return { ...Object.fromEntries((Object.keys(displayGroups) as DisplayGroup[]).map(group => [group, displayPreference(group, raw, layout)])), tagAppearance: tagAppearance(raw) } as DisplayPreferences
 }
 
 /** Commit the entire draft in one write, then notify mounted work and series views. */
-export function saveDisplay(preferences: DisplayPreferences) {
+export function saveDisplay(preferences: DisplayPreferences, layout: DisplayLayout = 'desktop') {
+  let saved: Record<string, unknown> = {}
+  try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
+  if (layout === 'desktop' && !saved.mobile) {
+    const mobile: Partial<DisplayPreferences> = { ...displayPreferences(displaySnapshot(), 'mobile') }
+    delete mobile.tagAppearance
+    saved.mobile = mobile
+  }
+  const { tagAppearance, ...groups } = preferences
+  writeDisplay({ ...saved, ...(layout === 'mobile' ? { mobile: groups } : groups), tagAppearance })
+}
+function writeDisplay(preferences: object) {
   const raw = JSON.stringify(preferences)
   localStorage.setItem(displaySettingsKey, raw)
   fallback = raw

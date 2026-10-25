@@ -5,6 +5,8 @@
 .results-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 18px; }
 .pagination-trailing, .pagination-controls, .pagination-page, .pagination-size { display: flex; align-items: center; gap: 8px; }
 .pagination-trailing { grid-column: 3; justify-self: end; min-width: 0; gap: 0; }
+.pagination-inline .pagination-controls > [role=status] { white-space: normal; text-align: center; }
+.pagination-inline .pagination-page { display: inline-flex; vertical-align: middle; }
 .pagination-controls { grid-column: 2; white-space: nowrap; }
 .pagination-page { grid-column: 1; justify-self: start; white-space: nowrap; }
 .pagination-page input { width: 5rem; }

@@ -59,7 +59,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
    const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
-    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, tabId: null, nextAt: Date.now(), keys: [], error: '' }
+    startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, diagnosticsVersion: 1, skippedEntries: [], chapterDateIssues: [], tabId: null, nextAt: Date.now(), keys: [], error: '' }
    await write(next); return { state: next }
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
@@ -162,15 +162,21 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
      throw new Error(problem.error ?? 'Chapter Index could not be read. Check the scan tab and resume.')
     }
     if ((await auth())?.userId !== state.userId) return
-    let dates = {}
-    try { if (!result.notFound) dates = parseChapterDates(result.html, request.workId, request.published) } catch { /* An ambiguous index leaves progress unconfirmed. */ }
+    let dates = {}, reason = result.notFound ? 'AO3 reported that this work or chapter index was unavailable.' : ''
+    try { if (!result.notFound) dates = parseChapterDates(result.html, request.workId, request.published) } catch { reason = 'The chapter index contained ambiguous release dates.' }
     const complete = Object.keys(dates).length === request.published
     if (complete) {
      const key = pageKey(state, request.page), saved = (await storage.local.get(key))[key]
      if (!saved?.rows?.[request.row]) throw new Error('The saved listing page is missing. Discard this scan and retry.')
      saved.rows[request.row]['chapter dates'] = JSON.stringify(dates)
      await storage.local.set({ [key]: saved })
-    } else state.chapterDatesUnavailable++
+    } else {
+     state.chapterDatesUnavailable++
+     state.chapterDateIssues ??= []
+     state.chapterDateIssues.push({ workId: request.workId, title: request.title || `AO3 Work ${request.workId}`, url: `https://archiveofourown.org/works/${request.workId}`,
+      sourceUrl: state.requestUrl, expectedChapters: request.published, foundChapters: Object.keys(dates).length,
+      reason: reason || `Release dates were available for ${Object.keys(dates).length} of ${request.published} published chapters.` })
+    }
     state.chapterDatesChecked++; state.chapterQueue.shift(); state.chapterRequest = null
     await write(state); changed(); return
    }
@@ -213,9 +219,11 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     }
     await storage.local.set({ [pageKey(state, (state.startPage ?? 1) + state.pages)]: { rows, ...(state.kind === 'series_works' ? { seriesUrl: state.currentUrl, ...(seriesPreview ? { seriesPreview } : {}) } : {}) } })
     if (state.checkChapterDates && (!state.readingStatus || state.readingStatus === 'reading')) {
-     state.chapterQueue = readAo3Rows(rows).flatMap((work, row) => work.source === 'bookmarks' && work.workId && work.workStatus !== 'deleted' && work.bookmarkDate && work.metadata.published_chapters && bookmarkReadingState(work).status === 'reading' && !known.has(keys[row]) ? [{ workId: work.workId, published: work.metadata.published_chapters, page: (state.startPage ?? 1) + state.pages, row }] : [])
+     state.chapterQueue = readAo3Rows(rows).flatMap((work, row) => work.source === 'bookmarks' && work.workId && work.workStatus !== 'deleted' && work.bookmarkDate && work.metadata.published_chapters && bookmarkReadingState(work).status === 'reading' && !known.has(keys[row]) ? [{ workId: work.workId, title: work.metadata.title, published: work.metadata.published_chapters, page: (state.startPage ?? 1) + state.pages, row }] : [])
     }
     state.keys.push(...keys.map(key => state.kind === 'series_works' ? `series-work:${key}` : key)); state.pages++; state.count += rows.length; state.skipped += result.skipped
+    state.skippedEntries ??= []
+    state.skippedEntries.push(...result.skippedEntries ?? [])
     if (state.kind !== 'series_works') state.listPages = (state.listPages ?? 0) + 1
     state.captured = true
     state.done = !result.hasNext || state.mode === 'quick' && state.kind !== 'series_works' && keys.some(key => known.has(key))
@@ -254,8 +262,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior } = result.state
-    return { state: { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior } }
+    const { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } = result.state
+    return { state: { id, status, url, mode, pages, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } }
    }
    return result
   } finally {

@@ -1,6 +1,56 @@
 import { fixture, login, selectLibraryShelf } from './library-fixture'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
+test('work info retains chapter word counts, read timestamps and rereads after reload', async ({ page }) => {
+ const tables = await fixture(page)
+ const first = { id: 'read-1', action: 'chapter_read', at: '2026-10-24T12:00:00Z', status: 'reading', chapter: 4, chapter_id: '104', word_count: 1234, is_reread: false }
+ tables.works.push({ id: 'read-work', ao3_work_id: 123, title: 'Recorded Chapters', published_chapters: 10, total_chapters: 10, verified_chapters: {} })
+ tables.library_entries.push({ id: 'read-entry', work_id: 'read-work', reading_status: 're_reading', last_read_chapter: 5, notes: '', is_favorite: false, original_url: 'https://archiveofourown.org/works/123', metadata_overrides: {}, reading_history: [first, { ...first, id: 'read-2', at: '2026-10-24T13:00:00Z', word_count: 1200, is_reread: true }, { ...first, id: 'read-3', chapter: 5, word_count: null }] })
+ await page.goto('/stories/read-entry'); await login(page)
+ await page.evaluate(() => localStorage.setItem('between-chapters:display:v1', JSON.stringify({ workInfo: { hidden: ['saved'], order: ['saved', 'chapterHistory'] } })))
+ await page.reload()
+ for (let attempt = 0; attempt < 2; attempt++) {
+  const history = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: '3 Chapter Reads' }) })
+  await expect(history.locator('summary')).toHaveText('3 Chapter Reads · 2,434 Recorded Words')
+  await history.locator('summary').click()
+  await expect(history.getByRole('listitem').nth(0)).toContainText('Chapter 4 · 1,234 Words · First Read')
+  await expect(history.getByRole('listitem').nth(1)).toContainText('Chapter 4 · 1,200 Words · Re-Read')
+  await expect(history.getByRole('listitem').nth(2)).toContainText('Chapter 5 · Word Count Unavailable')
+  await expect(history.locator('time').first()).toHaveAttribute('datetime', first.at)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  if (!attempt) await page.reload()
+ }
+})
+test('saved library sync reports retain totals and open skipped entries and incomplete chapter indexes after reload', async ({ page }) => {
+ await fixture(page)
+ const skipped = { title: 'Hidden Bookmark', url: 'https://archiveofourown.org/bookmarks/12', sourceUrl: 'https://archiveofourown.org/users/alice/bookmarks?page=4', reason: 'No AO3 work link was available.' }
+ const dates = { title: 'Incomplete Work', url: 'https://archiveofourown.org/works/34', sourceUrl: 'https://archiveofourown.org/works/34/navigate', reason: 'The chapter index was incomplete.', expectedChapters: 5, foundChapters: 3 }
+ await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({ json: { total: 1, reports: [{ id: 'saved-scan', completed_at: '2026-10-24T12:00:00Z', report: {
+  id: 'saved-scan', status: 'complete', url: 'https://archiveofourown.org/users/alice/bookmarks', autoImport: true, listPages: 117, pages: 117, count: 2037, skipped: 4,
+  checkChapterDates: true, chapterDatesChecked: 201, chapterDatesUnavailable: 2, skippedEntries: [skipped], chapterDateIssues: [dates],
+ } }] } }))
+ await page.goto('/imports'); await login(page)
+ await page.getByRole('button', { name: 'View Saved Sync Reports', exact: true }).click()
+ await expect(page.getByText(/117 Bookmark pages saved · 117 total pages saved · 2037 works collected/)).toBeVisible()
+ await page.getByRole('button', { name: '4 Unsupported Entries Skipped', exact: true }).click()
+ let dialog = page.getByRole('dialog', { name: 'Skipped AO3 Entries', exact: true })
+ await expect(dialog.getByRole('link', { name: skipped.title, exact: true })).toHaveAttribute('href', skipped.url)
+ await expect(dialog.getByText(skipped.reason, { exact: true })).toBeVisible()
+ await expect(dialog.getByRole('link', { name: 'Open Source Listing', exact: true })).toHaveAttribute('href', skipped.sourceUrl)
+ expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+ await dialog.getByRole('button', { name: 'Close Dialog', exact: true }).click()
+ await page.reload()
+ await page.getByRole('button', { name: 'View Saved Sync Reports', exact: true }).click()
+ await page.getByRole('button', { name: '2 Unavailable or Incomplete', exact: true }).click()
+ dialog = page.getByRole('dialog', { name: 'Unavailable or Incomplete Chapter Dates', exact: true })
+ await expect(dialog.getByRole('link', { name: dates.title, exact: true })).toHaveAttribute('href', dates.url)
+ await expect(dialog.getByRole('link', { name: 'Open Chapter Index', exact: true })).toHaveAttribute('href', dates.sourceUrl)
+ await expect(dialog.getByText('3 of 5 chapter dates available.', { exact: true })).toBeVisible()
+ expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+ await dialog.getByRole('button', { name: 'Close Dialog', exact: true }).click()
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 async function closeAppearance(dialog: Locator) {
   for (const kind of ['Color', 'Symbol']) {
     const button=dialog.getByRole('button',{name:`Choose ${kind}`,exact:true})
@@ -270,7 +320,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(recBounds.x).toBeGreaterThanOrEqual(favoriteBounds!.x + favoriteBounds!.width)
   expect(recBounds.x + recBounds.width).toBeLessThanOrEqual(metadataActions!.x)
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', 'Estimated Reading Time', 'Last Edited', 'Other Metadata'])
+  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', 'Chapter Reading History', 'Last Edited', 'Other Metadata'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -896,6 +946,11 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   const complete = cards.filter({ has: page.getByRole('heading', { name: 'Spine story 2', exact: true }) })
   const unknown = cards.filter({ has: page.getByRole('heading', { name: 'Spine story 3', exact: true }) })
   const zero = cards.filter({ has: page.getByRole('heading', { name: 'Spine story 4', exact: true }) })
+  const readingIcon = first.locator('.spine-status')
+  await expect(readingIcon).toHaveAttribute('aria-label', 'Reading')
+  await readingIcon.focus()
+  await expect(first.getByRole('tooltip', { name: 'Reading', exact: true })).toBeVisible()
+  expect(await readingIcon.evaluate(node => Boolean(node.closest('footer')!.querySelector('.spine-divider')!.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
   await expect(first.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '5')
   await expect(first.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '8')
   await expect(first.locator('.spine-progress-fill')).toHaveAttribute('style', 'width: 62.5%;')
@@ -1842,7 +1897,7 @@ test('Paused Reading pauses stories without losing progress and uses the selecte
   await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-title').nth(2)).toHaveText('Paused Reading')
   await expect(shelf.locator('.collection-spine:not(.collection-spine-mini) .collection-spine-title').nth(3)).toHaveText('To Read')
   const paused = shelf.getByRole('button', { name: 'Paused Reading', exact: true })
-  await expect(paused).toHaveCSS('--cover-color', '#92504e')
+  await expect(paused).toHaveCSS('--cover-color', '#8b491e')
   await expect(paused.locator('.collection-spine-count')).toHaveText('1')
   for (const [name, design] of [['Currently Reading','art-deco'],['Paused Reading','linked-diamonds'],['To Read','library-deco'],['Series','book-stack'],['Favorites','star-trails-cascading']]) {
     await expect(shelf.getByRole('button', {name,exact:true})).toHaveAttribute('data-spine-design',design)
@@ -2004,7 +2059,9 @@ test('selects collections for bulk appearance edits without changing summaries a
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 })
       for (const [left, right] of [
+        [page.locator('.library-editing .custom-dropdown'), page.getByRole('button', { name: 'Done Editing', exact: true })],
         [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
+        [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
         [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
       ]) {
         const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
@@ -2013,6 +2070,7 @@ test('selects collections for bulk appearance edits without changing summaries a
       }
       await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
     }
+    await expect(page.getByRole('button', {name: 'Hidden', exact: true})).not.toHaveAttribute('aria-describedby')
     for (const name of ['First', 'Second', 'Third']) await shelf.getByRole('button', { name, exact: true }).click()
   } else {
     await shelf.getByRole('button', { name: 'First', exact: true }).click({ modifiers: ['Shift'] })
@@ -2730,7 +2788,7 @@ test('a completed direct fic import offers its related series and imports only s
  expect(tables.library_entries).toHaveLength(2)
 })
 
-test('pagination centers navigation, positions page controls left and resets temporary page sizes on reload', async ({ page }) => {
+test('pagination submits inline page numbers on Enter and keeps temporary page sizes at the bottom', async ({ page }) => {
  const tables = await fixture(page), now = '2026-10-20T12:00:00Z'
  for (let index=1; index<=60; index++) {
   tables.works.push({id:`pagination-work-${index}`,ao3_work_id:index,title:`Pagination fic ${index}`,word_count:100,published_chapters:2,total_chapters:3,verified_chapters:{}})
@@ -2743,27 +2801,31 @@ test('pagination centers navigation, positions page controls left and resets tem
   const paginations=page.getByRole('navigation',{name:'Result Pages'})
   await expect(paginations).toHaveCount(2)
   const pagination=paginations.first(), bottomPagination=paginations.last()
-  const size=pagination.getByRole('combobox',{name:'Works per Page',exact:true})
+  const size=bottomPagination.getByRole('combobox',{name:'Works per Page',exact:true})
   await expect(size).toHaveValue('25')
   await expect(size).toHaveCSS('border-top-style','solid')
   await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
   const statusFont=await pagination.getByRole('status').evaluate(element=>getComputedStyle(element).fontSize)
   for (const controls of [pagination,bottomPagination]) {
-   for (const selector of ['.pagination-page','.pagination-page input','.pagination-size','.pagination-size select']) await expect(controls.locator(selector)).toHaveCSS('font-size',statusFont)
+   for (const selector of controls === pagination ? ['.pagination-page','.pagination-page input'] : ['.pagination-page','.pagination-page input','.pagination-size','.pagination-size select']) await expect(controls.locator(selector)).toHaveCSS('font-size',statusFont)
    await expect(controls.getByRole('button',{name:'Prev',exact:true})).toBeDisabled()
    await expect(controls.getByRole('button',{name:'Previous',exact:true})).toHaveCount(0)
   }
-  await pagination.getByRole('button',{name:'Works per Page Information'}).focus()
+  await bottomPagination.getByRole('button',{name:'Works per Page Information'}).focus()
   await expect(page.getByRole('tooltip')).toContainText('temporary and resets when you reload')
   await expect(page.getByRole('tooltip')).toContainText('Settings')
-  await pagination.getByRole('button',{name:'Works per Page Information'}).press('Escape')
+  await bottomPagination.getByRole('button',{name:'Works per Page Information'}).press('Escape')
   await expect(page.getByRole('tooltip')).toHaveCount(0)
-  const nav=(await pagination.boundingBox())!, controls=(await pagination.locator('.pagination-controls').boundingBox())!, jump=(await pagination.locator('.pagination-page').boundingBox())!
-  expect(Math.abs(controls.x+controls.width/2-nav.x-nav.width/2)).toBeLessThan(1)
-  expect(Math.abs(jump.x-nav.x)).toBeLessThan(1)
-  const pageSizeControl=(await pagination.locator('.pagination-trailing').boundingBox())!
-  expect(Math.abs(pageSizeControl.x+pageSizeControl.width-nav.x-nav.width)).toBeLessThan(1)
-  if(page.viewportSize()!.width>900) expect(Math.abs(jump.y+jump.height/2-controls.y-controls.height/2)).toBeLessThan(1)
+  await expect(pagination.getByRole('combobox')).toHaveCount(0)
+  await expect(pagination.locator(':scope > .pagination-page')).toHaveCount(0)
+  const jump = pagination.getByRole('spinbutton', {name:'Go to Page'})
+  await jump.fill('3')
+  await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
+  await jump.press('Enter')
+  await expect(pagination.getByRole('status')).toContainText('51–60 of 60')
+  await jump.fill('1'); await jump.press('Enter')
+  await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
+  await expect(paginations).toHaveCount(2)
   const grid=(await page.locator('.reading-group .story-grid').last().boundingBox())!, footer=(await bottomPagination.boundingBox())!
   expect(footer.y).toBeGreaterThanOrEqual(grid.y+grid.height)
   await bottomPagination.getByRole('combobox',{name:'Works per Page',exact:true}).selectOption('50')

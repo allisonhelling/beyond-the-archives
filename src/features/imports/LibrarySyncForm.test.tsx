@@ -3,10 +3,11 @@ import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), sample: false }))
+const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), reports: vi.fn(), sample: false }))
 vi.mock('../../lib/sample-mode', () => ({ get sampleMode() { return mocks.sample } }))
 vi.mock('./extension', () => ({ librarySyncCommand: mocks.command, connectExtension: mocks.connect }))
 vi.mock('../library/repository', () => ({ saveCollection: mocks.collection }))
+vi.mock('./library-sync-reports', () => ({ librarySyncReports: mocks.reports }))
 vi.mock('./repository', () => ({ submitLibrarySync: mocks.submit, previewSeries: mocks.preview }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => ({ session: { user: { id: 'test' } } }) }))
@@ -15,7 +16,7 @@ const ready = { id: 'scan', status: 'ready', pages: 2, count: 2, skipped: 0, err
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
- vi.clearAllMocks(); mocks.sample = false; mocks.connect.mockResolvedValue(true)
+ vi.clearAllMocks(); mocks.reports.mockResolvedValue({ reports: [], total: 0 }); mocks.sample = false; mocks.connect.mockResolvedValue(true)
  mocks.command.mockImplementation(async (action, options) => {
   if (action === 'status') return { state: ready }
   if (action === 'page') return { rows: [{ title: `Work ${options.page}`, link: `https://archiveofourown.org/works/${options.page}`, source_list: 'marked_for_later' }] }
@@ -31,7 +32,48 @@ it('imports saved listing pages through the shared row conversion and acknowledg
  expect(mocks.submit).toHaveBeenCalledTimes(2)
  expect(mocks.submit.mock.calls[0][0][0]).toMatchObject({ workId: 1, source: 'marked_for_later', metadata: { title: 'Work 1' } })
  expect(mocks.command).toHaveBeenLastCalledWith('finish', { scanId: 'scan' })
+ expect(mocks.reports).toHaveBeenCalledWith(1, ready)
+ expect(mocks.reports.mock.invocationCallOrder[0]).toBeLessThan(mocks.command.mock.invocationCallOrder.at(-1)!)
  expect(screen.getByText(/Imported 2 works/)).toBeVisible()
+})
+it('keeps scan checkpoints available when the report cannot be saved', async () => {
+ mocks.reports.mockRejectedValueOnce(new Error('Report save failed'))
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('Report save failed')
+ expect(mocks.command.mock.calls.some(([action]) => action === 'finish')).toBe(false)
+ expect(screen.getByRole('button', { name: 'Import Scanned Works' })).toBeEnabled()
+})
+
+it('archives the latest completed legacy scan when opening saved reports', async () => {
+ const legacy = { ...ready, status: 'complete', url: 'https://archiveofourown.org/users/alice/bookmarks', skipped: 4 }
+ mocks.command.mockResolvedValue({ state: legacy })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ await screen.findByRole('button', { name: '4 Unsupported Entries Skipped' })
+ fireEvent.click(screen.getByRole('button', { name: 'View Saved Sync Reports' }))
+ await waitFor(() => expect(mocks.reports).toHaveBeenCalledWith(1, legacy))
+})
+
+it('loads saved reports without a live extension scan and opens detailed skipped and chapter-date results', async () => {
+ mocks.command.mockResolvedValue({ state: null })
+ const issue = { title: 'Hidden Bookmark', url: 'https://archiveofourown.org/bookmarks/12', sourceUrl: 'https://archiveofourown.org/users/alice/bookmarks?page=4', reason: 'No AO3 work link was available.' }
+ const dates = { title: 'Incomplete Work', url: 'https://archiveofourown.org/works/34', sourceUrl: 'https://archiveofourown.org/works/34/navigate', reason: 'The index was incomplete.', expectedChapters: 5, foundChapters: 3 }
+ mocks.reports.mockResolvedValue({ reports: [{ id: 'saved', completed_at: '2026-10-24T12:00:00Z', report: { ...ready, status: 'complete', autoImport: true, url: 'https://archiveofourown.org/users/alice/bookmarks', listPages: 117, pages: 117, count: 2037, skipped: 4, checkChapterDates: true, chapterDatesChecked: 201, chapterDatesUnavailable: 2, skippedEntries: [issue], chapterDateIssues: [dates] } }], total: 1 })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(screen.getByRole('button', { name: 'View Saved Sync Reports' }))
+ expect(await screen.findByText(/117 Bookmark pages saved · 117 total pages saved · 2037 works collected/)).toBeVisible()
+ fireEvent.click(screen.getByRole('button', { name: '4 Unsupported Entries Skipped' }))
+ let dialog = screen.getByRole('dialog', { name: 'Skipped AO3 Entries' })
+ expect(within(dialog).getByRole('link', { name: 'Hidden Bookmark' })).toHaveAttribute('href', issue.url)
+ expect(within(dialog).getByRole('link', { name: 'Open Source Listing' })).toHaveAttribute('href', issue.sourceUrl)
+ expect(within(dialog).getByText(issue.reason)).toBeVisible()
+ expect(within(dialog).getByText(/Details for 3 entries were not captured/)).toBeVisible()
+ fireEvent.click(within(dialog).getByRole('button', { name: /Close/ }))
+ fireEvent.click(screen.getByRole('button', { name: '2 Unavailable or Incomplete' }))
+ dialog = screen.getByRole('dialog', { name: 'Unavailable or Incomplete Chapter Dates' })
+ expect(within(dialog).getByRole('link', { name: 'Incomplete Work' })).toHaveAttribute('href', dates.url)
+ expect(within(dialog).getByRole('link', { name: 'Open Chapter Index' })).toHaveAttribute('href', dates.sourceUrl)
+ expect(within(dialog).getByText('3 of 5 chapter dates available.')).toBeVisible()
 })
 it('preserves completed scan checkpoints and never acknowledges an incomplete upload', async () => {
  mocks.submit.mockResolvedValueOnce({ imported: 1, kept: 0, batch: 'first' }).mockRejectedValueOnce(new Error('Connection lost'))
@@ -59,7 +101,7 @@ it.each(['discard now', 'reload older discarded scan'])('hides discarded scan de
  expect(await screen.findByText('Scan discarded.')).toHaveAttribute('role', 'status')
  expect(screen.queryByText(oldError)).not.toBeInTheDocument()
  expect(screen.queryByText(/total pages saved/)).not.toBeInTheDocument()
- expect(screen.queryByText(/Chapter dates:/)).not.toBeInTheDocument()
+ expect(screen.queryByText(/Chapter Dates:/)).not.toBeInTheDocument()
  expect(screen.queryByText(/Partial scan ·/)).not.toBeInTheDocument()
  expect(screen.queryByRole('button', { name: 'Discard Scan' })).not.toBeInTheDocument()
  expect(screen.queryByRole('button', { name: 'Import Scanned Works' })).not.toBeInTheDocument()
@@ -196,7 +238,7 @@ it('reuses a created collection when a page upload must be retried', async () =>
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
  expect(mocks.collection).toHaveBeenCalledTimes(1)
  expect(mocks.collection).toHaveBeenCalledWith('AO3 Collection', undefined, undefined, 'Summary\n\nIntro')
- expect(mocks.submit).toHaveBeenCalledWith(expect.any(Array), collectionId, undefined)
+ expect(mocks.submit).toHaveBeenCalledWith(expect.any(Array), collectionId, undefined, { id: ready.id, url: undefined })
 })
 
 const seriesUrl = 'https://archiveofourown.org/series/99'
@@ -456,7 +498,7 @@ it('keeps a manually entered list URL status through import submission', async (
  fireEvent.change(screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' }), { target: { value: 'finished' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
- await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'finished'))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'finished', { id: ready.id, url: 'https://archiveofourown.org/users/reader/bookmarks' }))
 })
 
 it('keeps a username manual status through automatic saved-page import without changing the list selector', async () => {
@@ -473,7 +515,7 @@ it('keeps a username manual status through automatic saved-page import without c
  fireEvent.click(screen.getByRole('checkbox', { name: 'Manually Set Reading Status' }))
  fireEvent.change(screen.getByRole('combobox', { name: 'Reading Status for Username Import' }), { target: { value: 'paused_reading' } })
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
- await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'paused_reading'))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'paused_reading', { id: ready.id, url: 'https://archiveofourown.org/users/reader/bookmarks' }))
  expect(screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' })).toHaveValue('finished')
 })
 
@@ -533,7 +575,7 @@ it('restores dynamic list selections from saved scans and sends no fixed status 
  expect(check).toBeChecked()
  expect(check).toBeDisabled()
  fireEvent.click(importButton)
- await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks', metadata: expect.objectContaining({ chapter_dates: { '1': '2026-10-01', '2': '2026-10-09', '3': '2026-10-20' } }) })], undefined, undefined))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks', metadata: expect.objectContaining({ chapter_dates: { '1': '2026-10-01', '2': '2026-10-09', '3': '2026-10-20' } }) })], undefined, undefined, { id: ready.id, url: undefined }))
 })
 
 it.each(['Import Bookmarks', 'Import Marked for Later'])('keeps Dynamic (Bookmarks) and list chapter preferences out of the %s status selector', async title => {

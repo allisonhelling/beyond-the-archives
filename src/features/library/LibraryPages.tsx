@@ -1,10 +1,11 @@
+import { ChapterReadingHistory } from './ChapterReadingHistory'
 import { useCollectionDeletion } from './collections/useCollectionDeletion'
 import { OtherWorkMetadata } from './display/OtherWorkMetadata'
 import { workMetadataFields } from './display/WorkMetadataFields'
 import { isDisplayFieldHidden } from './display/display-settings'
 import { WorkStatusBadge } from './WorkStatusBadge'
 import { BookmarkRec } from './BookmarkRec'
-import { resumeReadingStatus, readingDuration } from './reading-history'
+import { resumeReadingStatus } from './reading-history'
 import { automaticCollectionLabels } from './collections/automatic-collections'
 import { MetadataTags } from './MetadataTags'
 import { CustomCollectionNames } from './collections/CustomCollectionNames'
@@ -34,6 +35,7 @@ import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, saved
 import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
+import { useLayout } from '../../lib/use-layout'
 import { Tooltip } from '../../components/Tooltip'
 import { StarRating } from './StarRating'
 import { useDisplayPreference } from './display/useDisplayPreference'
@@ -135,6 +137,7 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
   </>
 }
 function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; editProgress: ReactNode; caughtUp: ReactNode }) {
+  const StatusIcon = readingStatusIcons[story.reading_status]
   const published = story.metadata.published_chapters
   const knownPublished = published !== null && published > 0
   const read = Math.max(0, story.last_read_chapter)
@@ -147,6 +150,7 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
         <span className="spine-progress-fill" style={{ width: `${knownPublished ? Math.min(100, read / published * 100) : 0}%` }} />
       </div>
     </div>
+    <Tooltip description={statuses[story.reading_status]}>{descriptionId => <span className="spine-status" role="img" tabIndex={0} aria-label={statuses[story.reading_status]} aria-describedby={descriptionId}><StatusIcon size={18} aria-hidden="true" /></span>}</Tooltip>
     <span className="spine-divider" aria-hidden="true"><SpineOrnament /></span>
     <div className="spine-actions">
       <Tooltip description={`Read chapter ${nextUnread(story.last_read_chapter)}`}>{descriptionId => <a className="spine-action" href={next ?? savedWorkUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
@@ -191,6 +195,7 @@ function initialCollectionSort(): CollectionSort {
 }
 
 function LibraryContent() {
+  const layout = useLayout()
   const { stories, collections, series: seriesRecords, refreshCollections: refresh } = useLibrary()
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'all'
@@ -364,10 +369,11 @@ function LibraryContent() {
       return { ...item, count: works + seriesCount, countLabel: seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
     })
 
+  const hiddenButton = (descriptionId?: string) => <button aria-describedby={descriptionId} type="button" className="button secondary collection-hidden" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>
   return <><LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={() => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection Selection">
-      <Tooltip description="View Hidden">{descriptionId => <button aria-describedby={descriptionId} type="button" className="button secondary" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>}</Tooltip>
-      <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
+      {layout === 'mobile' ? hiddenButton() : <Tooltip description="View Hidden">{hiddenButton}</Tooltip>}
+      <button type="button" className="button secondary collection-select" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
       <span className="collection-selection-trigger">{selectingCollections && <span role="status">{selectedCollectionIds.length} selected</span>}<Tooltip pinOnClick description={collectionControlHelp} placement="bottom">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Collection Controls" aria-describedby={descriptionId}><Info size={16} aria-hidden="true" /></button>}</Tooltip></span>
       {selectingCollections && <button type="button" className="button secondary collection-bulk-edit" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit Selected</button>}
     </div>}
@@ -468,7 +474,8 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
 <DisplayInfo group="workInfo">{{
       ...workMetadataFields(story, 'info'),
       personalTags: <> <div><PersonalStoryField key={story.id} story={story} /></div> </>,
-      saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>{story.finished_at && <div><dt>Finished</dt><dd>{formatDateTime(story.finished_at)}</dd></div>}<div><dt>Estimated Reading Time</dt><dd>{readingDuration(story)}</dd></div>{story.reading_history?.filter(event => ['paused_reading', 'resumed'].includes(event.action)).map((event, index) => <div key={index}><dt>{event.action === 'resumed' ? 'Resumed' : 'Paused'}</dt><dd>{formatDateTime(event.at)}</dd></div>)} </>,
+      saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>{story.finished_at && <div><dt>Finished</dt><dd>{formatDateTime(story.finished_at)}</dd></div>}{story.reading_history?.filter(event => ['paused_reading', 'resumed'].includes(event.action)).map((event, index) => <div key={index}><dt>{event.action === 'resumed' ? 'Resumed' : 'Paused'}</dt><dd>{formatDateTime(event.at)}</dd></div>)} </>,
+      chapterHistory: <ChapterReadingHistory history={story.reading_history} />,
       edited: <> <div><dt>Last Edited</dt><dd>{formatDateTime(story.updated_at)}</dd></div> </>,
       other: <OtherWorkMetadata story={story} expanded={Boolean(example)} />
     }}</DisplayInfo>

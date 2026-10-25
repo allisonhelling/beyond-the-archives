@@ -14,9 +14,9 @@
 .display-edit-surface[data-hide-information="true"] [data-display-field]:hover { outline-style: solid; background-color: var(--color-brand-soft); }
 .display-available { margin-block: 12px; padding: 16px; border: 1px solid var(--color-border); border-radius: 6px; }
 .display-available h4 { margin: 0 0 12px; }
+.display-available section + section { margin-top: 16px; }
 .display-available ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.display-available .button { flex-direction: column; align-items: flex-start; gap: 4px; }
-.display-available small { font-weight: 400; }
+.display-available .button { padding: 6px 10px; }
 .display-save-bar { position: static; z-index: 2; padding: 14px; border: 1px solid var(--color-border); border-radius: 6px; background: #fffdfb; margin-block: 20px; }
 .display-save-bar .form-actions { margin: 0; }
 .display-save-bar .button { width: auto; flex: 1; }
@@ -72,7 +72,14 @@
  .display-tag-color-grid { grid-template-rows: none; grid-auto-flow: row; }
  .display-all-colors .field-help { white-space: normal; }
 }
-.display-tile-section .display-edit-surface { --preview-tile-width: calc((var(--display-preview-container-width, calc(100% + 2 * var(--settings-inset) + 2 * var(--fieldset-inset) + 4px)) - (var(--story-grid-columns) - 1) * var(--story-grid-gap)) / var(--story-grid-columns)); width: var(--preview-tile-width); margin-inline: calc((100% - var(--preview-tile-width)) / 2); }
+.display-device-previews, .viewport-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 20px; }
+.display-device-editor, .viewport-size-fields { min-width: 0; }
+.viewport-size-fields { display: grid; gap: 12px; }
+.viewport-preview { width: 100%; min-width: 0; margin-inline: auto; }
+.viewport-preview-crop { width: min(100%, var(--preview-crop-width)); height: var(--preview-crop-height); position: relative; overflow: hidden; margin-inline: auto; }
+.viewport-preview-frame { position: absolute; left: 0; top: 0; width: var(--preview-width); height: var(--preview-height); border: 0; transform-origin: top left; transform: scale(var(--preview-scale)) translate(var(--preview-offset-x), var(--preview-offset-y)); }
+.viewport-preview-document .app-main { padding-bottom: 20px; }
+@media (max-width: 1100px) { .display-device-previews, .viewport-settings-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .display-tag-shapes { margin-block: 16px; }
 .display-tag-shape-options { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }

@@ -2,12 +2,31 @@ import fixture from '../../server/ao3/fixtures/work.html?raw'
 import { parseMetadata } from '../../server/ao3/adapter.ts'
 import { captureMetadataPage } from '../chrome/capture.js'
 import { expect, it, vi } from 'vitest'
-import { collectWorkPage, readPage } from './page'
+import { captureChapterRead, collectWorkPage, readPage } from './page'
 
 function page(chapter, total = '10', full = false) {
  const doc = new DOMParser().parseFromString(`<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/${total}</dd></dl><select id="selected_id">${Array.from({ length: 10 }, (_, i) => `<option value="${100 + i}">${i + 1}. Title</option>`).join('')}</select><div id="chapters">PRIVATE CHAPTER TEXT</div>`, 'text/html')
  return readPage(doc, `https://archiveofourown.org/works/123${chapter ? `/chapters/${99 + chapter}` : ''}${full ? '?view_full_work=true' : ''}`)
 }
+it('counts chapter text locally, preserving inline words and excluding notes, summaries and scripts', () => {
+ const doc = new DOMParser().parseFromString('<div id="chapters"><div class="chapter" id="chapter-4"><div class="summary"><div class="userstuff">Private summary</div></div><div class="userstuff"><h3>Title</h3><p>Hello <em>world</em>!</p><p>un<em>break</em>able<br>Another word.</p><div hidden>Hidden private text</div><script>SECRET CODE</script><div class="notes">Author notes</div></div><div class="notes"><div class="userstuff">Private note</div></div></div></div>', 'text/html')
+ const captured = captureChapterRead(doc, { current: 4 }, 'https://archiveofourown.org/works/123/chapters/104')
+ expect(captured).toEqual({ chapter: 4, chapter_id: '104', word_count: 6 })
+ expect(JSON.stringify(captured)).not.toMatch(/Hello|private|notes|SECRET|summary/)
+ expect(captureChapterRead(doc, { current: 10 }, 'https://archiveofourown.org/works/123/chapters/110').word_count).toBeNull()
+})
+it('counts a one-shot, distinguishes an empty chapter from unavailable text, and never counts a whole multi-chapter page', () => {
+ const doc = new DOMParser().parseFromString('<div id="chapters"><div class="userstuff"><p>One shot.</p></div></div>', 'text/html')
+ const info = { current: 1, chapters: {} }, url = 'https://archiveofourown.org/works/123'
+ expect(captureChapterRead(doc, info, url)).toEqual({ chapter: 1, chapter_id: null, word_count: 2 })
+ doc.querySelector('.userstuff').textContent = ''
+ expect(captureChapterRead(doc, info, url).word_count).toBe(0)
+ doc.querySelector('.userstuff').remove()
+ expect(captureChapterRead(doc, info, url).word_count).toBeNull()
+ expect(captureChapterRead(doc, { current: null }, url)).toBeNull()
+ doc.querySelector('#chapters').innerHTML = '<div class="chapter"><div class="userstuff">Wrong chapter</div></div><div class="chapter"><div class="userstuff">Another chapter</div></div>'
+ expect(captureChapterRead(doc, info, url).word_count).toBeNull()
+})
 it('uses navigation positions rather than chapter IDs for first, middle and final defaults', () => {
  expect(page(1).defaults).toEqual({ status: 'to_read', chapter: 1, chapterFinished: false })
  expect(page(4).defaults).toEqual({ status: 'reading', chapter: 4, chapterFinished: false })

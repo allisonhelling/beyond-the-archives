@@ -177,18 +177,24 @@ export type Database = {
           user_id: string
           created_at: string
           cancelled_at: string | null
+          sync_id: string | null
+          source_url: string | null
         }
         Insert: {
           id?: string
           user_id: string
           created_at?: string
           cancelled_at?: string | null
+          sync_id?: string | null
+          source_url?: string | null
         }
         Update: {
           id?: string
           user_id?: string
           created_at?: string
           cancelled_at?: string | null
+          sync_id?: string | null
+          source_url?: string | null
         }
         Relationships: [
         ]
@@ -483,6 +489,28 @@ export type Database = {
           user_id?: string | null
           work_id?: string | null
           story?: Json | null
+        }
+        Relationships: [
+        ]
+      }
+      library_sync_reports: {
+        Row: {
+          user_id: string
+          id: string
+          completed_at: string
+          report: Json
+        }
+        Insert: {
+          user_id?: string
+          id: string
+          completed_at?: string
+          report: Json
+        }
+        Update: {
+          user_id?: string
+          id?: string
+          completed_at?: string
+          report?: Json
         }
         Relationships: [
         ]
@@ -968,11 +996,12 @@ export type Database = {
       manage_userscript_device: { Args: { p_action: string; p_name?: string; p_id?: string }; Returns: Json }
       dnf_cleanup: { Args: { p_action?: string; p_input?: Json; p_page?: number }; Returns: Json }
       run_scheduled_dnf_cleanup: { Args: Record<string, never>; Returns: number }
+      library_sync_report_history: { Args: { p_report?: Json; p_page?: number }; Returns: Json }
       personal_rating_settings: { Args: { p_input?: Json }; Returns: Json }
       userscript_library: { Args: { p_secret: string; p_action: string; p_work?: number; p_input?: Json }; Returns: Json }
       preview_ao3_csv_import: { Args: { p_work_ids: number[]; p_bookmark_ids?: number[] }; Returns: Json }
       submit_ao3_csv_import: { Args: { p_rows: Json }; Returns: Json }
-      submit_ao3_library_sync: { Args: { p_rows: Json }; Returns: Json }
+      submit_ao3_library_sync: { Args: { p_rows: Json; p_scan_id?: string; p_source_url?: string }; Returns: Json }
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean; p_reading_status?: Database['public']['Enums']['reading_status']; p_series_ids?: number[] }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }

@@ -28,6 +28,10 @@ it('classifies login and rate restriction pages for the app alert', () => {
 it('recognizes AO3’s explicit deleted message while leaving hidden and unsupported entries unclassified', () => {
  page('<div id="main" class="bookmarks-index"><ol class="bookmark"><li id="bookmark_100" class="bookmark blurb group"><p class="message">This has been deleted, sorry!</p><div class="user"><div class="notes"><p>Remember this</p></div><ul class="tags"><li><a class="tag">Mine</a></li></ul></div></li><li id="bookmark_101" class="bookmark"><p class="message">This work is hidden.</p></li><li id="bookmark_102" class="bookmark"><div class="user"><div class="notes">This has been deleted, sorry!</div></div></li></ol></div>')
  expect(captureListingPage('bookmarks')).toMatchObject({ skipped: 2, rows: [{ work_status: 'deleted', title: '', link: 'https://archiveofourown.org/bookmarks/100', 'bookmark id': '100', 'bookmark notes': 'Remember this', 'bookmark tags': 'Mine' }] })
+ expect(captureListingPage('bookmarks').skippedEntries).toEqual([
+  { title: 'This work is hidden.', url: 'https://archiveofourown.org/bookmarks/101', sourceUrl: 'https://archiveofourown.org/users/alice/bookmarks', reason: expect.stringContaining('No AO3 work link') },
+  { title: 'Unidentified AO3 Entry', url: 'https://archiveofourown.org/bookmarks/102', sourceUrl: 'https://archiveofourown.org/users/alice/bookmarks', reason: expect.stringContaining('No AO3 work link') },
+ ])
 })
 it('retains all displayed bookmark fields and remaining work data for explicit deletions', () => {
  page(`<div id="main" class="bookmarks-index"><ol class="bookmark index"><li class="bookmark" id="bookmark_123456"><p class="message">This has been deleted, sorry!</p>

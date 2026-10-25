@@ -9,13 +9,51 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DisplayInfo } from './DisplayInfo'
 import { DisplayEditorContext } from './display-editor-context'
-import { displayGroups, tagAppearance, displayPreference, displayPreferences, displaySettingsKey, moveDisplaySelection, deleteDisplaySelection, moveDisplayField, removeDisplayLine, separateDisplayField, saveDisplay, type DisplayGroup } from './display-settings'
+import { displayGroups, previewViewports, savePreviewViewports, tagAppearance, displayPreference, displayPreferences, displaySettingsKey, moveDisplaySelection, deleteDisplaySelection, moveDisplayField, removeDisplayLine, separateDisplayField, saveDisplay, type DisplayGroup } from './display-settings'
 
 beforeEach(() => {
+  vi.stubGlobal('innerWidth', 1280)
   const storage = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) })
 })
 afterEach(() => vi.unstubAllGlobals())
+
+it('starts both layouts from legacy arrangements and saves only the edited profile', () => {
+ localStorage.setItem(displaySettingsKey, JSON.stringify({ workTile: { order: ['summary', 'authors'], hidden: ['authors'] } }))
+ const desktop = displayPreferences(), mobile = displayPreferences(undefined, 'mobile')
+ expect(mobile.workTile).toEqual(desktop.workTile)
+ desktop.workTile.hidden = []
+ saveDisplay(desktop, 'desktop')
+ expect(displayPreferences(undefined, 'mobile').workTile.hidden).toContain('authors')
+ const changedMobile = displayPreferences(undefined, 'mobile')
+ changedMobile.workInfo.hidden.push('summary')
+ saveDisplay(changedMobile, 'mobile')
+ expect(displayPreferences(undefined, 'mobile').workInfo.hidden).toContain('summary')
+ expect(displayPreferences().workInfo.hidden).not.toContain('summary')
+ expect(displayPreferences().workTile.hidden).not.toContain('authors')
+})
+it('retains shared tag colors and viewport sizes while independently saving layout groups', () => {
+ const sizes = { mobile: { width: 430, height: 900 }, desktop: { width: 1366, height: 768 } }
+ savePreviewViewports(sizes)
+ const mobile = displayPreferences(undefined, 'mobile')
+ mobile.tagAppearance.shape = 'sharp'
+ saveDisplay(mobile, 'mobile')
+ expect(previewViewports()).toEqual(sizes)
+ expect(displayPreferences().tagAppearance.shape).toBe('sharp')
+ expect(() => savePreviewViewports({ ...sizes, mobile: { width: 100, height: 900 } })).toThrow('Enter whole widths')
+ expect(previewViewports()).toEqual(sizes)
+})
+it('switches mounted tiles to the saved profile when the browser crosses the mobile breakpoint', () => {
+ const mobile = displayPreferences(undefined, 'mobile')
+ mobile.workTile.hidden.push('authors')
+ saveDisplay(mobile, 'mobile')
+ render(<DisplayInfo group="workTile">{{ authors: <p>Responsive Author</p> }}</DisplayInfo>)
+ expect(screen.getByText('Responsive Author')).toBeVisible()
+ act(() => { vi.stubGlobal('innerWidth', 390); window.dispatchEvent(new Event('resize')) })
+ expect(screen.queryByText('Responsive Author')).not.toBeInTheDocument()
+ act(() => { vi.stubGlobal('innerWidth', 1280); window.dispatchEvent(new Event('resize')) })
+ expect(screen.getByText('Responsive Author')).toBeVisible()
+})
 
 it.each(Object.keys(displayGroups) as DisplayGroup[])('previews %s without changing its live display until saved', group => {
   const keys = Object.keys(displayGroups[group].fields)

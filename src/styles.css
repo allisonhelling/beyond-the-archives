@@ -343,8 +343,8 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .series-progress-state { grid-column: 1; grid-row: 1; }
   .series-progress-columns > .details-collections { grid-column: 2; grid-row: 1 / 3; grid-template-columns: minmax(0, 1fr); justify-items: start; }
   .series-progress-columns > .details-collections > * { grid-column: 1; }
-  .series-choose-works { grid-column: 1; grid-row: 2; }
-  .series-import-actions > button:not(.series-choose-works) { grid-column: 1 / -1; grid-row: 3; }
+  .series-choose-works { grid-column: 2; grid-row: 3; }
+  .series-import-actions > button:not(.series-choose-works) { grid-column: 1 / -1; grid-row: 4; }
   .series-progress-controls .button { width: fit-content; max-width: 100%; justify-self: start; }
   .details-reading-controls .status-select select { padding-inline: 6px; }
   .story-details-heading h1 { font-size: 24px; margin-bottom: 2px; }
@@ -458,15 +458,16 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .library-heading-actions { position: relative; }
   .library-heading-actions .dropdown-compact { position: static; }
   .library-heading-actions .dropdown-panel { left: 0; right: auto; width: 100%; min-width: 0; }
-  .library-editing { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .library-editing { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto max-content; gap: 8px; }
   .library-editing .collection-selection-toolbar, .library-editing .library-heading-actions { display: contents; }
-  .library-editing h1 { grid-column: 1; grid-row: 1; }
-  .library-editing .custom-dropdown { grid-column: 2; grid-row: 1; }
-  .library-editing .library-create-action { grid-column: 1; grid-row: 2; justify-self: start; }
-  .library-editing .collection-selection-toolbar > .action-tooltip { grid-column: 2; grid-row: 2; }
-  .library-editing .collection-selection-toolbar > button:not(.collection-bulk-edit) { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
-  .library-editing .collection-selection-trigger { grid-column: 1; grid-row: 4; }
-  .library-editing .collection-bulk-edit { grid-column: 2; grid-row: 4; }
+  .library-editing h1 { grid-column: 1 / -1; grid-row: 1; }
+  .library-editing .custom-dropdown { grid-column: 1; grid-row: 2; }
+  .library-editing .library-create-action { grid-column: 2; grid-row: 2; justify-self: center; }
+  .library-editing .collection-hidden { grid-column: 3; grid-row: 2; }
+  .library-editing .collection-select { grid-column: 1; grid-row: 3; justify-self: start; }
+  .library-editing .collection-selection-trigger { grid-column: 2; grid-row: 3; justify-self: end; white-space: nowrap; }
+  .library-editing .collection-bulk-edit { grid-column: 3; grid-row: 3; }
+  .library-editing .button { padding-inline: 8px; }
   .app-header { gap: 8px; }
   .app-header .brand { min-width: 0; flex: 1; white-space: normal; font-size: 21px; }
   .app-header .brand-subtitle { display: none; }
@@ -812,6 +813,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .book-spine-footer .chapter-progress-button:focus-visible, .book-spine-footer .spine-action:focus-visible { outline: 2px solid #fff4de; outline-offset: 4px; }
 .spine-progress-track { height: 5px; overflow: hidden; border: 1px solid #ead7b5; border-radius: 3px; background: #f1e6d6; }
 .spine-progress-fill { display: block; height: 100%; background: #bc3228; }
+.spine-status { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; min-height: 32px; }
 .spine-divider { position: relative; align-self: stretch; margin-block: -2px; width: 12px; flex: 0 0 12px; color: var(--spine-gold); }
 .spine-divider svg { position: absolute; inset: 0; display: block; width: 12px; height: 100%; }
 .spine-actions { display: flex; gap: 7px; flex-shrink: 0; }
@@ -873,6 +875,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .series-import-work { padding-block: var(--space-4, 1rem); border-bottom: 1px solid var(--color-border); overflow-wrap: anywhere; }
 .series-import-work .series-work-choice { display: flex; align-items: baseline; gap: .5rem; margin-block: 4px 0; font-size: var(--series-work-heading-size); font-weight: 650; }
 .series-import-work .series-work-choice input { width: auto; flex-shrink: 0; }
+.sync-reports-trigger { white-space: nowrap; }
 .import-results { overflow-x: auto; margin-top: var(--space-4, 1rem); }
 .import-results caption { letter-spacing: .08em; word-spacing: .16em; }
 .import-results td { font-size: var(--minimum-text-size); }

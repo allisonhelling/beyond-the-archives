@@ -5,6 +5,7 @@ const rpc = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/sample-mode', () => ({ sampleMode: true }))
 vi.mock('../../lib/supabase', () => ({ supabase: { rpc } }))
 import { submitLibrarySync } from './repository'
+import { librarySyncReports } from './library-sync-reports'
 import { readAo3Rows, type CsvWork } from './ao3-csv'
 import { loadSampleLibrary } from '../library/sample/repository'
 beforeEach(() => {
@@ -13,6 +14,17 @@ beforeEach(() => {
  rpc.mockClear()
 })
 afterEach(() => vi.unstubAllGlobals())
+it('retains sync reports across reads and upserts retries in sample storage without account requests', async () => {
+ const report = { id: 'sample-scan', status: 'ready' as const, url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', pages: 117, listPages: 117, count: 2037, skipped: 4, error: '', checkChapterDates: true, chapterDatesChecked: 201, chapterDatesUnavailable: 2,
+  skippedEntries: [{ title: 'Hidden', sourceUrl: 'https://archiveofourown.org/users/alice/bookmarks?page=1', reason: 'No work link' }] }
+ const first = await librarySyncReports(1, report)
+ expect(first.total).toBe(1)
+ expect(first.reports[0].report).toEqual({ ...report, status: 'complete' })
+ expect(await librarySyncReports()).toEqual(first)
+ expect(await librarySyncReports(1, report)).toEqual(first)
+ expect(await librarySyncReports(2)).toEqual({ reports: [], total: 1 })
+ expect(rpc).not.toHaveBeenCalled()
+})
 it('routes sample listing imports to browser storage without calling the connected database', async () => {
  const rows = readAo3Rows([{ title: 'Sample extension import', link: 'https://archiveofourown.org/works/9990011', source_list: 'marked_for_later' }]) as CsvWork[]
  expect(await submitLibrarySync(rows)).toEqual({ batch: null, imported: 1, kept: 0 })

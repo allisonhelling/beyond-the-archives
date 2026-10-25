@@ -4,14 +4,14 @@ import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feathe
 export const readingStatusIcons: Record<Status, LucideIcon> = { to_read: Bookmark, reading: BookOpenText, paused_reading: Pause, re_reading: BookOpenText, waiting_for_updates: BookOpenText, finished: Check, did_not_finish: X }
 export const automaticCollectionIcons: Partial<Record<string, LucideIcon>> = { all: Library, series: Layers3, currently_reading: readingStatusIcons.reading, paused_reading: readingStatusIcons.paused_reading, to_read: readingStatusIcons.to_read, favorites: Star, recs: Heart, finished: readingStatusIcons.finished, did_not_finish: readingStatusIcons.did_not_finish }
 
-export const defaultShelfColors = { all: '#970000', currently_reading: '#214921', paused_reading: '#92504e', to_read: '#243c5e', favorites: '#54254b', recs: '#8b491e', finished: '#4a1b0f', did_not_finish: '#25211f', series: '#07534a' } as const
+export const defaultShelfColors = { all: '#970000', currently_reading: '#214921', paused_reading: '#8b491e', to_read: '#243c5e', favorites: '#54254b', recs: '#92504e', finished: '#4a1b0f', did_not_finish: '#25211f', series: '#07534a' } as const
 
 export const collectionColors = [
   { label: 'Burgundy', value: defaultShelfColors.all }, { label: 'Forest', value: defaultShelfColors.currently_reading },
   { label: 'Navy', value: defaultShelfColors.to_read }, { label: 'Finished', value: defaultShelfColors.finished },
   { label: 'One Shots', value: '#721613' },
   { label: 'Plum', value: defaultShelfColors.favorites }, { label: 'Charcoal', value: defaultShelfColors.did_not_finish },
-  { label: 'Rose', value: defaultShelfColors.paused_reading }, { label: 'Teal', value: defaultShelfColors.series },
+  { label: 'Rose', value: defaultShelfColors.recs }, { label: 'Teal', value: defaultShelfColors.series },
 ] as const
 
 export const collectionSymbols = [

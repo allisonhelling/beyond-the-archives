@@ -20,6 +20,8 @@ import { connectExtension, librarySyncCommand } from './extension'
 import { readAo3Rows, uniqueCsvWorks, csvWorkKey, type CsvConflict, type CsvWork } from './ao3-csv'
 import { previewSeries, submitLibrarySync } from './repository'
 import { SeriesImportReview } from './SeriesImportReview'
+import { LibrarySyncReportHistory, LibrarySyncSummary } from './LibrarySyncReports'
+import { librarySyncReports } from './library-sync-reports'
 
 export function LibrarySyncForm({ onImported }: { onImported: (batch: string | null) => Promise<void> }) {
  const seriesBehavior = useSeriesImportBehavior()
@@ -65,6 +67,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   if (pending.current) return
   pending.current = true; setBusy(true); setError(''); setMessage('')
   try {
+   if (name === 'start' && state?.status === 'complete') await librarySyncReports(1, state)
    if (name === 'start' && !await connectExtension()) throw new Error(sampleMode ? localExtensionConnectionHelp : 'Connect the extension in Settings, then try again.')
    if (name === 'discard') seriesBehavior.reset()
    if (name === 'start' || name === 'discard') { setSeriesReview(null); selection.current = null }
@@ -150,11 +153,13 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     const reply = await librarySyncCommand('page', { page, scanId: state.id })
     const rows = uniqueCsvWorks(readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork => row.workId !== undefined && (!reply.seriesUrl || typeof row.workId === 'number' && selection.current?.ids.has(row.workId) === true)))
     if (!rows.length) continue
-    const result = await submitLibrarySync(rows, collectionId, state.readingStatus)
+    const result = await submitLibrarySync(rows, collectionId, state.readingStatus, { id: state.id, url: state.url })
     for (const conflict of result.bookmarkConflicts ?? []) differences.set(csvWorkKey(conflict), conflict)
     setConflicts([...differences.values()])
     imported += result.imported; kept += result.kept; batch = result.batch ?? batch
    }
+   // Save the report before acknowledging: finish deletes the scan checkpoints.
+   await librarySyncReports(1, state)
    const reply = await librarySyncCommand('finish', { scanId: state.id }); setState(reply.state ?? null)
    setSeriesReview(null); selection.current = null; seriesBehavior.reset()
    setMessage(`Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.`)
@@ -171,7 +176,6 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  const saved = state && ['running', 'paused', 'ready'].includes(state.status)
  const selectedMode = saved && state.mode ? state.mode : mode
  const listReadingStatus = saved && !state.autoImport ? state.readingStatus ?? 'dynamic_bookmarks' : readingStatus
- const listName = state?.autoImport ? (/\/bookmarks(?:[?#]|$)/.test(state.url ?? '') ? 'Bookmark' : 'Marked for Later') : 'List'
  return <section className="settings-card story-form" aria-labelledby="library-sync-heading">
   <h2 id="library-sync-heading">AO3 Library Sync</h2>
   {sampleMode && <p className="field-help">Sample imports use the extension with Local selected and save only to this browser’s sample library. No library account or background worker is needed. Select Local in the companion’s extension settings and enter its ID in this app’s Settings before starting.</p>}
@@ -207,9 +211,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   </form>
   <p className="field-help">Uses one scan tab with your selected request interval; background alarms may make it slower. Existing work imports finish first. Keep Chrome running. If sign-in or a request restriction blocks the scan, an alert lets you open the scan tab. Resolve the issue there, then resume manually. Checkpoints stay on this device until imported or discarded.</p>
   {state?.status === 'discarded' ? <p role="status">Scan discarded.</p> : <>
-  {state && <p role="status">{state.status} · {state.listPages !== undefined && <>{state.listPages} {listName} pages saved · </>}{state.pages} total pages saved · {state.count} works collected · {state.skipped} unsupported entries skipped</p>}
-  {state?.checkChapterDates && <p className="field-help">Chapter dates: {state.chapterDatesChecked ?? 0} indexes checked · {state.chapterDatesUnavailable ?? 0} unavailable or incomplete.</p>}
-  {state?.limited && <p className="field-help">Partial scan · pages {state.startPage ?? 1}–{state.endPage ?? 'end of list'}{state.partial ? " · stopped at the selected end page; more pages remain on AO3" : ""}. Importing this range will not update the Quick Sync baseline.</p>}
+  {state && <LibrarySyncSummary key={state.id} state={state} />}
   {state?.error && <p role="alert" className="error-message">{state.error}</p>}
   </>}
   {state?.status === 'ready' && state.importToCollection && state.collection && <label>New Collection Name<input value={collectionName ?? state.collection.name} disabled={busy || Boolean(state.collectionId) || createdCollection?.scanId === state.id} onChange={event => setCollectionName(event.target.value)} /></label>}
@@ -223,6 +225,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    selection.current = { scanId: state.id, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
+  <LibrarySyncReportHistory key={`${state?.id}:${state?.status}`} latest={state?.status === 'complete' ? state : undefined} />
   {conflicts.length > 0 && <details><summary>{conflicts.length} Bookmark Conflicts — Personal Data Kept</summary><p>These incoming bookmarks differ in notes, personal tags, or reading state. Saved notes, tags, and reading state were kept. Older bookmark dates take precedence and Rec is enabled if either version selected it. Use CSV import to overwrite personal data if desired.</p><ul>{conflicts.map(conflict => <li key={csvWorkKey(conflict)}><Link to={`/stories/${conflict.id}`}>{conflict.title || `AO3 Work ${conflict.workId}`}</Link><dl><dt>Reading State Before Import</dt><dd>{statuses[conflict.status as keyof typeof statuses]} · {conflict.progress} chapters read · Finished: {formatDate(conflict.finishedAt)}</dd>{conflict.incomingReading && <><dt>Incoming Reading State</dt><dd>{statuses[conflict.incomingReading.status]} · {conflict.incomingReading.progress} chapters read · Finished: {formatDate(conflict.incomingReading.finishedAt)}</dd></>}<dt>Saved Personal Notes</dt><dd>{conflict.notes || 'None'}</dd><dt>Incoming Bookmark Notes</dt><dd>{conflict.incomingNotes || 'None'}</dd><dt>Saved Personal Tags</dt><dd>{conflict.tags.join(', ') || 'None'}</dd><dt>Incoming Bookmark Tags</dt><dd>{conflict.incomingTags?.join(', ') || 'None'}</dd></dl></li>)}</ul></details>}
   {usernameKind && <Dialog title={usernameKind === 'bookmarks' ? 'Import Bookmarks' : 'Import Marked for Later'} busy={busy} onClose={() => setUsernameKind(null)}><form className="story-form" onSubmit={event => {
    event.preventDefault()

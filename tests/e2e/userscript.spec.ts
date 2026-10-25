@@ -13,7 +13,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
   // Userscripts supplies GM in the script's scope, without exposing it on globalThis.
   const script = `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);`
-  await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><div class="summary module"><blockquote></blockquote></div><div id="chapters"><div class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div>PRIVATE CHAPTER TEXT</div></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></div><div id="kudos">Kudos list</div></main></body></html>' }))
+  await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><div class="summary module"><blockquote></blockquote></div><div id="chapters"><div id="chapter-4" class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div><div class="userstuff">PRIVATE CHAPTER TEXT</div><div class="notes">Private author notes</div></div></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></div><div id="kudos">Kudos list</div></main></body></html>' }))
   await page.route('https://archiveofourown.org/works/123?view_adult=true', route => route.fulfill({ contentType: 'text/html', body: '<h2 class="title">Test story</h2><div class="summary module"><blockquote><p>Work <em>summary</em>.</p><p>Second<br>line.</p></blockquote></div><dl class="work meta"><dd class="chapters">6/?</dd></dl>' }))
   await page.goto('https://archiveofourown.org/works/123/chapters/104')
   await page.exposeFunction('mergeLibraryEdits', mergeEdits)
@@ -208,7 +208,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
   await expect(top.locator('.library-link')).toHaveText('')
-  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Mark Through Chapter 4 as Read', exact: true })).toBeVisible()
+  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.locator('.chapter-progress > span')).toBeHidden()
    await surface.getByLabel('About chapters read', { exact: true }).click()
@@ -222,6 +222,15 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(top.locator('.toolbar-progress').getByRole('button')).toHaveCount(0)
   await expect(top.locator('.status-bullet')).toHaveText('•')
   await expect(top.locator('.status-bullet')).toHaveCSS('color', 'rgb(38, 115, 68)')
+  for (const [status, color] of [
+   ['reading', 'rgb(38, 115, 68)'], ['paused_reading', 'rgb(165, 107, 18)'],
+   ['finished', 'rgb(151, 0, 0)'], ['to_read', 'rgb(50, 103, 168)'],
+   ['re_reading', 'rgb(178, 148, 214)'],
+  ]) {
+   await top.locator('.status-bullet').evaluate((element, status) => { (element as HTMLElement).dataset.status = status }, status)
+   await expect(top.locator('.status-bullet')).toHaveCSS('color', color)
+  }
+  await top.locator('.status-bullet').evaluate(element => { (element as HTMLElement).dataset.status = 'reading' })
   await top.locator('.toolbar').evaluate(element => { element.scrollLeft = 0 })
   const barBounds = (await top.locator('.toolbar').boundingBox())!, linkBounds = (await top.locator('.library-link').boundingBox())!, actionsBoundsTop = (await top.locator('.toolbar-actions').boundingBox())!, centerBounds = (await top.locator('.toolbar-progress').boundingBox())!
   expect(Math.abs(linkBounds.x - barBounds.x)).toBeLessThan(1)
@@ -247,7 +256,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    expect(Math.abs(centerBounds.y + centerBounds.height / 2 - rowCenter)).toBeLessThan(1)
    expect(Math.abs(actionsBoundsTop.y + actionsBoundsTop.height / 2 - rowCenter)).toBeLessThan(1)
   }
-  await expect(top.locator('.complete-chapter')).toHaveText('Ch. 4')
+  await expect(top.locator('.complete-chapter')).toHaveText('Mark Read')
   await expect(top.locator('.toolbar')).toHaveCSS('column-gap', '12px')
   await expect(top.locator('.toolbar-actions')).toHaveCSS('gap', '12px')
   const actionButtons = await top.locator('.toolbar-actions > button').all()
@@ -266,18 +275,19 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 3 / 10', { exact: true })).toBeVisible()
    await expect(surface.getByText('Currently Reading', { exact: true })).toBeVisible()
-   await expect(surface.getByRole('button', { name: 'Mark Through Chapter 4 as Read', exact: true })).toBeVisible()
+   await expect(surface.getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
   }
   await top.screenshot({ path: `test-results/userscript-top-toolbar-${page.viewportSize()!.width}.png` })
   await bottom.screenshot({ path: `test-results/userscript-bottom-toolbar-${page.viewportSize()!.width}.png` })
   await expect(bottom.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await expect(bottom.getByRole('button', { name: 'Connection', exact: true })).toHaveCount(0)
-  await bottom.getByRole('button', { name: 'Mark Through Chapter 4 as Read', exact: true }).click()
+  await bottom.getByRole('button', { name: 'Mark Read', exact: true }).click()
+  expect(await page.evaluate(() => (window as unknown as {userscriptTestState:{requests:{p_input:{chapter_read?:unknown}}[]}}).userscriptTestState.requests.at(-1)!.p_input.chapter_read)).toEqual({chapter:4,chapter_id:'104',word_count:3})
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
-   await expect(surface.getByText('Read', { exact: true })).toBeVisible()
+   await expect(surface.getByText('Ch. 4 Read', { exact: true })).toBeVisible()
    await expect(surface.locator('.completion-indicator')).toHaveCSS('gap', '4px')
-   await expect(surface.getByRole('button', { name: /Through Ch/ })).toHaveCount(0)
+   await expect(surface.getByRole('button', { name: /Mark Read/ })).toHaveCount(0)
   }
   expect(page.url()).toBe('https://archiveofourown.org/works/123/chapters/104')
   await expect(page.getByText(/AO3 Library v/)).toBeHidden()
@@ -313,20 +323,19 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByLabel('This Chapter Is Finished', { exact: true }).uncheck()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 0 / 10', { exact: true })).toBeVisible()
-  await bottom.getByRole('button', { name: 'Mark Through Chapter 4 as Read', exact: true }).click()
+  await bottom.getByRole('button', { name: 'Mark Read', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
   await page.evaluate(() => {
    document.getElementById('ao3-library-companion')!.remove()
    history.replaceState(null, '', '/works/123/chapters/110')
   })
   await page.addScriptTag({ content: script })
-  await expect(bottom.getByRole('button', { name: 'Finished', exact: true })).toBeVisible()
-  await bottom.getByRole('button', { name: 'Finished', exact: true }).click()
+  await expect(bottom.getByRole('button', { name: 'Finish Fic', exact: true })).toBeVisible()
+  await bottom.getByRole('button', { name: 'Finish Fic', exact: true }).click()
   await expect(top.getByText('Finished', { exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 10 / 10', { exact: true })).toBeVisible()
-   await expect(surface.getByText('Read', { exact: true })).toBeVisible()
-   await expect(surface.locator('.completion-indicator')).toHaveCSS('gap', '4px')
+   await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
   }
   await page.evaluate(() => {
    document.getElementById('ao3-library-companion')!.remove()
@@ -334,9 +343,8 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   })
   await page.addScriptTag({ content: script })
   for (const surface of [top, bottom]) {
-   await expect(surface.getByText('Read', { exact: true })).toBeVisible()
-   await expect(surface.locator('.completion-indicator')).toHaveCSS('gap', '4px')
-   await expect(surface.getByRole('button', { name: /Through Ch|Finish Fic/ })).toHaveCount(0)
+   await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
+   await expect(surface.getByRole('button', { name: /Mark Read|Finish Fic/ })).toHaveCount(0)
   }
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await page.getByLabel('Private Notes', { exact: true }).fill('Keep this unsaved draft during recollection')

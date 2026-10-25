@@ -1,9 +1,15 @@
+import { useLayout } from '../../../lib/use-layout'
 import { useContext, useSyncExternalStore } from 'react'
 import { DisplayEditorContext } from './display-editor-context'
-import { displayPreference, tagAppearance, displaySnapshot, subscribeDisplay, type DisplayGroup } from './display-settings'
+import { displayPreference, previewViewports, tagAppearance, displaySnapshot, subscribeDisplay, type DisplayGroup } from './display-settings'
+export function usePreviewViewports() {
+ const raw = useSyncExternalStore(subscribeDisplay, displaySnapshot, () => '{}')
+ return previewViewports(raw)
+}
 export function useDisplayPreference(group: DisplayGroup) {
+  const layout = useLayout()
   const raw = useSyncExternalStore(subscribeDisplay, displaySnapshot, () => '{}')
-  return useContext(DisplayEditorContext)?.preferences[group] ?? displayPreference(group, raw)
+  return useContext(DisplayEditorContext)?.preferences[group] ?? displayPreference(group, raw, layout)
 }
 
 /** One appearance applies to tags in every tile and information page. */

@@ -2,7 +2,7 @@ import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { blankMetadata, parseLines, statuses, validateProgress } from '../../src/features/library/model'
-import { collectWorkPage, readPage } from './page'
+import { captureChapterRead, collectWorkPage, readPage } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
@@ -149,7 +149,11 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (action === 'claim') throw new Error(`Pairing code not accepted by ${appOrigin}. Create a fresh code on that website and paste it within 5 minutes.${browser === 'chrome' ? ' Check the selected Hosted / Local environment in the extension settings and reload AO3.' : ''} Your draft is preserved.`)
     throw new Error('Device authorization expired or was revoked. Reconnect below; your draft is preserved.')
    }
-   const conflict = conflictFromError(data, (values, base) => rpc(action, { ...input, ...values, base }))
+   const conflict = conflictFromError(data, (values, base) => {
+    const retry = { ...input, ...values, base }
+    if (retry.chapter_read && (retry.progress !== retry.chapter_read.chapter || retry.status === 'to_read')) delete retry.chapter_read
+    return rpc(action, retry)
+   })
    if (conflict) { conflict.action = action; throw conflict }
    if (data.code === '40001' && action === 'rating_save') throw new Error('This rating explanation changed on another device. Close and reopen Rating Info to load it before saving again. Your text is kept here.')
    if (data.code === '40001') throw new Error('This entry changed elsewhere. Reload Saved Entry, review your draft, then save again.')
@@ -173,11 +177,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   return api.setValue(draftKey(), draft).catch(() => { message.textContent = 'Could not preserve the draft on this device. Keep this panel open.' })
  }
  async function load() { accept(await rpc('get')); renderToolbar() }
- async function progress(value, status) {
+ async function progress(value, status, markRead = false) {
   validateProgress(value, page.metadata)
   const previous = entry
   entry = { ...entry, progress: value, status }; renderToolbar()
-  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status })) }
+  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, ...(markRead && { chapter_read: captureChapterRead(doc, page, href) }) })) }
   catch (error) { entry = previous; renderToolbar(); throw error }
   renderToolbar()
   await syncProgressDraft()
@@ -229,15 +233,20 @@ export async function mountLibrary(doc = document, href = location.href, options
    button(paused ? 'Resume Reading' : 'Pause Reading', () => progress(entry.progress, paused ? resumeReadingStatus({ reading_history: entry.readingHistory }) : 'paused_reading'), parent)
   }
   if (!page.current) return
+  if (entry.status === 'finished') {
+   const reread = button('Re-Read', () => progress(page.current - 1, 're_reading'), parent)
+   reread.className = 'complete-chapter'
+   reread.prepend(icon(['M3 11a9 9 0 1 1 2.7 6.4', 'M3 4v7h7'], reread))
+   return
+  }
   const read = entry.progress >= page.current
   if (read) {
    const indicator = node('span', '', parent); indicator.className = 'completion-indicator'
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
-   node('span', 'Read', indicator)
+   node('span', `Ch. ${page.current} Read`, indicator)
   } else {
-   const final = entry.status !== 'to_read' && page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
-   const complete = button(final ? 'Finished' : `Ch. ${page.current}`, () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading'), parent)
-   if (!final) complete.setAttribute('aria-label', `Mark Through Chapter ${page.current} as Read`)
+   const final = page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
+   const complete = button(final ? 'Finish Fic' : 'Mark Read', () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading', true), parent)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
@@ -547,7 +556,8 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (value === null) throw new Error('The published chapter count is unavailable. Reload AO3 before finishing the work.')
     validateProgress(value, page.metadata)
     await api.setValue(draftKey(), draft)
-    accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), tags: parseLines(draft.tags), collections: draft.collections }))
+    const chapterRead = !tile && page.current === value && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? captureChapterRead(doc, page, href) : null
+    accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
     message.textContent = 'Saved'; clearEditor(); draft = null; showPanel(null)
     await api.deleteValue(draftKey()).catch(() => { message.textContent = 'Saved. Could not clear the local draft.' })
    } finally { fieldset.disabled = false }

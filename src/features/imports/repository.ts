@@ -9,7 +9,7 @@ import { classifyUrl, extractUrls, mergeSeriesPreviews, parseSeriesUrl, seriesPa
 import { connectExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
 type Row<K extends keyof Database['public']['Tables']> = Database['public']['Tables'][K]['Row']
-export type ImportHistory = { batches: Row<'import_batches'>[]; items: Row<'import_items'>[]; jobs: Row<'metadata_jobs'>[];
+export type ImportHistory = { selectedBatch?: string; batches: Row<'import_batches'>[]; items: (Row<'import_items'> & { work_info?: { title: string; authors: string[]; author_links?: Record<string, string> } | null })[]; jobs: Row<'metadata_jobs'>[];
  changes?: Pick<Row<'metadata_jobs'>,'id'|'entry_id'|'status'|'completed_at'|'last_attempt_at'>[];
  summary?: { total: number; filtered: number; page: number; pages: number; historyTotal: number; historyPages: number; active: boolean; counts: Record<string,number>; imported: number; alreadySaved: number; completed: number } }
 export async function importHistory(batchId?: string, options?: { historyPage: number; resultPage: number; status: string }): Promise<ImportHistory> {
@@ -131,13 +131,13 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  return data as unknown as { batch: string | null; imported: number; kept: number }
 }
 
-export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status) {
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string }) {
  if (readingStatus) works = works.map(work => ({ ...work, importReadingStatus: readingStatus }))
  const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
  let result: { batch: string | null; imported: number; kept: number }
  if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works)
  else {
-  const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json })
+  const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json, ...(scan ? { p_scan_id: scan.id, p_source_url: scan.url } : {}) })
   if (error) throw new Error('Could not import this scan page. Apply the latest database migrations and check your connection; retry safely to preserve personal data.')
   result = data as unknown as typeof result
  }

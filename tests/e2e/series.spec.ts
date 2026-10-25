@@ -27,7 +27,8 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   expect(collectionBox.x).toBeGreaterThan(progressBox.x)
   expect(Math.abs(collectionBox.y - progressBox.y)).toBeLessThan(1)
   const chooseBox = (await page.getByRole('button', { name: 'Choose Works to Import' }).boundingBox())!
-  expect(chooseBox.y).toBeGreaterThanOrEqual(progressBox.y + progressBox.height)
+  expect(chooseBox.y).toBeGreaterThanOrEqual(collectionBox.y + collectionBox.height)
+  expect(chooseBox.x).toBeCloseTo(collectionBox.x, 0)
   const addBox = (await collection.getByRole('button', { name: 'Add to Collection' }).boundingBox())!
   expect(addBox.width).toBeLessThanOrEqual(collectionBox.width)
  }

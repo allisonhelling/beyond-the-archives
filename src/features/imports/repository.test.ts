@@ -4,7 +4,18 @@ vi.mock('../../lib/supabase',()=>({supabase:{rpc,auth:{getSession:session},from:
 vi.mock('./extension',()=>({connectExtension:connect,previewSeriesWithExtension:extensionPreview}))
 vi.mock('../library/repository',()=>({allRows:vi.fn()}))
 import { previewSeries, submitImport } from './repository'
+import { librarySyncReports } from './library-sync-reports'
 beforeEach(()=>{rpc.mockReset();invoke.mockReset();session.mockReset();settings.mockReset();connect.mockReset().mockResolvedValue(true);extensionPreview.mockReset()})
+it('saves completed sync totals and diagnostics through account storage and reports persistence errors', async () => {
+ const state = { id: 'scan', status: 'ready' as const, url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', pages: 117, listPages: 117, count: 2037, skipped: 4, error: '', chapterDateIssues: [{ title: 'Work', sourceUrl: 'https://archiveofourown.org/works/12/navigate', reason: 'Incomplete index' }] }
+ rpc.mockResolvedValue({ data: { reports: [], total: 1 }, error: null })
+ expect(await librarySyncReports(1, state)).toEqual({ reports: [], total: 1 })
+ expect(rpc).toHaveBeenCalledWith('library_sync_report_history', { p_page: 1, p_report: { ...state, status: 'complete' } })
+ await librarySyncReports(2)
+ expect(rpc).toHaveBeenLastCalledWith('library_sync_report_history', { p_page: 2 })
+ rpc.mockResolvedValue({ error: { message: 'Connection failed' } })
+ await expect(librarySyncReports(1, state)).rejects.toThrow('Saved scan pages remain available for retry')
+})
 it('explains a missing Phase 3 migration instead of suggesting a one-link batch is too large',async()=>{
  rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'Internal database details'}})
  await expect(submitImport('https://archiveofourown.org/works/123')).rejects.toThrow('The connected Supabase database is missing the Phase 3 importer.')

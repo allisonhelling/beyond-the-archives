@@ -26,6 +26,16 @@ it('shows history, saved work links, cancellation, retry and an explicit progres
  fireEvent.click(screen.getByRole('button',{name:'Approve Progress Through Chapter 5'}));await waitFor(()=>expect(mocks.approve).toHaveBeenCalledWith('item'))
  await waitFor(()=>expect(screen.getByRole('button',{name:'Retry Metadata'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'Retry Metadata'}));await waitFor(()=>expect(mocks.retry).toHaveBeenCalledWith('job'))
 })
+it('shows completed work names and authors with clickable submitted URLs in the selected request', async () => {
+ mocks.history.mockResolvedValue({ selectedBatch: 'request', batches: [{ id: 'request', source_url: 'https://archiveofourown.org/users/reader/bookmarks', created_at: '2026-10-24T12:00:00Z' }], items: [{ id: 'item', entry_id: 'entry', original_url: 'https://archiveofourown.org/works/123', ao3_work_id: 123, status: 'completed', result: 'imported', metadata_status: 'completed', work_info: { title: 'Completed Fic', authors: ['An Author'] } }], jobs: [] })
+ show()
+ await screen.findByRole('button', { name: 'All Results: 1' })
+ fireEvent.click(screen.getByRole('button', { name: 'All Results: 1' }))
+ expect(screen.getByRole('columnheader', { name: 'WORK INFO' })).toBeVisible()
+ expect(screen.getByText('Completed Fic')).toBeVisible()
+ expect(screen.getByText(/An Author/)).toBeVisible()
+ expect(screen.getByRole('link', { name: 'https://archiveofourown.org/works/123' })).toHaveAttribute('href', 'https://archiveofourown.org/works/123')
+})
 it('reports history and submission errors with the input preserved',async()=>{
  mocks.submit.mockRejectedValue(new Error('Database unavailable'))
  show();await screen.findByText('No imports yet. Paste your first batch above.')

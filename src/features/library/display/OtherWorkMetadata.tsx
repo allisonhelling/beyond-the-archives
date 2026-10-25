@@ -25,7 +25,7 @@ export function OtherWorkMetadata({ story, expanded = false }: { story: Story; e
   if (!isDisplayFieldHidden(page, 'information')) for (const field of info.order.concat(Object.values(info.lines ?? {}).flat())) if (!isDisplayFieldHidden(info, field)) shown.add(field)
   const remaining = Object.fromEntries(Object.entries(workMetadataFields(story, 'info')).filter(([field]) => !shown.has(field)))
   return <div><dt className="sr-only">Other Metadata</dt><dd><details className="details-disclosure" open={expanded || undefined}><summary>Other Metadata</summary><p className="muted">Manually entered values are private field-level overrides.</p>
-    <dl className="metadata-list details-fic-fields"><DisplayInfo group="workOther">{{
+    <dl className="metadata-list"><DisplayInfo group="workOther">{{
       ...remaining,
       checked: <div><dt>Metadata Last Checked</dt><dd>{story.work.last_metadata_check ? formatDateTime(story.work.last_metadata_check) : 'Never'}</dd></div>,
       canonical: <div><dt>Verified Canonical URL</dt><dd><ExternalUrl url={story.work.canonical_url} /></dd></div>,

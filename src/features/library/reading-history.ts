@@ -1,15 +1,23 @@
 import type { Story, Status } from './model'
 
-export type ReadingEvent = { action: 'added' | 'status' | 'paused_reading' | 'resumed' | 'finished'; at: string; status: Status; previous_status?: Status }
+export type ChapterReadEvent = { action: 'chapter_read'; at: string; status: Status; id: string; chapter: number; chapter_id: string | null; word_count: number | null; is_reread: boolean }
+export type ReadingEvent = { action: 'added' | 'status' | 'paused_reading' | 'resumed' | 'finished'; at: string; status: Status; previous_status?: Status } | ChapterReadEvent
 
 export function readReadingHistory(value: unknown): ReadingEvent[] {
   return Array.isArray(value) ? value.filter((event): event is ReadingEvent => event && typeof event === 'object' && typeof event.at === 'string' && typeof event.status === 'string' && typeof event.action === 'string') : []
 }
 
+export function chapterReadEvents(history: ReadingEvent[] = []): ChapterReadEvent[] {
+  return history.filter((event): event is ChapterReadEvent => event.action === 'chapter_read'
+    && Number.isInteger(event.chapter) && event.chapter > 0
+    && (event.word_count === null || Number.isInteger(event.word_count) && event.word_count >= 0)
+    && typeof event.is_reread === 'boolean' && Number.isFinite(Date.parse(event.at)))
+}
+
 /** Preserve the reading mode when returning from a pause, including a re-read. */
 export function resumeReadingStatus(story: Pick<Story, 'reading_history'>): Status {
   const pause = [...(story.reading_history ?? [])].reverse().find(event => event.action === 'paused_reading')
-  return pause?.previous_status === 're_reading' ? 're_reading' : 'reading'
+  return pause && 'previous_status' in pause && pause.previous_status === 're_reading' ? 're_reading' : 'reading'
 }
 
 /** Elapsed calendar time since saving, excluding recorded pauses; not time spent on-page. */
@@ -26,10 +34,6 @@ export function readingMilliseconds(story: Pick<Story, 'created_at' | 'finished_
   }
   if (pausedAt !== null) paused += Math.max(0, end - pausedAt)
   return Math.max(0, end - start - paused)
-}
-export function readingDuration(story: Parameters<typeof readingMilliseconds>[0]): string {
-  const hours = readingMilliseconds(story) / 3_600_000
-  return `${hours < 1 ? 'Less than an hour' : hours < 24 ? `About ${Math.round(hours)} hours` : `About ${Math.round(hours / 24)} days`} since added, excluding recorded pauses`
 }
 
 /** Sample mode mirrors the database status trigger, including the history baseline. */

@@ -276,6 +276,22 @@ it('keeps progress unconfirmed for incomplete indexes without losing the saved l
  await collect(); await collect(); await sync.pump()
  expect(local.librarySync).toMatchObject({ status: 'ready', chapterDatesChecked: 1, chapterDatesUnavailable: 1 })
  expect((await sync.command({ action: 'page', page: 1 })).rows[0]['chapter dates']).toBeUndefined()
+ const expected = { workId: 1, title: 'Work 1', url: 'https://archiveofourown.org/works/1', sourceUrl: 'https://archiveofourown.org/works/1/navigate', expectedChapters: 3, foundChapters: 0,
+  reason: 'Release dates were available for 0 of 3 published chapters.' }
+ expect((await sync.command({ action: 'status' })).state.chapterDateIssues).toEqual([expected])
+ await sync.command({ action: 'finish' })
+ const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await restarted.command({ action: 'status' })).state).toMatchObject({ status: 'complete', chapterDateIssues: [expected] })
+})
+
+it('retains skipped entry identities after completion and controller restart', async () => {
+ const issue = { title: 'Hidden Work', url: 'https://archiveofourown.org/bookmarks/27', sourceUrl: 'https://archiveofourown.org/users/alice/bookmarks?page=1', reason: 'No work link was available.' }
+ await start()
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 1, skippedEntries: [issue], hasNext: false } }])
+ await collect()
+ expect((await sync.command({ action: 'finish' })).state).toMatchObject({ status: 'complete', skipped: 1, skippedEntries: [issue], diagnosticsVersion: 1 })
+ const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await restarted.command({ action: 'status' })).state.skippedEntries).toEqual([issue])
 })
 
 it('waits for a pending capture without pausing or requesting another page', async () => {

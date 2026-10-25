@@ -5,7 +5,29 @@ import { blankMetadata, initialProgress, parseWorkUrl } from '../../src/features
 
 const workMetadata = captured => ({ ...blankMetadata, ...captured, publication_status: captured.published_chapters == null ? 'unknown' : captured.is_complete ? 'complete' : 'in_progress' })
 
-// Read only AO3's work metadata and chapter navigation, never story text/forms.
+/** Count only the loaded chapter, on an explicit read action. Never return its text. */
+export function captureChapterRead(doc, page, href) {
+ if (!page.current || page.series) return null
+ const chapters = doc.querySelector('#chapters')
+ const chapter = chapters?.querySelector(`#chapter-${page.current}`)
+ const containers = chapters?.querySelectorAll('.chapter') ?? []
+ const only = containers.length === 1 && !/^chapter-[0-9]+$/.test(containers[0].id) ? containers[0] : null
+ const scope = chapter ?? only ?? (containers.length === 0 ? chapters : null)
+ const body = scope?.querySelector(':scope > .userstuff')
+ let wordCount = null
+ if (body && typeof Intl.Segmenter === 'function') {
+  const copy = body.cloneNode(true)
+  copy.querySelectorAll('script, style, noscript, iframe, .summary, .notes, .landmark, [hidden], [aria-hidden="true"]').forEach(node => node.remove())
+  // Block boundaries separate words; inline formatting must not split a word.
+  copy.querySelectorAll('p, div, li, blockquote, br, hr, h1, h2, h3, h4, h5, h6, td, tr').forEach(node => { node.before(' '); node.after(' ') })
+  const segments = new Intl.Segmenter(undefined, { granularity: 'word' }).segment(copy.textContent ?? '')
+  wordCount = 0
+  for (const segment of segments) if (segment.isWordLike) wordCount++
+ }
+ return { chapter: page.current, chapter_id: parseWorkUrl(href).chapterId ?? page.chapters?.[page.current] ?? null, word_count: wordCount }
+}
+
+// Metadata capture never includes story text/forms. Read actions count text separately.
 export function readPage(doc, href) {
  if (/^https:\/\/archiveofourown\.org\/series\/[1-9]\d*(?:[/?#]|$)/.test(href)) {
   try {

@@ -29,7 +29,12 @@ Build commands remain in `scripts/`. Installable output still goes to `userscrip
 
 The browser bar rereads work metadata when saving a new work. If a later chapter omits the work summary, it retrieves the first work page on AO3 before saving. Chapter summaries and chapter text are excluded from the saved metadata. Existing entries can use **Collect metadata** to refresh the same fields while keeping personal edits.
 
+**Mark Read**, **Finish Fic**, and saving an explicitly finished loaded chapter also record its chapter number, locally counted words, server reading timestamp, and whether it was a reread. Counting excludes chapter summaries, notes, and page controls; only the number is uploaded, never chapter text. Counts can differ from AO3's tokenizer. Missing chapter text is recorded with an unknown count; skipping ahead does not invent counts for earlier chapters. View the records under **Chapter Reading History** in the work info page's Story Information section. Arrange or hide this field independently of Saved Date in the display editor; when no records exist yet, it explains how tracking starts. Records use the existing private reading history and are included in backups and archived reading records. Deploy migration `20261024000500_chapter_read_history.sql`, the website, and rebuilt companions together to enable tracking; older reading progress cannot be backfilled with accurate timestamps or counts.
+
 Settings → Tile and Page Information offers **Category** (AO3 relationship category), bookmarks, comments, hits, language, publication date/status, work ID, and the AO3 link alongside the existing work metadata. These fields can be shown, hidden, grouped, and reordered in work tiles and information pages. Category is also available for series tiles and information pages. New fields start hidden to preserve saved layouts.
+
+Tile and information-page arrangements save independently for mobile (up to 1100 CSS pixels) and desktop. Existing arrangements initialize both profiles. Mobile editors save only the mobile profile. Desktop tile editors show desktop and mobile previews side by side, each with independent Save/Cancel controls; example information pages have a Desktop View / Mobile View toggle. Preview Screen Sizes offers phone, tablet and desktop presets plus exact width/height fields. Previews reuse the real responsive CSS; tag shape and colors remain shared. The book-spine footer shows the saved reading-status icon immediately after its progress indicator and before the divider; hover or focus it for the status label. On mobile, work information tooltips open below their icon, and Choose Works to Import sits below series collections.
+
 
 Apply `20261023000500_complete_ao3_metadata.sql` for language and companion statistics, deploy the updated app/worker, and reload the rebuilt Chrome companion (v0.6.2). Existing incomplete records need a metadata refresh or **Collect metadata**; this change does not queue unsolicited refreshes.
 
@@ -152,7 +157,7 @@ This deletes local library entries and test accounts and reapplies migrations. U
 
 ## Preview With Sample Stories
 
-Both `npm run dev` and `npm run dev:sample` show a **Local preview** toolbar on localhost. Select **Mobile · 390px** to test the existing responsive layout in a narrow viewport, then **Desktop** to expand it again. Save edits before entering mobile preview for the first time, which reloads the app in an embedded viewport. Subsequent switches keep that viewport mounted. These controls are excluded from production builds.
+Both `npm run dev` and `npm run dev:sample` show a **Local Preview** toolbar on localhost. **Preview Size** offers standard devices and custom width/height values, shared with Settings → Tile and Page Information → Preview Screen Sizes. Apply a size, select **Mobile**, then select **Desktop** to expand again. Save edits before entering mobile preview for the first time, which reloads the app in an embedded viewport. Subsequent switches retain the same viewport and app state. These controls are excluded from production builds.
 
 ```sh
 npm run dev:sample
@@ -388,6 +393,9 @@ Requirements come from the two PDFs in this folder: Implementation Plan Phase 1 
 ## Phase 3: Persistent AO3 Imports
 
 Open **Add → Import History from AO3** or `/imports` to submit batches of up to 2,000 URL tokens. Valid identities save immediately, independently of metadata retrieval. Run `npm run worker` in a separate terminal with ignored `.env.worker` server configuration to process persistent jobs locally; closing the import page does not stop that process. Hosted processing requires the supplied Supabase Edge Function and optional Cron/Vault setup.
+
+Apply `20261024000400_import_request_history.sql` before deploying request-based sync history. Previous Batches combines all page transactions from a new AO3 Library Sync request, keeps filtering and result pagination across the request, and shows completed work titles/authors in Work Info. Submitted HTTP/HTTPS URLs open in a new tab. Older batches without a recorded scan identity remain separate rather than guessing which requests they belonged to.
+
 
 See [the Phase 3 report](docs/PHASE_3_REPORT.md) for schema changes, retry/cancellation behavior, manual override protection, complete setup instructions, validation results and deployment limitations.
 

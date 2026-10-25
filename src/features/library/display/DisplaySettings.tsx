@@ -1,3 +1,8 @@
+import { usePreviewViewports } from './useDisplayPreference'
+import { useLayout, type DisplayLayout } from '../../../lib/use-layout'
+import { ViewportFrame } from '../../../components/ViewportFrame'
+import { ViewportSettings } from './ViewportSettings'
+import type { PreviewViewport } from './display-settings'
 import { ConfirmationDialog } from '../../../components/ConfirmationDialog'
 import { displaySettingsSection } from './settings-sections'
 import { useRef, useState, type ReactNode } from 'react'
@@ -19,23 +24,23 @@ const pageGroups = (kind: 'work' | 'series') => (Object.keys(displayGroups) as D
 const same = (a: DisplayField | null, b: DisplayField | null) => a?.group === b?.group && a?.field === b?.field
 const label = (item: DisplayField) => displayFieldLabel(item.group, item.field)
 
-function useDisplayDraft(groups: DisplayGroup[], editTags = false) {
-  const [baseline, setBaseline] = useState(() => displayPreferences())
+function useDisplayDraft(groups: DisplayGroup[], editTags = false, layout: DisplayLayout = 'desktop') {
+  const [baseline, setBaseline] = useState(() => displayPreferences(undefined, layout))
   const [draft, setDraft] = useState(baseline)
   const [version, setVersion] = useState(0)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const dirty = groups.some(group => JSON.stringify(draft[group]) !== JSON.stringify(baseline[group])) || editTags && JSON.stringify(draft.tagAppearance) !== JSON.stringify(baseline.tagAppearance)
   function change(next: DisplayPreferences) { setDraft(next); setMessage(''); setError('') }
-  function cancel() { const saved = displayPreferences(); setBaseline(saved); setDraft(saved); setVersion(value => value + 1); setMessage('Changes discarded.'); setError('') }
+  function cancel() { const saved = displayPreferences(undefined, layout); setBaseline(saved); setDraft(saved); setVersion(value => value + 1); setMessage('Changes discarded.'); setError('') }
   function commit(source: DisplayPreferences, message: string) {
-    const next = displayPreferences()
+    const next = displayPreferences(undefined, layout)
     for (const group of groups) next[group] = source[group]
     if (editTags) next.tagAppearance = source.tagAppearance
-    saveDisplay(next); setBaseline(next); setDraft(next); setMessage(message); setError('')
+    saveDisplay(next, layout); setBaseline(next); setDraft(next); setMessage(message); setError('')
   }
   function restoreDefaults() {
-    commit(displayPreferences('{}'), 'Default settings restored.')
+    commit(displayPreferences('{}', layout), 'Default settings restored.')
     setVersion(value => value + 1)
   }
   function save() {
@@ -54,7 +59,7 @@ function SaveControls({ state, onCancel, onSave }: { state: Draft; onCancel?: ()
 }
 
 /** Adds editing behavior around the site's actual tiles and information pages. */
-function DisplayEditor({ title, groups, state, children, showTitle = true }: { title: string; groups: DisplayGroup[]; state: Draft; children: ReactNode; showTitle?: boolean }) {
+function DisplayEditor({ title, groups, state, children, showTitle = true, viewport }: { title: string; groups: DisplayGroup[]; state: Draft; children: ReactNode; showTitle?: boolean; viewport?: PreviewViewport }) {
   const [selection, setSelection] = useState<DisplayField[]>([])
   const selected = selection[0] ?? null
   const [managing, setManaging] = useState(false)
@@ -64,7 +69,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
   const drag = useRef<{ source: DisplayField; x: number; y: number; moved: boolean; shift: boolean; scrollX: number; scrollY: number; bounds: { field: DisplayField; rect: DOMRect }[] } | null>(null)
   const surface = useRef<HTMLDivElement>(null)
   function fieldAt(element: EventTarget | null): DisplayField | null {
-    const node = element instanceof Element ? element.closest<HTMLElement>('[data-display-field]') : null
+    const node = element && 'nodeType' in element ? (element as Element).closest<HTMLElement>('[data-display-field]') : null
     const group = node?.dataset.displayGroup as DisplayGroup | undefined
     return node && surface.current?.contains(node) && group && groups.includes(group) ? { group, field: node.dataset.displayField! } : null
   }
@@ -112,7 +117,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
     const parent = Object.keys(preference.lines ?? {}).find(line => preference.lines![line].includes(field.field))
     state.change({ ...state.draft, [field.group]: { ...preference, hidden: preference.hidden.filter(key => key !== field.field && key !== parent) } })
   }
-  const managementFields = groups.flatMap(group => [...Object.keys(displayGroups[group].fields), ...state.draft[group].order.filter(field => displayLine(field) || displayDivider(field))].map(field => ({ group, field })))
+  const managementSections = groups.map(group => ({ group, fields: [...Object.keys(displayGroups[group].fields), ...state.draft[group].order.filter(field => displayLine(field) || displayDivider(field))].map(field => ({ group, field })) }))
   const isHidden = (field: DisplayField) => state.draft[field.group].hidden.includes(field.field)
   const moving = dragged && !selection.some(field => same(field, dragged)) ? [dragged] : selection
   let dropPreview
@@ -145,10 +150,19 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
           return <button key={direction} className="button secondary" type="button" disabled={!destination} aria-label={`Move ${selection.length > 1 ? 'Selected Elements' : label(selected)} ${direction < 0 ? 'Up' : 'Down'}`} onClick={() => { if (destination) move(selected, { group: selected.group, field: destination }, true) }}>{direction < 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}{direction < 0 ? 'Move Up' : 'Move Down'}</button>
         })}
       </div>}
-      {managing && <div className="display-available"><h4>Hide/Show Information</h4>{[false, true].map(hidden => <div key={String(hidden)}><h5>{hidden ? 'Available Information' : 'Shown Information'}</h5><ul>{managementFields.filter(field => isHidden(field) === hidden).map(item => <li key={`${item.group}:${item.field}`}><button className="button secondary" type="button" onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : 'Select'} {label(item)}<small>{displayGroups[item.group].title}</small></button></li>)}</ul></div>)}</div>}
+      {managing && <div className="display-available">{[false, true].map(hidden => <section key={String(hidden)} aria-label={hidden ? 'Available Information' : 'Shown Information'}>
+        <h4>{hidden ? 'Available Information' : 'Shown Information'}</h4>
+        {managementSections.map(({ group, fields }) => {
+          const items = fields.filter(field => isHidden(field) === hidden)
+          return items.length > 0 && <details key={group} className="details-disclosure" open>
+            <summary>{displayGroups[group].title}</summary>
+            <ul>{items.map(item => <li key={item.field}><button className="button secondary" type="button" onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : 'Select'} {label(item)}</button></li>)}</ul>
+          </details>
+        })}
+      </section>)}</div>}
 
     </div>
-      <div ref={surface} tabIndex={-1} className="display-edit-surface" data-hide-information={managing} aria-label={`${title} Preview`} onMouseDownCapture={event => event.preventDefault()} onDragStartCapture={event => event.preventDefault()} onClickCapture={event => {
+      <ViewportFrame viewport={viewport} title={`${title} Viewport`} tile={groups.length === 1}><div ref={surface} tabIndex={-1} className="display-edit-surface" data-hide-information={managing} aria-label={`${title} Preview`} onMouseDownCapture={event => event.preventDefault()} onDragStartCapture={event => event.preventDefault()} onClickCapture={event => {
         event.preventDefault(); event.stopPropagation()
         const field = fieldAt(event.target)
         if (field) { activate(field, event.shiftKey); surface.current?.focus({ preventScroll: true }) }
@@ -186,7 +200,7 @@ function DisplayEditor({ title, groups, state, children, showTitle = true }: { t
         else if (current) activate(current.source, current.shift)
         clearDrag(); event.currentTarget.focus({ preventScroll: true })
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-      }} onPointerCancel={clearDrag} onLostPointerCapture={clearDrag}>{children}</div>
+      }} onPointerCancel={clearDrag} onLostPointerCapture={clearDrag}>{children}</div></ViewportFrame>
   </section></DisplayEditorContext>
 }
 
@@ -203,22 +217,42 @@ function TagAppearanceSettings({ state }: { state: Draft }) {
   </section></DisplayEditorContext>
 }
 
+function TileLayoutEditor({ kind, layout, appearance }: { kind: 'work' | 'series'; layout: DisplayLayout; appearance: TagAppearance }) {
+ const groups = kind === 'work' ? workTileGroups : seriesTileGroups
+ const state = useDisplayDraft(groups, false, layout)
+ const sizes = usePreviewViewports()
+ const title = `${kind === 'work' ? 'Work' : 'Series'} Tile`
+ return <section className="display-device-editor" aria-label={`${layout === 'mobile' ? 'Mobile' : 'Desktop'} ${title} Layout`}>
+  <h4>{layout === 'mobile' ? 'Mobile' : 'Desktop'} Layout</h4>
+  <DisplayEditor key={state.version} title={title} showTitle={false} groups={groups} viewport={sizes[layout]} state={{ ...state, draft: { ...state.draft, tagAppearance: appearance } }}>{kind === 'work' ? <StoryCard story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor>
+  <SaveControls state={state} />
+ </section>
+}
 export function DisplaySettings() {
-  const workState = useDisplayDraft(workTileGroups)
-  const seriesState = useDisplayDraft(seriesTileGroups)
+  const layout = useLayout()
   const tagState = useDisplayDraft([], true)
   const [expanded, setExpanded] = useState({ work: false, series: false, tags: false })
-  return <section id={displaySettingsSection.id} tabIndex={-1} className="settings-card display-settings"><h2>{displaySettingsSection.title}</h2><p className="muted">Arrange your tiles directly in the previews. Use Hide/Show Information to add fields. Select a field and press Backspace to remove it. Shift-click to select multiple elements. Save applies your changes; Cancel or reloading discards them.</p>
+  return <section id={displaySettingsSection.id} tabIndex={-1} className="settings-card display-settings"><h2>{displaySettingsSection.title}</h2><p className="muted">Arrange your tiles directly in the previews. Mobile and desktop arrangements are saved separately. Save applies only to the layout you are editing. Tag appearance applies to both layouts.</p>
+    <ViewportSettings />
     <fieldset className="display-tag-format-section settings-subsection" aria-labelledby="display-tag-format-title"><legend className="display-tile-heading"><h3 id="display-tag-format-title">Tag Format</h3><button type="button" className="button secondary" aria-expanded={expanded.tags} aria-controls="display-tag-format" onClick={() => setExpanded(current => ({ ...current, tags: !current.tags }))}>Edit Tag Format</button></legend>
     <div id="display-tag-format" hidden={!expanded.tags}><TagAppearanceSettings key={tagState.version} state={tagState} /><SaveControls state={tagState} /></div></fieldset>
-    <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => { const state = kind === 'work' ? workState : seriesState; return <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><h3 id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</h3><button type="button" className="button secondary" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}>Edit {kind === 'work' ? 'Work' : 'Series'} Tiles</button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><DisplayEditor key={`${kind}:${state.version}`} title={`${kind === 'work' ? 'Work' : 'Series'} Tile`} showTitle={false} groups={kind === 'work' ? workTileGroups : seriesTileGroups} state={{ ...state, draft: { ...state.draft, tagAppearance: tagState.draft.tagAppearance } }}>{kind === 'work' ? <StoryCard story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor><SaveControls state={state} /></div></fieldset> })}</div>
-    <fieldset className="display-page-links settings-subsection" aria-labelledby="display-info-pages-title"><legend><h3 id="display-info-pages-title">Information Pages</h3></legend><div className="form-actions"><Link className="button secondary" to="/settings/example-work">Edit Work Info Page</Link><Link className="button secondary" to="/settings/example-series">Edit Series Info Page</Link></div><p className="muted">Open a full example page to arrange its information.</p></fieldset>
+    <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><h3 id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</h3><button type="button" className="button secondary" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}>Edit {kind === 'work' ? 'Work' : 'Series'} Tiles</button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><div className="display-device-previews">{(layout === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(device => <TileLayoutEditor key={device} kind={kind} layout={device} appearance={tagState.draft.tagAppearance} />)}</div></div></fieldset>)}</div>
+    <fieldset className="display-page-links settings-subsection" aria-labelledby="display-info-pages-title"><legend><h3 id="display-info-pages-title">Information Pages</h3></legend><div className="form-actions"><Link className="button secondary" to="/settings/example-work">Edit Work Info Page</Link><Link className="button secondary" to="/settings/example-series">Edit Series Info Page</Link></div><p className="muted">Open an example page and switch between mobile and desktop layouts.</p></fieldset>
   </section>
 }
+function ExampleLayoutEditor({ kind, layout, active }: { kind: 'work' | 'series'; layout: DisplayLayout; active: boolean }) {
+ const state = useDisplayDraft(pageGroups(kind), false, layout), navigate = useNavigate(), sizes = usePreviewViewports()
+ const title = `Example ${kind === 'work' ? 'Work' : 'Series'} Info Page`
+ return <div hidden={!active}>
+  <SaveControls state={state} onCancel={() => navigate('/settings#settings-display')} onSave={() => navigate('/settings#settings-display')} />
+  <DisplayEditor key={`${kind}:${state.version}`} title={title} showTitle={false} groups={pageGroups(kind)} state={state} viewport={sizes[layout]}>{kind === 'work' ? <StoryDetailsPage example={exampleWork} /> : <SeriesPage example={exampleSeries} />}</DisplayEditor>
+ </div>
+}
 export function DisplayExamplePage({ kind }: { kind: 'work' | 'series' }) {
-  const state = useDisplayDraft(pageGroups(kind)), navigate = useNavigate()
-  const title = `Example ${kind === 'work' ? 'Work' : 'Series'} Info Page`
-  return <div className="display-example-page"><div className="page-heading"><h1>{title}</h1></div><SaveControls state={state} onCancel={() => navigate('/settings#settings-display')} onSave={() => navigate('/settings#settings-display')} />
-    <DisplayEditor key={`${kind}:${state.version}`} title={title} showTitle={false} groups={pageGroups(kind)} state={state}>{kind === 'work' ? <StoryDetailsPage example={exampleWork} /> : <SeriesPage example={exampleSeries} />}</DisplayEditor>
-  </div>
+ const device = useLayout(), [view, setView] = useState<DisplayLayout>(device)
+ const layout = device === 'mobile' ? 'mobile' : view
+ return <div className="display-example-page"><div className="page-heading"><h1>Example {kind === 'work' ? 'Work' : 'Series'} Info Page</h1></div>
+  <div className="form-actions" role="group" aria-label="Information Page Preview Layout">{(device === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(option => <button key={option} className={`button ${layout === option ? 'primary' : 'secondary'}`} aria-pressed={layout === option} onClick={() => setView(option)}>{option === 'mobile' ? 'Mobile View' : 'Desktop View'}</button>)}</div>
+  {(device === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(option => <ExampleLayoutEditor key={option} kind={kind} layout={option} active={layout === option} />)}
+ </div>
 }
