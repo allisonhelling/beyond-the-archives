@@ -32,6 +32,7 @@ it('round-trips every filter, grouping, sort, collection and size while resettin
 it('restricts return navigation to internal browsing routes',()=>{
  expect(browsingReturnTo('/reading?shelf=waiting&page=3&size=50')).toContain('page=3')
  expect(browsingReturnTo('/series/77')).toBe('/series/77')
+ expect(browsingReturnTo('/authors/A%20Writer%20%2F%20%E9%9B%A8?page=2')).toBe('/authors/A%20Writer%20%2F%20%E9%9B%A8?page=2')
  for(const url of ['//evil.test','https://evil.test','/settings','/stories/1',null])expect(browsingReturnTo(url)).toBe('/library')
 })
 it('removes temporary page-size overrides from links so reload uses the saved default',()=>{

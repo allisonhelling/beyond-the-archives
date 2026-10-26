@@ -39,7 +39,7 @@ beforeEach(() => {
 
 describe('private app access and navigation', () => {
   it('protects every route from unauthenticated visitors', async () => {
-    for (const path of ['/reading', '/library', '/stats', '/settings', '/features']) {
+    for (const path of ['/reading', '/library', '/authors/Writer', '/stats', '/settings', '/features']) {
       window.history.replaceState(null, '', path)
       const view = render(<App />)
       expect(await screen.findByRole('heading', { name: 'Welcome Back.' })).toBeVisible()

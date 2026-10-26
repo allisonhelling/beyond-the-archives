@@ -137,3 +137,24 @@ it('retains summary, categories, language and statistics when adding and recolle
  }
  expect(result).toMatchObject({ summary: metadata.summary, summary_html: metadata.summary_html, categories: ['M/M'], language: 'English', kudos: 42, bookmark_count: 0, comment_count: 12, hits: 2345 })
 })
+
+it('keeps paired devices authorized indefinitely while unclaimed codes still expire in five minutes', async () => {
+ let pairing = ''
+ await user(alice, async () => { pairing = (await manage('create')).code })
+ const pending = (await db.query<{ id: string; expires: boolean }>('select id, expires_at between now() and now()+interval \'5 minutes\' as expires from public.userscript_devices where not paired')).rows[0]
+ expect(pending.expires).toBe(true)
+ const device = await request('claim', {}, pairing)
+ const hash = (await db.query<{ id: string; expires_at: string | null }>("select id,expires_at from public.userscript_devices where secret_hash=encode(sha256(convert_to($1,'UTF8')),'hex')", [device.secret])).rows[0]
+ expect(hash.expires_at).toBeNull()
+ await db.query("update public.userscript_devices set created_at=now()-interval '20 years' where id=$1", [hash.id])
+ await expect(request('get', {}, device.secret)).resolves.toHaveProperty('entry')
+ let unused = ''
+ await user(alice, async () => { unused = (await manage('create')).code })
+ // Creating another pairing code must leave long-lived connections intact.
+ await expect(request('get', {}, device.secret)).resolves.toHaveProperty('entry')
+ await db.exec("update public.userscript_devices set expires_at=now()-interval '1 second' where not paired")
+ await expect(request('claim', {}, unused)).rejects.toThrow(/Reconnect/)
+ await expect(db.query('update public.userscript_devices set expires_at=null where not paired')).rejects.toThrow(/userscript_pairing_requires_expiry/)
+ await request('disconnect', {}, device.secret)
+ await expect(request('get', {}, device.secret)).rejects.toThrow(/Reconnect/)
+})

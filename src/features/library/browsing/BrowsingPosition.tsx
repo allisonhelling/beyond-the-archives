@@ -14,8 +14,8 @@ export function BrowsingPosition() {
     return () => { history.scrollRestoration = previous }
   }, [])
   useLayoutEffect(() => {
-    const browsing = /^\/(reading|library|series\/)/.test(path)
-    const returning = action === 'POP' || /^\/(stories|series)\//.test(previousRoute.current)
+    const browsing = /^\/(reading|library|series\/|authors\/)/.test(path)
+    const returning = action === 'POP' || /^\/(stories|series|authors)\//.test(previousRoute.current)
     const preserve = action !== 'POP' && browsing && isFilterNavigation(previousRoute.current, path)
     previousRoute.current = path
     const saved = returning && !preserve ? positions.current.get(path) : undefined

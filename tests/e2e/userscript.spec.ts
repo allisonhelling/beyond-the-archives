@@ -208,7 +208,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
   await expect(top.locator('.library-link')).toHaveText('')
-  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
+  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Read', exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.locator('button.chapter-progress')).toHaveText('Ch. 3 / 10')
    await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
@@ -272,7 +272,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    expect(Math.abs(centerBounds.y + centerBounds.height / 2 - rowCenter)).toBeLessThan(1)
    expect(Math.abs(actionsBoundsTop.y + actionsBoundsTop.height / 2 - rowCenter)).toBeLessThan(1)
   }
-  await expect(top.locator('.complete-chapter')).toHaveText('Mark Read')
+  await expect(top.locator('.complete-chapter')).toHaveText('Read')
   await expect(top.locator('.toolbar')).toHaveCSS('column-gap', '12px')
   await expect(top.locator('.toolbar-actions')).toHaveCSS('gap', '12px')
   const actionButtons = await top.locator('.toolbar-actions > button').all()
@@ -299,21 +299,32 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect(surface.getByText('Reading', { exact: true })).toBeVisible()
    const pause = surface.getByRole('button', { name: 'Pause Reading', exact: true })
    await expect(pause).toBeVisible()
-   await expect(pause).toHaveText('')
+   await expect(pause).toHaveText('Pause')
+   const pauseHeight = (await pause.boundingBox())!.height
+   for (const control of await surface.locator('.toolbar button, .bottom-bar button').all()) expect(Math.abs((await control.boundingBox())!.height - pauseHeight)).toBeLessThan(1)
    await expect(pause.locator('svg')).toBeVisible()
-   await expect(surface.getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
+   await expect(surface.getByRole('button', { name: 'Read', exact: true })).toBeVisible()
   }
+  await top.getByRole('button', { name: 'Pause Reading', exact: true }).click()
+  const resume = top.getByRole('button', { name: 'Resume Reading', exact: true })
+  await expect(resume).toHaveText('Resume')
+  await expect(top.getByRole('button', { name: 'Read', exact: true })).toHaveCount(0)
+  await expect(bottom.getByRole('button', { name: 'Resume Reading', exact: true })).toHaveCount(0)
+  await expect(bottom.getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
+  expect(Math.abs((await resume.boundingBox())!.height - (await top.getByRole('button', { name: 'Edit', exact: true }).boundingBox())!.height)).toBeLessThan(1)
+  await resume.click()
+  for (const surface of [top, bottom]) await expect(surface.locator('.chapter-progress')).toHaveText('Ch. 3 / 10')
   await top.screenshot({ path: `test-results/userscript-top-toolbar-${page.viewportSize()!.width}.png` })
   await bottom.screenshot({ path: `test-results/userscript-bottom-toolbar-${page.viewportSize()!.width}.png` })
   await expect(bottom.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await expect(bottom.getByRole('button', { name: 'Connection', exact: true })).toHaveCount(0)
-  await bottom.getByRole('button', { name: 'Mark Read', exact: true }).click()
+  await bottom.getByRole('button', { name: 'Read', exact: true }).click()
   expect(await page.evaluate(() => (window as unknown as {userscriptTestState:{requests:{p_input:{chapter_read?:unknown}}[]}}).userscriptTestState.requests.at(-1)!.p_input.chapter_read)).toEqual({chapter:4,chapter_id:'104',word_count:3})
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
    await expect(surface.getByText('Read', { exact: true })).toBeVisible()
    await expect(surface.locator('.completion-indicator')).toHaveCSS('gap', '4px')
-   await expect(surface.getByRole('button', { name: /Mark Read/ })).toHaveCount(0)
+   await expect(surface.getByRole('button', { name: /^Read$/ })).toHaveCount(0)
   }
   expect(page.url()).toBe('https://archiveofourown.org/works/123/chapters/104')
   await expect(page.getByText(/AO3 Library v/)).toBeHidden()
@@ -341,6 +352,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await top.getByRole('button', { name: 'Connection', exact: true }).click()
   const pairing = page.locator('#library-connection')
   await expect(pairing.getByRole('button')).toHaveCount(5)
+  await expect(pairing.locator('.library-settings-link')).toHaveCSS('padding-top', '28px')
   await expect(pairing.getByRole('button', { name: /chapter|Finish Fic|Reread/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await expect(page.getByLabel('Private Notes', { exact: true })).toHaveValue('Unsaved notes stay while changing chapters')
@@ -349,7 +361,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByLabel('This Chapter Is Finished', { exact: true }).uncheck()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 0 / 10', { exact: true })).toBeVisible()
-  await bottom.getByRole('button', { name: 'Mark Read', exact: true }).click()
+  await bottom.getByRole('button', { name: 'Read', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
   await page.evaluate(() => {
    document.getElementById('ao3-library-companion')!.remove()
@@ -370,7 +382,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.addScriptTag({ content: script })
   for (const surface of [top, bottom]) {
    await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
-   await expect(surface.getByRole('button', { name: /Mark Read|Finish Fic/ })).toHaveCount(0)
+   await expect(surface.getByRole('button', { name: /^(Read|Finish Fic)$/ })).toHaveCount(0)
   }
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await page.getByLabel('Private Notes', { exact: true }).fill('Keep this unsaved draft during recollection')
@@ -482,6 +494,38 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect(surface).toHaveAttribute('data-theme', 'light')
    await expect(surface.locator('section').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)')
   }
+  // Entire Work reuses the progress bar after each chapter, including its notes.
+  const fullUrl = 'https://archiveofourown.org/works/123?view_full_work=true'
+  await page.route(fullUrl, route => route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Entire Work</h2><dl class="work meta"><dd class="chapters">3/3</dd></dl><div id="chapters">${[1, 2, 3].map(number => `<div class="chapter" id="chapter-${number}"><h3 class="title"><a href="/works/123/chapters/${100 + number}">Chapter ${number}</a></h3><div class="userstuff">${'Word '.repeat(number)}</div><div class="notes">Private author notes</div></div>`).join('')}</div></div><div id="kudos">Kudos</div></main></body></html>` }))
+  await page.goto(fullUrl)
+  await page.evaluate(() => {
+   const attach = Element.prototype.attachShadow
+   Element.prototype.attachShadow = function (options) { return attach.call(this, { ...options, mode: 'open' }) }
+   let entry = { version: 'v1', status: 'reading', progress: 0, notes: '', rating: null, tags: [], collections: [] }
+   const requests: Record<string, unknown>[] = []
+   Object.assign(window, { fullWorkRequests: requests, userscriptTestApi: {
+    getValue: async (key: string, fallback: unknown) => key.startsWith('connection:') ? { userId: 'alice', secret: 'fixture-device-secret' } : fallback,
+    xmlHttpRequest: async ({ data }: { data: string }) => {
+     const request = JSON.parse(data); requests.push(request)
+     if (request.p_action === 'progress') entry = { ...entry, ...request.p_input }
+     return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+    },
+   } })
+  })
+  await page.addScriptTag({ content: script })
+  const fullBars = page.locator('[id^="ao3-library-progress"]')
+  await expect(fullBars).toHaveCount(3)
+  for (let index = 0; index < 3; index++) expect(await fullBars.nth(index).evaluate(element => element.previousElementSibling?.id)).toBe(`chapter-${index + 1}`)
+  await fullBars.nth(1).getByRole('button', { name: 'Read', exact: true }).click()
+  await expect(fullBars.nth(1).getByText('Read', { exact: true })).toBeVisible()
+  for (const surface of await fullBars.all()) {
+   await expect(surface.locator('.chapter-progress')).toHaveText('Ch. 2 / 3')
+   expect(await surface.locator('.bottom-bar').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+  }
+  expect(await page.evaluate(() => (window as unknown as { fullWorkRequests: { p_input: unknown }[] }).fullWorkRequests.at(-1)!.p_input)).toMatchObject({ chapter_read: { chapter: 2, chapter_id: '102', word_count: 2 } })
+  await fullBars.nth(1).screenshot({ path: `test-results/full-work-chapter-bar-${page.viewportSize()!.width}.png` })
+  await fullBars.nth(2).getByRole('button', { name: 'Finish Fic', exact: true }).click()
+  for (const surface of await fullBars.all()) await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeEnabled()
   // Safari's installable userscript also mounts every series work before pairing.
   const seriesUrl = 'https://archiveofourown.org/series/77'
   const seriesHtml = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')

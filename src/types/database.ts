@@ -818,7 +818,7 @@ export type Database = {
           name: string
           secret_hash: string
           paired: boolean
-          expires_at: string
+          expires_at: string | null
           created_at: string
         }
         Insert: {
@@ -827,7 +827,7 @@ export type Database = {
           name: string
           secret_hash: string
           paired?: boolean
-          expires_at?: string
+          expires_at?: string | null
           created_at?: string
         }
         Update: {
@@ -836,7 +836,7 @@ export type Database = {
           name?: string
           secret_hash?: string
           paired?: boolean
-          expires_at?: string
+          expires_at?: string | null
           created_at?: string
         }
         Relationships: [

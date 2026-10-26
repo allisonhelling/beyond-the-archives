@@ -175,7 +175,7 @@ export async function loadStories(ids: string[]): Promise<Story[]> {
   if (error) throw new Error('Could not reload the affected works. Check your connection.')
   return ((data ?? []) as unknown as Story[]).map(story => ({ ...story, detailsLoaded: true }))
 }
-export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: string; filters: import('./reading-search').ReadingFilters }
+export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
 export type LibraryResults = { suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export async function queryLibrary(query: LibraryQuery, page: number, size: number, signal: AbortSignal): Promise<LibraryResults> {
   // Run the same parser/validation before either transport. Literal substring

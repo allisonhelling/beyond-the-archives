@@ -667,6 +667,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 
 /* Text controls retain a clear focus target without persistent button chrome. */
 .metadata-link, .chapter-text-link { color: #800020; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.author-source-link { display: inline-flex; margin-inline-start: .25em; vertical-align: middle; }
 .clickable-text { color: var(--color-link); background: transparent; text-decoration: none; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .clickable-text:is(:hover, :focus-visible):not(:disabled) { color: var(--color-brand-hover); text-decoration: underline; text-underline-offset: 3px; }
 .metadata-link:hover, .chapter-text-link:hover { color: #970000; }

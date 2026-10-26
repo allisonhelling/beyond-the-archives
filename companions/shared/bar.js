@@ -1,8 +1,8 @@
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
-import { parseLines, statuses, validateProgress } from '../../src/features/library/model'
-import { captureChapterRead, collectWorkPage, readPage, readWorkTiles } from './page'
+import { active, parseLines, statuses, validateProgress } from '../../src/features/library/model'
+import { captureChapterRead, collectWorkPage, readPage, readWorkTiles, readChapterSections, chapterDefaults } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
@@ -37,27 +37,32 @@ export async function mountLibrary(doc = document, href = location.href, options
  else if (page.series) doc.querySelector('#main .series.work.index')?.before(host)
  else doc.querySelector('#workskin')?.before(host)
  if (!host.isConnected) doc.querySelector('#main')?.prepend(host)
- const bottomId = tile ? `${hostId}-progress` : 'ao3-library-progress'
- doc.getElementById(bottomId)?.remove()
- const bottomHost = doc.createElement('div'); bottomHost.id = bottomId
- bottomHost.dataset.browser = browser
- if (ao3FontSize) bottomHost.style.setProperty('--ao3-font-size', ao3FontSize)
- const bottomRoot = bottomHost.attachShadow({ mode: 'closed' }); bottomRoot.append(style.cloneNode(true))
- const bottomSection = doc.createElement('section'); bottomSection.className = 'bottom-section'; bottomSection.setAttribute('aria-label', 'Reading Progress'); bottomRoot.append(bottomSection)
- const bottomBar = doc.createElement('div'); bottomBar.className = 'row bottom-bar'; bottomBar.setAttribute('aria-live', 'polite'); bottomSection.append(bottomBar)
- const bottomMessage = doc.createElement('p'); bottomMessage.setAttribute('aria-live', 'polite'); bottomSection.append(bottomMessage)
- if (!tile && !page.series) {
-  const bottomAnchor = doc.querySelector('#kudos') ?? doc.querySelector('.kudos') ?? doc.querySelector('#feedback')
-  if (bottomAnchor) bottomAnchor.before(bottomHost)
-  else doc.querySelector('#workskin')?.after(bottomHost)
- }
- bottomHost.hidden = true
+ const chapterSections = !tile && !page.series ? readChapterSections(doc, href) : []
+ const progressBars = (chapterSections.length ? chapterSections : [{ element: null, current: page.current }]).map(({ element, current }, index, targets) => {
+  const id = index === targets.length - 1 ? (tile ? `${hostId}-progress` : 'ao3-library-progress') : `ao3-library-progress-chapter-${current}`
+  doc.getElementById(id)?.remove()
+  const host = doc.createElement('div'); host.id = id; host.dataset.browser = browser
+  if (ao3FontSize) host.style.setProperty('--ao3-font-size', ao3FontSize)
+  const root = host.attachShadow({ mode: 'closed' }); root.append(style.cloneNode(true))
+  const section = doc.createElement('section'); section.className = 'bottom-section'; section.setAttribute('aria-label', element ? `Chapter ${current} Reading Progress` : 'Reading Progress'); root.append(section)
+  const bar = doc.createElement('div'); bar.className = 'row bottom-bar'; bar.setAttribute('aria-live', 'polite'); section.append(bar)
+  const message = doc.createElement('p'); message.setAttribute('aria-live', 'polite'); section.append(message)
+  if (element) element.after(host)
+  else if (!tile && !page.series) {
+   const anchor = doc.querySelector('#kudos') ?? doc.querySelector('.kudos') ?? doc.querySelector('#feedback')
+   if (anchor) anchor.before(host)
+   else doc.querySelector('#workskin')?.after(host)
+  }
+  host.hidden = true
+  return { host, root, bar, message, current: element ? current : undefined }
+ })
+ const surfaces = [root, ...progressBars.map(({ root }) => root)]
  const storageKey = `connection:${backendUrl}`, themeKey = `theme:${backendUrl}`
  const preferredTheme = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
  let [connection, theme, previousRatingInfo] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme), api.getValue(`rating-info:${backendUrl}`, null)])
  let ratingInfo = defaultRatingInfo, savedRatingInfo = null
  theme = ['light', 'dark'].includes(theme) ? theme : preferredTheme
- const applyTheme = () => [host, bottomHost].forEach(surface => { surface.dataset.theme = theme })
+ const applyTheme = () => [host, ...progressBars.map(({ host }) => host)].forEach(surface => { surface.dataset.theme = theme })
  applyTheme()
  let entry = null, collections = [], loaded = false, busy = false, draft = null, activePanel = null, syncEditorProgress = null, personalControls = null, syncEditorDraft = null, disposeConflict = null, pendingConflict = null, savedWorks = [], seriesControls = []
  const toolbar = doc.createElement('div'); toolbar.className = 'toolbar'; section.append(toolbar)
@@ -99,7 +104,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  function clearConflict() {
   pendingConflict = null; disposeConflict?.(); disposeConflict = null; conflictPanel.replaceChildren()
   editorPanel.querySelector('form fieldset')?.removeAttribute('disabled')
-  ;[root, bottomRoot].forEach(surface => surface.querySelectorAll('button').forEach(button => { button.disabled = busy || button.dataset.atBoundary === 'true' }))
+  ;surfaces.forEach(surface => surface.querySelectorAll('button').forEach(button => { button.disabled = busy || button.dataset.atBoundary === 'true' }))
  }
  function showConflict(error) {
   disposeConflict?.(); pendingConflict = error
@@ -116,7 +121,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  function panelButton(label, name, action, parent = toolbar) {
   const element = button(label, async () => {
    await action()
-   if (bottomBar.contains(element) && activePanel === name) {
+   if (progressBars.some(({ bar }) => bar.contains(element)) && activePanel === name) {
     host.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
     panel.querySelector('div:not([hidden]) input, div:not([hidden]) textarea')?.focus({ preventScroll: true })
    }
@@ -127,10 +132,10 @@ export async function mountLibrary(doc = document, href = location.href, options
  }
  async function run(action) {
   if (busy) return
-  busy = true; message.textContent = ''; [root, bottomRoot].forEach(surface => surface.querySelectorAll('button').forEach(button => { button.disabled = true }))
+  busy = true; message.textContent = ''; surfaces.forEach(surface => surface.querySelectorAll('button').forEach(button => { button.disabled = true }))
   try { await action() }
   catch (error) { if (error instanceof EditConflict) showConflict(error); message.textContent = error instanceof Error ? error.message : 'Connection failed. Your draft is preserved.' }
-  finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); bottomMessage.textContent = message.textContent === 'Saved' ? '' : message.textContent }
+  finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); progressBars.forEach(surface => { surface.message.textContent = message.textContent === 'Saved' ? '' : message.textContent }) }
  }
  async function rpc(action, input = {}, secret = connection?.secret) {
   const backend = new URL(backendUrl)
@@ -149,7 +154,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (response.status < 200 || response.status >= 300) {
    if (data.code === '28000') {
     if (action === 'claim') throw new Error(`Pairing code not accepted by ${appOrigin}. Create a fresh code on that website and paste it within 5 minutes.${browser === 'chrome' ? ' Check the selected Hosted / Local environment in the extension settings and reload AO3.' : ''} Your draft is preserved.`)
-    throw new Error('Device authorization expired or was revoked. Reconnect below; your draft is preserved.')
+    throw new Error('Device authorization was revoked or is no longer valid. Reconnect below; your draft is preserved.')
    }
    const conflict = conflictFromError(data, (values, base) => {
     const retry = { ...input, ...values, base }
@@ -179,11 +184,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   return api.setValue(draftKey(), draft).catch(() => { message.textContent = 'Could not preserve the draft on this device. Keep this panel open.' })
  }
  async function load() { accept(await rpc('get')); renderToolbar() }
- async function progress(value, status, markRead = false) {
+ async function progress(value, status, markRead = false, current = page.current) {
   validateProgress(value, page.metadata)
   const previous = entry
   entry = { ...entry, progress: value, status }; renderToolbar()
-  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, ...(markRead && { chapter_read: captureChapterRead(doc, page, href) }) })) }
+  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, ...(markRead && { chapter_read: captureChapterRead(doc, { ...page, current }, href) }) })) }
   catch (error) { entry = previous; renderToolbar(); throw error }
   renderToolbar()
   await syncProgressDraft()
@@ -275,40 +280,50 @@ export async function mountLibrary(doc = document, href = location.href, options
   else input.removeAttribute('max')
   dialog.showModal(); input.focus(); input.select()
  }
- function renderReadingToggle(parent) {
-  if (['reading', 're_reading', 'waiting_for_updates', 'paused_reading'].includes(entry.status)) {
+ function renderReadingToggle(parent, current, top) {
+  if (active({ reading_status: entry.status }) || entry.status === 'paused_reading') {
    const paused = entry.status === 'paused_reading'
+   if (paused && current && (current > entry.progress + 1 || (!top && current === entry.progress + 1))) return
    const label = paused ? 'Resume Reading' : 'Pause Reading'
-   const toggle = button(browser === 'safari' ? '' : label, () => progress(entry.progress, paused ? resumeReadingStatus({ reading_history: entry.readingHistory }) : 'paused_reading'), parent)
-   toggle.className = `reading-toggle${browser === 'safari' ? ' settings-button' : ''}`
+   const toggle = button(paused ? 'Resume' : 'Pause', () => progress(entry.progress, paused ? resumeReadingStatus({ reading_history: entry.readingHistory }) : 'paused_reading'), parent)
+   toggle.className = 'reading-toggle'
    toggle.setAttribute('aria-label', label); toggle.title = label
    toggle.prepend(icon(paused ? ['m9 5 11 7-11 7V5Z'] : ['M6 4h4v16H6z', 'M14 4h4v16h-4z'], toggle))
   }
  }
- function renderProgress(parent, summaryParent = parent) {
+ function renderProgress(parent, summaryParent = parent, current = page.current, top = false) {
   const summary = node('div', '', summaryParent); summary.className = 'row reading-summary'
   node('strong', entry.status === 'reading' ? readingLabel : statuses[entry.status], summary)
   const bullet = node('span', '•', summary); bullet.className = 'status-bullet'; bullet.dataset.status = entry.status; bullet.setAttribute('aria-hidden', 'true')
   const chapterCount = `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`
   const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), summary); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
-  if (!page.current) return
+  if (!current) { renderReadingToggle(parent, current, top); return }
   if (entry.status === 'finished') {
-   const reread = button('Re-Read', () => progress(page.current - 1, 're_reading'), parent)
+   const reread = button('Re-Read', () => progress(current - 1, 're_reading'), parent)
    reread.className = 'complete-chapter'
    reread.prepend(icon(['M3 11a9 9 0 1 1 2.7 6.4', 'M3 4v7h7'], reread))
    return
   }
-  const read = entry.progress >= page.current
-  if (read) {
+  const read = entry.progress >= current
+  const actionParent = browser === 'chrome' ? summary : parent
+  if (entry.status === 'to_read' && current === 1 && top) {
+   const start = button('Start Reading', () => progress(entry.progress, 'reading'), actionParent)
+   start.className = 'complete-chapter'
+   start.prepend(icon(['m9 5 11 7-11 7V5Z'], start))
+  } else if (read) {
    const indicator = node('span', '', summary); indicator.className = 'completion-indicator'
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
    node('span', 'Read', indicator)
-  } else {
-   const final = page.current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
-   const complete = button(final ? 'Finish Fic' : 'Mark Read', () => progress(Math.max(entry.progress, page.current), final ? 'finished' : entry.status === 're_reading' ? 're_reading' : 'reading', true), browser === 'chrome' ? summary : parent)
+  } else if (!(entry.status === 'paused_reading' && top && current === entry.progress + 1)) {
+   const final = current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
+   const starting = ['to_read', 'paused_reading'].includes(entry.status)
+   const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
+   const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
+   const complete = button(label, () => progress(Math.max(entry.progress, current), final ? 'finished' : status, true, current), actionParent)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
+  renderReadingToggle(parent, current, top)
  }
  function libraryLink(parent) {
   const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in Between Chapters Library')
@@ -316,20 +331,22 @@ export async function mountLibrary(doc = document, href = location.href, options
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }
  function renderToolbar() {
-  toolbar.replaceChildren(); bottomBar.replaceChildren()
+  toolbar.replaceChildren()
   const inlineInstructions = browser === 'chrome' && !connection && !activePanel
   toolbar.classList.toggle('toolbar-disconnected', inlineInstructions)
-  bottomHost.hidden = Boolean(page.series || tile)
-  bottomBar.className = entry ? 'row bottom-bar' : 'toolbar'
   footer.hidden = Boolean(connection && !activePanel)
-  renderBar(toolbar)
+  renderBar(toolbar, page.current ?? chapterSections[0]?.current)
   footer.classList.toggle('inline-instructions', inlineInstructions)
   if (inlineInstructions) toolbar.querySelector('.toolbar-progress').append(footer)
   else section.append(footer)
-  if (entry && !page.series) { renderProgress(bottomBar); renderReadingToggle(bottomBar) }
-  else renderBar(bottomBar)
+  for (const { host, bar, current } of progressBars) {
+   bar.replaceChildren(); host.hidden = Boolean(page.series || tile)
+   bar.className = entry ? 'row bottom-bar' : 'toolbar'
+   if (entry && !page.series) { renderProgress(bar, bar, current) }
+   else renderBar(bar, current)
+  }
  }
- function renderBar(parent) {
+ function renderBar(parent, current = page.current) {
   libraryLink(parent)
   const center = node('div', '', parent); center.className = 'row toolbar-progress'
   const actions = node('div', '', parent); actions.className = 'row toolbar-actions'
@@ -337,7 +354,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (!connection) { panelButton('Connect Library', 'connection', showConnection, actions); return }
   if (!loaded) button('Load Saved Entry', load, center)
   else if (!entry) {
-   panelButton('Add to Library', 'editor', openEditor, center)
+   panelButton('Add to Library', 'editor', () => openEditor(current), center)
    if (!page.series) button('To Read', async () => {
     if (!tile) Object.assign(page, await collectWorkPage(doc, href))
     accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }))
@@ -347,7 +364,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   }
   else {
    if (page.series) node('span', 'Series saved', center)
-   else { renderProgress(actions, center); renderReadingToggle(actions) }
+   else renderProgress(actions, center, current, parent === toolbar)
    const edit = panelButton('Edit', 'editor', openEditor, actions); edit.className = 'edit-button'
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
@@ -398,8 +415,9 @@ export async function mountLibrary(doc = document, href = location.href, options
    message.textContent = 'Rating info saved to your library account.'
   }, ratingEditor)
   const libraryLink = node('a', `Library Settings (${appOrigin})`, connectionPanel)
+  libraryLink.className = 'library-settings-link'
   libraryLink.href = `${appOrigin}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
-  node('p', 'In Library Settings → AO3 Browser Bar, create a pairing code. Paste it here within 5 minutes. This grants library access for 90 days.', connectionPanel)
+  node('p', 'In Library Settings → AO3 Browser Bar, create a pairing code. Paste it here within 5 minutes. This connects the device until you disconnect it here or remove it in Library Settings.', connectionPanel)
   const label = node('label', 'One-Time Pairing Code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false
   const actions = node('div', '', connectionPanel); actions.className = 'row'
@@ -535,13 +553,13 @@ export async function mountLibrary(doc = document, href = location.href, options
    clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()); message.textContent = 'Saved'
   }) })
  }
- async function openEditor() {
+ async function openEditor(current = page.current) {
   if (activePanel === 'editor') { showPanel(null); return }
   if (editorPanel.childNodes.length) { showPanel('editor'); return }
   if (!loaded) await load()
   if (page.series) { await openSeriesEditor(); return }
   const stored = await api.getValue(draftKey(), null)
-  draft = draft ?? stored ?? (entry ? { version: entry.version, status: entry.status, ...entryPosition(), notes: entry.notes, rating: entry.rating ?? '', tags: entry.tags.join('\n'), collections: entry.collections } : { ...page.defaults, version: null, notes: '', rating: '', tags: '', collections: [] })
+  draft = draft ?? stored ?? (entry ? { version: entry.version, status: entry.status, ...entryPosition(), notes: entry.notes, rating: entry.rating ?? '', tags: entry.tags.join('\n'), collections: entry.collections } : { ...chapterDefaults(current, page.metadata), version: null, notes: '', rating: '', tags: '', collections: [] })
   if (!Object.hasOwn(draft, 'base')) draft.base = stored ? {} : entryValues()
   if (stored) message.textContent = 'Unsaved draft restored. Review it before saving.'
   showPanel('editor')
@@ -623,7 +641,7 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (value === null) throw new Error('The published chapter count is unavailable. Reload AO3 before finishing the work.')
     validateProgress(value, page.metadata)
     await api.setValue(draftKey(), draft)
-    const chapterRead = !tile && page.current === value && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? captureChapterRead(doc, page, href) : null
+    const chapterRead = !tile && (page.current === value || chapterSections.some(({ current }) => current === value)) && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? captureChapterRead(doc, { ...page, current: value }, href) : null
     accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
     message.textContent = 'Saved'; clearEditor(); draft = null; showPanel(null)
     await api.deleteValue(draftKey()).catch(() => { message.textContent = 'Saved. Could not clear the local draft.' })

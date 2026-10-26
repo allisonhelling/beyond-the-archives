@@ -136,10 +136,11 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   const connectBox = (await connectButton.boundingBox())!
   expect(instructionBox.x + instructionBox.width / 2).toBeCloseTo(centerBox.x + centerBox.width / 2, 0)
   expect(instructionBox.y + instructionBox.height / 2).toBeCloseTo(connectBox.y + connectBox.height / 2, 0)
-  await expect(connectButton).toHaveCSS('min-height', '32px')
+  await expect(connectButton).toHaveCSS('min-height', '35px')
   expect(connectBox.height).toBeLessThan(48)
   await expect(bar.locator('.brand-icon svg')).toHaveCSS('width', '18px')
   await connectButton.click()
+  await expect(bar.locator('.library-settings-link')).toHaveCSS('padding-top', '20px')
   await expect(bar.locator('.inline-instructions')).toHaveCount(0)
   await bar.getByLabel('One-Time Pairing Code', { exact: true }).fill('one-time-code')
   await bar.getByRole('button', { name: 'Connect', exact: true }).click()
@@ -168,6 +169,20 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await bar.getByLabel('Private Notes', { exact: true }).fill('Edited directly from Chrome')
   await bar.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(bar.getByRole('status')).toHaveText('Saved')
+  await bar.getByRole('button', { name: 'Start Reading', exact: true }).click()
+  await expect(bar.getByRole('button', { name: 'Pause Reading', exact: true })).toHaveText('Pause')
+  await expect(bar.locator('.chapter-progress')).toHaveText('Ch. 0 / 6')
+  expect(barRequests.at(-1)!.p_input).not.toHaveProperty('chapter_read')
+  for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
+   const pauseHeight = (await surface.getByRole('button', { name: 'Pause Reading', exact: true }).boundingBox())!.height
+   for (const control of await surface.locator('.toolbar button, .bottom-bar button').all()) expect(Math.abs((await control.boundingBox())!.height - pauseHeight)).toBeLessThan(1)
+  }
+  await bar.getByRole('button', { name: 'Pause Reading', exact: true }).click()
+  const resume = bar.getByRole('button', { name: 'Resume Reading', exact: true })
+  await expect(resume).toHaveText('Resume')
+  expect(Math.abs((await resume.boundingBox())!.height - (await bar.getByRole('button', { name: 'Edit', exact: true }).boundingBox())!.height)).toBeLessThan(1)
+  await expect(bar.getByRole('button', { name: 'Mark Read', exact: true })).toHaveCount(0)
+  await expect(ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Resume Reading', exact: true })).toHaveCount(0)
   await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Read', exact: true }).click()
   await expect(bar.getByRole('status')).toHaveText('Saved')
   await expect(bar.getByText('Ch. 1 / 6', { exact: true })).toBeVisible()

@@ -268,3 +268,35 @@ it('excludes waiting works from reading View All while preserving the library Cu
   expect(result.waiting).toBe(status === 'waiting_for_updates')
  }
 })
+
+it('scopes author pages before pagination and filters, using saved corrections and keeping accounts isolated', async () => {
+ const name = 'A Writer / 雨 & Co'
+ const rows = await documents()
+ await db.exec('reset role')
+ for (const [index, story] of rows.slice(0, 30).entries()) {
+  await db.query("update public.library_entries set metadata_overrides=jsonb_build_object('authors', $2::jsonb, 'fandoms', jsonb_build_array('Author Fandom')), is_favorite=$3 where id=$1", [story.id, JSON.stringify(index === 0 ? [name, 'Coauthor'] : [name]), index === 0])
+ }
+ await db.query("update public.library_entries set metadata_overrides=jsonb_build_object('authors',jsonb_build_array($1::text)) where user_id=$2", [name, bob])
+ await db.exec(`set role authenticated; set request.jwt.claim.sub='${alice}'`)
+ const authorQuery = async (author: string, filters = {}, page = 1) => (await db.query<{ result: LibraryResults }>('select public.query_library($1,$2,25) result', [JSON.stringify({ mode: 'library', shelf: 'all', author, filters: { ...defaultReadingFilters, ...filters } }), page])).rows[0].result
+ const first = await authorQuery(name), second = await authorQuery(name, {}, 2)
+ expect(first).toMatchObject({ total: 30, pages: 2, page: 1, series: [] })
+ expect(first.stories).toHaveLength(25)
+ expect(second.stories).toHaveLength(5)
+ expect(new Set([...first.stories, ...second.stories].map(story => story.id)).size).toBe(30)
+ expect(first.fandoms).toEqual([{ name: 'Author Fandom', count: 30 }])
+ expect(first.stories.every(story => story.metadata.authors.includes(name))).toBe(true)
+ expect(await authorQuery('Coauthor')).toMatchObject({ total: 1 })
+ expect(await authorQuery(name, { favorites: true })).toMatchObject({ total: 1 })
+ expect(await authorQuery('A Writer')).toMatchObject({ total: 0, stories: [], fandoms: [] })
+ expect(await authorQuery(name, { showSeries: true })).toMatchObject({ total: 30, series: [] })
+ await db.exec(`set request.jwt.claim.sub='${bob}'`)
+ expect(await authorQuery(name)).toMatchObject({ total: 1 })
+ await db.exec(`set request.jwt.claim.sub='${alice}'`)
+ // Author pages appear and disappear with saved fic metadata; no extra record is needed.
+ await db.query("select public.save_library_story_checked(null, 'https://archiveofourown.org/works/987654321', $1::jsonb, '{}'::jsonb)", [JSON.stringify({ metadata: { title: 'New Author Work', authors: ['New Author'] }, status: 'to_read', progress: 0, notes: '', rating: null, favorite: false, tags: [], collections: [] })])
+ const added = await authorQuery('New Author')
+ expect(added).toMatchObject({ total: 1 })
+ await db.query('delete from public.library_entries where id=$1', [added.stories[0].id])
+ expect(await authorQuery('New Author')).toMatchObject({ total: 0 })
+})

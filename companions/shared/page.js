@@ -2,7 +2,7 @@ import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { parseSeries, parseWorkBlurbs } from '../../src/features/imports/ao3-series'
 import { load } from 'cheerio'
 import { extractWorkMetadata } from '../../src/features/imports/ao3-metadata.ts'
-import { blankMetadata, initialProgress, parseWorkUrl } from '../../src/features/library/model'
+import { blankMetadata, parseWorkUrl } from '../../src/features/library/model'
 
 const workMetadata = captured => ({ ...blankMetadata, ...captured, publication_status: captured.published_chapters == null ? 'unknown' : captured.is_complete ? 'complete' : 'in_progress' })
 
@@ -25,7 +25,22 @@ export function captureChapterRead(doc, page, href) {
   wordCount = 0
   for (const segment of segments) if (segment.isWordLike) wordCount++
  }
- return { chapter: page.current, chapter_id: parseWorkUrl(href).chapterId ?? page.chapters?.[page.current] ?? null, word_count: wordCount }
+ return { chapter: page.current, chapter_id: page.chapters?.[page.current] ?? parseWorkUrl(href).chapterId ?? null, word_count: wordCount }
+}
+
+/** AO3 numbers full-work chapter containers by their reading order. */
+export function readChapterSections(doc, href) {
+ if (new URL(href).searchParams.get('view_full_work') !== 'true') return []
+ return [...doc.querySelectorAll('#chapters > .chapter')].flatMap(element => {
+  const current = Number(/^chapter-([1-9]\d*)$/.exec(element.id)?.[1])
+  return current ? [{ element, current }] : []
+ })
+}
+
+export function chapterDefaults(current, metadata) {
+ // Only a known final chapter of a complete work defaults to Finished.
+ const last = current > 1 && current === metadata.total_chapters && metadata.published_chapters === metadata.total_chapters
+ return { status: last ? 'finished' : current > 1 ? 'reading' : 'to_read', chapter: current ?? 1, chapterFinished: last }
 }
 
 // Metadata capture never includes story text/forms. Read actions count text separately.
@@ -44,16 +59,19 @@ export function readPage(doc, href) {
  // AO3 nests its chapter selector inside a navigation li.chapter, not story text.
  const html = [...doc.querySelectorAll('h2.title, h3.byline, .summary.module, dl.work.meta, #selected_id')].filter(node => node.id === 'selected_id' || !node.closest('#chapters, .chapter')).map(node => node.outerHTML).join('')
  const { metadata: captured, chapters: chapterMap } = extractWorkMetadata(load(html), href)
+ for (const { element, current } of readChapterSections(doc, href)) {
+  const link = element.querySelector('h3.title a[href*="/chapters/"]')
+  if (!link) continue
+  try {
+   const chapter = parseWorkUrl(new URL(link.getAttribute('href'), href).href)
+   if (chapter.workId === identity.workId && chapter.chapterId) chapterMap[current] = chapter.chapterId
+  } catch { /* Ignore unrecognized chapter links. */ }
+ }
  const published = captured.published_chapters ?? null
- const total = captured.total_chapters ?? null
  let current = identity.chapterId ? Number(Object.keys(chapterMap).find(key => chapterMap[key] === identity.chapterId)) || null : 1
  if (!identity.chapterId && url.searchParams.get('view_full_work') === 'true' && published !== 1) current = null
  const metadata = workMetadata(captured)
- const defaults = initialProgress(href, chapterMap)
- // Chapter 1 remains To Read even for a one-shot. Only a known final chapter
- // of a complete work defaults to Finished; the latest WIP chapter does not.
- const last = current > 1 && total !== null && current === total && published === total
- return { work: identity.workId, metadata, automaticMetadata: captured, chapters: chapterMap, current, defaults: { status: last ? 'finished' : defaults.status, chapter: current ?? 1, chapterFinished: last } }
+ return { work: identity.workId, metadata, automaticMetadata: captured, chapters: chapterMap, current, defaults: chapterDefaults(current, metadata) }
 }
 
 /** Saving from a later chapter still needs the work's summary, not its chapter summary. */

@@ -117,3 +117,12 @@ it('reads listing tiles through the shared blurb parser without inventing series
  expect(tiles[0].page.metadata).not.toHaveProperty('series_memberships')
  expect(readWorkTiles(doc, 'https://evil.test/works')).toEqual([])
 })
+
+it('reads full-work chapter links without a selector and counts each chapter separately', () => {
+ const doc = new DOMParser().parseFromString('<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">2/2</dd></dl><div id="chapters"><div class="chapter" id="chapter-1"><h3 class="title"><a href="/works/123/chapters/910">First</a></h3><div class="userstuff">One.</div></div><div class="chapter" id="chapter-2"><h3 class="title"><a href="/works/123/chapters/920">Second</a></h3><div class="userstuff">Two words.</div></div></div>', 'text/html')
+ const url = 'https://archiveofourown.org/works/123?view_full_work=true'
+ const info = readPage(doc, url)
+ expect(info).toMatchObject({ current: null, chapters: { 1: '910', 2: '920' } })
+ expect(captureChapterRead(doc, { ...info, current: 2 }, url)).toEqual({ chapter: 2, chapter_id: '920', word_count: 2 })
+ expect(JSON.stringify(info)).not.toContain('Two words')
+})

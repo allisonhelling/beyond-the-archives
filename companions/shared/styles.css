@@ -10,6 +10,7 @@
 :host([hidden]), :host [hidden] { display: none; }
 section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field-gap)) 0 var(--bar-space-after, var(--field-gap)); border: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--text); }
 .toolbar, .bottom-bar { --font-size: var(--ao3-font-size, 20px); }
+.toolbar button, .bottom-bar button { min-height: max(var(--control-size), calc(1.5em + 2 * var(--control-padding) + 2px)); }
 .toolbar { display: grid; grid-template-columns: max-content minmax(max-content, 1fr) max-content; align-items: center; gap: var(--control-gap); overflow-x: auto; }
 .toolbar > .row, .reading-summary { flex-wrap: nowrap; }
 .toolbar strong, .toolbar button, .toolbar .library-link { white-space: nowrap; }
@@ -40,10 +41,11 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 .progress-dialog [role="alert"] { color: var(--accent); }
 .completion-indicator { display: inline-flex; align-items: center; gap: 4px; color: var(--status-read); min-height: var(--control-size); }
 .completion-indicator svg, button:not(.removable-tag) svg { width: var(--button-icon-size); height: var(--button-icon-size); fill: none; stroke: currentColor; stroke-width: 1.8; }
-.library-link, .edit-button, .complete-chapter, .theme-toggle, .reading-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--control-gap); }
+.library-link, .edit-button, .complete-chapter, .theme-toggle, .reading-toggle { display: inline-flex; align-items: center; justify-content: center; gap: calc(var(--control-gap) - 2px); }
 .library-link { min-height: var(--control-size); padding: var(--control-padding); border: 1px solid var(--border); border-radius: 5px; color: var(--color-brand); text-decoration: none; }
 .library-link:hover { border-color: var(--accent); }
 .connection-settings { padding-top: var(--field-gap); }
+.library-settings-link { display: block; padding-top: calc(2 * var(--field-gap)); }
 .rating-info-editor textarea { resize: vertical; overflow-y: auto; }
 .settings-button { display: grid; place-items: center; width: var(--control-size); padding: var(--control-padding); }
 button, input, select, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: var(--control-padding); min-height: var(--control-size); }

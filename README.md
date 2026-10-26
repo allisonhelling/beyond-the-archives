@@ -6,6 +6,12 @@ Phase 2 implements a private, manually managed library: story creation and editi
 
 The additive Phase 2 migration was applied to the local development Supabase stack. No hosted database was changed or deployed during this phase.
 
+## Author Pages
+
+Author names on fic tiles, work details, and series link to `/authors/:name`. Each page automatically groups all currently saved fics credited to that exact author name, including coauthored works, and reuses the library filter bar, sorting, grouping, pagination, and fic tiles. Importing or saving a new author needs no separate setup. AO3 profile links remain available beside names. These pages use saved metadata and do not retrieve an author's full AO3 listing.
+
+Apply `20261026000100_author_library_pages.sql` before deploying the updated web app. It scopes the existing account-owned results query before filtering and pagination, including suggestions and fandom counts. Existing author metadata overrides participate in grouping.
+
 ## Code Organization
 
 Keep components, behavior, styles, and unit tests beside the feature that owns them:

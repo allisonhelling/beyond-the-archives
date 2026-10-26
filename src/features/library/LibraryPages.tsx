@@ -183,6 +183,14 @@ export function LibraryPage({ reading = false }: { reading?: boolean }) {
   if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={actions => <div className="page-heading library-heading"><div className="library-title-row"><h1>Currently Reading</h1><div className="library-heading-actions">{actions}</div></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
   return <LibraryContent />
 }
+export function AuthorPage() {
+  const { name = '' } = useParams<{ name: string }>()
+  const { stories } = useLibrary()
+  const count = stories.filter(story => story.metadata.authors.includes(name)).length
+  return <LibraryBoundary><ReadingDashboard key={name} mode="library" author={name} stories={stories}
+    renderHeader={actions => <div className="page-heading library-heading"><div><div className="library-title-row"><h1>{name}</h1><div className="library-heading-actions">{actions}</div></div><p>{count} {count === 1 ? 'fic' : 'fics'} saved in your library</p></div></div>}
+    renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
+}
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nDelete or Backspace: delete selected collections; non-empty collections ask for confirmation.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
 
 type CollectionSort = { shelfOrder?: string[]; automaticOrder: string[]; order: CollectionOrder; hiddenAutomatic: string[]; hiddenCustom: string[] }
@@ -425,7 +433,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   function editSection(section: 'metadata' | 'reading' | null) { setParams(section ? { edit: section } : {}, { state: location.state }) }
   const candidate = location.state?.returnTo
   const returnTo = browsingReturnTo(candidate)
-  const returnLabel = returnTo.startsWith('/reading') ? 'Currently Reading' : returnTo.startsWith('/series/') ? 'Series' : 'Library'
+  const returnLabel = returnTo.startsWith('/reading') ? 'Currently Reading' : returnTo.startsWith('/series/') ? 'Series' : returnTo.startsWith('/authors/') ? 'Author' : 'Library'
   const candidateStory = example ?? library.stories.find(s => s.id === id)
   const story = useStorySnapshot(candidateStory)
   const { loadDetails, retainDetails } = library

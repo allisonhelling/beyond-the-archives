@@ -21,3 +21,14 @@ it('copies a newly created pairing code on click or Enter and preserves it if co
  await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('copy it manually'))
  expect(input).toHaveValue('test-pairing-code')
 })
+
+it('shows connected devices without expiry and still allows manual disconnection', async () => {
+ const devices = [{ id: 'paired-device', name: 'My Browser', paired: true, expires_at: null }, { id: 'pending-device', name: 'New Browser', paired: false, expires_at: '2026-10-26T12:05:00Z' }]
+ mocks.rpc.mockImplementation((_name: string, args: { p_action: string }) => Promise.resolve({ data: args.p_action === 'revoke' ? devices.slice(1) : devices, error: null }))
+ render(<MemoryRouter><BrowserBarSettings /></MemoryRouter>)
+ expect(await screen.findByText(/My Browser · Connected · Until disconnected/)).toBeVisible()
+ expect(screen.getByText(/New Browser · Awaiting pairing · expires/)).toBeVisible()
+ fireEvent.click(screen.getByRole('button', { name: 'Disconnect My Browser' }))
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Disconnect My Browser' })).not.toBeInTheDocument())
+ expect(mocks.rpc).toHaveBeenLastCalledWith('manage_userscript_device', { p_action: 'revoke', p_name: 'My browser', p_id: 'paired-device' })
+})

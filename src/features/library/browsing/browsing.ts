@@ -37,5 +37,5 @@ export function writeBrowsing(params: URLSearchParams, filters: ReadingFilters, 
 }
 
 export function browsingReturnTo(value: unknown, fallback = '/library') {
-  return typeof value === 'string' && /^\/(?:reading|library|series\/[1-9]\d*)(?:\?[^#]*)?$/.test(value) ? value : fallback
+  return typeof value === 'string' && /^\/(?:reading|library|series\/[1-9]\d*|authors\/[^/?#]+)(?:\?[^#]*)?$/.test(value) ? value : fallback
 }

@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
 import { useLocation } from 'react-router-dom'
 
-type Device = { id: string; name: string; paired: boolean; expires_at: string }
+type Device = { id: string; name: string; paired: boolean; expires_at: string | null }
 export function BrowserBarSettings() {
  const section = useRef<HTMLElement>(null)
  const { hash } = useLocation()
@@ -34,7 +34,7 @@ export function BrowserBarSettings() {
    if (error) throw error
    if (action === 'create') {
     setCode((data as { code: string }).code)
-    setMessage('Paste this one-time code into the AO3 panel within 5 minutes. It grants this device library access for 90 days. Keep it private.')
+    setMessage('Paste this one-time code into the AO3 panel within 5 minutes. The device stays connected until you disconnect it on AO3 or remove it here. Keep it private.')
    } else { setDevices(data as Device[]); if (action === 'revoke') setMessage('Device disconnected.') }
   } catch { setMessage('Could not update devices. Check your connection, sign-in, and userscript migration.') }
   finally { setBusy(false) }
@@ -58,8 +58,8 @@ export function BrowserBarSettings() {
   {message && <p role="status" className="muted">{message}</p>}
   </fieldset>
   <fieldset className="settings-subsection" aria-labelledby="browser-bar-devices-title"><legend><h3 id="browser-bar-devices-title">Connected Devices</h3></legend>
-  <ul>{devices.map(device => <li key={device.id}>{device.name} · {device.paired ? 'Connected' : 'Awaiting pairing'} · expires {formatDate(device.expires_at)} <button className="button secondary compact" disabled={busy} onClick={() => void manage('revoke', device.id)}>Disconnect {device.name}</button></li>)}</ul>
-  <p className="muted">Disconnect here to revoke access even if the device is lost. Signing out of the website leaves paired devices connected until disconnected or expired. New codes replace previous unused codes.</p>
+  <ul>{devices.map(device => <li key={device.id}>{device.name} · {device.paired ? 'Connected' : 'Awaiting pairing'} · {device.expires_at ? `expires ${formatDate(device.expires_at)}` : 'Until disconnected'} <button className="button secondary compact" disabled={busy} onClick={() => void manage('revoke', device.id)}>Disconnect {device.name}</button></li>)}</ul>
+  <p className="muted">Disconnect here to revoke access even if the device is lost. Signing out of the website leaves paired devices connected until you disconnect them here or on AO3. New codes replace previous unused codes.</p>
   </fieldset>
  </section>
 }

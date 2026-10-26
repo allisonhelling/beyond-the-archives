@@ -43,7 +43,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode) => ReactNode; filterItems?: typeof filterReading }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading, author }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileQuery)
@@ -54,8 +54,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   }, [])
   const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
   const [params, setParams] = useSearchParams()
-  const selected = params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')
-  const defaultScope = filterDefaultScope(mode, selected)
+  const selected = author !== undefined ? 'all' : params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')
+  const defaultScope = author !== undefined ? `author:${author}` : filterDefaultScope(mode, selected)
   const [defaults, setDefaults] = useState(() => ({ scope: defaultScope, filters: readFilterDefaults(defaultScope) }))
   if (defaults.scope !== defaultScope) setDefaults({ scope: defaultScope, filters: readFilterDefaults(defaultScope) })
   const decoded = readBrowsing(params, defaults.filters)
@@ -64,7 +64,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const [temporarySize, setTemporarySize] = useState(() => pageSize(params.get('size')) === undefined ? temporaryPageSizes.get(mode) : undefined)
   const [draft, setDraft] = useState<{ source: string; filters: ReadingFilters } | null>(null)
   const currentUrl = params.toString()
-  const filters = draft?.source === currentUrl ? draft.filters : decoded.filters
+  const currentFilters = draft?.source === currentUrl ? draft.filters : decoded.filters
+  const filters = useMemo(() => author !== undefined ? { ...currentFilters, showSeries: false } : currentFilters, [currentFilters, author])
   const page = draft?.source === currentUrl ? 1 : decoded.page, size = temporarySize ?? decoded.size
   const urlSize = temporarySize === undefined ? pageSize(params.get('size')) : undefined
   if (draft && draft.source !== currentUrl) setDraft(null)
@@ -80,12 +81,15 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     try { window.localStorage.setItem(readingPreferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
   }, [filters.sort, filters.groupBy])
-  const pool = useMemo(() => mode === 'reading' ? tracked(stories) : stories, [mode, stories])
+  const pool = useMemo(() => {
+    const works = author !== undefined ? stories.filter(story => story.metadata.authors.includes(author)) : stories
+    return mode === 'reading' ? tracked(works) : works
+  }, [mode, stories, author])
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { setFilters(previous => ({ ...previous, [key]: value, ...(key === 'sort' && value === 'random' && { randomSeed: crypto.randomUUID() }) })) }
   let error = '', filtered: Story[] = []
   try { filtered = filterItems(sampleMode ? pool : [], filters) } catch (e) { error = (e as Error).message }
   const localShown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
-  const remote = useLibraryResults({ mode, shelf: selected, filters }, page, size, !sampleMode && !error)
+  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(author !== undefined && { author }) }, page, size, !sampleMode && !error)
   const total = sampleMode ? localShown.length : remote.result?.total ?? 0
   const pages = sampleMode ? Math.max(1, Math.ceil(total / size)) : remote.result?.pages ?? 1
   const currentPage = sampleMode ? Math.min(page, pages) : remote.result?.page ?? page
@@ -112,7 +116,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
       const label = mobile && key === 'waiting' ? 'Waiting' : title
       return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, key), filters), urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{error ? '—' : sampleMode ? filtered.filter(story => inReadingSection(story, key)).length : remote.result?.sections[key] ?? '—'}</span></button>
     })}</nav>}
-    <ReadingFilterControls defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.result?.fandoms} />
+    <ReadingFilterControls worksOnly={author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.result?.fandoms} />
     {pagination(true)}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <div role="alert" className="error-message error-message-retry"><p>{error}</p>{remote.error && <button className="button secondary" onClick={remote.retry}>Retry Loading</button>}</div>}
