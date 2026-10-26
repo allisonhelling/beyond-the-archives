@@ -507,7 +507,7 @@ test('editor actions are centered, subsection titles interrupt borders, and cate
  await expect(work.getByRole('button',{name:'Hide/Show Information',exact:true})).toBeVisible()
  await page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true}).screenshot({path:`test-results/tag-category-rows-${info.project.name}.png`})
  await page.goto('/settings#settings-metadata')
- const metadataGap=await page.getByRole('group',{name:'Retrieval Mode',exact:true}).evaluate(node=>node.querySelector(':scope > label')!.getBoundingClientRect().top-node.querySelector('legend')!.getBoundingClientRect().bottom)
+ const metadataGap=await page.getByRole('group',{name:'Retrieval Mode',exact:true}).evaluate(node=>node.querySelector('.form-controls-row label')!.getBoundingClientRect().top-node.querySelector('legend')!.getBoundingClientRect().bottom)
  await page.goto('/settings#ao3-browser-bar')
  const installationGap=await page.getByRole('group',{name:'Install or Update',exact:true}).evaluate(node=>node.querySelector(':scope > p')!.getBoundingClientRect().top-node.querySelector('legend')!.getBoundingClientRect().bottom)
  expect(metadataGap).toBeCloseTo(installationGap,0)

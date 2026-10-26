@@ -104,7 +104,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
     <Dropdown label="Group" icon={ListTree} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
   </>
-  const headerActions = <>{showActions && <>{refreshButton}<span className="library-add-actions">{resultsActions}</span></>}</>
+  const headerActions = <>{showActions && <>{refreshButton}{resultsActions}</>}</>
   return <>
     {renderHeader ? renderHeader(headerActions) : <div className="library-heading-actions">{headerActions}</div>}
     {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View Import History</Link></p>}

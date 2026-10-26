@@ -107,7 +107,6 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .collection-name-field, .library-toolbar label, .story-form label, .progress-popover label, .status-select, .browsing-settings > label { display: grid; gap: 7px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); }
 .filter-input.select-fit, .story-form select.select-fit { width: max-content; max-width: 100%; }
 .library-heading > div { width: 100%; min-width: 0; }
-.library-add-actions { display: contents; }
 .library-heading-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; grid-column: 3; grid-row: 1; justify-self: end; }
 .library-heading-actions .dropdown-compact .dropdown-trigger { padding-inline: 6px; gap: 6px; }
 .library-title-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; margin-bottom: 9px; }
@@ -430,7 +429,6 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
 .add-menu button:focus-visible small { color: #fff; }
 .mobile-nav, .profile-action.mobile-profile-action { display: none; }
 @media (max-width: 1100px) {
-  .library-add-actions { display: none; }
   .library-title-row { display: flex; flex-wrap: wrap; justify-content: space-between; }
   .collection-selection-toolbar { order: 1; flex-basis: 100%; }
   .desktop-nav { display: none; }

@@ -263,6 +263,8 @@ test('series review tooltips escape scrolling controls and Save comes first', as
  }
  for (const name of ['Select All', 'Clear Selection', 'View All', 'Hide All']) await assertTooltip(top.getByRole('button', { name, exact: true }))
  const footer = dialog.getByRole('group', { name: 'Series Footer Controls' })
+ await expect(footer).toHaveCount(0)
+ await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).click()
  await expect(footer.getByRole('button').first()).toHaveText('Save')
  await assertTooltip(footer.getByRole('button', { name: 'Select All', exact: true }))
  await dialog.evaluate(node => { node.scrollTop += 20 })

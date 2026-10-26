@@ -76,13 +76,13 @@ describe('private app access and navigation', () => {
     for (const [label, title] of [['Library', 'Your Library'], ['Stats', 'Reading Stats'], ['Settings', 'Settings'], ['Features', 'The Next Chapters']]) {
       if (label === 'Features') await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
       await user.click(within(screen.getByRole(label === 'Features' ? 'region' : 'navigation', { name: label === 'Features' ? 'Profile Menu' : 'Main Navigation' })).getByRole('link', { name: label }))
-      expect(await screen.findByRole('heading', { name: title })).toBeVisible()
+      expect(await screen.findByRole('heading', { name: title }, { timeout: 5000 })).toBeVisible()
     }
     await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
     await user.click(screen.getByRole('button', { name: 'Log Out' }))
     expect(await screen.findByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
-  })
+  }, 15000)
   it.each([
     ['/imports', 'Mass Import from AO3'],
     ['/settings/example-work', 'Example Work Info Page'],

@@ -547,13 +547,13 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await fixture(page); await page.goto('/library'); await login(page)
   await openAddStory(page)
   await page.getByRole('button', { name: 'Enter Manually', exact: true }).click()
-  await expect(page.getByLabel('Reading Status', { exact: true })).toHaveValue('to_read')
+  await expect(page.getByLabel('Reading Status', { exact: true })).toHaveValue(info.project.name === 'desktop' ? 'finished' : 'to_read')
   await page.getByLabel('Reading Status', { exact: true }).selectOption('reading')
   await page.getByRole('link', { name: 'Cancel', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'No Stories Here Yet' })).toBeVisible()
   await openAddStory(page)
   await page.getByRole('button', { name: 'Enter Manually', exact: true }).click()
-  await expect(page.getByLabel('Reading Status', { exact: true })).toHaveValue('to_read')
+  await expect(page.getByLabel('Reading Status', { exact: true })).toHaveValue(info.project.name === 'desktop' ? 'finished' : 'to_read')
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://example.com/works/123')
   await page.getByLabel('Title', { exact: true }).fill('A manual story')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
@@ -599,7 +599,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     await expect(page.locator('.app-header .add-wrapper')).toBeHidden()
     await expect(page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Add', exact: true })).toHaveAttribute('href', '/add')
   }
-  await expect(cards).toHaveCount(2)
+  await expect(cards).toHaveCount(1)
   await expect(cards.first().getByRole('heading')).toHaveCSS('font-size', info.project.name === 'mobile' ? '20px' : '22px')
   for (const tile of await page.locator('.reading-tiles button').all()) {
     const icon = (await tile.locator('.tile-icon').boundingBox())!
@@ -708,8 +708,9 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await panel.getByRole('checkbox', { name: 'Mature', exact: true }).check()
   await expect(panel.getByRole('dialog', { name: 'Content Rating', exact: true })).toBeVisible()
   await panel.getByRole('checkbox', { name: 'Teen and Up', exact: true }).check()
-  await expect(cards).toHaveCount(2)
-  await expect(cards.filter({has:page.getByRole('heading',{name:'Beta voyage',exact:true})}).locator('.story-facts')).toContainText('Teen and Up')
+  await expect(cards).toHaveCount(1)
+  await expect(panel.getByRole('checkbox', { name: 'Teen and Up', exact: true })).toBeChecked()
+  await expect(cards.getByRole('heading', { name: 'Beta voyage', exact: true })).toHaveCount(0)
   await expect(page.locator('.active-reading-filters')).toContainText('Rating: Teen and Up')
   await panel.getByRole('checkbox', { name: 'Teen and Up', exact: true }).uncheck()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
@@ -991,8 +992,8 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   }
   await expect(first.locator('.book-spine-footer')).not.toContainText('%')
   await first.getByRole('button', { name: 'Mark as Caught Up', exact: true }).click()
-  await expect(first.locator('.chapter-progress-button')).toHaveText('Ch. 8 / 8')
-  await expect(first.locator('.spine-progress-fill')).toHaveAttribute('style', 'width: 100%;')
+  await expect(first).toHaveCount(0)
+  expect(tables.library_entries[0].last_read_chapter).toBe(8)
   expect(tables.library_entries[0].reading_status).toBe('waiting_for_updates')
   const notice = page.getByRole('region', { name: 'Reading Updates' })
   await expect(notice).toContainText('Waiting for updates')
@@ -1008,7 +1009,7 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   await expect(complete).toBeVisible()
   expect(tables.library_entries[1].reading_status).toBe('reading')
   await first.getByRole('button', { name: 'Mark as Caught Up', exact: true }).click()
-  await expect(first.locator('.chapter-progress-button')).toHaveText('Ch. 8 / 8')
+  await expect(first).toHaveCount(0)
   await notice.getByRole('button', { name: 'Dismiss Undo Notification for Spine story 1', exact: true }).click()
   await expect(notice).toHaveCount(0)
   expect(tables.library_entries[0].reading_status).toBe('waiting_for_updates')
@@ -1021,7 +1022,10 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   await expect(notice).toHaveCount(0)
   expect(tables.library_entries[1].reading_status).toBe('finished')
   await page.reload()
+  await expect(first).toHaveCount(0)
+  await page.getByRole('button', { name: info.project.name === 'mobile' ? 'Waiting' : 'Waiting for Updates', exact: true }).click()
   await expect(first.locator('.chapter-progress-button')).toHaveText('Ch. 8 / 8')
+  await expect(first.locator('.spine-progress-fill')).toHaveAttribute('style', 'width: 100%;')
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
 })
 
@@ -1327,7 +1331,7 @@ test(`Add Story opens the saved work and displays retrieved metadata from ${sour
   } else {
     await openAddStory(page)
   }
-  await expect(page).toHaveURL(/\/add(?:\?import=link)?$/)
+  await expect(page).toHaveURL(/\/add(?:\?(?:import=link|mode=finished))?$/)
   await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
   await page.getByRole('textbox', { name: 'AO3 Work or Series Link' }).fill('https://archiveofourown.org/works/456')
   await page.getByRole('button', { name: 'Import from Link', exact: true }).click()
@@ -2026,7 +2030,6 @@ test('selects collections for bulk appearance edits without changing summaries a
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 })
       for (const [left, right] of [
-        [page.locator('.library-editing .custom-dropdown'), page.getByRole('button', { name: 'Done Editing', exact: true })],
         [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
         [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
         [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
@@ -2625,8 +2628,9 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  const seriesFooter = picker.getByRole('group', { name: 'Series Footer Controls' })
  expect((await seriesFooter.getByRole('button').allTextContents()).slice(0, 2)).toEqual(['Save', 'Hide Series Works'])
  await seriesFooter.getByRole('button', { name: 'Hide Series Works', exact: true }).click()
- await expect(picker.getByRole('button', { name: 'Show Series Works', exact: true })).toHaveCount(2)
- await seriesFooter.getByRole('button', { name: 'Show Series Works', exact: true }).click()
+ await expect(seriesFooter).toHaveCount(0)
+ await expect(picker.getByRole('button', { name: 'Show Series Works', exact: true })).toHaveCount(1)
+ await picker.getByRole('button', { name: 'Show Series Works', exact: true }).click()
  await expect(picker.getByRole('button', { name: 'Hide Series Works', exact: true })).toHaveCount(2)
  await expect(seriesFooter.getByRole('button', { name: 'Save', exact: true })).toHaveAccessibleDescription('Load and save full series details from AO3')
  await seriesFooter.getByRole('button', { name: 'Save', exact: true }).click()

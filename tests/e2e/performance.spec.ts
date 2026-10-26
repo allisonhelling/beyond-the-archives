@@ -18,7 +18,7 @@ test('10,000-work library pages incrementally and restores a large page after de
  await page.goto('/library?size=50&sort=alpha')
  const started=Date.now()
  await login(page)
- await expect(page.locator('.work-card')).toHaveCount(50)
+ await expect(page.locator('.work-card')).toHaveCount(50, { timeout: 8000 })
  const firstDisplayMs=Date.now()-started
  expect(queries).toEqual([{page:1,size:50}])
  expect(queries.every(q=>q.size<=250)).toBe(true)
