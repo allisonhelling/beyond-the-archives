@@ -1,4 +1,5 @@
 import { mergeEdits, type EditValues, type MergeResult } from '../../src/features/library/edit-merge'
+import { statuses } from '../../src/features/library/model'
 import { expect, test } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
 import { execFileSync } from 'node:child_process'
@@ -13,8 +14,8 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
   // Userscripts supplies GM in the script's scope, without exposing it on globalThis.
   const script = `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);`
-  await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><div class="summary module"><blockquote></blockquote></div><div id="chapters"><div id="chapter-4" class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div><div class="userstuff">PRIVATE CHAPTER TEXT</div><div class="notes">Private author notes</div></div></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><ul class="work navigation actions"><li class="chapter"><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></li></ul></div><div id="kudos">Kudos list</div></main></body></html>' }))
-  await page.route('https://archiveofourown.org/works/123?view_adult=true', route => route.fulfill({ contentType: 'text/html', body: '<h2 class="title">Test story</h2><div class="summary module"><blockquote><p>Work <em>summary</em>.</p><p>Second<br>line.</p></blockquote></div><dl class="work meta"><dd class="chapters">6/?</dd></dl>' }))
+  await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><h3 class="byline"><a rel="author" href="/users/Writer/pseuds/PenName">PenName</a></h3><div class="summary module"><blockquote></blockquote></div><div id="chapters"><div id="chapter-4" class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div><div class="userstuff">PRIVATE CHAPTER TEXT</div><div class="notes">Private author notes</div></div></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><ul class="work navigation actions"><li class="chapter"><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></li></ul></div><div id="kudos">Kudos list</div></main></body></html>' }))
+  await page.route('https://archiveofourown.org/works/123?view_adult=true', route => route.fulfill({ contentType: 'text/html', body: '<h2 class="title">Test story</h2><h3 class="byline"><a rel="author" href="/users/Writer/pseuds/PenName">PenName</a></h3><div class="summary module"><blockquote><p>Work <em>summary</em>.</p><p>Second<br>line.</p></blockquote></div><dl class="work meta"><dd class="chapters">6/?</dd></dl>' }))
   await page.goto('https://archiveofourown.org/works/123/chapters/104')
   await page.exposeFunction('mergeLibraryEdits', mergeEdits)
   await page.evaluate(() => {
@@ -202,8 +203,22 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByRole('status')).toHaveText('Saved')
   const saved = await page.evaluate(() => (window as Window & { userscriptTestState: { entry: Record<string, unknown> } }).userscriptTestState.entry)
-  expect(saved).toMatchObject({ status: 'reading', progress: 3, metadata: { summary: 'Work summary.\n\nSecond\nline.', summary_html: '<p>Work <em>summary</em>.</p><p>Second<br>line.</p>', published_chapters: 10, total_chapters: 10 } })
+  expect(saved).toMatchObject({ status: 'reading', progress: 3, metadata: { authors: ['PenName'], author_links: { PenName: 'https://archiveofourown.org/users/Writer/pseuds/PenName' }, summary: 'Work summary.\n\nSecond\nline.', summary_html: '<p>Work <em>summary</em>.</p><p>Second<br>line.</p>', published_chapters: 10, total_chapters: 10 } })
   expect(JSON.stringify(saved)).not.toMatch(/Chapter summary only|PRIVATE CHAPTER TEXT/)
+  for (const status of ['to_read', 'waiting_for_updates', 'reading'] as const) {
+   await top.getByRole('button', { name: 'Edit', exact: true }).click()
+   await top.getByLabel('Reading Status', { exact: true }).selectOption(status)
+   if (status !== 'to_read') await top.getByLabel('Current Chapter', { exact: true }).fill('4')
+   await top.getByRole('button', { name: 'Save', exact: true }).click()
+   await expect(top.getByRole('status')).toHaveText('Saved')
+   for (const surface of [top, bottom]) {
+    await expect(surface.locator('.reading-summary strong')).toHaveText(statuses[status])
+    if (status === 'to_read') {
+     await expect(surface.getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
+     await expect(surface.getByRole('button', { name: 'Start Reading', exact: true })).toHaveCount(0)
+    }
+   }
+  }
 
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
@@ -308,6 +323,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await top.getByRole('button', { name: 'Pause Reading', exact: true }).click()
   const resume = top.getByRole('button', { name: 'Resume Reading', exact: true })
   await expect(resume).toHaveText('Resume')
+  await expect(resume).toBeEnabled()
   await expect(top.getByRole('button', { name: 'Read', exact: true })).toHaveCount(0)
   await expect(bottom.getByRole('button', { name: 'Resume Reading', exact: true })).toHaveCount(0)
   await expect(bottom.getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
@@ -496,7 +512,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   }
   // Entire Work reuses the progress bar after each chapter, including its notes.
   const fullUrl = 'https://archiveofourown.org/works/123?view_full_work=true'
-  await page.route(fullUrl, route => route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Entire Work</h2><dl class="work meta"><dd class="chapters">3/3</dd></dl><div id="chapters">${[1, 2, 3].map(number => `<div class="chapter" id="chapter-${number}"><h3 class="title"><a href="/works/123/chapters/${100 + number}">Chapter ${number}</a></h3><div class="userstuff">${'Word '.repeat(number)}</div><div class="notes">Private author notes</div></div>`).join('')}</div></div><div id="kudos">Kudos</div></main></body></html>` }))
+  await page.route(fullUrl, route => route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Entire Work</h2><dl class="work meta"><dd class="chapters">3/?</dd></dl><div id="chapters">${[1, 2, 3].map(number => `<div class="chapter" id="chapter-${number}"><h3 class="title"><a href="/works/123/chapters/${100 + number}">Chapter ${number}</a></h3><div class="userstuff">${'Word '.repeat(number)}</div><div class="notes">Private author notes</div></div>`).join('')}</div></div><div id="kudos">Kudos</div></main></body></html>` }))
   await page.goto(fullUrl)
   await page.evaluate(() => {
    const attach = Element.prototype.attachShadow
@@ -524,11 +540,12 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   }
   expect(await page.evaluate(() => (window as unknown as { fullWorkRequests: { p_input: unknown }[] }).fullWorkRequests.at(-1)!.p_input)).toMatchObject({ chapter_read: { chapter: 2, chapter_id: '102', word_count: 2 } })
   await fullBars.nth(1).screenshot({ path: `test-results/full-work-chapter-bar-${page.viewportSize()!.width}.png` })
-  await fullBars.nth(2).getByRole('button', { name: 'Finish Fic', exact: true }).click()
-  for (const surface of await fullBars.all()) await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeEnabled()
+  await fullBars.nth(2).getByRole('button', { name: 'Read', exact: true }).click()
+  for (const surface of [top, ...await fullBars.all()]) await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting for Updates')
+  expect(await page.evaluate(() => (window as unknown as { fullWorkRequests: { p_input: unknown }[] }).fullWorkRequests.at(-1)!.p_input)).toMatchObject({ status: 'waiting_for_updates', progress: 3, chapter_read: { chapter: 3, chapter_id: '103', word_count: 3 } })
   // Safari's installable userscript also mounts every series work before pairing.
   const seriesUrl = 'https://archiveofourown.org/series/77'
-  const seriesHtml = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')
+  const seriesHtml = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('rel="author">One', 'rel="author" href="/users/One/pseuds/One">One').replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')
   await page.route(seriesUrl, route => route.fulfill({ contentType: 'text/html', body: seriesHtml }))
   await page.goto(seriesUrl)
   await page.evaluate(() => {
@@ -559,7 +576,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
      getValue: async (key: string, fallback: unknown) => key.startsWith('connection:') ? { userId: 'alice', secret: 'fixture-device-secret' } : fallback,
      xmlHttpRequest: async ({ data }: { data: string }) => {
       const request = JSON.parse(data)
-      if (request.p_action === 'save') entries.set(request.p_work, { ...request.p_input, id: 'listing-entry', version: 'v1' })
+      if (request.p_action === 'save') { Object.assign(window, { savedListingMetadata: request.p_input.metadata }); entries.set(request.p_work, { ...request.p_input, id: 'listing-entry', version: 'v1' }) }
       return { status: 200, responseText: JSON.stringify({ entry: entries.get(request.p_work) ?? null, collections: [] }) }
      },
     } })
@@ -570,6 +587,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect(tile.getByRole('button', { name: 'Add to Library', exact: true })).toBeVisible()
    await tile.getByRole('button', { name: 'To Read', exact: true }).click()
    await expect(tile.getByRole('status')).toHaveText('Saved')
+   expect(await page.evaluate(() => (window as Window & { savedListingMetadata: unknown }).savedListingMetadata)).toMatchObject({ authors: ['One'], author_links: { One: 'https://archiveofourown.org/users/One/pseuds/One' } })
    await expect(tile.getByText('Ch. 0 / 2', { exact: true })).toBeVisible()
    await expect(tile.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
   }

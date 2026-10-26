@@ -22,17 +22,29 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
  const records = rows('library_series').map(record=>({...record,collectionIds:rows('collection_series').filter(link=>link.library_series_id===record.id).map(link=>link.collection_id)})) as SeriesRecord[]
  if (name==='library_catalog') return {stories:stories.map(story=>({id:story.id,work_id:story.work_id,created_at:story.created_at,updated_at:story.updated_at,last_read_chapter:story.last_read_chapter,work:{id:story.work.id,ao3_work_id:story.work.ao3_work_id},source_bookmark:{rec:story.source_bookmark && (story.source_bookmark as Row).rec},reading_status:story.reading_status,is_favorite:story.is_favorite,is_rec:story.is_rec,collectionIds:story.collectionIds,automaticCollectionIds:story.automaticCollectionIds,metadata:{title:story.metadata.title,authors:story.metadata.authors,fandoms:story.metadata.fandoms,publication_status:story.metadata.publication_status,series:story.metadata.series,series_memberships:story.metadata.series_memberships}})),collections:rows('collections'),series:records}
  if (name==='library_story_details') return stories.filter(story=>(body.p_ids as string[]).includes(story.id))
- if (name==='query_library') {
+ if (name==='library_navigation') {
+  const series=librarySeries(stories,records)
+  const keys=['all','currently_reading','paused_reading','to_read','finished','did_not_finish','series','recs','favorites',...rows('collections').filter(c=>!c.default_key).map(c=>String(c.id))]
+  return Object.fromEntries(keys.map(key=>{
+   const workMatches=stories.filter(story=>key==='all'||key==='currently_reading'&&['reading','re_reading','waiting_for_updates'].includes(story.reading_status)||key==='finished'&&['finished','re_reading'].includes(story.reading_status)||key==='favorites'&&story.is_favorite||key==='recs'&&story.is_rec||story.reading_status===key||story.collectionIds.includes(key)||story.automaticCollectionIds?.includes(key))
+   const seriesMatches=series.filter(item=>key==='all'||key==='series'||key==='currently_reading'&&seriesReadingStatus(item)==='reading'||key==='favorites'&&item.record?.is_favorite||key==='recs'&&item.record?.is_rec||seriesReadingStatus(item)===key||item.record?.collectionIds?.includes(key))
+   const dates=[...stories.filter(item=>item.collectionIds.includes(key)).map(item=>item.updated_at),...records.filter(item=>item.collectionIds?.includes(key)).map(item=>item.updated_at)].filter(Boolean).sort()
+   return [key,{works:key==='series'?0:workMatches.length,series:seriesMatches.length,updated_at:dates.at(-1)??null}]
+  }))
+ }
+ if (name==='query_library'||name==='library_query_facets') {
   const query=body.p_query as Row,mode=query.mode,shelf=String(query.shelf),filters={...defaultReadingFilters,...query.filters as Row}
   const series=librarySeries(stories,records)
   const seriesItems=series.filter(series=>query.author === undefined && (shelf==='all'||shelf==='series'||shelf==='favorites'&&series.record?.is_favorite||shelf==='currently_reading'&&seriesReadingStatus(series)==='reading'||['paused_reading','to_read','finished','did_not_finish'].includes(shelf)&&seriesReadingStatus(series)===shelf||series.record?.collectionIds?.includes(shelf)))
   const works=stories.filter(story=>(query.author === undefined || story.metadata.authors.includes(String(query.author))) && (shelf==='all'||shelf==='currently_reading'&&['reading','waiting_for_updates','re_reading'].includes(story.reading_status)||shelf==='finished'&&['finished','re_reading'].includes(story.reading_status)||shelf==='recs'&&story.is_rec||shelf==='favorites'&&story.is_favorite||story.reading_status===shelf||story.collectionIds.includes(shelf)||story.automaticCollectionIds?.includes(shelf)))
-  const pool=mode==='reading'?tracked(stories):[...works,...seriesItems.map(seriesSearchStory)]
+  const pool=mode==='reading'?tracked(stories):[...works,...(mode==='series'||shelf==='series'||filters.showSeries?seriesItems.map(seriesSearchStory):[])]
   const filtered=mode==='reading'?filterReading(pool,filters):filterLibraryItems(pool,{...filters,showSeries:mode==='series'||shelf==='series'||filters.showSeries},seriesItems)
   const shown=filtered.filter(story=>mode!=='reading'||inReadingSection(story,shelf))
   const size=Number(body.p_size),pages=Math.max(1,Math.ceil(shown.length/size)),page=Math.min(Number(body.p_page),pages),slice=shown.slice((page-1)*size,page*size)
   const fandoms = new Map<string,number>();for(const s of pool) for(const name of new Set(s.metadata.fandoms)) fandoms.set(name,(fandoms.get(name)??0)+1)
-  return {suggestions:{personalTags:[...new Set(pool.flatMap(s=>s.personalTags))],relationships:[...new Set(pool.flatMap(s=>s.metadata.relationship_tags??[]))],characters:[...new Set(pool.flatMap(s=>s.metadata.character_tags??[]))],tags:[...new Set(pool.flatMap(s=>s.metadata.additional_tags??[]))]},stories:slice,series:seriesItems.filter(series=>slice.some(story=>story.id===`series:${series.seriesId}`)),total:shown.length,pages,page,sections:Object.fromEntries(['complete','in_progress','new','re_reading','view_all','waiting','to_read','paused_reading'].map(key=>[key,filtered.filter(s=>inReadingSection(s,key)).length])),fandoms:[...fandoms].map(([name,count])=>({name,count}))}
+  const facets={suggestions:{personalTags:[...new Set(pool.flatMap(s=>s.personalTags))],relationships:[...new Set(pool.flatMap(s=>s.metadata.relationship_tags??[]))],characters:[...new Set(pool.flatMap(s=>s.metadata.character_tags??[]))],tags:[...new Set(pool.flatMap(s=>s.metadata.additional_tags??[]))]},fandoms:[...fandoms].map(([name,count])=>({name,count}))}
+  if(name==='library_query_facets') return {...facets,total:pool.length}
+  return {...(query.includeFacets===false?{}:facets),stories:slice,series:seriesItems.filter(series=>slice.some(story=>story.id===`series:${series.seriesId}`)),total:shown.length,pages,page,sections:Object.fromEntries(['complete','in_progress','new','re_reading','view_all','waiting','to_read','paused_reading'].map(key=>[key,filtered.filter(s=>inReadingSection(s,key)).length]))}
  }
  if(name==='paged_import_history') {
   const batches=[...rows('import_batches')].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))

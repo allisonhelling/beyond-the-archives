@@ -3,11 +3,11 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { defaultReadingFilters } from './reading-search'
 import { useLibraryResults } from './useLibraryResults'
 
-const mocks = vi.hoisted(() => ({ fetchPage: vi.fn() }))
-vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ fetchPage: mocks.fetchPage, revision: 0 }) }))
+const mocks = vi.hoisted(() => ({ fetchPage: vi.fn(), fetchFacets: vi.fn() }))
+vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ fetchPage: mocks.fetchPage, fetchFacets: mocks.fetchFacets, revision: 0 }) }))
 const query = { mode: 'library' as const, shelf: 'favorites', filters: defaultReadingFilters }
 const result = { stories: [], series: [], total: 0, page: 2, pages: 2, sections: {}, fandoms: [] }
-beforeEach(() => { mocks.fetchPage.mockReset() })
+beforeEach(() => { mocks.fetchPage.mockReset();mocks.fetchFacets.mockReset().mockResolvedValue({suggestions:{tags:[],characters:[],relationships:[]},fandoms:[],total:0}) })
 
 it('retries a failed page with the same shelf, filters and pagination', async () => {
  mocks.fetchPage.mockRejectedValueOnce(new Error('Temporary failure')).mockResolvedValueOnce(result)
@@ -32,4 +32,18 @@ it('aborts obsolete requests and ignores their late failures when switching shel
  await act(async () => { reject(new Error('Obsolete failure')) })
  await waitFor(() => expect(view.result.current.result).toEqual(result))
  expect(view.result.current.error).toBeUndefined()
+})
+
+it('renders results while suggestions are still loading and does not repeat facet requests for sorting or page changes',async()=>{
+ mocks.fetchPage.mockResolvedValue(result)
+ let finish!:(value:unknown)=>void
+ mocks.fetchFacets.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const view=renderHook(({page,sort})=>useLibraryResults({...query,filters:{...defaultReadingFilters,sort}},page,25,true),{initialProps:{page:1,sort:'added' as typeof defaultReadingFilters.sort}})
+ await waitFor(()=>expect(view.result.current.result).toEqual(result))
+ expect(view.result.current.facets).toBeUndefined()
+ view.rerender({page:2,sort:'alpha'})
+ await waitFor(()=>expect(mocks.fetchPage).toHaveBeenCalledTimes(2))
+ expect(mocks.fetchFacets).toHaveBeenCalledTimes(1)
+ await act(async()=>{finish({suggestions:{tags:['Adventure']},fandoms:[],total:10})})
+ expect(view.result.current.suggestions?.tags).toEqual(['Adventure'])
 })

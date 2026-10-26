@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { waitFor, within } from '@testing-library/dom'
 import { fireEvent } from '@testing-library/react'
 import { mountLibrary as mountSharedLibrary } from './bar'
+import { statuses } from '../../src/features/library/model'
 
 const mountLibrary = (doc, href, options = {}) => mountSharedLibrary(doc, href, { api: GM, ...options })
 
@@ -27,6 +28,31 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 const mount = () => mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104')
 const findButton = name => within(root).getByRole('button', { name })
+it.each(['safari', 'chrome'].flatMap(browser => Object.keys(statuses).map(status => ({ browser, status }))))('selects, saves and displays $status on both $browser bars', async ({ browser, status }) => {
+ entry = { version: 'v1', status: 'reading', progress: 3, notes: 'Keep notes', rating: 4, tags: ['Mine'], collections: [] }
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'save') entry = { ...entry, ...request.p_input, version: 'v2' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
+ await toggle('Edit', true)
+ const picker = within(root).getByLabelText('Reading Status')
+ expect([...picker.options].map(option => option.value)).toEqual(Object.keys(statuses))
+ fireEvent.change(picker, { target: { value: status } })
+ fireEvent.submit(picker.closest('form'))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ const progress = status === 'to_read' ? 0 : status === 'finished' ? 10 : 3
+ expect(entry).toMatchObject({ status, progress, notes: 'Keep notes', rating: 4, tags: ['Mine'] })
+ for (const surface of [root, bottomRoot]) {
+  expect(surface.querySelector('.reading-summary strong')).toHaveTextContent(status === 'reading' && browser === 'chrome' ? 'Currently Reading' : statuses[status])
+  expect(surface.querySelector('.status-bullet')).toHaveAttribute('data-status', status)
+  expect(surface.querySelector('.chapter-progress')).toHaveTextContent(`Ch. ${progress} / 10`)
+ }
+ await toggle('Edit', true)
+ expect(within(root).getByLabelText('Reading Status')).toHaveValue(status)
+ await waitFor(() => expect(findButton('Cancel')).toBeEnabled())
+})
 it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => ({ browser, fromBottom }))))('sends only the loaded chapter count on $browser Mark Read (bottom: $fromBottom)', async ({ browser, fromBottom }) => {
  document.querySelector('#workskin').insertAdjacentHTML('beforeend', '<div id="chapters"><div id="chapter-4" class="chapter"><div class="summary">Private summary</div><div class="userstuff"><p>Only three words.</p></div><div class="notes">Private note</div></div></div>')
  entry = { version: 'v1', status: 're_reading', progress: 3, notes: '', rating: null, tags: [], collections: [] }
@@ -65,9 +91,9 @@ it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => 
  await waitFor(() => expect(findButton('Cancel')).toBeEnabled())
 })
 
-it.each(['safari', 'chrome'].flatMap(browser => [1, 4, 10].flatMap(chapter => [false, true].map(fromBottom => ({ browser, chapter, fromBottom })))))('starts a reread at chapter $chapter on $browser (bottom bar: $fromBottom)', async ({ browser, chapter, fromBottom }) => {
+it.each(['safari', 'chrome'].flatMap(browser => (browser === 'chrome' ? ['finished', 'waiting_for_updates'] : ['finished']).flatMap(status => [1, 4, 10].flatMap(chapter => [false, true].map(fromBottom => ({ browser, status, chapter, fromBottom }))))))('starts a reread from $status at chapter $chapter on $browser (bottom bar: $fromBottom)', async ({ browser, status, chapter, fromBottom }) => {
  document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}. Chapter</option>`).join('')
- entry = { version: 'v1', status: 'finished', progress: 10, notes: 'Keep My Notes', rating: 5, tags: ['Mine'], collections: [] }
+ entry = { version: 'v1', status, progress: 10, notes: 'Keep My Notes', rating: 5, tags: ['Mine'], collections: [] }
  network.mockImplementation(async ({ data }) => {
   const { p_action, p_input } = JSON.parse(data)
   if (p_action === 'progress') entry = { ...entry, ...p_input, version: 'v2' }
@@ -84,21 +110,21 @@ it.each(['safari', 'chrome'].flatMap(browser => [1, 4, 10].flatMap(chapter => [f
  expect(within(root).getByLabelText('Current Chapter')).toHaveValue(chapter)
  expect(within(root).getByLabelText('This Chapter Is Finished')).not.toBeChecked()
  expect(within(root).getByLabelText('Private Notes')).toHaveValue('Unsaved Notes')
- expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'finished', progress: 10 }, status: 're_reading', progress: chapter - 1 })
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status, progress: 10 }, status: 're_reading', progress: chapter - 1 })
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByRole('button', { name: chapter === 10 ? 'Finish Fic' : 'Read' })).toBeVisible()
  }
  await waitFor(() => expect(findButton('Cancel')).toBeEnabled())
 })
 
-it('restores finished status and Re-Read in both bars after a failed reread save', async () => {
- entry = { version: 'v1', status: 'finished', progress: 10, notes: '', rating: null, tags: [], collections: [] }
- await mount()
+it.each([{ browser: 'safari', status: 'finished' }, { browser: 'chrome', status: 'finished' }, { browser: 'chrome', status: 'waiting_for_updates' }])('restores $status and Re-Read in both $browser bars after a failed reread save', async ({ browser, status }) => {
+ entry = { version: 'v1', status, progress: 10, notes: '', rating: null, tags: [], collections: [] }
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  network.mockResolvedValueOnce({ status: 503, responseText: '{}' })
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Re-Read' }))
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save'))
  for (const surface of [root, bottomRoot]) {
-  expect(within(surface).getByText('Finished', { exact: true })).toBeVisible()
+  expect(within(surface).getByText(statuses[status], { exact: true })).toBeVisible()
   expect(within(surface).getByText('Ch. 10 / 10')).toBeVisible()
   expect(within(surface).getByRole('button', { name: 'Re-Read' })).toBeEnabled()
  }
@@ -380,7 +406,7 @@ it('marks the latest WIP chapter read without finishing the fic', async () => {
  })
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/110')
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Read' }))
- await waitFor(() => expect(entry).toMatchObject({ status: 'reading', progress: 10 }))
+ await waitFor(() => expect(entry).toMatchObject({ status: 'waiting_for_updates', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 10 / 10')).toBeInTheDocument()
   expect(within(surface).getByText('Read')).toBeInTheDocument()
@@ -806,11 +832,11 @@ it.each(['safari', 'chrome'])('marks To Read and Paused chapters as read in both
   expect(within(root).queryByRole('button', { name: label })).not.toBeInTheDocument()
  }
 })
-it('finishes a To Read one-shot when its chapter is marked read', async () => {
+it.each(['safari', 'chrome'])('finishes a To Read one-shot when its chapter is marked read on %s', async browser => {
  document.querySelector('dd.chapters').textContent = '1/1'
  document.querySelector('#selected_id').remove()
  entry = { version: 'v1', status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }
- await mountLibrary(document, 'https://archiveofourown.org/works/123')
+ await mountLibrary(document, 'https://archiveofourown.org/works/123', { browser })
  expect(findButton('Start Reading')).toBeVisible()
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Read' }))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
@@ -1072,7 +1098,8 @@ it.each(['safari', 'chrome'])('keeps all full-work bars consistent after a faile
  }
  fireEvent.click(within(bars[2]).getByRole('button', { name: 'Read' }))
  await waitFor(() => expect(within(bars[2]).getByText('Read', { exact: true })).toBeVisible())
- expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'reading', progress: 3 })
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'waiting_for_updates', progress: 3 })
+ for (const surface of [root, ...bars]) expect(surface.querySelector('.reading-summary strong')).toHaveTextContent('Waiting for Updates')
 })
 
 it.each(['safari', 'chrome'])('opens the shared add editor at the selected full-work chapter on %s', async browser => {
@@ -1096,9 +1123,9 @@ const readingActionCases = [
  { status: 'reading', chapter: 4, progress: 3, top: ['Read', 'Pause'], bottom: ['Read', 'Pause'] },
  { status: 'reading', chapter: 10, progress: 9, top: ['Finish Fic', 'Pause'], bottom: ['Finish Fic', 'Pause'] },
 ]
-it.each(['safari', 'chrome'].flatMap(browser => readingActionCases.flatMap(scenario => [false, true].map(fromBottom => ({ browser, ...scenario, fromBottom })))))(
- 'uses chapter-specific controls for $status at chapter $chapter on $browser (bottom action: $fromBottom)',
- async ({ browser, status, chapter, progress, top, bottom, fromBottom }) => {
+it.each(['safari', 'chrome'].flatMap(browser => readingActionCases.flatMap(scenario => (scenario.chapter === 1 ? [false, true] : [false]).flatMap(workRoot => [false, true].map(fromBottom => ({ browser, ...scenario, workRoot, fromBottom }))))))(
+ 'uses chapter-specific controls for $status at chapter $chapter on $browser (work URL: $workRoot, bottom action: $fromBottom)',
+ async ({ browser, status, chapter, progress, top, bottom, workRoot, fromBottom }) => {
   document.querySelector('#selected_id').innerHTML = Array.from({ length: 10 }, (_, i) => `<option value="${101 + i}">${i + 1}. Chapter</option>`).join('')
   entry = { version: 'v1', status, progress, notes: 'Keep My Notes', rating: 4, tags: ['Mine'], collections: [] }
   network.mockImplementation(async ({ data }) => {
@@ -1106,7 +1133,7 @@ it.each(['safari', 'chrome'].flatMap(browser => readingActionCases.flatMap(scena
    if (p_action === 'progress') entry = { ...entry, ...p_input, version: 'v2' }
    return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
   })
-  await mountLibrary(document, `https://archiveofourown.org/works/123/chapters/${100 + chapter}`, { browser })
+  await mountLibrary(document, `https://archiveofourown.org/works/123${workRoot ? '' : `/chapters/${100 + chapter}`}`, { browser })
   const controls = surface => [...surface.querySelectorAll('.complete-chapter, .reading-toggle')].map(button => button.textContent)
   expect(controls(root)).toEqual(top)
   expect(controls(bottomRoot)).toEqual(bottom)
@@ -1129,4 +1156,50 @@ it.each(['safari', 'chrome'])('preserves a paused reread when Mark Read resumes 
  fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Read' }))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 're_reading', progress: 4 })
+})
+
+it('keeps the current waiting status and unread chapter action alongside Re-Read in Chrome', async () => {
+ entry = { version:'v1',status:'waiting_for_updates',progress:3,notes:'',rating:null,tags:[],collections:[] }
+ await mountLibrary(document,'https://archiveofourown.org/works/123/chapters/104',{browser:'chrome'})
+ for (const surface of [root,bottomRoot]) {
+  expect(surface.querySelectorAll('.reading-summary strong')).toHaveLength(1)
+  expect(surface.querySelector('.reading-summary strong')).toHaveTextContent('Waiting for Updates')
+  expect(within(surface).getByRole('button',{name:'Re-Read'})).toBeVisible()
+  expect(within(surface).getByRole('button',{name:'Read',exact:true})).toBeVisible()
+ }
+})
+
+it.each(['safari', 'chrome'])('uses Start Reading only at the top and Mark Read after each chapter for To Read in Entire Work on %s', async browser => {
+ entireWork()
+ entry = { version:'v1',status:'to_read',progress:0,notes:'',rating:null,tags:[],collections:[] }
+ await mountLibrary(document,entireWorkUrl,{browser})
+ expect(within(root).getByRole('button',{name:'Start Reading',exact:true})).toBeVisible()
+ expect(within(root).queryByRole('button',{name:'Mark Read',exact:true})).not.toBeInTheDocument()
+ const bars=chapterSurfaces()
+ expect(bars).toHaveLength(3)
+ for (const surface of bars) {
+  expect(within(surface).getByRole('button',{name:'Mark Read',exact:true})).toBeVisible()
+  expect(within(surface).queryByRole('button',{name:'Start Reading',exact:true})).not.toBeInTheDocument()
+ }
+})
+
+it.each(['safari', 'chrome'].flatMap(browser => ['10/?', '10/15'].flatMap(chapters => ['to_read', 'reading', 'waiting_for_updates', 're_reading', 'paused_reading'].flatMap(status => [false, true].map(fromBottom => ({browser, chapters, status, fromBottom}))))))('marks the latest $chapters chapter as waiting from $status on $browser (bottom: $fromBottom)', async ({browser, chapters, status, fromBottom}) => {
+ document.querySelector('dd.chapters').textContent = chapters
+ document.querySelector('#selected_id').innerHTML = '<option value="110">10. Latest</option>'
+ entry = {version:'v1',status,progress:status==='to_read'?0:status==='paused_reading'?8:9,notes:'Keep notes',rating:4,tags:['Mine'],collections:[]}
+ network.mockImplementation(async ({data}) => {
+  const {p_action,p_input}=JSON.parse(data)
+  if(p_action==='progress') entry={...entry,...p_input,version:'v2'}
+  return {status:200,responseText:JSON.stringify({entry,collections:[]})}
+ })
+ await mountLibrary(document,'https://archiveofourown.org/works/123/chapters/110',{browser})
+ const surface=fromBottom?bottomRoot:root
+ fireEvent.click(within(surface).getByRole('button',{name:['to_read','paused_reading'].includes(status)?'Mark Read':'Read',exact:true}))
+ await waitFor(()=>expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ expect(entry).toMatchObject({status:'waiting_for_updates',progress:10,notes:'Keep notes',rating:4,tags:['Mine']})
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input.chapter_read).toMatchObject({chapter:10,chapter_id:'110'})
+ for(const bar of [root,bottomRoot]) {
+  expect(bar.querySelector('.reading-summary strong')).toHaveTextContent('Waiting for Updates')
+  expect(bar.querySelector('.chapter-progress')).toHaveTextContent('Ch. 10 / 10')
+ }
 })

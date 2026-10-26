@@ -987,6 +987,8 @@ export type Database = {
       export_library_backup: { Args: Record<string, never>; Returns: Json }
       restore_library_backup: { Args: { p_backup: Json; p_user: string; p_replace?: boolean }; Returns: Json }
       paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
+      library_navigation: { Args: Record<string, never>; Returns: Json }
+      library_query_facets: { Args: { p_query?: Json }; Returns: Json }
       library_catalog: { Args: Record<string, never>; Returns: Json }
       library_story_details: { Args: { p_ids: string[] }; Returns: Json }
       query_library: { Args: { p_query?: Json; p_page?: number; p_size?: number }; Returns: Json }

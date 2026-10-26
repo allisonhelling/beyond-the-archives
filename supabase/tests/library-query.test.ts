@@ -300,3 +300,29 @@ it('scopes author pages before pagination and filters, using saved corrections a
  await db.query('delete from public.library_entries where id=$1', [added.stories[0].id])
  expect(await authorQuery('New Author')).toMatchObject({ total: 0 })
 })
+
+it('separates collection facets from page filters and scopes ordinary collection candidates by membership',async()=>{
+ const docs=await documents(), ids=docs.slice(0,2).map(story=>story.id)
+ const collection=(await db.query<{id:string}>("insert into public.collections(name) values ('Scoped query performance') returning id")).rows[0].id
+ await db.query('insert into public.collection_works(collection_id,library_entry_id) select $1,unnest($2::uuid[])',[collection,ids])
+ const scope={mode:'library',shelf:collection,filters:{...defaultReadingFilters},terms:[]}
+ const legacy=(await db.query<{result:LibraryResults}>('select public.query_library($1,1,25) result',[JSON.stringify(scope)])).rows[0].result
+ const page=(await db.query<{result:LibraryResults}>('select public.query_library($1,1,25) result',[JSON.stringify({...scope,includeFacets:false})])).rows[0].result
+ expect(page.total).toBe(2)
+ expect(page.stories.map(story=>story.id).sort()).toEqual(ids.sort())
+ expect(page).not.toHaveProperty('suggestions')
+ expect(page).not.toHaveProperty('fandoms')
+ const facets=(await db.query<{result:Record<string,unknown>}>('select public.library_query_facets($1) result',[JSON.stringify({...scope,filters:{sort:'alpha',query:'No matches'}})])).rows[0].result
+ expect(facets).toEqual({suggestions:legacy.suggestions,fandoms:legacy.fandoms,total:2})
+ const navigation=(await db.query<{result:Record<string,{works:number;series:number}>}>('select public.library_navigation() result')).rows[0].result
+ expect(navigation[collection]).toMatchObject({works:2,series:0})
+ expect(navigation.all.works).toBe(docs.length)
+ for(const shelf of ['all','series','finished','to_read','currently_reading','paused_reading','favorites','recs','did_not_finish']) {
+  const result=(await db.query<{result:{total:number}}>('select public.query_library($1,1,25) result',[JSON.stringify({mode:'library',shelf,includeFacets:false,filters:{showSeries:true}})])).rows[0].result
+  expect(navigation[shelf].works+navigation[shelf].series).toBe(result.total)
+ }
+ await db.exec(`set request.jwt.claim.sub='${bob}'`)
+ expect((await db.query<{result:{total:number}}>('select public.library_query_facets($1) result',[JSON.stringify(scope)])).rows[0].result.total).toBe(0)
+ expect((await db.query<{result:Record<string,unknown>}>('select public.library_navigation() result')).rows[0].result).not.toHaveProperty(collection)
+ await db.exec(`set request.jwt.claim.sub='${alice}'`)
+})

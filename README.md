@@ -468,7 +468,9 @@ Sort menus include reverse choices for fic and collection ordering, including **
 
 Library and Reading now query numbered server pages of 50 works by default. Choose 25, 50, 100 or 250 in Settings or the results toolbar. URLs preserve the selected collection, filters, grouping, sorting, page and effective size. Large pages reuse the cards with variable-height virtualization. Edits refresh affected works, and completed import batches stop polling.
 
-Apply migrations through `20261020000200_import_history_and_fairness.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
+Collection navigation and results load without the full catalog. Suggestions and fandom counts are cached per collection, and import deduplication loads the catalog on demand.
+
+Apply migrations through `20261026000300_incremental_library_loading.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
 
 ## Export and Restore Backups
 

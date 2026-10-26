@@ -4,14 +4,14 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { blankMetadata, type Story } from './model'
 import { defaultReadingFilters } from './reading-search'
-const mocks=vi.hoisted(()=>({catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn()}))
-vi.mock('./repository',async importOriginal=>({...(await importOriginal<typeof import('./repository')>()),loadCatalog:mocks.catalog,loadStories:mocks.stories,loadAffectedCollections:mocks.collections,loadCollections:mocks.collections,queryLibrary:mocks.query,loadSeriesRecord:mocks.series,deleteStory:vi.fn(),restoreStory:vi.fn(),updateEntry:vi.fn()}))
+const mocks=vi.hoisted(()=>({catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn(),facets:vi.fn(),navigation:vi.fn()}))
+vi.mock('./repository',async importOriginal=>({...(await importOriginal<typeof import('./repository')>()),loadLibraryFacets:mocks.facets,loadLibraryNavigation:mocks.navigation,loadCatalog:mocks.catalog,loadStories:mocks.stories,loadAffectedCollections:mocks.collections,loadCollections:mocks.collections,queryLibrary:mocks.query,loadSeriesRecord:mocks.series,deleteStory:vi.fn(),restoreStory:vi.fn(),updateEntry:vi.fn()}))
 import { LibraryProvider, useLibrary } from './LibraryProvider'
 const query={mode:'library' as const,shelf:'all',filters:defaultReadingFilters}
 const result={stories:[],series:[],total:0,page:1,pages:1,sections:{},fandoms:[]}
 const story=(id:string,title=id)=>({id,metadata:{...blankMetadata,title,summary:'Full summary'},notes:'Private Notes',personalTags:['Personal tag'],work:{ao3_work_id:1,verified_chapters:{'1':'910'}},collectionIds:[],reading_status:'reading',last_read_chapter:0}) as unknown as Story
 const wrapper=({children}:{children:ReactNode})=><MemoryRouter><LibraryProvider userId="reader-1">{children}</LibraryProvider></MemoryRouter>
-beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.query.mockResolvedValue(result)})
+beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.navigation.mockResolvedValue({});mocks.facets.mockResolvedValue({suggestions:{tags:[],relationships:[],characters:[]},fandoms:[],total:0});mocks.query.mockResolvedValue(result)})
 it('serializes targeted refreshes and preserves unrelated works without reloading the catalog',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
@@ -22,7 +22,7 @@ it('serializes targeted refreshes and preserves unrelated works without reloadin
  await waitFor(()=>expect(mocks.stories).toHaveBeenCalledTimes(1))
  await act(async()=>{finish([story('one','Updated one')]);await first;await second})
  expect(view.result.current.stories.map(s=>s.metadata.title).sort()).toEqual(['Updated one','Updated two'])
- expect(mocks.catalog).toHaveBeenCalledTimes(1)
+ expect(mocks.catalog).not.toHaveBeenCalled()
 })
 it('bounds page caching, retains pages when loading details, and invalidates obsolete query responses after an edit',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(view.result.current.loading).toBe(false))
@@ -58,6 +58,7 @@ it('bounds repeated detail navigation and targeted refreshes while retaining mou
  mocks.stories.mockImplementation(async(ids:string[])=>ids.map(id=>story(id)))
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ await act(()=>view.result.current.ensureCatalog())
  let releaseEditor!:()=>void,releaseSeries!:()=>void
  await act(async()=>{
   releaseEditor=view.result.current.retainDetails(['0'])
@@ -93,6 +94,7 @@ it('applies the same limit when a catalog contains full details',async()=>{
  mocks.catalog.mockResolvedValue({stories:Array.from({length:140},(_,i)=>story(String(i))),collections:[],series:[]})
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ await act(()=>view.result.current.ensureCatalog())
  expect(view.result.current.stories.filter(s=>s.detailsLoaded!==false)).toHaveLength(100)
  expect(view.result.current.stories[0]).toMatchObject({id:'0',detailsLoaded:false,notes:'',metadata:{summary:''}})
  expect(view.result.current.stories[139]).toMatchObject({id:'139',notes:'Private Notes'})
@@ -122,4 +124,74 @@ it('retains only the newest three notifications across reading and removal actio
  await act(() => view.result.current.markFinished(story('fifth')))
  expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
  expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for second' })).not.toBeInTheDocument()
+})
+
+it('shows navigation and pages without requesting the catalog, and deduplicates on-demand catalog loads', async () => {
+ const view=renderHook(()=>useLibrary(),{wrapper})
+ await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ expect(mocks.catalog).not.toHaveBeenCalled()
+ await act(()=>view.result.current.fetchPage(query,1,50,new AbortController().signal))
+ expect(mocks.query).toHaveBeenCalledTimes(1)
+ expect(mocks.catalog).not.toHaveBeenCalled()
+ await act(async()=>{await Promise.all([view.result.current.ensureCatalog(),view.result.current.ensureCatalog()])})
+ expect(mocks.catalog).toHaveBeenCalledTimes(1)
+ expect(view.result.current.catalogLoaded).toBe(true)
+})
+it('caches facets across filters, sorting and pagination, and preserves unrelated collection pages after an edit',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper})
+ await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ const signal=new AbortController().signal, first={...query,shelf:'first'}, second={...query,shelf:'second'}
+ const original={...story('one'),collectionIds:['first']}
+ mocks.stories.mockResolvedValue([original])
+ await act(()=>view.result.current.loadDetails(['one']))
+ await act(async()=>{
+  await view.result.current.fetchPage(first,1,50,signal)
+  await view.result.current.fetchPage(second,1,50,signal)
+  await view.result.current.fetchFacets(first,signal)
+  await view.result.current.fetchFacets({...first,filters:{...defaultReadingFilters,sort:'alpha',tags:'changed'}},signal)
+  await view.result.current.fetchFacets(second,signal)
+ })
+ expect(mocks.facets).toHaveBeenCalledTimes(2)
+ mocks.stories.mockResolvedValue([{...original,notes:'Edited'}])
+ await act(()=>view.result.current.refresh(['one']))
+ await act(async()=>{
+  await view.result.current.fetchPage(second,1,50,signal)
+  await view.result.current.fetchFacets(second,signal)
+ })
+ expect(mocks.query).toHaveBeenCalledTimes(2)
+ expect(mocks.facets).toHaveBeenCalledTimes(2)
+ await act(async()=>{
+  await view.result.current.fetchPage(first,1,50,signal)
+  await view.result.current.fetchFacets(first,signal)
+ })
+ expect(mocks.query).toHaveBeenCalledTimes(3)
+ expect(mocks.facets).toHaveBeenCalledTimes(3)
+})
+
+it('retries an on-demand catalog failure after refreshing and hydrates compact page identities for detail navigation',async()=>{
+ mocks.catalog.mockRejectedValueOnce(new Error('Catalog unavailable'))
+ const view=renderHook(()=>useLibrary({catalog:true}),{wrapper})
+ await waitFor(()=>expect(view.result.current.error).toBe('Catalog unavailable'))
+ await act(()=>view.result.current.refresh())
+ await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
+ expect(view.result.current.error).toBe('')
+ const other={...story('three'),automaticCollectionIds:['automatic']}
+ mocks.query.mockResolvedValue({...result,stories:[other]})
+ await act(()=>view.result.current.fetchPage(query,1,50,new AbortController().signal))
+ expect(view.result.current.stories.find(item=>item.id==='three')).toMatchObject({detailsLoaded:false,automaticCollectionIds:['automatic']})
+ mocks.stories.mockResolvedValue([other])
+ await act(()=>view.result.current.loadDetails(['three']))
+ expect(view.result.current.stories.find(item=>item.id==='three')).toMatchObject({notes:'Private Notes',metadata:{summary:'Full summary'}})
+})
+it('preserves work pages and their facets when only collection appearance changes',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper})
+ await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ const signal=new AbortController().signal
+ await act(async()=>{await view.result.current.fetchPage(query,1,50,signal);await view.result.current.fetchFacets(query,signal)})
+ mocks.collections.mockResolvedValue([{id:'new',name:'Renamed',color:'#123456',automatic_rules:null}])
+ await act(()=>view.result.current.refreshCollections())
+ await act(async()=>{await view.result.current.fetchPage(query,1,50,signal);await view.result.current.fetchFacets(query,signal)})
+ expect(mocks.query).toHaveBeenCalledTimes(1)
+ expect(mocks.facets).toHaveBeenCalledTimes(1)
+ expect(mocks.catalog).not.toHaveBeenCalled()
 })

@@ -11,13 +11,30 @@ export type AutomaticMetadata = {
 function count(text: string) { const value = text.replaceAll(',', '').trim(); const n = Number(value); return /^\d+$/.test(value) && Number.isSafeInteger(n) && n <= 2147483647 ? n : undefined }
 function date(text: string) { return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text)) ? `${text}T00:00:00Z` : undefined }
 
+/** Preserve credited names even when their AO3 profile link is unavailable. */
+export function readAuthors($: CheerioAPI, nodes: ReturnType<CheerioAPI>, sourceUrl: string) {
+ const authors: string[] = [], author_links: Record<string, string> = {}
+ nodes.each((_, node) => {
+  const name = $(node).text().trim()
+  if (!name) return
+  authors.push(name)
+  const href = $(node).attr('href')
+  if (!href) return
+  try {
+   const url = new URL(href, sourceUrl)
+   if (url.origin === 'https://archiveofourown.org' && /^\/users\//.test(url.pathname)) author_links[name] = url.href
+  } catch { /* Preserve names without unsafe links. */ }
+ })
+ return { authors, author_links }
+}
+
 /** Shared extraction for website imports and the inline AO3 companion. */
 export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
  const metadata: AutomaticMetadata = { title: $('h2.title').first().text().trim() }
  const summary = $('.summary.module blockquote').first()
  if (summary.length) Object.assign(metadata, readSummary(summary.html() ?? ''))
  const authors = $('h3.byline a[rel="author"]')
- if (authors.length) { metadata.authors=[]; metadata.author_links={}; authors.each((_, node) => { const name=$(node).text().trim(); if (!name) return; metadata.authors!.push(name); try { const u=new URL($(node).attr('href')!,sourceUrl); if (u.origin==='https://archiveofourown.org' && /^\/users\//.test(u.pathname)) metadata.author_links![name]=u.href } catch { /* Name is still useful. */ } }) }
+ if (authors.length) Object.assign(metadata, readAuthors($, authors, sourceUrl))
  const groups = { fandoms:'fandom', relationship_tags:'relationship', character_tags:'character', additional_tags:'freeform', archive_warnings:'warning', categories:'category' } as const
  for (const [field, css] of Object.entries(groups)) { const section=$(`dd.${css}.tags`); if (section.length) Object.assign(metadata,{[field]:section.find('a.tag').toArray().map(node=>$(node).text().trim()).filter(Boolean)}) }
  const tags = Object.keys(groups).filter(k=>k!=='fandoms').flatMap(k=>metadata[k as keyof AutomaticMetadata] as string[] ?? [])

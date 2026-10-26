@@ -23,7 +23,7 @@ export function ImportPage() {
  const location=useLocation()
  const [readingStatus,setReadingStatus]=useState<Status>('to_read')
  const [reviewing,setReviewing]=useState(false)
- const library=useLibrary()
+ const library=useLibrary({ catalog: reviewing })
  const [relatedBehavior, setRelatedBehavior] = useState<SeriesImportBehavior>()
  const [relatedBatch, setRelatedBatch] = useState<string>()
  const [resultPage,setResultPage]=useState(1)

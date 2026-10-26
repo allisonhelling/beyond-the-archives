@@ -25,7 +25,7 @@ import type { SeriesPreview } from '../../imports/urls'
 
 export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
  const seriesBehavior = useSeriesImportBehavior()
- const { id } = useParams(), library = useLibrary(), seriesId = example?.seriesId ?? Number(id)
+ const { id } = useParams(), library = useLibrary({ catalog: !example }), seriesId = example?.seriesId ?? Number(id)
  const valid = Boolean(example) || /^[1-9]\d*$/.test(id ?? '') && Number.isSafeInteger(seriesId)
  const { refreshSeries, loadDetails, retainDetails } = library
  const location = useLocation()

@@ -151,6 +151,10 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   expect(barEntries.get(123)).toMatchObject({ notes: 'Saved directly from Chrome', metadata: { summary: 'A summary & more.', summary_html: '<p>A summary &amp; more.</p>', categories: ['M/M'], word_count: 12345 } })
   await expect(bar.locator('.library-link')).toHaveText('')
   await expect(bar.getByText('Ch. 0 / 6', { exact: true })).toBeVisible()
+  await expect(bar.getByRole('button', { name: 'Start Reading', exact: true })).toBeVisible()
+  await expect(bar.getByRole('button', { name: 'Mark Read', exact: true })).toHaveCount(0)
+  await expect(ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
+  await expect(ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Start Reading', exact: true })).toHaveCount(0)
   const summaryFont = await ao3.locator('#workskin .summary blockquote').evaluate(element => getComputedStyle(element).fontSize)
   expect(summaryFont).toBe('14px')
   for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
@@ -171,6 +175,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await expect(bar.getByRole('status')).toHaveText('Saved')
   await bar.getByRole('button', { name: 'Start Reading', exact: true }).click()
   await expect(bar.getByRole('button', { name: 'Pause Reading', exact: true })).toHaveText('Pause')
+  await expect(bar.getByRole('button', { name: 'Pause Reading', exact: true })).toBeEnabled()
   await expect(bar.locator('.chapter-progress')).toHaveText('Ch. 0 / 6')
   expect(barRequests.at(-1)!.p_input).not.toHaveProperty('chapter_read')
   for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
@@ -180,6 +185,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await bar.getByRole('button', { name: 'Pause Reading', exact: true }).click()
   const resume = bar.getByRole('button', { name: 'Resume Reading', exact: true })
   await expect(resume).toHaveText('Resume')
+  await expect(resume).toBeEnabled()
   expect(Math.abs((await resume.boundingBox())!.height - (await bar.getByRole('button', { name: 'Edit', exact: true }).boundingBox())!.height)).toBeLessThan(1)
   await expect(bar.getByRole('button', { name: 'Mark Read', exact: true })).toHaveCount(0)
   await expect(ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Resume Reading', exact: true })).toHaveCount(0)
@@ -200,6 +206,20 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    expect(barEntries.get(123)).toMatchObject({ progress: Number(value), notes: 'Edited directly from Chrome' })
    expect(barRequests.at(-1)!.p_input).not.toHaveProperty('chapter_read')
   }
+  await bar.getByRole('button', { name: 'Edit', exact: true }).click()
+  await bar.getByLabel('Reading Status', { exact: true }).selectOption('waiting_for_updates')
+  await bar.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(bar.getByRole('status')).toHaveText('Saved')
+  for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
+   await expect(surface.locator('.reading-summary strong')).toHaveCount(1)
+   await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting for Updates')
+   await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
+  }
+  expect(barEntries.get(123)).toMatchObject({ status: 'waiting_for_updates', progress: 1 })
+  await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Re-Read', exact: true }).click()
+  await expect(bar.getByRole('status')).toHaveText('Saved')
+  expect(barEntries.get(123)).toMatchObject({ status: 're_reading', progress: 0, notes: 'Edited directly from Chrome' })
+  for (const surface of [bar, ao3.locator('#ao3-library-progress')]) await expect(surface.locator('.reading-summary strong')).toHaveText('Re-Reading')
   expect(await ao3.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
   expect(await ao3.evaluate(() => document.body.textContent)).not.toContain('paired-chrome-secret')
   // Saving from a later chapter retrieves the work summary from the first page.
@@ -226,6 +246,15 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   releaseImage!()
   await nextWork.waitForLoadState('load')
   expect(uploads).toHaveLength(2)
+  const nextBar = nextWork.locator('#ao3-library-companion')
+  await nextBar.getByRole('button', { name: 'Add to Library', exact: true }).click()
+  await nextBar.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(nextBar.getByRole('status')).toHaveText('Saved')
+  await nextWork.goto('https://archiveofourown.org/works/456/chapters/960')
+  await nextBar.getByRole('button', { name: 'Mark Read', exact: true }).click()
+  await expect(nextBar.getByRole('status')).toHaveText('Saved')
+  expect(barEntries.get(456)).toMatchObject({ status: 'waiting_for_updates', progress: 6 })
+  for (const surface of [nextBar, nextWork.locator('#ao3-library-progress')]) await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting for Updates')
   // Series previews reuse the same explicit-request boundary and never queue works.
   const seriesUrl = 'https://archiveofourown.org/series/77'
   const seriesFixture = (await readFile('server/ao3/fixtures/series.html', 'utf8')).replace('<dl class="stats"><dd', '<dl class="stats"><dd class="kudos">42</dd><dd')

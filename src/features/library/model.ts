@@ -33,6 +33,10 @@ export function initialProgress(url: string, verifiedChapters: Record<string, st
   const verified = Number.isInteger(position) && position > 0
   return { status: (verified && position > 1 ? 'reading' : 'to_read') as Status, lastRead: verified ? position - 1 : 0, chapterVerified: verified }
 }
+/** Status after reading all currently published chapters, shared by the app and companions. */
+export function caughtUpReadingStatus(status: Status, metadata: Pick<Metadata, 'publication_status'>): Status {
+  return metadata.publication_status === 'complete' ? 'finished' : metadata.publication_status === 'in_progress' ? 'waiting_for_updates' : status
+}
 export function abandonedReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
   return metadata.publication_status === 'abandoned' && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters ? 'finished' : status
 }

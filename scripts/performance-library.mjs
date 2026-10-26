@@ -45,15 +45,19 @@ async function main() {
     await seedLargeLibraries(db, workCount, 3, finishedWorks)
     await db.exec("set role authenticated; set request.jwt.claim.sub='10000000-0000-0000-0000-000000000001'")
     const results = []
+    const collection=(await db.query("select id from public.collections where name='Collection 1' and user_id=auth.uid()")).rows[0].id
     let offsetIds
     for (const [label, sql, args] of [
       ['catalog', 'select public.library_catalog() result', []],
       ['catalog-automatic', 'select public.library_catalog() result', []],
-      ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',filters:{sort:'added'}}]],
-      ['finished-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'finished',filters:{sort:'added',showSeries:false}}]],
-      ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',filters:{sort:'added'}}]],
-      ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
-      ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',filters:{sort:'alpha'}}]],
+      ['navigation','select public.library_navigation() result',[]],
+      ['facets','select public.library_query_facets($1) result',[{mode:'library',shelf:collection,filters:{}}]],
+      ['manual-collection','select public.query_library($1,1,50) result',[{mode:'library',shelf:collection,includeFacets:false,filters:{sort:'added'}}]],
+      ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
+      ['finished-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'finished',includeFacets:false,filters:{sort:'added',showSeries:false}}]],
+      ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
+      ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
+      ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'alpha'}}]],
       ['count', 'select count(*) from public.library_entries where user_id=auth.uid()', []],
       ['offset-identities', 'select id from public.library_entries where user_id=auth.uid() order by created_at desc,id offset 9950 limit 50', []],
       ['cursor-identities', 'with anchor as materialized (select created_at,id from public.library_entries where user_id=auth.uid() order by created_at desc,id offset 9949 limit 1) select e.id from public.library_entries e cross join anchor a where e.user_id=auth.uid() and (e.created_at<a.created_at or (e.created_at=a.created_at and e.id>a.id)) order by e.created_at desc,e.id limit 50', []],
@@ -71,11 +75,15 @@ async function main() {
       let plannedSql=sql,plannedValues=values
       if(sql.startsWith('select public.query_library')) {
         const definition=(await db.query("select pg_get_functiondef('public.query_library(jsonb,integer,integer)'::regprocedure) definition")).rows[0].definition
-        const seriesRequested=definition.match(/series_requested:=([\s\S]+?);/)[1]
-        const collectionRules=definition.match(/select c\.automatic_rules into collection_rules[\s\S]+?;/)[0].replace(' into collection_rules','').replace(/;$/,'')
-        // Use the function's own assignments when explaining its inner SQL.
-        plannedSql=definition.match(/ with works[\s\S]+?into result from totals/)[0].replace('into result','')
-          .replaceAll('series_requested',`(${seriesRequested})`).replaceAll('collection_rules',`(${collectionRules})`)
+        const pool=(await db.query("select prosrc from pg_proc where oid='public.library_query_pool(jsonb)'::regprocedure")).rows[0].prosrc
+        const seriesRequested=pool.match(/series_requested:=([\s\S]+?);/)[1]
+        const collectionRules=pool.match(/select c\.automatic_rules into collection_rules[\s\S]+?;/)[0].replace(' into collection_rules','').replace(/;$/,'')
+        const manualCollection=pool.match(/select c\.id into manual_collection[\s\S]+?;/)[0].replace(' into manual_collection','').replace(/;$/,'')
+        const poolSql=pool.match(/return query\s+([\s\S]+?);/)[1]
+          .replaceAll('manual_collection',`(${manualCollection})`).replaceAll('collection_rules',`(${collectionRules})`).replaceAll('series_requested',`(${seriesRequested})`)
+        // Explain the actual page pipeline, including the shared candidate pool.
+        plannedSql=definition.match(/ with pool[\s\S]+?into result from totals/)[0].replace('into result','')
+          .replace('select * from public.library_query_pool(p_query)',poolSql)
           .replaceAll('p_query','$1::jsonb').replaceAll('p_page','$2::integer').replaceAll('p_size','$3::integer')
         const page=Number(sql.match(/,([0-9]+),[0-9]+\)/)[1]),size=Number(sql.match(/,[0-9]+,([0-9]+)\)/)[1])
         plannedValues=[values[0],page,size]

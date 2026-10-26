@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react'
 import { useLibrary } from './LibraryProvider'
-import type { LibraryQuery, LibraryResults } from './repository'
+import { libraryFacetScope, type LibraryFacets, type LibraryQuery, type LibraryResults } from './repository'
 
-export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; retry: () => void } {
-  const { fetchPage, revision } = useLibrary()
+export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void } {
+  const { fetchPage, fetchFacets, revision } = useLibrary()
   const [state, setState] = useState<{ key: string; queryKey?: string; result?: LibraryResults; error?: string }>({ key: '' })
+  const [facetState, setFacets] = useState<{ key: string; result?: LibraryFacets; error?: string }>({ key: '' })
   const [attempt, setAttempt] = useState(0)
   const queryKey = JSON.stringify([query, page, size])
   const key = JSON.stringify([queryKey, revision, attempt])
+  const scopeKey = JSON.stringify(libraryFacetScope(query))
+  const facetKey = JSON.stringify([scopeKey, revision, attempt])
+  useEffect(() => {
+    if (!enabled) return
+    const controller = new AbortController()
+    void fetchFacets(query, controller.signal).then(result => { if (!controller.signal.aborted) setFacets({ key: facetKey, result }) }).catch(error => {
+      if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setFacets({ key: facetKey, error: error instanceof Error ? error.message : 'Could not load filter suggestions.' })
+    })
+    return () => controller.abort()
+    // Facets depend on the collection pool, not result filters or pagination.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facetKey, fetchFacets, enabled])
   function retry() { setState({ key: '' }); setAttempt(value => value + 1) }
   useEffect(() => {
     if (!enabled) return
@@ -24,5 +37,7 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
     // The serialized key contains the complete query and revision.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, fetchPage, enabled])
-  return state.key === key || state.queryKey === queryKey && state.result ? { ...state, suggestions: state.result?.suggestions, loading: false, retry } : { loading: enabled, previousResult: state.result, suggestions: state.result?.suggestions, retry }
+  const currentFacets = facetState.key === facetKey ? facetState : undefined
+  const results = state.key === key || state.queryKey === queryKey && state.result ? { ...state, loading: false, retry } : { loading: enabled, previousResult: state.result, retry }
+  return { ...results, facets: currentFacets?.result, facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
 }

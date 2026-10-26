@@ -8,12 +8,12 @@ import { deleteCollection, deleteCollections } from '../repository'
 export const collectionDeleteLabel = <><Trash2 size={16} aria-hidden="true" />Delete</>
 
 export function useCollectionDeletion(selectedTargets: Collection[], bulk: boolean, onDeleted: () => void) {
-  const { stories, series, refreshCollections } = useLibrary()
+  const { stories, series, navigation, catalogLoaded, refreshCollections } = useLibrary()
   const [confirmationTargets, setConfirmationTargets] = useState<Collection[] | null>(null)
   const targets = confirmationTargets ?? selectedTargets
   const confirming = confirmationTargets !== null
   const ids = targets.map(item => item.id)
-  const hasStories = stories.some(story => [...story.collectionIds, ...(story.automaticCollectionIds ?? [])].some(id => ids.includes(id))) || (series ?? []).some(series => series.collectionIds?.some(id => ids.includes(id)))
+  const hasStories = catalogLoaded === false && targets.some(target => !navigation?.[target.id]) || targets.some(target => (navigation?.[target.id]?.works ?? 0) + (navigation?.[target.id]?.series ?? 0) > 0) || stories.some(story => [...story.collectionIds, ...(story.automaticCollectionIds ?? [])].some(id => ids.includes(id))) || (series ?? []).some(series => series.collectionIds?.some(id => ids.includes(id)))
   const targetKey = [...ids].sort().join(',')
   const deleted = useRef<string | null>(null), pending = useRef(false)
   const [removedKey, setRemoved] = useState<string | null>(null), [busy, setBusy] = useState(false)

@@ -27,7 +27,7 @@ async function create(name: string) {
  return (await db.query<{id:string}>('insert into public.collections(name,automatic_rules) values($1,$2) returning id',[name,JSON.stringify(rules)])).rows[0].id
 }
 async function query(shelf: string) {
- return (await db.query<{result:LibraryResults}>('select public.query_library($1,1,25) result',[JSON.stringify({mode:'library',shelf,filters:defaultReadingFilters})])).rows[0].result
+ return (await db.query<{result:LibraryResults}>('select public.query_library($1,1,25) result',[JSON.stringify({mode:'library',shelf,includeFacets:false,filters:defaultReadingFilters})])).rows[0].result
 }
 it('matches existing and newly saved works, metadata edits and rule edits without copying memberships', async () => {
  const id = await create('Found family')
@@ -177,6 +177,10 @@ it('bounds membership evaluation to catalog works or returned pages and filters 
   expect(await query(selected)).toMatchObject({ total: 0, stories: [] })
   expect((await db.query<{ calls: number }>('select last_value::integer calls from public.rule_evaluations')).rows[0].calls).toBe(38)
   expect((await db.query<{ is_called: boolean }>('select is_called from public.catalog_evaluations')).rows[0].is_called).toBe(false)
+  await db.exec("reset role; select setval('public.rule_evaluations',1,false); set role authenticated")
+  const facets=(await db.query<{result:{total:number}}>('select public.library_query_facets($1) result',[JSON.stringify({mode:'library',shelf:selected,filters:{}})])).rows[0].result
+  expect(facets.total).toBe(0)
+  expect((await db.query<{calls:number}>('select last_value::integer calls from public.rule_evaluations')).rows[0].calls).toBe(38)
  } finally {
   await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)
  }

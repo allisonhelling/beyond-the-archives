@@ -1,3 +1,4 @@
+import { sampleMode } from '../../lib/sample-mode'
 import { ChapterReadingHistory } from './ChapterReadingHistory'
 import { useCollectionDeletion } from './collections/useCollectionDeletion'
 import { OtherWorkMetadata } from './display/OtherWorkMetadata'
@@ -186,9 +187,8 @@ export function LibraryPage({ reading = false }: { reading?: boolean }) {
 export function AuthorPage() {
   const { name = '' } = useParams<{ name: string }>()
   const { stories } = useLibrary()
-  const count = stories.filter(story => story.metadata.authors.includes(name)).length
   return <LibraryBoundary><ReadingDashboard key={name} mode="library" author={name} stories={stories}
-    renderHeader={actions => <div className="page-heading library-heading"><div><div className="library-title-row"><h1>{name}</h1><div className="library-heading-actions">{actions}</div></div><p>{count} {count === 1 ? 'fic' : 'fics'} saved in your library</p></div></div>}
+    renderHeader={(actions, count = 0) => <div className="page-heading library-heading"><div><div className="library-title-row"><h1>{name}</h1><div className="library-heading-actions">{actions}</div></div><p>{count} {count === 1 ? 'fic' : 'fics'} saved in your library</p></div></div>}
     renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
 }
 const collectionControlHelp = 'Command-click (Mac) or Control-click (Windows) a collection to edit it directly, or edit the group when multiple collections are selected.\nSelect collections, then click or tap books to select or deselect.\nShift + click or drag: select a range.\nStart Shift-drag on a selected book to deselect a range.\nRelease Shift. Drag a selected book: move the selected group.\nAlt + Left/Right Arrow: move a book or group.\nEscape: cancel dragging; otherwise leave selection, then leave editing.\nDelete or Backspace: delete selected collections; non-empty collections ask for confirmation.\nEdit selected: change appearance or delete. Cancel selection: clear the selection.'
@@ -204,7 +204,7 @@ function initialCollectionSort(): CollectionSort {
 
 function LibraryContent() {
   const layout = useLayout()
-  const { stories, collections, series: seriesRecords, refreshCollections: refresh } = useLibrary()
+  const { stories, collections, series: seriesRecords, navigation, navigationError, refreshCollections: refresh } = useLibrary()
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'all'
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
@@ -261,7 +261,7 @@ function LibraryContent() {
   }, [editingCollections, selectedCollectionIds.length, busy, collectionDeletion.busy, collectionDeletion.confirming, editingCollection, bulkCollections, addingToCollection, visibilityTarget])
 
   // Display sorts never change the saved manual positions.
-  const displayedCollections = orderCollections(customCollections, [...stories, ...(seriesRecords ?? []).map(series => ({ collectionIds: series.collectionIds ?? [], updated_at: series.updated_at }))], collectionSort.order)
+  const displayedCollections = orderCollections(customCollections, [...(sampleMode ? stories : Object.entries(navigation).map(([id, stats]) => ({ collectionIds: [id], updated_at: stats.updated_at ?? '' }))), ...(seriesRecords ?? []).map(series => ({ collectionIds: series.collectionIds ?? [], updated_at: series.updated_at }))], collectionSort.order)
   function toggleCollectionEditing() {
     if (!editingCollections) setCollectionSort(previous => ({ ...previous, order: 'manual' }))
     setEditingCollections(!editingCollections); setViewHidden(false)
@@ -368,8 +368,8 @@ function LibraryContent() {
       return rank(a.id) - rank(b.id)
     })
     .map(item => {
-      const works = item.id === 'series' ? 0 : storiesForShelf(item.id).length, seriesCount = item.id === 'series' || params.get('showSeries') === 'true' ? seriesForShelf(item.id).length : 0
-      return { ...item, count: works + seriesCount, countLabel: seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
+      const works = item.id === 'series' ? 0 : sampleMode ? storiesForShelf(item.id).length : navigation[item.id]?.works ?? 0, seriesCount = item.id === 'series' || params.get('showSeries') === 'true' ? sampleMode ? seriesForShelf(item.id).length : navigation[item.id]?.series ?? 0 : 0
+      return { ...item, count: !sampleMode && !navigation[item.id] ? undefined : works + seriesCount, countLabel: !sampleMode && !navigation[item.id] ? 'Loading collection count.' : seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
     })
 
   const hiddenButton = (descriptionId?: string) => <button aria-describedby={descriptionId} type="button" className="button secondary collection-hidden" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>
@@ -386,6 +386,7 @@ function LibraryContent() {
     </div></div></div></div>
     <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = writeBrowsing(previous, readFilterDefaults(filterDefaultScope('library', key), readBrowsing(previous).filters), undefined); next.set('shelf', key); return next })} />
     {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.automatic_rules && <p className="field-help">Automatic collection · Matching works are included as your library changes.</p>}{collection.description && <p className="collection-summary">{collection.description}</p>}{collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}</div>}
+    {navigationError && <p role="alert" className="error-message">{navigationError} <button className="text-button" onClick={() => void refresh()}>Retry Counts</button></p>}
     {(error || collectionDeletion.error) && <p role="alert" className="error-message">{error || collectionDeletion.error}</p>}
 </>} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={!editingCollections && collection && !collection.default_key && !collection.automatic_rules && <Tooltip description="Add Stories to Collection">{id => <button ref={addStoriesTrigger} type="button" className="button secondary button-small" aria-describedby={id} onClick={() => setAddingToCollection(collection)}>Add Story</button>}</Tooltip>} />
   </LibraryBoundary>{collectionDeletion.confirmation}{visibilityTarget && <CollectionVisibilityDialog collection={visibilityTarget} onClose={closeVisibility} onConfirm={async () => { setCollectionHidden(visibilityTarget.id, !visibilityTarget.hidden); setEditingCollection(null) }} />}{addingToCollection && <CollectionMembershipDialog collection={addingToCollection} onClose={() => { setAddingToCollection(null); addStoriesTrigger.current?.focus() }} />}{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} hidden={collectionSort.hiddenCustom.includes(editingCollection.id)} onVisibilityChange={changeEditedCollectionVisibility} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
@@ -447,7 +448,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <DisplayInfo group="workHeader" fields={['series']}>{{ series: story.metadata.series?.length ? <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p> : null }}</DisplayInfo>
       <div className="story-title-row">
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
-        {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} /></p> }}</DisplayInfo>}
+        {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> }}</DisplayInfo>}
         {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p> }}</DisplayInfo>}
         {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>

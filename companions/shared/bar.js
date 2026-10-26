@@ -1,7 +1,7 @@
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
-import { active, parseLines, statuses, validateProgress } from '../../src/features/library/model'
+import { active, caughtUpReadingStatus, parseLines, statuses, validateProgress } from '../../src/features/library/model'
 import { captureChapterRead, collectWorkPage, readPage, readWorkTiles, readChapterSections, chapterDefaults } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
@@ -298,11 +298,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   const chapterCount = `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`
   const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), summary); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
   if (!current) { renderReadingToggle(parent, current, top); return }
-  if (entry.status === 'finished') {
+  if (entry.status === 'finished' || browser === 'chrome' && entry.status === 'waiting_for_updates') {
    const reread = button('Re-Read', () => progress(current - 1, 're_reading'), parent)
    reread.className = 'complete-chapter'
    reread.prepend(icon(['M3 11a9 9 0 1 1 2.7 6.4', 'M3 4v7h7'], reread))
-   return
+   if (entry.status === 'finished') return
   }
   const read = entry.progress >= current
   const actionParent = browser === 'chrome' ? summary : parent
@@ -319,7 +319,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    const starting = ['to_read', 'paused_reading'].includes(entry.status)
    const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
    const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
-   const complete = button(label, () => progress(Math.max(entry.progress, current), final ? 'finished' : status, true, current), actionParent)
+   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current), actionParent)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
@@ -580,7 +580,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    infoHelp(control, title, description)
   }
   const status = field('Reading Status', 'select', 'status')
-  for (const key of [...new Set(['to_read', 'reading', 'paused_reading', 'finished', 're_reading', ...(entry ? [entry.status] : [])])]) { const option = node('option', key === 'reading' ? readingLabel : statuses[key], status); option.value = key }
+  for (const [key, title] of Object.entries(statuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
   status.value = draft.status
   help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current Chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter

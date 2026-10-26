@@ -20,7 +20,7 @@ function SeriesScopeAction({ label, scope, disabled, expanded, onClick }: { labe
  return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className="text-button clickable-text" aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
 }
 
-export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works' }: {
+export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: externalBusy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works' }: {
  bookmarkGroupingUnavailable?: boolean; relatedSeriesLabel?: string
  bookmarkedSeriesIds?: ReadonlySet<number>
  previewCache?: ReadonlyMap<number, SeriesPreview>; onPreview?(preview: SeriesPreview): void
@@ -33,7 +33,8 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy, onC
  text: string; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
  onConfirm(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[], selections: SeriesWorkSelection[]): void; onCancel(): void
 }) {
- const { refreshSeries, stories = [] } = useLibrary()
+ const { refreshSeries, stories = [], catalogLoaded } = useLibrary({ catalog: true })
+ const busy = externalBusy || catalogLoaded === false
  const savedIds = new Set([...suppliedSavedIds, ...stories.flatMap(story => story.work.ao3_work_id ? [Number(story.work.ao3_work_id)] : [])])
  const [readingStatus, setReadingStatus] = useState<Status>(initialReadingStatus)
  const series = useMemo(() => {

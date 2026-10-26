@@ -1,6 +1,7 @@
 import { load } from 'cheerio'
 import { parseSeriesUrl, seriesPageUrl, parseWorkUrl, type SeriesPreview } from './urls.ts'
 import { plainText, readSummary } from '../library/summaries/summary.ts'
+import { readAuthors } from './ao3-metadata.ts'
 
 function count(text: string) { const value = text.replaceAll(',', '').trim(); return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null }
 
@@ -19,9 +20,7 @@ export function parseSeries(html: string, sourceUrl: string): SeriesPreview {
  const field = (name: string) => $('dl.series.meta dt').filter((_, node) => $(node).text().trim().replace(/:$/, '').toLowerCase() === name.toLowerCase()).first().next('dd')
  const description = plainText(field('Description'))
  const creators = field('Creator').find('a[rel="author"]')
- const creatorNames = creators.toArray().map(node => $(node).text().trim()).filter(Boolean)
- const creatorLinks: Record<string, string> = {}
- creators.each((_, node) => { try { const link = new URL($(node).attr('href') ?? '', sourceUrl); if (link.origin === 'https://archiveofourown.org' && /^\/users\//.test(link.pathname)) creatorLinks[$(node).text().trim()] = link.href } catch { /* Preserve names without unsafe links. */ } })
+ const { authors: creatorNames, author_links: creatorLinks } = readAuthors($, creators, sourceUrl)
  const completeText = field('Complete').text().trim().toLowerCase()
  const complete = completeText === 'yes' ? true : completeText === 'no' ? false : null
  const works = parseWorkBlurbs(list.html() ?? '', sourceUrl, identity.seriesId)
@@ -52,8 +51,9 @@ export function parseWorkBlurbs(html: string, sourceUrl: string, seriesId?: numb
   const chapters = row.find('dd.chapters').text().trim()
   const chapterCounts = chapters.match(/^(\d+)\/(\d+|\?)$/)
   const names = (selector: string) => row.find(selector).toArray().map(tag => $(tag).text().trim()).filter(Boolean)
+  const credits = readAuthors($, row.find('a[rel="author"]'), sourceUrl)
   const updated = Date.parse(row.find('p.datetime').text().trim())
-  works.push({ workId, url, position, categories: (row.find('.required-tags .category').attr('title') ?? '').split(/,\s*/).filter(Boolean), language: row.find('dd.language').first().text().trim(), bookmarks: count(row.find('dd.bookmarks').first().text()), comments: count(row.find('dd.comments').first().text()), hits: count(row.find('dd.hits').first().text()), rating: row.find('.required-tags .rating').attr('title') ?? '', relationshipTags: names('.tags .relationships a.tag'), characterTags: names('.tags .characters a.tag'), additionalTags: names('.tags .freeforms a.tag'), archiveWarnings: names('.tags .warnings a.tag'), kudos: count(row.find('dd.kudos').first().text()), updated: Number.isFinite(updated) ? new Date(updated).toISOString().slice(0, 10) : '', title: heading.text().trim() || `AO3 Work ${workId}`, authors: row.find('a[rel="author"]').toArray().map(author => $(author).text().trim()), ...readSummary(row.find('blockquote.summary').html() ?? ''), fandoms: row.find('.fandoms a.tag').toArray().map(tag => $(tag).text().trim()).filter(Boolean), tags: row.find('.tags a.tag, .fandoms a.tag').toArray().map(tag => $(tag).text().trim()), wordCount: /^\d+$/.test(words) && Number.isSafeInteger(Number(words)) ? Number(words) : null, chapters, complete: chapterCounts ? chapterCounts[2] !== '?' && chapterCounts[1] === chapterCounts[2] : null })
+  works.push({ workId, url, position, categories: (row.find('.required-tags .category').attr('title') ?? '').split(/,\s*/).filter(Boolean), language: row.find('dd.language').first().text().trim(), bookmarks: count(row.find('dd.bookmarks').first().text()), comments: count(row.find('dd.comments').first().text()), hits: count(row.find('dd.hits').first().text()), rating: row.find('.required-tags .rating').attr('title') ?? '', relationshipTags: names('.tags .relationships a.tag'), characterTags: names('.tags .characters a.tag'), additionalTags: names('.tags .freeforms a.tag'), archiveWarnings: names('.tags .warnings a.tag'), kudos: count(row.find('dd.kudos').first().text()), updated: Number.isFinite(updated) ? new Date(updated).toISOString().slice(0, 10) : '', title: heading.text().trim() || `AO3 Work ${workId}`, authors: credits.authors, authorLinks: credits.author_links, ...readSummary(row.find('blockquote.summary').html() ?? ''), fandoms: row.find('.fandoms a.tag').toArray().map(tag => $(tag).text().trim()).filter(Boolean), tags: row.find('.tags a.tag, .fandoms a.tag').toArray().map(tag => $(tag).text().trim()), wordCount: /^\d+$/.test(words) && Number.isSafeInteger(Number(words)) ? Number(words) : null, chapters, complete: chapterCounts ? chapterCounts[2] !== '?' && chapterCounts[1] === chapterCounts[2] : null })
  })
  return works
 }

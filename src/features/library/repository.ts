@@ -177,11 +177,29 @@ export async function loadStories(ids: string[]): Promise<Story[]> {
 }
 export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
 export type LibraryResults = { suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
+export type LibraryFacets = Pick<LibraryResults, 'suggestions' | 'fandoms'> & { total: number }
+export type LibraryNavigation = Record<string, { works: number; series: number; updated_at: string | null }>
+/** Facets describe the collection pool, independent of page, sort and search filters. */
+export function libraryFacetScope(query: LibraryQuery) {
+  return { mode: query.mode, shelf: query.mode === 'reading' ? 'view_all' : query.shelf, ...(query.author !== undefined && { author: query.author }), filters: { showSeries: query.filters.showSeries } }
+}
+export async function loadLibraryFacets(query: LibraryQuery, signal: AbortSignal): Promise<LibraryFacets> {
+  const { data, error } = await client().rpc('library_query_facets', { p_query: libraryFacetScope(query) }).abortSignal(signal)
+  if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
+  if (error || !data) throw new Error('Could not load filter suggestions. Retry loading.')
+  return data as unknown as LibraryFacets
+}
+export async function loadLibraryNavigation(): Promise<LibraryNavigation> {
+  if (sampleMode) return {}
+  const { data, error } = await client().rpc('library_navigation')
+  if (error || !data) throw new Error('Could not load collection counts. Retry loading.')
+  return data as unknown as LibraryNavigation
+}
 export async function queryLibrary(query: LibraryQuery, page: number, size: number, signal: AbortSignal): Promise<LibraryResults> {
   // Run the same parser/validation before either transport. Literal substring
   // groups preserve escaped operators and avoid unsafe SQL/regex interpolation.
   filterReading([], query.filters)
-  const { data, error, status } = await client().rpc('query_library', { p_query: { ...query, terms: parseSearch(query.filters.within) }, p_page: page, p_size: size }).abortSignal(signal)
+  const { data, error, status } = await client().rpc('query_library', { p_query: { ...query, includeFacets: false, terms: parseSearch(query.filters.within) }, p_page: page, p_size: size }).abortSignal(signal)
   if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
   if (error) {
     const message = error.code === '57014' ? 'Loading these results took too long. Retry or narrow your filters.'

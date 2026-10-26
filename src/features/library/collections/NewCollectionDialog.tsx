@@ -29,7 +29,7 @@ function AppearanceOptions({ label, disabled, children }: { label: string; disab
 }
 
 export function NewCollectionDialog({ onClose, onCreated, collection, selectedCollections, onDeleted, hidden = false, onVisibilityChange }: { onClose: () => void; onCreated?: (id: string) => void; collection?: Collection; selectedCollections?: Collection[]; onDeleted?: () => void; hidden?: boolean; onVisibilityChange?: () => void }) {
-  const { refreshCollections: refresh, collections, stories } = useLibrary()
+  const { refreshCollections: refresh, collections, stories } = useLibrary({ catalog: true })
   const bulk = selectedCollections !== undefined
   const targets = selectedCollections ?? (collection ? [collection] : [])
   const targetIds = targets.map(item => item.id)

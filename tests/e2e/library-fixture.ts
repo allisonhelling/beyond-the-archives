@@ -28,7 +28,7 @@ export async function fixture(page: Page) {
       }
       return route.fulfill({ json: { ratingInfo: settings?.personal_rating_info ?? null } })
     }
-    if (['library_catalog','library_story_details','query_library','paged_import_history'].includes(table)) return route.fulfill({ json: libraryQueryFixture(table,body??{},tables) })
+    if (['library_navigation','library_query_facets','library_catalog','library_story_details','query_library','paged_import_history'].includes(table)) return route.fulfill({ json: libraryQueryFixture(table,body??{},tables) })
     if (table === 'ensure_library_series' && body) {
       if (!tables.library_series.some(series => series.ao3_series_id === body.p_series)) tables.library_series.push({id:crypto.randomUUID(),user_id:user.id,ao3_series_id:body.p_series,notes:'',is_favorite:false,reading_status:'to_read',created_at:now,updated_at:now,metadata:{seriesId:body.p_series,title:body.p_title,normalizedUrl:`https://archiveofourown.org/series/${body.p_series}`,description:'',works:[],basic:true}})
       return route.fulfill({status:204})

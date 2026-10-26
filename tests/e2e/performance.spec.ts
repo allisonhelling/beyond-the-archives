@@ -10,6 +10,11 @@ test('10,000-work library pages incrementally and restores a large page after de
   tables.works.push(work)
   tables.library_entries.push({id:`entry-${n}`,user_id:'10000000-0000-0000-0000-000000000001',work_id:work.id,original_url:`https://archiveofourown.org/works/${n+1}`,reading_status:'reading',last_read_chapter:1,is_favorite:false,personal_rating:null,notes:'Private note',created_at:'2026-10-19T00:00:00Z',metadata_overrides:{authors:[`Author ${n%5000}`],fandoms:[`Fandom ${n%100}`],additional_tags:Array.from({length:12},(_,k)=>`Tag ${(n+k)%500}`)}})
  }
+ let catalogRequests=0,facetRequests=0
+ page.on('request',request=>{
+  if(request.url().endsWith('/library_catalog'))catalogRequests++
+  if(request.url().endsWith('/library_query_facets'))facetRequests++
+ })
  let largeResponseAt=0
  page.on('response',response=>{if(response.url().endsWith('/query_library')&&response.request().postDataJSON()?.p_size===250) void response.finished().then(()=>{largeResponseAt=Date.now()})})
  const queries:{page:number;size:number}[]=[],transfers:{path:string;bytes:number}[]=[]
@@ -21,6 +26,7 @@ test('10,000-work library pages incrementally and restores a large page after de
  await expect(page.locator('.work-card')).toHaveCount(50, { timeout: 8000 })
  const firstDisplayMs=Date.now()-started
  expect(queries).toEqual([{page:1,size:50}])
+ expect(catalogRequests).toBe(0)
  expect(queries.every(q=>q.size<=250)).toBe(true)
  await expect(page.getByRole('navigation',{name:'Result Pages'}).first()).toContainText('1–50 of 10000')
  const largeStart=Date.now()
@@ -62,6 +68,8 @@ test('10,000-work library pages incrementally and restores a large page after de
  expect(await page.locator('.work-card').count()).toBeLessThan(100)
  await page.goForward()
  await expect(page.locator('.work-card')).toHaveCount(1)
+ expect(catalogRequests).toBe(0)
+ expect(facetRequests).toBe(1)
  await page.reload()
  await expect(page.getByRole('combobox', { name: 'Works per Page', exact: true }).first()).toHaveValue('50')
  const report={environment:'local Chromium, mocked transport; 10,000 work catalog',project:info.project.name,firstDisplayMs,largePageMs,largeRenderMs,heap,queries,transfers}

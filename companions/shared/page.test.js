@@ -111,9 +111,10 @@ it('reads chapter navigation inside AO3 chapter action items without capturing c
 
 it('reads listing tiles through the shared blurb parser without inventing series memberships', async () => {
  const doc = new DOMParser().parseFromString((await import('../../server/ao3/fixtures/series.html?raw')).default, 'text/html')
+ doc.querySelector('a[rel="author"]').setAttribute('href', '/users/One/pseuds/One')
  const tiles = readWorkTiles(doc, 'https://archiveofourown.org/tags/Naruto/works')
  expect(tiles).toHaveLength(2)
- expect(tiles[0].page).toMatchObject({ work: 101, current: null, metadata: { title: 'The first story', authors: ['One'], published_chapters: 2, total_chapters: 2 } })
+ expect(tiles[0].page).toMatchObject({ work: 101, current: null, metadata: { title: 'The first story', authors: ['One'], author_links: { One: 'https://archiveofourown.org/users/One/pseuds/One' }, published_chapters: 2, total_chapters: 2 } })
  expect(tiles[0].page.metadata).not.toHaveProperty('series_memberships')
  expect(readWorkTiles(doc, 'https://evil.test/works')).toEqual([])
 })
