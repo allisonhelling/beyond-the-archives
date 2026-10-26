@@ -51,6 +51,14 @@ Numbered pages use an offset after complete filtering and deterministic ordering
 
 Indexes cover owner/added/identity traversal, import-history ownership/order, and eligible queue work. Existing relationship and source-tag-order indexes are reused. Inspect the recorded inner page-query plans and exact-count plans before tuning further; no speculative full-text or trigram dependency was added. Very large migration backfills and projection write amplification need measurement on the intended hosted database before rollout.
 
+## Automatic Collection Evaluation
+
+Migration `20261025000400_catalog_collection_evaluation.sql` reads the stored work document directly in the compact catalog and computes `automaticCollectionIds` once per work. Previously each compact field expanded the collection view's combined JSON expression and could repeat the membership query. A database regression counts evaluations and verifies membership parity with full details and owner isolation.
+
+The shared library filter and automatic matching functions retain their existing predicates, signatures, grants and invoker security, while using PL/pgSQL to reuse statement plans across work/rule pairs. Membership still updates from current metadata and rules on every read; there is no persistent membership cache to invalidate. The performance runner now measures `catalog-automatic` with five tag-based automatic collections in addition to the manual-only catalog. Apply the migration to the hosted database to activate the optimization; a website-only deployment does not change these functions.
+
+Local checks on 25 October 2026 measured a 300-work, one-reader fixture with five tag-based automatic collections at 17,300 ms before the change and 940 ms after it. These are individual observations, not latency percentiles. The full fixture with three 10,000-work libraries measured the catalog at 5,796 ms without automatic collections and 19,838 ms with five automatic collections for the active reader. Those larger-fixture timings still miss the catalog target; neither the earlier 2026 measurements above nor the smaller comparison establish hosted timeout resolution. Validate the migrated catalog under the intended hosted reader role, data size and timeout before claiming that result.
+
 ## Retrieval Capacity and Fairness
 
 The hosted Edge Function handles exactly one job per invocation. The supplied one-minute Cron schedule therefore has a nominal maximum of 60 jobs/hour globally, before retrieval latency, failures, pauses and lease recovery. The global gate also enforces at least 15 seconds between eligible hosted requests; running a more frequent scheduler cannot exceed its nominal 240 requests/hour limit. The continuous Node worker waits 15 seconds after each attempt, in addition to attempt time. These are code-derived upper bounds, not measured AO3 throughput.

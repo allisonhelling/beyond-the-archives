@@ -12,6 +12,7 @@ import { MetadataSettings } from './MetadataSettings'
 
 beforeEach(() => {
  vi.clearAllMocks()
+ Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
  mocks.local = false
  mocks.sample = false
  mocks.auth = { session: { user: { id: 'alice' } } as Session, loading: false }
@@ -23,19 +24,19 @@ it('defaults to existing direct retrieval and saves it without requiring an exte
  render(<MetadataSettings />)
  const save = screen.getByRole('button', { name: 'Save Metadata Mode' })
  await waitFor(() => expect(save).toBeEnabled())
- expect(screen.getByLabelText('How to Load AO3 Metadata')).toHaveValue('direct')
+ expect(screen.getByLabelText('Desktop Metadata Retrieval')).toHaveValue('direct')
  fireEvent.click(save)
- await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ user_id: 'alice', retrieval_mode: 'direct' }))
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ user_id: 'alice', retrieval_mode: 'direct', retrieval_mode_mobile: null }))
  expect(mocks.connect).not.toHaveBeenCalled()
 })
 it('connects the configured extension before enabling its mode, and reconnect uses the entered ID', async () => {
  render(<MetadataSettings />)
  await waitFor(() => expect(screen.getByRole('button', { name: 'Save Metadata Mode' })).toBeEnabled())
- fireEvent.change(screen.getByLabelText('How to Load AO3 Metadata'), { target: { value: 'extension' } })
+ fireEvent.change(screen.getByLabelText('Desktop Metadata Retrieval'), { target: { value: 'extension' } })
  const id = 'a'.repeat(32)
  fireEvent.change(screen.getByLabelText(/^Extension ID/), { target: { value: id } })
  fireEvent.click(screen.getByRole('button', { name: 'Save Metadata Mode' }))
- await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ user_id: 'alice', retrieval_mode: 'extension' }))
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ user_id: 'alice', retrieval_mode: 'extension', retrieval_mode_mobile: null }))
  expect(mocks.id).toHaveBeenCalledWith(id)
  await waitFor(() => expect(screen.getByRole('button', { name: 'Reconnect Extension' })).toBeEnabled())
  fireEvent.click(screen.getByRole('button', { name: 'Reconnect Extension' }))
@@ -46,7 +47,7 @@ it('leaves the current database mode intact when the extension cannot connect', 
  mocks.connect.mockResolvedValue(false)
  render(<MetadataSettings />)
  await waitFor(() => expect(screen.getByRole('button', { name: 'Save Metadata Mode' })).toBeEnabled())
- fireEvent.change(screen.getByLabelText('How to Load AO3 Metadata'), { target: { value: 'extension' } })
+ fireEvent.change(screen.getByLabelText('Desktop Metadata Retrieval'), { target: { value: 'extension' } })
  fireEvent.click(screen.getByRole('button', { name: 'Save Metadata Mode' }))
  expect(await screen.findByRole('status')).toHaveTextContent('Could not connect.')
  expect(mocks.save).not.toHaveBeenCalled()
@@ -56,7 +57,7 @@ it('allows the shared extension ID on the local app', async () => {
  mocks.local = true
  render(<MetadataSettings />)
  await waitFor(() => expect(screen.getByRole('button', { name: 'Save Metadata Mode' })).toBeEnabled())
- fireEvent.change(screen.getByLabelText('How to Load AO3 Metadata'), { target: { value: 'extension' } })
+ fireEvent.change(screen.getByLabelText('Desktop Metadata Retrieval'), { target: { value: 'extension' } })
  expect(screen.getByLabelText(/^Extension ID/)).not.toHaveAttribute('readonly')
  expect(screen.getByText(/Use AO3 Library Companion with Local selected/)).toBeVisible()
 })
@@ -74,4 +75,26 @@ it('connects the shared companion in local sample mode without saving backend pr
  expect(mocks.load).not.toHaveBeenCalled()
  expect(mocks.save).not.toHaveBeenCalled()
  expect(screen.queryByRole('button', { name: 'Save Metadata Mode' })).not.toBeInTheDocument()
+})
+
+it('saves mobile direct retrieval without connecting the desktop extension', async () => {
+ Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+ mocks.load.mockResolvedValue({ data: { retrieval_mode: 'extension', retrieval_mode_mobile: null }, error: null })
+ render(<MetadataSettings />)
+ const save = screen.getByRole('button', { name: 'Save Metadata Mode' })
+ await waitFor(() => expect(save).toBeEnabled())
+ expect(screen.getByLabelText('Desktop Metadata Retrieval')).toHaveValue('extension')
+ expect(screen.getByLabelText('Mobile Metadata Retrieval')).toHaveValue('inherit')
+ fireEvent.change(screen.getByLabelText('Mobile Metadata Retrieval'), { target: { value: 'direct' } })
+ fireEvent.click(save)
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({ user_id: 'alice', retrieval_mode: 'extension', retrieval_mode_mobile: 'direct' }))
+ expect(mocks.connect).not.toHaveBeenCalled()
+ expect(screen.queryByLabelText(/^Extension ID/)).not.toBeInTheDocument()
+})
+it('loads independently saved desktop and mobile choices', async () => {
+ mocks.load.mockResolvedValue({ data: { retrieval_mode: 'direct', retrieval_mode_mobile: 'extension' }, error: null })
+ render(<MetadataSettings />)
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Save Metadata Mode' })).toBeEnabled())
+ expect(screen.getByLabelText('Desktop Metadata Retrieval')).toHaveValue('direct')
+ expect(screen.getByLabelText('Mobile Metadata Retrieval')).toHaveValue('extension')
 })

@@ -3060,7 +3060,7 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   await expect(bookmarkDialog.getByText('Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.')).toBeVisible()
   await expect(bookmarkDialog.getByRole('checkbox', { name: 'Save My AO3 Username for Future Imports', exact: true })).toBeVisible()
   await bookmarkDialog.getByRole('button', { name: 'Close Dialog' }).click()
-  const csvSection = page.getByRole('region', { name: 'Import AO3 Bookmarks or Marked for Later', exact: true })
+  const csvSection = page.getByRole('region', { name: 'Import from CSV (Bookmarks or Marked for Later)', exact: true })
   await expect(csvSection.getByRole('checkbox', { name: 'Check chapter publication dates for bookmarks' })).not.toBeChecked()
   await expect(options.getByRole('combobox', { name: 'Scan Mode', exact: true })).toHaveValue('full')
   const bookmarks = page.getByRole('button', { name: 'Import Bookmarks', exact: true })

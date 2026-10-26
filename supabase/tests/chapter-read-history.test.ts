@@ -62,6 +62,14 @@ it('records finish and reread events separately, including the final chapter of 
  expect(chapterReadEvents(entry.readingHistory).map(read => [read.chapter, read.word_count, read.is_reread])).toEqual([[10, 900, false], [4, 1200, true], [10, 950, true]])
 })
 
+it('recognizes later reread chapters after a completed work starts a fresh session in Reading', async () => {
+ let entry = await save(128, { status: 'finished', progress: 10 })
+ entry = (await request(128, 'progress', { version: entry.version, base: { status: entry.status, progress: entry.progress }, status: 'reading', progress: 0 })).entry
+ entry = (await request(128, 'progress', progress(entry, 1, 300))).entry
+ entry = (await request(128, 'progress', progress(entry, 2, 400))).entry
+ expect(chapterReadEvents(entry.readingHistory).map(read => [read.chapter, read.is_reread])).toEqual([[1, true], [2, true]])
+})
+
 it('supports explicit finished-chapter saves on new and existing entries and distinguishes zero from unknown', async () => {
  let entry = await save(125, { progress: 4, chapter_read: { chapter: 4, chapter_id: '104', word_count: 0 } })
  expect(chapterReadEvents(entry.readingHistory)).toMatchObject([{ chapter: 4, word_count: 0 }])

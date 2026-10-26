@@ -130,3 +130,28 @@ it('preserves author-only matching when converting automatic collections',async(
  await db.query('update public.collections set automatic_rules=null where id=$1',[id])
  expect((await query(id)).stories.map(story=>story.id)).toEqual(before)
 })
+
+it('evaluates automatic memberships once per catalog work and preserves matching details and owner isolation', async () => {
+ await db.exec('reset role;begin')
+ try {
+  // Count calls without changing the function's stability or its matching rules.
+  const definition = (await db.query<{ definition: string }>("select pg_get_functiondef('public.automatic_collection_ids(jsonb,uuid)'::regprocedure) definition")).rows[0].definition
+  await db.exec(`create sequence public.catalog_evaluations;
+   grant usage,select on sequence public.catalog_evaluations to authenticated;
+   ${definition.replace(/\bbegin\b/i, "begin perform nextval('public.catalog_evaluations');")};
+   set role authenticated;set request.jwt.claim.sub='${alice}';`)
+  const catalog = (await db.query<{ result: { stories: Story[] } }>('select public.library_catalog() result')).rows[0].result
+  const calls = (await db.query<{ calls: number }>('select last_value::integer calls from public.catalog_evaluations')).rows[0].calls
+  expect(catalog.stories).toHaveLength(3)
+  expect(calls).toBe(catalog.stories.length)
+  const details = (await db.query<{ result: Story[] }>('select public.library_story_details($1) result', [catalog.stories.map(story => story.id)])).rows[0].result
+  for (const story of catalog.stories) expect(story.automaticCollectionIds).toEqual(details.find(detail => detail.id === story.id)?.automaticCollectionIds)
+  await db.exec(`set request.jwt.claim.sub='${bob}'`)
+  const other = (await db.query<{ result: { stories: Story[] } }>('select public.library_catalog() result')).rows[0].result
+  expect(other.stories).toHaveLength(1)
+  expect(other.stories[0].automaticCollectionIds).toEqual([])
+  expect(catalog.stories.map(story => story.id)).not.toContain(other.stories[0].id)
+ } finally {
+  await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)
+ }
+})

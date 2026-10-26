@@ -75,6 +75,7 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .setup-panel { font-size: 13px; color: #756363; line-height: 1.85; }.setup-panel ol { list-style: decimal; padding-left: 18px; margin: 18px 0; }.setup-panel li { padding-left: 3px; margin-bottom: 10px; }.setup-panel > p { font-size: 13px; }
 .status-pill { display: inline-block; background: #f8e6e3; border: 1px solid #e6c8c1; border-radius: 5px; padding: 5px 9px; color: #970000; font-size: 13px; font-weight: 600; letter-spacing: .08em; }
 .error-message, .success-message { border-radius: 5px; padding: 11px; font-size: var(--minimum-text-size); line-height: 1.6; margin-bottom: 18px; background: #fbe9e5; color: #970000; }.success-message { background: #f8e6e3; color: #970000; }
+.error-message-retry { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 .loading-state { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #970000; font-size: 14px; }
 .app-shell { min-height: 100dvh; display: flex; flex-direction: column; }
 .app-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 32px; background: #fffdfb; border-bottom: 1px solid #ecddd8; }

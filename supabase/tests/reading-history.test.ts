@@ -63,6 +63,50 @@ it('adds only selected series works with personal details, preserves saved works
  expect((await db.query<{metadata:{works:{workId:number}[]}}>('select metadata from public.library_series where ao3_series_id=77')).rows[0].metadata.works.map(work=>work.workId)).toEqual([123,456,789,999])
 })
 
+it.each([
+ { work: 201, started: null, via: 'companion' },
+ { work: 202, started: '2026-09-01T00:00:00.000Z', via: 'web' },
+])('starts a new reading session after a historical finish through $via, preserving earlier dates: $started', async ({ work, started, via }) => {
+ let saved = await request('save', { metadata, status: 'finished', progress: 5, notes: '', rating: null, collections: [], tags: [] }, work)
+ const finished = '2026-10-01T00:00:00.000Z'
+ await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${alice}'`)
+ await db.query('update public.library_entries set started_at=$2,finished_at=$3 where id=$1', [saved.entry.id, started, finished])
+ const before = (await db.query<Story>('select * from public.library_entries where id=$1', [saved.entry.id])).rows[0]
+ if (via === 'companion') {
+  saved = await request('get', {}, work)
+  await request('progress', { status: 're_reading', progress: 1, version: saved.entry.version, base: { status: 'finished', progress: 5 } }, work)
+  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${alice}'`)
+ } else {
+  await db.query(`select public.update_library_entry_checked($1,'{"status":"re_reading","progress":1}','{"status":"finished","progress":5}')`, [saved.entry.id])
+ }
+ const current = async () => (await db.query<Story>('select * from public.library_entries where id=$1', [saved.entry.id])).rows[0]
+ const reread = await current()
+ expect(reread.reading_status).toBe('re_reading')
+ expect(reread.finished_at).toBeNull()
+ expect(new Date(reread.started_at!).getTime()).toBeGreaterThan(Date.parse(finished))
+ expect(reread.reading_history?.slice(0, -1)).toEqual(before.reading_history)
+ const session = reread.reading_history!.at(-1)!
+ expect(session).toMatchObject({ status: 're_reading' })
+ if (!('previous_finished_at' in session)) throw new Error('Missing previous session dates')
+ expect(Date.parse(session.previous_finished_at!)).toBe(Date.parse(finished))
+ expect(session.previous_started_at ? Date.parse(session.previous_started_at) : null).toBe(started ? Date.parse(started) : null)
+ await db.query(`select public.update_library_entry_checked($1,'{"status":"paused_reading"}','{"status":"re_reading","progress":1}')`, [saved.entry.id])
+ await db.query(`select public.update_library_entry_checked($1,'{"status":"re_reading"}','{"status":"paused_reading","progress":1}')`, [saved.entry.id])
+ expect((await current()).started_at).toEqual(reread.started_at)
+ await db.query(`select public.update_library_entry_checked($1,'{"status":"finished","progress":5}','{"status":"re_reading","progress":1}')`, [saved.entry.id])
+ const completed = await current()
+ expect(new Date(completed.finished_at!).getTime()).toBeGreaterThanOrEqual(new Date(completed.started_at!).getTime())
+ expect(completed.reading_history?.at(-1)).toMatchObject({ action: 'finished', status: 'finished' })
+ // A later reading session replaces only the entry's date range, not its history.
+ await db.query(`select public.update_library_entry_checked($1,'{"status":"reading","progress":0}','{"status":"finished","progress":5}')`, [saved.entry.id])
+ const again = await current()
+ expect(again.finished_at).toBeNull()
+ const nextSession = again.reading_history!.at(-1)!
+ if (!('previous_finished_at' in nextSession)) throw new Error('Missing previous session dates')
+ expect(Date.parse(nextSession.previous_finished_at!)).toBe(new Date(completed.finished_at!).getTime())
+ expect(again.reading_history?.slice(0, -1)).toEqual(completed.reading_history)
+})
+
 it('restores older backups without manufacturing dates or requiring a timeline column', async () => {
  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${alice}'`)
  const backup=(await db.query<{result:{tables:{library_entries:Record<string,unknown>[]}}}>('select public.export_library_backup() result')).rows[0].result

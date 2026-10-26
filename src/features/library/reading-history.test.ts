@@ -37,3 +37,22 @@ it('stops elapsed calendar duration at DNF rather than letting archived reading 
  const story = { ...exampleWork, reading_status: 'did_not_finish' as const, created_at: '2026-10-01T00:00:00Z', dnf_since: '2026-10-03T00:00:00Z', reading_history: [] }
  expect(readingMilliseconds(story, Date.parse('2026-12-01T00:00:00Z'))).toBe(2 * 86400000)
 })
+
+it.each([null, '2026-09-01T00:00:00Z'])('starts a fresh reread date range and retains the previous session with start %s', started_at => {
+ const finished = { ...exampleWork, reading_status: 'finished' as const, started_at, finished_at: '2026-10-01T00:00:00Z', reading_history: [] }
+ const reread = { ...finished, reading_status: 're_reading' as const }
+ recordReadingTransition(reread, finished, '2026-10-25T00:00:00Z')
+ expect(reread.started_at).toBe('2026-10-25T00:00:00Z')
+ expect(reread.finished_at).toBeNull()
+ expect(reread.reading_history.at(-1)).toMatchObject({ previous_started_at: started_at, previous_finished_at: finished.finished_at })
+ const paused = { ...reread, reading_status: 'paused_reading' as const }
+ recordReadingTransition(paused, reread, '2026-10-26T00:00:00Z')
+ const resumed = { ...paused, reading_status: 're_reading' as const }
+ recordReadingTransition(resumed, paused, '2026-10-27T00:00:00Z')
+ expect(resumed.started_at).toBe(reread.started_at)
+ expect(resumed.finished_at).toBeNull()
+ const completed = { ...resumed, reading_status: 'finished' as const }
+ recordReadingTransition(completed, resumed, '2026-10-28T00:00:00Z')
+ expect(completed.started_at).toBe(reread.started_at)
+ expect(completed.finished_at).toBe('2026-10-28T00:00:00Z')
+})

@@ -125,6 +125,41 @@ it('opens a popup, loads every series, and provides bulk controls without import
 function longPreview(seriesId = 7, count = 65) {
  return { seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: `Series ${seriesId}`, description: '', works: Array.from({ length: count }, (_, index) => ({ workId: index + 1, url: `https://archiveofourown.org/works/${index + 1}`, title: `Work ${index + 1}`, position: index + 1, authors: [], tags: [], summary: '', wordCount: null, chapters: '1/1', complete: true })) }
 }
+it('marks library works and direct links unavailable and keeps counts current when an individual import finishes', () => {
+ const preview = longPreview(7, 4), confirm = vi.fn()
+ const props = { text: `${preview.normalizedUrl}\nhttps://archiveofourown.org/works/3`, initialPreviews: [preview], busy: false, onConfirm: confirm, onCancel: vi.fn() }
+ const view = render(<SeriesImportReview {...props} savedIds={new Set([1])} />)
+ const series = within(screen.getByRole('region', { name: 'Series 7 • Series 7' }))
+ expect(series.getByText('4 visible works · 1 in library · 0 selected. AO3 may hide unavailable or restricted works.')).toBeVisible()
+ fireEvent.click(series.getAllByRole('button', { name: 'Show Series Works' })[0])
+ const choice = (id: number) => series.getByRole('checkbox', { name: `Part ${id}: Work ${id}` })
+ for (const id of [1, 3]) {
+  expect(choice(id)).toBeDisabled()
+  expect(choice(id)).toBeChecked()
+  expect(choice(id).closest('label')).toHaveClass('check-label')
+  expect(choice(id).closest('label')).toHaveAttribute('aria-disabled', 'true')
+ }
+ expect(series.getByText(/Already saved/)).toBeVisible()
+ expect(series.getByText(/Included via pasted work link/)).toBeVisible()
+ const controls = within(series.getByRole('group', { name: 'Series Selection Controls' }))
+ fireEvent.click(controls.getByRole('button', { name: 'Select All' }))
+ expect(series.getByText(/4 visible works · 1 in library · 2 selected/)).toBeVisible()
+ // A separately imported work can enter the library while the chooser stays open.
+ view.rerender(<SeriesImportReview {...props} savedIds={new Set([1, 2])} />)
+ expect(choice(2)).toBeDisabled()
+ expect(choice(2).closest('label')).toHaveAttribute('aria-disabled', 'true')
+ expect(series.getByText(/4 visible works · 2 in library · 1 selected/)).toBeVisible()
+ fireEvent.click(controls.getByRole('button', { name: 'Clear Selection' }))
+ expect(choice(1)).toBeChecked()
+ expect(choice(2)).toBeChecked()
+ expect(choice(3)).toBeChecked()
+ expect(choice(4)).not.toBeChecked()
+ expect(series.getByText(/4 visible works · 2 in library · 0 selected/)).toBeVisible()
+ fireEvent.click(choice(4))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([4])
+ expect(confirm.mock.calls[0][3][0].works.map((work: { workId: number }) => work.workId)).toEqual([4])
+})
 it('keeps a series larger than the page target together and preserves selections when hidden', () => {
  const preview = longPreview(), confirm = vi.fn()
  render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={confirm} onCancel={vi.fn()} />)
@@ -175,14 +210,17 @@ it.each([
 it('applies bulk selection and saving across hidden series pages and deduplicates overlapping works', async () => {
  const previews = Array.from({ length: 35 }, (_, index) => longPreview(index + 1, 1)), confirm = vi.fn()
  render(<SeriesImportReview text={previews.map(preview => preview.normalizedUrl).join('\n')} initialPreviews={previews} savedIds={new Set()} busy={false} onConfirm={confirm} onCancel={vi.fn()} />)
- expect(screen.getAllByRole('region', { name: /• Series/ })).toHaveLength(30)
+ expect(screen.getAllByRole('region', { name: /• Series/, hidden: true })).toHaveLength(30)
  fireEvent.click(within(screen.getByRole('group', { name: 'All Series Top Controls' })).getByRole('button', { name: 'Select All' }))
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save All Series' })) })
- await waitFor(() => expect(mocks.remember).toHaveBeenCalledTimes(35))
- fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ // Scope queries to avoid computing visibility for every per-series control.
+ const saveAll = within(screen.getByLabelText('All Series Controls')).getByRole('button', { name: 'Save All Series' })
+ await act(async () => { fireEvent.click(saveAll) })
+ expect(mocks.remember.mock.calls.map(([preview]) => preview.seriesId)).toEqual(previews.map(preview => preview.seriesId))
+ fireEvent.click(screen.getByText('Import Selected', { selector: 'button' }))
  expect(confirm.mock.calls[0][0]).toHaveLength(1)
  expect(confirm.mock.calls[0][2]).toHaveLength(35)
-})
+ // This deliberately renders 30 series and saves 35; allow for full-suite contention.
+}, 15000)
 
 it('mirrors save and works visibility controls in the footer', async () => {
  const preview = longPreview(7, 2)

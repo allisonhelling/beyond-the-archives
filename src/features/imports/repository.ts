@@ -3,6 +3,8 @@ import { bookmarkConflicts, bookmarkReadingState, csvWorkKey } from './ao3-csv'
 import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { sampleMode } from '../../lib/sample-mode'
+import { getLayout } from '../../lib/use-layout'
+import { metadataRetrievalMode } from './metadata-preferences'
 import { supabase } from '../../lib/supabase'
 import { addStoriesToCollections, allRows } from '../library/repository'
 import { classifyUrl, extractUrls, mergeSeriesPreviews, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
@@ -74,9 +76,9 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
   const db = client()
   const { data: session } = await db.auth.getSession()
   if (!session.session) throw new Error('Sign in to preview series.')
-  const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode').eq('user_id', session.session.user.id).maybeSingle()
+  const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode,retrieval_mode_mobile').eq('user_id', session.session.user.id).maybeSingle()
   if (settingsError) throw new Error('Could not load metadata settings. Retry the preview.')
-  useExtension = preferences?.retrieval_mode === 'extension'
+  useExtension = metadataRetrievalMode(preferences, getLayout()) === 'extension'
  }
  let nextUrl: string | undefined = identity.normalizedUrl
  const pages: SeriesPreview[] = []

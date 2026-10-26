@@ -1,7 +1,7 @@
 import type { Story, Status } from './model'
 
 export type ChapterReadEvent = { action: 'chapter_read'; at: string; status: Status; id: string; chapter: number; chapter_id: string | null; word_count: number | null; is_reread: boolean }
-export type ReadingEvent = { action: 'added' | 'status' | 'paused_reading' | 'resumed' | 'finished'; at: string; status: Status; previous_status?: Status } | ChapterReadEvent
+export type ReadingEvent = { action: 'added' | 'status' | 'paused_reading' | 'resumed' | 'finished'; at: string; status: Status; previous_status?: Status; previous_started_at?: string | null; previous_finished_at?: string | null } | ChapterReadEvent
 
 export function readReadingHistory(value: unknown): ReadingEvent[] {
   return Array.isArray(value) ? value.filter((event): event is ReadingEvent => event && typeof event === 'object' && typeof event.at === 'string' && typeof event.status === 'string' && typeof event.action === 'string') : []
@@ -42,8 +42,12 @@ export function recordReadingTransition(story: Story, previous?: Story, at = new
   if (previous && previous.reading_status === story.reading_status) return
   if (!story.reading_history.length) story.reading_history.push({ action: 'added', at: previous ? at : story.created_at, status: previous?.reading_status ?? story.reading_status })
   const status = story.reading_status
+  const startsSession = previous && ['reading', 're_reading'].includes(status)
+    && (previous.finished_at !== null || status === 're_reading' && !['reading', 're_reading', 'paused_reading'].includes(previous.reading_status))
   const action = status === 'finished' ? 'finished' : status === 'paused_reading' ? 'paused_reading' : previous?.reading_status === 'paused_reading' ? 'resumed' : 'status'
-  story.reading_history.push({ action, at, status, ...(previous && { previous_status: previous.reading_status }) })
+  story.reading_history.push({ action, at, status, ...(previous && { previous_status: previous.reading_status }),
+    ...(startsSession && { previous_started_at: previous.started_at, previous_finished_at: previous.finished_at }) })
+  if (startsSession) { story.started_at = at; story.finished_at = null }
   if (status === 'finished') story.finished_at = at
   story.dnf_since = status === 'did_not_finish' ? at : null
   if (['reading', 're_reading'].includes(status)) story.started_at ??= at

@@ -102,6 +102,12 @@ export async function fixture(page: Page) {
     const rows = tables[table]
     if (!rows) return route.fulfill({ status: 404, json: {} })
     const id = url.searchParams.get('id')?.replace('eq.', '')
+    if (request.method() === 'POST' && table === 'metadata_preferences' && body) {
+      const existing = rows.find(row => row.user_id === body.user_id)
+      if (existing) Object.assign(existing, body)
+      else rows.push({ ...body })
+      return route.fulfill({ status: 201, json: null })
+    }
     if (request.method() === 'POST' && table === 'collection_works' && Array.isArray(body)) {
       for (const membership of body) if (!rows.some(row => row.collection_id === membership.collection_id && row.library_entry_id === membership.library_entry_id)) {
         rows.push({ ...membership, created_at: now })

@@ -597,18 +597,21 @@ export type Database = {
           retrieval_mode: string
           personal_rating_info: string | null
           dnf_cleanup: Json
+          retrieval_mode_mobile: string | null
         }
         Insert: {
           user_id?: string
           retrieval_mode?: string
           personal_rating_info?: string | null
           dnf_cleanup?: Json
+          retrieval_mode_mobile?: string | null
         }
         Update: {
           user_id?: string
           retrieval_mode?: string
           personal_rating_info?: string | null
           dnf_cleanup?: Json
+          retrieval_mode_mobile?: string | null
         }
         Relationships: [
         ]

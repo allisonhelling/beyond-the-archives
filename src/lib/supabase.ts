@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from './config'
 import type { Database } from '../types/database'
 import { sampleMode } from './sample-mode'
+import { fetchWithLayout } from './layout-fetch'
 
 const config = readPublicConfig({
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
@@ -11,6 +12,7 @@ const config = readPublicConfig({
 export const initialAuthType = new URLSearchParams(window.location.search).get('type')
   || new URLSearchParams(window.location.hash.slice(1)).get('type')
 export const supabase = config && !sampleMode ? createClient<Database>(config.url, config.key, {
+  global: { fetch: fetchWithLayout },
   auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 }) : null
 

@@ -1,3 +1,4 @@
+import { sampleMode } from '../../lib/sample-mode'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior } from './series-import-preferences'
 import { FilePicker } from '../../components/FilePicker'
@@ -64,7 +65,8 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
  const conflicts = prepared ? bookmarkConflicts(prepared.works, prepared.conflicts) : []
  const laterSkipped = prepared?.conflicts.filter(conflict => prepared.works.some(work => work.workId === conflict.workId && work.source === 'marked_for_later')).length ?? 0
  return <section className="settings-card story-form" aria-labelledby="csv-import-heading">
-  <h2 id="csv-import-heading">Import AO3 Bookmarks or Marked for Later</h2>
+  <h2 id="csv-import-heading">Import from CSV (Bookmarks or Marked for Later)</h2>
+  {sampleMode ? <p>CSV imports are available in the connected library. Local sample mode does not save CSV import batches.</p> : <>
   <p>Choose CSV exports from your AO3 scraper, including combined lists. Bookmark notes become personal notes and bookmark tags become personal tags. Marked for Later works are saved as unread (To Read); existing personal data is always kept. Non-empty AO3 metadata refreshes automatically for every imported work, including existing works. Explicit manual metadata corrections are preserved.</p>
   <p className="field-help">Bookmarks dated after the work’s update date are saved as Read (Finished), with that bookmark date as the finished date. Earlier bookmarks are Currently Reading (Reading); chapter progress is unconfirmed unless you enable the chapter-date check. Missing dates leave progress unconfirmed. Choose which works to include from each series before reviewing conflicts.</p>
   <BookmarkChapterDatesOption checked={checkChapterDates} disabled={busy} onChange={setCheckChapterDates} />
@@ -86,6 +88,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
     })}</tbody></table></div>
    </>}
    <div className="form-actions"><button type="button" className="button primary" disabled={busy} onClick={() => void save()}>Import CSV Works</button><button type="button" className="button secondary" disabled={busy} onClick={() => { setPrepared(undefined); setError('') }}>Cancel CSV Import</button></div>
+  </>}
   </>}
  </section>
 }

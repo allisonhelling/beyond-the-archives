@@ -226,7 +226,10 @@ it('restores the same pasted work and series form in sample mode and saves witho
  await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith(links,true,'to_read',[]))
  await waitFor(()=>expect(mocks.refresh).toHaveBeenCalled())
  expect(mocks.history).not.toHaveBeenCalled()
- expect(screen.queryByText('Previous Batches')).not.toBeInTheDocument()
+ expect(screen.getByRole('heading', { name: 'Previous Batches' })).toBeVisible()
+ expect(screen.getByRole('heading', { name: 'Import from CSV (Bookmarks or Marked for Later)' })).toBeVisible()
+ expect(screen.getByText('CSV imports are available in the connected library. Local sample mode does not save CSV import batches.')).toBeVisible()
+ expect(screen.getByText('Batch history is available in the connected library. Local sample imports do not create account batches.')).toBeVisible()
  expect(screen.getByLabelText('AO3 URLs')).toHaveValue('')
 })
 

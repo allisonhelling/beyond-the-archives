@@ -45,6 +45,7 @@ async function main() {
     let offsetIds
     for (const [label, sql, args] of [
       ['catalog', 'select public.library_catalog() result', []],
+      ['catalog-automatic', 'select public.library_catalog() result', []],
       ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',filters:{sort:'added'}}]],
       ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',filters:{sort:'added'}}]],
       ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
@@ -53,6 +54,11 @@ async function main() {
       ['offset-identities', 'select id from public.library_entries where user_id=auth.uid() order by created_at desc,id offset 9950 limit 50', []],
       ['cursor-identities', 'with anchor as materialized (select created_at,id from public.library_entries where user_id=auth.uid() order by created_at desc,id offset 9949 limit 1) select e.id from public.library_entries e cross join anchor a where e.user_id=auth.uid() and (e.created_at<a.created_at or (e.created_at=a.created_at and e.id>a.id)) order by e.created_at desc,e.id limit 50', []],
     ]) {
+      if (label === 'catalog-automatic') await db.exec(`
+        insert into public.collections(name,automatic_rules)
+        select 'Performance automatic '||n,jsonb_build_object('filters',jsonb_build_object('tags','Tag '||n),'terms','[]'::jsonb)
+        from generate_series(1,5) n;
+      `)
       const values = args.map(value => typeof value === 'object' ? JSON.stringify(value) : value)
       const start = performance.now(), response = await db.query(sql, values), elapsedMs = performance.now()-start
       if (label === 'offset-identities') offsetIds = response.rows.map(row => row.id)
@@ -78,6 +84,7 @@ async function main() {
       }
       results.push({label,elapsedMs:Math.round(elapsedMs),bytes:Buffer.byteLength(JSON.stringify(response.rows)),plan:plan.rows,filteredCount})
       console.log(label,Math.round(elapsedMs)+'ms',results.at(-1).bytes+' bytes',filteredCount?'filtered count '+filteredCount.elapsedMs+'ms':'')
+      if (label === 'catalog-automatic') await db.exec("delete from public.collections where name like 'Performance automatic %'")
     }
     await mkdir('artifacts/performance',{recursive:true})
     await writeFile('artifacts/performance/library.json',JSON.stringify({environment:'PGlite, single process; not hosted concurrency',worksPerUser:Number(process.env.PERF_WORKS ?? 10000),users:3,results},null,2))

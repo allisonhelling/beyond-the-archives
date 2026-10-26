@@ -163,6 +163,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
    const preview = review?.preview
    const seriesLabel = preview?.title ? `${preview.title} • Series ${id}` : `Series ${id}`
    const available = preview?.works.filter(work => !savedIds.has(work.workId) && !direct.has(work.workId)) ?? []
+   const inLibrary = preview?.works.filter(work => savedIds.has(work.workId)).length ?? 0
    const expanded = Boolean(preview?.works.length && preview.works.every(work => !review.closed?.summary?.has(work.workId) && !review.closed?.tags?.has(work.workId)))
    const scope = preview?.title || `Series ${id}`
    const selectionControls = preview && !automatic && <>
@@ -183,14 +184,15 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
     {review?.error && <p className="error-message" role="alert">{review.error}</p>}
     {!preview && (review?.error ? <button className="button secondary" disabled={disabled} onClick={() => void load(id, url)}>Retry Preview</button> : <p role="status">{loading === id ? 'Loading Series…' : 'Waiting to load series…'}</p>)}
     {preview && <>
-     <p>{preview.works.length} visible works · {automatic ? available.length : available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>
+     <p>{preview.works.length} visible works · {inLibrary} in library · {automatic ? available.length : available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>
      {!automatic && <div className="form-actions series-preview-controls" role="group" aria-label="Series Selection Controls">{selectionControls}</div>}
      {!preview.works.length && <p>No available works were found in this listing.</p>}
      {worksToggle}
      {shownSeries.has(id) && visibleWorks.map(work => {
       const saved = savedIds.has(work.workId), linked = direct.has(work.workId)
+      const choiceDisabled = automatic || disabled || saved || linked
       return <div className="series-import-work" key={work.workId}>
-       <div className="series-import-work-title"><label className="series-work-choice"><input type="checkbox" disabled={automatic || disabled || saved || linked} checked={automatic || saved || linked || review.selected.has(work.workId)} onChange={event => select(id, event.target.checked ? [...review.selected, work.workId] : [...review.selected].filter(value => value !== work.workId))} />{work.position ? `Part ${work.position}: ` : ''}{work.title}</label><Tooltip description="View on AO3">{tooltipId => <a className="clickable-text series-work-link" href={work.url} target="_blank" rel="noreferrer" aria-label={`View on AO3: ${work.title}`} aria-describedby={tooltipId}><ExternalLink size={18} aria-hidden="true" /></a>}</Tooltip></div>
+       <div className="series-import-work-title"><label className="check-label series-work-choice" aria-disabled={choiceDisabled}><input type="checkbox" disabled={choiceDisabled} checked={automatic || saved || linked || review.selected.has(work.workId)} onChange={event => select(id, event.target.checked ? [...review.selected, work.workId] : [...review.selected].filter(value => value !== work.workId))} />{work.position ? `Part ${work.position}: ` : ''}{work.title}</label><Tooltip description="View on AO3">{tooltipId => <a className="clickable-text series-work-link" href={work.url} target="_blank" rel="noreferrer" aria-label={`View on AO3: ${work.title}`} aria-describedby={tooltipId}><ExternalLink size={18} aria-hidden="true" /></a>}</Tooltip></div>
        <p className="field-help">{work.authors.join(', ') || 'Unknown author'} · {work.fandoms?.join(' · ') || 'Fandom unknown'} · {work.wordCount === null ? 'Word count unknown' : `${work.wordCount.toLocaleString()} words`} · {work.chapters || 'Chapters unknown'} · {work.complete === null ? 'Completion unknown' : work.complete ? 'Complete' : 'In progress'}{saved ? ' · Already saved' : linked ? ' · Included via pasted work link' : ''}</p>
        <details open={!review.closed?.summary?.has(work.workId)} onToggle={event => toggleSection(id, work.workId, 'summary', event.currentTarget.open)}><summary>Summary</summary><div className="story-summary"><WorkSummary metadata={work} fallback="No summary provided." /></div></details>
        <details open={!review.closed?.tags?.has(work.workId)} onToggle={event => toggleSection(id, work.workId, 'tags', event.currentTarget.open)}><summary>Tags</summary><p className="field-help">{work.tags.join(' · ') || 'No tags provided.'}</p></details>

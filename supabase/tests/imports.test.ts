@@ -134,6 +134,29 @@ async function extensionMode(owner=alice) {
  await asUser(owner,()=>db.query("insert into public.metadata_preferences(user_id,retrieval_mode) values($1,'extension') on conflict(user_id) do update set retrieval_mode='extension'",[owner]))
 }
 async function claimExtension(owner=alice) { return asUser(owner,async()=>(await db.query<{job:Claim|null}>('select public.claim_extension_job() job')).rows[0].job) }
+it('snapshots independent mobile and desktop retrieval choices and preserves legacy inheritance', async () => {
+ await clearJobs(); await db.exec('delete from public.metadata_preferences')
+ await asUser(alice, () => db.query("insert into public.metadata_preferences(user_id,retrieval_mode,retrieval_mode_mobile) values($1,'extension','direct')", [alice]))
+ const mode = async (batch: string) => (await db.query<{retrieval_mode:string}>('select retrieval_mode from public.metadata_jobs where batch_id=$1', [batch])).rows[0].retrieval_mode
+ try {
+  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-client-info': 'supabase-js-web/test ao3-library/mobile' })])
+  const mobile = await submit(['https://archiveofourown.org/works/97001'])
+  expect(await mode(mobile)).toBe('direct')
+  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-client-info': 'supabase-js-web/test ao3-library/desktop' })])
+  const desktop = await submit(['https://archiveofourown.org/works/97002'])
+  expect(await mode(desktop)).toBe('extension')
+  await asUser(alice, () => db.exec("update public.metadata_preferences set retrieval_mode='direct',retrieval_mode_mobile='extension'"))
+  expect(await mode(desktop)).toBe('extension')
+  expect(await mode(mobile)).toBe('direct')
+  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-client-info': 'ao3-library/mobile' })])
+  expect(await mode(await submit(['https://archiveofourown.org/works/97003']))).toBe('extension')
+  expect(await mode(await submit(['https://archiveofourown.org/works/97004'], bob))).toBe('direct')
+  await asUser(alice, () => db.exec('update public.metadata_preferences set retrieval_mode_mobile=null'))
+  expect(await mode(await submit(['https://archiveofourown.org/works/97005']))).toBe('direct')
+  await db.exec('reset request.headers')
+  expect(await mode(await submit(['https://archiveofourown.org/works/97006']))).toBe('direct')
+ } finally { await db.exec('reset request.headers'); await clearJobs(); await db.exec('delete from public.metadata_preferences') }
+})
 it('routes explicitly submitted extension jobs separately, snapshots mode, and isolates claims by owner',async()=>{
  await extensionMode()
  const batch=await submit(['https://archiveofourown.org/works/9100'])

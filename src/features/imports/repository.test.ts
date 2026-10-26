@@ -70,6 +70,25 @@ it('fetches a temporary preview without writing any series metadata', async () =
  expect(rpc).not.toHaveBeenCalled()
 })
 
+it('uses the mobile override for series previews while preserving the desktop extension choice', async () => {
+ const width = window.innerWidth
+ session.mockResolvedValue({ data: { session: { user: { id: 'reader' } } } })
+ settings.mockResolvedValue({ data: { retrieval_mode: 'extension', retrieval_mode_mobile: 'direct' }, error: null })
+ const preview = { seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Series', works: [] }
+ invoke.mockResolvedValue({ data: { preview }, error: null })
+ extensionPreview.mockResolvedValue({ url: preview.normalizedUrl, html: '<html></html>' })
+ try {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+  await previewSeries(preview.normalizedUrl)
+  expect(extensionPreview).not.toHaveBeenCalled()
+  expect(invoke).toHaveBeenLastCalledWith('series-preview', { body: { url: preview.normalizedUrl } })
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
+  await previewSeries(preview.normalizedUrl)
+  expect(extensionPreview).toHaveBeenCalledWith(preview.normalizedUrl)
+  expect(invoke).toHaveBeenLastCalledWith('series-preview', { body: { url: preview.normalizedUrl, html: '<html></html>' } })
+ } finally { Object.defineProperty(window, 'innerWidth', { configurable: true, value: width }) }
+})
+
 it('follows every Next link and deduplicates overlapping works before returning the preview', async () => {
  session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
  settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})

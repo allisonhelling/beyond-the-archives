@@ -55,7 +55,7 @@ import { publicationStatuses } from './publication-status'
 export function LibraryBoundary({ children }: { children: ReactNode }) {
   const { loading, error, refresh } = useLibrary()
   if (loading) return <p role="status">Loading your library…</p>
-  if (error) return <div role="alert" className="error-message">{error}<button className="button secondary" onClick={() => void refresh().catch(() => {})}>Retry Loading</button></div>
+  if (error) return <div role="alert" className="error-message error-message-retry"><p>{error}</p><button className="button secondary" onClick={() => void refresh().catch(() => {})}>Retry Loading</button></div>
   return children
 }
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; rec: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode; collectionsField: ReactNode }
