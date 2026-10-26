@@ -207,6 +207,29 @@ it('hides series by default in mixed shelves and includes them on request before
  expect(allShown.series.length).toBeGreaterThan(0)
 })
 
+it('skips series aggregation for hidden series on built-in and manual collections', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const first = (await documents())[0]
+  await db.query("update public.library_entries set reading_status='finished' where id=$1", [first.id])
+  const collection = (await db.query<{ id: string }>("insert into public.collections(name) values('Hidden series performance') returning id")).rows[0].id
+  await db.query('insert into public.collection_works(collection_id,library_entry_id) values($1,$2)', [collection, first.id])
+  const shelves = ['all', 'finished', 'favorites', collection]
+  const expected = await Promise.all(shelves.map(shelf => query({}, 1, 25, shelf)))
+  await db.exec('reset role')
+  const fn = (await db.query<{ definition: string; source: string }>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_series_results(jsonb)'::regprocedure")).rows[0]
+  // Failing immediately makes unnecessary series work observable without a timer.
+  await db.exec(fn.definition.replace('LANGUAGE sql', 'LANGUAGE plpgsql').replace(fn.source, "begin raise exception 'Unexpected series aggregation'; end;"))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  for (const [index, shelf] of shelves.entries()) expect(await query({}, 1, 25, shelf)).toEqual(expected[index])
+  // Explicit series views must still run the original aggregation pipeline.
+  await expect(query({ showSeries: true }, 1, 25, 'finished')).rejects.toThrow('Unexpected series aggregation')
+ } finally {
+  await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)
+ }
+})
+
 it('matches first-series-work filters in the browser, paginated queries and automatic collections', async () => {
  const docs = await documents(), ids = docs.slice(0, 5).map(story => story.id)
  const membership = (position: number | null, id = 4444) => ({ id, name: 'Installment filter', url: `https://archiveofourown.org/series/${id}`, position })

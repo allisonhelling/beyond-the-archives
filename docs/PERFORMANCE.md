@@ -59,6 +59,14 @@ The shared library filter and automatic matching functions retain their existing
 
 Local checks on 25 October 2026 measured a 300-work, one-reader fixture with five tag-based automatic collections at 17,300 ms before the change and 940 ms after it. These are individual observations, not latency percentiles. The full fixture with three 10,000-work libraries measured the catalog at 5,796 ms without automatic collections and 19,838 ms with five automatic collections for the active reader. Those larger-fixture timings still miss the catalog target; neither the earlier 2026 measurements above nor the smaller comparison establish hosted timeout resolution. Validate the migrated catalog under the intended hosted reader role, data size and timeout before claiming that result.
 
+## Collection Page Queries
+
+Migration `20261025000500_collection_query_work.sql` skips series aggregation when series are hidden, including in Finished and manual collections. Previously non-All Works shelves prepared series that were then removed from the result pool. The shared query now reads stored work documents directly, evaluates only the selected automatic collection's rule when filtering that shelf, and computes complete automatic memberships for returned page works. It preserves filtering before pagination, exact totals, sorting, suggestions, owner isolation and explicit series views.
+
+With 3,038 finished works for one synthetic reader, a 50-work Finished page took 3,358 ms before this change and 509 ms after it; All Works took 1,670 ms and 414 ms respectively. These individual embedded measurements are not hosted latency guarantees. Regression tests make unexpected hidden-series aggregation fail and count membership evaluations to ensure off-page works do not receive display-only membership calculations.
+
+`npm run perf:db` now includes a `finished-page` scenario and seeds up to 3,038 finished works per reader. Use `PERF_WORKS=3038 npm run perf:db` for libraries matching that collection size. Apply the new migration to the hosted database to activate this fix; no website or companion update is required. Explicitly showing series still incurs series aggregation costs, and hosted latency remains to be verified after rollout.
+
 ## Retrieval Capacity and Fairness
 
 The hosted Edge Function handles exactly one job per invocation. The supplied one-minute Cron schedule therefore has a nominal maximum of 60 jobs/hour globally, before retrieval latency, failures, pauses and lease recovery. The global gate also enforces at least 15 seconds between eligible hosted requests; running a more frequent scheduler cannot exceed its nominal 240 requests/hour limit. The continuous Node worker waits 15 seconds after each attempt, in addition to attempt time. These are code-derived upper bounds, not measured AO3 throughput.

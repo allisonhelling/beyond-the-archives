@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks'
 import { mkdir, writeFile } from 'node:fs/promises'
 
 // Synthetic data only. This never contacts AO3 or a hosted database.
-export async function seedLargeLibraries(db, count = 10000, users = 3) {
+export async function seedLargeLibraries(db, count = 10000, users = 3, finishedWorks = 0) {
   // Bulk fixture setup measures reads separately from import write throughput.
   const sources = ['library_entries','collection_works','library_entry_tags','works','work_authors','work_fandoms','work_tags','authors','fandoms','tags','personal_tags']
   for (const table of sources) await db.exec(`alter table public.${table} disable trigger sync_library_search`)
@@ -25,7 +25,8 @@ export async function seedLargeLibraries(db, count = 10000, users = 3) {
     (select (ao3_work_id-1)/50+1 sid,jsonb_agg(jsonb_build_object('workId',ao3_work_id,'url','https://archiveofourown.org/works/'||ao3_work_id,'position',(ao3_work_id-1)%50/10+1,'title',title,'authors',jsonb_build_array('Preview author'),'fandoms',jsonb_build_array('Fandom '||(1+ao3_work_id%100)),'summary',summary,'tags',jsonb_build_array('Preview tag'),'chapters','10/20','complete',false,'wordCount',1000) order by ao3_work_id) works from public.works where ao3_work_id%10=0 group by (ao3_work_id-1)/50+1) series;
     insert into public.library_entries(user_id,work_id,original_url,reading_status,metadata_overrides,notes)
     select u.id,w.id,'https://archiveofourown.org/works/'||w.ao3_work_id,
-    case when w.ao3_work_id%3=0 then 'reading'::public.reading_status else 'to_read'::public.reading_status end,
+    case when w.ao3_work_id<=${finishedWorks} then 'finished'::public.reading_status
+     when w.ao3_work_id%3=0 then 'reading'::public.reading_status else 'to_read'::public.reading_status end,
     case when w.ao3_work_id%11=0 then jsonb_build_object('title','Private title '||w.ao3_work_id,'additional_tags',jsonb_build_array('Private tag')) else '{}'::jsonb end,
     'Private notes for '||u.id||' on work '||w.ao3_work_id from auth.users u cross join public.works w;
     insert into public.collections(user_id,name) select u.id,'Collection '||n from auth.users u cross join generate_series(1,20) n;
@@ -39,7 +40,9 @@ export async function seedLargeLibraries(db, count = 10000, users = 3) {
 async function main() {
   const db = await createTestDatabase()
   try {
-    await seedLargeLibraries(db, Number(process.env.PERF_WORKS ?? 10000), 3)
+    const workCount = Number(process.env.PERF_WORKS ?? 10000)
+    const finishedWorks = Math.min(workCount, 3038)
+    await seedLargeLibraries(db, workCount, 3, finishedWorks)
     await db.exec("set role authenticated; set request.jwt.claim.sub='10000000-0000-0000-0000-000000000001'")
     const results = []
     let offsetIds
@@ -47,6 +50,7 @@ async function main() {
       ['catalog', 'select public.library_catalog() result', []],
       ['catalog-automatic', 'select public.library_catalog() result', []],
       ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',filters:{sort:'added'}}]],
+      ['finished-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'finished',filters:{sort:'added',showSeries:false}}]],
       ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',filters:{sort:'added'}}]],
       ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
       ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',filters:{sort:'alpha'}}]],
@@ -61,12 +65,18 @@ async function main() {
       `)
       const values = args.map(value => typeof value === 'object' ? JSON.stringify(value) : value)
       const start = performance.now(), response = await db.query(sql, values), elapsedMs = performance.now()-start
+      if (label === 'finished-page' && response.rows[0].result.total !== finishedWorks) throw new Error('Finished shelf count does not match its fixture.')
       if (label === 'offset-identities') offsetIds = response.rows.map(row => row.id)
       if (label === 'cursor-identities' && JSON.stringify(response.rows.map(row => row.id)) !== JSON.stringify(offsetIds)) throw new Error('Offset and cursor returned different identities.')
       let plannedSql=sql,plannedValues=values
       if(sql.startsWith('select public.query_library')) {
         const definition=(await db.query("select pg_get_functiondef('public.query_library(jsonb,integer,integer)'::regprocedure) definition")).rows[0].definition
-        plannedSql=definition.match(/ with works[\s\S]+?into result from totals/)[0].replace('into result','').replaceAll('p_query','$1::jsonb').replaceAll('p_page','$2::integer').replaceAll('p_size','$3::integer')
+        const seriesRequested=definition.match(/series_requested:=([\s\S]+?);/)[1]
+        const collectionRules=definition.match(/select c\.automatic_rules into collection_rules[\s\S]+?;/)[0].replace(' into collection_rules','').replace(/;$/,'')
+        // Use the function's own assignments when explaining its inner SQL.
+        plannedSql=definition.match(/ with works[\s\S]+?into result from totals/)[0].replace('into result','')
+          .replaceAll('series_requested',`(${seriesRequested})`).replaceAll('collection_rules',`(${collectionRules})`)
+          .replaceAll('p_query','$1::jsonb').replaceAll('p_page','$2::integer').replaceAll('p_size','$3::integer')
         const page=Number(sql.match(/,([0-9]+),[0-9]+\)/)[1]),size=Number(sql.match(/,[0-9]+,([0-9]+)\)/)[1])
         plannedValues=[values[0],page,size]
       }
@@ -87,7 +97,7 @@ async function main() {
       if (label === 'catalog-automatic') await db.exec("delete from public.collections where name like 'Performance automatic %'")
     }
     await mkdir('artifacts/performance',{recursive:true})
-    await writeFile('artifacts/performance/library.json',JSON.stringify({environment:'PGlite, single process; not hosted concurrency',worksPerUser:Number(process.env.PERF_WORKS ?? 10000),users:3,results},null,2))
+    await writeFile('artifacts/performance/library.json',JSON.stringify({environment:'PGlite, single process; not hosted concurrency',worksPerUser:workCount,finishedWorksPerUser:finishedWorks,users:3,results},null,2))
   } finally { await db.close() }
 }
 if (import.meta.url === new URL(process.argv[1], 'file:').href) main().catch(error => { console.error(error.message); process.exitCode=1 })

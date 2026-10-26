@@ -131,7 +131,7 @@ it('preserves author-only matching when converting automatic collections',async(
  expect((await query(id)).stories.map(story=>story.id)).toEqual(before)
 })
 
-it('evaluates automatic memberships once per catalog work and preserves matching details and owner isolation', async () => {
+it('bounds membership evaluation to catalog works or returned pages and filters only the chosen automatic collection', async () => {
  await db.exec('reset role;begin')
  try {
   // Count calls without changing the function's stability or its matching rules.
@@ -151,6 +151,32 @@ it('evaluates automatic memberships once per catalog work and preserves matching
   expect(other.stories).toHaveLength(1)
   expect(other.stories[0].automaticCollectionIds).toEqual([])
   expect(catalog.stories.map(story => story.id)).not.toContain(other.stories[0].id)
+  await db.exec(`reset role;
+   insert into public.works(ao3_work_id,title) select n,'Finished fixture '||n from generate_series(10000,10034) n;
+   insert into public.library_entries(user_id,work_id,original_url,reading_status)
+   select '${alice}',id,'https://archiveofourown.org/works/'||ao3_work_id,'finished' from public.works where ao3_work_id between 10000 and 10034;
+   select setval('public.catalog_evaluations',1,false);
+   set role authenticated;set request.jwt.claim.sub='${alice}';`)
+  const finished = await query('finished')
+  expect(finished).toMatchObject({ total: 35, page: 1, pages: 2 })
+  expect(finished.stories).toHaveLength(25)
+  const pageCalls = (await db.query<{ calls: number }>('select last_value::integer calls from public.catalog_evaluations')).rows[0].calls
+  expect(pageCalls).toBe(finished.stories.length)
+  expect(finished.stories.every(story => Array.isArray(story.automaticCollectionIds))).toBe(true)
+  // An empty automatic collection needs its own rule for counting, but none of
+  // the other collections' rules or full membership lists for invisible works.
+  const selected = await create('Selected empty collection')
+  await db.query('update public.collections set automatic_rules=$2 where id=$1', [selected, JSON.stringify(automaticCollectionRules({ ...defaultReadingFilters, tags: 'No work has this tag' }))])
+  await db.exec('reset role')
+  const matcher = (await db.query<{ definition: string }>("select pg_get_functiondef('public.automatic_collection_matches(jsonb,jsonb)'::regprocedure) definition")).rows[0].definition
+  await db.exec(`create sequence public.rule_evaluations;
+   grant usage,select on sequence public.rule_evaluations to authenticated;
+   ${matcher.replace(/\bbegin\b/i, "begin perform nextval('public.rule_evaluations');")};
+   select setval('public.catalog_evaluations',1,false);
+   set role authenticated;set request.jwt.claim.sub='${alice}';`)
+  expect(await query(selected)).toMatchObject({ total: 0, stories: [] })
+  expect((await db.query<{ calls: number }>('select last_value::integer calls from public.rule_evaluations')).rows[0].calls).toBe(38)
+  expect((await db.query<{ is_called: boolean }>('select is_called from public.catalog_evaluations')).rows[0].is_called).toBe(false)
  } finally {
   await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)
  }
