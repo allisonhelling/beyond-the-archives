@@ -9,13 +9,13 @@ export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
-  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string;
+  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string; personalTags?: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy; randomSeed?: string;
 }
 export const defaultReadingFilters: ReadingFilters = {
   query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, showSeries: false, excludeLaterSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
-  relationship: '', characters: '', tags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
+  relationship: '', characters: '', tags: '', personalTags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
 export function hasReadingFilters(filters: ReadingFilters) {
@@ -90,6 +90,7 @@ export function inReadingSection(story: Story, section: string) {
   if (section === 'in_progress') return reading && story.metadata.publication_status === 'in_progress'
   if (section === 'waiting') return story.reading_status === 'waiting_for_updates'
   if (section === 'new') return story.reading_status !== 'paused_reading' && hasNewChapter(story)
+  if (section === 'view_all') return reading
   return active(story)
 }
 export function searchText(story: Story, scope: SearchScope) {
@@ -118,6 +119,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
   const relationships = normalize(filters.relationship).split(',').map(term => term.trim()).filter(Boolean)
   const characters = normalize(filters.characters).split(',').map(term => term.trim()).filter(Boolean)
   const tags = normalize(filters.tags).split(',').map(t => t.trim()).filter(Boolean)
+  const personalTags = normalize(filters.personalTags ?? '').split(',').map(term => term.trim()).filter(Boolean)
   const after = filters.updatedAfter ? Date.parse(`${filters.updatedAfter}T00:00:00Z`) : null
   const before = filters.updatedBefore ? Date.parse(`${filters.updatedBefore}T00:00:00Z`) + 86400000 : null
   return stories.filter(s => {
@@ -133,6 +135,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (!filters.personalRating?.length || (s.personalRatings?.length ? s.personalRatings : [s.personal_rating ?? null]).some(rating => filters.personalRating.includes(rating === null ? 'unrated' : String(rating)))) &&
       relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
       characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&
+      personalTags.every(term => s.personalTags.some(tag => normalize(tag).includes(term))) &&
       tags.every(term => tagNames(s.metadata, 'freeform').some(t => normalize(t).includes(term))) &&
       (after === null || (updated !== null && updated >= after)) &&
       (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))

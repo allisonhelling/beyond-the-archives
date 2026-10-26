@@ -25,6 +25,7 @@ export function readingFilterTags(filters: ReadingFilters, { authorOnly = false,
     ...(filters.personalNotes ? ['Personal Notes Only'] : []),
     ...(filters.recs ? ['Recs Only'] : []),
     ...([['relationship', 'Relationships', 'relationships'], ['characters', 'Characters', 'characters'], ['tags', 'Tags', 'tags']] as const).flatMap(([key, label, category]) => filters[key] ? [{ label: `${label}: ${filters[key]}`, category }] : []),
+    ...(filters.personalTags ? [`Personal Tags: ${filters.personalTags}`] : []),
     ...(filters.within ? [`Search ${filters.scope === 'any' ? 'All Information' : filters.scope === 'summary' ? 'Summary' : 'Notes'}: ${filters.within}`] : []),
     ...([['updatedAfter', 'Updated From'], ['updatedBefore', 'Updated Through']] as const).flatMap(([key, label]) => filters[key] ? [`${label}: ${filterDateText(filters[key])}`] : []),
   ].map(value => typeof value === 'string' ? { label: value } : value)

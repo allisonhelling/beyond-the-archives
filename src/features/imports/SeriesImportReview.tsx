@@ -20,7 +20,8 @@ function SeriesScopeAction({ label, scope, disabled, expanded, onClick }: { labe
  return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className="text-button clickable-text" aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
 }
 
-export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds }: {
+export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works' }: {
+ bookmarkGroupingUnavailable?: boolean; relatedSeriesLabel?: string
  bookmarkedSeriesIds?: ReadonlySet<number>
  previewCache?: ReadonlyMap<number, SeriesPreview>; onPreview?(preview: SeriesPreview): void
  embedded?: boolean; singleSeries?: boolean; error?: string
@@ -32,7 +33,8 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
  text: string; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
  onConfirm(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[], selections: SeriesWorkSelection[]): void; onCancel(): void
 }) {
- const { refreshSeries } = useLibrary()
+ const { refreshSeries, stories = [] } = useLibrary()
+ const savedIds = new Set([...suppliedSavedIds, ...stories.flatMap(story => story.work.ao3_work_id ? [Number(story.work.ao3_work_id)] : [])])
  const [readingStatus, setReadingStatus] = useState<Status>(initialReadingStatus)
  const series = useMemo(() => {
   const entries = new Map(extractUrls(text).flatMap(url => {
@@ -145,6 +147,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
  }} />
  const content = <section ref={contentRef} className="story-form series-import-review" aria-label="Review Series Imports">
   {embedded && <h2>{title}</h2>}
+  {bookmarkGroupingUnavailable && <p className="field-help" role="status">This scan did not retain which series were explicitly bookmarked, so bookmark groups cannot be separated. Update the companion extension and start a new scan to enable grouping. Library membership does not determine whether a series was bookmarked.</p>}
   {error && <p role="alert" className="error-message">{error}</p>}
   {automatic && ready && !canConfirm && <p role="status">No new available series works to import. Already saved works are kept.</p>}
   {!singleSeries && <p>{series.size} series detected · {direct.size} directly linked works included.</p>}
@@ -178,16 +181,15 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
     return next
    })}>{shownSeries.has(id) ? 'Hide Series Works' : 'Show Series Works'}</button>
    const groupStart = bookmarkedSeriesIds && (index === 0 || bookmarkedSeriesIds.has(entries[index - 1][0]) !== bookmarkedSeriesIds.has(id))
-   return <Fragment key={id}>{groupStart && <h2>{bookmarkedSeriesIds.has(id) ? 'Bookmarked Series' : 'Series Containing Bookmarked Works'}</h2>}<section className="series-import-preview" aria-label={seriesLabel}>
+   return <Fragment key={id}>{groupStart && <h2>{bookmarkedSeriesIds.has(id) ? 'Bookmarked Series' : relatedSeriesLabel}</h2>}<section className="series-import-preview" aria-label={seriesLabel}>
     <div className="series-import-heading"><h3><a className="clickable-text" href={url} target="_blank" rel="noreferrer">{seriesLabel}</a></h3>{saveControl}</div>
     {preview?.description && <p className="story-summary">{preview.description}</p>}
     {review?.error && <p className="error-message" role="alert">{review.error}</p>}
     {!preview && (review?.error ? <button className="button secondary" disabled={disabled} onClick={() => void load(id, url)}>Retry Preview</button> : <p role="status">{loading === id ? 'Loading Series…' : 'Waiting to load series…'}</p>)}
     {preview && <>
      <p>{preview.works.length} visible works · {inLibrary} in library · {automatic ? available.length : available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>
-     {!automatic && <div className="form-actions series-preview-controls" role="group" aria-label="Series Selection Controls">{selectionControls}</div>}
+     <div className="form-actions series-preview-controls" role="group" aria-label="Series Selection Controls">{worksToggle}{selectionControls}</div>
      {!preview.works.length && <p>No available works were found in this listing.</p>}
-     {worksToggle}
      {shownSeries.has(id) && visibleWorks.map(work => {
       const saved = savedIds.has(work.workId), linked = direct.has(work.workId)
       const choiceDisabled = automatic || disabled || saved || linked
@@ -199,7 +201,7 @@ export function SeriesImportReview({ text, savedIds, busy, onConfirm, onCancel, 
       </div>
      })}
     </>}
-    <div className="form-actions series-preview-controls" role="group" aria-label="Series Footer Controls">{saveControl}{worksToggle}{selectionControls}</div>
+    {shownSeries.has(id) && <div className="form-actions series-preview-controls" role="group" aria-label="Series Footer Controls">{saveControl}{worksToggle}{selectionControls}</div>}
    </section></Fragment>
   })}
   {pagination}

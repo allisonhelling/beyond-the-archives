@@ -3,13 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SeriesImportOptions, SeriesImportSettings } from './SeriesImportOptions'
 import { saveSeriesImportBehavior, useSeriesImportBehavior } from './series-import-preferences'
 import { SeriesImportReview } from './SeriesImportReview'
-const mocks = vi.hoisted(() => ({ preview: vi.fn(), remember: vi.fn() }))
+const mocks = vi.hoisted(() => ({ preview: vi.fn(), remember: vi.fn(), stories: [] as { work: { ao3_work_id: number } }[] }))
 vi.mock('../library/series/series-repository', () => ({ rememberSeries: mocks.remember }))
 vi.mock('./repository', () => ({ previewSeries: mocks.preview }))
-vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn(), stories: mocks.stories }) }))
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) })
+ mocks.stories = []
  vi.clearAllMocks()
  mocks.preview.mockImplementation(async (url: string) => ({ seriesId: Number(url.split('/').at(-1)), title: 'Series', works: [1, 2].map(workId => ({ workId, url: `https://archiveofourown.org/works/${workId}`, title: `Work ${workId}`, authors: [], tags: [], summary: '', wordCount: null, chapters: '1/1', complete: true })) }))
 })
@@ -88,7 +89,7 @@ it('opens a popup, loads every series, and provides bulk controls without import
  const firstSeries = within(screen.getByRole('region', { name: 'Series • Series 7' }))
  const top = within(firstSeries.getByRole('group', { name: 'Series Selection Controls' }))
  const footer = within(firstSeries.getByRole('group', { name: 'Series Footer Controls' }))
- for (const button of top.getAllByRole('button')) expect(button).toHaveAccessibleDescription('Applies to Series')
+ for (const button of top.getAllByRole('button').filter(button => button.textContent !== 'Hide Series Works')) expect(button).toHaveAccessibleDescription('Applies to Series')
  fireEvent.focus(top.getByRole('button', { name: 'Select All' }))
  expect(screen.getByRole('tooltip')).toHaveTextContent('Applies to Series')
  fireEvent.blur(top.getByRole('button', { name: 'Select All' }))
@@ -222,19 +223,23 @@ it('applies bulk selection and saving across hidden series pages and deduplicate
  // This deliberately renders 30 series and saves 35; allow for full-suite contention.
 }, 15000)
 
-it('mirrors save and works visibility controls in the footer', async () => {
+it('shows footer controls only while series works are shown', async () => {
  const preview = longPreview(7, 2)
  render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ expect(screen.queryByRole('group', { name: 'Series Footer Controls' })).not.toBeInTheDocument()
+ const top = within(screen.getByRole('group', { name: 'Series Selection Controls' }))
+ expect(top.getAllByRole('button').slice(0, 2).map(button => button.textContent)).toEqual(['Show Series Works', 'Select All'])
+ fireEvent.click(top.getByRole('button', { name: 'Show Series Works' }))
  const footer = within(screen.getByRole('group', { name: 'Series Footer Controls' }))
- expect(footer.getAllByRole('button').slice(0, 2).map(button => button.textContent)).toEqual(['Save', 'Show Series Works'])
+ expect(footer.getAllByRole('button').slice(0, 2).map(button => button.textContent)).toEqual(['Save', 'Hide Series Works'])
  expect(footer.getByRole('button', { name: 'Save' })).toHaveAccessibleDescription('Load and save full series details from AO3')
- fireEvent.click(footer.getByRole('button', { name: 'Show Series Works' }))
  expect(screen.getAllByRole('button', { name: 'Hide Series Works' })).toHaveLength(2)
  expect(footer.getByRole('button', { name: 'Hide Series Works' })).toHaveAttribute('aria-expanded', 'true')
  fireEvent.click(footer.getByRole('button', { name: 'Hide Series Works' }))
- expect(screen.getAllByRole('button', { name: 'Show Series Works' })).toHaveLength(2)
+ expect(screen.getAllByRole('button', { name: 'Show Series Works' })).toHaveLength(1)
+ expect(screen.queryByRole('group', { name: 'Series Footer Controls' })).not.toBeInTheDocument()
  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
- await act(async () => { fireEvent.click(footer.getByRole('button', { name: 'Save' })) })
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })) })
  expect(mocks.remember).toHaveBeenCalledWith(preview)
  for (const save of screen.getAllByRole('button', { name: 'Full Series Details Saved' })) expect(save).toBeDisabled()
 })
@@ -267,4 +272,19 @@ it('keeps bookmark group order and headings across whole-series pages', () => {
  expect(screen.getByRole('heading', { name: 'Series Containing Bookmarked Works' })).toBeVisible()
  expect(screen.getByRole('region', { name: 'Series 7 • Series 7' })).toBeVisible()
  expect(screen.queryByRole('region', { name: 'Series 8 • Series 8' })).not.toBeInTheDocument()
+})
+
+it('counts and marks catalog works already saved even when the import path supplies no saved IDs', () => {
+ mocks.stories = [{ work: { ao3_work_id: 1 } }]
+ const preview = longPreview(7, 2), confirm = vi.fn()
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={confirm} onCancel={vi.fn()} />)
+ expect(screen.getByText(/2 visible works · 1 in library · 0 selected/)).toBeVisible()
+ fireEvent.click(within(screen.getByRole('group', { name: 'Series Selection Controls' })).getByRole('button', { name: 'Show Series Works' }))
+ const saved = screen.getByRole('checkbox', { name: 'Part 1: Work 1' })
+ expect(saved).toBeChecked()
+ expect(saved).toBeDisabled()
+ fireEvent.click(within(screen.getByRole('group', { name: 'Series Selection Controls' })).getByRole('button', { name: 'Select All' }))
+ expect(screen.getByText(/2 visible works · 1 in library · 1 selected/)).toBeVisible()
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([2])
 })

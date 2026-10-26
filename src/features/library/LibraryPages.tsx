@@ -12,7 +12,8 @@ import { CustomCollectionNames } from './collections/CustomCollectionNames'
 import { DisplayInfo } from './display/DisplayInfo'
 import { formatDateTime } from '../../lib/dates'
 import { useStorySnapshot } from './useStorySnapshot'
-import { browsingReturnTo, collectionSortKey } from './browsing/browsing'
+import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
+import { readBrowsing, writeBrowsing, browsingReturnTo, collectionSortKey } from './browsing/browsing'
 import { CompletedImportSeriesNotice } from '../imports/ImportedSeriesNotice'
 import { PersonalNote } from './PersonalNote'
 import { SeriesCard } from './series/SeriesCollection'
@@ -22,14 +23,13 @@ import { EditConflictReview } from './EditConflictReview'
 import { editSnapshot, EditConflict, type EditValues } from './edit-merge'
 import { OneShotIndicator } from './OneShotIndicator'
 import { CollectionVisibilityDialog } from './collections/CollectionVisibility'
-import { Dropdown } from '../../components/Dropdown'
 import { readingStatusIcons, collectionOrderOptions, orderCollections, moveCollectionIds, type CollectionOrder, type CollectionAppearance } from './collections/collection-appearance'
 import { SeriesNames } from './series/SeriesNames'
 import { MetadataControls, MetadataRefreshButton } from '../imports/MetadataControls'
 import { useMetadataRefresh } from '../imports/useMetadataRefresh'
 import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowDownWideNarrow, ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, Info, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, Info, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
 import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, validateProgress, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
@@ -252,11 +252,6 @@ function LibraryContent() {
     return () => window.removeEventListener('keydown', removeSelected)
   }, [editingCollections, selectedCollectionIds.length, busy, collectionDeletion.busy, collectionDeletion.confirming, editingCollection, bulkCollections, addingToCollection, visibilityTarget])
 
-  function changeCollectionSort(order: CollectionOrder) {
-    setCollectionSort(previous => ({ ...previous, order }))
-    setEditingCollections(false); setViewHidden(false)
-    clearCollectionSelection()
-  }
   // Display sorts never change the saved manual positions.
   const displayedCollections = orderCollections(customCollections, [...stories, ...(seriesRecords ?? []).map(series => ({ collectionIds: series.collectionIds ?? [], updated_at: series.updated_at }))], collectionSort.order)
   function toggleCollectionEditing() {
@@ -380,9 +375,8 @@ function LibraryContent() {
     <div className="library-heading-actions">
       <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
       {actions}
-      <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact value={collectionSort.order} options={[...collectionOrderOptions]} onChange={value => changeCollectionSort(value as CollectionOrder)} disabled={busy || !customCollections.length} closeOnSelect />
     </div></div></div></div>
-    <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = new URLSearchParams(previous); next.set('shelf', key); next.set('page', '1'); return next })} />
+    <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = writeBrowsing(previous, readFilterDefaults(filterDefaultScope('library', key), readBrowsing(previous).filters), undefined); next.set('shelf', key); return next })} />
     {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.automatic_rules && <p className="field-help">Automatic collection · Matching works are included as your library changes.</p>}{collection.description && <p className="collection-summary">{collection.description}</p>}{collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}</div>}
     {(error || collectionDeletion.error) && <p role="alert" className="error-message">{error || collectionDeletion.error}</p>}
 </>} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={!editingCollections && collection && !collection.default_key && !collection.automatic_rules && <Tooltip description="Add Stories to Collection">{id => <button ref={addStoriesTrigger} type="button" className="button secondary button-small" aria-describedby={id} onClick={() => setAddingToCollection(collection)}>Add Story</button>}</Tooltip>} />

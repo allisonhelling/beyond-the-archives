@@ -707,6 +707,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 }
 .within-search-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: center; }
 .reading-filters > .form-actions { margin-top: 28px; }
+.filter-default-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-left: auto; justify-content: flex-end; }
 
 /* Chapter progress opens beneath its trigger, like the other menus. */
 .progress-editor { position: relative; min-width: 0; }
@@ -750,7 +751,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .reading-toolbar { padding: 12px 14px; gap: 12px; grid-template-columns: max-content max-content minmax(130px, 1.2fr) minmax(155px, 1fr) max-content max-content; }
 .reading-toolbar > .button { grid-column: auto; grid-row: auto; align-self: start; }
 .reading-toolbar > .button, .filter-grid > .button, .reading-toolbar .dropdown-compact .button, .reading-filters .dropdown-compact .button { min-height: 36px; height: 36px; padding: 7px 10px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); line-height: 20px; }
-.reading-toolbar[data-mode="reading"] { grid-template-columns: max-content minmax(130px, 1.2fr) minmax(155px, 1fr) max-content; }
+.reading-toolbar[data-mode="reading"] { grid-template-columns: max-content max-content minmax(130px, 1.2fr) minmax(155px, 1fr) max-content; }
 .reading-toolbar .dropdown-compact .dropdown-trigger, .reading-toolbar > .series-toggle { padding-inline: 6px; gap: 6px; }
 .reading-toolbar .suggestion-search > .unlabeled-filter { grid-template-columns: minmax(0, 1fr); }
 .dropdown-trigger > span, .fandom-trigger > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -770,8 +771,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 }
 @media (max-width: 650px) {
   .reading-toolbar { grid-template-columns: 36px minmax(0, 1fr) max-content; grid-template-areas: 'sort search search' 'group fandom fandom' '. series filters'; }
-  .reading-toolbar[data-mode="reading"] { grid-template-columns: 36px minmax(0, 1fr); grid-template-areas: 'group search' '. fandom' '. filters'; }
-  .reading-toolbar[data-mode="reading"] > .custom-dropdown:first-child { grid-area: group; }
+  .reading-toolbar[data-mode="reading"] { grid-template-columns: 36px minmax(0, 1fr); grid-template-areas: 'sort search' 'group fandom' '. filters'; }
   .reading-toolbar > .custom-dropdown:first-child { grid-area: sort; }
   .reading-toolbar > .custom-dropdown:nth-child(2) { grid-area: group; }
   .reading-toolbar > .suggestion-search { grid-area: search; }

@@ -1,0 +1,38 @@
+import { expect, test } from '@playwright/test'
+import { fixture, login } from './library-fixture'
+
+test('personal tag filters and collection/library defaults survive navigation and reload', async ({ page }) => {
+ const tables = await fixture(page)
+ for (const [index, status] of ['reading', 'waiting_for_updates'].entries()) {
+  tables.works.push({id:`work-${index}`,ao3_work_id:index+1,verified_chapters:{},published_chapters:3,is_complete:false})
+  tables.library_entries.push({id:`entry-${index}`,work_id:`work-${index}`,original_url:`https://archiveofourown.org/works/${index+1}`,reading_status:status,last_read_chapter:1,notes:'',is_favorite:true,created_at:'2026-10-20T00:00:00Z',metadata_overrides:{title:`Story ${index}`,authors:[],fandoms:[]}})
+ }
+ tables.personal_tags.push({id:'tag',name:'Comfort'})
+ tables.library_entry_tags.push({library_entry_id:'entry-0',personal_tag_id:'tag'})
+ await page.goto('/library'); await login(page)
+ await expect(page.locator('.library-heading-actions').getByRole('button',{name:'Sort',exact:true})).toHaveCount(0)
+ await page.getByRole('button',{name:'Filters',exact:true}).click()
+ const filters = page.getByRole('region',{name:'Library Filters',exact:true})
+ await filters.getByLabel('Personal Tags',{exact:true}).fill('Comfort')
+ await filters.getByLabel('Personal Tags',{exact:true}).press('Enter')
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ await filters.getByRole('button',{name:'Save as Collection Default',exact:true}).click()
+ await page.goto('/library')
+ await expect(page).toHaveURL(/personalTags=Comfort/)
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ await page.getByRole('button',{name:'Filters',exact:true}).click()
+ await filters.getByRole('button',{name:'Save as Library Default',exact:true}).click()
+ const confirmation = page.getByRole('dialog',{name:'Save as Library Default?'})
+ await expect(confirmation).toContainText('all collections and categories')
+ await confirmation.getByRole('button',{name:'Save as Library Default',exact:true}).click()
+ await expect(confirmation).toHaveCount(0)
+ await page.goto('/reading')
+ await expect(page).toHaveURL(/personalTags=Comfort/)
+ await expect(page.locator('.reading-toolbar').getByRole('button',{name:'Sort',exact:true})).toBeVisible()
+ await expect(page.locator('.library-heading-actions').getByRole('button',{name:'Sort',exact:true})).toHaveCount(0)
+ const viewAll = page.getByRole('button',{name:'View All',exact:true})
+ await expect(viewAll).toContainText('Non-caught up')
+ await expect(viewAll.locator('.tile-count')).toHaveText('1')
+ await page.reload()
+ await expect(page.locator('.story-card')).toHaveCount(1)
+})

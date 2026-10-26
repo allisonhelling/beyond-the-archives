@@ -39,6 +39,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await page.getByRole('button', {name:'Choose Works to Import'}).click()
  const dialog = page.getByRole('dialog', {name:'Review Series',exact:true})
  await expect(dialog.locator('.settings-card')).toHaveCount(0)
+ await expect(dialog.getByRole('group', { name: 'Series Footer Controls' })).toHaveCount(0)
  await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
  await expect(dialog.getByRole('checkbox', {name:'Part 1: Saved fic'})).toBeDisabled()
  await expect(dialog.getByRole('checkbox', {name:'Part 2: Unsaved sequel'})).not.toBeChecked()
@@ -51,6 +52,10 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await expect(dialog.locator('.series-import-preview').first()).toHaveCSS('border-top-width', '3px')
  const controls = dialog.getByRole('group', { name: 'Series Selection Controls' })
  await expect(controls.getByRole('button', { name: 'Select All', exact: true })).toHaveAccessibleDescription('Applies to Related series')
+ expect((await controls.getByRole('button').allTextContents()).slice(0, 2)).toEqual(['Hide Series Works', 'Select All'])
+ const workBounds = (await dialog.locator('.series-import-work').first().boundingBox())!
+ const previewBounds = (await dialog.locator('.series-import-preview').boundingBox())!
+ expect(Math.abs(workBounds.x - previewBounds.x)).toBeLessThan(1)
  const row = await controls.getByRole('button').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().y))
  expect(new Set(row).size).toBe(1)
  await expect(dialog.locator('.series-import-work .field-help').first()).toContainText('Author · Preview fandom · 200 words')

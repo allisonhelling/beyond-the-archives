@@ -42,6 +42,8 @@ describe('reading filters and sections', () => {
   it('separates active reading, saved for later, publication and waiting states', () => {
     expect(tracked([alpha, beta, later, story('DNF', { reading_status: 'did_not_finish' })])).toHaveLength(3)
     expect(inReadingSection(later, 'view_all')).toBe(false)
+    expect(inReadingSection(beta, 'view_all')).toBe(false)
+    expect(inReadingSection(alpha, 'view_all')).toBe(true)
     expect(inReadingSection(later, 'to_read')).toBe(true)
     expect(inReadingSection(alpha, 'complete')).toBe(true)
     expect(inReadingSection(beta, 'waiting')).toBe(true)
@@ -206,4 +208,11 @@ it('keeps paused works out of every active reading section even with verified un
  const entry = story('Paused with updates', { reading_status: 'paused_reading', last_update_notification_at: '2026-10-15T23:00:00Z', metadata: { ...blankMetadata, publication_status: 'complete', published_chapters: 5 }, work: { verified_chapters: { 1: '101' } } as unknown as Story['work'] })
  for (const section of ['complete', 'in_progress', 'new', 'view_all', 'waiting', 're_reading']) expect(inReadingSection(entry, section)).toBe(false)
  expect(inReadingSection(entry, 'paused_reading')).toBe(true)
+})
+
+it('searches personal tags separately from AO3 tags and combines selected terms', () => {
+ const comfort = story('Comfort', { personalTags: ['Café favorites', 'Revisit'], metadata: { ...blankMetadata, title: 'Comfort', additional_tags: ['Fluff'] } })
+ const ao3Only = story('AO3', { metadata: { ...blankMetadata, title: 'AO3', additional_tags: ['Café favorites'] } })
+ expect(filterReading([comfort, ao3Only], { ...defaultReadingFilters, personalTags: 'CAFE, revisit' })).toEqual([comfort])
+ expect(filterReading([comfort], { ...defaultReadingFilters, personalTags: 'missing' })).toEqual([])
 })

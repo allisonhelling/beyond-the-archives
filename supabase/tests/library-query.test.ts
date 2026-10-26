@@ -243,3 +243,28 @@ it('matches first-series-work filters in the browser, paginated queries and auto
  const collection = (await db.query<{ id: string }>('insert into public.collections(name,automatic_rules) values($1,$2) returning id', ['Series starts', JSON.stringify({ filters, terms: [] })])).rows[0]
  expect((await query({}, 1, 100, collection.id)).stories.map(story => story.id)).toEqual(expected)
 })
+
+it('matches personal tags in page queries, suggestions and automatic collections', async () => {
+ const entry = (await documents())[0]
+ const tag = (await db.query<{id:string}>("insert into public.personal_tags(name) values ('Café revisit') returning id")).rows[0].id
+ await db.query('insert into public.library_entry_tags(library_entry_id,personal_tag_id) values ($1,$2)', [entry.id, tag])
+ const filters = { ...defaultReadingFilters, personalTags: 'CAFE, revisit' }
+ const result = await query(filters, 1, 100)
+ expect(result.stories.map(story => story.id)).toEqual([entry.id])
+ expect(result.suggestions?.personalTags).toContain('Café revisit')
+ expect((await query({personalTags:'not a saved personal tag'})).total).toBe(0)
+ const collection = (await db.query<{id:string}>('insert into public.collections(name,automatic_rules) values ($1,$2) returning id', ['Personal tag matches', JSON.stringify({filters,terms:[]})])).rows[0].id
+ expect((await query({}, 1, 100, collection)).stories.map(story => story.id)).toEqual([entry.id])
+ await db.query('delete from public.collections where id=$1', [collection])
+ await db.query('delete from public.personal_tags where id=$1', [tag])
+})
+
+it('excludes waiting works from reading View All while preserving the library Currently Reading shelf', async () => {
+ for (const status of ['reading', 're_reading', 'waiting_for_updates', 'to_read']) {
+  const story = {...(await documents())[0], reading_status:status}
+  const result = (await db.query<{reading:boolean; library:boolean; waiting:boolean}>("select public.library_in_shelf($1,'view_all','reading') reading, public.library_in_shelf($1,'currently_reading','library') library, public.library_in_shelf($1,'waiting','reading') waiting", [JSON.stringify(story)])).rows[0]
+  expect(result.reading).toBe(['reading', 're_reading'].includes(status))
+  expect(result.library).toBe(['reading', 're_reading', 'waiting_for_updates'].includes(status))
+  expect(result.waiting).toBe(status === 'waiting_for_updates')
+ }
+})

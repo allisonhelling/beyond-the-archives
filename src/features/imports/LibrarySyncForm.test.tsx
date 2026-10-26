@@ -698,9 +698,12 @@ it('reviews only saved series works in a later batch and leaves pending series u
  expect(mocks.preview).not.toHaveBeenCalled()
 })
 
-it('passes bookmark provenance from saved scans to the shared series review', async () => {
+it.each([
+ { collection: undefined, relatedHeading: 'Series Containing Bookmarked Works' },
+ { collection: { name: 'Example', description: '' }, relatedHeading: 'Other Series From Collection Works and Bookmarks' },
+])('passes bookmark provenance from saved scans to the shared series review: $relatedHeading', async ({ collection, relatedHeading }) => {
  const urls = [99, 100].map(id => `https://archiveofourown.org/series/${id}`)
- const state = { ...ready, seenSeries: urls, bookmarkedSeries: [urls[1]], seriesReviewVersion: 1 }
+ const state = { ...ready, seenSeries: urls, bookmarkedSeries: [urls[1]], seriesReviewVersion: 1, collection }
  mocks.command.mockImplementation(async (action, options) => {
   if (action === 'status') return { state }
   if (action === 'page') {
@@ -712,6 +715,19 @@ it('passes bookmark provenance from saved scans to the shared series review', as
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
  expect(await screen.findByRole('heading', { name: 'Bookmarked Series' })).toBeVisible()
- expect(screen.getByRole('heading', { name: 'Series Containing Bookmarked Works' })).toBeVisible()
+ expect(screen.getByRole('heading', { name: relatedHeading })).toBeVisible()
  expect(screen.getAllByRole('region', { name: /• Series/ }).map(region => region.getAttribute('aria-label'))).toEqual(['Series 100 • Series 100', 'Series 99 • Series 99'])
+})
+
+it('explains why older bookmark scans cannot separate series groups', async () => {
+ const seriesUrl = 'https://archiveofourown.org/series/99'
+ const state = { ...ready, url: 'https://archiveofourown.org/users/alice/bookmarks', seenSeries: [seriesUrl], seriesReviewVersion: 1 }
+ mocks.command.mockImplementation(async action => action === 'page'
+  ? { seriesUrl, seriesPreview: { seriesId: 99, title: 'Series 99', works: [] }, rows: [] }
+  : { state })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ expect(await screen.findByText(/This scan did not retain which series were explicitly bookmarked/)).toBeVisible()
+ expect(screen.queryByRole('heading', { name: 'Bookmarked Series' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('heading', { name: 'Series Containing Bookmarked Works' })).not.toBeInTheDocument()
 })

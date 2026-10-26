@@ -1,5 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, FileText, Heart, Info, Layers3, SlidersHorizontal, Star } from 'lucide-react'
+import { ConfirmationDialog } from '../../components/ConfirmationDialog'
+import { saveFilterDefaults } from './browsing/filter-defaults'
 import { MetadataTags } from './MetadataTags'
 import { Dropdown } from '../../components/Dropdown'
 import { useDismissible } from '../../components/useDismissible'
@@ -34,18 +36,25 @@ function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: st
   const label = authorOnly ? 'Search Author' : 'Search Title or Author'
   return <SearchSuggestions label={label} placeholder={label} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
-export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false }: {
-  stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode
-  suggestions?: { relationships: string[]; characters: string[]; tags: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
+export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, defaultScope }: {
+  defaultScope?: string; stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode
+  suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
 }) {
+  const [confirmLibraryDefault, setConfirmLibraryDefault] = useState(false)
+  const [defaultMessage, setDefaultMessage] = useState('')
+  function saveDefault(library = false) {
+    saveFilterDefaults(filters, library ? undefined : defaultScope ?? `${mode}:all`)
+    setDefaultMessage(library ? 'Library default saved for all categories on this browser.' : 'Collection default saved on this browser.')
+  }
   const [expanded, setExpanded] = useState(alwaysExpanded)
   const filterId = useId(), helpId = `${filterId}-help`
-  const { localRelationships, localCharacters, localTags, localFandoms } = useMemo(() => {
+  const { localRelationships, localCharacters, localTags, localPersonalTags, localFandoms } = useMemo(() => {
     const fandomCounts = new Map<string, number>()
     for (const story of stories) for (const name of new Set(story.metadata.fandoms)) fandomCounts.set(name, (fandomCounts.get(name) ?? 0) + 1)
     return {
       localRelationships: stories.flatMap(story => tagNames(story.metadata, 'relationship')),
       localCharacters: stories.flatMap(story => tagNames(story.metadata, 'character')),
+      localPersonalTags: stories.flatMap(story => story.personalTags),
       localTags: stories.flatMap(story => tagNames(story.metadata, 'freeform')),
       localFandoms: [...fandomCounts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name)),
     }
@@ -78,6 +87,8 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <SearchSuggestions label="Characters" tagCategory="characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Tags" tagCategory="tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
 
+      <SearchSuggestions label="Personal Tags" placeholder="Search personal tags" value={filters.personalTags ?? ''} onChange={value => change('personalTags', value)} groups={[{ label: 'Personal Tags', values: suggestions?.personalTags ?? localPersonalTags }]} multiple chips keepOpen hideHeadings />
+
       <div className="filter-choice-row">
       <Dropdown fitContent label="Content Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
       <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
@@ -93,7 +104,8 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
 
       <details className="search-help"><summary aria-label="Search Syntax and Modes"><Info size={18} /></summary><div id={helpId}><p><strong>Any Field</strong> combines saved titles, authors, fandoms, AO3 tags, personal tags, summaries, notes, ratings, statuses, and URLs. <strong>Summary</strong> searches only the fic’s summary. <strong>Notes</strong> searches only your private notes.</p><ul><li><code>book*</code> — any characters: book, books, booking.</li><li><code>Harry Potter</code> — AND: both terms must occur.</li><li><code>Harry || Potter</code> — OR: either or both terms.</li><li><code>"Harry Lockhart"</code> — words in exact sequence.</li><li><code>Harry -Lockhart</code> — include Harry, exclude Lockhart.</li></ul><p>AND and NOT apply before OR. Use a backslash to escape literal symbols, such as <code>\*</code>, <code>\-</code>, <code>\"</code>, <code>\|</code>, or <code>\\</code>. Matching ignores case and accents. Searches stay within the selected {mode === 'library' ? 'shelf' : 'tile'} and filters.</p></div></details></div>
       <Dropdown label="Search In" value={filters.scope} onChange={value => change('scope', value as ReadingFilters['scope'])} options={[{ value: 'any', label: 'Any Field' }, { value: 'summary', label: 'Summary' }, { value: 'notes', label: 'Notes' }]} />
-    </div></div><div className="form-actions"><button type="button" className="button secondary" onClick={clearFilters}>Clear All Filters</button>{!alwaysExpanded && <button type="button" className="button secondary" onClick={() => setExpanded(false)}>Hide</button>}</div></section>}
+    </div></div><div className="form-actions"><button type="button" className="button secondary" onClick={clearFilters}>Clear All Filters</button>{!alwaysExpanded && <button type="button" className="button secondary" onClick={() => setExpanded(false)}>Hide</button>}<div className="filter-default-actions"><button type="button" className="button secondary" disabled={automaticCollection && !defaultScope} title={automaticCollection && !defaultScope ? 'Save the Collection First' : undefined} onClick={() => { try { saveDefault() } catch { setDefaultMessage('Could not save defaults. Check browser storage and retry.') } }}>Save as Collection Default</button><button type="button" className="button secondary" onClick={() => setConfirmLibraryDefault(true)}>Save as Library Default</button></div></div>{defaultMessage && <p role="status">{defaultMessage}</p>}</section>}
+    {confirmLibraryDefault && <ConfirmationDialog title="Save as Library Default?" confirmLabel="Save as Library Default" pendingLabel="Saving…" onClose={() => setConfirmLibraryDefault(false)} onConfirm={async () => saveDefault(true)}><p>The current filters will become the default for all collections and categories, replacing any collection defaults saved on this browser.</p></ConfirmationDialog>}
     {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active Filters"><div className="filter-chips">{activeFilters.map(({ label, category }) => <MetadataTags key={label} values={[label]} category={category ?? null} />)}</div><button type="button" className="text-button" onClick={clearFilters}>Clear All Filters</button></div>}
   </>
 }

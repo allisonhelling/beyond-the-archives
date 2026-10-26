@@ -317,3 +317,16 @@ it('uses the same editable fields and grouped lines for other metadata', () => {
  expect(container.querySelector('[data-display-group="workOther"][data-display-field="kudos"]')).toBeVisible()
  expect(container.querySelector('[data-display-line="line:stats"]')).toBeVisible()
 })
+
+it('saves collection filters directly and requires confirmation for all-category defaults', () => {
+ render(<ReadingFilterControls stories={[]} filters={{...defaultReadingFilters, personalTags:'Comfort'}} defaultScope="library:favorites" onChange={vi.fn()} alwaysExpanded />)
+ fireEvent.click(screen.getByRole('button', {name:'Save as Collection Default'}))
+ expect(screen.getByRole('status')).toHaveTextContent('Collection default saved')
+ expect(localStorage.getItem('between-chapters:filter-defaults:v1')).toContain('library:favorites')
+ fireEvent.click(screen.getByRole('button', {name:'Save as Library Default'}))
+ const dialog = within(screen.getByRole('dialog', {name:'Save as Library Default?'}))
+ expect(dialog.getByText(/default for all collections and categories/)).toBeVisible()
+ expect(localStorage.getItem('between-chapters:filter-defaults:v1')).toContain('library:favorites')
+ fireEvent.click(dialog.getByRole('button', {name:'Cancel'}))
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})

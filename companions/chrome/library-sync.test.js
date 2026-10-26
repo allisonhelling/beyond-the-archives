@@ -669,3 +669,21 @@ it.each([
  const requests = chrome.tabs.update.mock.calls.map(([, options]) => options.url).filter(url => url.endsWith('/navigate'))
  expect(requests).toEqual(checks ? [`https://archiveofourown.org/works/${checkedWork}/navigate`] : [])
 })
+
+it('retains explicit series bookmarks in mixed collection scans across restarts', async () => {
+ const related = 'https://archiveofourown.org/series/99', explicit = 'https://archiveofourown.org/series/100'
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/collections/example', mode: 'full' })
+ expect(local.librarySync.bookmarkedSeries).toEqual([])
+ chrome.scripting.executeScript.mockImplementation(async () => {
+  const { kind, requestUrl } = local.librarySync
+  return [{ result: { url: requestUrl, rows: [], skipped: 0, hasNext: false,
+   ...(kind === 'collection_profile' ? { collection: { name: 'Example', description: '' } } : {}),
+   ...(kind === 'works' ? { seriesUrls: [related] } : {}),
+   ...(kind === 'bookmarks' ? { seriesUrls: [related, explicit], bookmarkedSeriesUrls: [explicit] } : {}),
+  } }]
+ })
+ await collect()
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ for (let index = 0; index < 8; index++) await collect()
+ expect((await sync.command({ action: 'status' })).state).toMatchObject({ status: 'ready', seenSeries: [related, explicit], bookmarkedSeries: [explicit] })
+})
