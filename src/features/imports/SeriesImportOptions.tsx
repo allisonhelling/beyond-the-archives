@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { saveSeriesImportBehavior, useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { seriesImportSettingsSection } from './settings-sections'
 
 const descriptions = { choose: 'Choose Works from Each Series', all: 'Automatically Save All Available Works in Each Series' }
-export function SeriesImportOptions({ defaultBehavior, override, onChange, disabled = false }: {
- defaultBehavior: SeriesImportBehavior; override: boolean; onChange(value: boolean): void; disabled?: boolean
+export function SeriesImportOptions({ defaultBehavior, override, onChange, disabled = false, children }: {
+ defaultBehavior: SeriesImportBehavior; override: boolean; onChange(value: boolean): void; disabled?: boolean; children?: ReactNode
 }) {
- return <div className="form-control series-import-options"><p className="field-help">Current series default: {descriptions[defaultBehavior]}.</p><label className="check-label"><input type="checkbox" checked={override} disabled={disabled} onChange={event => onChange(event.target.checked)} />{defaultBehavior === 'all' ? 'Choose Series Works for This Import Only' : 'Automatically Save All Series Works for This Import Only'}</label></div>
+ return <div className="form-control series-import-options"><p className="field-help">Current series default: {descriptions[defaultBehavior]}.</p><div className="form-controls-row"><label className="check-label"><input type="checkbox" checked={override} disabled={disabled} onChange={event => onChange(event.target.checked)} />{defaultBehavior === 'all' ? 'Choose Series Works for This Import Only' : 'Automatically Save All Series Works for This Import Only'}</label>{children}</div></div>
 }
 export function SeriesImportSettings() {
  const { defaultBehavior } = useSeriesImportBehavior()

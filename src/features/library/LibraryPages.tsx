@@ -393,9 +393,9 @@ function LibraryContent() {
 }
 export function AddStoryPage() {
   const [params, setParams] = useSearchParams()
-  const importing = params.get('import') !== 'manual'
-  return <><div className="page-heading"><div><h1>Add Story</h1><p>Import metadata from an AO3 link or enter information by hand.</p></div></div><LibraryBoundary>
-    <div className="library-toolbar"><button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', importing ? 'manual' : 'link'); return next })}>{importing ? 'Enter Manually' : 'Import from Link'}</button></div>
+  const importing = !['manual', 'epub'].includes(params.get('import') ?? '')
+  return <><div className="page-heading"><div><h1>Add Story</h1><p>Import metadata from an AO3 link or EPUB, or enter information by hand.</p></div></div><LibraryBoundary>
+    <div className="library-toolbar"><button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', importing ? 'manual' : 'link'); return next })}>{importing ? 'Enter Manually' : 'Import from Link'}</button>{importing && <button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', 'epub'); return next })}>Import from EPUB</button>}</div>
     {importing ? <ImportLinkForm /> : <StoryForm />}
   </LibraryBoundary></>
 }

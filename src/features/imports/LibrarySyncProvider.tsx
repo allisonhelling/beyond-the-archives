@@ -26,8 +26,9 @@ export function LibrarySyncProvider({ children }: { children: ReactNode }) {
   alive.current = true
   const poll = () => { if (!sampleMode || sampleConnected.current) void refresh().catch(() => {}) }
   poll(); const timer = setInterval(poll, 5000)
-  const requests = version
-  return () => { alive.current = false; requests.current++; clearInterval(timer) }
+  // A StrictMode effect replay can reuse the pending read. Real unmounts are
+  // guarded by alive; explicit scan actions still invalidate reads via version.
+  return () => { alive.current = false; clearInterval(timer) }
  }, [refresh])
  const safetyLimit = isLibrarySyncSafetyLimit(state)
  const alertKey = state?.status === 'paused' && state.error ? state.attentionId ?? `${state.id}:${state.pages}:${state.error}` : ''

@@ -9,7 +9,7 @@ import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing/b
 import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
 import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
@@ -70,8 +70,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const urlSize = temporarySize === undefined ? pageSize(params.get('size')) : undefined
   if (draft && draft.source !== currentUrl) setDraft(null)
   function setFilters(update: (previous: ReadingFilters) => ReadingFilters) { const next = update(filters); setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize)) }
-  // Keep filters and explicit links reproducible; local page-size edits stay temporary.
-  useEffect(() => {
+  // Normalize before user navigation can race a deferred effect from this route.
+  // Local page-size edits stay temporary.
+  useLayoutEffect(() => {
     if (draft) return
     const next = writeBrowsing(params, filters, urlSize, page)
     if (!next.has('shelf')) next.set('shelf', mode === 'reading' ? 'view_all' : 'all')
@@ -98,7 +99,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const refreshStories = shown.flatMap(story => seriesById.get(story.id)?.savedStories ?? [story])
   const metadataRefresh = usePageMetadataRefresh(refreshStories)
   const refreshButton = <MetadataRefreshButton {...metadataRefresh} unavailable={metadataRefresh.unavailable || remote.loading || Boolean(error || remote.error)} onRefresh={() => void metadataRefresh.refresh()} variant="icon" label="Mass Refresh All Stories on Page" description="Mass Refresh All Stories on Page" />
-  useEffect(() => {
+  useLayoutEffect(() => {
     if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
   }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
   function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }

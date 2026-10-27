@@ -3,11 +3,12 @@ import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), reports: vi.fn(), sample: false }))
+const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), reports: vi.fn(), reading: vi.fn(), sample: false }))
 vi.mock('../../lib/sample-mode', () => ({ get sampleMode() { return mocks.sample } }))
 vi.mock('./extension', () => ({ librarySyncCommand: mocks.command, connectExtension: mocks.connect }))
 vi.mock('../library/repository', () => ({ saveCollection: mocks.collection }))
 vi.mock('./library-sync-reports', () => ({ librarySyncReports: mocks.reports }))
+vi.mock('./import-reading-review', async importOriginal => ({ ...await importOriginal<typeof import('./import-reading-review')>(), reviewImportReading: mocks.reading }))
 vi.mock('./repository', () => ({ submitLibrarySync: mocks.submit, previewSeries: mocks.preview }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => ({ session: { user: { id: 'test' } } }) }))
@@ -16,7 +17,7 @@ const ready = { reviewExisting: true, id: 'scan', status: 'ready', pages: 2, cou
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
- vi.clearAllMocks(); mocks.reports.mockResolvedValue({ reports: [], total: 0 }); mocks.sample = false; mocks.connect.mockResolvedValue(true)
+ vi.clearAllMocks(); mocks.reading.mockResolvedValue({reviews:[],total:0,changed:0,skipped:0}); mocks.reports.mockResolvedValue({ reports: [], total: 0 }); mocks.sample = false; mocks.connect.mockResolvedValue(true)
  mocks.command.mockImplementation(async (action, options) => {
   if (action === 'status') return { state: ready }
   if (action === 'page') return { rows: [{ title: `Work ${options.page}`, link: `https://archiveofourown.org/works/${options.page}`, source_list: 'marked_for_later' }] }
@@ -35,6 +36,83 @@ it('imports saved listing pages through the shared row conversion and acknowledg
  expect(mocks.reports).toHaveBeenCalledWith(1, ready)
  expect(mocks.reports.mock.invocationCallOrder[0]).toBeLessThan(mocks.command.mock.invocationCallOrder.at(-1)!)
  expect(screen.getByText(/Imported 2 works/)).toBeVisible()
+})
+it('places reading corrections immediately after Discard Scan in the same action row', async () => {
+ mocks.reading.mockResolvedValue({reviews:[],total:1,changed:0,skipped:0})
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async()=>{})} /></LibrarySyncProvider></MemoryRouter>)
+ const discard=await screen.findByRole('button',{name:'Discard Scan'})
+ const review=await screen.findByRole('button',{name:'Review Reading Corrections'})
+ expect(discard.nextElementSibling).toBe(review)
+ expect(discard.parentElement).toHaveClass('form-actions','form-actions-fit')
+})
+it.each(['running', 'paused', 'ready'])('ends a %s scan and imports its collected pages through the normal finish flow', async status => {
+ let state = { ...ready, status, hasMore: true, endedEarly: false, url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full' }
+ mocks.command.mockImplementation(async (action, options) => {
+  if (action === 'end') state = { ...state, status: 'ready', hasMore: false, endedEarly: true }
+  if (action === 'page') return { rows: [{ title: `Work ${options.page}`, link: `https://archiveofourown.org/works/${options.page}`, source_list: 'marked_for_later' }] }
+  if (action === 'finish') return { state: { ...state, status: 'complete' } }
+  return { state }
+ })
+ const onImported = vi.fn(async () => {})
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={onImported} /></LibrarySyncProvider></MemoryRouter>)
+ const end = await screen.findByRole('button', { name: 'End Scan' })
+ expect(end.nextElementSibling).toBe(screen.getByRole('button', { name: 'Discard Scan' }))
+ fireEvent.click(end)
+ await waitFor(() => expect(onImported).toHaveBeenCalledWith('batch'))
+ expect(mocks.command).toHaveBeenCalledWith('end', { scanId: 'scan' })
+ expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' })
+ expect(mocks.command.mock.calls.some(([action]) => ['finish-batch', 'discard'].includes(action))).toBe(false)
+ expect(mocks.reports).toHaveBeenCalledWith(1, expect.objectContaining({ endedEarly: true, hasMore: false }))
+})
+it('opens series selection after ending and imports only selected collected series works', async () => {
+ const url = 'https://archiveofourown.org/series/99'
+ let state = { ...ready, status: 'running', pages: 1, url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', seriesReviewVersion: 1, seriesBehavior: 'choose', seenSeries: [url], endedEarly: false }
+ const preview = { seriesId: 99, normalizedUrl: url, title: 'Collected Series', description: '', works: [2, 3].map(id => ({ workId: id, url: `https://archiveofourown.org/works/${id}`, title: `Work ${id}`, position: id, authors: [], summary: '', tags: [], wordCount: null, chapters: '1/1', complete: true })) }
+ mocks.command.mockImplementation(async action => {
+  if (action === 'end') state = { ...state, status: 'ready', endedEarly: true }
+  if (action === 'page') return { seriesUrl: url, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) }
+  if (action === 'finish') return { state: { ...state, status: 'complete' } }
+  return { state }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'End Scan' }))
+ const dialog = within(await screen.findByRole('dialog', { name: 'Choose Works From Series' }))
+ expect(mocks.submit).not.toHaveBeenCalled()
+ fireEvent.click(dialog.getByRole('button', { name: 'Show Series Works' }))
+ fireEvent.click(dialog.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ fireEvent.click(dialog.getByRole('button', { name: 'Import Selected Works' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
+ expect(mocks.submit.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([2])
+})
+it('finishes an empty ended collection scan without inventing missing collection details', async () => {
+ const state = { ...ready, status: 'ready', pages: 0, count: 0, endedEarly: true, importToCollection: true, url: 'https://archiveofourown.org/collections/example' }
+ mocks.command.mockResolvedValue({ state })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
+ expect(mocks.collection).not.toHaveBeenCalled()
+ expect(mocks.submit).not.toHaveBeenCalled()
+})
+it('imports collected direct works without fetching series pages that were not scanned before ending', async () => {
+ const state = { ...ready, endedEarly: true, pages: 1, seenSeries: ['https://archiveofourown.org/series/99'], seriesReviewVersion: 1, seriesBehavior: 'choose' }
+ mocks.command.mockImplementation(async action => action === 'page' ? { rows: [{ title: 'Collected Work', link: 'https://archiveofourown.org/works/1', source_list: 'marked_for_later' }] } : { state })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
+ expect(mocks.preview).not.toHaveBeenCalled()
+ expect(screen.queryByRole('dialog', { name: 'Choose Works From Series' })).not.toBeInTheDocument()
+ expect(mocks.submit.mock.calls[0][0][0]).toMatchObject({ workId: 1 })
+})
+it('keeps a running scan available if the End Scan command fails', async () => {
+ const state = { ...ready, status: 'running' }
+ mocks.command.mockImplementation(async action => {
+  if (action === 'end') throw new Error('Reconnect the extension')
+  return { state }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'End Scan' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('Reconnect the extension')
+ expect(screen.getByRole('button', { name: 'End Scan' })).toBeEnabled()
+ expect(screen.getByRole('button', { name: 'Discard Scan' })).toBeEnabled()
+ expect(mocks.submit).not.toHaveBeenCalled()
 })
 it('keeps scan checkpoints available when the report cannot be saved', async () => {
  mocks.reports.mockRejectedValueOnce(new Error('Report save failed'))

@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { CsvImportForm } from './CsvImportForm'
 const mocks = vi.hoisted(() => ({ preview: vi.fn(), submit: vi.fn(), series: vi.fn(), imported: vi.fn() }))
+vi.mock('./import-reading-review', async importOriginal => ({ ...await importOriginal<typeof import('./import-reading-review')>(), reviewImportReading: async () => ({reviews:[],total:0,changed:0,skipped:0}) }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
 vi.mock('./repository', () => ({ previewCsvImport: mocks.preview, submitCsvImport: mocks.submit, previewSeries: mocks.series }))
 const csv = 'source_list,title,link,date,chapters,bookmark date,bookmark notes,bookmark tags\nbookmarks,Bookmark,https://archiveofourown.org/works/1,01 Oct 2026,2/2,20 Oct 2026,My summary,My tag\nmarked_for_later,Later,https://archiveofourown.org/works/2,01 Oct 2026,1/1,,,'

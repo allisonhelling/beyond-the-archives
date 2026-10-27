@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { StrictMode } from 'react'
 const mocks = vi.hoisted(() => ({ command: vi.fn() }))
 vi.mock('./extension', () => ({ librarySyncCommand: mocks.command }))
 vi.mock('../../lib/sample-mode', () => ({ sampleMode: false }))
@@ -9,6 +10,11 @@ const paused = { id: 'scan', pages: 3, status: 'paused', error: 'AO3 is limiting
 function Page() { const { refresh } = useLibrarySyncStatus(); return <><p>Library page</p><button onClick={() => void refresh()}>Refresh status</button></> }
 function show() { render(<MemoryRouter initialEntries={['/library']}><LibrarySyncProvider><Page /></LibrarySyncProvider></MemoryRouter>) }
 beforeEach(() => { vi.clearAllMocks(); mocks.command.mockResolvedValue({ state: paused }) })
+it('loads the initial scan after StrictMode effect replay without waiting for another poll', async () => {
+ render(<StrictMode><MemoryRouter><LibrarySyncProvider><Page /></LibrarySyncProvider></MemoryRouter></StrictMode>)
+ expect(await screen.findByRole('dialog', { name: 'AO3 Request Restriction' })).toBeVisible()
+ expect(mocks.command).toHaveBeenCalledTimes(1)
+})
 it('alerts on other app pages and opens the specific scan tab through the extension', async () => {
  show()
  expect(await screen.findByRole('dialog', { name: 'AO3 Request Restriction' })).toBeVisible()

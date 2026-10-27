@@ -22,7 +22,15 @@ Library, Currently Reading, series searches, automatic collections and collectio
 
 Apply `20261026000700_canonical_tag_suggestions.sql`, deploy the `tag-resolution` Edge Function (`npx supabase functions deploy tag-resolution`), then deploy the website. Local builds do not publish these changes. Until the resolver is available, unverified names stay in the second group and saved-tag searches continue working.
 
+## EPUB Metadata Recovery
+
+Open **Add Story → Import from EPUB**, choose a downloaded `.epub`, and review the populated metadata before saving. The same **Recover Metadata from EPUB** picker is available when manually adding a story or editing an existing work's metadata. Choose **Deleted** under **AO3 Publication Status** for a removed work. If the original AO3 URL is absent from the file, enter it before saving a new work; the URL does not need to be reachable. Existing work identities cannot be changed by an EPUB import.
+
+Recovery reads standard EPUB metadata and AO3 download front matter, including title, authors, summary, fandoms, categorized tags, series names, rating, and available chapter/word counts. Missing fields keep the editor's current values. The EPUB stays on the device; only reviewed metadata is saved as private overrides through the existing editor and conflict-review flow. Chapter text and author notes are not stored. Existing reading history, ratings, favorites, personal tags, notes, and collections are preserved. Files are limited to 50 MB, with bounded metadata decompression and corruption checks. Encrypted metadata is unsupported. No database migration or background worker is required.
+
 ## Repeat Import Repairs
+
+**End Scan**, beside **Discard Scan**, stops new scan requests after the active checkpoint operation finishes, preserves collected pages, and opens the normal series selection/import flow. It works for running or paused scans and batches waiting to continue. Only collected series works are offered; pending pages and chapter-date checks are left unscanned. Early-ended scans retain their partial-scan report and never advance the Quick Sync baseline. Saved checkpoints remain available if review is cancelled or import fails. Rebuild and reload Chrome/Edge Companion v0.7.3 to use this control.
 
 Repeat CSV and library-sync imports refresh factual AO3 metadata through the existing automatic metadata layer. Manual metadata corrections remain authoritative. Updated companions attach series memberships to each scanned work and record a checked standalone result separately from an unchecked series field. Empty unchecked observations preserve saved information.
 
@@ -32,7 +40,7 @@ Repeat observations keep saved reading status, progress and personal start/finis
 
 Saved scan reports summarize factual repairs, series repairs and possible reading corrections. Counts deduplicate works across listing and series pages and survive acknowledged-page retries. The summary records findings; pending decisions remain available from **Review Reading Corrections** after the scan ends. Older bookmarks may still repair factual saved/bookmark dates and Rec observations automatically, while personal reading dates require approval.
 
-Apply `20261026000600_repeat_import_repairs.sql`, deploy the website and worker, and rebuild/reload Chrome Companion v0.7.2 (or replace the Safari userscript) together. Old saved scans can still import factual metadata; run a new Full Scan with the updated companion to review existing entries. No hosted deployment is performed by local builds.
+Apply `20261026000600_repeat_import_repairs.sql`, deploy the website and worker, and rebuild/reload Chrome Companion v0.7.3 (or replace the Safari userscript) together. Old saved scans can still import factual metadata; run a new Full Scan with the updated companion to review existing entries. No hosted deployment is performed by local builds.
 
 ## Code Organization
 

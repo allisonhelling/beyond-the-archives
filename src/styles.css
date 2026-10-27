@@ -378,7 +378,7 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
 .story-form .list-import-controls > .button { align-self: flex-end; width: auto; min-height: 44px; margin: 0 0 16px; }
 
 .story-form > .form-control, .form-controls-row > .form-control, .series-import-options { display: grid; gap: 7px; margin: 16px 0; }
-.story-form .series-import-options > * { margin: 0; }
+.story-form .series-import-options > *, .story-form .series-import-options label { margin: 0; }
 .form-control .editable-field-heading > label { margin: 0; }
 .form-controls-row .editable-field-heading { min-height: 24px; }
 .story-form input.input-fit { width: 8ch; min-width: 84px; }
@@ -637,6 +637,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .story-form > .form-actions > .button { width: 100%; min-height: 44px; margin: 0; }
 .story-form > .form-actions.form-actions-fit { display: flex; flex-wrap: wrap; }
 .story-form > .form-actions.form-actions-fit > .button { width: auto; white-space: nowrap; }
+.import-reading-review > .form-actions:not(:empty) { padding-top: 16px; }
 @media (max-width: 650px) {
   .story-form .reading-progress-row label { font-size: 13px; }
   .story-form .reading-progress-row input, .story-form .reading-progress-row select { padding-inline: 7px; font-size: 13px; }

@@ -23,6 +23,62 @@ beforeEach(() => {
 })
 const start = (mode = 'full') => sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode })
 async function collect() { clock += 20000; await sync.pump(); await sync.pump() }
+it('ends a scan without discarding checkpoints or advancing the Quick Sync baseline', async () => {
+ await start()
+ const { id, baselineKey } = local.librarySync
+ local[baselineKey] = ['old-baseline']; local.librarySync.baseline = ['old-baseline']
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
+ await collect()
+ Object.assign(local.librarySync, { sources: [{ url: 'https://archiveofourown.org/series/99', kind: 'series_works' }], chapterQueue: [{ workId: 1 }], chapterRequest: { workId: 1 }, error: 'Previous warning', attention: 'page_error', attentionId: 'old-alert' })
+ const result = await sync.command({ action: 'end', scanId: id })
+ expect(result.state).toMatchObject({ status: 'ready', endedEarly: true, partial: true, hasMore: false, pages: 1, count: 1, error: '' })
+ expect(result.state.attention).toBeUndefined()
+ expect(local.librarySync).toMatchObject({ sources: [], chapterQueue: [], chapterRequest: null })
+ expect((await sync.command({ action: 'page', page: 1, scanId: id })).rows).toEqual([row(1)])
+ chrome.tabs.update.mockClear(); chrome.scripting.executeScript.mockClear()
+ await sync.pump()
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+ expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
+ const restarted = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ expect((await restarted.command({ action: 'status' })).state.endedEarly).toBe(true)
+ await restarted.command({ action: 'finish', scanId: id })
+ expect(local.librarySync.status).toBe('complete')
+ expect(local[baselineKey]).toEqual(['old-baseline'])
+ expect(local[`librarySync:${id}:1`]).toBeUndefined()
+})
+it('waits for an in-flight capture to save and does not navigate to another page when ending', async () => {
+ await start(); clock += 20000; await sync.pump()
+ let finishCapture, captured
+ const entered = new Promise(resolve => { captured = resolve })
+ chrome.scripting.executeScript.mockImplementation(() => new Promise(resolve => { finishCapture = resolve; captured() }))
+ const pumping = sync.pump()
+ await entered
+ chrome.storage.local.get.mockClear()
+ const ending = sync.command({ action: 'end', scanId: local.librarySync.id })
+ // Let the end command read the scan and queue behind its active save.
+ await vi.waitFor(() => expect(chrome.storage.local.get).toHaveBeenCalled())
+ clock += 40000
+ finishCapture([{ result: { url: local.librarySync.requestUrl, rows: [row(7)], skipped: 0, hasNext: true } }])
+ await pumping
+ expect((await ending).state).toMatchObject({ status: 'ready', endedEarly: true, pages: 1, count: 1 })
+ expect((await sync.command({ action: 'page', page: 1 })).rows).toEqual([row(7)])
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+})
+it.each(['paused', 'ready'])('ends a %s batch safely and never resumes earlier acknowledged batches', async status => {
+ await start(); await collect()
+ Object.assign(local.librarySync, { status, batchStart: 1, hasMore: true, error: 'Safety limit' })
+ const ended = await sync.command({ action: 'end', scanId: local.librarySync.id })
+ expect(ended.state).toMatchObject({ status: 'ready', batchStart: 1, hasMore: false, endedEarly: true })
+ expect((await sync.command({ action: 'end', scanId: local.librarySync.id })).state).toMatchObject({ status: 'ready', endedEarly: true })
+})
+it('can end before any pages are collected and rejects stale scan identities', async () => {
+ await start()
+ await expect(sync.command({ action: 'end', scanId: 'stale-scan' })).rejects.toThrow('another tab')
+ expect(local.librarySync.status).toBe('running')
+ expect((await sync.command({ action: 'end', scanId: local.librarySync.id })).state).toMatchObject({ status: 'ready', pages: 0, endedEarly: true })
+ await sync.command({ action: 'finish' })
+ expect(local[local.librarySync.baselineKey]).toBeUndefined()
+})
 it('clears persisted scan errors and attention on discard without changing the completed baseline', async () => {
  await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', startPage: 2, endPage: 3 })
  await collect()

@@ -77,7 +77,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   {!busy && message && <p role="status">{message}</p>}
   {error && !seriesSources && <p className="error-message" role="alert">{error}</p>}
   {seriesSources && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={seriesSources.map(row => row.url).join('\n')} savedIds={new Set()} busy={busy} showReadingStatus={false} confirmLabel="Review CSV Conflicts" onConfirm={(_works, _status, _seriesIds, selections) => void reviewSeries(selections)} onCancel={() => { setSeriesSources(undefined); setError('') }} />}
-  <ImportReadingReview onChanged={() => onImported(null)} />
+  <ImportReadingReview onChanged={() => onImported(null)} refreshKey={message} />
   {prepared && <>
    <p>{prepared.works.length} unique works · {conflicts.length} bookmark conflicts · {laterSkipped} existing Marked for Later works will keep personal data.</p>
    {conflicts.length > 0 && <>

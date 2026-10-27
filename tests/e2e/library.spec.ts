@@ -1,6 +1,38 @@
 import { fixture, login, selectLibraryShelf } from './library-fixture'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
+import { epubBuffer } from '../../src/test/epub-fixture'
+
+test('EPUB recovery reviews and saves a deleted work and preserves personal data during later metadata recovery', async ({ page }) => {
+ const tables = await fixture(page)
+ await page.goto('/add'); await login(page)
+ await page.getByRole('button', { name: 'Import from EPUB', exact: true }).click()
+ await page.getByLabel('Recover Metadata from EPUB').setInputFiles({ name: 'recovered.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await epubBuffer()) })
+ await expect(page.getByRole('status')).toContainText('EPUB metadata loaded')
+ expect(tables.library_entries).toHaveLength(0)
+ await expect(page.getByLabel('AO3 URL', { exact: true })).toHaveValue('https://archiveofourown.org/works/8001')
+ await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Recovered & Remembered')
+ await page.getByLabel('AO3 Publication Status', { exact: true }).selectOption('deleted')
+ await page.getByLabel('Reading Status', { exact: true }).selectOption('reading')
+ await page.getByLabel('Last Fully Read Chapter', { exact: false }).fill('2')
+ await page.getByLabel('Private Notes', { exact: true }).fill('My personal notes')
+ await page.getByRole('button', { name: 'Save Story', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Recovered & Remembered', exact: true })).toBeVisible()
+ expect(tables.library_entries[0]).toMatchObject({ reading_status: 'reading', last_read_chapter: 2, notes: 'My personal notes', metadata_overrides: { publication_status: 'deleted', word_count: 12345, published_chapters: 3, relationship_tags: ['A/B'] } })
+ const id = tables.library_entries[0].id
+ await page.goto(`/stories/${id}?edit=metadata`)
+ await page.getByLabel('Recover Metadata from EPUB').setInputFiles({ name: 'recovered.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await epubBuffer()) })
+ await expect(page.getByRole('status')).toContainText('EPUB metadata loaded')
+ await expect(page.getByLabel('AO3 Publication Status', { exact: true })).toHaveValue('deleted')
+ await page.getByLabel('Title', { exact: true }).fill('Recovered Title Correction')
+ await page.getByRole('button', { name: 'Save Story', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Recovered Title Correction', exact: true })).toBeVisible()
+ expect(tables.library_entries[0]).toMatchObject({ reading_status: 'reading', last_read_chapter: 2, notes: 'My personal notes' })
+ expect(JSON.stringify(tables)).not.toContain('PRIVATE CHAPTER PROSE')
+ await page.reload()
+ await expect(page.getByRole('heading', { name: 'Recovered Title Correction', exact: true })).toBeVisible()
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
 test('work info retains chapter word counts, read timestamps and rereads after reload', async ({ page }) => {
  const tables = await fixture(page)
  const first = { id: 'read-1', action: 'chapter_read', at: '2026-10-24T12:00:00Z', status: 'reading', chapter: 4, chapter_id: '104', word_count: 1234, is_reread: false }
@@ -3005,9 +3037,21 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   await expect(options).toBeVisible()
   await expect(options).toHaveCSS('padding-top', '12px')
   await expect(options).toHaveCSS('padding-bottom', '12px')
-  await expect(options.getByRole('checkbox', { name: 'Automatically Save All Series Works for This Import Only' })).not.toBeChecked()
+  const scanSeries = options.getByRole('checkbox', { name: 'Automatically Save All Series Works for This Import Only', exact: true })
+  await expect(scanSeries).not.toBeChecked()
   const seriesDefault = options.getByText('Current series default: Choose Works from Each Series.')
-  expect((await seriesDefault.boundingBox())!.y).toBeLessThan((await options.getByRole('checkbox').boundingBox())!.y)
+  expect((await seriesDefault.boundingBox())!.y).toBeLessThan((await scanSeries.boundingBox())!.y)
+  const reviewExisting = options.getByRole('checkbox', { name: 'Review Existing Entries', exact: true })
+  const reviewHelp = options.getByRole('button', { name: 'Review Existing Entries Information', exact: true })
+  await reviewHelp.focus()
+  await expect(page.getByRole('tooltip')).toHaveText('Review older saved works encountered in this scan. Factual AO3 information repairs automatically; reading-status and progress corrections require approval. Quick Sync can stop before reaching older works.')
+  await reviewHelp.blur()
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  if (info.project.name === 'desktop') {
+    const series = (await scanSeries.boundingBox())!, review = (await reviewExisting.boundingBox())!
+    expect(review.x).toBeGreaterThan(series.x + series.width)
+    expect(Math.abs(review.y - series.y)).toBeLessThan(2)
+  }
   const linkForm = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Import Work or Series Links', exact: true }) })
   const linkSeries = linkForm.getByRole('checkbox', { name: 'Automatically Save All Series Works for This Import Only' })
   await expect(linkSeries).toBeVisible()
@@ -3372,6 +3416,47 @@ for (const preceding of [20, 28]) test(`series reviews keep series together afte
  await dialog.getByRole('button', { name: 'Import Selected', exact: true }).click()
  await expect(dialog).toHaveCount(0)
  expect(submitted).toEqual([['https://archiveofourown.org/works/1', `https://archiveofourown.org/works/${offset}`]])
+})
+
+test('End Scan opens collected series review and finishes through the normal import flow', async ({ page }, info) => {
+ await fixture(page)
+ const preview = { ...seriesPreview, seriesId: 99, normalizedUrl: 'https://archiveofourown.org/series/99', title: 'Collected Series', works: [501, 502].map((id, index) => ({ ...seriesPreview.works[0], workId: id, position: index + 1, title: `Collected Work ${id}`, url: `https://archiveofourown.org/works/${id}` })) }
+ const imported: number[][] = []
+ await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({json:{reports:[],total:0}}))
+ await page.route('**/rest/v1/rpc/submit_ao3_library_sync', route => {
+  imported.push(route.request().postDataJSON().p_rows.map((row: { workId: number }) => row.workId))
+  return route.fulfill({ json: { batch: null, imported: 1, kept: 0 } })
+ })
+ await page.addInitScript(({ preview }) => {
+  localStorage.setItem('ao3-library-extension-id', 'a'.repeat(32))
+  let state = { id: 'ended-scan', status: 'running', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', pages: 1, count: 2, skipped: 0, error: '', endedEarly: false, hasMore: false, seriesReviewVersion: 1, seriesBehavior: 'choose', seenSeries: [preview.normalizedUrl] }
+  Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime: { sendMessage: (_id: string, message: { action?: string }, callback: (reply: unknown) => void) => {
+   if (message.action === 'end') state = { ...state, status: 'ready', endedEarly: true }
+   if (message.action === 'finish') state = { ...state, status: 'complete' }
+   if (message.action === 'page') callback({ ok: true, seriesUrl: preview.normalizedUrl, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) })
+   else callback({ ok: true, state })
+  } } } })
+ }, { preview })
+ await page.goto('/imports'); await login(page)
+ const end = page.getByRole('button', { name: 'End Scan', exact: true })
+ await expect(end).toBeVisible()
+ if (info.project.name === 'desktop') {
+  const endBounds = (await end.boundingBox())!, discard = (await page.getByRole('button', { name: 'Discard Scan', exact: true }).boundingBox())!
+  expect(endBounds.x + endBounds.width).toBeLessThan(discard.x)
+  expect(Math.abs(endBounds.y - discard.y)).toBeLessThan(2)
+ }
+ await end.click()
+ const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ await expect(dialog).toBeVisible()
+ expect(imported).toHaveLength(0)
+ await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).click()
+ await dialog.getByRole('checkbox', { name: 'Part 1: Collected Work 501', exact: true }).check()
+ await dialog.getByRole('button', { name: 'Import Selected Works', exact: true }).click()
+ await expect(dialog).toHaveCount(0)
+ await expect(page.getByText(/Imported 1 works; kept 0 existing works/)).toBeVisible()
+ expect(imported).toEqual([[501]])
+ await expect(end).toHaveCount(0)
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
 test('bookmark scans show explicitly bookmarked series before series containing bookmarked works', async ({ page }) => {

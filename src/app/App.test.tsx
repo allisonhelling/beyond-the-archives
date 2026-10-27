@@ -82,7 +82,10 @@ describe('private app access and navigation', () => {
     await screen.findByRole('heading', { name: 'Currently Reading' })
     for (const [label, title] of [['Library', 'Your Library'], ['Stats', 'Reading Stats'], ['Settings', 'Settings'], ['Features', 'The Next Chapters']]) {
       if (label === 'Features') await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
-      await user.click(within(screen.getByRole(label === 'Features' ? 'region' : 'navigation', { name: label === 'Features' ? 'Profile Menu' : 'Main Navigation' })).getByRole('link', { name: label }))
+      await act(async () => {
+        await user.click(within(screen.getByRole(label === 'Features' ? 'region' : 'navigation', { name: label === 'Features' ? 'Profile Menu' : 'Main Navigation' })).getByRole('link', { name: label }))
+      })
+      expect(window.location.pathname).toBe(`/${label.toLowerCase()}`)
       expect(await screen.findByRole('heading', { name: title }, { timeout: 5000 })).toBeVisible()
     }
     await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
@@ -213,8 +216,8 @@ it.each(['#ios-safari-userscript', '#ao3-browser-bar'])('scrolls the browser bar
   try {
     auth.session = fakeSession
     window.history.replaceState(null, '', `/settings${hash}`)
-    render(<App />)
-    const heading = await screen.findByRole('heading', { name: 'AO3 Browser Bar' })
+    await act(async () => { render(<App />) })
+    const heading = await within(screen.getByRole('main')).findByRole('heading', { name: 'AO3 Browser Bar' }, { timeout: 5000 })
     await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' }))
     expect(scroll.mock.contexts).toContain(heading.closest('section'))
   } finally { delete (HTMLElement.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView }

@@ -8,6 +8,10 @@ import { captureListingPage, listingKey, listingUrl, sameScanUrl } from './listi
 // Durable state is separate from work-import leases and credentials. Never persist tokens here.
 export function createLibrarySync({ auth, available, changed, schedule = () => {}, storage = chrome.storage }) {
  let busy = false
+ let endingScanId = null
+ let idle = Promise.resolve(), releaseIdle = () => {}
+ function lock() { busy = true; idle = new Promise(resolve => { releaseIdle = resolve }) }
+ function unlock() { busy = false; releaseIdle() }
  const stateKey = sample => sample ? 'sampleLibrarySync' : 'librarySync'
  const read = async () => { const key = stateKey((await auth())?.sample); return (await storage.local.get(key))[key] }
  const write = state => storage.local.set({ [stateKey(state.sample)]: state })
@@ -67,6 +71,16 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
   if (!state) return { state: null }
+  if (message.action === 'end') {
+   if (state.endedEarly && state.status === 'ready') return { state }
+   if (!['running', 'paused', 'ready'].includes(state.status)) throw new Error('This scan has already ended.')
+   // Keep saved checkpoints and any completed chapter-date observations. Stop
+   // pending requests without treating the remaining AO3 list as scanned.
+   state.endedEarly = true; state.partial = true; state.hasMore = false
+   state.status = 'ready'; state.done = true; state.sources = []; state.chapterQueue = []; state.chapterRequest = null
+   state.retryNavigation = false; state.error = ''; state.attention = undefined; state.attentionId = undefined
+   await write(state); return { state }
+  }
   if (message.action === 'record-repairs') {
    if (state.status !== 'ready' || !Number.isSafeInteger(message.page) || message.page < (state.startPage ?? 1) || message.page >= (state.startPage ?? 1) + state.pages) throw new Error('Invalid repair page.')
    const counts = message.repairs
@@ -132,12 +146,13 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    state.error = ''; state.attention = undefined; state.attentionId = undefined
   } else if (message.action === 'finish' && state.status === 'ready' && !state.hasMore) {
    // Partial scans must not establish or advance a complete-list baseline.
-   if (!state.limited) await storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
+   if (!state.limited && !state.endedEarly) await storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
    await discard(state); state.status = 'complete'; state.baseline = []; state.keys = []
   } else throw new Error('This action is unavailable for the saved scan.')
   await write(state); return { state }
  }
  async function navigate(state, url) {
+  if (endingScanId === state.id) { await write(state); return }
   state.requestUrl = url; state.requestedAt = Date.now()
   state.nextAt = Date.now() + delayMs(state) + Math.floor(Math.random() * 3000)
   await storage.session.set({ ao3RequestAfter: state.nextAt })
@@ -152,7 +167,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
  }
  async function pump() {
   if (busy) return
-  busy = true
+  lock()
   let state
   try {
    const context = await owned(); state = context.state
@@ -302,25 +317,34 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   } catch (error) {
    if (state?.status === 'running') { state.status = 'paused'; state.error = error.message; state.attention = isLibrarySyncSafetyLimit(state) ? 'safety_limit' : state.attention ?? 'page_error'; state.attentionId = crypto.randomUUID(); await write(state) }
   } finally {
-   busy = false
+   unlock()
    if (state?.status === 'running') schedule(Math.max(Date.now() + 1000, state.tabId === null || state.retryNavigation || state.captured ? state.nextAt : 0))
   }
  }
  return { busy: () => busy, async command(message) {
   const mutation = !['status', 'page', 'open-tab'].includes(message.action)
+  // Ending is queued behind the current atomic page/checkpoint operation. Other
+  // mutations retain their existing retry behavior while the scanner is busy.
+  if (message.action === 'end') {
+   const { state } = await owned()
+   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
+   endingScanId = state?.id ?? null
+   while (busy) await idle
+  }
   if (mutation && busy) throw new Error('A page is being saved. Retry shortly.')
-  if (mutation) busy = true
+  if (mutation) lock()
   let updated = false
   try {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
-    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
+    const { id, status, url, mode, pages, batchStart, hasMore, endedEarly, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
+    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, endedEarly, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
    }
    return result
   } finally {
-   if (mutation) busy = false
+   if (message.action === 'end') endingScanId = null
+   if (mutation) unlock()
    // Wake the processor only after releasing the command lock.
    if (updated) changed()
   }

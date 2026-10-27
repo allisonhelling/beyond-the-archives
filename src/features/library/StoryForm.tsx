@@ -11,6 +11,8 @@ import { FavoriteButton, PersonalToggleButton } from './FavoriteButton'
 import { useLibrary } from './LibraryProvider'
 import { CollectionChoices, NewCollectionButton } from './collections/CollectionChoices'
 import { PersonalTagInput } from './PersonalTagInput'
+import { FilePicker } from '../../components/FilePicker'
+import { epubMaxBytes, readEpub } from '../imports/epub'
 export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story; onCancel?: () => void; section?: 'all' | 'metadata' | 'reading' }) {
   const library = useLibrary(), navigate = useNavigate(), [params] = useSearchParams(), location = useLocation()
   const [metadata, setMetadata] = useState<Metadata>(story?.metadata ?? { ...blankMetadata })
@@ -35,7 +37,27 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   const [base] = useState(story ? editSnapshot(story) : undefined)
   const [conflict, setConflict] = useState<EditConflict | null>(null)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  const [epubMessage, setEpubMessage] = useState('')
+  async function importEpub(file: File) {
+    setError(''); setEpubMessage(''); setBusy(true)
+    try {
+      if (file.size > epubMaxBytes) throw new Error('Choose an EPUB smaller than 50 MB.')
+      const imported = await readEpub(await file.arrayBuffer())
+      if (story?.work.ao3_work_id && imported.url && parseWorkUrl(imported.url).workId !== story.work.ao3_work_id) throw new Error('This EPUB belongs to a different AO3 work. Add it as a separate story.')
+      const next = { ...editedMetadata(), ...imported.metadata, ...(metadata.publication_status === 'deleted' ? { publication_status: 'deleted' as const } : {}) }
+      setMetadata(next)
+      setAuthors(next.authors.join('\n')); setFandoms(next.fandoms.join('\n')); setSeries(next.series?.join('\n') ?? '')
+      setRelationships(tagNames(next, 'relationship').join('\n')); setCharacters(tagNames(next, 'character').join('\n')); setAdditionalTags(tagNames(next, 'freeform').join('\n'))
+      setOtherTags(next.ao3_tags.filter(tag => ![...tagNames(next, 'relationship'), ...tagNames(next, 'character'), ...tagNames(next, 'freeform')].includes(tag)).join('\n'))
+      if (!story && imported.url) setUrl(imported.url)
+      setEpubMessage(`EPUB metadata loaded. Review the fields below, then save.${!imported.url && !story ? ' The original AO3 URL was not found; enter it below.' : ''}`)
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not read the EPUB file.') }
+    finally { setBusy(false) }
+  }
   function field<K extends keyof Metadata>(key: K, value: Metadata[K]) { setMetadata(m => ({ ...m, [key]: value })) }
+  function editedMetadata(): Metadata {
+    return { ...metadata, manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
+  }
   function urlDefaults() {
     if (story || statusTouched) return
     try { const defaults = initialProgress(url); setStatus(defaults.status); setProgress(String(defaults.lastRead)) } catch { /* Submission reports validation. */ }
@@ -71,13 +93,16 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
         authorLinks[author] = link
       }
       setBusy(true)
-      const nextMetadata: Metadata = section === 'reading' && story ? story.metadata : { ...metadata, manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), author_links: authorLinks, fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
+      const nextMetadata: Metadata = section === 'reading' && story ? story.metadata : { ...editedMetadata(), author_links: authorLinks }
       const id = await saveStory({ id: story?.id, base, url, metadata: nextMetadata, metadataChanges: story ? changedMetadata(initialMetadata!, nextMetadata) : undefined, status, progress: readProgress, notes, personalRating, favorite, rec, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
       await saved(id)
     } catch (e) { failed(e) }
     finally { setBusy(false) }
   }
   return <form className="story-form" onSubmit={e => void submit(e)}>{section !== 'reading' && <fieldset disabled={busy || Boolean(conflict)}><legend>AO3 Metadata · Manually Entered Private Overrides</legend><p className="muted">Your corrections are private overrides. Automatic metadata refresh preserves them.</p>
+    <FilePicker label="Recover Metadata from EPUB" accept=".epub,application/epub+zip" disabled={busy || Boolean(conflict)} onChange={files => void importEpub(files[0])} />
+    <p className="field-help">Recover information from a downloaded EPUB, including a deleted work. The file is read on your device; only reviewed metadata is saved. Choose Deleted under AO3 Publication Status if appropriate. Reading history and personal details stay unchanged.</p>
+    {epubMessage && <p role="status">{epubMessage}</p>}
     <label>AO3 URL<input required type="url" readOnly={story?.work.ao3_work_id === null} value={url} onChange={e => setUrl(e.target.value)} onBlur={urlDefaults} /></label>
     <p className="field-help">{story ? 'You can update the link for this work. The original submission is preserved separately; work identity cannot be changed.' : 'Chapter IDs are not chapter numbers. Unverified links do not set progress; enter chapters read below.'}</p>
     <label>Title<input required value={metadata.title} onChange={e => field('title', e.target.value)} /></label>
