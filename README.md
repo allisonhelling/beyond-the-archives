@@ -470,7 +470,7 @@ Library and Reading now query numbered server pages of 50 works by default. Choo
 
 Collection navigation and results load without the full catalog. Suggestions and fandom counts are cached per collection, and import deduplication loads the catalog on demand.
 
-Apply migrations through `20261026000300_incremental_library_loading.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
+Apply migrations through `20261026000400_compact_navigation_series.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
 
 ## Export and Restore Backups
 

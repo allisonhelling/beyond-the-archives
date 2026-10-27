@@ -5,7 +5,14 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { StrictMode } from 'react'
 import App from './App'
 
-vi.mock('../features/library/repository', () => ({ loadCatalog: async () => ({ stories: [], collections: [] }), queryLibrary: async () => ({ stories: [], series: [], total: 0, page: 1, pages: 1, fandoms: [], sections: {} }) }))
+vi.mock('../features/library/repository', async importOriginal => ({
+  ...await importOriginal<typeof import('../features/library/repository')>(),
+  loadCatalog: async () => ({ stories: [], collections: [], series: [] }),
+  loadCollections: async () => [],
+  loadLibraryFacets: async () => ({ fandoms: [], total: 0 }),
+  loadLibraryNavigation: async () => ({}),
+  queryLibrary: async () => ({ stories: [], series: [], total: 0, page: 1, pages: 1, fandoms: [], sections: {} }),
+}))
 
 const fakeSession = { user: { id: 'account-1', email: 'reader@example.com' }, access_token: 'session-token' } as Session
 const auth = vi.hoisted(() => ({

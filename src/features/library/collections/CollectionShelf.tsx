@@ -13,7 +13,7 @@ const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-fram
 const heightOrder = [0, 1, 2, 1]
 
 export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange, onAutomaticEdit, showHidden = false }: {
-  items: { id: string; name: string; count?: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null; spineDesign?: SpineDesign; automatic_rules?: Collection['automatic_rules'] }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
+  items: { id: string; name: string; count?: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null; spineDesign?: SpineDesign; automatic_rules?: Collection['automatic_rules'] }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void | Promise<void>; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)

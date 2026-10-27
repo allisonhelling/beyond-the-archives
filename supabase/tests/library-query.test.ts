@@ -326,3 +326,25 @@ it('separates collection facets from page filters and scopes ordinary collection
  expect((await db.query<{result:Record<string,unknown>}>('select public.library_navigation() result')).rows[0].result).not.toHaveProperty(collection)
  await db.exec(`set request.jwt.claim.sub='${alice}'`)
 })
+
+it('counts compact series with the same shelf fields without building preview metadata', async () => {
+ const stories = JSON.stringify(await documents())
+ const fields = ['id', 'reading_status', 'is_favorite', 'is_rec', 'collectionIds', 'updated_at']
+ const full = (await db.query<{ story: Record<string, unknown> }>('select story from public.library_series_results($1)', [stories])).rows
+ const compact = (await db.query<{ story: Record<string, unknown>; payload: null }>('select * from public.library_series_results($1,true)', [stories])).rows
+ expect(compact.length).toBeGreaterThan(0)
+ expect(compact.map(row => row.story).sort((a,b) => String(a.id).localeCompare(String(b.id)))).toEqual(
+  full.map(({story}) => Object.fromEntries(fields.map(key => [key, story[key]]))).sort((a,b) => String(a.id).localeCompare(String(b.id))))
+ expect(compact.every(row => row.payload === null)).toBe(true)
+ await db.exec('reset role')
+ const fn = (await db.query<{ definition: string; source: string }>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_unique_values(jsonb)'::regprocedure")).rows[0]
+ try {
+  // Turn preview aggregation into a deterministic failure instead of timing it.
+  await db.exec(fn.definition.replace('LANGUAGE sql', 'LANGUAGE plpgsql').replace(fn.source, "begin raise exception 'Unexpected preview aggregation'; end;"))
+  await db.exec('set role authenticated')
+  expect((await db.query<{ result: Record<string, unknown> }>('select public.library_navigation() result')).rows[0].result).toHaveProperty('all')
+  await expect(db.query('select * from public.library_series_results($1)', [stories])).rejects.toThrow('Unexpected preview aggregation')
+ } finally {
+  await db.exec('reset role'); await db.exec(fn.definition); await db.exec('set role authenticated')
+ }
+})

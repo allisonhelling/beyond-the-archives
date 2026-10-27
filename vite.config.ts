@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
   validateBrowserEnv(loadEnv(mode, process.cwd(), 'VITE_'))
   return {
     plugins: [react(), tailwindcss(), svgr()],
+    // Browser tests need stable pages while reports and other files are written.
+    server: { watch: mode === 'e2e' ? null : undefined },
     build: {
       rollupOptions: { output: { manualChunks: { supabase: ['@supabase/supabase-js'], react: ['react', 'react-dom', 'react-router-dom'] } } },
     },

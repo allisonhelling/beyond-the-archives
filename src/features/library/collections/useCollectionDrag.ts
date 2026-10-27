@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState, type MouseEvent, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from 'react'
 
 type Drag = { id: string; ids: string[]; target: string | null; x: number; y: number }
 
-export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, enabled: boolean, onMove?: (id: string, target: string) => void, selection?: { selectedIds: string[]; onChange: (ids: string[]) => void }) {
+export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, enabled: boolean, onMove?: (id: string, target: string) => void | Promise<void>, selection?: { selectedIds: string[]; onChange: (ids: string[]) => void }) {
   const [drag, setDrag] = useState<Drag | null>(null)
   const suppressClick = useRef(false)
-  const keyboardFocus = useRef<string | null>(null)
+  const [keyboardFocus, setKeyboardFocus] = useState<{ id: string } | null>(null)
+  const restoredFocus = useRef(keyboardFocus)
   const handlers = useRef({ onMove, selection })
-  useEffect(() => {
-    if (!enabled || !keyboardFocus.current) return
-    shelfRef.current?.querySelector<HTMLButtonElement>(`[data-collection-id="${CSS.escape(keyboardFocus.current)}"] .collection-spine`)?.focus()
-    keyboardFocus.current = null
-  })
+  useLayoutEffect(() => {
+    if (!enabled || !keyboardFocus || restoredFocus.current === keyboardFocus) return
+    shelfRef.current?.querySelector<HTMLButtonElement>(`[data-collection-id="${CSS.escape(keyboardFocus.id)}"] .collection-spine`)?.focus()
+    restoredFocus.current = keyboardFocus
+  }, [enabled, keyboardFocus, shelfRef])
   useEffect(() => { handlers.current = { onMove, selection } }, [onMove, selection])
   useEffect(() => {
     const shelf = shelfRef.current
@@ -115,8 +116,12 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       const index = slots.indexOf(edge) + direction
       const destination = slots[index]
       if (destination && handlers.current.onMove) {
-        keyboardFocus.current = slot.dataset.collectionId!
-        handlers.current.onMove(slot.dataset.collectionId!, destination.dataset.collectionId!)
+        const id = slot.dataset.collectionId!
+        // Wait for persistence, refresh and row moves before finding the final
+        // button; moving between shelf rows replaces its DOM node.
+        const restoreFocus = () => setKeyboardFocus({ id })
+        void Promise.resolve(handlers.current.onMove(id, destination.dataset.collectionId!)).then(
+          restoreFocus, restoreFocus)
       }
     }
     shelf.addEventListener('pointerdown', down)

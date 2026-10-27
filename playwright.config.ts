@@ -11,7 +11,7 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } },
   ],
   webServer: {
-    command: 'npm run dev -- --port 4173 --strictPort',
+    command: 'npm run dev -- --port 4173 --strictPort --mode e2e',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: false,
     env: { VITE_SUPABASE_URL: 'https://ao3-phase1-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' },

@@ -75,6 +75,12 @@ On 26 October 2026, three local comparison reads with 3,038 works per reader and
 
 The 10,000-work mocked browser regression recorded initial results at 847 ms desktop and 654 ms mobile layout. It asserts zero catalog requests during browsing and one facets request across page-size changes, searches, Back/Forward and detail navigation before reload. Navigation counts remain background work and may take longer than results; the local 3,038-work database run measured that independent RPC at 4,369 ms. This change removes it from the initial result dependency, but does not establish hosted timeout resolution.
 
+## Collection Count Timeouts
+
+Migration `20261026000400_compact_navigation_series.sql` adds a compact projection to the shared series aggregation function. Navigation sends only series membership, identity and reading status into that projection, and skips preview metadata and search text. Full series consumers retain the existing single-argument function and complete payload. Counts continue to use the shared shelf and automatic collection predicates, with the same owner policies and grants.
+
+The migration caches plans for frequently called shelf, one-shot, text and normalization helpers using the established PL/pgSQL pattern. It also disables JIT for the navigation function to avoid compilation startup costs. A hosted check on 26 October 2026 reproduced an eight-second timeout with 4,908 works, 442 saved series and two automatic collections; three revised reads completed in 5,580 / 5,522 / 5,867 ms in a transaction that rolled back all changes. These observations are not latency percentiles. This validation did not deploy the migration. Regression tests compare compact series fields and shelf counts with full query results and make unexpected preview aggregation fail deterministically.
+
 ## Retrieval Capacity and Fairness
 
 The hosted Edge Function handles exactly one job per invocation. The supplied one-minute Cron schedule therefore has a nominal maximum of 60 jobs/hour globally, before retrieval latency, failures, pauses and lease recovery. The global gate also enforces at least 15 seconds between eligible hosted requests; running a more frequent scheduler cannot exceed its nominal 240 requests/hour limit. The continuous Node worker waits 15 seconds after each attempt, in addition to attempt time. These are code-derived upper bounds, not measured AO3 throughput.
@@ -87,4 +93,4 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261026000300_incremental_library_loading.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261026000400_compact_navigation_series.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
