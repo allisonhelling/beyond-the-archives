@@ -101,9 +101,11 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261026000500_library_query_payloads.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261027000300_library_query_cache_write_access.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
 
 ## Revision-Based Navigation and Counts
+
+Migration `20261027000300_library_query_cache_write_access.sql` marks the cache-writing `query_library` RPC as volatile and reloads the PostgREST schema cache. This allows POST requests to write query caches; a stable RPC runs in a read-only transaction and fails with error `25006`.
 
 Migration `20261027000200_indexed_library_navigation.sql` extends the existing private document projection with indexed status, favorite/Rec and sort fields. Ordinary work queries select identities using these fields and manual or automatic membership indexes. The shared filter still evaluates complex predicates; the existing series pipeline retains its complete work context. Only the selected work page loads display documents. Seeded random ordering, title tie-breaks, missing-value placement and the browser filter contract remain covered by parity tests.
 

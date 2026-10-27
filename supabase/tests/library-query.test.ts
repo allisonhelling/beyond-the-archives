@@ -22,6 +22,11 @@ async function query(filters={},page=1,size=25,shelf='all') {
  return (await db.query<{result:LibraryResults}>('select public.query_library($1,$2,$3) result',[JSON.stringify({mode:'library',shelf,filters:{...defaultReadingFilters,...filters},terms:parseSearch((filters as {within?:string}).within??'')}),page,size])).rows[0].result
 }
 async function documents() { return (await db.query<{story:Story}>('select story from public.library_search_documents where user_id=auth.uid() order by id')).rows.map(row=>row.story) }
+it('marks cache-writing RPCs volatile so PostgREST allows cache writes', async () => {
+ const functions = ['query_library', 'library_query_matches', 'library_navigation', 'library_navigation_snapshot']
+ const result = await db.query<{proname:string;provolatile:string}>("select proname,provolatile from pg_proc where pronamespace='public'::regnamespace and proname=any($1::text[]) order by proname", [functions])
+ expect(result.rows).toEqual(functions.sort().map(proname => ({ proname, provolatile: 'v' })))
+})
 it('counts the complete result set, has unique stable boundaries and clamps after deletion',async()=>{
  const first=await query(),second=await query({},2),last=await query({},999)
  expect(first).toMatchObject({total:57,pages:3,page:1})
