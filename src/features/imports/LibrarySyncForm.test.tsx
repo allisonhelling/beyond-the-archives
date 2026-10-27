@@ -1,7 +1,7 @@
 import { saveSeriesImportBehavior } from './series-import-preferences'
 import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), reports: vi.fn(), reading: vi.fn(), sample: false }))
 vi.mock('../../lib/sample-mode', () => ({ get sampleMode() { return mocks.sample } }))
@@ -114,6 +114,30 @@ it('keeps a running scan available if the End Scan command fails', async () => {
  expect(screen.getByRole('button', { name: 'Discard Scan' })).toBeEnabled()
  expect(mocks.submit).not.toHaveBeenCalled()
 })
+it('waits for dependent metadata checks to finish before importing an ended scan', async () => {
+ vi.useFakeTimers()
+ try {
+  let state = { ...ready, pages: 1, status: 'running', endedEarly: false, checkChapterDates: true }
+  mocks.command.mockImplementation(async action => {
+   if (action === 'end') state = { ...state, endedEarly: true }
+   if (action === 'page') return { rows: [{ title: 'Checked Work', link: 'https://archiveofourown.org/works/1', source_list: 'bookmarks', chapters: '3/3', date: '2026-10-20', 'bookmark date': '2026-10-10', 'chapter dates': '{"1":"2026-09-01","2":"2026-10-01","3":"2026-10-10"}' }] }
+   if (action === 'finish') state = { ...state, status: 'complete' }
+   return { state }
+  })
+  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+  await act(async () => {})
+  fireEvent.click(screen.getByRole('button', { name: 'End Scan' }))
+  await act(async () => {})
+  expect(screen.getByText(/Remaining series pages and enabled chapter-date checks must finish before review/)).toBeVisible()
+  expect(mocks.submit).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Import Scanned Works' })).not.toBeInTheDocument()
+  state = { ...state, status: 'ready' }
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+  expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ metadata: expect.objectContaining({ chapter_dates: { '1': '2026-09-01', '2': '2026-10-01', '3': '2026-10-10' } }) })], undefined, undefined, expect.objectContaining({ id: ready.id }))
+  expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' })
+ } finally { vi.useRealTimers() }
+})
 it('keeps scan checkpoints available when the report cannot be saved', async () => {
  mocks.reports.mockRejectedValueOnce(new Error('Report save failed'))
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
@@ -201,11 +225,11 @@ it('shows page limits only for Full Library Scan and clears them for Quick Sync'
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.change(screen.getByLabelText(/Start Page/), { target: { value: '7' } })
  fireEvent.change(screen.getByLabelText('Scan Mode'), { target: { value: 'quick' } })
- expect(screen.queryByRole('group', { name: 'Limit Full Library Scan (Optional)' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('group', { name: 'Limit Full Library Scan' })).not.toBeInTheDocument()
  expect(screen.queryByLabelText(/Start Page/)).not.toBeInTheDocument()
  expect(screen.queryByLabelText(/End Page/)).not.toBeInTheDocument()
  fireEvent.change(screen.getByLabelText('Scan Mode'), { target: { value: 'full' } })
- expect(screen.getByRole('group', { name: 'Limit Full Library Scan (Optional)' })).toBeVisible()
+ expect(screen.getByRole('group', { name: 'Limit Full Library Scan' })).toBeVisible()
  expect(screen.queryByLabelText('Update Deleted Work Status')).not.toBeInTheDocument()
  expect(screen.queryByText(/Deleted-work bookmarks are kept/)).not.toBeInTheDocument()
  expect(screen.getByLabelText(/Start Page/)).toHaveValue(null)
@@ -448,7 +472,7 @@ it('leaves chapter-date checks off by default and includes the option for an opt
  const dialog = screen.getByRole('dialog', { name: 'Import Bookmarks' })
  expect(within(dialog).getByText('Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.')).toBeVisible()
  expect(within(dialog).getByText(/Earlier or same-day bookmarks/).compareDocumentPosition(within(dialog).getByLabelText('AO3 Username')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
- const option = within(dialog).getByRole('checkbox', { name: 'Check chapter publication dates' })
+ const option = within(dialog).getByRole('checkbox', { name: 'Check Chapter Publication Dates' })
  expect(option).not.toBeChecked()
  fireEvent.focus(within(dialog).getByRole('button', { name: 'Chapter Publication Dates Information' }))
  expect(screen.getByRole('tooltip')).toHaveTextContent('Estimates chapters read by comparing each chapter’s publication date with the bookmark date. Series works without an individual bookmark use the series bookmark date. Chapters published on the bookmark date or with missing dates remain unconfirmed. Uses the scan tab to open eligible works’ Chapter Index pages so scans will take longer than usual.')
@@ -466,7 +490,7 @@ it('rejects an older extension that would silently ignore the requested chapter-
  mocks.command.mockImplementation(async action => action === 'start' ? { state: { ...ready, status: 'running' } } : { state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
- fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' }))
  fireEvent.change(screen.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('Rebuild and reload AO3 Library Companion')
@@ -477,11 +501,11 @@ it('does not carry bookmark chapter checks into Marked for Later or list URL imp
  mocks.command.mockResolvedValue({ state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
- fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' }))
  fireEvent.click(screen.getByRole('button', { name: 'Close Dialog' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import Marked for Later' }))
  expect(within(screen.getByRole('dialog')).getByText(/New Marked for Later works are saved as To Read/)).toBeVisible()
- expect(screen.queryByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('checkbox', { name: 'Check Chapter Publication Dates' })).not.toBeInTheDocument()
  fireEvent.change(screen.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', expect.objectContaining({ url: 'https://archiveofourown.org/users/reader/readings?show=to-read' })))
@@ -621,9 +645,9 @@ it.each([false, true])('uses dynamic bookmark inference for list URLs with chapt
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  const select = screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' })
  expect(within(select).getByRole('option', { name: 'Dynamic (Bookmarks)' })).toBeInTheDocument()
- expect(screen.queryByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('checkbox', { name: 'Check Chapter Publication Dates' })).not.toBeInTheDocument()
  fireEvent.change(select, { target: { value: 'dynamic_bookmarks' } })
- const check = screen.getByRole('checkbox', { name: 'Check chapter publication dates' })
+ const check = screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' })
  expect(check).not.toBeChecked()
  if (checkDates) fireEvent.click(check)
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/reader/bookmarks' } })
@@ -638,9 +662,9 @@ it('hides and ignores dynamic chapter-date checks when a fixed list status is se
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  const select = screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' })
  fireEvent.change(select, { target: { value: 'dynamic_bookmarks' } })
- fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' }))
  fireEvent.change(select, { target: { value: 'paused_reading' } })
- expect(screen.queryByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('checkbox', { name: 'Check Chapter Publication Dates' })).not.toBeInTheDocument()
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/reader/bookmarks' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', reviewExisting: true, seriesBehavior: 'choose', delaySeconds: 15, readingStatus: 'paused_reading' }))
@@ -656,7 +680,7 @@ it('restores dynamic list selections from saved scans and sends no fixed status 
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  const importButton = await screen.findByRole('button', { name: 'Import Scanned Works' })
  expect(screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' })).toHaveValue('dynamic_bookmarks')
- const check = screen.getByRole('checkbox', { name: 'Check chapter publication dates' })
+ const check = screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' })
  expect(check).toBeChecked()
  expect(check).toBeDisabled()
  fireEvent.click(importButton)
@@ -667,13 +691,13 @@ it.each(['Import Bookmarks', 'Import Marked for Later'])('keeps Dynamic (Bookmar
  mocks.command.mockResolvedValue({ state: null })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.change(screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' }), { target: { value: 'dynamic_bookmarks' } })
- fireEvent.click(screen.getByRole('checkbox', { name: 'Check chapter publication dates' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' }))
  fireEvent.click(screen.getByRole('button', { name: title }))
  const dialog = within(screen.getByRole('dialog', { name: title }))
  fireEvent.click(dialog.getByRole('checkbox', { name: 'Manually Set Reading Status' }))
  expect(within(dialog.getByRole('combobox', { name: 'Reading Status for Username Import' })).queryByRole('option', { name: 'Dynamic (Bookmarks)' })).not.toBeInTheDocument()
- if (title === 'Import Bookmarks') expect(dialog.getByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeChecked()
- else expect(dialog.queryByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeInTheDocument()
+ if (title === 'Import Bookmarks') expect(dialog.getByRole('checkbox', { name: 'Check Chapter Publication Dates' })).not.toBeChecked()
+ else expect(dialog.queryByRole('checkbox', { name: 'Check Chapter Publication Dates' })).not.toBeInTheDocument()
  fireEvent.change(dialog.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
  fireEvent.change(dialog.getByRole('combobox', { name: 'Reading Status for Username Import' }), { target: { value: 'finished' } })
  fireEvent.click(dialog.getByRole('button', { name: 'Start Import' }))
@@ -687,7 +711,7 @@ it('places manual bookmark status below chapter dates, disables date checks, and
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(screen.getByRole('button', { name: 'Import Bookmarks' }))
  const dialog = within(screen.getByRole('dialog', { name: 'Import Bookmarks' }))
- const dates = dialog.getByRole('checkbox', { name: 'Check chapter publication dates' })
+ const dates = dialog.getByRole('checkbox', { name: 'Check Chapter Publication Dates' })
  const manual = dialog.getByRole('checkbox', { name: 'Manually Set Reading Status' })
  expect(dates.compareDocumentPosition(manual) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  fireEvent.click(dates)
@@ -824,4 +848,17 @@ it('offers existing-entry review only for Full Scan and retains the opt-out in i
  fireEvent.click(screen.getByRole('button',{name:'Import from List'}))
  await waitFor(()=>expect(mocks.command.mock.calls.filter(([action])=>action==='start')).toHaveLength(2))
  expect(mocks.command.mock.calls.filter(([action])=>action==='start')[1][1]).not.toHaveProperty('reviewExisting')
+})
+
+it('offers continuation for an imported ended scan and resumes its saved identity', async () => {
+ let state = { ...ready, status: 'complete', endedEarly: true, canContinue: true, delaySeconds: 20 }
+ mocks.command.mockImplementation(async action => {
+  if (action === 'continue') state = { ...state, status: 'running', endedEarly: false, canContinue: false }
+  return { state }
+ })
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Continue From Previous Scan' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('continue', { scanId: 'scan', delaySeconds: 20 }))
+ expect(await screen.findByRole('button', { name: 'Pause Scan' })).toBeEnabled()
+ expect(screen.queryByRole('button', { name: 'Continue From Previous Scan' })).not.toBeInTheDocument()
 })

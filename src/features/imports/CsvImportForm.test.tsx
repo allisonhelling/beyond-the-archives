@@ -114,7 +114,7 @@ it('does not ask for bookmark conflict choices when only work metadata differs',
 
 it('checks chapter dates only when the user opts in before importing the CSV', async () => {
  render(<CsvImportForm onImported={mocks.imported} />)
- const option = screen.getByRole('checkbox', { name: 'Check chapter publication dates for bookmarks' })
+ const option = screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' })
  expect(option).not.toBeChecked()
  fireEvent.click(option)
  upload()

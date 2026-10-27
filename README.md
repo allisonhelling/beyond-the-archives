@@ -30,7 +30,7 @@ Recovery reads standard EPUB metadata and AO3 download front matter, including t
 
 ## Repeat Import Repairs
 
-**End Scan**, beside **Discard Scan**, stops new scan requests after the active checkpoint operation finishes, preserves collected pages, and opens the normal series selection/import flow. It works for running or paused scans and batches waiting to continue. Only collected series works are offered; pending pages and chapter-date checks are left unscanned. Early-ended scans retain their partial-scan report and never advance the Quick Sync baseline. Saved checkpoints remain available if review is cancelled or import fails. Rebuild and reload Chrome/Edge Companion v0.7.3 to use this control.
+**End Scan**, beside **Discard Scan**, stops discovering new primary-list pages after the active checkpoint operation finishes, preserves collected pages, and finishes the normal series and chapter-date processing before opening series selection/import. It works for running or paused scans and batches waiting to continue. Already discovered series are scanned through all remaining pages, including a series currently in progress. Enabled chapter-date checks finish for both collected works and series works, using the usual bookmark dates and request pacing. Review waits for these checks; rate limits or login problems pause the scan normally and Resume Scan continues the remaining checks. Early-ended scans retain their partial-scan report and never advance the Quick Sync baseline. Saved checkpoints remain available if review is cancelled or import fails. Rebuild and reload Chrome/Edge Companion v0.7.4 to use this control.
 
 Repeat CSV and library-sync imports refresh factual AO3 metadata through the existing automatic metadata layer. Manual metadata corrections remain authoritative. Updated companions attach series memberships to each scanned work and record a checked standalone result separately from an unchecked series field. Empty unchecked observations preserve saved information.
 
@@ -40,7 +40,7 @@ Repeat observations keep saved reading status, progress and personal start/finis
 
 Saved scan reports summarize factual repairs, series repairs and possible reading corrections. Counts deduplicate works across listing and series pages and survive acknowledged-page retries. The summary records findings; pending decisions remain available from **Review Reading Corrections** after the scan ends. Older bookmarks may still repair factual saved/bookmark dates and Rec observations automatically, while personal reading dates require approval.
 
-Apply `20261026000600_repeat_import_repairs.sql`, deploy the website and worker, and rebuild/reload Chrome Companion v0.7.3 (or replace the Safari userscript) together. Old saved scans can still import factual metadata; run a new Full Scan with the updated companion to review existing entries. No hosted deployment is performed by local builds.
+Apply `20261026000600_repeat_import_repairs.sql`, deploy the website and worker, and rebuild/reload Chrome Companion v0.7.4 (or replace the Safari userscript) together. Old saved scans can still import factual metadata; run a new Full Scan with the updated companion to review existing entries. No hosted deployment is performed by local builds.
 
 ## Code Organization
 

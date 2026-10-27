@@ -89,7 +89,12 @@ test('library and reading actions fit their headers and filters across viewport 
   }
   const status = page.locator('.pagination-inline [role=status]')
   await expect(status).toContainText('1–50 of 113 works')
-  await expect(status).toHaveCSS('white-space', 'nowrap')
+  const previous = (await page.locator('.pagination-inline').getByRole('button', { name: 'Prev', exact: true }).boundingBox())!
+  const next = (await page.locator('.pagination-inline').getByRole('button', { name: 'Next', exact: true }).boundingBox())!
+  const count = (await status.boundingBox())!
+  expect(Math.abs(previous.y + previous.height / 2 - (next.y + next.height / 2))).toBeLessThan(2)
+  expect(previous.y + previous.height / 2).toBeGreaterThanOrEqual(count.y)
+  expect(previous.y + previous.height / 2).toBeLessThanOrEqual(count.y + count.height)
   expect(await status.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
  }
@@ -105,4 +110,50 @@ test('library and reading actions fit their headers and filters across viewport 
  await page.locator('.reading-toolbar').getByRole('button', { name: 'Sort', exact: true }).click()
  await page.getByRole('option', { name: 'Alphabetical', exact: true }).click()
  await expect(page).toHaveURL(/sort=alpha/)
+})
+
+test('mobile collection holds, filter defaults, inputs and work controls fit', async ({ page }) => {
+ const tables = await fixture(page)
+ tables.collections.push({ id: 'mobile-collection', name: 'Mobile Collection', default_key: null, sort_position: 1 })
+ tables.works.push({ id: 'mobile-work', ao3_work_id: 123, title: 'Mobile work', verified_chapters: {} })
+ tables.library_entries.push({ id: 'mobile-entry', work_id: 'mobile-work', reading_status: 'reading', last_read_chapter: 1, notes: '', original_url: 'https://archiveofourown.org/works/123', metadata_overrides: { published_chapters: 10, total_chapters: 10 } })
+ await page.setViewportSize({ width: 375, height: 900 })
+ await page.goto('/library'); await login(page)
+ const spine = page.getByRole('button', { name: 'Mobile Collection', exact: true })
+ await spine.scrollIntoViewIfNeeded()
+ await expect(spine).toBeEnabled()
+ await spine.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: 50, clientY: 300 })
+ const editor = page.getByRole('dialog', { name: 'Edit Collection', exact: true })
+ await expect(editor).toBeVisible()
+ await expect(editor.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
+ expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+ expect(await editor.getByLabel('Name', { exact: true }).evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(16)
+ await editor.getByRole('checkbox', { name: 'Automatic Collection', exact: true }).check()
+ await editor.getByRole('button', { name: 'Fandoms', exact: true }).click()
+ const fandomPanel = (await editor.locator('.fandom-panel').boundingBox())!
+ const filterBox = (await editor.locator('.reading-toolbar-rules').boundingBox())!
+ expect(Math.abs(fandomPanel.x - filterBox.x)).toBeLessThanOrEqual(1)
+ expect(Math.abs(fandomPanel.width - filterBox.width)).toBeLessThanOrEqual(2)
+ await editor.getByRole('button', { name: 'Fandoms', exact: true }).click()
+ await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+ await page.getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true }).click()
+ const confirmation = page.getByRole('dialog', { name: 'Mass Refresh?', exact: true })
+ await expect(confirmation).toBeVisible()
+ await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+ await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
+ const done = (await page.getByRole('button', { name: 'Done Editing', exact: true }).boundingBox())!
+ const select = (await page.getByRole('button', { name: 'Select Collections', exact: true }).boundingBox())!
+ expect(select.x).toBeGreaterThan(done.x)
+ expect(select.y).toBeCloseTo(done.y, 0)
+ await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+ await page.getByRole('button', { name: 'Filters', exact: true }).click()
+ const defaults = page.locator('.filter-default-actions button')
+ expect((await defaults.nth(0).boundingBox())!.y).toBeCloseTo((await defaults.nth(1).boundingBox())!.y, 0)
+ await page.goto('/stories/mobile-entry')
+ const rating = page.locator('.details-reading-controls .rating-heading')
+ const collection = page.locator('.details-collections')
+ const ratingBox = (await rating.boundingBox())!, collectionBox = (await collection.boundingBox())!
+ expect(ratingBox.x + ratingBox.width).toBeLessThanOrEqual(collectionBox.x)
+ expect(ratingBox.height).toBeLessThan(30)
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

@@ -530,7 +530,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await selectLibraryShelf(page, 'Comfort reads')
   const editor = page.getByRole('dialog', { name: 'Edit Collection', exact: true })
   await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Renamed shelf')
-  await editor.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await editor.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Renamed shelf' })).toBeVisible()
   await selectLibraryShelf(page, 'Renamed shelf')
   await editor.getByRole('button', { name: 'Delete', exact: true }).click()
@@ -1642,7 +1642,7 @@ test('edits, reorders, and deletes custom collections without moving default she
   await openAppearance(editor, 'Symbol')
   await editor.getByRole('radio', { name: 'Moon', exact: true }).check()
   await closeAppearance(editor)
-  await editor.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await editor.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(editor).toHaveCount(0)
   await expect(shelf.getByRole('button', { name: 'Zed', exact: true })).toBeFocused()
   await expect(shelf.locator('.collection-spine-editor').first().locator('.collection-spine-title')).toHaveText('Zed')
@@ -1767,7 +1767,7 @@ test('saved custom colors can be reused when creating and editing other collecti
   await edit.getByRole('radio', { name: '#abcdef', exact: true }).check()
   await expect(edit.getByLabel('Collection Preview').locator('.collection-spine')).toHaveCSS('background-color', 'rgb(171, 205, 239)')
   await closeAppearance(edit)
-  await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await edit.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(edit).toHaveCount(0)
   expect(tables.collections.find(collection => collection.id === 'other')).toMatchObject({ color: '#abcdef' })
 })
@@ -1796,7 +1796,7 @@ test('shared custom swatches disappear only after their last collection changes 
   await openAppearance(edit, 'Color')
   await edit.getByRole('radio', { name: 'Forest', exact: true }).check()
   await closeAppearance(edit)
-  await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await edit.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(edit).toHaveCount(0)
   await shelf.getByRole('button', { name: 'Second', exact: true }).click()
   await openAppearance(edit, 'Color')
@@ -1804,7 +1804,7 @@ test('shared custom swatches disappear only after their last collection changes 
   await openAppearance(edit, 'Color')
   await edit.getByRole('radio', { name: 'Navy', exact: true }).check()
   await closeAppearance(edit)
-  await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await edit.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(edit).toHaveCount(0)
   await shelf.getByRole('button', { name: 'New Collection', exact: true }).last().click()
   const create = page.getByRole('dialog', { name: 'New Collection', exact: true })
@@ -2014,7 +2014,7 @@ test('Command-click and Control-click open bulk editing for the selected collect
       await openAppearance(bulk, 'Symbol')
       await bulk.getByRole('radio', { name: 'Heart', exact: true }).check()
       await closeAppearance(bulk)
-      await bulk.getByRole('button', { name: 'Save Changes', exact: true }).click()
+      await bulk.getByRole('button', { name: 'Save', exact: true }).click()
     }
     await expect(bulk).toHaveCount(0)
   }
@@ -2042,7 +2042,7 @@ test('creates and edits individual collection summaries', async ({ page }) => {
   await expect(edit.getByRole('textbox', { name: 'Summary', exact: true })).toHaveValue('Stories for a quiet evening.\nSaved favorites.')
   await edit.getByRole('textbox', { name: 'Summary', exact: true }).fill('')
   await closeAppearance(edit)
-  await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await edit.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(edit).toHaveCount(0)
   await expect(page.locator('.collection-summary')).toHaveCount(0)
   expect(tables.collections[0].description).toBeNull()
@@ -2084,13 +2084,13 @@ test('selects collections for bulk appearance edits without changing summaries a
   const bulk = page.getByRole('dialog', { name: 'Edit 3 Collections', exact: true })
   await expect(bulk.getByRole('textbox', { name: 'Summary', exact: true })).toHaveCount(0)
   await expect(bulk.getByRole('textbox', { name: 'Name', exact: true })).toHaveCount(0)
-  await expect(bulk.getByRole('button', { name: 'Save Changes', exact: true })).toBeDisabled()
+  await expect(bulk.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
   await bulk.getByRole('checkbox', { name: 'Change Symbol', exact: true }).check()
   await openAppearance(bulk, 'Symbol')
   await bulk.getByRole('radio', { name: 'Heart', exact: true }).check()
   await page.screenshot({ path: `test-results/bulk-collection-editor-${page.viewportSize()!.width}.png`, fullPage: true })
   await closeAppearance(bulk)
-  await bulk.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await bulk.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(bulk).toHaveCount(0)
   for (const [index, name] of ['First', 'Second', 'Third'].entries()) expect(tables.collections[index]).toMatchObject({ name, symbol: 'heart', color: ['#123456', '#654321', '#abcdef'][index], description: `${name} summary` })
   await shelf.getByRole('button', { name: 'Third', exact: true }).click()
@@ -3420,6 +3420,7 @@ for (const preceding of [20, 28]) test(`series reviews keep series together afte
 
 test('End Scan opens collected series review and finishes through the normal import flow', async ({ page }, info) => {
  await fixture(page)
+ await page.clock.install()
  const preview = { ...seriesPreview, seriesId: 99, normalizedUrl: 'https://archiveofourown.org/series/99', title: 'Collected Series', works: [501, 502].map((id, index) => ({ ...seriesPreview.works[0], workId: id, position: index + 1, title: `Collected Work ${id}`, url: `https://archiveofourown.org/works/${id}` })) }
  const imported: number[][] = []
  await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({json:{reports:[],total:0}}))
@@ -3430,8 +3431,9 @@ test('End Scan opens collected series review and finishes through the normal imp
  await page.addInitScript(({ preview }) => {
   localStorage.setItem('ao3-library-extension-id', 'a'.repeat(32))
   let state = { id: 'ended-scan', status: 'running', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', pages: 1, count: 2, skipped: 0, error: '', endedEarly: false, hasMore: false, seriesReviewVersion: 1, seriesBehavior: 'choose', seenSeries: [preview.normalizedUrl] }
+  Object.assign(window, { completeEndScanChecks: () => { state = { ...state, status: 'ready' } } })
   Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime: { sendMessage: (_id: string, message: { action?: string }, callback: (reply: unknown) => void) => {
-   if (message.action === 'end') state = { ...state, status: 'ready', endedEarly: true }
+   if (message.action === 'end') state = { ...state, endedEarly: true }
    if (message.action === 'finish') state = { ...state, status: 'complete' }
    if (message.action === 'page') callback({ ok: true, seriesUrl: preview.normalizedUrl, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) })
    else callback({ ok: true, state })
@@ -3447,6 +3449,11 @@ test('End Scan opens collected series review and finishes through the normal imp
  }
  await end.click()
  const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ await expect(page.getByText(/Remaining series pages and enabled chapter-date checks must finish before review/)).toBeVisible()
+ await expect(dialog).toHaveCount(0)
+ expect(imported).toHaveLength(0)
+ await page.evaluate(() => (window as unknown as { completeEndScanChecks(): void }).completeEndScanChecks())
+ await page.clock.fastForward(5000)
  await expect(dialog).toBeVisible()
  expect(imported).toHaveLength(0)
  await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).click()

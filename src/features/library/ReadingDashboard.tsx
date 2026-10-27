@@ -1,3 +1,4 @@
+import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { MetadataRefreshButton } from '../imports/MetadataControls'
 import { usePageMetadataRefresh } from '../imports/usePageMetadataRefresh'
 import { LibraryResults } from './LibraryResults'
@@ -98,7 +99,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const seriesById = new Map((remote.result ?? remote.previousResult)?.series.map(series => [`series:${series.seriesId}`, series]) ?? [])
   const refreshStories = shown.flatMap(story => seriesById.get(story.id)?.savedStories ?? [story])
   const metadataRefresh = usePageMetadataRefresh(refreshStories)
-  const refreshButton = <MetadataRefreshButton {...metadataRefresh} unavailable={metadataRefresh.unavailable || remote.loading || Boolean(error || remote.error)} onRefresh={() => void metadataRefresh.refresh()} variant="icon" label="Mass Refresh All Stories on Page" description="Mass Refresh All Stories on Page" />
+  const [confirmRefresh, setConfirmRefresh] = useState(false)
+  const refreshButton = <MetadataRefreshButton {...metadataRefresh} unavailable={metadataRefresh.unavailable || remote.loading || Boolean(error || remote.error)} onRefresh={() => mobile ? setConfirmRefresh(true) : void metadataRefresh.refresh()} variant="icon" label="Mass Refresh All Stories on Page" description="Mass Refresh All Stories on Page" />
   useLayoutEffect(() => {
     if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
   }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
@@ -111,6 +113,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   </>
   const headerActions = <>{showActions && <>{refreshButton}{resultsActions}</>}</>
   return <>
+    {confirmRefresh && <ConfirmationDialog title="Mass Refresh?" confirmLabel="Mass Refresh" pendingLabel="Refreshing…" onClose={() => setConfirmRefresh(false)} onConfirm={async () => { await metadataRefresh.refresh() }}><p>Refresh AO3 metadata for all works on this page?</p></ConfirmationDialog>}
     {renderHeader ? renderHeader(headerActions, sampleMode ? pool.length : remote.facets?.total) : <div className="library-heading-actions">{headerActions}</div>}
     {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View Import History</Link></p>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard Sections">{displayedSections.map(([key, title, description, Icon]) => {

@@ -18,6 +18,9 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
   const [mobile, setMobile] = useState(() => window.innerWidth <= 650)
+  const hold = useRef<{ timer?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false })
+  function cancelHold() { clearTimeout(hold.current.timer) }
+  useEffect(() => () => clearTimeout(hold.current.timer), [])
   const shelfRef = useRef<HTMLDivElement>(null)
   const shelfId = useId()
   const dragInstructionsId = useId()
@@ -51,7 +54,16 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing
     const design = item.automatic_rules ? 'lunar-phases' : item.spineDesign ?? shelfDesigns[item.id]
-    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={design} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+    const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={design} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} onPointerDown={event => {
+      cancelHold(); hold.current = { x: event.clientX, y: event.clientY, fired: false }
+      if (!mobile || editing || event.pointerType === 'mouse') return
+      hold.current.timer = setTimeout(() => {
+        hold.current.fired = true
+        if (customIndex >= 0) onEdit?.(item.id, { color, symbol }, false, true)
+        else onAutomaticEdit?.(item.id)
+      }, 500)
+    }} onPointerMove={event => { if (Math.hypot(event.clientX - hold.current.x, event.clientY - hold.current.y) > 10) cancelHold() }} onPointerUp={cancelHold} onPointerCancel={cancelHold} onContextMenu={event => { if (mobile) event.preventDefault() }} title={editable ? `Edit ${item.name}` : item.name} onClick={event => {
+      if (hold.current.fired) { hold.current.fired = false; event.preventDefault(); return }
       if (editing && customIndex < 0 && onAutomaticEdit) { onAutomaticEdit(item.id); return }
       const direct = event.metaKey || event.ctrlKey
       if (customIndex >= 0 && onEdit && (editing || event.shiftKey || direct)) {

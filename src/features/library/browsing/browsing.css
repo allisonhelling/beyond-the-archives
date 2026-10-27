@@ -21,6 +21,6 @@
  .pagination-page input { width: 2.5rem; padding-inline: 3px; }
  .pagination-controls { grid-column: 1 / -1; grid-row: 2; justify-self: center; gap: 6px; }
  .pagination-controls .button { padding-inline: 6px; }
- .pagination-inline .pagination-controls { flex-wrap: wrap; justify-content: center; }
- .pagination-inline .pagination-controls > [role=status] { order: -1; flex-basis: 100%; }
+ .pagination-inline .pagination-controls { flex-wrap: nowrap; justify-content: center; width: 100%; min-width: 0; gap: 4px; font-size: 12px; }
+ .pagination-inline .pagination-controls > [role=status] { min-width: 0; white-space: normal; }
 }

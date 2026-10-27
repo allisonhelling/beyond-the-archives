@@ -158,3 +158,16 @@ it('keeps paired devices authorized indefinitely while unclaimed codes still exp
  await request('disconnect', {}, device.secret)
  await expect(request('get', {}, device.secret)).rejects.toThrow(/Reconnect/)
 })
+
+it('saves and clears companion favorites and recommendations', async () => {
+ let token = ''
+ await user(alice, async () => { const pairing = (await manage('create')).code; token = (await request('claim', {}, pairing)).secret })
+ const current = (await request('get', {}, token)).entry
+ const base = { status: current.status, progress: current.progress, notes: current.notes, rating: 4, tags: current.tags, collections: current.collections, favorite: false, rec: false }
+ const saved = await request('save', { ...base, version: current.version, base, favorite: true, rec: true }, token)
+ expect(saved.entry).toMatchObject({ favorite: true, rec: true })
+ const flags = (await db.query<{ is_favorite: boolean; is_rec: boolean }>(`select is_favorite,is_rec from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=123 and e.user_id='${alice}'`)).rows[0]
+ expect(flags).toEqual({ is_favorite: true, is_rec: true })
+ await request('save', { ...base, version: saved.entry.version, base: { ...base, favorite: true, rec: true }, favorite: false, rec: false }, token)
+ expect((await request('get', {}, token)).entry).toMatchObject({ favorite: false, rec: false })
+})

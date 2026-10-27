@@ -21,6 +21,11 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   return value
  }
  const pageKey = (state, page) => `librarySync:${state.id}:${page}`
+ function pendingPageUrl(state) {
+  const url = new URL(state.chapterRequest ? `https://archiveofourown.org/works/${state.chapterRequest.workId}/navigate` : state.currentUrl ?? state.url)
+  if (!state.chapterRequest) url.searchParams.set('page', String(state.page))
+  return url.href
+ }
  async function owned() {
   const user = await auth(), state = await read()
   if (!user || user.expiresAt * 1000 <= Date.now()) throw new Error('Reconnect the extension in Settings.')
@@ -72,13 +77,32 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
   if (!state) return { state: null }
   if (message.action === 'end') {
-   if (state.endedEarly && state.status === 'ready') return { state }
+   if (state.endedEarly) return { state }
    if (!['running', 'paused', 'ready'].includes(state.status)) throw new Error('This scan has already ended.')
-   // Keep saved checkpoints and any completed chapter-date observations. Stop
-   // pending requests without treating the remaining AO3 list as scanned.
+   // End only primary-list discovery. Drain the same dependent series and
+   // chapter-date work that a natural end of the list would still require.
+   const remaining = (state.sources ?? []).filter(source => source.kind !== 'series_works')
+   if (state.kind !== 'series_works' && !state.done) remaining.unshift({ url: state.currentUrl ?? state.url, kind: state.kind, page: state.page + (state.captured ? 1 : 0) })
+   state.continuation = remaining.length ? remaining : undefined
+   state.canContinue = Boolean(state.continuation?.length)
    state.endedEarly = true; state.partial = true; state.hasMore = false
-   state.status = 'ready'; state.done = true; state.sources = []; state.chapterQueue = []; state.chapterRequest = null
-   state.retryNavigation = false; state.error = ''; state.attention = undefined; state.attentionId = undefined
+   state.sources = (state.sources ?? []).filter(source => source.kind === 'series_works')
+   if (state.kind !== 'series_works') { state.captured = true; state.done = true }
+   state.retryNavigation = Boolean((state.chapterRequest || !state.captured) && (state.retryNavigation || state.status === 'paused' || !sameScanUrl(state.requestUrl, pendingPageUrl(state))))
+   if (state.status === 'paused') state.nextAt = Math.max(state.nextAt, Date.now() + delayMs(state))
+   state.status = state.chapterRequest || state.chapterQueue?.length || state.sources.length || !state.captured || !state.done ? 'running' : 'ready'
+   state.error = ''; state.attention = undefined; state.attentionId = undefined
+   await write(state); return { state }
+  }
+  if (message.action === 'continue') {
+   if (state.status !== 'complete' || !state.endedEarly || !state.continuation?.length) throw new Error('Import the ended scan before continuing.')
+   const [source, ...sources] = state.continuation
+   state.currentUrl = source.url; state.kind = source.kind; state.page = source.page ?? 1; state.sources = sources
+   state.batchStart = state.pages; state.hasMore = false; state.captured = false; state.done = false
+   state.endedEarly = false; state.partial = Boolean(state.limited); state.canContinue = false; state.continuation = undefined
+   state.status = 'running'; state.retryNavigation = true; state.error = ''; state.attention = undefined; state.attentionId = undefined
+   if (message.delaySeconds !== undefined) state.delaySeconds = requestDelay(message.delaySeconds)
+   state.nextAt = Math.max(state.nextAt, Date.now() + delayMs(state))
    await write(state); return { state }
   }
   if (message.action === 'record-repairs') {
@@ -142,17 +166,19 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   } else if (message.action === 'pause' && state.status === 'running') state.status = 'paused'
   else if (message.action === 'discard') {
    await discard(state)
-   state.status = 'discarded'; state.keys = []; state.baseline = []
+   state.status = 'discarded'; state.keys = []; state.baseline = []; state.canContinue = false; state.continuation = undefined
    state.error = ''; state.attention = undefined; state.attentionId = undefined
   } else if (message.action === 'finish' && state.status === 'ready' && !state.hasMore) {
    // Partial scans must not establish or advance a complete-list baseline.
    if (!state.limited && !state.endedEarly) await storage.local.set({ [state.baselineKey]: [...new Set([...state.baseline, ...state.keys])] })
-   await discard(state); state.status = 'complete'; state.baseline = []; state.keys = []
+   await discard(state); state.status = 'complete'; if (!state.canContinue) { state.baseline = []; state.keys = [] }
   } else throw new Error('This action is unavailable for the saved scan.')
   await write(state); return { state }
  }
  async function navigate(state, url) {
   if (endingScanId === state.id) { await write(state); return }
+  try { if (state.tabId !== null) await chrome.tabs.get(state.tabId) } catch { state.tabId = null }
+  state.retryNavigation = false
   state.requestUrl = url; state.requestedAt = Date.now()
   state.nextAt = Date.now() + delayMs(state) + Math.floor(Math.random() * 3000)
   await storage.session.set({ ao3RequestAfter: state.nextAt })
@@ -172,29 +198,29 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   try {
    const context = await owned(); state = context.state
    if (state?.status !== 'running' || !await available()) return
-   if (state.retryNavigation || state.tabId === null) {
+   const capturePending = !state.captured || Boolean(state.chapterRequest)
+   if (capturePending && (state.retryNavigation || state.tabId === null)) {
     const gates = await storage.session.get(['ao3LastNavigation', 'ao3RequestAfter'])
     const nextAt = Math.max(state.nextAt, (gates.ao3LastNavigation ?? 0) + delayMs(state), gates.ao3RequestAfter ?? 0)
     if (Date.now() < nextAt) { state.nextAt = nextAt; return }
-    try { if (state.tabId !== null) await chrome.tabs.get(state.tabId) } catch { state.tabId = null }
-    state.retryNavigation = false
-    const url = new URL(state.chapterRequest ? `https://archiveofourown.org/works/${state.chapterRequest.workId}/navigate` : state.currentUrl ?? state.url); if (!state.chapterRequest) url.searchParams.set('page', String(state.page))
-    await navigate(state, url.href); return
+    await navigate(state, pendingPageUrl(state)); return
    }
    if (!state.chapterRequest && state.chapterQueue?.length) {
     if (Date.now() < state.nextAt) return
     state.chapterRequest = state.chapterQueue[0]
     await navigate(state, `https://archiveofourown.org/works/${state.chapterRequest.workId}/navigate`); return
    }
-   const tab = await chrome.tabs.get(state.tabId)
-   if (!sameScanUrl(tab.url, state.requestUrl)) {
-    // Chrome may still report the previous URL while the requested document starts.
-    if (tab.status !== 'complete') {
-     if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
-     return
+   if (capturePending) {
+    const tab = await chrome.tabs.get(state.tabId)
+    if (!sameScanUrl(tab.url, state.requestUrl)) {
+     // Chrome may still report the previous URL while the requested document starts.
+     if (tab.status !== 'complete') {
+      if (Date.now() - state.requestedAt > 120000) throw new Error('Page load timed out. Check AO3, then resume.')
+      return
+     }
+     state.attention = /\/users\/login(?:[/?#]|$)/.test(tab.url ?? '') ? 'login' : 'page_error'
+     throw new Error('AO3 redirected the scan. Complete sign-in or confirmation in its tab, then resume.')
     }
-    state.attention = /\/users\/login(?:[/?#]|$)/.test(tab.url ?? '') ? 'login' : 'page_error'
-    throw new Error('AO3 redirected the scan. Complete sign-in or confirmation in its tab, then resume.')
    }
    if (state.chapterRequest) {
     const request = state.chapterRequest
@@ -338,8 +364,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, batchStart, hasMore, endedEarly, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
-    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, endedEarly, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
+    const { id, status, url, mode, pages, batchStart, hasMore, endedEarly, canContinue, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
+    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, endedEarly, canContinue, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
    }
    return result
   } finally {

@@ -678,7 +678,7 @@ it('offers series selection and individual work details using the existing conne
  const checkbox = root.querySelector('input[data-work-choice]')
  const workId = Number(checkbox.dataset.workChoice)
  fireEvent.click(checkbox)
- const details = checkbox.closest('label').nextElementSibling; details.open = true
+ const details = checkbox.closest('label').parentElement.querySelector('details.work-details'); details.open = true
  const workNotes = within(details).getByLabelText(/^Private Notes:/)
  fireEvent.change(workNotes, { target: { value: 'Individual reminder' } })
  const status = within(details).getByLabelText(/^Reading Status:/)
@@ -807,8 +807,16 @@ it.each(['safari', 'chrome'])('places series work disclosures below names and ex
  await within(root).findByLabelText('Series Private Notes')
  expect(root.querySelector('#library-editor h3')).toBeNull()
  const choice = root.querySelector('[data-work-choice]').closest('label')
- expect(choice.nextElementSibling.tagName).toBe('DETAILS')
- expect(choice.nextElementSibling.querySelector('summary')).toHaveTextContent('Details Below Apply Only to This Work When Selected.')
+ expect(choice.nextElementSibling).toHaveClass('work-summary')
+ expect(choice.parentElement.querySelector('.work-details > summary')).toHaveTextContent('Details Below Apply Only to This Work When Selected.')
+ const summary = choice.nextElementSibling
+ fireEvent.click(findButton('Hide Summaries'))
+ expect(summary.hidden).toBe(true)
+ choice.parentElement.querySelector('.work-details').open = true
+ expect(summary.hidden).toBe(true)
+ await waitFor(() => expect(findButton('Show Summaries')).toBeEnabled())
+ fireEvent.click(findButton('Show Summaries'))
+ expect(summary.hidden).toBe(false)
  const help = within(root).getByLabelText('About Reload Saved Series')
  fireEvent.click(help)
  expect(help.closest('details')).toHaveTextContent('Reloading does not save your draft or refresh AO3 metadata.')
@@ -883,17 +891,18 @@ it('loads account rating text on focus and never replaces unsaved story fields',
  await waitFor(() => expect(root.querySelector('.rating-info > span')).toHaveTextContent(accountRatingInfo))
  expect(notes).toHaveValue('My draft')
 })
-it('can explicitly copy an older device-only explanation into the shared account setting', async () => {
- storage.set('rating-info:https://backend.test', 'My previous stars')
+it('cancels rating explanation edits without saving and places Cancel after Save', async () => {
  await mount(); await toggle('Connection', true)
  fireEvent.click(findButton('Rating Info'))
  await waitFor(() => expect(root.getElementById('library-rating-info').hidden).toBe(false))
- fireEvent.click(within(root).getByText('Use This Device’s Previous Explanation', { selector: 'button' }))
- expect(within(root).getByLabelText('Rating Info Text')).toHaveValue('My previous stars')
+ const editor = root.getElementById('library-rating-info')
+ const text = within(editor).getByLabelText('Rating Info Text')
+ fireEvent.input(text, { target: { value: 'Unsaved explanation' } })
+ const cancel = within(editor).getByText('Cancel', { selector: 'button' })
+ expect(ratingInfoSave().nextElementSibling).toBe(cancel)
+ fireEvent.click(cancel)
+ expect(editor.hidden).toBe(true)
  expect(accountRatingInfo).toBeNull()
- await waitFor(() => expect(ratingInfoSave()).toBeEnabled())
- fireEvent.click(ratingInfoSave())
- await waitFor(() => expect(accountRatingInfo).toBe('My previous stars'))
 })
 
 it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => ({ browser, fromBottom }))))('edits chapters read from the $browser count (bottom: $fromBottom) without saving personal edits', async ({ browser, fromBottom }) => {
@@ -1224,4 +1233,21 @@ it.each([1, 4].flatMap(chapter => [false, true].map(fromBottom => ({chapter,from
  fireEvent.click(within(fromBottom?bottomRoot:root).getByRole('button',{name:!fromBottom && chapter===1?'Start Reading':'Mark Read',exact:true}))
  await waitFor(()=>expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({status:'reading',progress:!fromBottom && chapter===1?0:chapter})
+})
+
+it.each(['safari', 'chrome'])('saves work favorite and recommended choices from the %s edit menu', async browser => {
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'save') entry = { ...entry, ...request.p_input, version: 'v2' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ entry = { version: 'v1', status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [], favorite: false, rec: false }
+ await mountLibrary(document, 'https://archiveofourown.org/works/123', { browser })
+ await toggle('Edit', true)
+ fireEvent.click(within(root).getByLabelText('Favorite'))
+ fireEvent.click(within(root).getByLabelText('Recommended'))
+ fireEvent.submit(within(root).getByLabelText('Private Notes').closest('form'))
+ await waitFor(() => expect(entry).toMatchObject({ favorite: true, rec: true }))
+ const body = JSON.parse(network.mock.lastCall[0].data)
+ expect(body.p_input).toMatchObject({ favorite: true, rec: true, base: { favorite: false, rec: false } })
 })

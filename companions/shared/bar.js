@@ -60,7 +60,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  const surfaces = [root, ...progressBars.map(({ root }) => root)]
  const storageKey = `connection:${backendUrl}`, themeKey = `theme:${backendUrl}`
  const preferredTheme = doc.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
- let [connection, theme, previousRatingInfo] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme), api.getValue(`rating-info:${backendUrl}`, null)])
+ let [connection, theme] = await Promise.all([api.getValue(storageKey, null), api.getValue(themeKey, preferredTheme)])
  let ratingInfo = defaultRatingInfo, savedRatingInfo = null
  theme = ['light', 'dark'].includes(theme) ? theme : preferredTheme
  const applyTheme = () => [host, ...progressBars.map(({ host }) => host)].forEach(surface => { surface.dataset.theme = theme })
@@ -197,11 +197,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   renderToolbar()
  }
  function entryValues(value = entry) {
-  return value ? { status: value.status, progress: value.progress, notes: value.notes, rating: value.rating ?? null, tags: value.tags, collections: value.collections } : {}
+  return value ? { status: value.status, progress: value.progress, notes: value.notes, rating: value.rating ?? null, favorite: value.favorite ?? false, rec: value.rec ?? false, tags: value.tags, collections: value.collections } : {}
  }
  function draftValues() {
   const progress = draft.status === 'to_read' ? 0 : draft.status === 'finished' ? page.metadata.published_chapters : Number(draft.chapter) - (draft.chapterFinished ? 0 : 1)
-  return { status: draft.status, progress, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), tags: parseLines(draft.tags), collections: draft.collections }
+  return { status: draft.status, progress, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), favorite: draft.favorite ?? false, rec: draft.rec ?? false, tags: parseLines(draft.tags), collections: draft.collections }
  }
  function applyDraft(values) {
   const local = draftValues()
@@ -209,7 +209,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    const chapter = Math.min(values.progress + 1, page.metadata.published_chapters || values.progress + 1)
    draft.chapter = chapter; draft.chapterFinished = values.progress >= chapter
   }
-  Object.assign(draft, { status: values.status, notes: values.notes, rating: values.rating ?? '', tags: values.tags.join('\n'), collections: values.collections })
+  Object.assign(draft, { status: values.status, notes: values.notes, rating: values.rating ?? '', favorite: values.favorite ?? false, rec: values.rec ?? false, tags: values.tags.join('\n'), collections: values.collections })
   syncEditorDraft?.()
  }
  async function reconcileDraft() {
@@ -406,7 +406,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   ratingText.rows = 4; ratingText.value = ratingInfo
   ratingText.maxLength = 10000
   node('p', 'Saved to your library account across devices. Leave blank and save to hide the rating info icon.', ratingEditor)
-  if (typeof previousRatingInfo === 'string' && savedRatingInfo === null) button('Use This Device’s Previous Explanation', () => { ratingText.value = previousRatingInfo }, ratingEditor)
+  const ratingActions = node('div', '', ratingEditor); ratingActions.className = 'row'
   button('Save Rating Info', async () => {
    const next = ratingText.value
    if (!connection) throw new Error('Connect your library before saving rating info.')
@@ -414,7 +414,8 @@ export async function mountLibrary(doc = document, href = location.href, options
    catch (error) { throw new Error(`Could not save your rating info. ${error.message}`) }
    ratingBase = savedRatingInfo
    message.textContent = 'Rating info saved to your library account.'
-  }, ratingEditor)
+  }, ratingActions)
+  button('Cancel', () => { ratingText.value = ratingInfo; ratingEditor.hidden = true; ratingToggle.setAttribute('aria-expanded', 'false'); ratingToggle.focus() }, ratingActions)
   const libraryLink = node('a', `Library Settings (${appOrigin})`, connectionPanel)
   libraryLink.className = 'library-settings-link'
   libraryLink.href = `${appOrigin}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
@@ -510,11 +511,21 @@ export async function mountLibrary(doc = document, href = location.href, options
    for (const checkbox of fieldset.querySelectorAll('input[data-work-choice]')) { checkbox.checked = true; checkbox.dispatchEvent(new Event('change')) }
   }, fieldset)
   all.disabled = false
+  const choices = node('div', '', fieldset); choices.className = 'row'; choices.append(all)
+  const summaries = []
+  const summaryToggle = button('Hide Summaries', () => {
+   const hidden = summaryToggle.getAttribute('aria-expanded') === 'true'
+   for (const summary of summaries) summary.hidden = hidden
+   summaryToggle.textContent = hidden ? 'Show Summaries' : 'Hide Summaries'
+   summaryToggle.setAttribute('aria-expanded', String(!hidden))
+  }, choices)
+  summaryToggle.setAttribute('aria-expanded', 'true')
   for (const work of page.series.works) {
    const row = node('div', '', fieldset)
    const saved = savedWorks.includes(work.workId)
    const details = draft.works[work.workId] ??= { selected: false, status: 'to_read', progress: 0, notes: '', rating: '', tags: '', collections: [] }
    const checkbox = input(row, `${work.position ? `Part ${work.position}: ` : ''}${work.title}${saved ? ' (already saved)' : ''}`, 'input', saved || details.selected, value => { details.selected = value }, 'checkbox')
+   if (work.summary) { const summary = node('p', work.summary, row); summary.className = 'work-summary'; summaries.push(summary) }
    checkbox.disabled = saved
    if (!saved) checkbox.dataset.workChoice = String(work.workId)
    if (saved) continue
@@ -561,6 +572,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (page.series) { await openSeriesEditor(); return }
   const stored = await api.getValue(draftKey(), null)
   draft = draft ?? stored ?? (entry ? { version: entry.version, status: entry.status, ...entryPosition(), notes: entry.notes, rating: entry.rating ?? '', tags: entry.tags.join('\n'), collections: entry.collections } : { ...chapterDefaults(current, page.metadata), version: null, notes: '', rating: '', tags: '', collections: [] })
+  draft.favorite ??= entry?.favorite ?? false; draft.rec ??= entry?.rec ?? false
   if (!Object.hasOwn(draft, 'base')) draft.base = stored ? {} : entryValues()
   if (stored) message.textContent = 'Unsaved draft restored. Review it before saving.'
   showPanel('editor')
@@ -571,7 +583,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    const label = node('label', title, fieldset), input = node(tag, '', label)
    input.setAttribute('aria-label', title)
    input.addEventListener('change', () => {
-    draft[key] = key === 'chapterFinished' ? input.checked : input.value
+    draft[key] = ['chapterFinished', 'favorite', 'rec'].includes(key) ? input.checked : input.value
     void preserveDraft()
    })
    return input
@@ -579,6 +591,9 @@ export async function mountLibrary(doc = document, href = location.href, options
   const help = (input, title, description) => {
    const control = node('span', '', input.parentElement); control.className = 'field-control'; control.append(input)
    infoHelp(control, title, description)
+  }
+  for (const [key, title] of [['favorite', 'Favorite'], ['rec', 'Recommended']]) {
+   const checkbox = field(title, 'input', key); checkbox.type = 'checkbox'; checkbox.checked = draft[key]
   }
   const status = field('Reading Status', 'select', 'status')
   for (const [key, title] of Object.entries(readingStatuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
@@ -628,6 +643,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   const syncCollections = collectionPicker(fieldset, 'Collections', () => draft.collections, value => { draft.collections = value })
   syncEditorDraft = () => {
    syncEditorProgress(); notes.value = draft.notes; notes.dispatchEvent(new Event('resize-text')); renderPersonal()
+   for (const key of ['favorite', 'rec']) fieldset.querySelector(`input[aria-label="${key === 'favorite' ? 'Favorite' : 'Recommended'}"]`).checked = draft[key]
    syncCollections()
   }
   const actions = node('div', '', form); actions.className = 'row editor-actions'
@@ -643,7 +659,7 @@ export async function mountLibrary(doc = document, href = location.href, options
     validateProgress(value, page.metadata)
     await api.setValue(draftKey(), draft)
     const chapterRead = !tile && (page.current === value || chapterSections.some(({ current }) => current === value)) && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? captureChapterRead(doc, { ...page, current: value }, href) : null
-    accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
+    accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), favorite: draft.favorite ?? false, rec: draft.rec ?? false, tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
     message.textContent = 'Saved'; clearEditor(); draft = null; showPanel(null)
     await api.deleteValue(draftKey()).catch(() => { message.textContent = 'Saved. Could not clear the local draft.' })
    } finally { fieldset.disabled = false }

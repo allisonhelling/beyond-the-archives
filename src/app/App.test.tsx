@@ -113,7 +113,7 @@ describe('private app access and navigation', () => {
     await screen.findByRole('heading', { name: 'Currently Reading' })
     expect(screen.getByRole('navigation', { name: 'Mobile Navigation' })).toBeInTheDocument()
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile Navigation' })
-    expect(within(mobileNav).getAllByRole('link').map(link => link.textContent)).toEqual(['Reading', 'Library', 'Add', 'Stats', 'Settings'])
+    expect(within(mobileNav).getAllByRole('link').map(link => link.textContent)).toEqual(['Reading', 'Library', 'Import', 'Stats', 'Settings'])
     await user.click(within(mobileNav).getByRole('link', { name: 'Library' }))
     expect(await screen.findByRole('heading', { name: 'Your Library' })).toBeVisible()
     expect(mobileNav).toBeInTheDocument()

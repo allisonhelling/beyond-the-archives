@@ -176,9 +176,12 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .confirmation-description p + p { margin-top: 10px; }
 .confirmation-dialog .form-actions { margin-top: 24px; justify-content: flex-end; }
 .confirmation-dialog .form-actions .button { flex: 1; }
-.collection-dialog { width: min(960px, calc(100vw - 32px)); }
+.collection-dialog { width: min(960px, calc(100vw - 32px)); overflow-x: hidden; touch-action: pan-y; }
 .collection-rule-filters { border: 0; padding: 0; margin: 0; min-width: 0; grid-column: 1 / -1; grid-row: 2; }
 .collection-rule-filters > legend { font-weight: 600; }
+.collection-rule-filters .reading-toolbar-rules { position: relative; }
+.collection-rule-filters .reading-toolbar-rules > :is(.suggestion-search, .fandom-select) { position: static; }
+.collection-rule-filters .reading-toolbar-rules :is(.search-suggestions, .fandom-panel) { position: absolute; left: 0; right: 0; top: 100%; width: 100%; max-width: 100%; }
 .collection-dialog-content { display: grid; grid-template-columns: minmax(0, 1fr) var(--collection-spine-width) minmax(0, 1fr); align-items: start; gap: 24px; }
 .collection-dialog-fields, .collection-appearance-options { border: 0; padding: 0; margin: 0; min-width: 0; }
 .collection-dialog-fields { display: grid; gap: 18px; }
@@ -335,7 +338,9 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .story-metadata-edit { max-width: 110px; height: 34px; min-height: 34px; padding: 6px 8px; gap: 6px; }
   .details-story-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; font-size: 14px; }
   .settings-card.details-progress-panel { padding: 12px; }
-  .details-reading-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .details-reading-controls { grid-template-columns: minmax(0, 1fr) max-content; gap: 8px; }
+  .details-reading-controls .details-collections-content .button { padding-inline: 2px; }
+  .details-reading-controls .rating-heading { white-space: nowrap; }
   .details-reading-controls > .status-select { grid-column: 1 / -1; }
   .details-reading-controls .personal-rating legend, .details-reading-controls .details-collections-heading { min-height: 42px; }
   .details-reading-controls .rating-controls { display: grid; justify-items: start; gap: 4px; }
@@ -460,11 +465,11 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .library-heading-actions .dropdown-panel { left: 0; right: auto; width: 100%; min-width: 0; }
   .library-editing { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto max-content; gap: 8px; }
   .library-editing .collection-selection-toolbar, .library-editing .library-heading-actions { display: contents; }
-  .library-editing h1 { grid-column: 1 / -1; grid-row: 1; }
+  .library-editing h1 { grid-column: 1; grid-row: 1; }
   .library-editing .custom-dropdown { grid-column: 1; grid-row: 2; }
-  .library-editing .library-create-action { grid-column: 2; grid-row: 2; justify-self: center; }
+  .library-editing .library-create-action { grid-column: 2; grid-row: 1; justify-self: end; }
   .library-editing .collection-hidden { grid-column: 3; grid-row: 2; }
-  .library-editing .collection-select { grid-column: 1; grid-row: 3; justify-self: start; }
+  .library-editing .collection-select { grid-column: 3; grid-row: 1; justify-self: end; }
   .library-editing .collection-selection-trigger { grid-column: 2; grid-row: 3; justify-self: end; white-space: nowrap; }
   .library-editing .collection-bulk-edit { grid-column: 3; grid-row: 3; }
   .library-editing .button { padding-inline: 8px; }
@@ -724,6 +729,10 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 }
 @media (max-width: 650px) {
   .story-card { padding-top: 12px; }
+  .filter-default-actions { width: 100%; gap: 6px; flex-wrap: nowrap; }
+  .filter-default-actions .button { flex: 1; padding-inline: 4px; font-size: 12px; }
+  :root :is(input:not([type=checkbox], [type=radio]), textarea, select) { font-size: 16px; }
+  .progress-popover input, .pagination-page input { font-size: 16px; }
   .within-search-row { grid-template-columns: minmax(0, 1fr); }
   .within-search-field > label { grid-template-columns: minmax(0, 1fr); }
   .reading-toolbar .custom-dropdown:not(.dropdown-compact), .fandom-select, .reading-toolbar .suggestion-search > label { grid-template-columns: 112px minmax(0, 1fr); }

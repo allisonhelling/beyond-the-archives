@@ -13,12 +13,12 @@ import { publicationStatuses } from './publication-status'
 import { defaultReadingFilters, normalize, type ReadingFilters } from './reading-search'
 
 type FandomOption = { name: string; count: number }
-function FandomSelect({ options, selected, onChange }: { options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
+function FandomSelect({ options, selected, onChange, label = 'Select Fandoms' }: { label?: string; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState('')
   const id = useId()
   const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false))
   return <div className="fandom-select" ref={ref}>
-    <button type="button" className="filter-input fandom-trigger" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><span>Select Fandoms {selected.length ? `(${selected.length})` : ''}</span><ChevronDown size={16} /></button>
+    <button type="button" className="filter-input fandom-trigger" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><span>{label} {selected.length ? `(${selected.length})` : ''}</span><ChevronDown size={16} /></button>
     {!open && selected.length > 0 && <div className="filter-chips"><MetadataTags values={selected} removeLabel={name => `Remove Fandom ${name}`} onRemove={name => onChange(selected.filter(f => f !== name))} /></div>}
     {open && <div id={id} className="fandom-panel menu-surface" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
       <input aria-label="Search Fandoms" type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Fandoms" />
@@ -68,6 +68,7 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { onChange({ ...filters, [key]: value }) }
   const publicationLabel = (value: keyof typeof publicationStatuses) => filterPublicationLabel(value, mode === 'series')
   const activeFilters = readingFilterTags(filters, { authorOnly: automaticCollection, series: mode === 'series', seriesVisibility: mode === 'library' && !worksOnly })
+  const oneShotControl = <Dropdown fitContent label="One-Shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
   const membershipToggles = <>
       <button type="button" className={`button ${filters.excludeLaterSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.excludeLaterSeries)} onClick={() => change('excludeLaterSeries', !filters.excludeLaterSeries)}><Layers3 size={17} />Exclude Later Series Works</button>
       <button type="button" className={`button ${filters.inSeries ? 'primary' : 'secondary'}`} aria-pressed={filters.inSeries} onClick={() => change('inSeries', !filters.inSeries)}><Layers3 size={17} />In a Series</button>
@@ -79,7 +80,7 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
     <section data-mode={mode} className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series Toolbar' : mode === 'library' ? 'Library Toolbar' : 'Reading Toolbar'}>
       {orderingControls}
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
-      <FandomSelect options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
+      <FandomSelect label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       {mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
       {!alwaysExpanded && <button type="button" className={`button filter-toggle ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
     </section>
@@ -93,8 +94,9 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <div className="filter-choice-row">
       <Dropdown fitContent label="Content Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
       <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
+      {automaticCollection && oneShotControl}
       <Dropdown fitContent label={mode !== 'reading' ? 'Publication Status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
-      <Dropdown fitContent label="One-Shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
+      {!automaticCollection && oneShotControl}
       {!automaticCollection && membershipToggles}
       </div>
       <div className={automaticCollection ? "filter-date-options" : "filter-date-only"}>

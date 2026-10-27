@@ -29,11 +29,11 @@ it('ends a scan without discarding checkpoints or advancing the Quick Sync basel
  local[baselineKey] = ['old-baseline']; local.librarySync.baseline = ['old-baseline']
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
  await collect()
- Object.assign(local.librarySync, { sources: [{ url: 'https://archiveofourown.org/series/99', kind: 'series_works' }], chapterQueue: [{ workId: 1 }], chapterRequest: { workId: 1 }, error: 'Previous warning', attention: 'page_error', attentionId: 'old-alert' })
+ Object.assign(local.librarySync, { sources: [{ url: 'https://archiveofourown.org/users/alice/works', kind: 'works' }], error: 'Previous warning', attention: 'page_error', attentionId: 'old-alert' })
  const result = await sync.command({ action: 'end', scanId: id })
  expect(result.state).toMatchObject({ status: 'ready', endedEarly: true, partial: true, hasMore: false, pages: 1, count: 1, error: '' })
  expect(result.state.attention).toBeUndefined()
- expect(local.librarySync).toMatchObject({ sources: [], chapterQueue: [], chapterRequest: null })
+ expect(local.librarySync.sources).toEqual([])
  expect((await sync.command({ action: 'page', page: 1, scanId: id })).rows).toEqual([row(1)])
  chrome.tabs.update.mockClear(); chrome.scripting.executeScript.mockClear()
  await sync.pump()
@@ -296,6 +296,101 @@ it('persists explicit reading status for URL and username scans and leaves defau
 
 const datedRow = (id = 1) => ({ ...row(id), chapters: '3/3', date: '2026-10-20', 'bookmark date': '2026-10-10' })
 const chapterIndex = '<ol class="chapter index"><li><a href="/works/1/chapters/101">1. First</a><span class="datetime">(2026-09-01)</span></li><li><a href="/works/1/chapters/102">2. Second</a><span class="datetime">(2026-10-01)</span></li><li><a href="/works/1/chapters/103">3. Third</a><span class="datetime">(2026-10-10)</span></li></ol>'
+it('ends primary-list discovery but completes queued series pagination and chapter dates across restart', async () => {
+ const seriesUrl = 'https://archiveofourown.org/series/99'
+ const html = readFileSync(new URL('../../server/ao3/fixtures/series.html', import.meta.url), 'utf8').replaceAll('/series/77', '/series/99')
+ await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates: true, delaySeconds: 5 })
+ chrome.scripting.executeScript.mockImplementation(async ({args}) => {
+  const state = local.librarySync, url = state.requestUrl
+  if (args?.[1] === 'navigation') return [{result:{url,html:chapterIndex.replaceAll('/works/1/', `/works/${state.chapterRequest.workId}/`)}}]
+  if (args?.[1] === 'series') return [{result:{url,html}}]
+  if (state.kind === 'series_works') return [{result:{url,rows:[state.page === 1 ? {...datedRow(2),source_list:'marked_for_later'} : row(3)],skipped:0,hasNext:state.page === 1}}]
+  return [{result:{url,rows:[datedRow()],skipped:0,hasNext:true,seriesUrls:[seriesUrl],bookmarkedSeriesUrls:[seriesUrl],seriesBookmarkDates:{[seriesUrl]:'2026-10-10'}}}]
+ })
+ await collect()
+ const baselineKey = local.librarySync.baselineKey
+ local[baselineKey] = ['previous']
+ expect((await sync.command({action:'end',scanId:local.librarySync.id})).state).toMatchObject({status:'running',endedEarly:true})
+ expect(local.librarySync.chapterQueue).toHaveLength(1)
+ await expect(sync.command({action:'page',page:1})).rejects.toThrow('No completed page')
+ sync = createLibrarySync({auth:async()=>user,available:async()=>true,changed:vi.fn()})
+ for(let step=0;step<20 && local.librarySync.status==='running';step++){clock+=10000;await sync.pump()}
+ expect(local.librarySync.error).toBe('')
+ expect(local.librarySync).toMatchObject({status:'ready',pages:3,listPages:1,chapterDatesChecked:2,chapterDatesUnavailable:0,endedEarly:true,sources:[],chapterQueue:[]})
+ const direct = (await sync.command({action:'page',page:1})).rows[0]
+ const series = await sync.command({action:'page',page:2})
+ expect(bookmarkReadingState(readAo3Rows([direct])[0])).toMatchObject({status:'reading',progress:2})
+ expect(bookmarkReadingState(readAo3Rows(series.rows)[0])).toMatchObject({status:'reading',progress:2})
+ expect(series).toMatchObject({seriesUrl,seriesPreview:{seriesId:99}})
+ expect((await sync.command({action:'page',page:3})).rows).toEqual([{...row(3),'bookmark date':'2026-10-10'}])
+ expect(chrome.tabs.update.mock.calls.every(([,change])=>!change.url.includes('/users/'))).toBe(true)
+ await sync.command({action:'finish'})
+ expect(local[baselineKey]).toEqual(['previous'])
+})
+it('finishes the remaining pages of a series already in progress when End Scan is pressed', async () => {
+ const seriesUrl='https://archiveofourown.org/series/99'
+ await start()
+ chrome.scripting.executeScript.mockImplementation(async ({args})=>args?.[1]==='series' ? [{result:null}] : [{result:{url:local.librarySync.requestUrl,rows:[row(local.librarySync.kind==='series_works'?local.librarySync.page+1:1)],skipped:0,hasNext:local.librarySync.kind==='series_works'&&local.librarySync.page===1,seriesUrls:local.librarySync.kind==='series_works'?[]:[seriesUrl]}}])
+ await collect();clock+=20000;await sync.pump();await sync.pump()
+ expect(local.librarySync).toMatchObject({kind:'series_works',page:1,pages:2,captured:true,done:false})
+ expect((await sync.command({action:'end'})).state.status).toBe('running')
+ for(let step=0;step<6&&local.librarySync.status==='running';step++){clock+=20000;await sync.pump()}
+ expect(local.librarySync).toMatchObject({status:'ready',pages:3,page:2,endedEarly:true})
+ expect((await sync.command({action:'page',page:3})).rows).toEqual([row(3)])
+})
+it('preserves dependent chapter checks when they pause and resumes them before exposing review', async () => {
+ await sync.command({action:'start',url:'https://archiveofourown.org/users/alice/bookmarks',mode:'full',checkChapterDates:true,delaySeconds:5})
+ chrome.scripting.executeScript.mockImplementation(async()=>[{result:{url:local.librarySync.requestUrl,rows:[datedRow()],skipped:0,hasNext:true}}])
+ await collect();await sync.command({action:'end'})
+ clock+=10000;await sync.pump()
+ chrome.scripting.executeScript.mockResolvedValue([{result:{attention:'rate_limit',error:'AO3 is limiting requests.'}}])
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({status:'paused',endedEarly:true,attention:'rate_limit'})
+ expect(local.librarySync.chapterQueue).toHaveLength(1)
+ await expect(sync.command({action:'finish'})).rejects.toThrow('unavailable')
+ chrome.scripting.executeScript.mockImplementation(async()=>[{result:{url:local.librarySync.requestUrl,html:chapterIndex}}])
+ await sync.command({action:'resume'})
+ for(let step=0;step<5&&local.librarySync.status==='running';step++){clock+=10000;await sync.pump()}
+ expect(local.librarySync).toMatchObject({status:'ready',chapterDatesChecked:1,chapterDatesUnavailable:0})
+})
+it('finishes a chapter index already requested before End Scan without reopening it', async () => {
+ await sync.command({action:'start',url:'https://archiveofourown.org/users/alice/bookmarks',mode:'full',checkChapterDates:true,delaySeconds:5})
+ chrome.scripting.executeScript.mockImplementation(async()=>[{result:local.librarySync.chapterRequest?{url:local.librarySync.requestUrl,html:chapterIndex}:{url:local.librarySync.requestUrl,rows:[datedRow()],skipped:0,hasNext:true}}])
+ await collect();clock+=10000;await sync.pump()
+ expect(local.librarySync.requestUrl).toBe('https://archiveofourown.org/works/1/navigate')
+ const navigations=chrome.tabs.update.mock.calls.length
+ expect((await sync.command({action:'end'})).state.status).toBe('running')
+ await sync.pump();await sync.pump()
+ expect(local.librarySync).toMatchObject({status:'ready',chapterDatesChecked:1})
+ expect(chrome.tabs.update).toHaveBeenCalledTimes(navigations)
+})
+it('recovers a closed scan tab for pending series without reopening the primary listing', async () => {
+ const seriesUrl='https://archiveofourown.org/series/99'
+ await start()
+ chrome.scripting.executeScript.mockImplementation(async({args})=>args?.[1]==='series'?[{result:null}]:[{result:{url:local.librarySync.requestUrl,rows:[row(1)],skipped:0,hasNext:false,seriesUrls:local.librarySync.kind==='series_works'?[]:[seriesUrl]}}])
+ await collect();await sync.command({action:'end'})
+ chrome.tabs.get.mockRejectedValueOnce(new Error('Tab closed'))
+ clock+=20000;await sync.pump();await sync.pump()
+ expect(chrome.tabs.create).toHaveBeenCalledTimes(2)
+ expect(chrome.tabs.create.mock.lastCall[0].url).toBe(`${seriesUrl}?page=1`)
+ expect(local.librarySync).toMatchObject({status:'ready',endedEarly:true,pages:2})
+})
+it('keeps remaining series work across a normal batch boundary after ending primary discovery', async () => {
+ const seriesUrl='https://archiveofourown.org/series/99'
+ await start();await collect()
+ Object.assign(local.librarySync,{status:'ready',hasMore:true,pages:500,page:500,captured:true,done:false,sources:[{url:seriesUrl,kind:'series_works'}]})
+ expect((await sync.command({action:'end'})).state.status).toBe('running')
+ await sync.pump()
+ expect(local.librarySync).toMatchObject({status:'ready',hasMore:true,endedEarly:true})
+ await sync.command({action:'finish-batch',batchStart:0,batchEnd:500})
+ chrome.scripting.executeScript.mockImplementation(async({args})=>args?.[1]==='series'?[{result:null}]:[{result:{url:local.librarySync.requestUrl,rows:[row(2)],skipped:0,hasNext:false}}])
+ for(let step=0;step<5&&local.librarySync.status==='running';step++){clock+=20000;await sync.pump()}
+ expect(local.librarySync).toMatchObject({status:'ready',hasMore:false,batchStart:500,pages:501,currentUrl:seriesUrl})
+ expect((await sync.command({action:'page',page:501})).rows).toEqual([row(2)])
+ expect(chrome.tabs.update.mock.calls.every(([,change])=>!change.url.includes('/users/'))).toBe(true)
+ await sync.command({action:'finish'})
+ expect(local[local.librarySync.baselineKey]).toBeUndefined()
+})
 it.each([undefined, 'reading'])('checks bookmark chapter dates for the %s status and resumes from durable checkpoints', async readingStatus => {
  await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates: true, delaySeconds: 5, readingStatus })
  chrome.scripting.executeScript.mockImplementation(async () => [{ result: local.librarySync.requestUrl.endsWith('/navigate') ? { url: local.librarySync.requestUrl, html: chapterIndex } : { url: local.librarySync.requestUrl, rows: [datedRow()], skipped: 0, hasNext: false } }])
@@ -756,4 +851,27 @@ it('persists existing-entry review and repair counts across restarts without dou
  await restarted.command({action:'finish'})
  expect(local.librarySync.repairPages[1]).toEqual(record.repairs)
  await expect(sync.command({action:'start',url:'https://archiveofourown.org/users/alice/bookmarks',mode:'quick',reviewExisting:true})).rejects.toThrow('Full Scan')
+})
+
+it('continues an imported ended scan at its next uncaptured primary page', async () => {
+ await start()
+ const { id, baselineKey } = local.librarySync
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
+ await collect()
+ await sync.command({ action: 'end', scanId: id })
+ expect(local.librarySync.canContinue).toBe(true)
+ await expect(sync.command({ action: 'continue', scanId: id })).rejects.toThrow(/Import/)
+ await sync.command({ action: 'finish', scanId: id })
+ expect(local[baselineKey]).toBeUndefined()
+ // A new service worker must recover the same continuation from durable storage.
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ const result = await sync.command({ action: 'continue', scanId: id })
+ expect(result.state).toMatchObject({ status: 'running', endedEarly: false, batchStart: 1, pages: 1 })
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(2)], skipped: 0, hasNext: false } }])
+ clock += 20000; await sync.pump(); await sync.pump()
+ expect(local.librarySync.requestUrl).toContain('page=2')
+ expect((await sync.command({ action: 'page', page: 2, scanId: id })).rows).toEqual([row(2)])
+ await sync.command({ action: 'finish', scanId: id })
+ expect(local[baselineKey]).toEqual(['1', '2'])
+ expect(local.librarySync.canContinue).toBe(false)
 })
