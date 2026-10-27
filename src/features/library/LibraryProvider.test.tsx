@@ -195,3 +195,29 @@ it('preserves work pages and their facets when only collection appearance change
  expect(mocks.facets).toHaveBeenCalledTimes(1)
  expect(mocks.catalog).not.toHaveBeenCalled()
 })
+
+it('invalidates tag-filtered pages after verified aliases arrive without reloading unfiltered pages or facets',async()=>{
+ const {tagResolutionEvent}=await import('./tags/tag-resolution')
+ const view=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ const tagged={...query,filters:{...defaultReadingFilters,characters:'Alya Césaire'}},signal=new AbortController().signal
+ await act(async()=>{await view.result.current.fetchPage(query,1,50,signal);await view.result.current.fetchPage(tagged,1,50,signal)})
+ await act(async()=>{window.dispatchEvent(new CustomEvent(tagResolutionEvent,{detail:{userId:'someone-else'}}))})
+ expect(view.result.current.tagRevision).toBe(0)
+ await act(async()=>{window.dispatchEvent(new CustomEvent(tagResolutionEvent,{detail:{userId:'reader-1'}}))})
+ expect(view.result.current.tagRevision).toBe(1)
+ await act(async()=>{await view.result.current.fetchPage(query,1,50,signal);await view.result.current.fetchPage(tagged,1,50,signal)})
+ expect(mocks.query).toHaveBeenCalledTimes(3)
+})
+
+it('does not cache an in-flight tag query completed after its alias evidence changes',async()=>{
+ const {tagResolutionEvent}=await import('./tags/tag-resolution')
+ const view=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ let finish!:(value:typeof result)=>void
+ mocks.query.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockResolvedValue(result)
+ const tagged={...query,filters:{...defaultReadingFilters,characters:'Alya Césaire'}},signal=new AbortController().signal
+ const old=view.result.current.fetchPage(tagged,1,50,signal).catch(error=>error)
+ await act(async()=>{window.dispatchEvent(new CustomEvent(tagResolutionEvent,{detail:{userId:'reader-1'}}));finish(result)})
+ expect(await old).toMatchObject({name:'AbortError'})
+ await act(async()=>{await view.result.current.fetchPage(tagged,1,50,signal)})
+ expect(mocks.query).toHaveBeenCalledTimes(2)
+})

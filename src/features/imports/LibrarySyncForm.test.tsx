@@ -12,7 +12,7 @@ vi.mock('./repository', () => ({ submitLibrarySync: mocks.submit, previewSeries:
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => ({ session: { user: { id: 'test' } } }) }))
 import { LibrarySyncForm } from './LibrarySyncForm'
-const ready = { id: 'scan', status: 'ready', pages: 2, count: 2, skipped: 0, error: '' }
+const ready = { reviewExisting: true, id: 'scan', status: 'ready', pages: 2, count: 2, skipped: 0, error: '' }
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
@@ -117,7 +117,7 @@ it('offers optional start/end pages in the full app and sends the inclusive rang
  fireEvent.change(screen.getByLabelText(/End Page/), { target: { value: '10' } })
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/alice/bookmarks' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
- await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', seriesBehavior: 'choose', readingStatus: 'to_read', delaySeconds: 15, startPage: 2, endPage: 10 }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', reviewExisting: true, seriesBehavior: 'choose', readingStatus: 'to_read', readingStatusOrigin: 'default', delaySeconds: 15, startPage: 2, endPage: 10 }))
 })
 it('shows page limits only for Full Library Scan and clears them for Quick Sync', () => {
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
@@ -155,7 +155,7 @@ it('sends the chosen request interval and explains bookmark sorting and reading 
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/alice/bookmarks' } })
  fireEvent.change(screen.getByLabelText(/^Time Between Page Requests/), { target: { value: '60' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
- await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', seriesBehavior: 'choose', readingStatus: 'to_read', delaySeconds: 60 }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', reviewExisting: true, seriesBehavior: 'choose', readingStatus: 'to_read', readingStatusOrigin: 'default', delaySeconds: 60 }))
  expect(screen.getByText(/Ensure that bookmarks are sorted by "Date Bookmarked"/)).toBeVisible()
  expect(screen.queryByText(/Earlier or same-day bookmarks/)).not.toBeInTheDocument()
  expect(screen.queryByText(/CSV importer’s reading-status rules/)).not.toBeInTheDocument()
@@ -238,7 +238,7 @@ it('reuses a created collection when a page upload must be retried', async () =>
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
  expect(mocks.collection).toHaveBeenCalledTimes(1)
  expect(mocks.collection).toHaveBeenCalledWith('AO3 Collection', undefined, undefined, 'Summary\n\nIntro')
- expect(mocks.submit).toHaveBeenCalledWith(expect.any(Array), collectionId, undefined, { id: ready.id, url: undefined })
+ expect(mocks.submit).toHaveBeenCalledWith(expect.any(Array), collectionId, undefined, { id: ready.id, url: undefined, reviewExisting: true })
 })
 
 const seriesUrl = 'https://archiveofourown.org/series/99'
@@ -505,7 +505,7 @@ it('keeps a manually entered list URL status through import submission', async (
  fireEvent.change(screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' }), { target: { value: 'finished' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
- await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'finished', { id: ready.id, url: 'https://archiveofourown.org/users/reader/bookmarks' }))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'finished', { id: ready.id, url: 'https://archiveofourown.org/users/reader/bookmarks', reviewExisting: true }))
 })
 
 it('keeps a username manual status through automatic saved-page import without changing the list selector', async () => {
@@ -522,7 +522,7 @@ it('keeps a username manual status through automatic saved-page import without c
  fireEvent.click(screen.getByRole('checkbox', { name: 'Manually Set Reading Status' }))
  fireEvent.change(screen.getByRole('combobox', { name: 'Reading Status for Username Import' }), { target: { value: 'paused_reading' } })
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
- await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'paused_reading', { id: ready.id, url: 'https://archiveofourown.org/users/reader/bookmarks' }))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks' })], undefined, 'paused_reading', { id: ready.id, url: 'https://archiveofourown.org/users/reader/bookmarks', reviewExisting: true }))
  expect(screen.getByRole('combobox', { name: 'Reading Status for AO3 list URL' })).toHaveValue('finished')
 })
 
@@ -551,7 +551,7 @@ it.each([false, true])('uses dynamic bookmark inference for list URLs with chapt
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/reader/bookmarks' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', {
-  url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', seriesBehavior: 'choose', delaySeconds: 15, ...(checkDates ? { checkChapterDates: true } : {}),
+  url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', reviewExisting: true, seriesBehavior: 'choose', delaySeconds: 15, ...(checkDates ? { checkChapterDates: true } : {}),
  }))
 })
 
@@ -565,7 +565,7 @@ it('hides and ignores dynamic chapter-date checks when a fixed list status is se
  expect(screen.queryByRole('checkbox', { name: 'Check chapter publication dates' })).not.toBeInTheDocument()
  fireEvent.change(screen.getByLabelText('AO3 List URL'), { target: { value: 'https://archiveofourown.org/users/reader/bookmarks' } })
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
- await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', seriesBehavior: 'choose', delaySeconds: 15, readingStatus: 'paused_reading' }))
+ await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('start', { url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', reviewExisting: true, seriesBehavior: 'choose', delaySeconds: 15, readingStatus: 'paused_reading' }))
 })
 
 it('restores dynamic list selections from saved scans and sends no fixed status when importing their pages', async () => {
@@ -582,7 +582,7 @@ it('restores dynamic list selections from saved scans and sends no fixed status 
  expect(check).toBeChecked()
  expect(check).toBeDisabled()
  fireEvent.click(importButton)
- await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks', metadata: expect.objectContaining({ chapter_dates: { '1': '2026-10-01', '2': '2026-10-09', '3': '2026-10-20' } }) })], undefined, undefined, { id: ready.id, url: undefined }))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith([expect.objectContaining({ source: 'bookmarks', metadata: expect.objectContaining({ chapter_dates: { '1': '2026-10-01', '2': '2026-10-09', '3': '2026-10-20' } }) })], undefined, undefined, { id: ready.id, url: undefined, reviewExisting: true }))
 })
 
 it.each(['Import Bookmarks', 'Import Marked for Later'])('keeps Dynamic (Bookmarks) and list chapter preferences out of the %s status selector', async title => {
@@ -730,4 +730,20 @@ it('explains why older bookmark scans cannot separate series groups', async () =
  expect(await screen.findByText(/This scan did not retain which series were explicitly bookmarked/)).toBeVisible()
  expect(screen.queryByRole('heading', { name: 'Bookmarked Series' })).not.toBeInTheDocument()
  expect(screen.queryByRole('heading', { name: 'Series Containing Bookmarked Works' })).not.toBeInTheDocument()
+})
+
+it('offers existing-entry review only for Full Scan and retains the opt-out in its request',async()=>{
+ mocks.command.mockResolvedValue({state:null})
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
+ const option=screen.getByRole('checkbox',{name:'Review Existing Entries'})
+ expect(option).toBeChecked()
+ fireEvent.click(option)
+ fireEvent.change(screen.getByLabelText('AO3 List URL'),{target:{value:'https://archiveofourown.org/users/reader/bookmarks'}})
+ fireEvent.click(screen.getByRole('button',{name:'Import from List'}))
+ await waitFor(()=>expect(mocks.command).toHaveBeenCalledWith('start',expect.objectContaining({reviewExisting:false})))
+ fireEvent.change(screen.getByLabelText('Scan Mode'),{target:{value:'quick'}})
+ expect(screen.queryByRole('checkbox',{name:'Review Existing Entries'})).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button',{name:'Import from List'}))
+ await waitFor(()=>expect(mocks.command.mock.calls.filter(([action])=>action==='start')).toHaveLength(2))
+ expect(mocks.command.mock.calls.filter(([action])=>action==='start')[1][1]).not.toHaveProperty('reviewExisting')
 })

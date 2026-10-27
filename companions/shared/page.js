@@ -69,6 +69,14 @@ export function readPage(doc, href) {
  }
  const published = captured.published_chapters ?? null
  let current = identity.chapterId ? Number(Object.keys(chapterMap).find(key => chapterMap[key] === identity.chapterId)) || null : 1
+ // Custom AO3 skins may omit the chapter selector. The single loaded chapter
+ // container still identifies its ordinal without guessing from a chapter ID.
+ if (identity.chapterId && !current) {
+  const sections = doc.querySelectorAll('#chapters > .chapter')
+  const ordinal = sections.length === 1 ? Number(/^chapter-([1-9]\d*)$/.exec(sections[0].id)?.[1]) : null
+  current = published === 1 ? 1 : ordinal && (!published || ordinal <= published) ? ordinal : null
+  if (current) chapterMap[current] = identity.chapterId
+ }
  if (!identity.chapterId && url.searchParams.get('view_full_work') === 'true' && published !== 1) current = null
  const metadata = workMetadata(captured)
  return { work: identity.workId, metadata, automaticMetadata: captured, chapters: chapterMap, current, defaults: chapterDefaults(current, metadata) }

@@ -10,6 +10,7 @@ import { mountPersonalControls, mountConflictReview } from './personal-controls'
 export async function mountLibrary(doc = document, href = location.href, options = {}) {
  const { tile = null, api, browser = 'safari', config } = options
  const readingLabel = browser === 'safari' ? 'Reading' : 'Currently Reading'
+ const readingStatuses = { ...statuses, ...(browser === 'safari' ? { waiting_for_updates: 'Waiting' } : {}) }
  const backendUrl = config?.backend ?? __SUPABASE_URL__, appOrigin = config?.appOrigin ?? __APP_ORIGIN__, publicKey = config?.publicKey ?? __SUPABASE_KEY__
  const page = tile?.page ?? readPage(doc, href)
  if (!page) {
@@ -281,7 +282,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   dialog.showModal(); input.focus(); input.select()
  }
  function renderReadingToggle(parent, current, top) {
-  if (active({ reading_status: entry.status }) || entry.status === 'paused_reading') {
+  if (['reading', 're_reading', 'paused_reading'].includes(entry.status)) {
    const paused = entry.status === 'paused_reading'
    if (paused && current && (current > entry.progress + 1 || (!top && current === entry.progress + 1))) return
    const label = paused ? 'Resume Reading' : 'Pause Reading'
@@ -291,27 +292,27 @@ export async function mountLibrary(doc = document, href = location.href, options
    toggle.prepend(icon(paused ? ['m9 5 11 7-11 7V5Z'] : ['M6 4h4v16H6z', 'M14 4h4v16h-4z'], toggle))
   }
  }
- function renderProgress(parent, summaryParent = parent, current = page.current, top = false) {
-  const summary = node('div', '', summaryParent); summary.className = 'row reading-summary'
-  node('strong', entry.status === 'reading' ? readingLabel : statuses[entry.status], summary)
+ function renderProgress(parent, current = page.current, top = false) {
+  const summary = node('div', '', parent); summary.className = 'row reading-summary'
+  node('strong', entry.status === 'reading' ? readingLabel : readingStatuses[entry.status], summary)
   const bullet = node('span', '•', summary); bullet.className = 'status-bullet'; bullet.dataset.status = entry.status; bullet.setAttribute('aria-hidden', 'true')
+  const actions = node('div', '', summary); actions.className = 'row reading-actions'
   const chapterCount = `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`
-  const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), summary); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
-  if (!current) { renderReadingToggle(parent, current, top); return }
-  if (entry.status === 'finished' || browser === 'chrome' && entry.status === 'waiting_for_updates') {
-   const reread = button('Re-Read', () => progress(current - 1, 're_reading'), parent)
+  const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), actions); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
+  if (!current) { renderReadingToggle(actions, current, top); return }
+  if (['finished', 'waiting_for_updates'].includes(entry.status)) {
+   const reread = button('Re-Read', () => progress(current - 1, 're_reading'), actions)
    reread.className = 'complete-chapter'
    reread.prepend(icon(['M3 11a9 9 0 1 1 2.7 6.4', 'M3 4v7h7'], reread))
-   if (entry.status === 'finished') return
+   return
   }
   const read = entry.progress >= current
-  const actionParent = browser === 'chrome' ? summary : parent
   if (entry.status === 'to_read' && current === 1 && top) {
-   const start = button('Start Reading', () => progress(entry.progress, 'reading'), actionParent)
+   const start = button('Start Reading', () => progress(entry.progress, 'reading'), actions)
    start.className = 'complete-chapter'
    start.prepend(icon(['m9 5 11 7-11 7V5Z'], start))
   } else if (read) {
-   const indicator = node('span', '', summary); indicator.className = 'completion-indicator'
+   const indicator = node('span', '', actions); indicator.className = 'completion-indicator'
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
    node('span', 'Read', indicator)
   } else if (!(entry.status === 'paused_reading' && top && current === entry.progress + 1)) {
@@ -319,11 +320,11 @@ export async function mountLibrary(doc = document, href = location.href, options
    const starting = ['to_read', 'paused_reading'].includes(entry.status)
    const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
    const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
-   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current), actionParent)
+   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current), actions)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
-  renderReadingToggle(parent, current, top)
+  renderReadingToggle(actions, current, top)
  }
  function libraryLink(parent) {
   const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in Between Chapters Library')
@@ -342,7 +343,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   for (const { host, bar, current } of progressBars) {
    bar.replaceChildren(); host.hidden = Boolean(page.series || tile)
    bar.className = entry ? 'row bottom-bar' : 'toolbar'
-   if (entry && !page.series) { renderProgress(bar, bar, current) }
+   if (entry && !page.series) { renderProgress(bar, current) }
    else renderBar(bar, current)
   }
  }
@@ -364,7 +365,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   }
   else {
    if (page.series) node('span', 'Series saved', center)
-   else renderProgress(actions, center, current, parent === toolbar)
+   else renderProgress(center, current, parent === toolbar)
    const edit = panelButton('Edit', 'editor', openEditor, actions); edit.className = 'edit-button'
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
@@ -520,7 +521,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    const disclosure = node('details', '', row); disclosure.className = 'work-details'
    node('summary', 'Details Below Apply Only to This Work When Selected.', disclosure)
    const status = input(disclosure, `Reading Status: ${work.title}`, 'select', details.status, value => { details.status = value })
-   for (const [key, title] of Object.entries(statuses)) { const option = node('option', title, status); option.value = key }
+   for (const [key, title] of Object.entries(readingStatuses)) { const option = node('option', title, status); option.value = key }
    status.value = details.status
    const chapter = input(disclosure, `Chapters Read: ${work.title}`, 'input', details.progress, value => { details.progress = Number(value) }, 'number'); chapter.min = '0'; chapter.step = '1'
    input(disclosure, `Private Notes: ${work.title}`, 'textarea', details.notes, value => { details.notes = value })
@@ -580,7 +581,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    infoHelp(control, title, description)
   }
   const status = field('Reading Status', 'select', 'status')
-  for (const [key, title] of Object.entries(statuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
+  for (const [key, title] of Object.entries(readingStatuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
   status.value = draft.status
   help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current Chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter

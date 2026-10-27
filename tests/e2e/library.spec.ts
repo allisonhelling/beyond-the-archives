@@ -3398,3 +3398,29 @@ test('bookmark scans show explicitly bookmarked series before series containing 
  expect(ordered).toEqual(['Bookmarked Series', 'Explicitly bookmarked series • Series 78', 'Series Containing Bookmarked Works', 'Related series • Series 77'])
  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 })
+
+for (const source of ['library', 'reading'] as const) {
+ test(`returning from work info restores the ${source} scroll position`, async ({page}) => {
+  const tables = await fixture(page)
+  for (let index=0;index<40;index++) {
+   tables.works.push({id:`scroll-work-${index}`,ao3_work_id:70000+index,title:`Scroll Work ${String(index).padStart(2,'0')}`,summary:'A saved summary that keeps the browsing page taller than work info. '.repeat(6),published_chapters:10,total_chapters:20,is_complete:false,verified_chapters:{}})
+   tables.library_entries.push({id:`scroll-entry-${index}`,work_id:`scroll-work-${index}`,reading_status:'reading',last_read_chapter:1,is_favorite:false,notes:'',original_url:`https://archiveofourown.org/works/${70000+index}`,metadata_overrides:{},created_at:'2026-10-15T00:00:00Z',updated_at:'2026-10-15T00:00:00Z'})
+  }
+  await page.goto(`/${source}?sort=alpha`); await login(page)
+  await expect(page.locator('.work-card')).toHaveCount(40)
+  const link=page.getByRole('heading',{name:'Scroll Work 30',exact:true}).getByRole('link')
+  for (const browserBack of [true,false]) {
+   await link.scrollIntoViewIfNeeded()
+   await expect.poll(()=>page.evaluate(()=>scrollY)).toBeGreaterThan(1000)
+   const position=await page.evaluate(()=>scrollY), url=page.url()
+   await link.click()
+   await expect(page.locator('.story-details-page')).toBeVisible()
+   await page.evaluate(()=>window.scrollTo(0,250))
+   if(browserBack) await page.goBack()
+   else await page.getByRole('link',{name:`Back to ${source==='reading'?'Currently Reading':'Library'}`,exact:true}).click()
+   await expect(page).toHaveURL(url)
+   await expect(page.locator('.work-card')).toHaveCount(40)
+   await expect.poll(()=>page.evaluate(expected=>Math.abs(scrollY-expected),position)).toBeLessThan(2)
+  }
+ })
+}

@@ -1,16 +1,19 @@
+import { hasTagFilters, hasTagRules } from './tags/tag-resolution'
 import { useEffect, useState } from 'react'
 import { useLibrary } from './LibraryProvider'
 import { libraryFacetScope, type LibraryFacets, type LibraryQuery, type LibraryResults } from './repository'
 
 export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void } {
-  const { fetchPage, fetchFacets, revision } = useLibrary()
+  const { fetchPage, fetchFacets, revision, tagRevision, collections } = useLibrary()
   const [state, setState] = useState<{ key: string; queryKey?: string; result?: LibraryResults; error?: string }>({ key: '' })
   const [facetState, setFacets] = useState<{ key: string; result?: LibraryFacets; error?: string }>({ key: '' })
   const [attempt, setAttempt] = useState(0)
-  const queryKey = JSON.stringify([query, page, size])
+  const automatic = collections?.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules))
+  const aliasRevision = hasTagFilters(query.filters) || automatic ? tagRevision ?? 0 : 0
+  const queryKey = JSON.stringify([query, page, size, aliasRevision])
   const key = JSON.stringify([queryKey, revision, attempt])
   const scopeKey = JSON.stringify(libraryFacetScope(query))
-  const facetKey = JSON.stringify([scopeKey, revision, attempt])
+  const facetKey = JSON.stringify([scopeKey, revision, attempt, automatic ? tagRevision ?? 0 : 0])
   useEffect(() => {
     if (!enabled) return
     const controller = new AbortController()

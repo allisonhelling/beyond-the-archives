@@ -1,3 +1,4 @@
+import { librarySyncRepairs } from './library-sync-state'
 import { useState } from 'react'
 import { Dialog } from '../../components/Dialog'
 import { formatDateTime } from '../../lib/dates'
@@ -15,11 +16,13 @@ export function LibrarySyncSummary({ state }: { state: LibrarySyncState }) {
  const listName = state.autoImport ? (/\/bookmarks(?:[?#]|$)/.test(state.url ?? '') ? 'Bookmark' : 'Marked for Later') : 'List'
  const issues: LibrarySyncIssue[] = (details === 'skipped' ? state.skippedEntries : state.chapterDateIssues) ?? []
  const count = details === 'skipped' ? state.skipped : state.chapterDatesUnavailable ?? 0
+ const repairs = librarySyncRepairs(state)
  return <>
   {Boolean(state.batchStart) && <p className="field-help">{state.batchStart} pages already imported · {state.pages - (state.batchStart ?? 0)} pages in the current batch. Page and work totals below include all batches.</p>}
   <p role="status">{state.status} · {state.listPages !== undefined && <>{state.listPages} {listName} pages saved · </>}{state.pages} total pages saved · {state.count} works collected · {state.skipped ? <button type="button" className="text-button" onClick={() => setDetails('skipped')}>{state.skipped} Unsupported Entries Skipped</button> : '0 unsupported entries skipped'}</p>
   {state.hasMore && <p className="field-help">Batch ready: {state.pages - (state.batchStart ?? 0)} saved pages await import. Import this batch to continue with the remaining list pages and series. The Quick Sync baseline updates only after the entire scan finishes.</p>}
   {state.checkChapterDates && <p className="field-help">Chapter Dates: {state.chapterDatesChecked ?? 0} indexes checked · {state.chapterDatesUnavailable ? <button type="button" className="text-button" onClick={() => setDetails('dates')}>{state.chapterDatesUnavailable} Unavailable or Incomplete</button> : '0 unavailable or incomplete'}.</p>}
+  {state.repairPages && <p className="field-help">Updated AO3 information for {repairs.metadata} works, including series information for {repairs.series} works. Found {repairs.reading} possible reading-status corrections. Use Review Reading Corrections to accept or keep them.</p>}
   {state.limited && <p className="field-help">Partial scan · pages {state.startPage ?? 1}–{state.endPage ?? 'end of list'}{state.partial ? ' · stopped at the selected end page; more pages remain on AO3' : ''}. Importing this range will not update the Quick Sync baseline.</p>}
   {details && <Dialog title={details === 'skipped' ? 'Skipped AO3 Entries' : 'Unavailable or Incomplete Chapter Dates'} onClose={() => setDetails(null)}>
    <div className="confirmation-description">

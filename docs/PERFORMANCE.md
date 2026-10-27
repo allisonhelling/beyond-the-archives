@@ -81,6 +81,14 @@ Migration `20261026000400_compact_navigation_series.sql` adds a compact projecti
 
 The migration caches plans for frequently called shelf, one-shot, text and normalization helpers using the established PL/pgSQL pattern. It also disables JIT for the navigation function to avoid compilation startup costs. A hosted check on 26 October 2026 reproduced an eight-second timeout with 4,908 works, 442 saved series and two automatic collections; three revised reads completed in 5,580 / 5,522 / 5,867 ms in a transaction that rolled back all changes. These observations are not latency percentiles. This validation did not deploy the migration. Regression tests compare compact series fields and shelf counts with full query results and make unexpected preview aggregation fail deterministically.
 
+## Query Payloads and Membership Counts
+
+Migration `20261026000500_library_query_payloads.sql` carries only the requested normalized search scope through the shared candidate pool. Pages without search terms and collection facets omit all three large normalized strings. Interactive page, pool and facet functions disable JIT compilation startup costs. Filter semantics, pagination, owner policies and response contracts stay with their existing implementations.
+
+Navigation uses the existing shelf matcher on compact shelf fields, expands manual collection memberships once, and evaluates automatic rules only for automatic collections. Empty collections and membership timestamps remain included. This avoids comparing every full work document against every manual collection.
+
+A local PostgreSQL transaction with 5,000 synthetic works, 100 series and 20 manual collections measured navigation at 4,955 ms before / 3,011 ms after, full-library facets at 401 / 302 ms, and the first 50-work page at 1,068 / 602 ms. A second transaction confirmed identical complete JSON responses for navigation, facets, a library page and the second Currently Reading page. Both transactions rolled back their fixtures and schema changes. These are individual local observations, not hosted latency guarantees; remaining automatic-rule and series work can still be substantial. The benchmark now includes full-library facets and a nonempty Currently Reading page, including for smaller fixtures.
+
 ## Retrieval Capacity and Fairness
 
 The hosted Edge Function handles exactly one job per invocation. The supplied one-minute Cron schedule therefore has a nominal maximum of 60 jobs/hour globally, before retrieval latency, failures, pauses and lease recovery. The global gate also enforces at least 15 seconds between eligible hosted requests; running a more frequent scheduler cannot exceed its nominal 240 requests/hour limit. The continuous Node worker waits 15 seconds after each attempt, in addition to attempt time. These are code-derived upper bounds, not measured AO3 throughput.
@@ -93,4 +101,4 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261026000400_compact_navigation_series.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261026000500_library_query_payloads.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.

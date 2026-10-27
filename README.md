@@ -12,6 +12,28 @@ Author names on fic tiles, work details, and series link to `/authors/:name`. Ea
 
 Apply `20261026000100_author_library_pages.sql` before deploying the updated web app. It scopes the existing account-owned results query before filtering and pagination, including suggestions and fandom counts. Existing author metadata overrides participate in grouping.
 
+## Canonical Tag Suggestions
+
+Characters, Relationships and Additional Tags suggestions show verified **Standard Tags** first, followed by a divider and **Other / Unverified Tags**. A canonical name can appear even when saved fics use only its synonyms. Selecting that name includes exact, AO3-verified synonyms; related tags, subtags and similarly worded names are not treated as aliases. Original fic tags remain unchanged. Partial searches and unverified tag names keep the existing substring matching. Personal tags are independent. Relationship suggestions still require text on both sides of `&` or `/`.
+
+The app reads account-scoped cached evidence immediately. While a suggestion field is open, the `tag-resolution` Edge Function checks up to eight relevant names, resolving at most one missing or stale profile per call. It reads AO3's explicit canonical/synonym profile sections, verifies name and category, and uses the existing bounded retrieval and global pacing/pause gate. Low-priority lookups yield to direct metadata imports. Known mappings refresh after 30 days; failed/unverifiable observations remain unverified, retry no sooner than ten minutes, and never overwrite previously verified evidence with a guess. AO3 outages do not block filtering or page navigation. Account caches are isolated and cannot be written by browser clients.
+
+Library, Currently Reading, series searches, automatic collections and collection counts share the same matching rules. Filtered page queries prepare the verified-name lookup once and use JSON key membership during per-fic matching; unfiltered pages skip it. Only affected cached results are invalidated when new evidence arrives. The derived tag cache is not part of personal-library backups and can be rebuilt.
+
+Apply `20261026000700_canonical_tag_suggestions.sql`, deploy the `tag-resolution` Edge Function (`npx supabase functions deploy tag-resolution`), then deploy the website. Local builds do not publish these changes. Until the resolver is available, unverified names stay in the second group and saved-tag searches continue working.
+
+## Repeat Import Repairs
+
+Repeat CSV and library-sync imports refresh factual AO3 metadata through the existing automatic metadata layer. Manual metadata corrections remain authoritative. Updated companions attach series memberships to each scanned work and record a checked standalone result separately from an unchecked series field. Empty unchecked observations preserve saved information.
+
+Full Scan offers **Review Existing Entries**, enabled by default. It includes older works reached by the selected scan range, and includes existing works in optional chapter-date checks. Quick Sync still stops at the saved baseline and may never reach those works. New default reading values, bookmark inferences, confirmed progress and explicit personal edits have separate provenance; older entries remain unknown rather than receiving invented history.
+
+Repeat observations keep saved reading status, progress and personal start/finish dates. **Review Reading Corrections** shows saved and proposed values, including unconfirmed progress. Accept corrections individually or select multiple rows; **Keep Reading History** dismisses the observation without changing personal data. Proposals persist across reloads, remain private to the account, and are invalidated by later personal reading edits. Imported notes, personal tags, ratings, favorites and collections are never replaced by reading-only approval. Existing explicit CSV Overwrite remains available for intentional personal-data replacement.
+
+Saved scan reports summarize factual repairs, series repairs and possible reading corrections. Counts deduplicate works across listing and series pages and survive acknowledged-page retries. The summary records findings; pending decisions remain available from **Review Reading Corrections** after the scan ends. Older bookmarks may still repair factual saved/bookmark dates and Rec observations automatically, while personal reading dates require approval.
+
+Apply `20261026000600_repeat_import_repairs.sql`, deploy the website and worker, and rebuild/reload Chrome Companion v0.7.2 (or replace the Safari userscript) together. Old saved scans can still import factual metadata; run a new Full Scan with the updated companion to review existing entries. No hosted deployment is performed by local builds.
+
 ## Code Organization
 
 Keep components, behavior, styles, and unit tests beside the feature that owns them:
@@ -470,7 +492,7 @@ Library and Reading now query numbered server pages of 50 works by default. Choo
 
 Collection navigation and results load without the full catalog. Suggestions and fandom counts are cached per collection, and import deduplication loads the catalog on demand.
 
-Apply migrations through `20261026000400_compact_navigation_series.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
+Apply migrations through `20261026000500_library_query_payloads.sql` before deploying this frontend. See [performance checks and rollout notes](docs/PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
 
 ## Export and Restore Backups
 

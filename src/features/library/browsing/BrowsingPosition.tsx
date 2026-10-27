@@ -19,6 +19,11 @@ export function BrowsingPosition() {
     const preserve = action !== 'POP' && browsing && isFilterNavigation(previousRoute.current, path)
     previousRoute.current = path
     const saved = returning && !preserve ? positions.current.get(path) : undefined
+    let lastPosition = saved ?? { y: window.scrollY, focus: null }
+    function remember() {
+      const focused = document.activeElement
+      lastPosition = { y: window.scrollY, focus: focused instanceof HTMLElement ? focused.id || null : null }
+    }
     let frame = 0, stopped = false, attempts = 0
     function restore() {
       if (stopped) return
@@ -40,11 +45,18 @@ export function BrowsingPosition() {
     const cancel = () => { stopped = true; cancelAnimationFrame(frame) }
     window.addEventListener('wheel', cancel, { once: true, passive: true })
     window.addEventListener('touchstart', cancel, { once: true, passive: true })
+    // Capture while this page is still present. Reading scrollY during route
+    // cleanup can see a position clamped by the shorter destination page.
+    window.addEventListener('scroll', remember, { passive: true })
+    window.addEventListener('click', remember, true)
+    window.addEventListener('focusin', remember)
     const cache = positions.current
     return () => {
       cancel(); window.removeEventListener('wheel', cancel); window.removeEventListener('touchstart', cancel)
-      const focused = document.activeElement
-      cache.set(path, { y: window.scrollY, focus: focused instanceof HTMLElement ? focused.id || null : null })
+      window.removeEventListener('scroll', remember)
+      window.removeEventListener('click', remember, true)
+      window.removeEventListener('focusin', remember)
+      cache.set(path, lastPosition)
       while (cache.size > 40) cache.delete(cache.keys().next().value!)
     }
   }, [path, action, location.hash, location.pathname])

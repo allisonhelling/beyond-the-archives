@@ -6,7 +6,7 @@ import type { AutomaticMetadata } from './ao3-metadata'
 import { bookmarkRec, type SourceBookmark } from '../library/model'
 
 export type CsvWork = {
- importReadingStatus?: import('../library/model').Status; source: 'bookmarks' | 'marked_for_later'; url: string; workId: number | null; workStatus?: 'available' | 'deleted'; bookmarkId?: number; bookmarkStatus?: string; bookmarkUser?: string; bookmarkCount?: number; bookmarkRec?: boolean | null; metadata: AutomaticMetadata;
+ importReadingStatusOrigin?: 'default' | 'manual'; reviewExisting?: boolean; importReadingStatus?: import('../library/model').Status; source: 'bookmarks' | 'marked_for_later'; url: string; workId: number | null; workStatus?: 'available' | 'deleted'; bookmarkId?: number; bookmarkStatus?: string; bookmarkUser?: string; bookmarkCount?: number; bookmarkRec?: boolean | null; metadata: AutomaticMetadata;
  bookmarkDate: string | null; updatedDate: string | null; notes: string; tags: string[];
 }
 export type CsvSource = Omit<CsvWork, 'workId'> & { workId?: number | null; seriesId?: number }
@@ -44,6 +44,13 @@ function count(text = '') { const raw = text.replaceAll(',', '').trim(); const v
 export function csvMetadata(row: Record<string, string>): AutomaticMetadata {
  const metadata: AutomaticMetadata = { title: row.title?.trim() ?? '', summary: row.summary ?? '', authors: list(row.author), fandoms: list(row.fandoms),
   categories: list(row.category), relationship_tags: list(row.relationships), character_tags: list(row.characters), additional_tags: list(row.freeforms), archive_warnings: list(row.warnings) }
+ if (row.series_checked === 'true') {
+  const memberships: unknown = JSON.parse(row.series_memberships ?? '[]')
+  if (!Array.isArray(memberships) || memberships.some(item => !item || !Number.isSafeInteger(item.id) || item.id < 1 || item.url !== `https://archiveofourown.org/series/${item.id}` || typeof item.name !== 'string' || item.position !== null && (!Number.isSafeInteger(item.position) || item.position < 1))) throw new Error('Invalid series information in listing.')
+  metadata.series_checked = true
+  metadata.series_memberships = memberships
+  metadata.series = memberships.map(item => item.name)
+ }
  if (row.language?.trim()) metadata.language = row.language.trim()
  if (row.summary_html) Object.assign(metadata, readSummary(row.summary_html))
  metadata.ao3_tags = [...new Set([...(metadata.categories ?? []), ...(metadata.relationship_tags ?? []), ...(metadata.character_tags ?? []), ...(metadata.additional_tags ?? []), ...(metadata.archive_warnings ?? [])])]
@@ -104,7 +111,7 @@ export function uniqueCsvWorks(rows: CsvWork[]): CsvWork[] {
 /** Empty observations preserve saved values; zero and false are meaningful data. */
 export function nonemptyMetadata(metadata: AutomaticMetadata): AutomaticMetadata {
  const result = Object.fromEntries(Object.entries(metadata).filter(([, value]) => value != null && (typeof value !== 'string' || Boolean(value.trim())) && (typeof value !== 'object' || Object.keys(value).length > 0))) as AutomaticMetadata
- return result
+ return metadata.series_checked ? { ...result, series_checked: true, series: metadata.series ?? [], series_memberships: metadata.series_memberships ?? [] } : result
 }
 export const csvWorkKey = (work: Pick<CsvWork, 'workId' | 'bookmarkId'>) => work.workId === null ? `bookmark:${work.bookmarkId}` : String(work.workId)
 /** Keep source bookmark observations separate from editable personal fields. */

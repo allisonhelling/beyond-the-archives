@@ -59,3 +59,6 @@ verify_jwt = false # Handler verifies each bearer token with Supabase Auth.
 
 [functions.save-backup]
 verify_jwt = false # Handler verifies bearer tokens with Auth before lease/Storage access.
+
+[functions.tag-resolution]
+verify_jwt = false # Handler verifies bearer tokens with Auth before cache access.

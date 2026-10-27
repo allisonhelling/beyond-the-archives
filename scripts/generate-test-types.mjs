@@ -34,6 +34,7 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number }; Returns: Json }
       mark_work_deleted: { Args: { p_entry: string; p_job: string }; Returns: undefined }
       claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }
       release_backup_save: { Args: { p_user: string; p_token: string }; Returns: undefined }

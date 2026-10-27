@@ -1,3 +1,4 @@
+import { importProgressKnown, readingSnapshot, type ReadingProvenance, type ReadingReviews } from '../../imports/import-reading-review'
 import type { AutomaticMetadata } from '../../imports/ao3-metadata'
 import { csvBookmark, bookmarkReadingState, nonemptyMetadata, type CsvWork } from '../../imports/ao3-csv'
 import { recordReadingTransition } from '../reading-history'
@@ -216,12 +217,14 @@ export async function saveSampleStory(input: StoryInput, verifiedChapters?: Reco
     reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, is_rec: input.rec ?? existing?.is_rec ?? (bookmark?.bookmarkRec === true), personal_rating: input.personalRating,
     metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: automaticMetadata ? {} : existing && input.metadataChanges ? { ...(existing.metadata_overrides as object), ...input.metadataChanges } : input.metadata, extension_metadata: automaticMetadata ? { ...nonemptyMetadata(automaticMetadata), publication_status: input.metadata.publication_status } as Json : existing?.extension_metadata ?? {}, extension_chapters: existing?.extension_chapters ?? {},
+    reading_provenance: existing?.reading_provenance ?? {},
     collectionIds: input.collections, personalTags: input.tags,
     created_at: existing?.created_at ?? now, updated_at: now,
     started_at: existing?.started_at ?? null, finished_at: existing?.finished_at ?? null,
     last_update_notification_at: existing?.last_update_notification_at ?? null,
     update_dismissed_at: existing?.update_dismissed_at ?? null,
   }
+  if (!automaticMetadata && (!existing || input.status !== existing.reading_status || input.progress !== existing.last_read_chapter)) story.reading_provenance = { source: 'manual', progressKnown: true }
   recordReadingTransition(story, existing ?? undefined, now)
   for (const collection of data.collections) {
     if (input.collections.includes(collection.id) && !existing?.collectionIds.includes(collection.id)) collection.last_story_added_at = now
@@ -237,7 +240,7 @@ export async function previewSampleCsvImport(works: CsvWork[]) {
   status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, tags: story.personalTags, finishedAt: story.finished_at,
  }))
 }
-function applySampleBookmarkHistory(story: Story, row: CsvWork) {
+function applySampleBookmarkHistory(story: Story, row: CsvWork, preserveReading = false) {
  const source = sourceBookmark(story), observed = csvBookmark(row)
  const cutoff = Math.min(Date.parse(story.created_at), Date.parse(source.date ?? story.created_at))
  if (row.source === 'bookmarks') {
@@ -247,9 +250,9 @@ function applySampleBookmarkHistory(story: Story, row: CsvWork) {
    observed.date = date
    const at = `${date}T00:00:00Z`, oldFinished = story.finished_at
    if (Date.parse(at) < Date.parse(story.created_at)) story.created_at = at
-   if (story.started_at && Date.parse(at) < Date.parse(story.started_at)) story.started_at = at
+   if (!preserveReading && story.started_at && Date.parse(at) < Date.parse(story.started_at)) story.started_at = at
    const reading = bookmarkReadingState(row)
-   if (row.workStatus !== 'deleted' && !row.importReadingStatus && reading.finishedAt && Date.parse(reading.finishedAt) <= cutoff && (!oldFinished || Date.parse(reading.finishedAt) < Date.parse(oldFinished))) story.finished_at = `${reading.finishedAt}T00:00:00Z`
+   if (!preserveReading && row.workStatus !== 'deleted' && !row.importReadingStatus && reading.finishedAt && Date.parse(reading.finishedAt) <= cutoff && (!oldFinished || Date.parse(reading.finishedAt) < Date.parse(oldFinished))) story.finished_at = `${reading.finishedAt}T00:00:00Z`
    story.reading_history = story.reading_history?.map(event => event.action === 'added' ? { ...event, at: story.created_at } : event.action === 'finished' && event.at === oldFinished ? { ...event, at: story.finished_at! } : event)
   }
  }
@@ -258,14 +261,17 @@ function applySampleBookmarkHistory(story: Story, row: CsvWork) {
 
 /** Refresh automatic observations while preserving existing personal data. */
 export async function importSampleWorks(works: CsvWork[]) {
- let imported = 0, kept = 0
+ let imported = 0, kept = 0, metadataRepaired = 0, seriesRepaired = 0, readingCorrections = 0
+ const repairWorkIds = { metadata: [] as string[], series: [] as string[], reading: [] as string[] }
  for (const row of works) {
   const data = read()
   const existing = data.stories.find(story => row.bookmarkId && sourceBookmark(story).id === String(row.bookmarkId) || row.workId !== null && story.work.ao3_work_id === row.workId)
   const incoming = nonemptyMetadata(row.metadata)
   const automatic = { ...incoming, ...(incoming.is_complete === undefined ? {} : { publication_status: incoming.is_complete ? 'complete' as const : 'in_progress' as const }) }
   if (existing) {
-   applySampleBookmarkHistory(existing, row)
+   const previous = JSON.stringify(existing.extension_metadata)
+   const previousSeries = JSON.stringify([existing.metadata.series, existing.metadata.series_memberships, (existing.extension_metadata as AutomaticMetadata)?.series_checked])
+   applySampleBookmarkHistory(existing, row, true)
    if (row.workStatus === 'deleted') {
     existing.work_status = 'deleted'
     existing.metadata.publication_status = 'deleted'
@@ -276,6 +282,21 @@ export async function importSampleWorks(works: CsvWork[]) {
    existing.extension_metadata = { ...(existing.extension_metadata as object), ...automatic } as Json
    existing.metadata = { ...existing.metadata, ...(existing.extension_metadata as object), ...(existing.metadata_overrides as object) }
    if (incoming.ao3_updated_at) existing.work.ao3_updated_at = incoming.ao3_updated_at
+   if (previous !== JSON.stringify(existing.extension_metadata)) { metadataRepaired++; repairWorkIds.metadata.push(existing.id) }
+   if (previousSeries !== JSON.stringify([existing.metadata.series, existing.metadata.series_memberships, incoming.series_checked ?? (existing.extension_metadata as AutomaticMetadata)?.series_checked])) { seriesRepaired++; repairWorkIds.series.push(existing.id) }
+   const provenance = (existing.reading_provenance ?? {}) as ReadingProvenance
+   if (row.reviewExisting !== false && row.source === 'bookmarks' && row.bookmarkDate && row.updatedDate && (!row.importReadingStatus || row.importReadingStatusOrigin === 'default') && !['manual', 'reviewed_import'].includes(provenance.source ?? '')) {
+    const observation = row.importReadingStatusOrigin === 'default' ? { ...row, importReadingStatus: undefined } : row
+    const reading = bookmarkReadingState(observation), known = importProgressKnown(observation), saved = readingSnapshot(existing)
+    const proposed = { ...saved, status: reading.status, progress: known ? reading.progress : saved.progress, finishedAt: reading.finishedAt ? `${reading.finishedAt}T00:00:00Z` : null }
+    const review = { saved, proposed, source: provenance.source ?? 'legacy_unknown', progressKnown: known, savedProgressKnown: provenance.progressKnown ?? false }
+    const needsReview = JSON.stringify(saved) !== JSON.stringify(proposed) || known && !provenance.progressKnown
+    if (needsReview && JSON.stringify(provenance.dismissed) !== JSON.stringify(review)) {
+     existing.reading_provenance = { ...provenance, review } as unknown as Json; readingCorrections++; repairWorkIds.reading.push(existing.id)
+    } else if (!needsReview && provenance.review) {
+     const next = { ...provenance }; delete next.review; existing.reading_provenance = next as unknown as Json
+    }
+   }
    write(data); kept++; continue
   }
   const reading = bookmarkReadingState(row), finished = reading.status === 'finished'
@@ -290,9 +311,10 @@ export async function importSampleWorks(works: CsvWork[]) {
    story.reading_history = story.reading_history?.map(event => event.action === 'finished' ? { ...event, at: story.finished_at! } : event)
   }
   applySampleBookmarkHistory(story, row)
+  story.reading_provenance = { source: row.importReadingStatusOrigin === 'default' ? 'import_default' : row.importReadingStatus ? 'manual' : row.source === 'bookmarks' ? 'bookmark_inference' : 'import_default', progressKnown: importProgressKnown(row) }
   write(saved); imported++
  }
- return { batch: null, imported, kept }
+ return { batch: null, imported, kept, metadataRepaired, seriesRepaired, readingCorrections, repairWorkIds }
 }
 
 export async function addSampleStoriesToCollections(storyIds: string[], collectionIds: string[]) {
@@ -316,6 +338,7 @@ export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>
   const data = read(), story = find(data, id)
   if (changes.last_read_chapter !== undefined) validateProgress(changes.last_read_chapter, story.metadata)
   const previous = { ...story }
+  if (changes.reading_status !== undefined || changes.last_read_chapter !== undefined) story.reading_provenance = { source: 'manual', progressKnown: true }
   Object.assign(story, changes, { updated_at: new Date().toISOString() })
   story.reading_status = abandonedReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
   recordReadingTransition(story, previous, story.updated_at)
@@ -437,4 +460,27 @@ export async function finishSampleSeries(seriesId: number) {
  }
  write(data)
  return series.savedStories.length
+}
+
+export async function reviewSampleImportReading(ids: string[], action: 'list' | 'accept' | 'keep', page: number): Promise<ReadingReviews> {
+ const data = read(); let changed = 0, skipped = 0
+ if (action !== 'list') for (const story of data.stories.filter(story => ids.includes(story.id))) {
+  const provenance = (story.reading_provenance ?? {}) as ReadingProvenance, review = provenance.review
+  if (!review || JSON.stringify(readingSnapshot(story)) !== JSON.stringify(review.saved)) { skipped++; continue }
+  if (action === 'keep') { const next = { ...provenance, dismissed: review }; delete next.review; story.reading_provenance = next as unknown as Json }
+  else {
+   const previous = { ...story }, now = new Date().toISOString()
+   story.reading_status = review.proposed.status; story.last_read_chapter = review.proposed.progress
+   recordReadingTransition(story, previous, now)
+   story.started_at = review.proposed.startedAt; story.finished_at = review.proposed.finishedAt
+   story.updated_at = now; story.reading_provenance = { source: 'reviewed_import', progressKnown: review.progressKnown }
+  }
+  changed++
+ }
+ write(data)
+ const reviews = data.stories.flatMap(story => {
+  const review = (story.reading_provenance as ReadingProvenance)?.review
+  return review ? [{ ...review, id: story.id, title: story.metadata.title }] : []
+ }).sort((a,b) => a.id.localeCompare(b.id))
+ return { reviews: reviews.slice((page-1)*50,page*50), total: reviews.length, changed, skipped }
 }

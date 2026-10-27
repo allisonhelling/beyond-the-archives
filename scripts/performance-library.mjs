@@ -41,7 +41,7 @@ async function main() {
   const db = await createTestDatabase()
   try {
     const workCount = Number(process.env.PERF_WORKS ?? 10000)
-    const finishedWorks = Math.min(workCount, 3038)
+    const finishedWorks = Math.min(Math.floor(workCount / 2), 3038)
     await seedLargeLibraries(db, workCount, 3, finishedWorks)
     await db.exec("set role authenticated; set request.jwt.claim.sub='10000000-0000-0000-0000-000000000001'")
     const results = []
@@ -52,10 +52,12 @@ async function main() {
       ['catalog-automatic', 'select public.library_catalog() result', []],
       ['navigation','select public.library_navigation() result',[]],
       ['facets','select public.library_query_facets($1) result',[{mode:'library',shelf:collection,filters:{}}]],
+      ['all-facets','select public.library_query_facets($1) result',[{mode:'library',shelf:'all',filters:{}}]],
       ['manual-collection','select public.query_library($1,1,50) result',[{mode:'library',shelf:collection,includeFacets:false,filters:{sort:'added'}}]],
       ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
       ['finished-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'finished',includeFacets:false,filters:{sort:'added',showSeries:false}}]],
       ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
+      ['reading-page', 'select public.query_library($1,1,50) result', [{mode:'reading',shelf:'view_all',includeFacets:false,filters:{sort:'added'}}]],
       ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
       ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'alpha'}}]],
       ['count', 'select count(*) from public.library_entries where user_id=auth.uid()', []],
@@ -70,6 +72,7 @@ async function main() {
       const values = args.map(value => typeof value === 'object' ? JSON.stringify(value) : value)
       const start = performance.now(), response = await db.query(sql, values), elapsedMs = performance.now()-start
       if (label === 'finished-page' && response.rows[0].result.total !== finishedWorks) throw new Error('Finished shelf count does not match its fixture.')
+      if (label === 'reading-page' && workCount >= 2 && response.rows[0].result.total === 0) throw new Error('Currently Reading must exercise a nonempty result set.')
       if (label === 'offset-identities') offsetIds = response.rows.map(row => row.id)
       if (label === 'cursor-identities' && JSON.stringify(response.rows.map(row => row.id)) !== JSON.stringify(offsetIds)) throw new Error('Offset and cursor returned different identities.')
       let plannedSql=sql,plannedValues=values

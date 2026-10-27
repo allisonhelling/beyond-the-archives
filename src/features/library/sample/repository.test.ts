@@ -515,11 +515,11 @@ it('adds the automatic example once to older samples without replacing a same-na
 
 it('imports extension listing metadata into sample storage, preserving existing personal edits and safe retries', async () => {
  const rows = readAo3Rows([{ title: 'Imported bookmark', link: 'https://archiveofourown.org/works/9990001', source_list: 'bookmarks', 'bookmark date': '20 Oct 2026', date: '01 Oct 2026', chapters: '3/3', 'bookmark notes': 'Private notes', 'bookmark tags': 'Mine', author: 'Writer' }, { title: 'Read later', link: 'https://archiveofourown.org/works/9990002', source_list: 'marked_for_later' }]) as CsvWork[]
- expect(await importSampleWorks(rows)).toEqual({ batch: null, imported: 2, kept: 0 })
+ expect(await importSampleWorks(rows)).toMatchObject({ batch: null, imported: 2, kept: 0 })
  const saved = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990001)!
  expect(saved).toMatchObject({ notes: 'Private notes', personalTags: ['Mine'], reading_status: 'finished', last_read_chapter: 3, finished_at: '2026-10-20T00:00:00Z', metadata: { title: 'Imported bookmark', authors: ['Writer'] } })
  await updateSampleEntry(saved.id, { notes: 'Personal edit', personal_rating: 5 })
- expect(await importSampleWorks(rows)).toEqual({ batch: null, imported: 0, kept: 2 })
+ expect(await importSampleWorks(rows)).toMatchObject({ batch: null, imported: 0, kept: 2 })
  expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ notes: 'Personal edit', personal_rating: 5 })
  expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990002)).toMatchObject({ reading_status: 'to_read', last_read_chapter: 0 })
 })
@@ -550,7 +550,7 @@ it('uses earlier bookmark dates and either Rec while retaining personal notes in
  await importSampleWorks([row])
  await importSampleWorks([{ ...row, bookmarkDate: '2026-10-10', bookmarkRec: true, notes: 'Incoming note', tags: ['Incoming tag'] }])
  const saved = (await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === row.workId)!
- expect(saved).toMatchObject({ created_at: '2026-10-10T00:00:00Z', finished_at: '2026-10-10T00:00:00Z', is_rec: true, notes: 'Saved note', personalTags: ['Saved tag'], source_bookmark: { date: '2026-10-10', notes: 'Incoming note' } })
+ expect(saved).toMatchObject({ created_at: '2026-10-10T00:00:00Z', finished_at: '2026-10-21T00:00:00Z', is_rec: true, notes: 'Saved note', personalTags: ['Saved tag'], source_bookmark: { date: '2026-10-10', notes: 'Incoming note' } })
  await importSampleWorks([row])
  expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ finished_at: saved.finished_at, is_rec: true })
 })

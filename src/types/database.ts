@@ -5,6 +5,37 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      ao3_tag_resolutions: {
+        Row: {
+          user_id: string
+          category: string
+          name: string
+          status: string
+          canonical_name: string | null
+          checked_at: string
+          attempted_at: string
+        }
+        Insert: {
+          user_id: string
+          category: string
+          name: string
+          status: string
+          canonical_name?: string | null
+          checked_at?: string
+          attempted_at?: string
+        }
+        Update: {
+          user_id?: string
+          category?: string
+          name?: string
+          status?: string
+          canonical_name?: string | null
+          checked_at?: string
+          attempted_at?: string
+        }
+        Relationships: [
+        ]
+      }
       authors: {
         Row: {
           id: string
@@ -319,6 +350,7 @@ export type Database = {
           source_bookmark: Json
           is_rec: boolean
           dnf_since: string | null
+          reading_provenance: Json
         }
         Insert: {
           id?: string
@@ -344,6 +376,7 @@ export type Database = {
           source_bookmark?: Json
           is_rec?: boolean
           dnf_since?: string | null
+          reading_provenance?: Json
         }
         Update: {
           id?: string
@@ -369,6 +402,7 @@ export type Database = {
           source_bookmark?: Json
           is_rec?: boolean
           dnf_since?: string | null
+          reading_provenance?: Json
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -978,6 +1012,7 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number }; Returns: Json }
       mark_work_deleted: { Args: { p_entry: string; p_job: string }; Returns: undefined }
       claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }
       release_backup_save: { Args: { p_user: string; p_token: string }; Returns: undefined }

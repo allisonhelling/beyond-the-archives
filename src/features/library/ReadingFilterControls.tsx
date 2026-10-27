@@ -60,7 +60,7 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       localFandoms: [...fandomCounts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name)),
     }
   }, [stories])
-  const relationships = suggestions?.relationships ?? localRelationships
+  const relationships = (suggestions?.relationships ?? localRelationships).filter(tag => /\S\s*[&/]\s*\S/.test(tag))
   const characters = suggestions?.characters ?? localCharacters
   const additionalTags = suggestions?.tags ?? localTags
   const fandoms = fandomOptions ?? localFandoms

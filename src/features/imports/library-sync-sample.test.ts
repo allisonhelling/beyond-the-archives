@@ -27,7 +27,7 @@ it('retains sync reports across reads and upserts retries in sample storage with
 })
 it('routes sample listing imports to browser storage without calling the connected database', async () => {
  const rows = readAo3Rows([{ title: 'Sample extension import', link: 'https://archiveofourown.org/works/9990011', source_list: 'marked_for_later' }]) as CsvWork[]
- expect(await submitLibrarySync(rows)).toEqual({ batch: null, imported: 1, kept: 0 })
+ expect(await submitLibrarySync(rows)).toMatchObject({ batch: null, imported: 1, kept: 0 })
  expect(rpc).not.toHaveBeenCalled()
  expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990011)?.metadata.title).toBe('Sample extension import')
 })
@@ -159,4 +159,27 @@ it.each(['to_read', 'paused_reading', 'finished'] as const)('honors an explicit 
   await submitLibrarySync(rows, undefined, status === 'finished' ? 'to_read' : 'finished')
   expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 9990093)?.reading_status).toBe(status)
  } finally { vi.useRealTimers() }
+})
+
+it('repairs series on repeat sample imports and requires approval for inferred reading corrections',async()=>{
+ const { reviewImportReading }=await import('./import-reading-review')
+ const work:CsvWork={workId:9990044,url:'https://archiveofourown.org/works/9990044',source:'marked_for_later',metadata:{title:'Repeat repair'},notes:'Keep me',tags:[],bookmarkDate:null,updatedDate:null}
+ await submitLibrarySync([work])
+ const incoming={...work,source:'bookmarks' as const,bookmarkDate:'2026-10-20',updatedDate:'2026-10-10',metadata:{title:'Repeat repair',published_chapters:3,series_checked:true,series:['Series'],series_memberships:[{id:99,name:'Series',url:'https://archiveofourown.org/series/99',position:1}]}}
+ expect(await submitLibrarySync([incoming])).toMatchObject({metadataRepaired:1,seriesRepaired:1,readingCorrections:1})
+ let story=(await loadSampleLibrary()).stories.find(s=>s.work.ao3_work_id===work.workId)!
+ expect(story.reading_status).toBe('to_read');expect(story.metadata.series).toEqual(['Series'])
+ const reviews=await reviewImportReading()
+ expect(reviews.reviews.find(r=>r.id===story.id)).toMatchObject({proposed:{status:'finished',progress:3}})
+ await reviewImportReading([story.id],'accept')
+ story=(await loadSampleLibrary()).stories.find(s=>s.id===story.id)!
+ expect(story.reading_status).toBe('finished');expect(story.last_read_chapter).toBe(3);expect(story.notes).toBe('Keep me')
+})
+
+it('deduplicates repair summaries across pages and preserves acknowledged counts on retry',async()=>{
+ const { librarySyncRepairs, mergeLibrarySyncRepairs }=await import('./library-sync-state')
+ const first={metadata:1,series:1,reading:1,ids:{metadata:['one'],series:['one'],reading:['one']}}
+ const retry=mergeLibrarySyncRepairs(first,{metadata:0,series:0,reading:1,ids:{metadata:[],series:[],reading:['one']}})
+ const next={metadata:1,series:0,reading:1,ids:{metadata:['one'],series:[],reading:['two']}}
+ expect(librarySyncRepairs({repairPages:{1:retry,2:next}})).toEqual({metadata:1,series:1,reading:2})
 })

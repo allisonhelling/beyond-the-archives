@@ -39,15 +39,19 @@ it.each(['safari', 'chrome'].flatMap(browser => Object.keys(statuses).map(status
  await toggle('Edit', true)
  const picker = within(root).getByLabelText('Reading Status')
  expect([...picker.options].map(option => option.value)).toEqual(Object.keys(statuses))
+ expect(within(picker).getByRole('option', { name: browser === 'safari' ? 'Waiting' : 'Waiting for Updates', exact: true })).toHaveValue('waiting_for_updates')
  fireEvent.change(picker, { target: { value: status } })
  fireEvent.submit(picker.closest('form'))
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
  const progress = status === 'to_read' ? 0 : status === 'finished' ? 10 : 3
  expect(entry).toMatchObject({ status, progress, notes: 'Keep notes', rating: 4, tags: ['Mine'] })
  for (const surface of [root, bottomRoot]) {
-  expect(surface.querySelector('.reading-summary strong')).toHaveTextContent(status === 'reading' && browser === 'chrome' ? 'Currently Reading' : statuses[status])
+  expect(surface.querySelector('.reading-summary strong')).toHaveTextContent(status === 'waiting_for_updates' && browser === 'safari' ? /^Waiting$/ : status === 'reading' && browser === 'chrome' ? 'Currently Reading' : statuses[status])
   expect(surface.querySelector('.status-bullet')).toHaveAttribute('data-status', status)
   expect(surface.querySelector('.chapter-progress')).toHaveTextContent(`Ch. ${progress} / 10`)
+  const actions = surface.querySelector('.reading-actions')
+  expect(actions.firstElementChild).toHaveClass('chapter-progress')
+  for (const button of surface.querySelectorAll('.complete-chapter, .reading-toggle')) expect(actions).toContainElement(button)
  }
  await toggle('Edit', true)
  expect(within(root).getByLabelText('Reading Status')).toHaveValue(status)
@@ -91,7 +95,7 @@ it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => 
  await waitFor(() => expect(findButton('Cancel')).toBeEnabled())
 })
 
-it.each(['safari', 'chrome'].flatMap(browser => (browser === 'chrome' ? ['finished', 'waiting_for_updates'] : ['finished']).flatMap(status => [1, 4, 10].flatMap(chapter => [false, true].map(fromBottom => ({ browser, status, chapter, fromBottom }))))))('starts a reread from $status at chapter $chapter on $browser (bottom bar: $fromBottom)', async ({ browser, status, chapter, fromBottom }) => {
+it.each(['safari', 'chrome'].flatMap(browser => ['finished', 'waiting_for_updates'].flatMap(status => [1, 4, 10].flatMap(chapter => [false, true].map(fromBottom => ({ browser, status, chapter, fromBottom }))))))('starts a reread from $status at chapter $chapter on $browser (bottom bar: $fromBottom)', async ({ browser, status, chapter, fromBottom }) => {
  document.getElementById('selected_id').innerHTML = Array.from({ length: 10 }, (_, index) => `<option value="${101 + index}">${index + 1}. Chapter</option>`).join('')
  entry = { version: 'v1', status, progress: 10, notes: 'Keep My Notes', rating: 5, tags: ['Mine'], collections: [] }
  network.mockImplementation(async ({ data }) => {
@@ -376,15 +380,15 @@ it.each([false, true])('keeps one logo in the main bar when panels open (saved e
  const toolbar = root.querySelector('.library-link').parentElement
  if (saved) {
   const summary = root.querySelector('.reading-summary')
-  expect([...summary.children].map(element => element.textContent)).toEqual(['Reading', '•', 'Ch. 1 / 10'])
-  expect([...bottomRoot.querySelector('.reading-summary').children].map(element => element.textContent)).toEqual(['Reading', '•', 'Ch. 1 / 10'])
+  expect([...summary.querySelector('.reading-actions').children].map(element => element.textContent)).toEqual(['Ch. 1 / 10', 'Read', 'Pause'])
+  expect([...bottomRoot.querySelector('.reading-actions').children].map(element => element.textContent)).toEqual(['Ch. 1 / 10', 'Read', 'Pause'])
   for (const surface of [root, bottomRoot]) {
    expect(surface.querySelector('button.chapter-progress')).not.toHaveAttribute('title')
    expect(surface.querySelector('.chapter-progress')).toHaveAttribute('aria-label', 'Edit Chapters Read')
    expect(within(surface).queryByLabelText('About chapters read')).not.toBeInTheDocument()
   }
   expect(summary.querySelector('.status-bullet')).toHaveAttribute('aria-hidden', 'true')
-  expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Read'))
+  expect(summary.querySelector('.reading-actions')).toContainElement(findButton('Read'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Edit'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Connection'))
  }
@@ -409,7 +413,8 @@ it('marks the latest WIP chapter read without finishing the fic', async () => {
  await waitFor(() => expect(entry).toMatchObject({ status: 'waiting_for_updates', progress: 10 }))
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByText('Ch. 10 / 10')).toBeInTheDocument()
-  expect(within(surface).getByText('Read')).toBeInTheDocument()
+  expect(within(surface).getByRole('button', { name: 'Re-Read', exact: true })).toBeInTheDocument()
+  expect(within(surface).queryByRole('button', { name: 'Pause Reading' })).not.toBeInTheDocument()
  }
 })
 
@@ -441,10 +446,8 @@ it.each(['safari', 'chrome'].flatMap(browser => [4, 10].map(chapter => ({ browse
  await mountLibrary(document, `https://archiveofourown.org/works/123/chapters/${100 + chapter}`, { browser })
  for (const surface of [root, bottomRoot]) {
   const action = within(surface).getByRole('button', { name: chapter === 10 ? 'Finish Fic' : 'Read' })
-  if (browser === 'chrome') {
-   expect(action.previousElementSibling).toHaveClass('chapter-progress')
-   expect(surface.querySelector('.reading-summary')).toContainElement(action)
-  } else expect(surface.querySelector('.reading-summary')).not.toContainElement(action)
+  expect(action.previousElementSibling).toHaveClass('chapter-progress')
+  expect(surface.querySelector('.reading-actions')).toContainElement(action)
  }
 })
 
@@ -842,7 +845,7 @@ it.each(['safari', 'chrome'])('finishes a To Read one-shot when its chapter is m
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'finished', progress: 1 })
 })
-it.each(['safari', 'chrome'].flatMap(browser => ['reading', 're_reading', 'waiting_for_updates'].map(status => ({ browser, status }))))('pauses and resumes $status in $browser without changing chapters or personal fields', async ({ browser, status }) => {
+it.each(['safari', 'chrome'].flatMap(browser => ['reading', 're_reading'].map(status => ({ browser, status }))))('pauses and resumes $status in $browser without changing chapters or personal fields', async ({ browser, status }) => {
  entry = { version: 'v1', status, progress: 3, notes: 'Keep', rating: 5, tags: ['mine'], collections: [] }
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  network.mockImplementation(async ({ data }) => {
@@ -857,7 +860,7 @@ it.each(['safari', 'chrome'].flatMap(browser => ['reading', 're_reading', 'waiti
   expect(pause.textContent).toBe('Pause')
   expect(pause.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
  }
- expect(findButton('Pause Reading').nextElementSibling).toBe(findButton('Edit'))
+ expect(findButton('Pause Reading').parentElement).toBe(findButton('Edit Chapters Read').parentElement)
  fireEvent.click(findButton('Pause Reading'))
  await waitFor(() => expect(findButton('Resume Reading')).toBeEnabled())
  expect(entry).toMatchObject({ status: 'paused_reading', progress: 3, notes: 'Keep', rating: 5 })
@@ -1097,9 +1100,9 @@ it.each(['safari', 'chrome'])('keeps all full-work bars consistent after a faile
   expect(surface.querySelector('p')).toHaveTextContent('Could not save')
  }
  fireEvent.click(within(bars[2]).getByRole('button', { name: 'Read' }))
- await waitFor(() => expect(within(bars[2]).getByText('Read', { exact: true })).toBeVisible())
+ await waitFor(() => expect(within(bars[2]).getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible())
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 'waiting_for_updates', progress: 3 })
- for (const surface of [root, ...bars]) expect(surface.querySelector('.reading-summary strong')).toHaveTextContent('Waiting for Updates')
+ for (const surface of [root, ...bars]) expect(surface.querySelector('.reading-summary strong')).toHaveTextContent(browser === 'safari' ? /^Waiting$/ : /^Waiting for Updates$/)
 })
 
 it.each(['safari', 'chrome'])('opens the shared add editor at the selected full-work chapter on %s', async browser => {
@@ -1158,14 +1161,14 @@ it.each(['safari', 'chrome'])('preserves a paused reread when Mark Read resumes 
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({ status: 're_reading', progress: 4 })
 })
 
-it('keeps the current waiting status and unread chapter action alongside Re-Read in Chrome', async () => {
+it.each(['safari', 'chrome'])('shows only Re-Read beside the chapter count while waiting for updates on %s', async browser => {
  entry = { version:'v1',status:'waiting_for_updates',progress:3,notes:'',rating:null,tags:[],collections:[] }
- await mountLibrary(document,'https://archiveofourown.org/works/123/chapters/104',{browser:'chrome'})
+ await mountLibrary(document,'https://archiveofourown.org/works/123/chapters/104',{browser})
  for (const surface of [root,bottomRoot]) {
   expect(surface.querySelectorAll('.reading-summary strong')).toHaveLength(1)
-  expect(surface.querySelector('.reading-summary strong')).toHaveTextContent('Waiting for Updates')
+  expect(surface.querySelector('.reading-summary strong')).toHaveTextContent(browser === 'safari' ? /^Waiting$/ : /^Waiting for Updates$/)
   expect(within(surface).getByRole('button',{name:'Re-Read'})).toBeVisible()
-  expect(within(surface).getByRole('button',{name:'Read',exact:true})).toBeVisible()
+  expect([...surface.querySelectorAll('.reading-actions button')].map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Edit Chapters Read', 'Re-Read'])
  }
 })
 
@@ -1194,12 +1197,31 @@ it.each(['safari', 'chrome'].flatMap(browser => ['10/?', '10/15'].flatMap(chapte
  })
  await mountLibrary(document,'https://archiveofourown.org/works/123/chapters/110',{browser})
  const surface=fromBottom?bottomRoot:root
+ if (status === 'waiting_for_updates') {
+  fireEvent.click(within(surface).getByRole('button',{name:'Re-Read',exact:true}))
+  await waitFor(()=>expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ }
  fireEvent.click(within(surface).getByRole('button',{name:['to_read','paused_reading'].includes(status)?'Mark Read':'Read',exact:true}))
  await waitFor(()=>expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
  expect(entry).toMatchObject({status:'waiting_for_updates',progress:10,notes:'Keep notes',rating:4,tags:['Mine']})
  expect(JSON.parse(network.mock.lastCall[0].data).p_input.chapter_read).toMatchObject({chapter:10,chapter_id:'110'})
  for(const bar of [root,bottomRoot]) {
-  expect(bar.querySelector('.reading-summary strong')).toHaveTextContent('Waiting for Updates')
+  expect(bar.querySelector('.reading-summary strong')).toHaveTextContent(browser === 'safari' ? /^Waiting$/ : /^Waiting for Updates$/)
   expect(bar.querySelector('.chapter-progress')).toHaveTextContent('Ch. 10 / 10')
  }
+})
+
+it.each([1, 4].flatMap(chapter => [false, true].map(fromBottom => ({chapter,fromBottom}))))('keeps Chrome To Read actions available without chapter navigation at chapter $chapter (bottom: $fromBottom)', async ({chapter,fromBottom}) => {
+ document.querySelector('#selected_id').remove()
+ document.querySelector('#workskin').insertAdjacentHTML('beforeend', `<div id="chapters"><div class="chapter" id="chapter-${chapter}"><div class="userstuff">Loaded chapter.</div></div></div>`)
+ entry = { version:'v1',status:'to_read',progress:0,notes:'',rating:null,tags:[],collections:[] }
+ await mountLibrary(document, `https://archiveofourown.org/works/123/chapters/${100 + chapter}`, {browser:'chrome'})
+ for (const [surface,top] of [[root,true],[bottomRoot,false]]) {
+  const actions = surface.querySelector('.reading-actions')
+  expect(actions.firstElementChild).toHaveClass('chapter-progress')
+  expect(within(actions).getByRole('button',{name:top && chapter===1?'Start Reading':'Mark Read',exact:true})).toBeVisible()
+ }
+ fireEvent.click(within(fromBottom?bottomRoot:root).getByRole('button',{name:!fromBottom && chapter===1?'Start Reading':'Mark Read',exact:true}))
+ await waitFor(()=>expect(network).toHaveBeenCalledTimes(2))
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toMatchObject({status:'reading',progress:!fromBottom && chapter===1?0:chapter})
 })

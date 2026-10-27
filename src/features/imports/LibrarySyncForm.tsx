@@ -1,4 +1,5 @@
-import { isLibrarySyncSafetyLimit } from './library-sync-state'
+import { ImportReadingReview } from './ImportReadingReview'
+import { isLibrarySyncSafetyLimit, librarySyncRepairs, mergeLibrarySyncRepairs } from './library-sync-state'
 import { mergeSeriesPreviews, parseSeriesUrl, type SeriesPreview } from './urls'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior } from './series-import-preferences'
@@ -47,8 +48,10 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  const intervalId = useId(), modeId = useId(), urlId = useId()
  const [checkChapterDates, setCheckChapterDates] = useState(false)
  const [readingStatus, setReadingStatus] = useState<ImportReadingStatusValue>('to_read')
+ const [readingStatusExplicit, setReadingStatusExplicit] = useState(false)
  const [listCheckChapterDates, setListCheckChapterDates] = useState(false)
  const [url, setUrl] = useState(''), [mode, setMode] = useState('full')
+ const [reviewExisting, setReviewExisting] = useState(true)
  const [startPage, setStartPage] = useState(''), [endPage, setEndPage] = useState('')
  const { state, setState, refresh } = useLibrarySyncStatus()
  const [delayDraft, setDelayDraft] = useState<string | null>(null)
@@ -73,8 +76,8 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    if (name === 'discard') seriesBehavior.reset()
    if (name === 'start' || name === 'discard') { setSeriesReview(null); selection.current = null }
    if (name === 'start') { setCollectionName(null); setCreatedCollection(null) }
-   const reply = await librarySyncCommand(name, name === 'start' ? { url: listUrl.trim(), mode, seriesBehavior: seriesBehavior.behavior, ...(withChapterDates ? { checkChapterDates: true } : {}), ...(requestedReadingStatus ? { readingStatus: requestedReadingStatus } : {}), ...(autoImport ? { autoImport: true } : {}), ...(/^https:\/\/archiveofourown\.org\/collections\//.test(listUrl.trim()) && importToCollection ? { importToCollection: true } : {}), delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
-   const unsupportedOption = reply.state && (withChapterDates && reply.state.checkChapterDates !== true ? 'chapter-date checks' : requestedReadingStatus && reply.state.readingStatus !== requestedReadingStatus ? 'manual reading status' : null)
+   const reply = await librarySyncCommand(name, name === 'start' ? { url: listUrl.trim(), mode, ...(mode === 'full' ? { reviewExisting } : {}), seriesBehavior: seriesBehavior.behavior, ...(withChapterDates ? { checkChapterDates: true } : {}), ...(requestedReadingStatus ? { readingStatus: requestedReadingStatus, ...(!autoImport && !readingStatusExplicit ? { readingStatusOrigin: 'default' as const } : {}) } : {}), ...(autoImport ? { autoImport: true } : {}), ...(/^https:\/\/archiveofourown\.org\/collections\//.test(listUrl.trim()) && importToCollection ? { importToCollection: true } : {}), delaySeconds: Number(interval), ...(startPage !== '' ? { startPage: Number(startPage) } : {}), ...(endPage !== '' ? { endPage: Number(endPage) } : {}) } : { scanId: state?.id, ...(['set-delay', 'resume'].includes(name) ? { delaySeconds: Number(interval) } : {}) })
+   const unsupportedOption = reply.state && (withChapterDates && reply.state.checkChapterDates !== true ? 'chapter-date checks' : requestedReadingStatus && reply.state.readingStatus !== requestedReadingStatus ? 'manual reading status' : mode === 'full' && reviewExisting && reply.state.reviewExisting !== true ? 'existing-entry review' : null)
    if (name === 'start' && reply.state && unsupportedOption) {
     const discarded = await librarySyncCommand('discard', { scanId: reply.state.id })
     setState(discarded.state ?? null)
@@ -134,6 +137,8 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   pending.current = true; setBusy(true); setError(''); setMessage('')
   let imported = 0, kept = 0, batch: string | null = null
   const differences = new Map<string, CsvConflict>()
+  let reportState = state
+  const repairPages = { ...state.repairPages }
   setConflicts([])
   try {
    let collectionId = state.collectionId ?? (createdCollection?.scanId === state.id ? createdCollection!.id : undefined)
@@ -155,16 +160,23 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     const reply = await librarySyncCommand('page', { page, scanId: state.id })
     const rows = uniqueCsvWorks(readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork => row.workId !== undefined && (!reply.seriesUrl || typeof row.workId === 'number' && selection.current?.ids.has(row.workId) === true)))
     if (!rows.length) continue
-    const result = await submitLibrarySync(rows, collectionId, state.readingStatus, { id: state.id, url: state.url })
+    const result = await submitLibrarySync(rows, collectionId, state.readingStatus, { id: state.id, url: state.url, reviewExisting: state.reviewExisting ?? false, ...(state.readingStatusOrigin ? { readingStatusOrigin: state.readingStatusOrigin } : {}) })
     for (const conflict of result.bookmarkConflicts ?? []) differences.set(csvWorkKey(conflict), conflict)
     setConflicts([...differences.values()])
+    if (result.metadataRepaired !== undefined) {
+     const previous = repairPages[page]
+     const repairs = mergeLibrarySyncRepairs(previous, { metadata: result.metadataRepaired, series: result.seriesRepaired ?? 0, reading: result.readingCorrections ?? 0, ...(result.repairWorkIds ? { ids: result.repairWorkIds } : {}) })
+     if (state.reviewExisting !== undefined) await librarySyncCommand('record-repairs', { scanId: state.id, page, repairs })
+     repairPages[page] = repairs; reportState = { ...state, repairPages }
+    }
     imported += result.imported; kept += result.kept; batch = result.batch ?? batch
    }
    // Save the report before acknowledging: finish deletes the scan checkpoints.
-   if (!state.hasMore) await librarySyncReports(1, state)
+   if (!state.hasMore) await librarySyncReports(1, reportState)
    const reply = await librarySyncCommand(state.hasMore ? 'finish-batch' : 'finish', { scanId: state.id, ...(state.hasMore ? { batchStart: state.batchStart ?? 0, batchEnd: state.pages } : {}) }); setState(reply.state ?? null)
    setSeriesReview(null); selection.current = null; seriesBehavior.reset()
-   setMessage(`Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.${state.hasMore ? ' Scanning continues with the remaining pages.' : ''}`)
+   const repairs = librarySyncRepairs({ repairPages })
+   setMessage(`Updated AO3 information for ${repairs.metadata} works, including series information for ${repairs.series} works. Found ${repairs.reading} possible reading-status corrections. Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.${state.hasMore ? ' Scanning continues with the remaining pages.' : ''}`)
    await onImported(batch)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Import failed. Retry to continue safely.'); setMessage('Saved pages remain available. Retrying keeps works already imported.') }
   finally { pending.current = false; setBusy(false) }
@@ -191,6 +203,8 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     <div className="input-with-unit"><input id={intervalId} aria-describedby={`${intervalId}-unit`} className="input-fit" type="number" required min={5} max={3600} step={1} value={interval} disabled={busy} onChange={event => setDelayDraft(event.target.value)} /><span id={`${intervalId}-unit`}>seconds</span><Tooltip pinOnClick description="Default interval: 15 seconds. Choose 5–3,600 seconds; browser scheduling and a small random delay may make requests slower.">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="Request Interval Information" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div>
    </div>
    <div className="form-control"><div className="editable-field-heading"><label htmlFor={modeId}>Scan Mode</label><Tooltip pinOnClick description="Full Scan collects all listings from a list. Quick Sync checks newest entries until a previously imported record is found.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Scan Mode Information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><select id={modeId} className="select-fit" value={selectedMode} disabled={busy || Boolean(saved)} onChange={event => { setMode(event.target.value); if (event.target.value === 'quick') { setStartPage(''); setEndPage('') } }}><option value="full">Full Scan</option><option value="quick">Quick Sync</option></select></div>
+   {selectedMode === 'full' && <label className="check-label"><input type="checkbox" checked={saved ? Boolean(state.reviewExisting) : reviewExisting} disabled={busy || Boolean(saved)} onChange={event => setReviewExisting(event.target.checked)} />Review Existing Entries</label>}
+   {selectedMode === 'full' && <p className="field-help">Review older saved works encountered in this scan. Factual AO3 information repairs automatically; reading-status and progress corrections require approval. Quick Sync can stop before reaching older works.</p>}
    {selectedMode === 'full' && <fieldset className="scan-page-limits" aria-label="Limit Full Library Scan (Optional)">
     <legend><span className="editable-field-heading">Limit Full Library Scan (Optional)<Tooltip pinOnClick description="Enter page numbers only; both endpoints are included. Leave Start Page blank for page 1 and End Page blank to scan to the list’s end. Selected ranges are partial scans and do not update the Quick Sync baseline.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Page Limits Information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></span></legend>
     <div className="form-grid form-grid-two-columns">
@@ -203,7 +217,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    <div className="form-actions"><button type="button" className="button secondary" disabled={busy || Boolean(saved)} onClick={() => importUsername('bookmarks')}>Import Bookmarks</button><button type="button" className="button secondary" disabled={busy || Boolean(saved)} onClick={() => importUsername('marked_for_later')}>Import Marked for Later</button></div>
    <div className="form-controls-row list-import-controls">
    <div className="form-control list-url-control"><div className="editable-field-heading"><label htmlFor={urlId}>AO3 List URL</label><Tooltip pinOnClick description="Accepts a full user or pseud's Works, Series, or Bookmarks URL, filtered Bookmarks URL, tag Works/Bookmarks URL, work search URL, or an AO3 collection URL. Full Scan preserves URL filters; Quick Sync requires an unfiltered user list.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="AO3 List URL Information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div><input id={urlId} type="url" required value={url} placeholder="https://archiveofourown.org/users/USERNAME/bookmarks" disabled={busy || Boolean(saved)} onChange={event => setUrl(event.target.value)} /></div>
-   <ImportReadingStatus allowDynamic description="Applies only to new works imported with Import from List. Dynamic (Bookmarks) uses bookmark and update dates, with optional chapter-date checks; other works default to To Read. Username imports use their own reading-status options. Existing reading progress is preserved." ariaLabel="Reading Status for AO3 list URL" value={listReadingStatus} onChange={setReadingStatus} disabled={busy || Boolean(saved)} />
+   <ImportReadingStatus allowDynamic description="Applies only to new works imported with Import from List. Dynamic (Bookmarks) uses bookmark and update dates, with optional chapter-date checks; other works default to To Read. Username imports use their own reading-status options. Existing reading progress is preserved." ariaLabel="Reading Status for AO3 list URL" value={listReadingStatus} onChange={value => { setReadingStatus(value); setReadingStatusExplicit(true) }} disabled={busy || Boolean(saved)} />
    <button className="button primary" disabled={busy || Boolean(saved)}>Import from List</button>
    </div>
    {listReadingStatus === 'dynamic_bookmarks' && <BookmarkChapterDatesOption scan checked={saved && !state.autoImport ? Boolean(state.checkChapterDates) : listCheckChapterDates} disabled={busy || Boolean(saved)} onChange={setListCheckChapterDates} />}
@@ -229,6 +243,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    selection.current = { scanId: state.id, batchStart: state.batchStart ?? 0, ids: new Set(works.map(work => work.workId)) }
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
+  <ImportReadingReview onChanged={() => onImported(null)} />
   <LibrarySyncReportHistory key={`${state?.id}:${state?.status}`} latest={state?.status === 'complete' ? state : undefined} />
   {conflicts.length > 0 && <details><summary>{conflicts.length} Bookmark Conflicts — Personal Data Kept</summary><p>These incoming bookmarks differ in notes, personal tags, or reading state. Saved notes, tags, and reading state were kept. Older bookmark dates take precedence and Rec is enabled if either version selected it. Use CSV import to overwrite personal data if desired.</p><ul>{conflicts.map(conflict => <li key={csvWorkKey(conflict)}><Link to={`/stories/${conflict.id}`}>{conflict.title || `AO3 Work ${conflict.workId}`}</Link><dl><dt>Reading State Before Import</dt><dd>{statuses[conflict.status as keyof typeof statuses]} · {conflict.progress} chapters read · Finished: {formatDate(conflict.finishedAt)}</dd>{conflict.incomingReading && <><dt>Incoming Reading State</dt><dd>{statuses[conflict.incomingReading.status]} · {conflict.incomingReading.progress} chapters read · Finished: {formatDate(conflict.incomingReading.finishedAt)}</dd></>}<dt>Saved Personal Notes</dt><dd>{conflict.notes || 'None'}</dd><dt>Incoming Bookmark Notes</dt><dd>{conflict.incomingNotes || 'None'}</dd><dt>Saved Personal Tags</dt><dd>{conflict.tags.join(', ') || 'None'}</dd><dt>Incoming Bookmark Tags</dt><dd>{conflict.incomingTags?.join(', ') || 'None'}</dd></dl></li>)}</ul></details>}
   {usernameKind && <Dialog title={usernameKind === 'bookmarks' ? 'Import Bookmarks' : 'Import Marked for Later'} busy={busy} onClose={() => setUsernameKind(null)}><form className="story-form" onSubmit={event => {

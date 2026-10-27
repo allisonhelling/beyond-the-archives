@@ -129,3 +129,10 @@ it('distinguishes bookmarked series from memberships and recognizes a series pre
  document.querySelector('#main').className = 'series-index'
  expect(captureListingPage('series')).not.toHaveProperty('bookmarkedSeriesUrls')
 })
+
+it('captures per-work series evidence including confirmed standalone listings', () => {
+ page('<div id="main" class="works-index"><ol class="work"><li class="work"><h4 class="heading"><a href="/works/34">Title</a></h4><ul class="series"><li>Part 2 of <a href="/series/7">Series seven</a></li></ul></li><li class="work"><h4 class="heading"><a href="/works/35">Standalone</a></h4></li></ol></div>')
+ const result = captureListingPage('works')
+ expect(JSON.parse(result.rows[0].series_memberships)).toEqual([{ id: 7, name: 'Series seven', url: 'https://archiveofourown.org/series/7', position: 2 }])
+ expect(result.rows[1]).toMatchObject({ series_checked: 'true', series: '[]', series_memberships: '[]' })
+})

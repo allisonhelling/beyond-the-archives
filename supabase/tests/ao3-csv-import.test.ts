@@ -161,18 +161,19 @@ it('applies list status progress rules to new works and preserves existing statu
  expect(await entry(126)).toMatchObject({ reading_status: 'to_read', last_read_chapter: 0 })
 })
 
-it('reconciles earlier bookmark dates and unions Rec without replacing personal notes or tags', async () => {
+it('repairs factual bookmark dates and Rec while leaving personal finish dates for review', async () => {
  await submit([row(991, { bookmarkId: 90991, bookmarkDate: '2026-10-22', notes: 'Library notes', bookmarkRec: false })])
  await db.query("select public.submit_ao3_library_sync($1)", [JSON.stringify([row(991, { bookmarkId: 90991, bookmarkDate: '2026-10-10', notes: 'Older bookmark notes', tags: ['Incoming'], bookmarkRec: true })])])
  const saved = (await db.query<{ created_at: string; finished_at: string; is_rec: boolean; notes: string; source_bookmark: object; reading_history: { action: string; at: string }[] }>('select e.* from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=991')).rows[0]
  expect(new Date(saved.created_at).toISOString()).toBe('2026-10-10T00:00:00.000Z')
- expect(new Date(saved.finished_at).toISOString()).toBe('2026-10-10T00:00:00.000Z')
+ expect(new Date(saved.finished_at).toISOString()).toBe('2026-10-22T00:00:00.000Z')
  expect(saved).toMatchObject({ is_rec: true, notes: 'Library notes', source_bookmark: { date: '2026-10-10', notes: 'Older bookmark notes' } })
- expect(saved.reading_history.filter(event => ['added', 'finished'].includes(event.action)).every(event => new Date(event.at).toISOString() === '2026-10-10T00:00:00.000Z')).toBe(true)
+ expect(new Date(saved.reading_history.find(event => event.action === 'added')!.at).toISOString()).toBe('2026-10-10T00:00:00.000Z')
+ expect(new Date(saved.reading_history.find(event => event.action === 'finished')!.at).toISOString()).toBe('2026-10-22T00:00:00.000Z')
  await submit([row(991, { bookmarkId: 90991, bookmarkDate: '2026-10-21', bookmarkRec: false })])
  const repeated = (await db.query<{ is_rec: boolean; finished_at: string }>('select e.* from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=991')).rows[0]
  expect(repeated.is_rec).toBe(true)
- expect(new Date(repeated.finished_at as string).toISOString()).toBe('2026-10-10T00:00:00.000Z')
+ expect(new Date(repeated.finished_at as string).toISOString()).toBe('2026-10-22T00:00:00.000Z')
 })
 
 it('keeps an earlier known finish even when a newer bookmark overwrites personal fields', async () => {

@@ -1,3 +1,4 @@
+import { tagAliasIndex, type TagResolution } from '../../src/features/library/tags/tag-resolution'
 import { applyAutomaticCollections } from '../../src/features/library/collections/automatic-collections'
 import { effectiveMetadata, type Collection, type Story, type Work } from '../../src/features/library/model'
 import { defaultReadingFilters, filterReading, inReadingSection, tracked } from '../../src/features/library/reading-search'
@@ -33,7 +34,7 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
   }))
  }
  if (name==='query_library'||name==='library_query_facets') {
-  const query=body.p_query as Row,mode=query.mode,shelf=String(query.shelf),filters={...defaultReadingFilters,...query.filters as Row}
+  const query=body.p_query as Row,mode=query.mode,shelf=String(query.shelf),filters={...defaultReadingFilters,...query.filters as Row,tagAliases:tagAliasIndex(rows('ao3_tag_resolutions') as unknown as TagResolution[])}
   const series=librarySeries(stories,records)
   const seriesItems=series.filter(series=>query.author === undefined && (shelf==='all'||shelf==='series'||shelf==='favorites'&&series.record?.is_favorite||shelf==='currently_reading'&&seriesReadingStatus(series)==='reading'||['paused_reading','to_read','finished','did_not_finish'].includes(shelf)&&seriesReadingStatus(series)===shelf||series.record?.collectionIds?.includes(shelf)))
   const works=stories.filter(story=>(query.author === undefined || story.metadata.authors.includes(String(query.author))) && (shelf==='all'||shelf==='currently_reading'&&['reading','waiting_for_updates','re_reading'].includes(story.reading_status)||shelf==='finished'&&['finished','re_reading'].includes(story.reading_status)||shelf==='recs'&&story.is_rec||shelf==='favorites'&&story.is_favorite||story.reading_status===shelf||story.collectionIds.includes(shelf)||story.automaticCollectionIds?.includes(shelf)))

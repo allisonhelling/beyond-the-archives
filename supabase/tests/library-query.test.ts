@@ -348,3 +348,37 @@ it('counts compact series with the same shelf fields without building preview me
   await db.exec('reset role'); await db.exec(fn.definition); await db.exec('set role authenticated')
  }
 })
+
+it('only carries the requested search scope through the shared pool', async () => {
+ const scope={mode:'library',shelf:'all',filters:{scope:'any'}}
+ const pool=async (query:unknown) => (await db.query<{search_any:string|null;search_summary:string|null;search_notes:string|null}>(
+  'select search_any,search_summary,search_notes from public.library_query_pool($1)',[JSON.stringify(query)])).rows
+ const unsearched=await pool(scope)
+ expect(unsearched.length).toBeGreaterThan(0)
+ expect(unsearched.every(row=>Object.values(row).every(value=>value===null))).toBe(true)
+ for(const searchScope of ['any','summary','notes']) {
+  const searched=await pool({...scope,filters:{scope:searchScope},terms:parseSearch('private')})
+  expect(searched.length).toBe(unsearched.length)
+  for(const row of searched) for(const [field,value] of Object.entries(row)) {
+   if(field===`search_${searchScope}`) expect(typeof value).toBe('string')
+   else expect(value).toBeNull()
+  }
+ }
+})
+
+it('counts overlapping and empty manual collections without losing membership timestamps',async()=>{
+ const docs=(await documents()).slice(0,2)
+ const collections=(await db.query<{id:string;name:string}>("insert into public.collections(name) values ('Count overlap A'),('Count overlap B'),('Count empty') returning id,name")).rows
+ for(const collection of collections.filter(c=>c.name!=='Count empty')) {
+  await db.query('insert into public.collection_works(collection_id,library_entry_id) select $1,unnest($2::uuid[])',[collection.id,docs.map(s=>s.id)])
+ }
+ const navigation=(await db.query<{result:Record<string,{works:number;series:number;updated_at:string|null}>}>('select public.library_navigation() result')).rows[0].result
+ const updated=(await documents()).filter(s=>docs.some(d=>d.id===s.id)).map(s=>s.updated_at).sort().at(-1)!
+ for(const collection of collections) {
+  const empty=collection.name==='Count empty'
+  expect(navigation[collection.id]).toMatchObject({works:empty?0:2,series:0})
+  if(empty) expect(navigation[collection.id].updated_at).toBeNull()
+  else expect(Date.parse(navigation[collection.id].updated_at!)).toBe(Date.parse(updated))
+ }
+ await db.query('delete from public.collections where id=any($1::uuid[])',[collections.map(c=>c.id)])
+})

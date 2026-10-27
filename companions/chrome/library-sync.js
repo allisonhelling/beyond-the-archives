@@ -1,4 +1,4 @@
-import { isLibrarySyncSafetyLimit, librarySyncSafetyLimitError } from '../../src/features/imports/library-sync-state.ts'
+import { isLibrarySyncSafetyLimit, librarySyncSafetyLimitError, mergeLibrarySyncRepairs } from '../../src/features/imports/library-sync-state.ts'
 import { parseSeries } from '../../src/features/imports/ao3-series.ts'
 import { captureMetadataPage } from './capture.js'
 import { parseChapterDates } from '../../src/features/imports/chapter-dates.ts'
@@ -46,6 +46,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    if (!Number.isSafeInteger(startPage) || startPage < 1 || endPage !== undefined && (!Number.isSafeInteger(endPage) || endPage < startPage)) throw new Error('Enter positive whole page numbers, with End page at or after Start page.')
    const limited = startPage > 1 || endPage !== undefined
    if (message.mode === 'quick' && limited) throw new Error('Quick Sync must start at page 1 with no End page. Use a full scan for page ranges.')
+   if (message.reviewExisting && message.mode !== 'full') throw new Error('Review Existing Entries requires Full Scan.')
    const delaySeconds = requestDelay(message.delaySeconds)
    const identity = listingUrl(message.url, message.mode)
    if ((identity.collectionUrl || identity.kind === 'series') && limited) throw new Error('Page ranges are available for individual work or bookmark lists. Clear the range to scan a collection or series list.')
@@ -61,10 +62,21 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const first = sources.shift()
    const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesBookmarkDates: {}, bookmarkedWorkIds: [], ...([first, ...sources].some(source => source.kind === 'bookmarks') ? { bookmarkedSeries: [] } : {}), seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
     batchStart: 0, hasMore: false, startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, diagnosticsVersion: 1, skippedEntries: [], chapterDateIssues: [], tabId: null, nextAt: Date.now(), keys: [], error: '' }
+   next.readingStatusOrigin = message.readingStatusOrigin === 'default' ? 'default' : 'manual'; next.reviewExisting = Boolean(message.reviewExisting); next.repairPages = {}
    await write(next); return { state: next }
   }
   if (message.scanId && state?.id !== message.scanId) throw new Error('The saved scan changed in another tab. Refresh before continuing.')
   if (!state) return { state: null }
+  if (message.action === 'record-repairs') {
+   if (state.status !== 'ready' || !Number.isSafeInteger(message.page) || message.page < (state.startPage ?? 1) || message.page >= (state.startPage ?? 1) + state.pages) throw new Error('Invalid repair page.')
+   const counts = message.repairs
+   if (!counts || ['metadata', 'series', 'reading'].some(key => !Number.isSafeInteger(counts[key]) || counts[key] < 0)) throw new Error('Invalid repair summary.')
+   if (counts.ids && ['metadata', 'series', 'reading'].some(key => !Array.isArray(counts.ids[key]) || counts.ids[key].length > 2000 || counts.ids[key].some(id => typeof id !== 'string' || id.length > 128))) throw new Error('Invalid repair identities.')
+   const previous = state.repairPages?.[message.page]
+   state.repairPages ??= {}
+   state.repairPages[message.page] = mergeLibrarySyncRepairs(previous, counts)
+   await write(state); return { state }
+  }
   if (message.action === 'prepare-batch') {
    if (state.status !== 'paused' || !isLibrarySyncSafetyLimit(state) || !state.pages) throw new Error('No saved batch is available.')
    // Old safety-limit checkpoints may still need chapter dates for their final page.
@@ -257,7 +269,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
     }
     await storage.local.set({ [pageKey(state, (state.startPage ?? 1) + state.pages)]: { rows, ...(state.kind === 'series_works' ? { seriesUrl: state.currentUrl, ...(seriesPreview ? { seriesPreview } : {}) } : {}) } })
     if (state.checkChapterDates && (!state.readingStatus || state.readingStatus === 'reading')) {
-     state.chapterQueue = readAo3Rows(rows).flatMap((work, row) => work.source === 'bookmarks' && work.workId && work.workStatus !== 'deleted' && work.bookmarkDate && work.metadata.published_chapters && bookmarkReadingState(work).status === 'reading' && !known.has(keys[row]) ? [{ workId: work.workId, title: work.metadata.title, published: work.metadata.published_chapters, page: (state.startPage ?? 1) + state.pages, row }] : [])
+     state.chapterQueue = readAo3Rows(rows).flatMap((work, row) => work.source === 'bookmarks' && work.workId && work.workStatus !== 'deleted' && work.bookmarkDate && work.metadata.published_chapters && bookmarkReadingState(work).status === 'reading' && (state.reviewExisting || !known.has(keys[row])) ? [{ workId: work.workId, title: work.metadata.title, published: work.metadata.published_chapters, page: (state.startPage ?? 1) + state.pages, row }] : [])
     }
     state.keys.push(...keys.map(key => state.kind === 'series_works' ? `series-work:${key}` : key)); state.pages++; state.count += rows.length; state.skipped += result.skipped
     state.skippedEntries ??= []
@@ -303,8 +315,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } = result.state
-    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues } }
+    const { id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
+    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
    }
    return result
   } finally {

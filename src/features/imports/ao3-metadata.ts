@@ -2,6 +2,7 @@ import type { CheerioAPI } from 'cheerio'
 import { readSummary } from '../library/summaries/summary.ts'
 
 export type AutomaticMetadata = {
+ series_checked?: boolean;
  language?: string; chapter_dates?: Record<string, string>; title?: string; summary?: string; summary_html?: string; authors?: string[]; author_links?: Record<string,string>; fandoms?: string[];
  ao3_tags?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; archive_warnings?: string[]; categories?: string[];
  rating?: string; kudos?: number; bookmark_count?: number; comment_count?: number; hits?: number; word_count?: number; published_chapters?: number; total_chapters?: number; is_complete?: boolean;
@@ -52,7 +53,7 @@ export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
  if(updated) metadata.ao3_updated_at=updated
  const memberships: NonNullable<AutomaticMetadata['series_memberships']>=[]
  $('dd.series .position').each((_,node)=>{ const link=$(node).find('a[href*="/series/"]').first(); const m=link.attr('href')?.match(/^\/series\/([1-9]\d*)$/); const position=$(node).text().match(/Part\s+(\d+)\s+of/i); if(m && Number.isSafeInteger(Number(m[1]))) memberships.push({id:Number(m[1]),name:link.text().trim(),url:`https://archiveofourown.org/series/${m[1]}`,position:position?count(position[1])??null:null}) })
- if(memberships.length) { metadata.series_memberships=memberships; metadata.series=memberships.map(s=>s.name) }
+ if(memberships.length || $('dl.work.meta').length) { metadata.series_checked=true; metadata.series_memberships=memberships; metadata.series=memberships.map(s=>s.name) }
  const chapters: Record<string,string>={}
  // Only explicit numbered options verify position. Never use chapter IDs or DOM index as chapter numbers.
  $('#selected_id option').each((_,node)=>{ const id=$(node).attr('value'), label=$(node).text().match(/^\s*(\d+)\./); if(id && /^[1-9]\d*$/.test(id) && label && Number(label[1])>0 && metadata.published_chapters && Number(label[1])<=metadata.published_chapters) chapters[label[1]]=id })

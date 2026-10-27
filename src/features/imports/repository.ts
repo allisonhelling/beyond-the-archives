@@ -130,13 +130,13 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
   throw new Error('Could not confirm the CSV import. Check import history and your connection before retrying. Apply the latest database migrations if this feature is new.')
  }
  void connectExtension().catch(() => {})
- return data as unknown as { batch: string | null; imported: number; kept: number }
+ return data as unknown as { batch: string | null; imported: number; kept: number; metadataRepaired: number; seriesRepaired: number; readingCorrections: number }
 }
 
-export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string }) {
- if (readingStatus) works = works.map(work => ({ ...work, importReadingStatus: readingStatus }))
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string; reviewExisting?: boolean; readingStatusOrigin?: 'default' | 'manual' }) {
+ works = works.map(work => ({ ...work, ...(readingStatus ? { importReadingStatus: readingStatus, ...(scan?.readingStatusOrigin ? { importReadingStatusOrigin: scan.readingStatusOrigin } : {}) } : {}), reviewExisting: scan?.reviewExisting ?? true }))
  const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
- let result: { batch: string | null; imported: number; kept: number }
+ let result: { batch: string | null; imported: number; kept: number; metadataRepaired?: number; seriesRepaired?: number; readingCorrections?: number; repairWorkIds?: Record<'metadata' | 'series' | 'reading', string[]> }
  if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works)
  else {
   const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json, ...(scan ? { p_scan_id: scan.id, p_source_url: scan.url } : {}) })

@@ -72,6 +72,15 @@ export function captureListingPage(kind) {
     rating: text(item.querySelector('.required-tags .rating .text')), warnings: join(item, '.tags .warnings a'),
     date: text(item.querySelector('.header > .datetime')), chapters: text(item.querySelector('dd.chapters')),
     recipient: join(item, 'h4.heading > a[href$="gifts"]'), summary: lines(item.querySelector('.summary')), summary_html: item.querySelector('.summary')?.innerHTML ?? '' }
+   if (!deleted) {
+    const memberships = [...item.querySelectorAll('.series a[href]')].flatMap(anchor => {
+     const url = linkUrl(anchor), id = Number(url?.pathname.match(/^\/series\/([1-9]\d*)$/)?.[1])
+     if (url?.origin !== location.origin || !Number.isSafeInteger(id) || id < 1) return []
+     const position = text(anchor.closest('li')).match(/Part\s+(\d+)\s+of/i)
+     return [{ id, name: text(anchor), url: `${location.origin}/series/${id}`, position: position && Number.isSafeInteger(Number(position[1])) ? Number(position[1]) : null }]
+    })
+    if (memberships.length || kind !== 'series_works' && !item.querySelector('.series')) Object.assign(row, { series_checked: 'true', series_memberships: JSON.stringify(memberships), series: JSON.stringify(memberships.map(series => series.name)) })
+   }
    for (const field of ['words', 'comments', 'kudos', 'bookmarks', 'hits']) row[field] = text(item.querySelector(`dd.${field}`)).replace(/\D/g, '')
    if (kind === 'bookmarks') {
     const status = item.querySelector(':scope > .status')

@@ -1,3 +1,4 @@
+import { normalizeTag as normalize, tagMatches, type TagAliases } from './tags/tag-resolution'
 import { datePlaceholder } from '../../lib/dates'
 import { inSeries, seriesMemberships } from './series/series'
 import { publicationStatuses } from './publication-status'
@@ -8,6 +9,7 @@ export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
 export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
+  tagAliases?: TagAliases;
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
   oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string; personalTags?: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
@@ -21,7 +23,7 @@ export const defaultReadingFilters: ReadingFilters = {
 export function hasReadingFilters(filters: ReadingFilters) {
   return (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope', 'showSeries'].includes(key) && JSON.stringify(filters[key]) !== JSON.stringify(defaultReadingFilters[key]))
 }
-export const normalize = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
+export { normalizeTag as normalize } from './tags/tag-resolution'
 
 // OR has lower precedence than space/AND; a leading minus negates one term.
 // Quoted terms keep spaces. Backslash escapes the next character, including operators.
@@ -133,10 +135,10 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&
       (!filters.personalNotes || Boolean(s.notes?.trim())) && (!filters.recs || s.is_rec) &&
       (!filters.personalRating?.length || (s.personalRatings?.length ? s.personalRatings : [s.personal_rating ?? null]).some(rating => filters.personalRating.includes(rating === null ? 'unrated' : String(rating)))) &&
-      relationships.every(term => tagNames(s.metadata, 'relationship').some(t => normalize(t).includes(term))) &&
-      characters.every(term => tagNames(s.metadata, 'character').some(t => normalize(t).includes(term))) &&
+      relationships.every(term => tagMatches(tagNames(s.metadata, 'relationship'), term, 'relationship', filters.tagAliases)) &&
+      characters.every(term => tagMatches(tagNames(s.metadata, 'character'), term, 'character', filters.tagAliases)) &&
       personalTags.every(term => s.personalTags.some(tag => normalize(tag).includes(term))) &&
-      tags.every(term => tagNames(s.metadata, 'freeform').some(t => normalize(t).includes(term))) &&
+      tags.every(term => tagMatches(tagNames(s.metadata, 'freeform'), term, 'freeform', filters.tagAliases)) &&
       (after === null || (updated !== null && updated >= after)) &&
       (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))
   }).sort((a, b) => {

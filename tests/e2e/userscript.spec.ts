@@ -1,3 +1,4 @@
+import { verifyReadingActionOrder } from './reading-action-controls'
 import { mergeEdits, type EditValues, type MergeResult } from '../../src/features/library/edit-merge'
 import { statuses } from '../../src/features/library/model'
 import { expect, test } from '@playwright/test'
@@ -212,7 +213,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await top.getByRole('button', { name: 'Save', exact: true }).click()
    await expect(top.getByRole('status')).toHaveText('Saved')
    for (const surface of [top, bottom]) {
-    await expect(surface.locator('.reading-summary strong')).toHaveText(statuses[status])
+    await expect(surface.locator('.reading-summary strong')).toHaveText(status === 'waiting_for_updates' ? 'Waiting' : statuses[status])
     if (status === 'to_read') {
      await expect(surface.getByRole('button', { name: 'Mark Read', exact: true })).toBeVisible()
      await expect(surface.getByRole('button', { name: 'Start Reading', exact: true })).toHaveCount(0)
@@ -223,9 +224,10 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
   await expect(top.getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
   await expect(top.locator('.library-link')).toHaveText('')
-  await expect(top.locator('.toolbar-actions').getByRole('button', { name: 'Read', exact: true })).toBeVisible()
+  await expect(top.locator('.reading-actions').getByRole('button', { name: 'Read', exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.locator('button.chapter-progress')).toHaveText('Ch. 3 / 10')
+   await verifyReadingActionOrder(surface)
    await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
    await expect(surface.getByLabel('About chapters read', { exact: true })).toHaveCount(0)
    for (const element of await surface.locator('.toolbar *, .bottom-bar *').all()) await expect(element).toHaveCSS('font-size', '20px')
@@ -296,18 +298,9 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    if (!mobile) expect(Math.abs(bounds.y + bounds.height / 2 - rowCenter)).toBeLessThan(1)
    await expect(button).toHaveCSS('margin-left', '0px')
   }
-  const bottomBounds = (await bottom.locator('.bottom-bar').boundingBox())!, chapterBounds = (await bottom.locator('.reading-summary').boundingBox())!, completeBounds = (await bottom.locator('.complete-chapter').boundingBox())!
-  const pauseBounds = (await bottom.getByRole('button', { name: 'Pause Reading', exact: true }).boundingBox())!
-  const progressRows: (typeof chapterBounds)[][] = []
-  for (const bounds of [chapterBounds, pauseBounds, completeBounds]) {
-   const row = progressRows.find(items => Math.abs(items[0].y + items[0].height / 2 - bounds.y - bounds.height / 2) < 2)
-   if (row) row.push(bounds)
-   else progressRows.push([bounds])
-  }
-  for (const row of progressRows) {
-   const left = Math.min(...row.map(bounds => bounds.x)), right = Math.max(...row.map(bounds => bounds.x + bounds.width))
-   expect(Math.abs((left + right) / 2 - bottomBounds.x - bottomBounds.width / 2)).toBeLessThan(1)
-  }
+  const bottomBounds = (await bottom.locator('.bottom-bar').boundingBox())!, summaryBounds = (await bottom.locator('.reading-summary').boundingBox())!
+  expect(Math.abs(summaryBounds.x + summaryBounds.width / 2 - bottomBounds.x - bottomBounds.width / 2)).toBeLessThan(1)
+  await verifyReadingActionOrder(bottom)
 
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 3 / 10', { exact: true })).toBeVisible()
@@ -541,7 +534,12 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.evaluate(() => (window as unknown as { fullWorkRequests: { p_input: unknown }[] }).fullWorkRequests.at(-1)!.p_input)).toMatchObject({ chapter_read: { chapter: 2, chapter_id: '102', word_count: 2 } })
   await fullBars.nth(1).screenshot({ path: `test-results/full-work-chapter-bar-${page.viewportSize()!.width}.png` })
   await fullBars.nth(2).getByRole('button', { name: 'Read', exact: true }).click()
-  for (const surface of [top, ...await fullBars.all()]) await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting for Updates')
+  for (const surface of [top, ...await fullBars.all()]) {
+   await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting')
+   await expect(surface.locator('.reading-actions > button')).toHaveCount(2)
+   await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
+   await expect(surface.getByRole('button', { name: 'Pause Reading', exact: true })).toHaveCount(0)
+  }
   expect(await page.evaluate(() => (window as unknown as { fullWorkRequests: { p_input: unknown }[] }).fullWorkRequests.at(-1)!.p_input)).toMatchObject({ status: 'waiting_for_updates', progress: 3, chapter_read: { chapter: 3, chapter_id: '103', word_count: 3 } })
   // Safari's installable userscript also mounts every series work before pairing.
   const seriesUrl = 'https://archiveofourown.org/series/77'

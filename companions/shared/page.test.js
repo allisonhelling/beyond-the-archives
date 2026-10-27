@@ -127,3 +127,10 @@ it('reads full-work chapter links without a selector and counts each chapter sep
  expect(captureChapterRead(doc, { ...info, current: 2 }, url)).toEqual({ chapter: 2, chapter_id: '920', word_count: 2 })
  expect(JSON.stringify(info)).not.toContain('Two words')
 })
+
+it.each([1, 4])('identifies loaded chapter %i when a skin omits chapter navigation', chapter => {
+ const doc = new DOMParser().parseFromString(`<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/10</dd></dl><div id="chapters"><div class="chapter" id="chapter-${chapter}"><div class="userstuff">PRIVATE CHAPTER TEXT</div></div></div>`, 'text/html')
+ const result = readPage(doc, 'https://archiveofourown.org/works/123/chapters/940')
+ expect(result).toMatchObject({ current: chapter, chapters: { [chapter]: '940' } })
+ expect(JSON.stringify(result)).not.toContain('PRIVATE CHAPTER TEXT')
+})

@@ -687,3 +687,17 @@ it('retains explicit series bookmarks in mixed collection scans across restarts'
  for (let index = 0; index < 8; index++) await collect()
  expect((await sync.command({ action: 'status' })).state).toMatchObject({ status: 'ready', seenSeries: [related, explicit], bookmarkedSeries: [explicit] })
 })
+
+it('persists existing-entry review and repair counts across restarts without double counting retries',async()=>{
+ await sync.command({action:'start',url:'https://archiveofourown.org/users/alice/bookmarks',mode:'full',reviewExisting:true})
+ await collect()
+ expect(local.librarySync.reviewExisting).toBe(true)
+ const record={action:'record-repairs',page:1,repairs:{metadata:1,series:1,reading:1,ids:{metadata:['one'],series:['one'],reading:['one']}}}
+ await sync.command(record)
+ await sync.command({...record,repairs:{metadata:0,series:0,reading:1,ids:{metadata:[],series:[],reading:['one']}}})
+ const restarted=createLibrarySync({auth:async()=>user,available:async()=>true,changed:vi.fn()})
+ expect((await restarted.command({action:'status'})).state.repairPages[1]).toEqual(record.repairs)
+ await restarted.command({action:'finish'})
+ expect(local.librarySync.repairPages[1]).toEqual(record.repairs)
+ await expect(sync.command({action:'start',url:'https://archiveofourown.org/users/alice/bookmarks',mode:'quick',reviewExisting:true})).rejects.toThrow('Full Scan')
+})

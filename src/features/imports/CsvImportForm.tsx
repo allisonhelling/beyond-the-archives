@@ -1,3 +1,4 @@
+import { ImportReadingReview } from './ImportReadingReview'
 import { sampleMode } from '../../lib/sample-mode'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior } from './series-import-preferences'
@@ -57,7 +58,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   pending.current = true; setBusy(true); setError('')
   try {
    const result = await submitCsvImport(prepared.works, prepared.conflicts, choices, checkChapterDates)
-   setPrepared(undefined); seriesBehavior.reset(); setMessage(`Imported ${result.imported} works. Kept ${result.kept} existing works. Non-empty AO3 metadata was refreshed for existing works. Metadata${checkChapterDates ? ' and chapter dates' : ''} for new or overwritten works continue processing in import history.`)
+   setPrepared(undefined); seriesBehavior.reset(); setMessage(`Updated AO3 information for ${result.metadataRepaired ?? 0} works, including series information for ${result.seriesRepaired ?? 0} works. Found ${result.readingCorrections ?? 0} possible reading-status corrections. Imported ${result.imported} works. Kept ${result.kept} existing works. Non-empty AO3 metadata was refreshed for existing works. Metadata${checkChapterDates ? ' and chapter dates' : ''} for new or overwritten works continue processing in import history.`)
    await onImported(result.batch)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not import the CSV files.') }
   finally { pending.current = false; setBusy(false) }
@@ -76,10 +77,11 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   {!busy && message && <p role="status">{message}</p>}
   {error && !seriesSources && <p className="error-message" role="alert">{error}</p>}
   {seriesSources && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={seriesSources.map(row => row.url).join('\n')} savedIds={new Set()} busy={busy} showReadingStatus={false} confirmLabel="Review CSV Conflicts" onConfirm={(_works, _status, _seriesIds, selections) => void reviewSeries(selections)} onCancel={() => { setSeriesSources(undefined); setError('') }} />}
+  <ImportReadingReview onChanged={() => onImported(null)} />
   {prepared && <>
    <p>{prepared.works.length} unique works · {conflicts.length} bookmark conflicts · {laterSkipped} existing Marked for Later works will keep personal data.</p>
    {conflicts.length > 0 && <>
-    <p>Choose how to handle each existing bookmark. Overwrite replaces notes, personal tags, reading status, and progress. Older known bookmark dates take precedence for dates with either choice, including the finished date when the bookmark confirms completion. Rec is enabled if either version selected it. AO3 metadata refreshes automatically with either choice; empty fields do not erase saved data. For deleted bookmarks, Overwrite replaces only notes and personal tags; saved work metadata and reading history remain. Ratings, favorites, and collections are kept. Unselected conflicts default to Keep.</p>
+    <p>Choose how to handle each existing bookmark. Overwrite replaces notes, personal tags, reading status, and progress. Older known bookmark dates can repair saved and source bookmark dates with either choice. Personal reading dates change only with Overwrite or an accepted reading correction. Rec is enabled if either version selected it. AO3 metadata refreshes automatically with either choice; empty fields do not erase saved data. For deleted bookmarks, Overwrite replaces only notes and personal tags; saved work metadata and reading history remain. Ratings, favorites, and collections are kept. Unselected conflicts default to Keep.</p>
     <div className="form-actions">{(['overwrite', 'keep'] as const).map(choice => <button type="button" className="button secondary" key={choice} disabled={busy} onClick={() => setChoices(Object.fromEntries(conflicts.map(conflict => [csvWorkKey(conflict), choice])))}>{choice === 'overwrite' ? 'Overwrite All Works' : 'Keep All Works'}</button>)}</div>
     <div className="import-results"><table><caption>Bookmark Conflicts</caption><thead><tr><th>Work</th><th>Existing Data</th><th>Incoming Bookmark</th><th>Action</th></tr></thead><tbody>{conflicts.map(conflict => {
      const incoming = prepared.works.find(work => csvWorkKey(work) === csvWorkKey(conflict))!

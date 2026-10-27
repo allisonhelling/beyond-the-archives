@@ -34,6 +34,8 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 .status-bullet[data-status="re_reading"] { color: var(--status-rereading); }
 .status-bullet[data-status="to_read"] { color: var(--status-to-read); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--control-gap); }
+.reading-actions { flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; }
+.reading-actions > * { flex-shrink: 0; }
 .chapter-progress, .complete-chapter, .completion-indicator { white-space: nowrap; }
 .progress-dialog { width: min(320px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: var(--field-gap); border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface); text-align: start; }
 .progress-dialog::backdrop { background: #0005; }

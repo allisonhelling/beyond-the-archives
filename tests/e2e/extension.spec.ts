@@ -1,3 +1,4 @@
+import { verifyReadingActionOrder } from './reading-action-controls'
 import { chromium, expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
@@ -160,6 +161,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   for (const surface of [bar, ao3.locator('#ao3-library-progress')]) {
    await expect(surface.locator('.reading-summary strong')).toHaveCSS('font-size', summaryFont)
    await expect(surface.locator('button.chapter-progress')).toHaveText('Ch. 0 / 6')
+   await verifyReadingActionOrder(surface)
    await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
    await expect(surface.getByLabel('About chapters read', { exact: true })).toHaveCount(0)
   }
@@ -214,6 +216,8 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    await expect(surface.locator('.reading-summary strong')).toHaveCount(1)
    await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting for Updates')
    await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
+   await expect(surface.locator('.reading-actions > button')).toHaveCount(2)
+   await expect(surface.getByRole('button', { name: 'Pause Reading', exact: true })).toHaveCount(0)
   }
   expect(barEntries.get(123)).toMatchObject({ status: 'waiting_for_updates', progress: 1 })
   await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Re-Read', exact: true }).click()
