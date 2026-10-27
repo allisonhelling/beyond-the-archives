@@ -27,7 +27,7 @@ test('automatic collection rules persist and update connected library results, c
   await expect(dialog.getByLabel('Active Filters')).toContainText(name === 'Favorites' ? 'Favorites Only' : 'In a Series Only')
   await toggle.click()
  }
- await dialog.getByRole('button',{name:/Select Fandoms/}).click()
+ await dialog.getByRole('button',{name:'Fandoms',exact:true}).click()
  await dialog.getByRole('checkbox',{name:/^Fandom/}).check()
  await dialog.getByRole('textbox',{name:'Name',exact:true}).click()
  const tags=dialog.getByRole('searchbox',{name:'Tags',exact:true})

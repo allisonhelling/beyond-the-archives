@@ -382,3 +382,131 @@ it('counts overlapping and empty manual collections without losing membership ti
  }
  await db.query('delete from public.collections where id=any($1::uuid[])',[collections.map(c=>c.id)])
 })
+
+it('uses indexed identities for ordinary browsing without invoking the JSON filter or full pool', async () => {
+ await db.exec('reset role;begin')
+ try {
+  for (const signature of ['public.library_filter(jsonb,jsonb,jsonb,text)', 'public.library_query_pool(jsonb)']) {
+   const fn = (await db.query<{definition:string;source:string}>('select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid=$1::regprocedure', [signature])).rows[0]
+   await db.exec(fn.definition.replace(fn.source, "begin raise exception 'Unexpected full-document scan'; end;"))
+  }
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope = { mode: 'library', shelf: 'all', includeFacets: false, filters: { ...defaultReadingFilters, randomSeed: 'indexed-regression' } }
+  const first = (await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r', [JSON.stringify(scope)])).rows[0].r
+  const last = (await db.query<{r:LibraryResults}>('select public.query_library($1,999,25) r', [JSON.stringify(scope)])).rows[0].r
+  expect(first.total).toBe((await documents()).length)
+  expect(first.stories).toHaveLength(Math.min(25,first.total))
+  expect(last.page).toBe(last.pages)
+  expect(first.stories.every(story => typeof story.metadata.summary === 'string')).toBe(true)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('reuses exact totals and combined navigation counts across pages, then invalidates them after worker edits', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const fn = (await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_query_work_sql(jsonb,boolean,boolean)'::regprocedure")).rows[0]
+  const nav = (await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_navigation_counts()'::regprocedure")).rows[0]
+  await db.exec(`create sequence public.match_scans;create sequence public.navigation_scans;
+   grant usage,select on sequence public.match_scans,public.navigation_scans to authenticated;`)
+  await db.exec(fn.definition.replace(fn.source, fn.source.replace(/\bbegin\b/i,"begin perform nextval('public.match_scans');")))
+  await db.exec(nav.definition.replace('LANGUAGE sql','LANGUAGE plpgsql').replace(nav.source,"begin perform nextval('public.navigation_scans'); return ("+nav.source.trim().replace(/;$/,'')+'); end;'))
+  await db.query('select public.invalidate_library_queries($1)',[alice])
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope = {mode:'reading',shelf:'view_all',includeFacets:false,filters:defaultReadingFilters}
+  const first=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify(scope)])).rows[0].r
+  const second=(await db.query<{r:LibraryResults}>('select public.query_library($1,2,50) r',[JSON.stringify(scope)])).rows[0].r
+  expect(second.total).toBe(first.total)
+  expect(second.sections).toEqual(first.sections)
+  await db.query('select public.library_navigation()')
+  await db.query('select public.library_navigation()')
+  expect((await db.query<{n:number}>('select last_value::integer n from public.match_scans')).rows[0].n).toBe(1)
+  expect((await db.query<{n:number}>('select last_value::integer n from public.navigation_scans')).rows[0].n).toBe(1)
+  const removed=first.stories[0].id
+  // A worker does not have the reader's JWT; owner invalidation comes from the row.
+  await db.exec('reset role;reset request.jwt.claim.sub')
+  await db.query('delete from public.library_entries where id=$1',[removed])
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const refreshed=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify(scope)])).rows[0].r
+  expect(refreshed.total).toBe(first.total-1)
+  expect(refreshed.stories.map(story=>story.id)).not.toContain(removed)
+  await db.query('select public.library_navigation()')
+  expect((await db.query<{n:number}>('select last_value::integer n from public.match_scans')).rows[0].n).toBe(2)
+  expect((await db.query<{n:number}>('select last_value::integer n from public.navigation_scans')).rows[0].n).toBe(2)
+  for(let index=0;index<24;index++)await db.query('select public.query_library($1,1,25)',[JSON.stringify({...scope,filters:{...defaultReadingFilters,query:`Cache limit ${index}`}})])
+  await db.exec('reset role')
+  expect((await db.query<{n:number}>('select count(*)::integer n from public.library_query_cache where user_id=$1',[alice])).rows[0].n).toBeLessThanOrEqual(20)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('cascades private derived memberships and query caches when an account is deleted', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const owner='10000000-0000-0000-0000-000000000099'
+  await db.query('insert into auth.users values($1)',[owner])
+  await db.query("insert into public.library_entries(user_id,work_id,original_url) select $1,id,'https://archiveofourown.org/works/'||ao3_work_id from public.works limit 1",[owner])
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${owner}'`)
+  await db.query('insert into public.collections(name,automatic_rules) values($1,$2)',['All Automatic',JSON.stringify({filters:defaultReadingFilters,terms:[]})])
+  await db.query('select public.query_library($1,1,25)',[JSON.stringify({mode:'library',shelf:'all',includeFacets:false,filters:defaultReadingFilters})])
+  await db.query('select public.library_navigation()')
+  expect((await db.query('select * from public.automatic_collection_works')).rows).toHaveLength(1)
+  await db.exec(`set request.jwt.claim.sub='${bob}'`)
+  expect((await db.query('select * from public.automatic_collection_works where user_id=$1',[owner])).rows).toEqual([])
+  await db.exec('savepoint private_cache')
+  await expect(db.query('select * from public.library_query_cache')).rejects.toThrow('permission denied')
+  await db.exec('rollback to savepoint private_cache;reset role')
+  await db.query('select public.store_tag_resolutions($1,$2)',[owner,JSON.stringify([{category:'character',name:'Canonical',status:'canonical',canonical_name:'Canonical'}])])
+  await db.query('delete from auth.users where id=$1',[owner])
+  for(const table of ['library_query_state','library_query_cache','automatic_collection_works'])expect((await db.query(`select * from public.${table} where user_id=$1`,[owner])).rows).toEqual([])
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+
+it('reuses matching IDs and exact totals when only sorting changes', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope={mode:'library',shelf:'all',includeFacets:false,filters:{...defaultReadingFilters,within:'Private',scope:'notes'},terms:parseSearch('Private')}
+  const first=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify(scope)])).rows[0].r
+  await db.exec('reset role')
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_filter(jsonb,jsonb,jsonb,text)'::regprocedure")).rows[0]
+  await db.exec(fn.definition.replace(fn.source,"begin raise exception 'Repeated matching for sorting'; end;"))
+  await db.exec('set role authenticated')
+  const sorted=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify({...scope,filters:{...scope.filters,sort:'alpha'}})])).rows[0].r
+  expect(sorted.total).toBe(first.total)
+  expect(sorted.revision).toBe(first.revision)
+  expect(sorted.stories.map(story=>story.id)).toEqual(filterReading(await documents(),{...defaultReadingFilters,within:'Private',scope:'notes',sort:'alpha'}).slice(0,25).map(story=>story.id))
+ } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
+})
+
+it('uses the shared shelf semantics for every status, including re-reads on Finished', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const docs=await documents()
+  const statuses=['to_read','reading','re_reading','waiting_for_updates','paused_reading','finished','did_not_finish']
+  for(const [index,status] of statuses.entries())await db.query('update public.library_entries set reading_status=$2::public.reading_status where id=$1',[docs[index].id,status])
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  for(const shelf of ['all','currently_reading','to_read','paused_reading','finished','did_not_finish','favorites','recs']) {
+   const expected=(await db.query<{id:string}>("select id from public.library_search_documents where user_id=auth.uid() and public.library_in_shelf(story,$1,'library')",[shelf])).rows.map(row=>row.id)
+   const result=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,250) r',[JSON.stringify({mode:'library',shelf,includeFacets:false,filters:defaultReadingFilters})])).rows[0].r
+   expect(result.stories.map(story=>story.id).sort()).toEqual(expected.sort())
+  }
+ } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
+})
+
+it('retries a page if a newer revision appears between identity selection and document loading', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope={mode:'library',shelf:'all',includeFacets:false,filters:defaultReadingFilters}
+  const before=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify(scope)])).rows[0].r
+  await db.exec('reset role')
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.automatic_collection_ids(jsonb,uuid)'::regprocedure")).rows[0]
+  await db.exec('create sequence public.page_mutation;grant usage,select on sequence public.page_mutation to authenticated')
+  await db.exec(fn.definition.replace(' STABLE',' VOLATILE').replace(fn.source,fn.source.replace(/\bbegin\b/i,"begin if not (select is_called from public.page_mutation) then perform nextval('public.page_mutation'); delete from public.library_entries where id=(s->>'id')::uuid; end if;")))
+  await db.exec('set role authenticated')
+  const after=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify(scope)])).rows[0].r
+  expect(after.total).toBe(before.total-1)
+  expect(after.stories.map(story=>story.id)).not.toContain(before.stories[0].id)
+  expect(after.revision).toBe((await db.query<{r:number}>('select public.library_revision() r')).rows[0].r)
+ } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
+})

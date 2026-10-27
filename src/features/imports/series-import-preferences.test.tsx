@@ -62,7 +62,7 @@ it('keeps already saved series works without submitting an empty automatic impor
  expect(confirm).not.toHaveBeenCalled()
 })
 
-it('opens a popup, loads every series, and provides bulk controls without importing works', async () => {
+async function openSeriesReview() {
  const confirm = vi.fn()
  render(<SeriesImportReview text={'https://archiveofourown.org/series/7\nhttps://archiveofourown.org/series/8'} savedIds={new Set([1])} busy={false} onConfirm={confirm} onCancel={vi.fn()} />)
  expect(await screen.findByRole('dialog', { name: 'Choose Works From Series' })).toBeVisible()
@@ -70,8 +70,13 @@ it('opens a popup, loads every series, and provides bulk controls without import
  await waitFor(() => expect(saveAll).toBeEnabled())
  expect(mocks.preview).toHaveBeenCalledTimes(2)
  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
- while (screen.queryAllByRole('button', { name: 'Show Series Works' }).length) fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
+ for (const button of screen.getAllByRole('button', { name: 'Show Series Works' })) fireEvent.click(button)
  expect(screen.queryByRole('button', { name: 'Load works' })).not.toBeInTheDocument()
+ return { confirm, saveAll }
+}
+
+it('opens a popup, loads every series, and applies top controls to all series', async () => {
+ const { confirm } = await openSeriesReview()
  const globalTop = within(screen.getByRole('group', { name: 'All Series Top Controls' }))
  expect(globalTop.getAllByRole('button').map(button => button.textContent)).toEqual(['Select All', 'Clear Selection', 'View All', 'Hide All'])
  for (const button of globalTop.getAllByRole('button')) expect(button).toHaveAccessibleDescription('Applies to all series')
@@ -86,7 +91,14 @@ it('opens a popup, loads every series, and provides bulk controls without import
  await waitFor(() => expect(screen.getAllByText('Summary').every(node => !node.parentElement!.hasAttribute('open'))).toBe(true))
  fireEvent.click(globalTop.getByRole('button', { name: 'View All' }))
  await waitFor(() => expect(screen.getAllByText('Summary').every(node => node.parentElement!.hasAttribute('open'))).toBe(true))
+ expect(confirm).not.toHaveBeenCalled()
+ expect(mocks.remember).not.toHaveBeenCalled()
+})
+
+it('applies series controls only to their series and synchronizes top and footer controls', async () => {
+ const { confirm } = await openSeriesReview()
  const firstSeries = within(screen.getByRole('region', { name: 'Series • Series 7' }))
+ const secondSeries = within(screen.getByRole('region', { name: 'Series • Series 8' }))
  const top = within(firstSeries.getByRole('group', { name: 'Series Selection Controls' }))
  const footer = within(firstSeries.getByRole('group', { name: 'Series Footer Controls' }))
  for (const button of top.getAllByRole('button').filter(button => button.textContent !== 'Hide Series Works')) expect(button).toHaveAccessibleDescription('Applies to Series')
@@ -95,6 +107,7 @@ it('opens a popup, loads every series, and provides bulk controls without import
  fireEvent.blur(top.getByRole('button', { name: 'Select All' }))
  fireEvent.click(top.getByRole('button', { name: 'Select All' }))
  expect(firstSeries.getByRole('checkbox', { name: 'Work 2' })).toBeChecked()
+ expect(secondSeries.getByRole('checkbox', { name: 'Work 2' })).not.toBeChecked()
  fireEvent.click(footer.getByRole('button', { name: 'Clear Selection' }))
  expect(firstSeries.getByRole('checkbox', { name: 'Work 2' })).not.toBeChecked()
  fireEvent.click(top.getByRole('button', { name: 'Hide All' }))
@@ -104,6 +117,12 @@ it('opens a popup, loads every series, and provides bulk controls without import
  await waitFor(() => expect(top.getByRole('button', { name: 'Hide All' })).toHaveAttribute('aria-expanded', 'true'))
  expect(screen.queryByRole('button', { name: 'Skip Series' })).not.toBeInTheDocument()
  expect(footer.getAllByRole('button')[0]).toHaveTextContent('Save')
+ expect(confirm).not.toHaveBeenCalled()
+ expect(mocks.remember).not.toHaveBeenCalled()
+})
+
+it('applies footer controls to all series and saves details without importing works', async () => {
+ const { confirm, saveAll } = await openSeriesReview()
  const allControls = document.querySelector('[aria-label="All Series Controls"]')!
  expect(within(allControls as HTMLElement).getAllByRole('button').map(button => button.textContent)).toEqual(['Save All Series', 'Hide All', 'Select All'])
  for (const name of ['Hide All', 'Select All']) expect(within(allControls as HTMLElement).getByRole('button', { name })).toHaveAccessibleDescription('Applies to all series')

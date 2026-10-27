@@ -6,9 +6,11 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { UndoNotice } from '../../components/UndoNotice'
 import { abandonedReadingStatus, caughtUpReadingStatus, type Collection, type Story } from './model'
 import { sampleMode } from '../../lib/sample-mode'
-import { libraryFacetScope, loadLibraryFacets, loadLibraryNavigation, type LibraryFacets, type LibraryNavigation, deleteStory, loadCatalog, loadStories, loadSeriesRecord, loadAffectedCollections, loadCollections, queryLibrary, storyCatalogEntry, restoreStory, updateEntry, type LibraryQuery, type LibraryResults } from './repository'
+import { libraryFacetScope, loadLibraryFacets, loadLibraryNavigation, loadLibraryRevision, type LibraryFacets, type LibraryNavigation, deleteStory, loadCatalog, loadStories, loadSeriesRecord, loadAffectedCollections, loadCollections, queryLibrary, storyCatalogEntry, restoreStory, updateEntry, type LibraryQuery, type LibraryResults } from './repository'
 type ReadingUndo = { id: string; storyId: string; title: string; message: string; saved?: { status: Story['reading_status']; progress: number }; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
-type LibraryState = { tagRevision: number; navigation: LibraryNavigation; navigationError: string; catalogLoaded: boolean; ensureCatalog: () => Promise<void>; fetchFacets: (query: LibraryQuery, signal: AbortSignal) => Promise<LibraryFacets>; temporaryPageSizes: Map<LibraryQuery['mode'], number>; rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
+const revisionCheckInterval = 45_000
+const pageCacheKey = (query: LibraryQuery, page: number, size: number) => JSON.stringify([query, page, size])
+type LibraryState = { retryCounts: () => Promise<void>; navigationLoading: boolean; revisionError: string; checkRevision: (force?: boolean) => Promise<void>; hasCachedPage: (query: LibraryQuery, page: number, size: number) => boolean; tagRevision: number; navigation: LibraryNavigation; navigationError: string; catalogLoaded: boolean; ensureCatalog: () => Promise<void>; fetchFacets: (query: LibraryQuery, signal: AbortSignal) => Promise<LibraryFacets>; temporaryPageSizes: Map<LibraryQuery['mode'], number>; rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
 const Context = createContext<LibraryState | null>(null)
 export function LibraryProvider({ children, userId = 'sample' }: { children: ReactNode; userId?: string }) {
   const [data, setData] = useState<{ stories: Story[]; collections: Collection[]; series?: SeriesRecord[] }>({ stories: [], collections: [], series: [] })
@@ -19,6 +21,13 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const [navigation, setNavigation] = useState<LibraryNavigation>({})
   const [firstPageLoaded, setFirstPageLoaded] = useState(false)
   const [navigationError, setNavigationError] = useState('')
+  const [navigationEpoch, setNavigationEpoch] = useState(0)
+  const [navigationStatus, setNavigationStatus] = useState({ revision: -1, epoch: -1 })
+  const navigationLoading = !sampleMode && (navigationStatus.revision !== revision || navigationStatus.epoch !== navigationEpoch)
+  const [revisionError, setRevisionError] = useState('')
+  const serverRevision = useRef<number | undefined>(undefined)
+  const revisionCheckedAt = useRef(0)
+  const revisionRequest = useRef<Promise<void> | null>(null)
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const catalogRequest = useRef<Promise<void> | null>(null)
   const dataRef = useRef(data)
@@ -93,6 +102,58 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     }
     invalidateQueries(affected)
   }, [invalidateQueries])
+  const reloadCollections = useCallback(async () => {
+    const version = generation.current, life = lifecycle.current
+    try {
+      const collections = await loadCollections()
+      if (version === generation.current && life === lifecycle.current) setData(previous => ({ ...previous, collections }))
+    } catch { if (version === generation.current && life === lifecycle.current) setRevisionError('Couldn’t update collections.') }
+  }, [])
+  const acceptRevision = useCallback((next: number | undefined) => {
+    if (next === undefined) return true
+    const known = serverRevision.current
+    if (known !== undefined && next < known) return false
+    serverRevision.current = next
+    if (known === undefined || next === known) return true
+    generation.current++
+    invalidate()
+    setData(previous => ({ ...previous, stories: previous.stories.map(storyCatalogEntry) }))
+    void reloadCollections()
+    catalogRequest.current = null; setCatalogLoaded(false)
+    setRevision(value => value + 1)
+    return false
+  }, [invalidate, reloadCollections])
+  const recordOwnRevision = useCallback(async (version: number) => {
+    if (sampleMode) return
+    try {
+      const next = await loadLibraryRevision()
+      if (version !== generation.current) return
+      if (serverRevision.current !== undefined && next > serverRevision.current) {
+        invalidate()
+        catalogRequest.current = null; setCatalogLoaded(false)
+      }
+      serverRevision.current = Math.max(serverRevision.current ?? next, next)
+      revisionCheckedAt.current = Date.now(); setRevisionError('')
+    } catch { if (version === generation.current) setRevisionError('Couldn’t update counts.') }
+  }, [invalidate])
+  const checkRevision = useCallback(async (force = false) => {
+    if (sampleMode) return
+    if (revisionRequest.current) return revisionRequest.current
+    if (!force && Date.now() - revisionCheckedAt.current < revisionCheckInterval) return
+    const version = generation.current, life = lifecycle.current
+    const task = (async () => {
+      try {
+        const next = await loadLibraryRevision()
+        if (life !== lifecycle.current || version !== generation.current) return
+        acceptRevision(next); revisionCheckedAt.current = Date.now(); setRevisionError('')
+      } catch {
+        if (life === lifecycle.current && version === generation.current) setRevisionError('Couldn’t update counts.')
+      }
+    })()
+    revisionRequest.current = task
+    try { await task } finally { if (revisionRequest.current === task) revisionRequest.current = null }
+  }, [acceptRevision])
+  const retryCounts = useCallback(async () => { await checkRevision(true); await reloadCollections(); setNavigationEpoch(value => value + 1) }, [checkRevision, reloadCollections])
   useEffect(() => {
     const changed = (event: Event) => {
       if ((event as CustomEvent<{ userId: string }>).detail?.userId !== userId) return
@@ -102,7 +163,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       setTagRevision(tagGeneration.current)
       if (automatic.size) {
         catalogRequest.current = null; setCatalogLoaded(false)
-        void loadLibraryNavigation().then(setNavigation).catch(() => {})
+        setNavigationEpoch(value => value + 1)
       }
     }
     window.addEventListener(tagResolutionEvent, changed)
@@ -139,6 +200,8 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
             setData(previous => ({ ...previous, collections }))
           }
         }
+        await recordOwnRevision(version)
+        if (version !== generation.current) return
         setError(''); setRevision(value => value + 1)
       } catch (e) {
         if (version === generation.current) setError(e instanceof Error ? e.message : 'Could not load your library.')
@@ -147,7 +210,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     })
     queue.current = task
     await task
-  }, [boundDetails, invalidate])
+  }, [boundDetails, invalidate, recordOwnRevision])
   const refreshCollections = useCallback(async () => {
     const life = lifecycle.current
     const task = queue.current.catch(() => {}).then(async () => {
@@ -168,11 +231,13 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       const ids = new Set(collections.map(collection => collection.id))
       const prune = <T extends { collectionIds?: string[] }>(item: T): T => item.collectionIds?.some(id => !ids.has(id)) ? { ...item, collectionIds: item.collectionIds.filter(id => ids.has(id)) } : item
       setData(previous => ({ ...previous, collections, stories: previous.stories.map(story => ({ ...prune(story), automaticCollectionIds: rulesChanged ? [] : story.automaticCollectionIds?.filter(id => ids.has(id)) })), series: previous.series?.map(prune) }))
+      await recordOwnRevision(version)
+      if (version !== generation.current) return
       setRevision(value => value + 1)
     })
     queue.current = task
     await task
-  }, [invalidate, invalidateQueries])
+  }, [invalidate, invalidateQueries, recordOwnRevision])
   const refreshSeries = useCallback(async (id: number, invalidate = true) => {
     const life = lifecycle.current
     const task = queue.current.catch(() => {}).then(async () => {
@@ -185,11 +250,11 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       const record = await loadSeriesRecord(id)
       if (version !== generation.current) return
       setData(previous => ({ ...previous, series: [...(previous.series ?? []).filter(item => item.ao3_series_id !== id), ...(record ? [record] : [])] }))
-      if (invalidate) setRevision(value => value + 1)
+      if (invalidate) { await recordOwnRevision(version); if (version === generation.current) setRevision(value => value + 1) }
     })
     queue.current = task
     await task
-  }, [invalidateQueries])
+  }, [invalidateQueries, recordOwnRevision])
   const loadDetails = useCallback(async (ids: string[]) => {
     const version = generation.current
     let next: Story[]
@@ -199,13 +264,19 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     setData(previous => ({ ...previous, stories: boundDetails([...previous.stories.filter(story => !wanted.has(story.id)), ...next]) }))
   }, [boundDetails])
   const refreshStory = useCallback((id: string) => refresh([id]), [refresh])
+  const hasCachedPage = useCallback((query: LibraryQuery, page: number, size: number) => {
+    const entry = cache.current.get(pageCacheKey(query, page, size))
+    return Boolean(entry)
+  }, [])
   const fetchPage = useCallback(async (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => {
-    const key = JSON.stringify([userId, query, page, size])
+    const key = pageCacheKey(query, page, size)
     const cached = cache.current.get(key)
     if (cached) { cache.current.delete(key); cache.current.set(key, cached); return cached.result }
     const version = generation.current
     const tagVersion = tagGeneration.current
     const result = await queryLibrary(query, page, size, signal)
+    if (version !== generation.current || signal.aborted) throw new DOMException('Obsolete library result', 'AbortError')
+    if (!acceptRevision(result.revision)) throw new DOMException('Obsolete library revision', 'AbortError')
     if (tagVersion !== tagGeneration.current && (hasTagFilters(query.filters) || dataRef.current.collections.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules)))) throw new DOMException('Obsolete tag result', 'AbortError')
     if (!signal.aborted && version === generation.current) {
       setFirstPageLoaded(true)
@@ -220,7 +291,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     }
     if (version !== generation.current) throw new DOMException('Obsolete library result', 'AbortError')
     return result
-  }, [userId, boundDetails])
+  }, [acceptRevision, boundDetails])
   const fetchFacets = useCallback(async (query: LibraryQuery, signal: AbortSignal) => {
     const key = JSON.stringify(libraryFacetScope(query)), cached = facets.current.get(key)
     if (cached) return cached.result
@@ -233,10 +304,20 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   useEffect(() => {
     if (sampleMode || loading || !firstPageLoaded && !catalogLoaded) return
     let alive = true
-    void loadLibraryNavigation().then(result => { if (alive) { setNavigation(result); setNavigationError('') } }).catch(error => { if (alive) setNavigationError(error instanceof Error ? error.message : 'Could not load collection counts.') })
+    const version = generation.current
+    void loadLibraryNavigation().then(result => { if (alive && version === generation.current && acceptRevision(result.revision)) { setNavigation(result.counts); setNavigationError('') } }).catch(error => { if (alive && version === generation.current) setNavigationError(error instanceof Error ? error.message : 'Couldn’t update counts.') }).finally(() => { if (alive) setNavigationStatus({ revision, epoch: navigationEpoch }) })
     return () => { alive = false }
-  }, [revision, loading, firstPageLoaded, catalogLoaded])
+  }, [revision, loading, firstPageLoaded, catalogLoaded, navigationEpoch, acceptRevision])
   const location = useLocation()
+  useEffect(() => {
+    const returned = () => { if (!document.hidden) void checkRevision(true) }
+    const fallback = () => { if (!document.hidden) void checkRevision() }
+    window.addEventListener('focus', returned)
+    document.addEventListener('visibilitychange', returned)
+    const timer = setInterval(fallback, revisionCheckInterval)
+    return () => { clearInterval(timer); window.removeEventListener('focus', returned); document.removeEventListener('visibilitychange', returned) }
+  }, [checkRevision])
+  useEffect(() => { void checkRevision() }, [location.pathname, location.search, checkRevision])
   const [undoNotices, setUndoNotices] = useState<ReadingUndo[]>([])
   const noticeUrl = location.pathname + location.search
   const [noticeLocation, setNoticeLocation] = useState(noticeUrl)
@@ -282,7 +363,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     const pages = cache.current, facetCache = facets.current, heights = rowHeights, lifeRef = lifecycle, requests = generation
     return () => { lifeRef.current++; requests.current++; pages.clear(); facetCache.clear(); heights.clear(); temporaryPageSizes.clear() }
   }, [ensureCatalog, rowHeights, temporaryPageSizes])
-  return <Context.Provider value={{ ...data, navigation, navigationError, catalogLoaded, ensureCatalog, fetchFacets, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, tagRevision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
+  return <Context.Provider value={{ ...data, hasCachedPage, navigation, navigationError, navigationLoading, revisionError, checkRevision, retryCounts, catalogLoaded, ensureCatalog, fetchFacets, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, tagRevision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
     {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading Updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss Undo Notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous, notice.saved ?? {}); await refreshStory(notice.storyId) }} />)}</section>}
     {children}
   </Context.Provider>

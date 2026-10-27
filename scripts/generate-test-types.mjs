@@ -7,7 +7,7 @@ try {
     from information_schema.columns where table_schema = 'public' order by table_name, ordinal_position`)
   const { rows: enums } = await db.query(`select t.typname as name, e.enumlabel as value from pg_enum e
     join pg_type t on t.oid = e.enumtypid order by e.enumsortorder`)
-  const types = { uuid: 'string', text: 'string', timestamptz: 'string', int8: 'number', int4: 'number', int2: 'number', bool: 'boolean', jsonb: 'Json' }
+  const types = { uuid: 'string', text: 'string', _text: 'string[]', timestamptz: 'string', int8: 'number', int4: 'number', int2: 'number', bool: 'boolean', jsonb: 'Json' }
   const enumNames = new Set(enums.map(e => e.name))
   let output = '// Generated from versioned migrations by npm run db:types:embedded.\n// After linking Supabase, use npm run db:types for the authoritative remote types.\nexport type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]\n\nexport type Database = {\n  public: {\n    Tables: {\n'
   for (const table of [...new Set(columns.map(c => c.table_name))]) {
@@ -44,6 +44,8 @@ try {
       export_library_backup: { Args: Record<string, never>; Returns: Json }
       restore_library_backup: { Args: { p_backup: Json; p_user: string; p_replace?: boolean }; Returns: Json }
       paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
+      library_revision: { Args: Record<string, never>; Returns: number }
+      library_navigation_snapshot: { Args: Record<string, never>; Returns: Json }
       library_navigation: { Args: Record<string, never>; Returns: Json }
       library_query_facets: { Args: { p_query?: Json }; Returns: Json }
       library_catalog: { Args: Record<string, never>; Returns: Json }

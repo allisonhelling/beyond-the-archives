@@ -29,7 +29,7 @@ export function LibrarySyncSummary({ state }: { state: LibrarySyncState }) {
    <div className="confirmation-description">
    <p>{count} {details === 'skipped' ? 'entries skipped.' : 'chapter indexes unavailable or incomplete. Reading progress was not inferred from these indexes.'}</p>
    {issues.length < count && <p className="field-help">Details for {count - issues.length} {count - issues.length === 1 ? 'entry were' : 'entries were'} not captured by the extension used for this scan. Run a new scan with the updated extension to collect them.</p>}
-   <ul>{issues.map((issue, index) => <li key={`${issue.sourceUrl}:${issue.workId ?? index}`}>
+   <ul className="sync-issue-list">{issues.map((issue, index) => <li key={`${issue.sourceUrl}:${issue.workId ?? index}`}>
     {ao3Link(issue.url) ? <a className="clickable-text" href={ao3Link(issue.url)} target="_blank" rel="noopener noreferrer">{issue.title}</a> : <strong>{issue.title}</strong>}
     <p>{issue.reason}</p>
     {issue.expectedChapters !== undefined && <p>{issue.foundChapters ?? 0} of {issue.expectedChapters} chapter dates available.</p>}
@@ -41,6 +41,7 @@ export function LibrarySyncSummary({ state }: { state: LibrarySyncState }) {
 }
 
 export function LibrarySyncReportHistory({ latest }: { latest?: LibrarySyncState }) {
+ const [open, setOpen] = useState(false)
  const [history, setHistory] = useState<LibrarySyncReports | null>(null)
  const [page, setPage] = useState(1), [selected, setSelected] = useState('')
  const [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -52,12 +53,15 @@ export function LibrarySyncReportHistory({ latest }: { latest?: LibrarySyncState
  }
  const report = history?.reports.find(report => report.id === selected)
  return <div className="story-form">
-  <button type="button" className="text-button clickable-text sync-reports-trigger" disabled={busy} onClick={() => void load()}>{busy ? 'Loading Sync Reports…' : history ? 'Refresh Saved Sync Reports' : 'View Saved Sync Reports'}</button>
-  {error && <p role="alert" className="error-message">{error}</p>}
-  {history && <>
+  <div className="form-actions form-actions-fit">
+   <button type="button" className="text-button clickable-text sync-reports-trigger" aria-expanded={open} onClick={() => { setOpen(!open); if (!open && !history && !busy) void load() }}>{open ? 'Hide Saved Sync Reports' : 'View Saved Sync Reports'}</button>
+   {open && <button type="button" className="text-button clickable-text" disabled={busy} onClick={() => void load()}>{busy ? 'Loading Sync Reports…' : 'Refresh'}</button>}
+  </div>
+  {open && error && <p role="alert" className="error-message">{error}</p>}
+  {open && history && <>
    {!history.total ? <p>No saved sync reports yet.</p> : <>
     <label>Sync Report<select value={selected} onChange={event => setSelected(event.target.value)}>{history.reports.map(report => <option key={report.id} value={report.id}>{formatDateTime(report.completed_at)} · {report.report.count} works · {report.report.url}</option>)}</select></label>
-    <Pagination itemLabel="reports" page={page} pages={Math.ceil(history.total / 10)} total={history.total} size={10} onPage={next => { if (!busy) void load(next) }} />
+    <Pagination inlinePage itemLabel="reports" page={page} pages={Math.ceil(history.total / 10)} total={history.total} size={10} onPage={next => { if (!busy) void load(next) }} />
     {report && <LibrarySyncSummary key={report.id} state={report.report} />}
    </>}
   </>}

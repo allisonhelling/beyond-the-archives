@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+import { libraryQueryFixture } from './library-query-fixture'
 import { fixture, login } from './library-fixture'
 
 test('10,000-work library pages incrementally and restores a large page after details',async({page},info)=>{
@@ -78,4 +79,52 @@ test('10,000-work library pages incrementally and restores a large page after de
  await info.attach('performance.json',{body:JSON.stringify(report,null,2),contentType:'application/json'})
  expect(firstDisplayMs).toBeLessThan(8000)
  expect(largePageMs).toBeLessThan(3000)
+})
+
+
+test('tab return refreshes revision-bound totals, permits stale navigation, and retains counts after failure',async({page})=>{
+ const tables=await fixture(page)
+ for(let n=1;n<=30;n++) {
+  tables.works.push({id:`revision-work-${n}`,ao3_work_id:n,title:`Revision Work ${n}`,published_chapters:1,total_chapters:1,is_complete:true,verified_chapters:{}})
+  tables.library_entries.push({id:`revision-entry-${n}`,work_id:`revision-work-${n}`,original_url:`https://archiveofourown.org/works/${n}`,reading_status:'to_read',last_read_chapter:0,notes:'',is_favorite:false,metadata_overrides:{},created_at:'2026-10-27T00:00:00Z'})
+ }
+ let revision=1,fail=false,hold=false,release!:()=>void
+ const gate=new Promise<void>(resolve=>{release=resolve})
+ await page.route('**/rest/v1/rpc/*',async route=>{
+  const name=new URL(route.request().url()).pathname.split('/').at(-1)!
+  if(name==='library_revision')return route.fulfill({json:revision})
+  if(name==='query_library'||name==='library_navigation_snapshot') {
+   if(name==='query_library'&&hold)await gate
+   if(name==='query_library'&&fail)return route.fulfill({status:503,json:{code:'XX000',message:'Temporarily unavailable'}})
+   const result=libraryQueryFixture(name,route.request().postDataJSON(),tables) as Record<string,unknown>
+   return route.fulfill({json:{...result,revision}})
+  }
+  return route.fallback()
+ })
+ await page.goto('/library?size=25');await login(page)
+ const navigation=page.getByRole('navigation',{name:'Result Pages'}).first()
+ await expect(navigation).toContainText('1–25 of 30')
+ const jump=navigation.getByRole('spinbutton',{name:'Go to Page'})
+ await jump.fill('2');await jump.press('Enter')
+ await expect(navigation).toContainText('26–30 of 30')
+ tables.library_entries.splice(20)
+ revision=2;hold=true
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+ await expect(navigation).toContainText('Updating…')
+ await expect(navigation.getByRole('button',{name:'Next'})).toBeEnabled()
+ await expect(jump).not.toHaveAttribute('max')
+ await jump.fill('3');await jump.press('Enter')
+ hold=false;release()
+ await expect(navigation).toContainText('1–20 of 20')
+ await expect(jump).toHaveValue('1')
+ await expect(page.locator('.work-card')).toHaveCount(20)
+ tables.library_entries.pop();revision=3;fail=true
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+ await expect(navigation).toContainText('Couldn’t update')
+ await expect(navigation).toContainText('of 20')
+ await expect(page.locator('.work-card')).toHaveCount(20)
+ fail=false
+ await page.getByRole('button',{name:'Retry Loading',exact:true}).click()
+ await expect(navigation).toContainText('1–19 of 19')
+ await expect(page.locator('.work-card')).toHaveCount(19)
 })

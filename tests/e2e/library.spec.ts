@@ -104,7 +104,8 @@ async function openFilters(page: Page) {
 }
 async function openAddStory(page: Page) {
   if ((page.viewportSize()?.width ?? 1280) <= 1100) {
-    await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Add', exact: true }).click()
+    await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
+    await page.getByRole('link', { name: 'Add Individual Story', exact: true }).click()
   } else {
     await page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true }).click()
   }
@@ -323,7 +324,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
     expect(await automaticMetadata.getByRole('heading', { name: 'Automatic Metadata', exact: true }).evaluate((el, key) => getComputedStyle(el)[key], property)).toBe(expected)
   }
   const metadataFontSize = await automaticMetadata.evaluate(el => getComputedStyle(el).fontSize)
-  for (const element of await automaticMetadata.locator('p, label, select, .button, a').all()) expect(await element.evaluate(el => getComputedStyle(el).fontSize)).toBe(metadataFontSize)
+  for (const element of await automaticMetadata.locator('p, label, select, .button, a').all()) expect(await element.evaluate(el => getComputedStyle(el).fontSize)).toBe(info.project.name === 'mobile' && await element.evaluate(el => el.matches('select')) ? '16px' : metadataFontSize)
   const authorLine = await page.locator('.story-details-authors').boundingBox()
   const metadataActions = await page.locator('.story-metadata-actions').boundingBox()
   if (info.project.name === 'mobile') {
@@ -354,7 +355,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(recBounds.x).toBeGreaterThanOrEqual(favoriteBounds!.x + favoriteBounds!.width)
   expect(recBounds.x + recBounds.width).toBeLessThanOrEqual(metadataActions!.x)
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', 'Chapter Reading History', 'Last Edited', 'Other Metadata'])
+  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', /^Chapter Reading History/, 'Last Edited', 'Other Metadata'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -443,7 +444,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(page.getByRole('img', { name: '3 Out of 5 Stars', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Edit Note', exact: true }).click()
   await expect(page.getByLabel('AO3 URL', { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('textbox', { name: 'Private Notes', exact: true })).toHaveCSS('font-size', noteSize)
+  await expect(page.getByRole('textbox', { name: 'Private Notes', exact: true })).toHaveCSS('font-size', info.project.name === 'mobile' ? '16px' : noteSize)
   await page.getByRole('textbox', { name: 'Private Notes', exact: true }).fill('Unsaved note')
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
@@ -629,7 +630,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     await expect(page.locator('.add-menu')).toHaveCount(0)
   } else {
     await expect(page.locator('.app-header .add-wrapper')).toBeHidden()
-    await expect(page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Add', exact: true })).toHaveAttribute('href', '/add')
+    await expect(page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Import', exact: true })).toHaveAttribute('href', '/imports')
   }
   await expect(cards).toHaveCount(1)
   await expect(cards.first().getByRole('heading')).toHaveCSS('font-size', info.project.name === 'mobile' ? '20px' : '22px')
@@ -2818,9 +2819,9 @@ test('pagination submits inline page numbers on Enter and keeps temporary page s
   await expect(size).toHaveValue('25')
   await expect(size).toHaveCSS('border-top-style','solid')
   await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
-  const statusFont=await pagination.getByRole('status').evaluate(element=>getComputedStyle(element).fontSize)
   for (const controls of [pagination,bottomPagination]) {
-   for (const selector of controls === pagination ? ['.pagination-page','.pagination-page input'] : ['.pagination-page','.pagination-page input','.pagination-size','.pagination-size select']) await expect(controls.locator(selector)).toHaveCSS('font-size',statusFont)
+   const statusFont=await controls.getByRole('status').evaluate(element=>getComputedStyle(element).fontSize)
+   for (const selector of controls === pagination ? ['.pagination-page','.pagination-page input'] : ['.pagination-page','.pagination-page input','.pagination-size','.pagination-size select']) await expect(controls.locator(selector)).toHaveCSS('font-size',test.info().project.name === 'mobile' && /input|select/.test(selector) ? '16px' : statusFont)
    await expect(controls.getByRole('button',{name:'Prev',exact:true})).toBeDisabled()
    await expect(controls.getByRole('button',{name:'Previous',exact:true})).toHaveCount(0)
   }
@@ -3063,7 +3064,7 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   }
   await page.getByRole('button', { name: 'Import Bookmarks', exact: true }).click()
   const bookmarkDialog = page.getByRole('dialog', { name: 'Import Bookmarks', exact: true })
-  const chapterOption = bookmarkDialog.getByRole('checkbox', { name: 'Check chapter publication dates', exact: true })
+  const chapterOption = bookmarkDialog.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })
   await expect(chapterOption).not.toBeChecked()
   await chapterOption.check()
   await expect(chapterOption).toBeChecked()
@@ -3081,7 +3082,7 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   await expect(bookmarkDialog.getByRole('checkbox', { name: 'Save My AO3 Username for Future Imports', exact: true })).toBeVisible()
   await bookmarkDialog.getByRole('button', { name: 'Close Dialog' }).click()
   const csvSection = page.getByRole('region', { name: 'Import from CSV (Bookmarks or Marked for Later)', exact: true })
-  await expect(csvSection.getByRole('checkbox', { name: 'Check chapter publication dates for bookmarks' })).not.toBeChecked()
+  await expect(csvSection.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })).not.toBeChecked()
   await expect(options.getByRole('combobox', { name: 'Scan Mode', exact: true })).toHaveValue('full')
   const bookmarks = page.getByRole('button', { name: 'Import Bookmarks', exact: true })
   const url = page.getByLabel('AO3 List URL', { exact: true })
@@ -3105,12 +3106,12 @@ test('mass import shares scan options and keeps the wider form within the viewpo
     expect(importButton.x).toBeGreaterThan(readingStatus.x + readingStatus.width)
     expect(Math.abs(readingStatus.y - listUrl.y)).toBeLessThan(2)
     expect(Math.abs(importButton.y - listUrl.y)).toBeLessThan(2)
-    const limits = await bounds(options.getByRole('group', { name: 'Limit Full Library Scan (Optional)', exact: true }))
+    const limits = await bounds(options.getByRole('group', { name: 'Limit Full Library Scan', exact: true }))
     const interval = await bounds(options.getByLabel('Time Between Page Requests', { exact: true }))
     const mode = await bounds(options.getByRole('combobox', { name: 'Scan Mode', exact: true }))
     expect(mode.x).toBeGreaterThan(interval.x + interval.width)
     expect(limits.x).toBeGreaterThan(mode.x + mode.width)
-    await expect(options.getByRole('group', { name: 'Limit Full Library Scan (Optional)', exact: true })).toHaveCSS('padding-top', '8px')
+    await expect(options.getByRole('group', { name: 'Limit Full Library Scan', exact: true })).toHaveCSS('padding-top', '8px')
   }
   await page.screenshot({ path: `/tmp/ao3-import-${info.project.name}.png`, fullPage: true })
 })
@@ -3183,6 +3184,7 @@ test(`mass metadata refresh respects filters and pagination on ${route}`, async 
     await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Mass Refresh All Stories on Page', exact: true })).toBeVisible()
   }
   await refresh.click()
+  if ((page.viewportSize()?.width ?? 1280) <= 650) await page.getByRole('dialog', { name: 'Mass Refresh?', exact: true }).getByRole('button', { name: 'Mass Refresh', exact: true }).click()
   await expect.poll(() => submitted).toEqual({ p_urls: ['https://archiveofourown.org/works/126', 'https://archiveofourown.org/works/127'], p_update_reading_location: false })
   await expect(refresh).toBeDisabled()
   await expect(page.getByText('Metadata refresh queued for 2 works. See import history for progress.')).toBeVisible()
@@ -3319,7 +3321,7 @@ test('username import popups share optional reading-status controls independentl
   await expect(status).toHaveCount(0)
   if (title === 'Import Bookmarks') await expect(dialog.getByText(/Earlier or same-day bookmarks/)).toBeVisible()
   else await expect(dialog.getByText(/New Marked for Later works are saved as To Read/)).toBeVisible()
-  const chapterDates = dialog.getByRole('checkbox', { name: 'Check chapter publication dates', exact: true })
+  const chapterDates = dialog.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })
   if (title === 'Import Bookmarks') {
    expect(await chapterDates.evaluate((node, next) => Boolean(node.compareDocumentPosition(next as Node) & Node.DOCUMENT_POSITION_FOLLOWING), await manual.elementHandle())).toBe(true)
    await chapterDates.check()
@@ -3354,7 +3356,7 @@ test('Dynamic Bookmarks is available only for library list sync and reveals opti
  const sync = page.getByRole('region', { name: 'AO3 Library Sync', exact: true })
  const status = sync.getByRole('combobox', { name: 'Reading Status for AO3 list URL', exact: true })
  await expect(page.getByRole('option', { name: 'Dynamic (Bookmarks)', exact: true })).toHaveCount(1)
- const check = sync.getByRole('checkbox', { name: 'Check chapter publication dates', exact: true })
+ const check = sync.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })
  await expect(check).toHaveCount(0)
  await status.selectOption('dynamic_bookmarks')
  await expect(check).toBeVisible()
@@ -3370,7 +3372,7 @@ test('Dynamic Bookmarks is available only for library list sync and reveals opti
   const dialog = page.getByRole('dialog', { name: title, exact: true })
   await dialog.getByRole('checkbox', { name: 'Manually Set Reading Status', exact: true }).check()
   await expect(dialog.getByRole('option', { name: 'Dynamic (Bookmarks)', exact: true })).toHaveCount(0)
-  if (title === 'Import Bookmarks') await expect(dialog.getByRole('checkbox', { name: 'Check chapter publication dates', exact: true })).not.toBeChecked()
+  if (title === 'Import Bookmarks') await expect(dialog.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })).not.toBeChecked()
   await dialog.getByRole('button', { name: 'Close Dialog', exact: true }).click()
  }
  await expect(status).toHaveValue('dynamic_bookmarks')

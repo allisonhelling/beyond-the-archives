@@ -131,7 +131,7 @@ it('preserves author-only matching when converting automatic collections',async(
  expect((await query(id)).stories.map(story=>story.id)).toEqual(before)
 })
 
-it('bounds membership evaluation to catalog works or returned pages and filters only the chosen automatic collection', async () => {
+it('reads maintained memberships without evaluating rules during pages, facets or catalog reads', async () => {
  await db.exec('reset role;begin')
  try {
   // Count calls without changing the function's stability or its matching rules.
@@ -163,8 +163,7 @@ it('bounds membership evaluation to catalog works or returned pages and filters 
   const pageCalls = (await db.query<{ calls: number }>('select last_value::integer calls from public.catalog_evaluations')).rows[0].calls
   expect(pageCalls).toBe(finished.stories.length)
   expect(finished.stories.every(story => Array.isArray(story.automaticCollectionIds))).toBe(true)
-  // An empty automatic collection needs its own rule for counting, but none of
-  // the other collections' rules or full membership lists for invisible works.
+  // Rule changes maintain membership on write; reads do not evaluate any rules.
   const selected = await create('Selected empty collection')
   await db.query('update public.collections set automatic_rules=$2 where id=$1', [selected, JSON.stringify(automaticCollectionRules({ ...defaultReadingFilters, tags: 'No work has this tag' }))])
   await db.exec('reset role')
@@ -175,12 +174,12 @@ it('bounds membership evaluation to catalog works or returned pages and filters 
    select setval('public.catalog_evaluations',1,false);
    set role authenticated;set request.jwt.claim.sub='${alice}';`)
   expect(await query(selected)).toMatchObject({ total: 0, stories: [] })
-  expect((await db.query<{ calls: number }>('select last_value::integer calls from public.rule_evaluations')).rows[0].calls).toBe(38)
+  expect((await db.query<{ is_called: boolean }>('select is_called from public.rule_evaluations')).rows[0].is_called).toBe(false)
   expect((await db.query<{ is_called: boolean }>('select is_called from public.catalog_evaluations')).rows[0].is_called).toBe(false)
   await db.exec("reset role; select setval('public.rule_evaluations',1,false); set role authenticated")
   const facets=(await db.query<{result:{total:number}}>('select public.library_query_facets($1) result',[JSON.stringify({mode:'library',shelf:selected,filters:{}})])).rows[0].result
   expect(facets.total).toBe(0)
-  expect((await db.query<{calls:number}>('select last_value::integer calls from public.rule_evaluations')).rows[0].calls).toBe(38)
+  expect((await db.query<{is_called:boolean}>('select is_called from public.rule_evaluations')).rows[0].is_called).toBe(false)
  } finally {
   await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)
  }

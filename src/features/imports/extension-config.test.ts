@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { localExtensionId, localExtensionKey } from './extension-config'
-import { extensionId, setExtensionId } from './extension'
+import { extensionId, setExtensionId, librarySyncCommand } from './extension'
 import { isLocalApp } from '../../lib/local-app'
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 function location(hostname: string, savedId: string | null = 'a'.repeat(32)) {
@@ -45,4 +45,14 @@ it('prefers a configured shared extension on local origins and retains the legac
  expect(extensionId()).toBe('b'.repeat(32))
  vi.stubEnv('VITE_AO3_EXTENSION_ID', '')
  expect(extensionId()).toBe(localExtensionId)
+})
+
+it('explains how to preserve a scan when an older companion rejects End Scan', async () => {
+ location('library.example.com')
+ const sendMessage = vi.fn((_id, _message, callback) => callback({ ok: false, error: 'This action is unavailable for the saved scan.' }))
+ Object.assign(window, { chrome: { runtime: { sendMessage } } })
+ await expect(librarySyncCommand('end', { scanId: 'older-scan' })).rejects.toThrow('Update and reload the existing extension')
+ expect(sendMessage).toHaveBeenCalledTimes(1)
+ expect(sendMessage).toHaveBeenCalledWith('a'.repeat(32), { type: 'AO3_LIBRARY_SYNC', action: 'end', scanId: 'older-scan' }, expect.any(Function))
+ await expect(librarySyncCommand('resume', { scanId: 'older-scan' })).rejects.toThrow('This action is unavailable for the saved scan.')
 })

@@ -10,7 +10,8 @@ vi.mock('../features/library/repository', async importOriginal => ({
   loadCatalog: async () => ({ stories: [], collections: [], series: [] }),
   loadCollections: async () => [],
   loadLibraryFacets: async () => ({ fandoms: [], total: 0 }),
-  loadLibraryNavigation: async () => ({}),
+  loadLibraryNavigation: async () => ({counts:{},revision:0}),
+  loadLibraryRevision: async () => 0,
   queryLibrary: async () => ({ stories: [], series: [], total: 0, page: 1, pages: 1, fandoms: [], sections: {} }),
 }))
 

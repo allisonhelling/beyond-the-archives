@@ -64,6 +64,27 @@ export type Database = {
         Relationships: [
         ]
       }
+      automatic_collection_works: {
+        Row: {
+          user_id: string
+          collection_id: string
+          library_entry_id: string
+        }
+        Insert: {
+          user_id: string
+          collection_id: string
+          library_entry_id: string
+        }
+        Update: {
+          user_id?: string
+          collection_id?: string
+          library_entry_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'automatic_collection_works_collection_id_user_id_fkey'; columns: ['collection_id', 'user_id']; isOneToOne: false; referencedRelation: 'collections'; referencedColumns: ['id', 'user_id'] },
+          { foreignKeyName: 'automatic_collection_works_user_id_library_entry_id_fkey'; columns: ['user_id', 'library_entry_id']; isOneToOne: false; referencedRelation: 'library_search_documents'; referencedColumns: ['user_id', 'id'] },
+        ]
+      }
       backup_save_state: {
         Row: {
           user_id: string
@@ -432,6 +453,56 @@ export type Database = {
           { foreignKeyName: 'library_entry_tags_personal_tag_id_user_id_fkey'; columns: ['personal_tag_id', 'user_id']; isOneToOne: false; referencedRelation: 'personal_tags'; referencedColumns: ['id', 'user_id'] },
         ]
       }
+      library_query_cache: {
+        Row: {
+          user_id: string
+          key: string
+          query: Json
+          revision: number
+          matches: Json
+          touched_at: string
+        }
+        Insert: {
+          user_id: string
+          key: string
+          query: Json
+          revision: number
+          matches: Json
+          touched_at?: string
+        }
+        Update: {
+          user_id?: string
+          key?: string
+          query?: Json
+          revision?: number
+          matches?: Json
+          touched_at?: string
+        }
+        Relationships: [
+        ]
+      }
+      library_query_state: {
+        Row: {
+          user_id: string
+          revision: number
+          navigation: Json | null
+          navigation_revision: number | null
+        }
+        Insert: {
+          user_id: string
+          revision?: number
+          navigation?: Json | null
+          navigation_revision?: number | null
+        }
+        Update: {
+          user_id?: string
+          revision?: number
+          navigation?: Json | null
+          navigation_revision?: number | null
+        }
+        Relationships: [
+        ]
+      }
       library_search_documents: {
         Row: {
           id: string
@@ -441,6 +512,14 @@ export type Database = {
           search_any: string | null
           search_summary: string | null
           search_notes: string | null
+          reading_status: string | null
+          is_favorite: boolean | null
+          is_rec: boolean | null
+          sort_title: string | null
+          sort_added: string | null
+          sort_updated: string | null
+          sort_ready: number | null
+          reading_sections: string[] | null
         }
         Insert: {
           id: string
@@ -450,6 +529,14 @@ export type Database = {
           search_any?: string | null
           search_summary?: string | null
           search_notes?: string | null
+          reading_status?: string | null
+          is_favorite?: boolean | null
+          is_rec?: boolean | null
+          sort_title?: string | null
+          sort_added?: string | null
+          sort_updated?: string | null
+          sort_ready?: number | null
+          reading_sections?: string[] | null
         }
         Update: {
           id?: string
@@ -459,6 +546,14 @@ export type Database = {
           search_any?: string | null
           search_summary?: string | null
           search_notes?: string | null
+          reading_status?: string | null
+          is_favorite?: boolean | null
+          is_rec?: boolean | null
+          sort_title?: string | null
+          sort_added?: string | null
+          sort_updated?: string | null
+          sort_ready?: number | null
+          reading_sections?: string[] | null
         }
         Relationships: [
           { foreignKeyName: 'library_search_documents_id_fkey'; columns: ['id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
@@ -1022,6 +1117,8 @@ export type Database = {
       export_library_backup: { Args: Record<string, never>; Returns: Json }
       restore_library_backup: { Args: { p_backup: Json; p_user: string; p_replace?: boolean }; Returns: Json }
       paged_import_history: { Args: { p_batch?: string; p_history_page?: number; p_result_page?: number; p_status?: string }; Returns: Json }
+      library_revision: { Args: Record<string, never>; Returns: number }
+      library_navigation_snapshot: { Args: Record<string, never>; Returns: Json }
       library_navigation: { Args: Record<string, never>; Returns: Json }
       library_query_facets: { Args: { p_query?: Json }; Returns: Json }
       library_catalog: { Args: Record<string, never>; Returns: Json }

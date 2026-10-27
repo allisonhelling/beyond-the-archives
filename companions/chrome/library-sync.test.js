@@ -875,3 +875,23 @@ it('continues an imported ended scan at its next uncaptured primary page', async
  expect(local[baselineKey]).toEqual(['1', '2'])
  expect(local.librarySync.canContinue).toBe(false)
 })
+
+it.each(['running', 'paused', 'ready'])('ends and continues a pre-End-Scan %s checkpoint after the extension reloads', async status => {
+ await start()
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
+ await collect()
+ const { id, baselineKey } = local.librarySync
+ // These fields did not exist in scans created before End Scan/page diagnostics.
+ for (const key of ['endedEarly', 'canContinue', 'continuation', 'startPage', 'listPages']) delete local.librarySync[key]
+ Object.assign(local.librarySync, { status, hasMore: status === 'ready' })
+ const checkpoint = structuredClone(local[`librarySync:${id}:1`])
+ sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
+ const ended = await sync.command({ action: 'end', scanId: id })
+ expect(ended.state).toMatchObject({ id, status: 'ready', endedEarly: true, canContinue: true, pages: 1, listPages: 1 })
+ expect(local[`librarySync:${id}:1`]).toEqual(checkpoint)
+ expect((await sync.command({ action: 'page', scanId: id, page: 1 })).rows).toEqual([row(1)])
+ await sync.command({ action: 'finish', scanId: id })
+ expect(local[baselineKey]).toBeUndefined()
+ await sync.command({ action: 'continue', scanId: id })
+ expect(local.librarySync).toMatchObject({ id, status: 'running', endedEarly: false, page: 2, pages: 1, batchStart: 1 })
+})

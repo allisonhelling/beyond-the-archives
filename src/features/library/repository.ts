@@ -176,7 +176,7 @@ export async function loadStories(ids: string[]): Promise<Story[]> {
   return ((data ?? []) as unknown as Story[]).map(story => ({ ...story, detailsLoaded: true }))
 }
 export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
-export type LibraryResults = { suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
+export type LibraryResults = { revision?: number; suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export type LibraryFacets = Pick<LibraryResults, 'suggestions' | 'fandoms'> & { total: number }
 export type LibraryNavigation = Record<string, { works: number; series: number; updated_at: string | null }>
 /** Facets describe the collection pool, independent of page, sort and search filters. */
@@ -189,11 +189,16 @@ export async function loadLibraryFacets(query: LibraryQuery, signal: AbortSignal
   if (error || !data) throw new Error('Could not load filter suggestions. Retry loading.')
   return data as unknown as LibraryFacets
 }
-export async function loadLibraryNavigation(): Promise<LibraryNavigation> {
-  if (sampleMode) return {}
-  const { data, error } = await client().rpc('library_navigation')
+export async function loadLibraryRevision(): Promise<number> {
+  const { data, error } = await client().rpc('library_revision')
+  if (error || data === null) throw new Error('Couldn’t update library counts. Retry updating.')
+  return data
+}
+export async function loadLibraryNavigation(): Promise<{ counts: LibraryNavigation; revision: number }> {
+  if (sampleMode) return { counts: {}, revision: 0 }
+  const { data, error } = await client().rpc('library_navigation_snapshot')
   if (error || !data) throw new Error('Could not load collection counts. Retry loading.')
-  return data as unknown as LibraryNavigation
+  return data as unknown as { counts: LibraryNavigation; revision: number }
 }
 export async function queryLibrary(query: LibraryQuery, page: number, size: number, signal: AbortSignal): Promise<LibraryResults> {
   // Run the same parser/validation before either transport. Literal substring

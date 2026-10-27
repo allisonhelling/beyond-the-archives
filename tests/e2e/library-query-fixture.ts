@@ -9,6 +9,9 @@ type Row = Record<string, unknown>
 // Transport fixtures reuse the client reference semantics. Actual SQL parity and
 // RLS are independently checked in supabase/tests/library-query.test.ts.
 export function libraryQueryFixture(name: string, body: Row, tables: Record<string, Row[]>) {
+ if (name==='review_import_reading') return {reviews:[],total:0,changed:0,skipped:0}
+ if (name==='library_revision') return 0
+ if (name==='library_navigation_snapshot') return {revision:0,counts:libraryQueryFixture('library_navigation',body,tables)}
  const rows = (name: string) => tables[name] ?? []
  const worksById = new Map(rows('works').map(work => [work.id, work]))
  const stories = applyAutomaticCollections(rows('library_entries').map(entry => {
@@ -45,7 +48,7 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
   const fandoms = new Map<string,number>();for(const s of pool) for(const name of new Set(s.metadata.fandoms)) fandoms.set(name,(fandoms.get(name)??0)+1)
   const facets={suggestions:{personalTags:[...new Set(pool.flatMap(s=>s.personalTags))],relationships:[...new Set(pool.flatMap(s=>s.metadata.relationship_tags??[]))],characters:[...new Set(pool.flatMap(s=>s.metadata.character_tags??[]))],tags:[...new Set(pool.flatMap(s=>s.metadata.additional_tags??[]))]},fandoms:[...fandoms].map(([name,count])=>({name,count}))}
   if(name==='library_query_facets') return {...facets,total:pool.length}
-  return {...(query.includeFacets===false?{}:facets),stories:slice,series:seriesItems.filter(series=>slice.some(story=>story.id===`series:${series.seriesId}`)),total:shown.length,pages,page,sections:Object.fromEntries(['complete','in_progress','new','re_reading','view_all','waiting','to_read','paused_reading'].map(key=>[key,filtered.filter(s=>inReadingSection(s,key)).length]))}
+  return {revision:0,...(query.includeFacets===false?{}:facets),stories:slice,series:seriesItems.filter(series=>slice.some(story=>story.id===`series:${series.seriesId}`)),total:shown.length,pages,page,sections:Object.fromEntries(['complete','in_progress','new','re_reading','view_all','waiting','to_read','paused_reading'].map(key=>[key,filtered.filter(s=>inReadingSection(s,key)).length]))}
  }
  if(name==='paged_import_history') {
   const batches=[...rows('import_batches')].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))

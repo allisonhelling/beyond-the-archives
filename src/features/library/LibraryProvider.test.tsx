@@ -4,14 +4,14 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { blankMetadata, type Story } from './model'
 import { defaultReadingFilters } from './reading-search'
-const mocks=vi.hoisted(()=>({catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn(),facets:vi.fn(),navigation:vi.fn()}))
-vi.mock('./repository',async importOriginal=>({...(await importOriginal<typeof import('./repository')>()),loadLibraryFacets:mocks.facets,loadLibraryNavigation:mocks.navigation,loadCatalog:mocks.catalog,loadStories:mocks.stories,loadAffectedCollections:mocks.collections,loadCollections:mocks.collections,queryLibrary:mocks.query,loadSeriesRecord:mocks.series,deleteStory:vi.fn(),restoreStory:vi.fn(),updateEntry:vi.fn()}))
+const mocks=vi.hoisted(()=>({catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn(),facets:vi.fn(),navigation:vi.fn(),revision:vi.fn()}))
+vi.mock('./repository',async importOriginal=>({...(await importOriginal<typeof import('./repository')>()),loadLibraryFacets:mocks.facets,loadLibraryNavigation:mocks.navigation,loadLibraryRevision:mocks.revision,loadCatalog:mocks.catalog,loadStories:mocks.stories,loadAffectedCollections:mocks.collections,loadCollections:mocks.collections,queryLibrary:mocks.query,loadSeriesRecord:mocks.series,deleteStory:vi.fn(),restoreStory:vi.fn(),updateEntry:vi.fn()}))
 import { LibraryProvider, useLibrary } from './LibraryProvider'
 const query={mode:'library' as const,shelf:'all',filters:defaultReadingFilters}
 const result={stories:[],series:[],total:0,page:1,pages:1,sections:{},fandoms:[]}
 const story=(id:string,title=id)=>({id,metadata:{...blankMetadata,title,summary:'Full summary'},notes:'Private Notes',personalTags:['Personal tag'],work:{ao3_work_id:1,verified_chapters:{'1':'910'}},collectionIds:[],reading_status:'reading',last_read_chapter:0}) as unknown as Story
 const wrapper=({children}:{children:ReactNode})=><MemoryRouter><LibraryProvider userId="reader-1">{children}</LibraryProvider></MemoryRouter>
-beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.navigation.mockResolvedValue({});mocks.facets.mockResolvedValue({suggestions:{tags:[],relationships:[],characters:[]},fandoms:[],total:0});mocks.query.mockResolvedValue(result)})
+beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.revision.mockResolvedValue(0);mocks.navigation.mockResolvedValue({counts:{},revision:0});mocks.facets.mockResolvedValue({suggestions:{tags:[],relationships:[],characters:[]},fandoms:[],total:0});mocks.query.mockResolvedValue(result)})
 it('serializes targeted refreshes and preserves unrelated works without reloading the catalog',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
@@ -220,4 +220,72 @@ it('does not cache an in-flight tag query completed after its alias evidence cha
  expect(await old).toMatchObject({name:'AbortError'})
  await act(async()=>{await view.result.current.fetchPage(tagged,1,50,signal)})
  expect(mocks.query).toHaveBeenCalledTimes(2)
+})
+
+
+it('retains display pages until a server revision changes', async () => {
+ const view = renderHook(() => useLibrary(), { wrapper })
+ await waitFor(() => expect(view.result.current.loading).toBe(false))
+ let now = 1000
+ vi.spyOn(Date, 'now').mockImplementation(() => now)
+ const signal = new AbortController().signal
+ await act(() => view.result.current.fetchPage(query, 1, 50, signal))
+ expect(view.result.current.hasCachedPage(query, 1, 50)).toBe(true)
+ now += 29_999
+ await act(() => view.result.current.fetchPage(query, 1, 50, signal))
+ expect(mocks.query).toHaveBeenCalledTimes(1)
+ now += 60_000
+ expect(view.result.current.hasCachedPage(query, 1, 50)).toBe(true)
+ mocks.revision.mockResolvedValue(1)
+ await act(() => view.result.current.checkRevision(true))
+ expect(view.result.current.hasCachedPage(query, 1, 50)).toBe(false)
+ await act(() => view.result.current.fetchPage(query, 1, 50, signal))
+ expect(mocks.query).toHaveBeenCalledTimes(2)
+})
+
+
+it('checks the server on tab return, invalidates older pages, and ignores late responses', async () => {
+ mocks.revision.mockResolvedValue(4)
+ mocks.navigation.mockResolvedValue({counts:{all:{works:12,series:0,updated_at:null}},revision:4})
+ mocks.query.mockResolvedValue({...result,revision:4,total:12})
+ const view = renderHook(() => useLibrary(),{wrapper})
+ await waitFor(() => expect(view.result.current.loading).toBe(false))
+ await act(() => view.result.current.fetchPage(query,1,50,new AbortController().signal))
+ await waitFor(() => expect(view.result.current.navigation.all?.works).toBe(12))
+ let finish!:(value:typeof result & {revision:number})=>void
+ mocks.query.mockImplementationOnce(() => new Promise(resolve=>{finish=resolve}))
+ const late = view.result.current.fetchPage(query,2,50,new AbortController().signal).catch(error=>error)
+ mocks.revision.mockResolvedValue(5)
+ mocks.navigation.mockResolvedValue({counts:{all:{works:13,series:0,updated_at:null}},revision:5})
+ await act(async()=>{window.dispatchEvent(new Event('focus'))})
+ await waitFor(() => expect(view.result.current.hasCachedPage(query,1,50)).toBe(false))
+ await act(async()=>{finish({...result,revision:4})})
+ expect(await late).toMatchObject({name:'AbortError'})
+ expect(view.result.current.hasCachedPage(query,2,50)).toBe(false)
+ await waitFor(() => expect(view.result.current.navigation.all?.works).toBe(13))
+ mocks.revision.mockRejectedValueOnce(new Error('Offline'))
+ await act(()=>view.result.current.checkRevision(true))
+ expect(view.result.current.revisionError).toBe('Couldn’t update counts.')
+ expect(view.result.current.navigation.all?.works).toBe(13)
+ await act(()=>view.result.current.retryCounts())
+ expect(view.result.current.revisionError).toBe('')
+})
+
+it('coalesces simultaneous revision checks and retains counts after a navigation refresh fails', async () => {
+ const view = renderHook(() => useLibrary(),{wrapper})
+ await waitFor(() => expect(view.result.current.loading).toBe(false))
+ mocks.navigation.mockResolvedValue({counts:{all:{works:9,series:0,updated_at:null}},revision:0})
+ await act(()=>view.result.current.fetchPage(query,1,50,new AbortController().signal))
+ await waitFor(()=>expect(view.result.current.navigation.all?.works).toBe(9))
+ let finish!:(revision:number)=>void
+ mocks.revision.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const before = mocks.revision.mock.calls.length
+ let first!:Promise<void>,second!:Promise<void>
+ act(()=>{first=view.result.current.checkRevision(true);second=view.result.current.checkRevision(true)})
+ expect(mocks.revision).toHaveBeenCalledTimes(before+1)
+ await act(async()=>{finish(0);await first;await second})
+ mocks.navigation.mockRejectedValueOnce(new Error('Couldn’t update counts.'))
+ await act(()=>view.result.current.retryCounts())
+ await waitFor(()=>expect(view.result.current.navigationError).toBe('Couldn’t update counts.'))
+ expect(view.result.current.navigation.all?.works).toBe(9)
 })

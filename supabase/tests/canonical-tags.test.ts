@@ -71,3 +71,41 @@ it('does not reload the alias index per work in a filtered query',async()=>{
  expect((await query({characters:names[0]})).total).toBe(3)
  expect((await db.query<{n:number}>("select last_value::integer n from alias_reads")).rows[0].n).toBe(1)
 })
+
+
+it('refreshes maintained memberships and cached counts when verified aliases change under a service context', async()=>{
+ const id=(await db.query<{id:string}>('insert into public.collections(name,automatic_rules) values($1,$2) returning id',['New Canonical',JSON.stringify({filters:{...defaultReadingFilters,characters:'New Canonical'},terms:[]})])).rows[0].id
+ expect((await query({},id)).total).toBe(0)
+ await db.query('select public.library_navigation()')
+ await db.exec('reset role;reset request.jwt.claim.sub')
+ await db.query('select public.store_tag_resolutions($1,$2)',[alice,JSON.stringify([
+  {category:'character',name:'New Canonical',status:'canonical',canonical_name:'New Canonical'},
+  {category:'character',name:names[1],status:'synonym',canonical_name:'New Canonical'},
+ ])])
+ await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+ expect((await query({},id)).total).toBe(1)
+ const navigation=(await db.query<{r:Record<string,{works:number}>}>('select public.library_navigation() r')).rows[0].r
+ expect(navigation[id].works).toBe(1)
+ await db.exec('reset role;reset request.jwt.claim.sub')
+ await db.query("update public.library_entries set metadata_overrides=metadata_overrides||'{\"character_tags\":[\"Unrelated\"]}'::jsonb where id=$1",[(await db.query<{id:string}>("select id from public.library_entries where user_id=$1 and metadata_overrides->'character_tags' ? $2",[alice,names[1]])).rows[0].id])
+ await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+ expect((await query({},id)).total).toBe(0)
+})
+
+
+it('re-resolves aliases if verification changes between alias loading and revision capture',async()=>{
+ await db.exec('reset role')
+ const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_tag_aliases(uuid)'::regprocedure")).rows[0]
+ const updated=[{category:'character',name:'New Canonical',status:'canonical',canonical_name:'New Canonical'},{category:'character',name:names[1],status:'synonym',canonical_name:'New Canonical'}]
+ await db.exec('create sequence public.alias_race;grant usage,select on sequence public.alias_race to authenticated')
+ // Resolve once with the old evidence, then store new evidence before the
+ // matching stage records its revision. The page must retry with fresh aliases.
+ const expression=fn.source.trim().replace(/;$/,'')
+ const replacement=`declare aliases jsonb; begin aliases:=(${expression}); if not (select is_called from public.alias_race) then perform nextval('public.alias_race'); perform public.store_tag_resolutions(p_owner,'${JSON.stringify(updated).replaceAll("'","''")}'::jsonb); end if; return aliases; end;`
+ await db.exec(fn.definition.replace('LANGUAGE sql','LANGUAGE plpgsql').replace(' STABLE',' VOLATILE').replace(fn.source,replacement))
+ // The instrumented resolver has the same owner as the real server resolver.
+ await db.exec('alter function public.library_tag_aliases(uuid) security definer;set role authenticated')
+ const result=await query({characters:'New Canonical'})
+ expect(result.total).toBe(1)
+ expect(result.stories[0].metadata.character_tags).toEqual([names[1]])
+})

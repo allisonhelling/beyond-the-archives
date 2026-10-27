@@ -21,27 +21,36 @@ beforeEach(() => { vi.clearAllMocks(); state.collections = []; state.stories = [
 
 const collection: Collection = { last_story_added_at: null, id: 'existing', name: 'Night reads', color: '#123456', symbol: 'moon', default_key: null, sort_position: 0, user_id: 'reader', description: null, created_at: '', updated_at: '' }
 
-it('reuses saved custom colors as swatches without duplicates or default-collection colors', async () => {
-  state.collections = [collection,
-    { ...collection, id: 'duplicate', color: '#123456' },
-    { ...collection, id: 'upper', color: '#AbCdEf' },
-    { ...collection, id: 'lower', color: '#abcdef' },
-    { ...collection, id: 'preset', color: '#970000' },
-    { ...collection, id: 'default', default_key: 'favorites', color: '#654321' },
-    { ...collection, id: 'invalid', color: 'red' },
-  ]
+const savedColorCollections = [
+  collection,
+  { ...collection, id: 'duplicate', color: '#123456' },
+  { ...collection, id: 'upper', color: '#AbCdEf' },
+  { ...collection, id: 'lower', color: '#abcdef' },
+  { ...collection, id: 'preset', color: '#970000' },
+  { ...collection, id: 'default', default_key: 'favorites', color: '#654321' },
+  { ...collection, id: 'invalid', color: 'red' },
+]
+
+it('reuses saved custom colors as swatches without duplicates or default-collection colors', () => {
+  state.collections = savedColorCollections
+  render(<NewCollectionDialog onClose={vi.fn()} />)
+  const colors = within(screen.getByRole('group', { name: 'Color' }))
+  expect(colors.getAllByRole('radio', { name: '#123456' })).toHaveLength(1)
+  expect(colors.getAllByRole('radio', { name: '#abcdef' })).toHaveLength(1)
+  expect(colors.getAllByRole('radio', { name: 'Burgundy' })).toHaveLength(1)
+  expect(colors.queryByRole('radio', { name: '#654321' })).not.toBeInTheDocument()
+  expect(colors.queryByRole('radio', { name: 'red' })).not.toBeInTheDocument()
+})
+
+it('previews and saves a reused custom color', async () => {
+  state.collections = savedColorCollections
   const user = userEvent.setup()
   render(<NewCollectionButton />)
   await user.click(screen.getByRole('button', { name: 'New Collection' }))
-  expect(screen.getAllByRole('radio', { name: '#123456' })).toHaveLength(1)
-  expect(screen.getAllByRole('radio', { name: '#abcdef' })).toHaveLength(1)
-  expect(screen.getAllByRole('radio', { name: 'Burgundy' })).toHaveLength(1)
-  expect(screen.queryByRole('radio', { name: '#654321' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('radio', { name: 'red' })).not.toBeInTheDocument()
-  // Set up the name once; this test exercises color reuse, selection, and saving.
+  const colors = within(screen.getByRole('group', { name: 'Color' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Shared color' } })
-  await user.click(screen.getByRole('radio', { name: '#abcdef' }))
-  expect(screen.getByRole('radio', { name: '#abcdef' })).toBeChecked()
+  await user.click(colors.getByRole('radio', { name: '#abcdef' }))
+  expect(colors.getByRole('radio', { name: '#abcdef' })).toBeChecked()
   expect(screen.getByLabelText('Collection Preview').querySelector('.collection-spine')).toHaveStyle('--cover-color: #abcdef')
   await user.click(screen.getByRole('button', { name: 'Create Collection' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

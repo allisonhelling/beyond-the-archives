@@ -51,12 +51,14 @@ async function main() {
       ['catalog', 'select public.library_catalog() result', []],
       ['catalog-automatic', 'select public.library_catalog() result', []],
       ['navigation','select public.library_navigation() result',[]],
+      ['navigation-cached','select public.library_navigation() result',[]],
       ['facets','select public.library_query_facets($1) result',[{mode:'library',shelf:collection,filters:{}}]],
       ['all-facets','select public.library_query_facets($1) result',[{mode:'library',shelf:'all',filters:{}}]],
       ['manual-collection','select public.query_library($1,1,50) result',[{mode:'library',shelf:collection,includeFacets:false,filters:{sort:'added'}}]],
       ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
       ['finished-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'finished',includeFacets:false,filters:{sort:'added',showSeries:false}}]],
       ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
+      ['sorted-page','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'alpha'}}]],
       ['reading-page', 'select public.query_library($1,1,50) result', [{mode:'reading',shelf:'view_all',includeFacets:false,filters:{sort:'added'}}]],
       ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
       ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'alpha'}}]],
@@ -68,6 +70,7 @@ async function main() {
         insert into public.collections(name,automatic_rules)
         select 'Performance automatic '||n,jsonb_build_object('filters',jsonb_build_object('tags','Tag '||n),'terms','[]'::jsonb)
         from generate_series(1,5) n;
+        reset role; analyze public.automatic_collection_works; set role authenticated;
       `)
       const values = args.map(value => typeof value === 'object' ? JSON.stringify(value) : value)
       const start = performance.now(), response = await db.query(sql, values), elapsedMs = performance.now()-start
@@ -76,33 +79,28 @@ async function main() {
       if (label === 'offset-identities') offsetIds = response.rows.map(row => row.id)
       if (label === 'cursor-identities' && JSON.stringify(response.rows.map(row => row.id)) !== JSON.stringify(offsetIds)) throw new Error('Offset and cursor returned different identities.')
       let plannedSql=sql,plannedValues=values
-      if(sql.startsWith('select public.query_library')) {
-        const definition=(await db.query("select pg_get_functiondef('public.query_library(jsonb,integer,integer)'::regprocedure) definition")).rows[0].definition
-        const pool=(await db.query("select prosrc from pg_proc where oid='public.library_query_pool(jsonb)'::regprocedure")).rows[0].prosrc
-        const seriesRequested=pool.match(/series_requested:=([\s\S]+?);/)[1]
-        const collectionRules=pool.match(/select c\.automatic_rules into collection_rules[\s\S]+?;/)[0].replace(' into collection_rules','').replace(/;$/,'')
-        const manualCollection=pool.match(/select c\.id into manual_collection[\s\S]+?;/)[0].replace(' into manual_collection','').replace(/;$/,'')
-        const poolSql=pool.match(/return query\s+([\s\S]+?);/)[1]
-          .replaceAll('manual_collection',`(${manualCollection})`).replaceAll('collection_rules',`(${collectionRules})`).replaceAll('series_requested',`(${seriesRequested})`)
-        // Explain the actual page pipeline, including the shared candidate pool.
-        plannedSql=definition.match(/ with pool[\s\S]+?into result from totals/)[0].replace('into result','')
-          .replace('select * from public.library_query_pool(p_query)',poolSql)
-          .replaceAll('p_query','$1::jsonb').replaceAll('p_page','$2::integer').replaceAll('p_size','$3::integer')
-        const page=Number(sql.match(/,([0-9]+),[0-9]+\)/)[1]),size=Number(sql.match(/,[0-9]+,([0-9]+)\)/)[1])
-        plannedValues=[values[0],page,size]
-      }
-      const plan = await db.query(`explain (analyze,buffers,format json) ${plannedSql}`, plannedValues)
       let filteredCount
       if(sql.startsWith('select public.query_library')) {
-        const countBoundary=plannedSql.indexOf(',\n totals as')
-        if(countBoundary<0)throw new Error('Review the filtered-count plan extraction after query changes.')
-        const countSql=plannedSql.slice(0,countBoundary)+' select count(*) from selected'
-        const countStart=performance.now()
-        const count=await db.query(countSql,[values[0]])
-        const elapsedMs=Math.round(performance.now()-countStart)
-        const plan=await db.query(`explain (analyze,buffers,format json) ${countSql}`,[values[0]])
-        filteredCount={elapsedMs,count:count.rows[0].count,plan:plan.rows}
+        const query=args[0]
+        const withSeries=query.mode==='series'||query.shelf==='series'||query.filters.showSeries
+        if(withSeries) {
+          plannedSql=(await db.query("select prosrc from pg_proc where oid='public.library_query_series_matches(jsonb,jsonb)'::regprocedure")).rows[0].prosrc
+            .replaceAll('p_query','$1::jsonb').replaceAll('p_ids','null::jsonb')
+          plannedValues=[values[0]]
+        } else {
+          plannedSql=(await db.query('select public.library_query_work_sql($1,false) statement',[values[0]])).rows[0].statement.replaceAll('$1','$1::jsonb').replaceAll('$2','$2::uuid')
+          const owner=(await db.query('select auth.uid() id')).rows[0].id
+          plannedValues=[values[0],owner]
+        }
+        // This is the production selection statement, deliberately uncached so
+        // cold matching cost remains visible beside warm page/cache timings.
+        const start=performance.now()
+        const matches=await db.query(plannedSql,plannedValues)
+        const result=Object.values(matches.rows[0])[0]
+        filteredCount={elapsedMs:Math.round(performance.now()-start),count:result.ids.length}
+        if(filteredCount.count!==response.rows[0].result.total)throw new Error('Candidate count differs from page total.')
       }
+      const plan = await db.query(`explain (analyze,buffers,format json) ${plannedSql}`, plannedValues)
       results.push({label,elapsedMs:Math.round(elapsedMs),bytes:Buffer.byteLength(JSON.stringify(response.rows)),plan:plan.rows,filteredCount})
       console.log(label,Math.round(elapsedMs)+'ms',results.at(-1).bytes+' bytes',filteredCount?'filtered count '+filteredCount.elapsedMs+'ms':'')
       if (label === 'catalog-automatic') await db.exec("delete from public.collections where name like 'Performance automatic %'")

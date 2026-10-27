@@ -52,7 +52,7 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
   if (mobile) {
     const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
-    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Add', 'Stats', 'Settings'])
+    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Import', 'Stats', 'Settings'])
     await expect(nav).toHaveCSS('position', 'fixed')
     expect((await nav.boundingBox())!.height).toBeLessThanOrEqual(56)
     const active=nav.getByRole('link',{name:'Settings',exact:true})
@@ -79,7 +79,8 @@ test('Add controls are available and layouts fit the viewport', async ({ page })
   await signIn(page)
   if (test.info().project.name === 'mobile') {
     await expect(page.locator('.app-header .add-wrapper')).toBeHidden()
-    const add = page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Add', exact: true })
+    await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
+    const add = page.getByRole('link', { name: 'Add Individual Story', exact: true })
     await expect(add.locator('svg')).toHaveCount(1)
     await add.click()
     await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
@@ -115,8 +116,7 @@ test('large imports show persisted results and fit the viewport after returning 
   await page.goto('/')
   await signIn(page)
   if (test.info().project.name === 'mobile') {
-    await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
-    await page.getByRole('link', { name: 'Import History from AO3', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Import', exact: true }).click()
   } else {
     await page.getByRole('navigation', { name: 'Main Navigation' }).getByRole('link', { name: 'Import', exact: true }).click()
   }

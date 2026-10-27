@@ -4,11 +4,14 @@ import { importFinished } from './urls'
 import { importHistory, type ImportHistory } from './repository'
 
 export function useImportHistory(selected: string | undefined, historyPage: number, resultPage: number, status: string, enabled: boolean, busy: boolean) {
-  const { refresh } = useLibrary()
+  const { refresh, checkRevision } = useLibrary()
   const [data, setData] = useState<ImportHistory>({ batches: [], items: [], jobs: [] })
   const [loading, setLoading] = useState(true), [error, setError] = useState('')
   const [loadedSelection, setLoadedSelection] = useState<string>()
   const queue = useRef<Promise<unknown>>(Promise.resolve()), version = useRef(0)
+  const pendingEntries = useRef(new Set<string>())
+  const refreshedAt = useRef(0)
+  const completedBatches = useRef(new Set<string>())
   const signatures = useRef(new Map<string, string>())
   const reload = useCallback(async () => {
     const request = ++version.current
@@ -24,7 +27,20 @@ export function useImportHistory(selected: string | undefined, historyPage: numb
           if (job.entry_id) affected.add(job.entry_id)
         }
       }
-      if (affected.size) await refresh([...affected])
+      for (const id of affected) pendingEntries.current.add(id)
+      const finished = importFinished(next)
+      if (pendingEntries.current.size && (finished || Date.now() - refreshedAt.current >= 30_000)) {
+        const ids = [...pendingEntries.current]
+        await refresh(ids)
+        for (const id of ids) pendingEntries.current.delete(id)
+        refreshedAt.current = Date.now()
+      }
+      const batch = next.selectedBatch ?? selected ?? next.batches[0]?.id
+      if (finished && batch && !completedBatches.current.has(batch)) {
+        await checkRevision?.(true)
+        completedBatches.current.add(batch)
+        if (completedBatches.current.size > 100) completedBatches.current.delete(completedBatches.current.values().next().value!)
+      }
       for (const [id, signature] of changed) signatures.current.set(id, signature)
       while (signatures.current.size > 6000) signatures.current.delete(signatures.current.keys().next().value!)
       if (request === version.current) { setData(next); setLoadedSelection(selected); setLoading(false); setError('') }
@@ -32,7 +48,7 @@ export function useImportHistory(selected: string | undefined, historyPage: numb
     })
     queue.current = operation
     return operation
-  }, [selected, historyPage, resultPage, status, refresh])
+  }, [selected, historyPage, resultPage, status, refresh, checkRevision])
   useEffect(() => {
     if (!enabled || busy) return
     let alive = true, failures = 0

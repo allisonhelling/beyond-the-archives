@@ -68,7 +68,10 @@ export function librarySyncCommand(action: string, options: { readingStatusOrigi
   try {
    api.sendMessage(id, { type: 'AO3_LIBRARY_SYNC', action, ...options }, reply => {
     clearTimeout(timer)
-    if (api.lastError || !reply?.ok) reject(new Error(reply?.error ?? 'Could not contact library sync. Update and reconnect the extension.'))
+    if (api.lastError || !reply?.ok) {
+     const unsupportedEnd = action === 'end' && reply?.error === 'This action is unavailable for the saved scan.'
+     reject(new Error(unsupportedEnd ? 'The loaded companion does not support End Scan. Update and reload the existing extension, reconnect it in Settings, then retry End Scan. Keep this scan saved; do not discard it or uninstall the extension.' : reply?.error ?? 'Could not contact library sync. Update and reconnect the extension.'))
+    }
     else resolve(reply)
    })
   } catch { clearTimeout(timer); reject(new Error('Could not contact the extension.')) }
