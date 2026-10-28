@@ -29,7 +29,8 @@ it('loads the bundled default in a fresh browser without an existing sample libr
  expect(library.stories).toMatchObject(defaultState.stories)
  expect(library.series).toHaveLength(4)
  expect(library.series).toMatchObject(defaultState.series)
- expect(library.collections).toEqual([...defaultState.collections].sort((a, b) => (a.sort_position ?? 0) - (b.sort_position ?? 0)))
+ for (const collection of defaultState.collections) expect(library.collections.find(saved=>saved.id===collection.id)).toMatchObject({...collection,sort_position:expect.any(Number)})
+ expect(library.collections).toHaveLength(24)
  await updateSampleEntry(library.stories[0].id, { notes: 'A new reader’s edit' })
  expect((await loadSampleLibrary()).stories[0].notes).toBe('A new reader’s edit')
  resetSampleLibrary()
@@ -39,7 +40,7 @@ it('loads the bundled default in a fresh browser without an existing sample libr
 it('seeds separate spine design collections and preserves edits and deletions on reload', async () => {
  resetSampleLibrary()
  const { collections } = await loadSampleLibrary()
- expect(collections.filter(collection => collection.spineDesign).map(collection => collection.spineDesign)).toEqual(['celestial','interlocking-circles','linked-diamonds','book-stack','constellation','deco-crest','star-trails','star-trails-extended','vertical-diamonds','lunar-phases','query-crown'])
+ expect(collections.filter(collection => collection.spineDesign).map(collection => collection.spineDesign)).toEqual(['celestial','constellation','deco-crest','star-trails','star-trails-extended','vertical-diamonds','query-crown','radiant-ornament','library-label','sunburst-fans','interlocking-circles','linked-diamonds','book-stack','lunar-phases','embossed-frame','art-deco','arched','raised-bands','star-trails-cascading','library-deco','plain'])
  const celestial = collections.find(collection => collection.spineDesign === 'celestial')!
  await saveSampleCollection('My celestial shelf', celestial.id)
  await deleteSampleCollection(collections.find(collection => collection.spineDesign === 'interlocking-circles')!.id)
@@ -56,38 +57,38 @@ it('adds design samples once to an existing preview without replacing its collec
  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
  const upgraded = await loadSampleLibrary()
  expect(upgraded.collections.find(collection => collection.id === id)).toMatchObject({id,name:'My reads'})
- expect(upgraded.collections.filter(collection => collection.spineDesign)).toHaveLength(11)
+ expect(upgraded.collections.filter(collection => collection.spineDesign)).toHaveLength(21)
  expect(upgraded.stories[0].notes).toBe('Keep this note')
- expect((await loadSampleLibrary()).collections).toHaveLength(13)
+ expect((await loadSampleLibrary()).collections).toHaveLength(24)
 })
 
 it('renames the legacy celestial design without changing saved collection identities or memberships', async () => {
  resetSampleLibrary()
  const library = await loadSampleLibrary()
- const collection = library.collections[0]
+ const collection = library.collections.find(collection=>collection.spineDesign==='celestial')!
  Object.assign(collection, { id:'sample-spine-celestial-constellation', name:'My celestial shelf', spineDesign:'celestial-constellation' })
  library.stories[0].collectionIds = [collection.id]
  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
  const upgraded = await loadSampleLibrary()
- expect(upgraded.collections[0]).toMatchObject({id:collection.id,name:'My celestial shelf',spineDesign:'celestial'})
+ expect(upgraded.collections.find(saved=>saved.id===collection.id)).toMatchObject({id:collection.id,name:'My celestial shelf',spineDesign:'celestial'})
  expect(upgraded.stories[0].collectionIds).toEqual([collection.id])
- expect((await loadSampleLibrary()).collections).toHaveLength(13)
+ expect((await loadSampleLibrary()).collections).toHaveLength(24)
 })
 
 it('adds the latest preview designs without restoring deleted samples or replacing renamed ones', async () => {
  resetSampleLibrary()
  const library = await loadSampleLibrary()
  library.sampleVersion = 4
- library.collections = library.collections.slice(0,4)
+ library.collections = library.collections.filter(collection=>['celestial','interlocking-circles','linked-diamonds','book-stack'].includes(collection.spineDesign ?? ''))
  const removed = library.collections.splice(1,1)[0]
  library.collections[0].name = 'My celestial sample'
  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
  const upgraded = await loadSampleLibrary()
  expect(upgraded.collections.some(collection => collection.id === removed.id)).toBe(false)
  expect(upgraded.collections.find(collection => collection.id === library.collections[0].id)?.name).toBe('My celestial sample')
- expect(upgraded.collections).toHaveLength(11)
+ expect(upgraded.collections).toHaveLength(22)
  expect(upgraded.collections.filter(collection => ['deco-crest','star-trails','star-trails-extended','vertical-diamonds','constellation'].includes(collection.spineDesign ?? ''))).toHaveLength(5)
- expect((await loadSampleLibrary()).collections).toHaveLength(11)
+ expect((await loadSampleLibrary()).collections).toHaveLength(22)
 })
 
 it('keeps custom order through reload, rename, creation, and deletion', async () => {
@@ -387,7 +388,7 @@ it('upgrades version two samples without restoring removed old works or overwrit
  library.stories[0].notes = 'Keep my work note'
  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
  const upgraded = await loadSampleLibrary()
- expect(upgraded.sampleVersion).toBe(8)
+ expect(upgraded.sampleVersion).toBe(10)
  expect(upgraded.series).toHaveLength(4)
  expect(upgraded.stories.some(story => story.work.ao3_work_id === 2034597)).toBe(true)
  expect(upgraded.series[0].notes).toBe('Keep my series note')
@@ -438,13 +439,13 @@ it('adds lunar phases and query crown once to version six samples while preservi
  story.notes = 'Keep my notes'
  window.localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(library))
  const upgraded = await loadSampleLibrary()
- expect(upgraded.collections.filter(collection => collection.spineDesign).slice(-2).map(collection => collection.spineDesign)).toEqual(['lunar-phases','query-crown'])
- expect(upgraded.collections[0].name).toBe('My edited sample')
+ expect(upgraded.collections.filter(collection => ['lunar-phases','query-crown'].includes(collection.spineDesign ?? '')).map(collection => collection.spineDesign)).toEqual(expect.arrayContaining(['lunar-phases','query-crown']))
+ expect(upgraded.collections.find(collection=>collection.id===library.collections[0].id)?.name).toBe('My edited sample')
  expect(upgraded.collections.some(collection => collection.id === removed.id)).toBe(false)
  expect(upgraded.stories.find(item => item.id === story.id)?.notes).toBe('Keep my notes')
- expect(upgraded.collections).toHaveLength(11)
+ expect(upgraded.collections).toHaveLength(22)
  await deleteSampleCollection(upgraded.collections.at(-1)!.id)
- expect((await loadSampleLibrary()).collections).toHaveLength(10)
+ expect((await loadSampleLibrary()).collections).toHaveLength(21)
 })
 
 it('keeps automatic collections in sync with saved works and rule edits, independently from manual membership', async () => {
@@ -510,7 +511,7 @@ it('adds the automatic example once to older samples without replacing a same-na
  expect(upgraded.collections.filter(collection => collection.name === 'One Shots')).toHaveLength(1)
  expect(upgraded.collections.find(collection => collection.id === id)).toMatchObject({ color: '#123456', symbol: 'moon' })
  await deleteSampleCollection(id)
- expect((await loadSampleLibrary()).collections).toHaveLength(0)
+ expect((await loadSampleLibrary()).collections.some(collection=>collection.name==='One Shots')).toBe(false)
 })
 
 it('imports extension listing metadata into sample storage, preserving existing personal edits and safe retries', async () => {
@@ -529,7 +530,7 @@ it('restores the captured default after edits, removals and additions on every r
  const baseline = await loadSampleLibrary()
  expect(baseline.stories).toMatchObject(defaultState.stories)
  expect(baseline.series).toMatchObject(defaultState.series)
- expect(baseline.collections).toHaveLength(13)
+ expect(baseline.collections).toHaveLength(24)
  const story = baseline.stories[0]
  await updateSampleEntry(story.id, { notes: 'Temporary edit', last_read_chapter: 0, is_favorite: !story.is_favorite, is_rec: !story.is_rec })
  await deleteSampleStory(baseline.stories[1].id)
@@ -553,4 +554,18 @@ it('uses earlier bookmark dates and either Rec while retaining personal notes in
  expect(saved).toMatchObject({ created_at: '2026-10-10T00:00:00Z', finished_at: '2026-10-21T00:00:00Z', is_rec: true, notes: 'Saved note', personalTags: ['Saved tag'], source_bookmark: { date: '2026-10-10', notes: 'Incoming note' } })
  await importSampleWorks([row])
  expect((await loadSampleLibrary()).stories.find(story => story.id === saved.id)).toMatchObject({ finished_at: saved.finished_at, is_rec: true })
+})
+
+
+it('restores all spine designs and hosted automatic collections with visible shelves after reset',async()=>{
+ resetSampleLibrary()
+ const initial=await loadSampleLibrary()
+ expect(new Set(initial.collections.filter(c=>c.spineDesign).map(c=>c.spineDesign)).size).toBe(21)
+ expect(initial.collections.find(c=>c.name==='One Shots')?.automatic_rules).toMatchObject({filters:{oneShot:'only'}})
+ expect(initial.collections.find(c=>c.name==='Deleted Works')?.automatic_rules).toMatchObject({filters:{publication:['deleted']}})
+ await deleteSampleCollections(initial.collections.map(c=>c.id))
+ window.localStorage.setItem('between-chapters:collection-sort:v1',JSON.stringify({hiddenAutomatic:['series','favorites'],hiddenCustom:initial.collections.map(c=>c.id)}))
+ resetSampleLibrary()
+ expect(window.localStorage.getItem('between-chapters:collection-sort:v1')).toBeNull()
+ expect((await loadSampleLibrary()).collections).toEqual(initial.collections)
 })

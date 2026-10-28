@@ -8,17 +8,19 @@ import type { SeriesPreview } from '../../imports/urls'
 import { librarySeries, type SeriesRecord } from '../series/series'
 import type { Json } from '../../../types/database'
 import { applyStoryEdits, editSnapshot, EditConflict, mergeEdits, resolveEdits, storyEdits, type EditValues } from '../edit-merge'
-import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collections/collection-appearance'
+import { automaticCollectionSpineDesign, defaultShelfDesigns, compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collections/collection-appearance'
 import defaultState from './default-state.json'
 import snapshots from './stories.json'
 import seriesSnapshots from './series.json'
+import { collectionSortKey } from '../browsing/browsing'
+import { waybackSnapshot } from '../../imports/urls'
 import type { SpineDesign } from '../collections/SpineDetails'
 import { abandonedReadingStatus, blankMetadata, bookmarkRec, deletedWorkTitle, sourceBookmark, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
 const capturedAt = '2026-10-15T12:00:00.000Z'
-const sampleVersion = 8
+const sampleVersion = 10
 const seriesVersions: Record<number, number> = { 132147: 6, 1030529: 3, 2404765: 3, 2888871: 3 }
 const spineSamples = [
   { name: 'Celestial', spineDesign: 'celestial', color: '#92504e', introducedIn: 4 },
@@ -32,6 +34,16 @@ const spineSamples = [
   { name: 'Vertical Diamonds', spineDesign: 'vertical-diamonds', color: '#54254b', introducedIn: 5 },
   { name: 'Lunar Phases', spineDesign: 'lunar-phases', color: '#243c5e', introducedIn: 7 },
   { name: 'Query Crown', spineDesign: 'query-crown', color: '#54254b', introducedIn: 7 },
+  { name: 'Embossed Frame', spineDesign: 'embossed-frame', color: '#970000', introducedIn: 9 },
+  { name: 'Radiant Ornament', spineDesign: 'radiant-ornament', color: '#92504e', introducedIn: 9 },
+  { name: 'Art Deco', spineDesign: 'art-deco', color: '#214921', introducedIn: 9 },
+  { name: 'Library Label', spineDesign: 'library-label', color: '#243c5e', introducedIn: 9 },
+  { name: 'Arched', spineDesign: 'arched', color: '#4a1b0f', introducedIn: 9 },
+  { name: 'Raised Bands', spineDesign: 'raised-bands', color: '#25211f', introducedIn: 9 },
+  { name: 'Sunburst Fans', spineDesign: 'sunburst-fans', color: '#8b491e', introducedIn: 9 },
+  { name: 'Plain', spineDesign: 'plain', color: '#07534a', introducedIn: 9 },
+  { name: 'Library Deco', spineDesign: 'library-deco', color: '#243c5e', introducedIn: 9 },
+  { name: 'Cascading Star Trails', spineDesign: 'star-trails-cascading', color: '#54254b', introducedIn: 9 },
 ] satisfies { name: string; spineDesign: SpineDesign; color: string; introducedIn: number }[]
 type Library = { stories: Story[]; collections: (Collection & { spineDesign?: SpineDesign })[]; series?: SeriesRecord[]; sampleVersion?: number }
 
@@ -94,7 +106,25 @@ function originalSamples(): Library {
     automatic_rules: automaticCollectionRules({ ...defaultReadingFilters, oneShot: 'only' }) as unknown as Json,
     sort_position: collections.length, last_story_added_at: null, created_at: capturedAt, updated_at: capturedAt,
   })
+  collections.push({
+    id: 'sample-deleted-works', user_id: userId, name: 'Deleted Works', default_key: null,
+    color: '#25211f', symbol: 'cross', description: null,
+    automatic_rules: automaticCollectionRules({ ...defaultReadingFilters, publication: ['deleted'] }) as unknown as Json,
+    sort_position: collections.length, last_story_added_at: null, created_at: capturedAt, updated_at: capturedAt,
+  })
   return { stories, collections, series, sampleVersion }
+}
+
+// Order only the design examples; ordinary collections keep their relative order.
+function orderSampleCollections(collections: Library['collections']) {
+  const ordered = [...collections].sort(compareCollections)
+  const examples = ordered.filter(collection => collection.spineDesign)
+  const plain = examples.findIndex(collection => collection.spineDesign === 'plain')
+  const cascading = examples.findIndex(collection => collection.spineDesign === 'star-trails-cascading')
+  if (plain >= 0 && cascading >= 0) [examples[plain], examples[cascading]] = [examples[cascading], examples[plain]]
+  const used = new Set<SpineDesign>([...Object.values(defaultShelfDesigns).filter((design): design is SpineDesign => !!design), automaticCollectionSpineDesign, 'plain'])
+  return [...ordered.filter(collection => !collection.spineDesign), ...examples.filter(collection => !used.has(collection.spineDesign!)), ...examples.filter(collection => used.has(collection.spineDesign!))]
+    .map((collection, sort_position) => ({ ...collection, sort_position }))
 }
 
 // Store only changes to the original fixtures so captured defaults reuse work metadata.
@@ -102,8 +132,13 @@ function originalSamples(): Library {
 function seedLibrary(): Library {
   const original = originalSamples()
   const saved = structuredClone(defaultState)
+  const collections = [...saved.collections] as Library['collections']
+  for (const collection of original.collections) {
+    if (collections.some(saved => saved.id === collection.id || saved.name === collection.name)) continue
+    collections.push({ ...collection, sort_position: Math.max(-1,...collections.map(saved => saved.sort_position ?? -1)) + 1 })
+  }
   return {
-    ...saved,
+    ...saved, collections: orderSampleCollections(collections),
     stories: saved.stories.map(story => ({ ...original.stories.find(sample => sample.id === story.id), ...story })),
     series: saved.series.map(series => ({ ...original.series?.find(sample => sample.id === series.id), ...series })),
   } as Library
@@ -115,7 +150,10 @@ function read(): Library {
   try {
     const data = JSON.parse(saved) as Library
     if (Array.isArray(data.stories) && Array.isArray(data.collections)) {
-      for (const story of data.stories) if (story.work_status === 'deleted') story.metadata.publication_status = 'deleted'
+      for (const story of data.stories) {
+        if (waybackSnapshot(story.original_url)) story.work_status = 'deleted'
+        if (story.work_status === 'deleted') story.metadata.publication_status = 'deleted'
+      }
       // Preserve saved identities and reading progress when upgrading legacy names.
       let renamedValues = false
       for (const story of data.stories) if (typeof story.is_rec !== 'boolean') {
@@ -155,12 +193,13 @@ function read(): Library {
         }
         const newDesigns = new Set<SpineDesign>(spineSamples.filter(sample => sample.introducedIn > (data.sampleVersion ?? 1)).map(sample => sample.spineDesign))
         for (const collection of seed.collections) {
-          const starter = collection.id === 'sample-one-shots'
-          const introduced = collection.spineDesign ? newDesigns.has(collection.spineDesign) : starter && (data.sampleVersion ?? 1) < 8
+          const starter = collection.id === 'sample-one-shots' || collection.id === 'sample-deleted-works'
+          const introduced = collection.spineDesign ? newDesigns.has(collection.spineDesign) : starter && (data.sampleVersion ?? 1) < (collection.id === 'sample-one-shots' ? 8 : 9)
           if (!introduced || data.collections.some(saved => saved.id === collection.id || starter && saved.name === collection.name)) continue
           const lastPosition = Math.max(-1, ...data.collections.map(saved => saved.sort_position ?? -1))
           data.collections.push({ ...collection, sort_position: lastPosition + 1 })
         }
+        data.collections = orderSampleCollections(data.collections)
         data.sampleVersion = sampleVersion
         write(data)
       }
@@ -190,7 +229,7 @@ function find(data: Library, id: string) {
 }
 
 export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, stories: applyAutomaticCollections(data.stories, data.collections), series: data.series ?? [] } }
-export function resetSampleLibrary() { window.localStorage.removeItem(storageKey) }
+export function resetSampleLibrary() { window.localStorage.removeItem(storageKey); window.localStorage.removeItem(collectionSortKey) }
 
 export async function saveSampleStory(input: StoryInput, verifiedChapters?: Record<string, string>, automaticMetadata?: AutomaticMetadata, bookmark?: CsvWork) {
   const data = read()
@@ -212,7 +251,7 @@ export async function saveSampleStory(input: StoryInput, verifiedChapters?: Reco
   if (automaticMetadata) Object.assign(work, { metadata_source: 'extension', canonical_url: workId === null ? null : `https://archiveofourown.org/works/${workId}`, ao3_updated_at: automaticMetadata.ao3_updated_at ?? null })
   const story: Story = {
     id: input.id ?? crypto.randomUUID(), user_id: userId, work_id: work.id,
-    original_url: existing?.original_url ?? input.url, work, work_status: existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
+    original_url: existing?.original_url ?? input.url, work, work_status: waybackSnapshot(input.url) ? 'deleted' : existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
     source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), ...csvBookmark(bookmark) } : existing?.source_bookmark ?? {},
     reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, is_rec: input.rec ?? existing?.is_rec ?? (bookmark?.bookmarkRec === true), personal_rating: input.personalRating,

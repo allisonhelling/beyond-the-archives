@@ -1,7 +1,7 @@
 import { MemoryRouter, useNavigate } from 'react-router-dom'
 import { act, renderHook, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { ReactNode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import { blankMetadata, type Story } from './model'
 import { defaultReadingFilters } from './reading-search'
 const mocks=vi.hoisted(()=>({catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn(),facets:vi.fn(),navigation:vi.fn(),revision:vi.fn()}))
@@ -32,17 +32,17 @@ it('bounds page caching, retains pages when loading details, and invalidates obs
  await act(()=>view.result.current.loadDetails(['one']))
  await view.result.current.fetchPage(query,1,50,signal)
  expect(mocks.query).toHaveBeenCalledTimes(1)
- for(let page=2;page<=7;page++)await view.result.current.fetchPage(query,page,50,signal)
+ for(let page=2;page<=21;page++)await view.result.current.fetchPage(query,page,50,signal)
  await view.result.current.fetchPage(query,1,50,signal)
- expect(mocks.query).toHaveBeenCalledTimes(8)
+ expect(mocks.query).toHaveBeenCalledTimes(22)
  let finish!:(value:typeof result)=>void
  mocks.query.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
- const old=view.result.current.fetchPage(query,8,50,signal)
+ const old=view.result.current.fetchPage(query,22,50,signal)
  const rejection=expect(old).rejects.toMatchObject({name:'AbortError'})
  await act(()=>view.result.current.refresh(['one']))
  finish(result);await rejection
- await view.result.current.fetchPage(query,8,50,signal)
- expect(mocks.query).toHaveBeenCalledTimes(10)
+ await view.result.current.fetchPage(query,22,50,signal)
+ expect(mocks.query).toHaveBeenCalledTimes(24)
 })
 it('discards private page caches when the account provider unmounts',async()=>{
  const first=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(first.result.current.loading).toBe(false))
@@ -321,4 +321,31 @@ it('skips aborted queued series reads and releases the queue after failures',asy
  expect(mocks.facets).not.toHaveBeenCalled()
  await act(()=>view.result.current.fetchPage(seriesQuery,1,50,new AbortController().signal))
  expect(mocks.query).toHaveBeenCalledTimes(2)
+})
+
+
+it('queues navigation counts with series results and suggestions',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper})
+ await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ let finishPage!:(value:typeof result)=>void,finishFacets!:(value:{suggestions:{tags:string[];relationships:string[];characters:string[]};fandoms:never[];total:number})=>void
+ mocks.query.mockImplementationOnce(()=>new Promise(resolve=>{finishPage=resolve}))
+ mocks.facets.mockImplementationOnce(()=>new Promise(resolve=>{finishFacets=resolve}))
+ const seriesQuery={...query,shelf:'series'},signal=new AbortController().signal
+ const page=view.result.current.fetchPage(seriesQuery,1,50,signal)
+ await waitFor(()=>expect(mocks.query).toHaveBeenCalledOnce())
+ const facets=view.result.current.fetchFacets(seriesQuery,signal)
+ await act(async()=>{finishPage(result);await page})
+ await waitFor(()=>expect(mocks.facets).toHaveBeenCalledOnce())
+ expect(mocks.navigation).not.toHaveBeenCalled()
+ await act(async()=>{finishFacets({suggestions:{tags:[],relationships:[],characters:[]},fandoms:[],total:0});await facets})
+ await waitFor(()=>expect(mocks.navigation).toHaveBeenCalledOnce())
+ expect(mocks.navigation.mock.calls[0][0]).toBeInstanceOf(AbortSignal)
+})
+
+
+it('loads the catalog after the development StrictMode cleanup cancels its first lifecycle',async()=>{
+ const strictWrapper=({children}:{children:ReactNode})=><StrictMode><MemoryRouter><LibraryProvider userId="reader-1">{children}</LibraryProvider></MemoryRouter></StrictMode>
+ const view=renderHook(()=>useLibrary({catalog:true}),{wrapper:strictWrapper})
+ await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
+ expect(view.result.current.stories.map(story=>story.id)).toEqual(['one','two'])
 })

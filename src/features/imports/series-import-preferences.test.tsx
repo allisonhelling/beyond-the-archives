@@ -3,14 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SeriesImportOptions, SeriesImportSettings } from './SeriesImportOptions'
 import { saveSeriesImportBehavior, useSeriesImportBehavior } from './series-import-preferences'
 import { SeriesImportReview } from './SeriesImportReview'
-const mocks = vi.hoisted(() => ({ preview: vi.fn(), remember: vi.fn(), series: [] as { ao3_series_id: number }[], stories: [] as { metadata?: { series_memberships?: { id: number; name: string; url: string; position: number | null }[] }; work: { ao3_work_id: number } }[] }))
+const mocks = vi.hoisted(() => ({ preview: vi.fn(), remember: vi.fn(), refresh: vi.fn(), series: [] as { ao3_series_id: number }[], stories: [] as { metadata?: { series_memberships?: { id: number; name: string; url: string; position: number | null }[] }; work: { ao3_work_id: number } }[] }))
 vi.mock('../library/series/series-repository', () => ({ rememberSeries: mocks.remember }))
 vi.mock('./repository', () => ({ previewSeries: mocks.preview }))
-vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn(), stories: mocks.stories, series: mocks.series }) }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: mocks.refresh, stories: mocks.stories, series: mocks.series }) }))
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) })
- mocks.stories = []; mocks.series = []
+ mocks.stories = []; mocks.series = []; mocks.refresh.mockReset().mockResolvedValue(undefined)
  vi.clearAllMocks()
  mocks.preview.mockImplementation(async (url: string) => ({ seriesId: Number(url.split('/').at(-1)), title: 'Series', works: [1, 2].map(workId => ({ workId, url: `https://archiveofourown.org/works/${workId}`, title: `Work ${workId}`, authors: [], tags: [], summary: '', wordCount: null, chapters: '1/1', complete: true })) }))
 })
@@ -346,4 +346,39 @@ it('starts related-series discovery unchecked and keeps the choice local to this
  first.unmount()
  render(<Options />)
  expect(screen.getByRole('checkbox',{name:'Check Series Containing Imported Works'})).not.toBeChecked()
+})
+
+it('releases the picker after saving while a library refresh is still pending', async () => {
+ const preview = longPreview(7, 2)
+ let finishRefresh!: () => void
+ mocks.refresh.mockReturnValue(new Promise<void>(resolve => { finishRefresh = resolve }))
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+ await waitFor(() => expect(mocks.refresh).toHaveBeenCalledWith(7))
+ expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+ await act(async () => finishRefresh())
+})
+
+it('reuses downloaded details after a failed save even when the preview cache is partial', async () => {
+ const preview = longPreview(7, 2), partial = { ...preview, basic: true }
+ mocks.preview.mockResolvedValue(preview)
+ mocks.remember.mockRejectedValueOnce(new Error('Save unavailable')).mockResolvedValue(undefined)
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[partial]} previewCache={new Map([[7, partial]])} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('Save unavailable')
+ fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+ await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument())
+ expect(mocks.preview).toHaveBeenCalledOnce()
+ expect(mocks.remember).toHaveBeenCalledTimes(2)
+})
+
+it('reports a failed library refresh without offering to save the series again', async () => {
+ const preview = longPreview(7, 2)
+ mocks.refresh.mockRejectedValueOnce(new Error('Refresh unavailable'))
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('Series details were saved, but the library could not refresh.')
+ expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
 })

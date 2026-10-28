@@ -6,9 +6,7 @@ import { useCollectionDrag } from './useCollectionDrag'
 import { SpineBookmark } from './SpineBookmark'
 import type { Collection } from '../model'
 import type { SpineDesign } from './SpineDetails'
-import { defaultShelfColors as shelfColors, automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
-
-const shelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'book-stack', currently_reading: 'art-deco', paused_reading: 'linked-diamonds', to_read: 'library-deco', finished:'arched',favorites: 'star-trails-cascading', recs: 'interlocking-circles', did_not_finish: 'raised-bands' }
+import { defaultShelfDesigns as shelfDesigns, automaticCollectionSpineDesign, defaultShelfColors as shelfColors, automaticCollectionIcons as shelfSymbols, collectionColors, collectionSymbols, type CollectionAppearance } from './collection-appearance'
 
 const heightOrder = [0, 1, 2, 1]
 
@@ -53,7 +51,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
     const symbol = item.symbol ?? collectionSymbols[appearanceIndex % collectionSymbols.length]?.value ?? collectionSymbols[0].value
     const Icon = shelfSymbols[item.id] ?? collectionSymbols.find(option => option.value === symbol)?.Icon ?? Library
     const editable = editing
-    const design = item.automatic_rules ? 'lunar-phases' : item.spineDesign ?? shelfDesigns[item.id]
+    const design = item.automatic_rules ? automaticCollectionSpineDesign : item.spineDesign ?? shelfDesigns[item.id]
     const spine = <button type="button" key={item.id} className={`collection-spine collection-spine-height-${heightOrder[index % heightOrder.length]}${item.hidden ? ' collection-spine-hidden' : ''}${selected === item.id ? ' selected' : ''}${selectedIds.includes(item.id) ? ' collection-spine-selected' : ''}`} style={{ '--cover-color': color } as CSSProperties} data-spine-design={design} aria-label={item.name} aria-description={`${item.hidden ? 'Hidden collection. ' : ''}${item.countLabel ?? `${item.count} ${item.id === 'series' ? 'series' : item.count === 1 ? 'story' : 'stories'}`}`} aria-pressed={selecting && customIndex >= 0 ? selectedIds.includes(item.id) : editing ? undefined : selected === item.id} aria-describedby={editable ? dragInstructionsId : undefined} aria-haspopup={editing && (!selecting || customIndex < 0) ? 'dialog' : undefined} disabled={disabled} onPointerDown={event => {
       cancelHold(); hold.current = { x: event.clientX, y: event.clientY, fired: false }
       if (!mobile || editing || event.pointerType === 'mouse') return

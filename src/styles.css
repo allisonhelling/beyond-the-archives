@@ -887,6 +887,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .series-import-preview h3 { font-size: 18px; margin: 0; }
 .form-actions.series-preview-controls { display: flex; justify-content: flex-start; flex-wrap: nowrap; gap: 8px; max-width: 100%; overflow-x: auto; }
 .series-preview-controls :is(.text-button, .button) { white-space: nowrap; }
+.series-preview-save { min-height: 0; padding: 0 10px; line-height: 18px; }
 .series-import-work summary { font-size: var(--series-work-heading-size); cursor: pointer; }
 .series-import-work-title { display: flex; align-items: baseline; gap: .5rem; }
 .series-import-work-title .action-tooltip { flex-shrink: 0; }

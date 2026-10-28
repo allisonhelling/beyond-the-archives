@@ -52,7 +52,7 @@ test('sample collections preview the new designs alongside the selected default 
  const shelf = page.getByRole('navigation', {name:'Library Shelves',exact:true})
  await expect(shelf.getByRole('button',{name:'Favorites',exact:true})).toHaveCount(1)
  await expect(shelf.getByRole('button',{name:'Favorites (Extended Trails)',exact:true})).toHaveCount(0)
- for (const [name,design] of [['Celestial','celestial'],['Circles','interlocking-circles'],['Diamonds','linked-diamonds'],['Book Stack','book-stack'],['Constellation','constellation'],['Deco Crest','deco-crest'],['Star Trails','star-trails'],['Extended Trails','star-trails-extended'],['Vertical Diamonds','vertical-diamonds'],['Lunar Phases','lunar-phases'],['Query Crown','query-crown'],['Currently Reading','art-deco'],['Paused Reading','linked-diamonds'],['To Read','library-deco'],['Series','book-stack'],['Favorites','star-trails-cascading']]) {
+ for (const [name,design] of [['Celestial','celestial'],['Circles','interlocking-circles'],['Diamonds','linked-diamonds'],['Book Stack','book-stack'],['Constellation','constellation'],['Deco Crest','deco-crest'],['Star Trails','star-trails'],['Extended Trails','star-trails-extended'],['Vertical Diamonds','vertical-diamonds'],['Lunar Phases','lunar-phases'],['Query Crown','query-crown'],['Embossed Frame','embossed-frame'],['Radiant Ornament','radiant-ornament'],['Art Deco','art-deco'],['Library Label','library-label'],['Arched','arched'],['Raised Bands','raised-bands'],['Sunburst Fans','sunburst-fans'],['Library Deco','library-deco'],['Cascading Star Trails','star-trails-cascading'],['Currently Reading','art-deco'],['Paused Reading','linked-diamonds'],['To Read','library-deco'],['Series','book-stack'],['Favorites','star-trails-cascading']]) {
   const spine = shelf.getByRole('button',{name,exact:true})
   await expect(spine).toHaveAttribute('data-spine-design',design)
   await expect(spine.locator('.collection-spine-details')).toHaveCount(1)
@@ -427,6 +427,7 @@ test('Reset Sample Data restores the captured library after local changes', asyn
   edited.stories.pop()
   edited.collections.pop()
   localStorage.setItem('between-chapters:sample-library:v1', JSON.stringify(edited))
+  localStorage.setItem('between-chapters:collection-sort:v1',JSON.stringify({hiddenAutomatic:['series','favorites'],hiddenCustom:baseline.collections.map((c:{id:string})=>c.id)}))
  }, baseline)
  await page.reload()
  await page.getByRole('button', { name: 'Reset Sample Data', exact: true }).click()
@@ -438,5 +439,8 @@ test('Reset Sample Data restores the captured library after local changes', asyn
  expect(restored).toEqual(baseline)
  expect(restored.stories).toHaveLength(23)
  expect(restored.series).toHaveLength(4)
- expect(restored.collections).toHaveLength(13)
+ expect(restored.collections).toHaveLength(24)
+ expect(restored.collections.filter((c:{spineDesign?:string})=>c.spineDesign)).toHaveLength(21)
+ expect(restored.collections.find((c:{name:string})=>c.name==='Deleted Works')).toMatchObject({automatic_rules:{filters:{publication:['deleted']}}})
+ expect(await page.evaluate(()=>localStorage.getItem('between-chapters:collection-sort:v1'))).toBeNull()
 })

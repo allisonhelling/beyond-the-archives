@@ -23,7 +23,7 @@ async function query(filters={},page=1,size=25,shelf='all') {
 }
 async function documents() { return (await db.query<{story:Story}>('select story from public.library_search_documents where user_id=auth.uid() order by id')).rows.map(row=>row.story) }
 it('marks cache-writing RPCs volatile so PostgREST allows cache writes', async () => {
- const functions = ['query_library', 'library_query_matches', 'library_navigation', 'library_navigation_snapshot']
+ const functions = ['query_library', 'library_query_matches', 'library_navigation', 'library_navigation_snapshot', 'library_query_facets']
  const result = await db.query<{proname:string;provolatile:string}>("select proname,provolatile from pg_proc where pronamespace='public'::regnamespace and proname=any($1::text[]) order by proname", [functions])
  expect(result.rows).toEqual(functions.sort().map(proname => ({ proname, provolatile: 'v' })))
 })
@@ -223,12 +223,12 @@ it('skips series aggregation for hidden series on built-in and manual collection
   const shelves = ['all', 'finished', 'favorites', collection]
   const expected = await Promise.all(shelves.map(shelf => query({}, 1, 25, shelf)))
   await db.exec('reset role')
-  const fn = (await db.query<{ definition: string; source: string }>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_series_results(jsonb)'::regprocedure")).rows[0]
+  const fn = (await db.query<{ definition: string; source: string }>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_series_results(jsonb,boolean,boolean,boolean)'::regprocedure")).rows[0]
   // Failing immediately makes unnecessary series work observable without a timer.
   await db.exec(fn.definition.replace('LANGUAGE sql', 'LANGUAGE plpgsql').replace(fn.source, "begin raise exception 'Unexpected series aggregation'; end;"))
   await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
   for (const [index, shelf] of shelves.entries()) expect(await query({}, 1, 25, shelf)).toEqual(expected[index])
-  // Explicit series views must still run the original aggregation pipeline.
+  // Explicit series views must still run the shared aggregation pipeline.
   await expect(query({ showSeries: true }, 1, 25, 'finished')).rejects.toThrow('Unexpected series aggregation')
  } finally {
   await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)
@@ -392,7 +392,7 @@ it('counts overlapping and empty manual collections without losing membership ti
 it('uses indexed identities for ordinary browsing without invoking the JSON filter or full pool', async () => {
  await db.exec('reset role;begin')
  try {
-  for (const signature of ['public.library_filter(jsonb,jsonb,jsonb,text)', 'public.library_query_pool(jsonb)']) {
+  for (const signature of ['public.library_filter(jsonb,jsonb,jsonb,text)', 'public.library_query_pool(jsonb,boolean)']) {
    const fn = (await db.query<{definition:string;source:string}>('select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid=$1::regprocedure', [signature])).rows[0]
    await db.exec(fn.definition.replace(fn.source, "begin raise exception 'Unexpected full-document scan'; end;"))
   }
@@ -553,7 +553,7 @@ it('aggregates merged series metadata once per series while preserving compact n
 it('builds the series pool once per page for cold loads, paging and sorting', async () => {
  await db.exec('reset role;begin')
  try {
-  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_query_pool(jsonb)'::regprocedure")).rows[0]
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_query_pool(jsonb,boolean)'::regprocedure")).rows[0]
   await db.exec('create sequence public.series_pool_reads;grant usage,select on sequence public.series_pool_reads to authenticated')
   await db.exec(fn.definition.replace(fn.source,fn.source.replace(/\bbegin\b/i,"begin perform nextval('public.series_pool_reads');")))
   await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
@@ -603,4 +603,58 @@ it('loads series cards and suggestions without reading full work documents', asy
   expect(page.series.length).toBeGreaterThan(0)
   expect(facets.total).toBe(page.total)
  } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+
+it('keeps compact series card payloads equal to the existing page contract', async () => {
+ const inputs=JSON.stringify((await db.query<{s:unknown}>('select series_story s from public.library_search_documents where user_id=auth.uid()')).rows.map(row=>row.s))
+ const rows=(await db.query<{full:Record<string,unknown>;compact:Record<string,unknown>}>(`
+  with full_results as materialized (select * from public.library_series_results($1,false,false,true)),
+  compact_results as materialized (select * from public.library_series_results($1,false,true,true))
+  select f.payload||jsonb_build_object('record',nullif(f.payload->'record','null'::jsonb)-'metadata','savedStories',public.library_series_saved_stories(f.payload->'savedStories')) full,c.payload compact
+  from full_results f join compact_results c on c.story->>'id'=f.story->>'id'`,[inputs])).rows
+ expect(rows.length).toBeGreaterThan(0)
+ for(const row of rows) expect(row.compact).toEqual(row.full)
+})
+
+it('builds series suggestions without constructing any card payload', async () => {
+ await db.exec('reset role;begin')
+ await db.query("delete from public.library_query_cache where user_id=$1 and key='series-pool'",[alice])
+ try {
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_series_saved_stories(jsonb)'::regprocedure")).rows[0]
+  await db.exec(fn.definition.replace('LANGUAGE sql','LANGUAGE plpgsql').replace(fn.source,"begin raise exception 'Unexpected series card payload'; end;"))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope=JSON.stringify({mode:'library',shelf:'series',includeFacets:false,filters:defaultReadingFilters})
+  expect((await db.query<{r:{total:number}}>('select public.library_query_facets($1) r',[scope])).rows[0].r.total).toBeGreaterThan(0)
+  await expect(db.query('select public.query_library($1,1,25)',[scope])).rejects.toThrow('Unexpected series card payload')
+ } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
+})
+
+
+it('reuses one owner-scoped series pool across filters and invalidates it after source edits',async()=>{
+ await db.exec('reset role;begin')
+ try {
+  const saved=(await db.query<{id:string}>('select id from public.library_search_documents where user_id=$1 limit 1',[alice])).rows[0]
+  await db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{series_memberships}',$2::jsonb) where id=$1",[saved.id,JSON.stringify([{id:880099,name:'Cached series',url:'https://archiveofourown.org/series/880099',position:1}])])
+  await db.query("delete from public.library_query_cache where key='series-pool' and user_id=$1",[alice])
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_series_results(jsonb,boolean,boolean,boolean)'::regprocedure")).rows[0]
+  await db.exec('create sequence public.series_cache_builds;grant usage,select on sequence public.series_cache_builds to authenticated')
+  await db.exec(fn.definition.replace('LANGUAGE sql','LANGUAGE plpgsql').replace(fn.source,()=>"begin perform nextval('public.series_cache_builds'); return query "+fn.source.trim().replace(/;$/,'')+"; end;"))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const first=await query({},1,25,'series')
+  expect(first.total).toBeGreaterThan(0)
+  await query({sort:'alpha'},1,25,'series')
+  await query({within:'unmatched series text'},1,25,'series')
+  await query({showSeries:true,inSeries:true},1,25,'all')
+  await db.query('select public.library_query_facets($1)',[JSON.stringify({mode:'library',shelf:'series'})])
+  expect((await db.query<{n:number}>('select last_value::integer n from public.series_cache_builds')).rows[0].n).toBe(1)
+  await db.query("update public.library_entries set notes='Changed cached series note' where id=$1",[saved.id])
+  const changed=await query({},1,25,'series')
+  expect(changed.stories.some(story=>story.notes.includes('Changed cached series note'))).toBe(true)
+  expect((await db.query<{n:number}>('select last_value::integer n from public.series_cache_builds')).rows[0].n).toBe(2)
+  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${bob}'`)
+  const other=await query({},1,25,'series')
+  expect(other.stories.some(story=>story.notes.includes('Changed cached series note'))).toBe(false)
+  await expect(db.query('select * from public.library_query_cache')).rejects.toThrow('permission denied')
+ } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
 })

@@ -65,6 +65,9 @@ async function main() {
       ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
       ['in-series-page','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'alpha',inSeries:true,showSeries:true}}]],
       ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'alpha'}}]],
+      ['series-page-warm', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'added'}}]],
+      ['series-facets-warm','select public.library_query_facets($1) result',[{mode:'library',shelf:'series',filters:{}}]],
+      ['series-filter-warm','select public.query_library($1,1,50) result',[{mode:'library',shelf:'series',includeFacets:false,filters:{inSeries:true}}]],
       ['count', 'select count(*) from public.library_entries where user_id=auth.uid()', []],
       ['offset-identities', 'select id from public.library_entries where user_id=auth.uid() order by created_at desc,id offset 9950 limit 50', []],
       ['cursor-identities', 'with anchor as materialized (select created_at,id from public.library_entries where user_id=auth.uid() order by created_at desc,id offset 9949 limit 1) select e.id from public.library_entries e cross join anchor a where e.user_id=auth.uid() and (e.created_at<a.created_at or (e.created_at=a.created_at and e.id>a.id)) order by e.created_at desc,e.id limit 50', []],
@@ -95,8 +98,8 @@ async function main() {
           const owner=(await db.query('select auth.uid() id')).rows[0].id
           plannedValues=[values[0],owner]
         }
-        // This is the production selection statement, deliberately uncached so
-        // cold matching cost remains visible beside warm page/cache timings.
+        // This is the production selection statement. Work identities are selected
+        // without their match cache; series selection reuses its revision pool.
         const start=performance.now()
         const matches=await db.query(plannedSql,plannedValues)
         const result=Object.values(matches.rows[0])[0]

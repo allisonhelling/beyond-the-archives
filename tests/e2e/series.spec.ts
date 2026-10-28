@@ -333,7 +333,7 @@ test('series results load before suggestions without concurrent series scans', a
  const tables=await fixture(page)
  tables.works.push({id:'queued-work',ao3_work_id:987,title:'Queued work',verified_chapters:{}})
  tables.library_entries.push({id:'queued-entry',work_id:'queued-work',original_url:'https://archiveofourown.org/works/987',reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{series_memberships:[{id:789,name:'Queued series',url:'https://archiveofourown.org/series/789',position:1}]}})
- let releaseResults!:()=>void,releaseSuggestions!:()=>void,resultsActive=false,overlaps=0
+ let releaseResults!:()=>void,releaseSuggestions!:()=>void,resultsActive=false,suggestionsActive=false,overlaps=0
  const resultsGate=new Promise<void>(resolve=>{releaseResults=resolve}),suggestionsGate=new Promise<void>(resolve=>{releaseSuggestions=resolve})
  const requests:string[]=[]
  await page.route('**/rest/v1/rpc/query_library',async route=>{
@@ -343,9 +343,15 @@ test('series results load before suggestions without concurrent series scans', a
   await route.fallback()
  })
  await page.route('**/rest/v1/rpc/library_query_facets',async route=>{
-  requests.push('suggestions')
+  requests.push('suggestions');suggestionsActive=true
   if(resultsActive) {overlaps++;return route.fulfill({status:500,json:{code:'57014',message:'Concurrent series scan timed out'}})}
   await suggestionsGate
+  suggestionsActive=false
+  await route.fallback()
+ })
+ await page.route('**/rest/v1/rpc/library_navigation_snapshot',async route=>{
+  requests.push('navigation')
+  if(resultsActive||suggestionsActive) {overlaps++;return route.fulfill({status:500,json:{code:'57014',message:'Concurrent navigation scan timed out'}})}
   await route.fallback()
  })
  try {
@@ -356,6 +362,8 @@ test('series results load before suggestions without concurrent series scans', a
   await expect.poll(()=>requests).toEqual(['results','suggestions'])
   expect(overlaps).toBe(0)
   releaseSuggestions()
+  await expect.poll(()=>requests).toEqual(['results','suggestions','navigation'])
+  expect(overlaps).toBe(0)
   await expect(page.locator('[data-results-loading]')).toHaveCount(0)
   await expect(page.locator('.error-message-retry')).toHaveCount(0)
  } finally {releaseResults();releaseSuggestions()}
@@ -381,4 +389,32 @@ test('work imports leave related series alone unless the user opts in',async({pa
  await expect(page.locator('.story-details-page')).toBeVisible()
  await expect(page.getByRole('dialog',{name:'Related Series',exact:true})).toHaveCount(0)
  expect(previews).toBe(0)
+})
+
+
+test('saving series details preserves review spacing', async ({ page }) => {
+ await fixture(page)
+ const preview = { seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Series', description: 'Series description', works: [{ workId: 501, url: 'https://archiveofourown.org/works/501', title: 'Installment', authors: [], tags: [], summary: '', wordCount: 100, chapters: '1/1', complete: true }] }
+ let requests = 0
+ await page.route('**/functions/v1/series-preview', route => {
+  requests++
+  return route.fulfill({ json: { preview } })
+ })
+ await page.goto('/imports'); await login(page)
+ await page.getByLabel('AO3 URLs', { exact: true }).fill(preview.normalizedUrl)
+ await page.getByRole('button', { name: 'Review Series', exact: true }).click()
+ const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ const series = dialog.locator('.series-import-preview')
+ await series.getByRole('button', { name: 'Show Series Works', exact: true }).click()
+ const measure = () => series.evaluate(element => {
+  const heading = element.querySelector('.series-import-heading')!.getBoundingClientRect()
+  const description = element.querySelector('.story-summary')!.getBoundingClientRect()
+  const footer = element.querySelector('[aria-label="Series Footer Controls"]')!.getBoundingClientRect()
+  return [heading.height, description.y - heading.y, footer.height, element.getBoundingClientRect().height]
+ })
+ const before = await measure()
+ await series.getByRole('button', { name: 'Save', exact: true }).first().click()
+ await expect(series.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
+ expect(await measure()).toEqual(before)
+ expect(requests).toBe(1)
 })

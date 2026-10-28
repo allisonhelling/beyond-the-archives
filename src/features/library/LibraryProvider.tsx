@@ -40,9 +40,9 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const cache = useRef(new Map<string, { query: LibraryQuery; result: LibraryResults }>())
   const facets = useRef(new Map<string, { query: LibraryQuery; result: LibraryFacets }>())
   const seriesReads = useRef<Promise<unknown>>(Promise.resolve())
-  const readQuery = useCallback(<T,>(query: LibraryQuery, signal: AbortSignal, read: () => Promise<T>) => {
-    if (!libraryQueryHasSeries(query)) return read()
-    // Series pages and suggestions each aggregate the same reader's series.
+  const readQuery = useCallback(<T,>(hasSeries: boolean, signal: AbortSignal, read: () => Promise<T>) => {
+    if (!hasSeries) return read()
+    // Pages, suggestions and navigation aggregate the same reader's series.
     // Queue them so concurrent scans cannot exhaust the database time budget.
     const task = seriesReads.current.catch(() => {}).then(() => {
       if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
@@ -285,7 +285,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     if (cached) { cache.current.delete(key); cache.current.set(key, cached); return cached.result }
     const version = generation.current
     const tagVersion = tagGeneration.current
-    const result = await readQuery(query, signal, () => queryLibrary(query, page, size, signal))
+    const result = await readQuery(libraryQueryHasSeries(query), signal, () => queryLibrary(query, page, size, signal))
     if (version !== generation.current || signal.aborted) throw new DOMException('Obsolete library result', 'AbortError')
     if (!acceptRevision(result.revision)) throw new DOMException('Obsolete library revision', 'AbortError')
     if (tagVersion !== tagGeneration.current && (hasTagFilters(query.filters) || dataRef.current.collections.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules)))) throw new DOMException('Obsolete tag result', 'AbortError')
@@ -298,7 +298,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
         const ids = new Set(next.map(story => story.id))
         return { ...previous, stories: boundDetails([...previous.stories.filter(story => !ids.has(story.id)), ...next]) }
       })
-      while (cache.current.size > 6) cache.current.delete(cache.current.keys().next().value!)
+      while (cache.current.size > 20) cache.current.delete(cache.current.keys().next().value!)
     }
     if (version !== generation.current) throw new DOMException('Obsolete library result', 'AbortError')
     return result
@@ -306,7 +306,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const fetchFacets = useCallback(async (query: LibraryQuery, signal: AbortSignal) => {
     const key = JSON.stringify(libraryFacetScope(query)), cached = facets.current.get(key)
     if (cached) return cached.result
-    const version = generation.current, tagVersion = tagGeneration.current, result = await readQuery(query, signal, () => loadLibraryFacets(query, signal))
+    const version = generation.current, tagVersion = tagGeneration.current, result = await readQuery(libraryQueryHasSeries(query), signal, () => loadLibraryFacets(query, signal))
     if (version !== generation.current || signal.aborted || tagVersion !== tagGeneration.current && dataRef.current.collections.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules))) throw new DOMException('Obsolete library facets', 'AbortError')
     facets.current.set(key, { query, result })
     while (facets.current.size > 20) facets.current.delete(facets.current.keys().next().value!)
@@ -315,10 +315,11 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   useEffect(() => {
     if (sampleMode || loading || !firstPageLoaded && !catalogLoaded) return
     let alive = true
+    const controller = new AbortController()
     const version = generation.current
-    void loadLibraryNavigation().then(result => { if (alive && version === generation.current && acceptRevision(result.revision)) { setNavigation(result.counts); setNavigationError('') } }).catch(error => { if (alive && version === generation.current) setNavigationError(error instanceof Error ? error.message : 'Couldn’t update counts.') }).finally(() => { if (alive) setNavigationStatus({ revision, epoch: navigationEpoch }) })
-    return () => { alive = false }
-  }, [revision, loading, firstPageLoaded, catalogLoaded, navigationEpoch, acceptRevision])
+    void readQuery(true, controller.signal, () => loadLibraryNavigation(controller.signal)).then(result => { if (alive && version === generation.current && acceptRevision(result.revision)) { setNavigation(result.counts); setNavigationError('') } }).catch(error => { if (alive && version === generation.current) setNavigationError(error instanceof Error ? error.message : 'Couldn’t update counts.') }).finally(() => { if (alive) setNavigationStatus({ revision, epoch: navigationEpoch }) })
+    return () => { alive = false; controller.abort() }
+  }, [revision, loading, firstPageLoaded, catalogLoaded, navigationEpoch, acceptRevision, readQuery])
   const location = useLocation()
   useEffect(() => {
     const returned = () => { if (!document.hidden) void checkRevision(true) }
@@ -372,7 +373,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       finally { if (life === lifecycle.current) setLoading(false) }
     })()
     const pages = cache.current, facetCache = facets.current, heights = rowHeights, lifeRef = lifecycle, requests = generation
-    return () => { lifeRef.current++; requests.current++; pages.clear(); facetCache.clear(); heights.clear(); temporaryPageSizes.clear() }
+    return () => { lifeRef.current++; requests.current++; catalogRequest.current = null; pages.clear(); facetCache.clear(); heights.clear(); temporaryPageSizes.clear() }
   }, [ensureCatalog, rowHeights, temporaryPageSizes])
   return <Context.Provider value={{ ...data, hasCachedPage, navigation, navigationError, navigationLoading, revisionError, checkRevision, retryCounts, catalogLoaded, ensureCatalog, fetchFacets, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, tagRevision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
     {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading Updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss Undo Notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous, notice.saved ?? {}); await refreshStory(notice.storyId) }} />)}</section>}

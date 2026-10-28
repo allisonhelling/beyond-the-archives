@@ -44,5 +44,5 @@ it('imports a Wayback snapshot into the sample library using its original archiv
  mocks.capture.mockResolvedValue({ url, html })
  await importSampleWorkUrls([url], 'to_read', [])
  expect(mocks.capture).toHaveBeenCalledWith(url)
- expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 123)).toMatchObject({ original_url: url, metadata: { title: 'A & B', authors: ['One', 'Two'] }, last_read_chapter: 0 })
+ expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 123)).toMatchObject({ original_url: url, work_status:'deleted', metadata: { title: 'A & B', authors: ['One', 'Two'],publication_status:'deleted' }, last_read_chapter: 0 })
 })

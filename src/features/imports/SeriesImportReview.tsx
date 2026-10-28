@@ -90,12 +90,17 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   setLoading(id)
   setReviews(current => ({ ...current, [id]: { ...current[id], selected: current[id]?.selected ?? new Set(), error: undefined } }))
   try {
-   const cached = previewCache?.get(id) ?? reviews[id]?.preview
-   const preview = cached && !cached.basic ? cached : await previewSeries(url)
+   const cached = [reviews[id]?.preview, previewCache?.get(id)].find(preview => preview && !preview.basic)
+   const preview = cached ?? await previewSeries(url)
    onPreview?.(preview)
+   // Retain the download even if persistence fails, so retrying only saves it.
+   setReviews(current => ({ ...current, [id]: { ...current[id], preview } }))
    await rememberSeries(preview)
-   await refreshSeries(id)
    setReviews(current => ({ ...current, [id]: { ...current[id], preview, detailsSaved: true } }))
+   // The write has completed. Queued library reads must not block the picker.
+   void refreshSeries(id).catch(() => {
+    setReviews(current => ({ ...current, [id]: { ...current[id], error: 'Series details were saved, but the library could not refresh. Reload the library to see them.' } }))
+   })
   } catch (error) {
    setReviews(current => ({ ...current, [id]: { ...current[id], error: error instanceof Error ? error.message : 'Could not save series details.' } }))
   } finally { setLoading(undefined) }
@@ -179,7 +184,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
     <SeriesScopeAction label="Clear Selection" scope={scope} disabled={disabled} onClick={() => select(id, [])} />
     <SeriesScopeAction label={expanded ? 'Hide All' : 'View All'} scope={scope} disabled={!preview.works.length} expanded={expanded} onClick={() => setVisibility(!expanded, id)} />
    </>
-   const saveControl = !singleSeries && catalogLoaded !== false && !seriesSaved(id) && <Tooltip description={saveDescription}>{tooltipId => <button type="button" className="button secondary" aria-describedby={tooltipId} disabled={disabled || !preview} onClick={() => void saveDetails(id, url)}>Save</button>}</Tooltip>
+   const saveControl = !singleSeries && catalogLoaded !== false && !seriesSaved(id) && <Tooltip description={saveDescription}>{tooltipId => <button type="button" className="button secondary series-preview-save" aria-describedby={tooltipId} disabled={disabled || !preview} onClick={() => void saveDetails(id, url)}>Save</button>}</Tooltip>
    const worksToggle = !!preview?.works.length && <button type="button" className="text-button clickable-text" aria-expanded={shownSeries.has(id)} onClick={() => setShownSeries(current => {
     const next = new Set(current)
     if (next.has(id)) next.delete(id); else next.add(id)

@@ -205,9 +205,12 @@ export async function loadLibraryRevision(): Promise<number> {
   if (error || data === null) throw new Error('Couldn’t update library counts. Retry updating.')
   return data
 }
-export async function loadLibraryNavigation(): Promise<{ counts: LibraryNavigation; revision: number }> {
+export async function loadLibraryNavigation(signal?: AbortSignal): Promise<{ counts: LibraryNavigation; revision: number }> {
   if (sampleMode) return { counts: {}, revision: 0 }
-  const { data, error } = await client().rpc('library_navigation_snapshot')
+  let request = client().rpc('library_navigation_snapshot')
+  if (signal) request = request.abortSignal(signal)
+  const { data, error } = await request
+  if (signal?.aborted) throw new DOMException('Library request cancelled', 'AbortError')
   if (error || !data) throw new Error('Could not load collection counts. Retry loading.')
   return data as unknown as { counts: LibraryNavigation; revision: number }
 }
