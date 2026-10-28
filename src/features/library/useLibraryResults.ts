@@ -14,16 +14,6 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
   const key = JSON.stringify([queryKey, revision, attempt])
   const scopeKey = JSON.stringify(libraryFacetScope(query))
   const facetKey = JSON.stringify([scopeKey, revision, attempt, automatic ? tagRevision ?? 0 : 0])
-  useEffect(() => {
-    if (!enabled) return
-    const controller = new AbortController()
-    void fetchFacets(query, controller.signal).then(result => { if (!controller.signal.aborted) setFacets({ key: facetKey, scopeKey, result }) }).catch(error => {
-      if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setFacets(previous => ({ key: facetKey, scopeKey, result: previous.scopeKey === scopeKey ? previous.result : undefined, error: error instanceof Error ? error.message : 'Could not load filter suggestions.' }))
-    })
-    return () => controller.abort()
-    // Facets depend on the collection pool, not result filters or pagination.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facetKey, fetchFacets, enabled])
   function retry() { setState(current => ({ ...current, key: '', error: undefined })); setAttempt(value => value + 1) }
   const { query: search, within, relationship, characters, tags, personalTags, updatedAfter, updatedBefore, ...controls } = query.filters
   const textKey = JSON.stringify([search, within, relationship, characters, tags, personalTags, updatedAfter, updatedBefore])
@@ -49,6 +39,16 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
     // The serialized key contains the complete query and revision.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, fetchPage, hasCachedPage, enabled])
+  useEffect(() => {
+    if (!enabled) return
+    const controller = new AbortController()
+    void fetchFacets(query, controller.signal).then(result => { if (!controller.signal.aborted) setFacets({ key: facetKey, scopeKey, result }) }).catch(error => {
+      if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setFacets(previous => ({ key: facetKey, scopeKey, result: previous.scopeKey === scopeKey ? previous.result : undefined, error: error instanceof Error ? error.message : 'Could not load filter suggestions.' }))
+    })
+    return () => controller.abort()
+    // Facets depend on the collection pool, not result filters or pagination.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facetKey, fetchFacets, enabled])
   const currentFacets = facetState.key === facetKey ? facetState : undefined
   const current = state.key === key
   const results = current && !state.error ? { result: state.result, loading: false, retry } : { loading: enabled && !current, error: current ? state.error : undefined, previousResult: state.result, retry }

@@ -570,3 +570,37 @@ it('builds the series pool once per page for cold loads, paging and sorting', as
   }
  } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })
+
+it('keeps stored series inputs current after effective work and reading edits', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const saved=(await documents())[0]
+  const compact=async()=> (await db.query<{s:Story}>('select series_story s from public.library_search_documents where id=$1',[saved.id])).rows[0].s
+  expect(await compact()).toMatchObject({id:saved.id,metadata:{title:saved.metadata.title},work:{ao3_work_id:saved.work.ao3_work_id}})
+  await db.query("update public.library_entries set notes='Changed reading note',last_read_chapter=2,metadata_overrides=metadata_overrides||$2::jsonb where id=$1",[saved.id,JSON.stringify({title:'Corrected series work',summary:'Current summary',summary_html:'<p>Current summary</p>'})])
+  expect(await compact()).toMatchObject({notes:'Changed reading note',last_read_chapter:2,metadata:{title:'Corrected series work',summary:'Current summary'}})
+  expect((await compact()).metadata).not.toHaveProperty('summary_html')
+  expect(await compact()).not.toHaveProperty('extension_metadata')
+  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${bob}'`)
+  expect((await db.query('select series_story from public.library_search_documents where id=$1',[saved.id])).rows).toEqual([])
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('loads series cards and suggestions without reading full work documents', async () => {
+ await db.exec('reset role;begin')
+ try {
+  // A trigger-maintained plain column lets this transaction invalidate the large
+  // source documents without changing the stored series projection under test.
+  await db.exec('alter table public.library_search_documents alter column series_story drop expression')
+  await db.exec('alter table public.library_search_documents disable trigger all')
+  await db.exec(`update public.library_search_documents set story='null'::jsonb`)
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const q=JSON.stringify({mode:'library',shelf:'series',includeFacets:false,filters:defaultReadingFilters})
+  const page=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[q])).rows[0].r
+  const facets=(await db.query<{r:{total:number}}>('select public.library_query_facets($1) r',[q])).rows[0].r
+  expect(page.total).toBeGreaterThan(0)
+  expect(page.series.length).toBeGreaterThan(0)
+  expect(facets.total).toBe(page.total)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})

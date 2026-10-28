@@ -289,3 +289,36 @@ it('coalesces simultaneous revision checks and retains counts after a navigation
  await waitFor(()=>expect(view.result.current.navigationError).toBe('Couldn’t update counts.'))
  expect(view.result.current.navigation.all?.works).toBe(9)
 })
+
+it('queues series suggestions behind results while ordinary work requests remain independent',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ const seriesQuery={...query,shelf:'series'}
+ let finish!:(value:typeof result)=>void
+ mocks.query.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockResolvedValue(result)
+ const page=view.result.current.fetchPage(seriesQuery,1,50,new AbortController().signal)
+ await waitFor(()=>expect(mocks.query).toHaveBeenCalledTimes(1))
+ const facets=view.result.current.fetchFacets(seriesQuery,new AbortController().signal)
+ await view.result.current.fetchPage(query,1,50,new AbortController().signal)
+ expect(mocks.query).toHaveBeenCalledTimes(2)
+ expect(mocks.facets).not.toHaveBeenCalled()
+ await act(async()=>{finish(result);await page;await facets})
+ expect(mocks.facets).toHaveBeenCalledTimes(1)
+})
+
+it('skips aborted queued series reads and releases the queue after failures',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper});await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ const seriesQuery={...query,shelf:'series'}
+ let fail!:(error:Error)=>void
+ mocks.query.mockImplementationOnce(()=>new Promise((_,reject)=>{fail=reject})).mockResolvedValue(result)
+ const page=view.result.current.fetchPage(seriesQuery,1,50,new AbortController().signal)
+ const rejected=expect(page).rejects.toThrow('Temporary timeout')
+ await waitFor(()=>expect(mocks.query).toHaveBeenCalledTimes(1))
+ const controller=new AbortController()
+ const cancelled=view.result.current.fetchFacets(seriesQuery,controller.signal)
+ const aborted=expect(cancelled).rejects.toMatchObject({name:'AbortError'})
+ controller.abort()
+ await act(async()=>{fail(new Error('Temporary timeout'));await rejected;await aborted})
+ expect(mocks.facets).not.toHaveBeenCalled()
+ await act(()=>view.result.current.fetchPage(seriesQuery,1,50,new AbortController().signal))
+ expect(mocks.query).toHaveBeenCalledTimes(2)
+})

@@ -340,8 +340,8 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .story-metadata-edit { max-width: 110px; height: 34px; min-height: 34px; padding: 6px 8px; gap: 6px; }
   .details-story-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; font-size: 14px; }
   .settings-card.details-progress-panel { padding: 12px; }
-  .details-reading-controls { grid-template-columns: minmax(0, 1fr) max-content; gap: 8px; }
-  .details-reading-controls .details-collections-content .button { padding-inline: 2px; }
+  .details-reading-controls { grid-template-columns: max-content minmax(0, 1fr); gap: 8px; }
+  .details-reading-controls .details-collections-content .button { padding-inline: 2px; max-width: 100%; }
   .details-reading-controls .rating-heading { white-space: nowrap; }
   .details-reading-controls > .status-select { grid-column: 1 / -1; }
   .details-reading-controls .personal-rating legend, .details-reading-controls .details-collections-heading { min-height: 42px; }
@@ -385,6 +385,7 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
 .story-form .list-import-controls > .button { align-self: flex-end; width: auto; min-height: 44px; margin: 0 0 16px; }
 
 .story-form > .form-control, .form-controls-row > .form-control, .series-import-options { display: grid; gap: 7px; margin: 16px 0; }
+.form-controls-row > .series-import-options { flex: 1 1 360px; min-width: 0; }
 .story-form .series-import-options > *, .story-form .series-import-options label { margin: 0; }
 .form-control .editable-field-heading > label { margin: 0; }
 .form-controls-row .editable-field-heading { min-height: 24px; }
@@ -465,7 +466,7 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .library-heading-actions { position: relative; }
   .library-heading-actions .dropdown-compact { position: static; }
   .library-heading-actions .dropdown-panel { left: 0; right: auto; width: 100%; min-width: 0; }
-  .library-editing { position: relative; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px; }
+  .library-editing { position: relative; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px 4px; }
   .library-editing .collection-selection-toolbar, .library-editing .library-heading-actions { display: contents; }
   .library-editing h1 { grid-column: 1 / -1; grid-row: 1; }
   .library-editing .custom-dropdown { grid-column: 1; grid-row: 2; }
@@ -473,8 +474,9 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .library-editing .collection-hidden { grid-column: 3; grid-row: 2; }
   .library-editing .collection-select { grid-column: 2; grid-row: 2; justify-self: start; min-width: 0; }
   .library-editing .collection-selection-trigger { grid-column: 2; grid-row: 3; justify-self: end; white-space: nowrap; }
+  .library-editing:has(.collection-bulk-edit) .collection-select { grid-column: 1; grid-row: 3; }
   .library-editing .collection-bulk-edit { grid-column: 3; grid-row: 3; }
-  .library-editing .button { padding-inline: 8px; }
+  .library-editing .button { padding-inline: 4px; }
   .app-header { gap: 8px; }
   .app-header .brand { min-width: 0; flex: 1; white-space: normal; font-size: 21px; }
   .app-header .brand-subtitle { display: none; }

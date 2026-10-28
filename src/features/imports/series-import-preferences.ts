@@ -21,6 +21,7 @@ export function useSeriesImportBehavior(initialBehavior?: SeriesImportBehavior) 
  const [previewCache, setPreviewCache] = useState(() => new Map<number, SeriesPreview>())
  const cachePreview = useCallback((preview: SeriesPreview) => setPreviewCache(current => new Map(current).set(preview.seriesId, preview)), [])
  const [override, setOverride] = useState(() => initialBehavior !== undefined && initialBehavior !== snapshot())
+ const [reviewRelatedSeries, setReviewRelatedSeries] = useState(false)
  const behavior: SeriesImportBehavior = override ? defaultBehavior === 'all' ? 'choose' : 'all' : defaultBehavior
- return { defaultBehavior, behavior, override, setOverride, previewCache, cachePreview, reset() { setOverride(false); setPreviewCache(new Map()) } }
+ return { defaultBehavior, behavior, override, setOverride, reviewRelatedSeries, setReviewRelatedSeries, previewCache, cachePreview, reset() { setOverride(false); setReviewRelatedSeries(false); setPreviewCache(new Map()) } }
 }

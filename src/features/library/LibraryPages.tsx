@@ -463,7 +463,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
     }}</DisplayInfo>
         </dl> </>}}</DisplayInfo>}
     </div></div>
-    {typeof location.state?.importBatchId === 'string' && <CompletedImportSeriesNotice key={location.state.importBatchId} batchId={location.state.importBatchId} initialBehavior={location.state.seriesImportBehavior === 'all' || location.state.seriesImportBehavior === 'choose' ? location.state.seriesImportBehavior : undefined} />}
+    {typeof location.state?.importBatchId === 'string' && <CompletedImportSeriesNotice reviewRelatedSeries={location.state.reviewRelatedSeries === true} key={location.state.importBatchId} batchId={location.state.importBatchId} initialBehavior={location.state.seriesImportBehavior === 'all' || location.state.seriesImportBehavior === 'choose' ? location.state.seriesImportBehavior : undefined} />}
     {editing ? <StoryForm key={`${story.id}-${editing}`} story={story} section={editing} onCancel={() => editSection(null)} /> : <>
 <DisplayInfo group="workPage">{{
       progress: <>       <section className="settings-card details-progress-panel" aria-label="Reading and Organization">

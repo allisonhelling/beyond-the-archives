@@ -172,7 +172,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  tables.import_items.push({id:'item-1',batch_id:'batch-1',entry_id:'entry-101',ordinal:0,status:'completed',metadata_status:'completed'})
  tables.metadata_jobs.push({id:'job-1',batch_id:'batch-1',entry_id:'entry-101',status:'completed'})
  await page.goto('/stories/entry-101')
- await page.evaluate(() => window.history.replaceState({...window.history.state,usr:{importBatchId:'batch-1'}},''))
+ await page.evaluate(() => window.history.replaceState({...window.history.state,usr:{importBatchId:'batch-1',reviewRelatedSeries:true}},''))
  await page.reload()
  const related = page.getByRole('dialog', {name:'Related Series',exact:true})
  await expect(related).toBeVisible()
@@ -327,4 +327,58 @@ test('series collection failures share retry styling and recover results and sug
  await expect(alerts).toHaveCount(0)
  await expect(page.locator('[data-results-loading]')).toHaveCount(0)
  await expect(page.getByRole('heading', { name: 'No Stories Here Yet' })).toBeVisible()
+})
+
+test('series results load before suggestions without concurrent series scans', async ({ page }) => {
+ const tables=await fixture(page)
+ tables.works.push({id:'queued-work',ao3_work_id:987,title:'Queued work',verified_chapters:{}})
+ tables.library_entries.push({id:'queued-entry',work_id:'queued-work',original_url:'https://archiveofourown.org/works/987',reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{series_memberships:[{id:789,name:'Queued series',url:'https://archiveofourown.org/series/789',position:1}]}})
+ let releaseResults!:()=>void,releaseSuggestions!:()=>void,resultsActive=false,overlaps=0
+ const resultsGate=new Promise<void>(resolve=>{releaseResults=resolve}),suggestionsGate=new Promise<void>(resolve=>{releaseSuggestions=resolve})
+ const requests:string[]=[]
+ await page.route('**/rest/v1/rpc/query_library',async route=>{
+  requests.push('results');resultsActive=true
+  await resultsGate
+  resultsActive=false
+  await route.fallback()
+ })
+ await page.route('**/rest/v1/rpc/library_query_facets',async route=>{
+  requests.push('suggestions')
+  if(resultsActive) {overlaps++;return route.fulfill({status:500,json:{code:'57014',message:'Concurrent series scan timed out'}})}
+  await suggestionsGate
+  await route.fallback()
+ })
+ try {
+  await page.goto('/library?shelf=series');await login(page)
+  await expect.poll(()=>requests).toEqual(['results'])
+  releaseResults()
+  await expect(page.locator('.series-card h2')).toContainText('Queued series')
+  await expect.poll(()=>requests).toEqual(['results','suggestions'])
+  expect(overlaps).toBe(0)
+  releaseSuggestions()
+  await expect(page.locator('[data-results-loading]')).toHaveCount(0)
+  await expect(page.locator('.error-message-retry')).toHaveCount(0)
+ } finally {releaseResults();releaseSuggestions()}
+})
+
+test('work imports leave related series alone unless the user opts in',async({page})=>{
+ const tables=await fixture(page)
+ tables.works.push({id:'optout-work',ao3_work_id:765,title:'Direct bookmark',verified_chapters:{}})
+ tables.library_entries.push({id:'optout-entry',work_id:'optout-work',original_url:'https://archiveofourown.org/works/765',reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{series_memberships:[{id:876,name:'Unrequested series',url:'https://archiveofourown.org/series/876',position:1}]}})
+ tables.import_batches.push({id:'optout-batch',created_at:'2026-10-27T12:00:00Z'})
+ tables.import_items.push({id:'optout-item',batch_id:'optout-batch',entry_id:'optout-entry',status:'completed',metadata_status:'completed'})
+ tables.metadata_jobs.push({id:'optout-job',batch_id:'optout-batch',entry_id:'optout-entry',status:'completed'})
+ let previews=0
+ await page.route('**/functions/v1/series-preview',route=>{previews++;return route.fulfill({status:500,json:{error:'Unexpected related-series request'}})})
+ await page.route('**/rest/v1/rpc/submit_import_urls',route=>route.fulfill({json:'optout-batch'}))
+ await page.goto('/add');await login(page)
+ await expect(page.getByRole('checkbox',{name:'Check Series Containing Imported Works'})).not.toBeChecked()
+ await page.getByRole('textbox',{name:'AO3 Work or Series Link'}).fill('https://archiveofourown.org/works/765')
+ await page.getByRole('button',{name:'Import from Link',exact:true}).click()
+ await expect(page).toHaveURL(/\/stories\/optout-entry$/)
+ await expect(page.locator('.story-details-page')).toBeVisible()
+ await page.reload()
+ await expect(page.locator('.story-details-page')).toBeVisible()
+ await expect(page.getByRole('dialog',{name:'Related Series',exact:true})).toHaveCount(0)
+ expect(previews).toBe(0)
 })

@@ -20,7 +20,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 it('waits for completed metadata, then offers an explicit picker that excludes saved works', async () => {
- await act(async () => { render(<CompletedImportSeriesNotice batchId="original-batch" />) })
+ await act(async () => { render(<CompletedImportSeriesNotice reviewRelatedSeries batchId="original-batch" />) })
  expect(screen.queryByRole('dialog', { name: 'Related Series' })).not.toBeInTheDocument()
  expect(mocks.preview).not.toHaveBeenCalled(); expect(mocks.refresh).not.toHaveBeenCalled()
  mocks.history.mockResolvedValue({ items: [{ entry_id: 'saved-101', status: 'completed', metadata_status: 'completed' }], jobs: [{ status: 'completed' }] })
@@ -39,7 +39,7 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
 })
 
 it('keeps related-series selection without offering Save for a series already represented in the library', async () => {
- await act(async () => { render(<ImportedSeriesNotice stories={mocks.stories as never} />) })
+ await act(async () => { render(<ImportedSeriesNotice reviewRelatedSeries stories={mocks.stories as never} />) })
  expect(mocks.remember).not.toHaveBeenCalled()
  fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' }))
@@ -51,21 +51,36 @@ it('keeps related-series selection without offering Save for a series already re
 it('deduplicates shared series and stays dismissed when the library refreshes', async () => {
  const stories = [...mocks.stories, { ...mocks.stories[0], id: 'second', metadata: { ...mocks.stories[0].metadata, title: 'Other fic' } }]
  let view!: ReturnType<typeof render>
- await act(async () => { view = render(<ImportedSeriesNotice stories={stories as never} />) })
+ await act(async () => { view = render(<ImportedSeriesNotice reviewRelatedSeries stories={stories as never} />) })
  expect(screen.getAllByRole('link', { name: 'Related series • Series 77' })).toHaveLength(1)
  fireEvent.click(screen.getByRole('button', { name: 'Close Dialog' }))
- view.rerender(<ImportedSeriesNotice stories={[...stories] as never} />)
+ view.rerender(<ImportedSeriesNotice reviewRelatedSeries stories={[...stories] as never} />)
  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
  expect(mocks.preview).toHaveBeenCalledOnce()
  expect(mocks.remember).not.toHaveBeenCalled()
 })
 it('keeps the preview and selections available after a failed selected-work import', async () => {
  mocks.submit.mockRejectedValue(new Error('Import unavailable'))
- await act(async () => { render(<ImportedSeriesNotice stories={mocks.stories as never} />) })
+ await act(async () => { render(<ImportedSeriesNotice reviewRelatedSeries stories={mocks.stories as never} />) })
  fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' }))
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected' })) })
  expect(screen.getByRole('alert')).toHaveTextContent('Import unavailable')
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).toBeEnabled()
  expect(mocks.submit).toHaveBeenCalledOnce()
+})
+
+it('does not discover or retrieve related series unless the import opted in', async () => {
+ await act(async()=>{render(<><CompletedImportSeriesNotice batchId="original-batch" /><ImportedSeriesNotice stories={mocks.stories as never} /></>)})
+ await act(async()=>{await vi.advanceTimersByTimeAsync(10000)})
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+ expect(mocks.history).not.toHaveBeenCalled()
+ expect(mocks.preview).not.toHaveBeenCalled()
+ expect(mocks.refresh).not.toHaveBeenCalled()
+})
+
+it('does not request another review for directly supplied series already reviewed in this import', async () => {
+ await act(async()=>{render(<ImportedSeriesNotice reviewRelatedSeries reviewedSeriesIds={[77]} stories={mocks.stories as never} />)})
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+ expect(mocks.preview).not.toHaveBeenCalled()
 })

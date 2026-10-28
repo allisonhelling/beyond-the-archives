@@ -1,3 +1,4 @@
+import { sampleMode } from '../../lib/sample-mode'
 import { useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { useEffect, useState } from 'react'
 import { Dialog } from '../../components/Dialog'
@@ -8,12 +9,13 @@ import { importHistory, submitImport } from './repository'
 import { importFinished, selectedImportText, type SeriesPreview } from './urls'
 import { SeriesImportReview } from './SeriesImportReview'
 
-export function ImportedSeriesNotice({ stories, onImported, initialBehavior }: { stories: Story[]; onImported?: (batchId: string) => void; initialBehavior?: SeriesImportBehavior }) {
+export function ImportedSeriesNotice({ stories, onImported, initialBehavior, reviewRelatedSeries = false, reviewedSeriesIds = [] }: { stories: Story[]; onImported?: (batchId: string) => void; initialBehavior?: SeriesImportBehavior; reviewRelatedSeries?: boolean; reviewedSeriesIds?: number[] }) {
  const seriesBehavior = useSeriesImportBehavior(initialBehavior)
  const library = useLibrary()
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
  const [dismissed, setDismissed] = useState(''), [reviewBusy, setReviewBusy] = useState(false)
- const suggestions = stories.flatMap(story => { const series = seriesMemberships(story); return series.length ? [{ story, series }] : [] })
+ const reviewed = new Set(reviewedSeriesIds)
+ const suggestions = reviewRelatedSeries ? stories.flatMap(story => { const series = seriesMemberships(story).filter(series => !reviewed.has(series.id)); return series.length ? [{ story, series }] : [] }) : []
  const seriesUrls = [...new Map(suggestions.flatMap(({ series }) => series.map(item => [item.id, item.url] as const))).values()]
  const reviewText = seriesUrls.join('\n')
  const signature = suggestions.map(({ story }) => story.id).sort().join(',')
@@ -23,8 +25,11 @@ export function ImportedSeriesNotice({ stories, onImported, initialBehavior }: {
   try {
    const batch = await submitImport(selectedImportText(reviewText, works), false, readingStatus, seriesIds)
    if (!batch) throw new Error('No selected works could be imported.')
-   const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'})
-   await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : []))
+   if (sampleMode) await library.refresh()
+   else {
+    const history = await importHistory(batch, {historyPage:1,resultPage:1,status:'all'})
+    await library.refresh((history.changes ?? history.items).flatMap(item => item.entry_id ? [item.entry_id] : []))
+   }
    for (const id of seriesIds) await library.refreshSeries(id)
    seriesBehavior.reset(); setMessage('Selected series works saved. Metadata retrieval will continue in the background.'); onImported?.(batch)
   } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected series works.') }
@@ -39,9 +44,11 @@ export function ImportedSeriesNotice({ stories, onImported, initialBehavior }: {
 
 /** Add Story opens a fic immediately; discover its series only after retrieval
  * finishes, including when the fic page is reloaded during the batch. */
-export function CompletedImportSeriesNotice({ batchId, initialBehavior }: { batchId: string; initialBehavior?: SeriesImportBehavior }) {
- const { refresh, stories } = useLibrary(), [currentBatch, setCurrentBatch] = useState(batchId), [entries, setEntries] = useState<string[]>([]), [discover, setDiscover] = useState(true)
+export function CompletedImportSeriesNotice({ batchId, workIds, initialBehavior, reviewRelatedSeries = false, reviewedSeriesIds = [] }: { batchId?: string; workIds?: number[]; initialBehavior?: SeriesImportBehavior; reviewRelatedSeries?: boolean; reviewedSeriesIds?: number[] }) {
+ const { refresh, stories } = useLibrary({ catalog: reviewRelatedSeries }), [currentBatch, setCurrentBatch] = useState(batchId), [entries, setEntries] = useState<string[]>([]), [discover, setDiscover] = useState(true)
+ const [finished, setFinished] = useState(!batchId)
  useEffect(() => {
+  if (!reviewRelatedSeries || !currentBatch) return
   let alive = true, failures = 0, timer: ReturnType<typeof setTimeout>
   async function check() {
    try {
@@ -49,7 +56,7 @@ export function CompletedImportSeriesNotice({ batchId, initialBehavior }: { batc
     if (!alive) return
     if (importFinished(history)) {
      await refresh(history.items.flatMap(item => item.entry_id ? [item.entry_id] : []))
-     if (alive) setEntries(history.items.flatMap(item => item.entry_id ? [item.entry_id] : []))
+     if (alive) { setEntries(history.items.flatMap(item => item.entry_id ? [item.entry_id] : [])); setFinished(true) }
      return
     }
     failures = 0
@@ -58,6 +65,7 @@ export function CompletedImportSeriesNotice({ batchId, initialBehavior }: { batc
   }
   void check()
   return () => { alive = false; clearTimeout(timer) }
- }, [currentBatch, refresh])
- return discover ? <ImportedSeriesNotice initialBehavior={initialBehavior} stories={stories.filter(story => entries.includes(story.id))} onImported={id => { setEntries([]); setCurrentBatch(id); setDiscover(false) }} /> : null
+ }, [currentBatch, refresh, reviewRelatedSeries])
+ const includedEntries = new Set(entries), includedWorks = new Set(workIds)
+ return discover && reviewRelatedSeries ? <ImportedSeriesNotice reviewedSeriesIds={reviewedSeriesIds} reviewRelatedSeries={reviewRelatedSeries} initialBehavior={initialBehavior} stories={stories.filter(story => includedEntries.has(story.id) || finished && story.work.ao3_work_id !== null && includedWorks.has(story.work.ao3_work_id))} onImported={id => { setEntries([]); setCurrentBatch(id); setDiscover(false) }} /> : null
 }

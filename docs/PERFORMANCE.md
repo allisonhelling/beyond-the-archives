@@ -103,7 +103,7 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261027000700_series_grouped_inputs.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261028000100_projected_series_documents.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
 
 ## Revision-Based Navigation and Counts
 
@@ -160,3 +160,15 @@ A local PGlite upgrade comparison used 4,908 works and 450 saved series for one 
 | Work-only page | 33 ms | 35 ms |
 
 The equivalent grouped/compact suggestions SELECT completed in 6,935 ms in one hosted read-only plan; the corresponding first-page selection completed in 7,483 ms. These are individual SELECT observations, not production RPC latency percentiles. The regression suite counts pool evaluations for cold series loads, paging, sorting and mixed results, and retains the existing filter/ownership parity checks. The new migration was not applied by these diagnostics; verify both production RPCs after rollout, including concurrent result/suggestion loads.
+
+### Stored Series Inputs and Request Scheduling
+
+A subsequent hosted check confirmed both prior series migrations were applied, but simultaneous page and suggestion RPCs still timed out with `57014`. The earlier individual SELECT timings were insufficient evidence for the browser's concurrent request pattern. A stored-projection prototype alone also exceeded the eight-second budget when both RPCs ran together.
+
+Migration `20261028000100_projected_series_documents.sql` extends `library_search_documents` with a stored `series_story` column, generated through the shared immutable `library_series_input` function. It backfills existing documents and updates atomically with the effective story. The series context query reads only these compact inputs; full work documents are retained for ordinary/mixed work cards and are never evaluated for a Series-only shelf. The projection remains protected by the existing owner policy and contains effective metadata plus required personal reading fields.
+
+The client additionally queues series reads within its existing provider, registering page loading before suggestions. This prevents the two expensive RPCs competing for the database budget. Ordinary work requests remain independent; existing cache hits return immediately, queued cancellations skip transport, and failed requests release the queue. No new table, separate invalidation system, dependency or higher statement timeout is introduced.
+
+Full RPC copies using transaction-local projected data and function definitions returned 499 series on the hosted database: results in 5,022 ms and suggestions in 3,770 ms when executed separately, each under an eight-second limit. These checks copied the deployed page projection and matching pipeline, rather than explaining only a selection fragment. They did not deploy schema changes. The updated desktop/mobile browser regression rejects overlapping series scans and checks that cards render before suggestions finish. Production verification still requires applying this migration and deploying the matching frontend, then checking both requests in the actual browser.
+
+A local upgrade comparison with 4,908 works and 450 series returned identical complete JSON for series facets, first and clamped last pages, mixed pages/facets and ordinary work pages. Individual before/after observations were 290/189 ms for series facets, 322/240 ms for the first series page, and 765/679 ms for a mixed page. Regression tests verify projection refresh after edits and owner isolation, and make full source documents unavailable to prove Series-only reads do not depend on them.

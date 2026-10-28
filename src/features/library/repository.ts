@@ -179,6 +179,9 @@ export type LibraryQuery = { mode: 'reading' | 'library' | 'series'; shelf: stri
 export type LibraryResults = { revision?: number; suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export type LibraryFacets = Pick<LibraryResults, 'suggestions' | 'fandoms'> & { total: number }
 export type LibraryNavigation = Record<string, { works: number; series: number; updated_at: string | null }>
+export function libraryQueryHasSeries(query: LibraryQuery) {
+  return query.author === undefined && query.mode !== 'reading' && (query.mode === 'series' || query.shelf === 'series' || query.filters.showSeries)
+}
 /** Facets describe the collection pool, independent of page, sort and search filters. */
 export function libraryFacetScope(query: LibraryQuery) {
   return { mode: query.mode, shelf: query.mode === 'reading' ? 'view_all' : query.shelf, ...(query.author !== undefined && { author: query.author }), filters: { showSeries: query.filters.showSeries } }

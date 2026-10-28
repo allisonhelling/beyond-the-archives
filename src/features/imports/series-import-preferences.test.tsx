@@ -17,7 +17,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 function Options() {
  const behavior = useSeriesImportBehavior()
- return <><SeriesImportOptions defaultBehavior={behavior.defaultBehavior} override={behavior.override} onChange={behavior.setOverride} /><output>{behavior.behavior}</output></>
+ return <><SeriesImportOptions reviewRelatedSeries={behavior.reviewRelatedSeries} onReviewRelatedSeriesChange={behavior.setReviewRelatedSeries} defaultBehavior={behavior.defaultBehavior} override={behavior.override} onChange={behavior.setOverride} /><output>{behavior.behavior}</output></>
 }
 it('saves the settings default and reverses checkbox wording without persisting an override', () => {
  const view = render(<><SeriesImportSettings /><Options /></>)
@@ -335,4 +335,15 @@ it('keeps Save and work selections available when saving a missing series fails'
  expect(await screen.findByRole('alert')).toHaveTextContent('Save unavailable')
  expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeEnabled()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
+})
+
+it('starts related-series discovery unchecked and keeps the choice local to this import',()=>{
+ const first=render(<Options />)
+ const option=screen.getByRole('checkbox',{name:'Check Series Containing Imported Works'})
+ expect(option).not.toBeChecked()
+ fireEvent.click(option)
+ expect(option).toBeChecked()
+ first.unmount()
+ render(<Options />)
+ expect(screen.getByRole('checkbox',{name:'Check Series Containing Imported Works'})).not.toBeChecked()
 })

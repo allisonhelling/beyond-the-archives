@@ -15,7 +15,7 @@ import { approveProgress, cancelBatch, retryJob, submitImport } from './reposito
 import type { Status } from '../library/model'
 import { ImportReadingStatus } from './ImportReadingStatus'
 import { SeriesImportReview } from './SeriesImportReview'
-import { importFinished, classifyUrl, extractUrls, selectedImportText, type SeriesPreview } from './urls'
+import { importFinished, classifyUrl, extractUrls, groupWorks, selectedImportText, type SeriesPreview } from './urls'
 const activeStatuses=['pending','processing']
 const reviewStatuses=['failed','skipped','cancelled']
 export function ImportPage() {
@@ -24,8 +24,7 @@ export function ImportPage() {
  const [readingStatus,setReadingStatus]=useState<Status>('to_read')
  const [reviewing,setReviewing]=useState(false)
  const library=useLibrary({ catalog: reviewing })
- const [relatedBehavior, setRelatedBehavior] = useState<SeriesImportBehavior>()
- const [relatedBatch, setRelatedBatch] = useState<string>()
+ const [relatedImport, setRelatedImport] = useState<{ batchId: string; behavior: SeriesImportBehavior; workIds: number[]; reviewedSeriesIds: number[] }>()
  const [resultPage,setResultPage]=useState(1)
  const [resultView,setResultView]=useState<{batchId?:string;finished:boolean;status:string}>({finished:false,status:'all'})
  const [text,setText]=useState(typeof location.state?.seriesUrl==='string'?location.state.seriesUrl:''), [selected,setSelected]=useState<string>()
@@ -42,7 +41,16 @@ export function ImportPage() {
  const urls=extractUrls(text), ignored=urls.filter(url=>classifyUrl(url).kind==='unrelated').length
  const seriesCount=new Set(urls.flatMap(url=>{const result=classifyUrl(url);return result.kind==='series'?[result.identity.seriesId]:[]})).size
  function saveImport(works?:SeriesPreview['works'], status:Status=readingStatus, seriesIds:number[]=[]) {
-  void action(async()=>{const id=await submitImport(works?selectedImportText(text,works):text,true,status,seriesIds);for(const seriesId of seriesIds) await library.refreshSeries(seriesId);setMessage(sampleMode?'Works saved to this browser’s sample library. Existing works were kept.':id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.');setReviewing(false);setText('');setRelatedBehavior(seriesBehavior.behavior);seriesBehavior.reset();if(id){setSelected(id);setRelatedBatch(works ? undefined : id)}})
+  void action(async()=>{
+   const importText = works ? selectedImportText(text,works) : text
+   const id = await submitImport(importText,true,status,seriesIds)
+   for (const seriesId of seriesIds) await library.refreshSeries(seriesId)
+   setMessage(sampleMode?'Works saved to this browser’s sample library. Existing works were kept.':id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.')
+   setReviewing(false); setText('')
+   setRelatedImport(id && seriesBehavior.reviewRelatedSeries ? { batchId:id, behavior:seriesBehavior.behavior, workIds:[...groupWorks(extractUrls(importText)).keys()], reviewedSeriesIds:seriesIds } : undefined)
+   seriesBehavior.reset()
+   if (id) setSelected(id)
+  })
  }
  const visibleItems=data.summary ? data.items : statusFilter==='review'?reviewItems:data.items.filter(item=>statusFilter==='all'||item.status===statusFilter)
  const total=data.summary?.total??data.items.length
@@ -60,7 +68,7 @@ export function ImportPage() {
  <label>AO3 URLs<textarea rows={10} value={text} onChange={event=>setText(event.target.value)} placeholder={"Paste work or series links here one per line\nhttps://archiveofourown.org/works/123"} disabled={busy} /></label>
  <div className="form-controls-row">
  <ImportReadingStatus description="Applies to all links imported." value={readingStatus} onChange={setReadingStatus} disabled={busy} />
- <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || reviewing} />
+ <SeriesImportOptions reviewRelatedSeries={seriesBehavior.reviewRelatedSeries} onReviewRelatedSeriesChange={seriesBehavior.setReviewRelatedSeries} defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || reviewing} />
  </div>
  <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; ${seriesBehavior.behavior === 'all' ? 'all available works will be included.' : 'review and select their works before importing.'}`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
  <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount ? seriesBehavior.behavior === 'all' ? 'Import All Series Works' : 'Review Series' : 'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
@@ -68,7 +76,7 @@ export function ImportPage() {
  {!sampleMode && <p className="muted">Processing uses the metadata mode selected in Settings: the hosted worker or the connected browser extension. For extension requests, keep your browser running and complete any AO3 confirmation in the requested tab. This page checks persisted progress every five seconds. Closing it does not cancel jobs.</p>}
  {sampleMode && <p className="muted">Pasted links use the extension with Local selected and save to this browser’s sample library. Keep this page open while importing and complete any AO3 sign-in in the requested tab. Series follow the default and temporary option shown above; existing saved works are kept. New work-page requests wait 15 seconds between captures. Retry interrupted imports with the same links to continue safely.</p>}
  {message&&<p role="status">{message}</p>}{!reviewing&&(error||history.error)&&<p className="error-message" role="alert">{error||history.error}</p>}
- {finished && batch?.id === relatedBatch && <ImportedSeriesNotice initialBehavior={relatedBehavior} stories={(library.stories ?? []).filter(story => batchEntries.has(story.id))} onImported={id => { setSelected(id); setRelatedBatch(undefined) }} />}
+ {relatedImport && (sampleMode || finished && batch?.id === relatedImport.batchId) && <ImportedSeriesNotice key={relatedImport.batchId} reviewedSeriesIds={relatedImport.reviewedSeriesIds} reviewRelatedSeries initialBehavior={relatedImport.behavior} stories={(library.stories ?? []).filter(story => sampleMode ? story.work.ao3_work_id !== null && relatedImport.workIds.includes(story.work.ao3_work_id) : batchEntries.has(story.id))} onImported={id => { setSelected(id); setRelatedImport(undefined) }} />}
  <section className="settings-card"><h2>Previous Batches</h2>{sampleMode?<p>Batch history is available in the connected library. Local sample imports do not create account batches.</p>:loading?<p role="status">Loading import history…</p>:!data.batches.length?<p>No imports yet. Paste your first batch above.</p>:<label>Batch<select value={batch?.id??''} onChange={event=>{setResultPage(1);setSelected(event.target.value)}}>{data.batches.map(b=><option key={b.id} value={b.id}>{formatDateTime(b.created_at)}{b.source_url ? ` · Library Sync · ${b.source_url}` : ''}{b.cancelled_at?' · Cancelled':''}</option>)}</select></label>}
  {batch&&<><p>{total} tracked URLs · {data.summary?.imported??data.items.filter(i=>i.result==='imported'&&i.status==='completed').length} imported with metadata · {data.summary?.alreadySaved??data.items.filter(i=>i.result==='already_saved').length} already saved</p><div className="import-status-filters" role="group" aria-label="Filter Import Results by Status"><button className="text-button" aria-pressed={statusFilter==='all'} aria-controls="import-result-table" onClick={()=>setStatusFilter('all')}>All Results: {total}</button>{finished&&<button className="text-button" aria-pressed={statusFilter==='review'} aria-controls="import-result-table" onClick={()=>setStatusFilter('review')}>Review: {reviewCount}</button>}{Object.entries(counts).map(([name,n])=><button key={name} className="text-button" aria-pressed={statusFilter===name} aria-controls="import-result-table" onClick={()=>setStatusFilter(name)}>{name}: {n}</button>)}</div>
  <p className="muted" role="status">{statusFilter==='review'?(reviewCount?`Batch finished. Showing failed, skipped, and cancelled results for your review. ${visibleCount} of ${total} results.`:'Batch finished. No failed, skipped, or cancelled results to review.'):`Showing ${visibleCount} of ${total} results${statusFilter!=='all'?` · ${statusFilter}`:''}`}</p>

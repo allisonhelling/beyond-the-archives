@@ -2063,18 +2063,21 @@ test('selects collections for bulk appearance edits without changing summaries a
   const shelf = page.getByRole('navigation', { name: 'Library Shelves', exact: true })
   if (info.project.name === 'mobile') {
     await page.getByRole('button', { name: 'Select Collections', exact: true }).click()
-    for (const width of [320, 390]) {
-      await page.setViewportSize({ width, height: 844 })
-      for (const [left, right] of [
-        [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
-        [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
-        [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
-      ]) {
-        const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
-        expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width)
-        expect(Math.abs(leftBox.y + leftBox.height / 2 - rightBox.y - rightBox.height / 2)).toBeLessThan(1)
+    for (const fallback of [false, true]) {
+      if (fallback) await page.addStyleTag({ content: ':root { --font-sans: Arial, sans-serif; }' })
+      for (const width of [320, 390]) {
+        await page.setViewportSize({ width, height: 844 })
+        for (const [left, right] of [
+          [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
+          [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
+          [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
+        ]) {
+          const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
+          expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width)
+          expect(Math.abs(leftBox.y + leftBox.height / 2 - rightBox.y - rightBox.height / 2)).toBeLessThan(1)
+        }
+        await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
       }
-      await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
     }
     await expect(page.getByRole('button', {name: 'Hidden', exact: true})).not.toHaveAttribute('aria-describedby')
     for (const name of ['First', 'Second', 'Third']) await shelf.getByRole('button', { name, exact: true }).click()
@@ -2787,6 +2790,7 @@ test('a completed direct fic import offers its related series and imports only s
  })
  await page.goto('/add'); await login(page)
  await page.getByRole('textbox', { name: 'AO3 Work or Series Link' }).fill('https://archiveofourown.org/works/101')
+ await page.getByRole('checkbox', { name: 'Check Series Containing Imported Works', exact: true }).check()
  await page.getByRole('button', { name: 'Import from Link', exact: true }).click()
  await expect(page).toHaveURL(/\/stories\/entry-101$/)
  const notice = page.getByRole('dialog', { name: 'Related Series', exact: true })

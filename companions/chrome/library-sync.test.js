@@ -21,7 +21,7 @@ beforeEach(() => {
  vi.stubGlobal('chrome', chrome)
  sync = createLibrarySync({ auth: async () => user, available: async () => true, changed: vi.fn() })
 })
-const start = (mode = 'full') => sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode })
+const start = (mode = 'full') => sync.command({ action: 'start', reviewRelatedSeries: true, url: 'https://archiveofourown.org/users/alice/bookmarks', mode })
 async function collect() { clock += 20000; await sync.pump(); await sync.pump() }
 it('ends a scan without discarding checkpoints or advancing the Quick Sync baseline', async () => {
  await start()
@@ -256,7 +256,7 @@ it('accepts full user, pseud, tag, search, series, and collection URLs while res
  expect(listingUrl('https://archiveofourown.org/users/alice/works?work_search[complete]=T').url).toContain('work_search[complete]=T')
 })
 it('resumes a collection across profile, works, bookmarks, and expanded series without overwriting checkpoints', async () => {
- await sync.command({ action: 'start', url: 'https://archiveofourown.org/collections/example', mode: 'full', importToCollection: true })
+ await sync.command({ action: 'start', reviewRelatedSeries: true, url: 'https://archiveofourown.org/collections/example', mode: 'full', importToCollection: true })
  chrome.scripting.executeScript.mockImplementation(async () => {
   const { requestUrl, kind } = local.librarySync
   return [{ result: { url: requestUrl, rows: kind === 'collection_profile' ? [] : [row(kind === 'works' ? 1 : kind === 'bookmarks' ? 2 : 3)], skipped: 0, hasNext: false,
@@ -596,7 +596,7 @@ it('persists the series behavior with the scan and rejects invalid values', asyn
 
 it('checkpoints full series previews from the scan tab without opening an additional tab', async () => {
  const html = readFileSync(new URL('../../server/ao3/fixtures/series.html', import.meta.url), 'utf8')
- await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full' })
+ await sync.command({ action: 'start', reviewRelatedSeries: true, url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full' })
  chrome.scripting.executeScript.mockImplementation(async ({ func }) => [{ result: func.name === 'captureMetadataPage' ? { url: local.librarySync.requestUrl, html } : {
   url: local.librarySync.requestUrl, rows: [row(101)], skipped: 0, hasNext: false,
   ...(local.librarySync.kind === 'bookmarks' ? { seriesUrls: ['https://archiveofourown.org/series/77'] } : {}),
@@ -790,7 +790,7 @@ it.each([
  { label: 'membership without a series bookmark', checkChapterDates: true, expectedStatus: 'to_read', progress: 0, checks: 0 },
 ])('inherits series bookmark reading dates and respects individual bookmarks: $label', async ({ cutoff, checkChapterDates, readingStatus, expectedStatus, progress, checks, ownCutoff = '2026-10-25', ownStatus = 'finished', ownProgress = 3, checkedWork = 1 }) => {
  const seriesUrl = 'https://archiveofourown.org/series/77'
- await sync.command({ action: 'start', url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates, readingStatus, delaySeconds: 5 })
+ await sync.command({ action: 'start', reviewRelatedSeries: true, url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', checkChapterDates, readingStatus, delaySeconds: 5 })
  const individual = { ...datedRow(2), 'bookmark date': ownCutoff }
  const seriesRows = [1, 2].map(id => ({ title: `Work ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'marked_for_later', chapters: '3/3', date: '2026-10-20' }))
  chrome.scripting.executeScript.mockImplementation(async ({ func }) => {
@@ -823,7 +823,7 @@ it.each([
 
 it('retains explicit series bookmarks in mixed collection scans across restarts', async () => {
  const related = 'https://archiveofourown.org/series/99', explicit = 'https://archiveofourown.org/series/100'
- await sync.command({ action: 'start', url: 'https://archiveofourown.org/collections/example', mode: 'full' })
+ await sync.command({ action: 'start', reviewRelatedSeries: true, url: 'https://archiveofourown.org/collections/example', mode: 'full' })
  expect(local.librarySync.bookmarkedSeries).toEqual([])
  chrome.scripting.executeScript.mockImplementation(async () => {
   const { kind, requestUrl } = local.librarySync
@@ -894,4 +894,24 @@ it.each(['running', 'paused', 'ready'])('ends and continues a pre-End-Scan %s ch
  expect(local[baselineKey]).toBeUndefined()
  await sync.command({ action: 'continue', scanId: id })
  expect(local.librarySync).toMatchObject({ id, status: 'running', endedEarly: false, page: 2, pages: 1, batchStart: 1 })
+})
+
+it.each([undefined,false,true])('checks memberships only when opted in while retaining direct series bookmarks: %s', async reviewRelatedSeries => {
+ const related='https://archiveofourown.org/series/99',direct='https://archiveofourown.org/series/100'
+ await sync.command({action:'start',url:'https://archiveofourown.org/users/alice/bookmarks',mode:'full',...(reviewRelatedSeries===undefined?{}:{reviewRelatedSeries})})
+ chrome.scripting.executeScript.mockImplementation(async()=>[{result:{url:local.librarySync.requestUrl,rows:[row(1)],seriesUrls:local.librarySync.kind==='bookmarks'?[related,direct]:[],bookmarkedSeriesUrls:local.librarySync.kind==='bookmarks'?[direct]:[],skipped:0,hasNext:false}}])
+ for(let n=0;n<5;n++)await collect()
+ const restarted=createLibrarySync({auth:async()=>user,available:async()=>true,changed:vi.fn()})
+ expect((await restarted.command({action:'status'})).state).toMatchObject({reviewRelatedSeries:reviewRelatedSeries===true,seenSeries:reviewRelatedSeries?[related,direct]:[direct],bookmarkedSeries:[direct]})
+ const requests=[...chrome.tabs.create.mock.calls.map(([options])=>options.url),...chrome.tabs.update.mock.calls.map(([,options])=>options.url)]
+ expect(requests.some(url=>url?.startsWith(related))).toBe(reviewRelatedSeries===true)
+ expect(requests.some(url=>url?.startsWith(direct))).toBe(true)
+})
+
+it('retains explicitly supplied series lists when related-series discovery is disabled',async()=>{
+ const direct='https://archiveofourown.org/series/100'
+ await sync.command({action:'start',url:'https://archiveofourown.org/users/alice/series',mode:'full',reviewRelatedSeries:false})
+ chrome.scripting.executeScript.mockImplementation(async()=>[{result:{url:local.librarySync.requestUrl,rows:[],seriesUrls:local.librarySync.kind==='series'?[direct]:[],skipped:0,hasNext:false}}])
+ for(let n=0;n<4;n++)await collect()
+ expect((await sync.command({action:'status'})).state).toMatchObject({reviewRelatedSeries:false,seenSeries:[direct],status:'ready'})
 })

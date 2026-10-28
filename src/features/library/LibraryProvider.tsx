@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { UndoNotice } from '../../components/UndoNotice'
 import { abandonedReadingStatus, caughtUpReadingStatus, type Collection, type Story } from './model'
 import { sampleMode } from '../../lib/sample-mode'
-import { libraryFacetScope, loadLibraryFacets, loadLibraryNavigation, loadLibraryRevision, type LibraryFacets, type LibraryNavigation, deleteStory, loadCatalog, loadStories, loadSeriesRecord, loadAffectedCollections, loadCollections, queryLibrary, storyCatalogEntry, restoreStory, updateEntry, type LibraryQuery, type LibraryResults } from './repository'
+import { libraryQueryHasSeries, libraryFacetScope, loadLibraryFacets, loadLibraryNavigation, loadLibraryRevision, type LibraryFacets, type LibraryNavigation, deleteStory, loadCatalog, loadStories, loadSeriesRecord, loadAffectedCollections, loadCollections, queryLibrary, storyCatalogEntry, restoreStory, updateEntry, type LibraryQuery, type LibraryResults } from './repository'
 type ReadingUndo = { id: string; storyId: string; title: string; message: string; saved?: { status: Story['reading_status']; progress: number }; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
 const revisionCheckInterval = 45_000
 const pageCacheKey = (query: LibraryQuery, page: number, size: number) => JSON.stringify([query, page, size])
@@ -39,6 +39,18 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const [rowHeights] = useState(() => new Map<string, number>())
   const cache = useRef(new Map<string, { query: LibraryQuery; result: LibraryResults }>())
   const facets = useRef(new Map<string, { query: LibraryQuery; result: LibraryFacets }>())
+  const seriesReads = useRef<Promise<unknown>>(Promise.resolve())
+  const readQuery = useCallback(<T,>(query: LibraryQuery, signal: AbortSignal, read: () => Promise<T>) => {
+    if (!libraryQueryHasSeries(query)) return read()
+    // Series pages and suggestions each aggregate the same reader's series.
+    // Queue them so concurrent scans cannot exhaust the database time budget.
+    const task = seriesReads.current.catch(() => {}).then(() => {
+      if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
+      return read()
+    })
+    seriesReads.current = task
+    return task
+  }, [])
   const retainedDetails = useRef(new Map<string, number>())
   const boundDetails = useCallback((stories: Story[]) => {
     // Merges append recently loaded records. Keep the newest 100, plus any
@@ -243,8 +255,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     const task = queue.current.catch(() => {}).then(async () => {
       const version = invalidate ? ++generation.current : generation.current
       if (invalidate) {
-        const includesSeries = (query: LibraryQuery) => query.author === undefined && query.mode !== 'reading' && (query.mode === 'series' || query.shelf === 'series' || query.filters.showSeries)
-        invalidateQueries(includesSeries)
+        invalidateQueries(libraryQueryHasSeries)
       }
       if (life !== lifecycle.current) return
       const record = await loadSeriesRecord(id)
@@ -274,7 +285,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     if (cached) { cache.current.delete(key); cache.current.set(key, cached); return cached.result }
     const version = generation.current
     const tagVersion = tagGeneration.current
-    const result = await queryLibrary(query, page, size, signal)
+    const result = await readQuery(query, signal, () => queryLibrary(query, page, size, signal))
     if (version !== generation.current || signal.aborted) throw new DOMException('Obsolete library result', 'AbortError')
     if (!acceptRevision(result.revision)) throw new DOMException('Obsolete library revision', 'AbortError')
     if (tagVersion !== tagGeneration.current && (hasTagFilters(query.filters) || dataRef.current.collections.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules)))) throw new DOMException('Obsolete tag result', 'AbortError')
@@ -291,16 +302,16 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     }
     if (version !== generation.current) throw new DOMException('Obsolete library result', 'AbortError')
     return result
-  }, [acceptRevision, boundDetails])
+  }, [acceptRevision, boundDetails, readQuery])
   const fetchFacets = useCallback(async (query: LibraryQuery, signal: AbortSignal) => {
     const key = JSON.stringify(libraryFacetScope(query)), cached = facets.current.get(key)
     if (cached) return cached.result
-    const version = generation.current, tagVersion = tagGeneration.current, result = await loadLibraryFacets(query, signal)
+    const version = generation.current, tagVersion = tagGeneration.current, result = await readQuery(query, signal, () => loadLibraryFacets(query, signal))
     if (version !== generation.current || signal.aborted || tagVersion !== tagGeneration.current && dataRef.current.collections.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules))) throw new DOMException('Obsolete library facets', 'AbortError')
     facets.current.set(key, { query, result })
     while (facets.current.size > 20) facets.current.delete(facets.current.keys().next().value!)
     return result
-  }, [])
+  }, [readQuery])
   useEffect(() => {
     if (sampleMode || loading || !firstPageLoaded && !catalogLoaded) return
     let alive = true

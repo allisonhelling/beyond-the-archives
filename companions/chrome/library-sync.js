@@ -49,6 +49,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
   if (message.action === 'status') return { state: state ?? null }
   if (message.action === 'start') {
    if (state && ['running', 'paused', 'ready'].includes(state.status)) throw new Error('Finish or discard the saved scan first.')
+   if (message.reviewRelatedSeries !== undefined && typeof message.reviewRelatedSeries !== 'boolean') throw new Error('Choose whether to check related series.')
    if (message.seriesBehavior !== undefined && !['choose', 'all'].includes(message.seriesBehavior)) throw new Error('Choose a valid series import behavior.')
    const startPage = message.startPage ?? 1, endPage = message.endPage
    if (message.maxPages !== undefined) throw new Error('Use Start page and End page instead of a page limit.')
@@ -69,7 +70,7 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    ] : [{ url: identity.url, kind: identity.kind }]
    if (sources.length > 1 && new URL(message.url).search) throw new Error('Use an unfiltered collection URL to scan both Works and Bookmarks.')
    const first = sources.shift()
-   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesBookmarkDates: {}, bookmarkedWorkIds: [], ...([first, ...sources].some(source => source.kind === 'bookmarks') ? { bookmarkedSeries: [] } : {}), seriesReviewVersion: 1, seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
+   const next = { ...identity, currentUrl: first.url, kind: first.kind, sources, seenSeries: [], seriesBookmarkDates: {}, bookmarkedWorkIds: [], ...([first, ...sources].some(source => source.kind === 'bookmarks') ? { bookmarkedSeries: [] } : {}), seriesReviewVersion: 1, reviewRelatedSeries: Boolean(message.reviewRelatedSeries), seriesBehavior: message.seriesBehavior ?? 'choose', importToCollection: Boolean(identity.collectionUrl && message.importToCollection), autoImport: Boolean(message.autoImport), checkChapterDates: Boolean(message.checkChapterDates), chapterDatesChecked: 0, chapterDatesUnavailable: 0, readingStatus: message.readingStatus, id: crypto.randomUUID(), userId: user.userId, mode: message.mode, baselineKey, baseline,
     batchStart: 0, hasMore: false, startPage, endPage, delaySeconds, sample: Boolean(user.sample), limited, partial: false, status: 'running', page: startPage, pages: 0, listPages: 0, count: 0, skipped: 0, diagnosticsVersion: 1, skippedEntries: [], chapterDateIssues: [], tabId: null, nextAt: Date.now(), keys: [], error: '' }
    next.readingStatusOrigin = message.readingStatusOrigin === 'default' ? 'default' : 'manual'; next.reviewExisting = Boolean(message.reviewExisting); next.repairPages = {}
    await write(next); return { state: next }
@@ -272,7 +273,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
      state.collection = result.collection
     }
     state.sources ??= []; state.seenSeries ??= []
-    for (const seriesUrl of result.seriesUrls ?? []) {
+    const seriesUrls = state.kind === 'series' || state.reviewRelatedSeries !== false ? result.seriesUrls ?? [] : result.bookmarkedSeriesUrls ?? []
+    for (const seriesUrl of seriesUrls) {
      if (!/^https:\/\/archiveofourown\.org\/series\/[1-9]\d*$/.test(seriesUrl)) throw new Error('Unexpected series URL in listing.')
      if (!state.seenSeries.includes(seriesUrl)) {
       state.seenSeries.push(seriesUrl); state.sources.push({ url: seriesUrl, kind: 'series_works' })
@@ -364,8 +366,8 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    const result = await command(message)
    updated = mutation
    if (result.state) {
-    const { id, status, url, mode, pages, batchStart, hasMore, endedEarly, canContinue, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
-    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, endedEarly, canContinue, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
+    const { id, status, url, mode, pages, batchStart, hasMore, endedEarly, canContinue, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, reviewRelatedSeries, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } = result.state
+    return { state: { batchVersion: 1, id, status, url, mode, pages, batchStart, hasMore, endedEarly, canContinue, listPages, count, skipped, error, startPage, endPage, limited, partial, delaySeconds, attention, attentionId, collection, collectionId, importToCollection, autoImport, checkChapterDates, chapterDatesChecked, chapterDatesUnavailable, readingStatus, seenSeries, bookmarkedSeries, seriesReviewVersion, reviewRelatedSeries, seriesBehavior, diagnosticsVersion, skippedEntries, chapterDateIssues, readingStatusOrigin, reviewExisting, repairPages } }
    }
    return result
   } finally {

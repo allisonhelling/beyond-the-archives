@@ -1,3 +1,4 @@
+import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
 import { ImportReadingReview } from './ImportReadingReview'
 import { sampleMode } from '../../lib/sample-mode'
 import { SeriesImportOptions } from './SeriesImportOptions'
@@ -15,6 +16,8 @@ import { SeriesImportReview, type SeriesWorkSelection } from './SeriesImportRevi
 type Prepared = { works: CsvWork[]; conflicts: CsvConflict[] }
 export function CsvImportForm({ onImported }: { onImported: (batch: string | null) => Promise<void> }) {
  const seriesBehavior = useSeriesImportBehavior()
+ const [relatedImport, setRelatedImport] = useState<{ batchId?: string; workIds: number[]; behavior: typeof seriesBehavior.behavior; reviewedSeriesIds: number[] }>()
+ const reviewedSeriesIds = useRef<number[]>([])
  const [checkChapterDates, setCheckChapterDates] = useState(false)
  const [prepared, setPrepared] = useState<Prepared>(), [choices, setChoices] = useState<Record<string, CsvChoice>>({})
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
@@ -22,6 +25,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
  const pending = useRef(false)
  async function preview(files: File[]) {
   if (pending.current) return
+  reviewedSeriesIds.current = []; setRelatedImport(undefined)
   pending.current = true; setBusy(true); setError(''); setMessage(''); setPrepared(undefined); setSeriesSources(undefined); setChoices({})
   try {
    if (files.reduce((size, file) => size + file.size, 0) > 20_000_000) throw new Error('Choose CSV files totaling at most 20 MB.')
@@ -49,6 +53,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
      works.push({ ...row, workId: work.workId, url: work.url, metadata, updatedDate: work.updated?.slice(0, 10) ?? null })
     }
    }
+   reviewedSeriesIds.current = seriesSources.flatMap(row => row.seriesId === undefined ? [] : [row.seriesId])
    await prepare(works)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not review CSV conflicts.') }
   finally { pending.current = false; setBusy(false) }
@@ -58,6 +63,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   pending.current = true; setBusy(true); setError('')
   try {
    const result = await submitCsvImport(prepared.works, prepared.conflicts, choices, checkChapterDates)
+   setRelatedImport(seriesBehavior.reviewRelatedSeries ? {batchId: result.batch ?? undefined, workIds: prepared.works.flatMap(work => work.workId === null ? [] : [work.workId]), behavior: seriesBehavior.behavior, reviewedSeriesIds: reviewedSeriesIds.current} : undefined)
    setPrepared(undefined); seriesBehavior.reset(); setMessage(`Updated AO3 information for ${result.metadataRepaired ?? 0} works, including series information for ${result.seriesRepaired ?? 0} works. Found ${result.readingCorrections ?? 0} possible reading-status corrections. Imported ${result.imported} works. Kept ${result.kept} existing works. Non-empty AO3 metadata was refreshed for existing works. Metadata${checkChapterDates ? ' and chapter dates' : ''} for new or overwritten works continue processing in import history.`)
    await onImported(result.batch)
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not import the CSV files.') }
@@ -71,12 +77,13 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   <p>Choose CSV exports from your AO3 scraper, including combined lists. Bookmark notes become personal notes and bookmark tags become personal tags. Marked for Later works are saved as unread (To Read); existing personal data is always kept. Non-empty AO3 metadata refreshes automatically for every imported work, including existing works. Explicit manual metadata corrections are preserved.</p>
   <p className="field-help">Bookmarks dated after the work’s update date are saved as Read (Finished), with that bookmark date as the finished date. Earlier bookmarks are Currently Reading (Reading); chapter progress is unconfirmed unless you enable the chapter-date check. Missing dates leave progress unconfirmed. Choose which works to include from each series before reviewing conflicts.</p>
   <BookmarkChapterDatesOption checked={checkChapterDates} disabled={busy} onChange={setCheckChapterDates} />
-  <SeriesImportOptions defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || Boolean(seriesSources) || Boolean(prepared)} />
+  <SeriesImportOptions reviewRelatedSeries={seriesBehavior.reviewRelatedSeries} onReviewRelatedSeriesChange={seriesBehavior.setReviewRelatedSeries} defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || Boolean(seriesSources) || Boolean(prepared)} />
   <FilePicker label="AO3 CSV Files" multiple accept=".csv,text/csv" disabled={busy || Boolean(seriesSources)} onChange={files => void preview(files)} />
   {busy && <p role="status">{message || 'Processing CSV import…'}</p>}
   {!busy && message && <p role="status">{message}</p>}
   {error && !seriesSources && <p className="error-message" role="alert">{error}</p>}
   {seriesSources && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={seriesSources.map(row => row.url).join('\n')} savedIds={new Set()} busy={busy} showReadingStatus={false} confirmLabel="Review CSV Conflicts" onConfirm={(_works, _status, _seriesIds, selections) => void reviewSeries(selections)} onCancel={() => { setSeriesSources(undefined); setError('') }} />}
+  {relatedImport && <CompletedImportSeriesNotice key={relatedImport.batchId ?? relatedImport.workIds.join(',')} workIds={relatedImport.workIds} reviewedSeriesIds={relatedImport.reviewedSeriesIds} reviewRelatedSeries batchId={relatedImport.batchId} initialBehavior={relatedImport.behavior} />}
   <ImportReadingReview onChanged={() => onImported(null)} refreshKey={message} />
   {prepared && <>
    <p>{prepared.works.length} unique works · {conflicts.length} bookmark conflicts · {laterSkipped} existing Marked for Later works will keep personal data.</p>

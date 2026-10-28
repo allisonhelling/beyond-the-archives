@@ -155,8 +155,15 @@ test('mobile collection holds, filter defaults, inputs and work controls fit', a
  await page.goto('/stories/mobile-entry')
  const rating = page.locator('.details-reading-controls .rating-heading')
  const collection = page.locator('.details-collections')
- const ratingBox = (await rating.boundingBox())!, collectionBox = (await collection.boundingBox())!
- expect(ratingBox.x + ratingBox.width).toBeLessThanOrEqual(collectionBox.x)
- expect(ratingBox.height).toBeLessThan(30)
- expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+ // Cover both the native system font and the sans-serif fallback used in CI.
+ for (const fallback of [false, true]) {
+  if (fallback) await page.addStyleTag({ content: ':root { --font-sans: Arial, sans-serif; }' })
+  for (const width of [375, 390]) {
+   await page.setViewportSize({ width, height: 900 })
+   const ratingBox = (await rating.boundingBox())!, collectionBox = (await collection.boundingBox())!
+   expect(ratingBox.x + ratingBox.width).toBeLessThanOrEqual(collectionBox.x)
+   expect(ratingBox.height).toBeLessThan(30)
+   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+ }
 })

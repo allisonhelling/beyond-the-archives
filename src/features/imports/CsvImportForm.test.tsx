@@ -1,14 +1,15 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { Story } from '../library/model'
 import { CsvImportForm } from './CsvImportForm'
-const mocks = vi.hoisted(() => ({ preview: vi.fn(), submit: vi.fn(), series: vi.fn(), imported: vi.fn() }))
+const mocks = vi.hoisted(() => ({ preview: vi.fn(), submit: vi.fn(), series: vi.fn(), imported: vi.fn(), history: vi.fn(), refresh: vi.fn(), stories: [] as Story[] }))
 vi.mock('./import-reading-review', async importOriginal => ({ ...await importOriginal<typeof import('./import-reading-review')>(), reviewImportReading: async () => ({reviews:[],total:0,changed:0,skipped:0}) }))
-vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
-vi.mock('./repository', () => ({ previewCsvImport: mocks.preview, submitCsvImport: mocks.submit, previewSeries: mocks.series }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: mocks.refresh, refresh: mocks.refresh, stories: mocks.stories }) }))
+vi.mock('./repository', () => ({ previewCsvImport: mocks.preview, submitCsvImport: mocks.submit, previewSeries: mocks.series, importHistory: mocks.history }))
 const csv = 'source_list,title,link,date,chapters,bookmark date,bookmark notes,bookmark tags\nbookmarks,Bookmark,https://archiveofourown.org/works/1,01 Oct 2026,2/2,20 Oct 2026,My summary,My tag\nmarked_for_later,Later,https://archiveofourown.org/works/2,01 Oct 2026,1/1,,,'
 function upload(text = csv) { const file = new File([text], 'bookmarks.csv', { type: 'text/csv' }); Object.assign(file, { text: async () => text }); fireEvent.change(screen.getByLabelText('AO3 CSV Files'), { target: { files: [file] } }) }
 beforeEach(() => {
- vi.clearAllMocks()
+ vi.clearAllMocks(); mocks.stories=[]; mocks.refresh.mockResolvedValue(undefined); mocks.history.mockResolvedValue({items:[],jobs:[]})
  mocks.preview.mockResolvedValue([{ workId: 1, id: 'saved', version: 'v1', title: 'Old title', status: 'finished', progress: 2, notes: 'Old notes', tags: ['Old tag'] }, { workId: 2, id: 'later', version: 'v2', title: 'Saved Later', status: 'reading', progress: 1, notes: '', tags: [] }])
  mocks.submit.mockResolvedValue({ batch: 'batch', imported: 1, kept: 1 }); mocks.imported.mockResolvedValue(undefined)
 })
@@ -131,4 +132,27 @@ it('expands all CSV series works automatically but still requires conflict revie
  await waitFor(() => expect(mocks.preview).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ workId: 10 })])))
  expect(mocks.submit).not.toHaveBeenCalled()
  expect(await screen.findByRole('button', { name: 'Import CSV Works' })).toBeVisible()
+})
+
+it('does not retrieve associated series after a CSV import unless selected',async()=>{
+ render(<CsvImportForm onImported={mocks.imported} />)
+ expect(screen.getByRole('checkbox',{name:'Check Series Containing Imported Works'})).not.toBeChecked()
+ upload()
+ fireEvent.click(await screen.findByRole('button',{name:'Import CSV Works'}))
+ await waitFor(()=>expect(mocks.imported).toHaveBeenCalledWith('batch'))
+ expect(mocks.history).not.toHaveBeenCalled()
+ expect(mocks.series).not.toHaveBeenCalled()
+})
+
+it('reviews associated series for opted-in CSV imports even when every work was already saved',async()=>{
+ mocks.submit.mockResolvedValue({batch:null,imported:0,kept:2})
+ mocks.stories=[{id:'saved',work:{ao3_work_id:1},metadata:{title:'Existing bookmark',series_memberships:[{id:77,name:'Associated series',url:'https://archiveofourown.org/series/77',position:1}]}}] as Story[]
+ mocks.series.mockResolvedValue({seriesId:77,title:'Associated series',works:[installment(1),installment(3)]})
+ render(<CsvImportForm onImported={mocks.imported} />)
+ fireEvent.click(screen.getByRole('checkbox',{name:'Check Series Containing Imported Works'}))
+ upload()
+ fireEvent.click(await screen.findByRole('button',{name:'Import CSV Works'}))
+ expect(await screen.findByRole('dialog',{name:'Related Series'})).toBeVisible()
+ await waitFor(()=>expect(mocks.series).toHaveBeenCalledWith('https://archiveofourown.org/series/77'))
+ expect(mocks.history).not.toHaveBeenCalled()
 })

@@ -1,16 +1,17 @@
+import type { Story } from '../library/model'
 vi.mock('../auth/auth-context', () => ({ useAuth: () => ({ session: { user: { id: 'test' } } }) }))
 import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-const mocks=vi.hoisted(()=>({history:vi.fn(),submit:vi.fn(),cancel:vi.fn(),retry:vi.fn(),approve:vi.fn(),preview:vi.fn(),refresh:vi.fn(),sample:false}))
+const mocks=vi.hoisted(()=>({history:vi.fn(),submit:vi.fn(),cancel:vi.fn(),retry:vi.fn(),approve:vi.fn(),preview:vi.fn(),refresh:vi.fn(),sample:false,stories:[] as Story[]}))
 vi.mock('../../lib/sample-mode',()=>({get sampleMode(){return mocks.sample}}))
 vi.mock('./repository',()=>({importHistory:mocks.history,submitImport:mocks.submit,cancelBatch:mocks.cancel,retryJob:mocks.retry,approveProgress:mocks.approve,previewSeries:mocks.preview}))
 vi.mock('./import-reading-review', async importOriginal => ({ ...await importOriginal<typeof import('./import-reading-review')>(), reviewImportReading: async () => ({reviews:[],total:0,changed:0,skipped:0}) }))
-vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,refreshSeries:mocks.refresh,stories:[{id:'saved-103',metadata:{series:[],series_memberships:[]},work:{ao3_work_id:103}}]})}))
+vi.mock('../library/LibraryProvider',()=>({useLibrary:()=>({refresh:mocks.refresh,refreshSeries:mocks.refresh,stories:mocks.stories})}))
 import { ImportPage } from './ImportPage'
 function show(){return render(<MemoryRouter><LibrarySyncProvider><ImportPage/></LibrarySyncProvider></MemoryRouter>)}
-beforeEach(()=>{vi.clearAllMocks();mocks.sample=false;mocks.history.mockResolvedValue({batches:[],items:[],jobs:[]});mocks.refresh.mockResolvedValue(undefined);mocks.submit.mockResolvedValue('batch')})
+beforeEach(()=>{vi.clearAllMocks();mocks.sample=false;mocks.stories=[{id:'saved-103',metadata:{series:[],series_memberships:[]},work:{ao3_work_id:103}}] as unknown as Story[];mocks.history.mockResolvedValue({batches:[],items:[],jobs:[]});mocks.refresh.mockResolvedValue(undefined);mocks.submit.mockResolvedValue('batch')})
 it('submits 100+ links, explains unrelated links and remains usable after navigating back',async()=>{
  show();expect(await screen.findByText('No imports yet. Paste your first batch above.')).toBeVisible()
  const text=Array.from({length:110},(_,i)=>`https://archiveofourown.org/works/${i+1}`).join('\n')+'\nhttps://example.com'
@@ -242,4 +243,21 @@ it('automatically imports every available series work with a one-import override
  fireEvent.change(screen.getByLabelText('AO3 URLs'), { target: { value: 'https://archiveofourown.org/series/77' } })
  fireEvent.submit(form)
  await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/101\nhttps://archiveofourown.org/works/102', true, 'to_read', [77]))
+})
+
+it.each([false,true])('keeps sample pasted-work related-series discovery optional: %s',async optedIn=>{
+ mocks.sample=true
+ mocks.stories[0].metadata.series_memberships=[{id:77,name:'Sample related series',url:'https://archiveofourown.org/series/77',position:1}]
+ mocks.preview.mockResolvedValue({seriesId:77,title:'Sample related series',works:[]})
+ show()
+ const form=screen.getByRole('button',{name:'Import URLs'}).closest('form')!
+ const option=within(form).getByRole('checkbox',{name:'Check Series Containing Imported Works'})
+ expect(option).not.toBeChecked()
+ if(optedIn)fireEvent.click(option)
+ fireEvent.change(screen.getByLabelText('AO3 URLs'),{target:{value:'https://archiveofourown.org/works/103'}})
+ fireEvent.click(screen.getByRole('button',{name:'Import URLs'}))
+ await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/103',true,'to_read',[]))
+ if(optedIn)expect(await screen.findByRole('dialog',{name:'Related Series'})).toBeVisible()
+ else expect(screen.queryByRole('dialog',{name:'Related Series'})).not.toBeInTheDocument()
+ expect(mocks.history).not.toHaveBeenCalled()
 })
