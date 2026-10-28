@@ -87,8 +87,8 @@ async function main() {
         const query=args[0]
         const withSeries=query.mode==='series'||query.shelf==='series'||query.filters.showSeries
         if(withSeries) {
-          plannedSql=(await db.query("select prosrc from pg_proc where oid='public.library_query_series_matches(jsonb,jsonb)'::regprocedure")).rows[0].prosrc
-            .replaceAll('p_query','$1::jsonb').replaceAll('p_ids','null::jsonb')
+          plannedSql=(await db.query("select prosrc from pg_proc where oid='public.library_query_series_matches(jsonb,jsonb,integer,integer)'::regprocedure")).rows[0].prosrc
+            .replaceAll('p_query','$1::jsonb').replaceAll('p_ids','null::jsonb').replaceAll('p_page','null::integer').replaceAll('p_size','null::integer')
           plannedValues=[values[0]]
         } else {
           plannedSql=(await db.query('select public.library_query_work_sql($1,false) statement',[values[0]])).rows[0].statement.replaceAll('$1','$1::jsonb').replaceAll('$2','$2::uuid')

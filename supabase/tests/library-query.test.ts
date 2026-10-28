@@ -549,3 +549,24 @@ it('aggregates merged series metadata once per series while preserving compact n
   expect((await db.query<{is_called:boolean}>('select is_called from public.series_aggregations')).rows[0].is_called).toBe(false)
  } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })
+
+it('builds the series pool once per page for cold loads, paging and sorting', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_query_pool(jsonb)'::regprocedure")).rows[0]
+  await db.exec('create sequence public.series_pool_reads;grant usage,select on sequence public.series_pool_reads to authenticated')
+  await db.exec(fn.definition.replace(fn.source,fn.source.replace(/\bbegin\b/i,"begin perform nextval('public.series_pool_reads');")))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  let calls=0
+  for(const [shelf,filters,page] of [
+   ['series',{},1],['series',{},999],['series',{sort:'alpha'},1],
+   ['all',{showSeries:true,inSeries:true},1],['all',{showSeries:true},1],
+  ] as const) {
+   const result=(await db.query<{r:LibraryResults}>('select public.query_library($1,$2,25) r',[JSON.stringify({mode:'library',shelf,includeFacets:false,filters:{...defaultReadingFilters,...filters}}),page])).rows[0].r
+   expect(result.total).toBeGreaterThan(0)
+   expect(result.stories.length).toBeGreaterThan(0)
+   expect(result.page).toBeLessThanOrEqual(result.pages)
+   expect((await db.query<{n:number}>('select last_value::integer n from public.series_pool_reads')).rows[0].n).toBe(++calls)
+  }
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})

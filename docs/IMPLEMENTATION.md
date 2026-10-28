@@ -6,7 +6,7 @@ This document carries forward the detailed feature behavior, implementation deci
 
 ## Current Upgrade Requirements
 
-Apply all migrations through `20261027000600_series_query_evaluation.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
+Apply all migrations through `20261027000700_series_grouped_inputs.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
 
 Recent implementation changes:
 
@@ -47,9 +47,11 @@ Recovery reads standard EPUB metadata and AO3 download front matter, including t
 
 `SeriesImportReview` derives saved series IDs from account-owned series records and valid series memberships on saved works. Individual Save controls render only for missing series; Save All Series uses the same predicate, skips existing identities and hides after every reviewed series is saved. Loading/full-snapshot state does not create a second definition of whether a series belongs to the library. Work selection and importing remain independent of series saves.
 
+Suggestion and result failures reuse `RetryError` and the same cause-specific error formatter. Retry labels underline on hover and keyboard focus.
+
 Migration `20261027000600_series_query_evaluation.sql` reuses the existing series aggregation and pool functions. Materialization boundaries prevent rebuilding merged preview works and metadata for each output field or filter. Compact navigation explicitly skips these full-preview expressions. Result pools omit normalized search strings unless the corresponding text scope is requested, and Series-only pools omit individual work cards while retaining the works needed to derive series. Matchers, aliases, ownership, sorting, exact counts and result payloads retain their existing definitions. No new table, dependency, index, cache or backfill is introduced.
 
-The hosted reports involved the Series collection and In a Series with Show Series enabled. Apply this migration to the hosted database and deploy the client for the Save-control change. A frontend-only deployment cannot alter database evaluation. Local before/after measurements and regression checks are maintained in [Performance](PERFORMANCE.md#series-filters-and-suggestions). Hosted response times still require verification on the intended database.
+A hosted diagnostic confirmed the preceding migration was applied and suggestions still exceeded a 15-second limit. Migration `20261027000700_series_grouped_inputs.sql` groups linked saved works in one pass, sends only effective metadata and required reading fields into the series merger, and extends the existing matching function to return the selected page. Series requests select and hydrate from one pool; work-only requests retain the revision-bound identity cache. Public card/facet responses, paging, aliases, ownership and revision checks retain their contracts. Apply the new migration for this database fix; frontend deployment alone cannot change database evaluation. Measurements and rollout limits are maintained in [Performance](PERFORMANCE.md#series-filters-and-suggestions).
 
 ## Product Branding
 
@@ -399,7 +401,7 @@ Library and Reading now query numbered server pages of 50 works by default. Choo
 
 Collection navigation and results load without the full catalog. Suggestions and fandom counts are cached per collection, and import deduplication loads the catalog on demand.
 
-Apply all migrations through `20261027000600_series_query_evaluation.sql` before deploying this frontend. See [performance checks and rollout notes](PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
+Apply all migrations through `20261027000700_series_grouped_inputs.sql` before deploying this frontend. See [performance checks and rollout notes](PERFORMANCE.md) for repeatable 10,000-work fixtures, measured targets, database plans, queue capacity and hosted-validation requirements.
 
 ## Export and Restore Backups
 

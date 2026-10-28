@@ -1,3 +1,4 @@
+import { RetryError } from '../../components/RetryError'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { MetadataRefreshButton } from '../imports/MetadataControls'
 import { usePageMetadataRefresh } from '../imports/usePageMetadataRefresh'
@@ -125,9 +126,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
     <ReadingFilterControls worksOnly={author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
     {pagination(true)}
-    {remote.facetsError && <p role="alert" className="error-message">{remote.facetsError} <button className="text-button" onClick={remote.retry}>Retry Suggestions</button></p>}
+    {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retry} retryLabel="Retry Suggestions" />}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
-    {error && <div role="alert" className="error-message error-message-retry"><p>{error}</p>{remote.error && <button className="button secondary" onClick={remote.retry}>Retry Loading</button>}</div>}
+    {error && <RetryError message={error} onRetry={remote.error ? remote.retry : undefined} />}
     {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
     {!error && !remote.loading && pagination()}
   </>

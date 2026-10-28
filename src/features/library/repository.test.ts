@@ -8,7 +8,7 @@ vi.mock('../../lib/supabase', () => ({ supabase: { rpc: state.rpc, from: (table:
     return { data: (state.data[table] ?? []).slice(from, to + 1), error: state.fail ? { code: 'offline' } : null }
   } }; return query
 } }) } }))
-import { addStoriesToCollections, loadLibrary, queryLibrary } from './repository'
+import { addStoriesToCollections, loadLibrary, loadLibraryFacets, queryLibrary } from './repository'
 beforeEach(() => { state.data = {}; state.calls = []; state.fail = false; state.rpc.mockReturnValue({ abortSignal: state.response }) })
 it('loads beyond the API response cap without losing private tags and memberships', async () => {
   state.data.library_entries = Array.from({ length: 1001 }, (_, n) => ({ id: `entry-${n}`, work_id: `work-${n}`, metadata_overrides: { ...blankMetadata, title: `Story ${n}`, authors: ['Manual author'] } }))
@@ -36,7 +36,10 @@ it.each([
 ])('distinguishes results error %s and preserves the underlying cause', async (code, status, message) => {
  const error = { code, message: 'Backend failure' }
  state.response.mockResolvedValueOnce({ data: null, error, status })
- await expect(queryLibrary({ mode: 'library', shelf: 'favorites', filters: defaultReadingFilters }, 1, 50, new AbortController().signal)).rejects.toMatchObject({ message: expect.stringContaining(message), cause: error })
+ const query = { mode: 'library' as const, shelf: 'series', filters: defaultReadingFilters }
+ await expect(queryLibrary(query, 1, 50, new AbortController().signal)).rejects.toMatchObject({ message: expect.stringContaining(message), cause: error })
+ state.response.mockResolvedValueOnce({ data: null, error, status })
+ await expect(loadLibraryFacets(query, new AbortController().signal)).rejects.toMatchObject({ message: expect.stringContaining(message), cause: error })
 })
 
 it('keeps cancelled result requests out of the error state', async () => {

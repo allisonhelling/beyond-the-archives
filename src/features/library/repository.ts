@@ -183,10 +183,18 @@ export type LibraryNavigation = Record<string, { works: number; series: number; 
 export function libraryFacetScope(query: LibraryQuery) {
   return { mode: query.mode, shelf: query.mode === 'reading' ? 'view_all' : query.shelf, ...(query.author !== undefined && { author: query.author }), filters: { showSeries: query.filters.showSeries } }
 }
+function libraryLoadError(subject: string, error: { code?: string } | null, status: number) {
+  const reason = error?.code === '57014' ? 'The request took too long. Please try again.'
+    : status === 401 || error?.code === 'PGRST301' || error?.code === 'PGRST303' ? 'Your session has expired. Sign in again.'
+    : error?.code === 'PGRST202' || error?.code === '42883' ? 'The library database needs an update. Apply the latest migrations, then retry.'
+    : status === 0 ? 'Check your connection and retry.'
+    : `Please try again. If this continues, report error ${error?.code || status}.`
+  return new Error(`Could not load ${subject}. ${reason}`, { cause: error })
+}
 export async function loadLibraryFacets(query: LibraryQuery, signal: AbortSignal): Promise<LibraryFacets> {
-  const { data, error } = await client().rpc('library_query_facets', { p_query: libraryFacetScope(query) }).abortSignal(signal)
+  const { data, error, status } = await client().rpc('library_query_facets', { p_query: libraryFacetScope(query) }).abortSignal(signal)
   if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
-  if (error || !data) throw new Error('Could not load filter suggestions. Retry loading.')
+  if (error || !data) throw libraryLoadError('filter suggestions', error, status)
   return data as unknown as LibraryFacets
 }
 export async function loadLibraryRevision(): Promise<number> {
@@ -206,14 +214,7 @@ export async function queryLibrary(query: LibraryQuery, page: number, size: numb
   filterReading([], query.filters)
   const { data, error, status } = await client().rpc('query_library', { p_query: { ...query, includeFacets: false, terms: parseSearch(query.filters.within) }, p_page: page, p_size: size }).abortSignal(signal)
   if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
-  if (error) {
-    const message = error.code === '57014' ? 'Loading these results took too long. Retry or narrow your filters.'
-      : status === 401 || error.code === 'PGRST301' || error.code === 'PGRST303' ? 'Your session has expired. Sign in again to load these results.'
-      : error.code === 'PGRST202' || error.code === '42883' ? 'The library database needs an update. Apply the latest migrations, then retry.'
-      : status === 0 ? 'Could not reach the library. Check your connection and retry.'
-      : `Could not load these results. Retry loading. If this continues, report error ${error.code || status}.`
-    throw new Error(message, { cause: error })
-  }
+  if (error) throw libraryLoadError('these results', error, status)
   return data as unknown as LibraryResults
 }
 export async function loadSeriesRecord(seriesId: number): Promise<SeriesRecord | undefined> {

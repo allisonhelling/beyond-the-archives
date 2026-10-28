@@ -76,6 +76,7 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .status-pill { display: inline-block; background: #f8e6e3; border: 1px solid #e6c8c1; border-radius: 5px; padding: 5px 9px; color: #970000; font-size: 13px; font-weight: 600; letter-spacing: .08em; }
 .error-message, .success-message { border-radius: 5px; padding: 11px; font-size: var(--minimum-text-size); line-height: 1.6; margin-bottom: 18px; background: #fbe9e5; color: #970000; }.success-message { background: #f8e6e3; color: #970000; }
 .error-message-retry { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.error-message-retry .button:is(:hover, :focus-visible):not(:disabled) { text-decoration: underline; }
 .loading-state { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #970000; font-size: 14px; }
 .app-shell { min-height: 100dvh; display: flex; flex-direction: column; }
 .app-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 32px; background: #fffdfb; border-bottom: 1px solid #ecddd8; }

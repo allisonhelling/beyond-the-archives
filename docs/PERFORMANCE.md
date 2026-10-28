@@ -103,7 +103,7 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261027000600_series_query_evaluation.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261027000700_series_grouped_inputs.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
 
 ## Revision-Based Navigation and Counts
 
@@ -113,7 +113,7 @@ Migration `20261027000200_indexed_library_navigation.sql` extends the existing p
 
 A server revision advances transactionally after effective document changes, membership/series changes, collection-rule changes and verified tag evidence changes. Page responses and navigation snapshots include their revision. A page retries selection when that revision changes during document loading. The client rejects responses older than a revision it has already observed. Cache tables are private; RPCs derive the owner from authentication.
 
-Exact matching identities and totals are cached by filter combination and revision, with at most 20 cache entries per reader. Pagination and page size reuse the matching set. Sorting and shuffling reuse its identities and counts, applying only the new order. Dashboard section counts are calculated together and shared across categories with identical filters. Combined library/collection navigation counts are cached until the revision changes. The cache stores identities and counts rather than display documents.
+For work-only requests, exact matching identities and totals are cached by filter combination and revision, with at most 20 cache entries per reader. Pagination and page size reuse the matching set. Sorting and shuffling reuse its identities and counts, applying only the new order. Dashboard section counts are calculated together and shared across categories with identical filters. Combined library/collection navigation counts are cached until the revision changes. The cache stores identities and counts rather than display documents.
 
 Automatic memberships are derived in a separate table, leaving manual memberships editable through the established path. Effective metadata/progress/tag changes update affected memberships in the same transaction. Rule edits rebuild the affected collection; verified alias changes rebuild the reader's memberships. The resolver batches alias evidence updates before rebuilding once. Shared matchers and explicit owner aliases cover worker writes without a reader JWT. Converting an automatic collection still snapshots the shared rule's current matches into manual membership.
 
@@ -140,4 +140,23 @@ One local PGlite comparison used 4,908 works and 442 series for one reader, with
 | Work-only fandom-filtered page | 596 ms | 597 ms |
 | Work-only suggestions | 223 ms | 222 ms |
 
-`npm run perf:db` now includes `series-facets`, `mixed-facets`, and `in-series-page` alongside the existing series page. SQL regressions count aggregate evaluations per series, reject unnecessary search-text construction, exercise real text searches, and verify compact navigation does not evaluate full preview metadata. Existing ownership, browser/SQL filter parity, alias, paging, and automatic-collection checks remain applicable. Apply the migration to the hosted database; local fixtures do not establish that an existing hosted deployment has been upgraded or that its timeout is resolved.
+`npm run perf:db` now includes `series-facets`, `mixed-facets`, and `in-series-page` alongside the existing series page. SQL regressions count aggregate evaluations per series, reject unnecessary search-text construction, exercise real text searches, and verify compact navigation does not evaluate full preview metadata. Existing ownership, browser/SQL filter parity, alias, paging, and automatic-collection checks remain applicable. These original local fixtures did not establish hosted latency. The subsequent hosted diagnostic below confirmed this migration was applied and the timeout persisted.
+
+### Grouped Inputs and Single-Pass Series Pages
+
+A read-only hosted diagnostic on 27 October 2026 confirmed migration `20261027000600_series_query_evaluation.sql` was applied. The database contained 4,911 saved works and 450 saved series. Series suggestions still exceeded a 15-second statement limit; an isolated original grouping/merger SELECT exceeded 45 seconds. Plans exposed repeated full saved-document joins and large temporary intermediates.
+
+Migration `20261027000700_series_grouped_inputs.sql` reuses the existing linked memberships and groups all saved works by series in one join. The query pool passes effective metadata and required reading fields into the merger, omitting unused HTML summaries, raw overlays, chapter maps and duplicate work metadata. The existing matching pipeline gains a four-argument overload that returns the requested page alongside identities. `query_library` uses that page directly for series requests, avoiding a second pool build. The original two-argument helper remains available; work-only paging retains the existing identity cache. No new table, index, dependency or cache is introduced.
+
+A local PGlite upgrade comparison used 4,908 works and 450 saved series for one reader. Complete JSON responses matched before/after for every scenario below, including compact saved-work fields, exact totals, clamped pagination and facets. Timings are individual observations:
+
+| Operation | Before | After |
+| --- | ---: | ---: |
+| Series suggestions | 491 ms | 318 ms |
+| First 50 series | 1,142 ms | 370 ms |
+| Clamped last series page | 1,201 ms | 384 ms |
+| In a Series + Show Series | 1,827 ms | 876 ms |
+| Mixed suggestions | 889 ms | 504 ms |
+| Work-only page | 33 ms | 35 ms |
+
+The equivalent grouped/compact suggestions SELECT completed in 6,935 ms in one hosted read-only plan; the corresponding first-page selection completed in 7,483 ms. These are individual SELECT observations, not production RPC latency percentiles. The regression suite counts pool evaluations for cold series loads, paging, sorting and mixed results, and retains the existing filter/ownership parity checks. The new migration was not applied by these diagnostics; verify both production RPCs after rollout, including concurrent result/suggestion loads.

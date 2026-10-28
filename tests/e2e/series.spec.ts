@@ -298,3 +298,33 @@ test('series review saves only series missing from the library', async ({ page }
  await expect(dialog.getByRole('button', { name: 'Save All Series', exact: true })).toHaveCount(0)
  expect(tables.library_series.map(series => series.ao3_series_id).sort()).toEqual([77, 89])
 })
+
+test('series collection failures share retry styling and recover results and suggestions', async ({ page }) => {
+ await fixture(page)
+ let fail = true
+ for (const rpc of ['query_library', 'library_query_facets']) {
+  await page.route(`**/rest/v1/rpc/${rpc}`, route => fail
+   ? route.fulfill({ status: 500, json: { code: '57014', message: 'Statement timeout' } })
+   : route.fallback())
+ }
+ await page.goto('/library?shelf=series'); await login(page)
+ const alerts = page.locator('.error-message-retry')
+ await expect(alerts).toHaveCount(2)
+ await expect(alerts.filter({ hasText: 'Could not load filter suggestions.' })).toContainText('The request took too long. Please try again.')
+ await expect(alerts.filter({ hasText: 'Could not load these results.' })).toContainText('The request took too long. Please try again.')
+ const retry = page.getByRole('button', { name: 'Retry Suggestions', exact: true })
+ await retry.focus()
+ await page.keyboard.press('Shift+Tab')
+ await page.keyboard.press('Tab')
+ await expect(retry).toHaveCSS('text-decoration-line', 'underline')
+ if (page.viewportSize()!.width > 600) {
+  await retry.blur()
+  await retry.hover()
+  await expect(retry).toHaveCSS('text-decoration-line', 'underline')
+ }
+ fail = false
+ await retry.click()
+ await expect(alerts).toHaveCount(0)
+ await expect(page.locator('[data-results-loading]')).toHaveCount(0)
+ await expect(page.getByRole('heading', { name: 'No Stories Here Yet' })).toBeVisible()
+})
