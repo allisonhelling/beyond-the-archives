@@ -7,6 +7,7 @@ A private application for organizing AO3 works and series, tracking reading prog
 ## Major Features
 
 - **Library and Currently Reading:** shelves, favorites, editable Recs, personal star ratings, notes, tags, and reading statuses from To Read through Finished or Did Not Finish.
+- **Reading Statistics:** monthly/yearly chapter word totals, re-reads, reading-time estimates, status progression, taxonomy profiles, favorites, trends, and activity heatmaps. Set your reading speed in Settings → Reading Statistics.
 - **Reading Progress:** chapter tracking, pause/resume, rereads, reading date ranges, and chapter reading history recorded by the browser companion. Reading status stays separate from AO3 publication status.
 - **Flexible Imports:** work/chapter links, series selection, manual entry, metadata recovery from EPUBs, scraper CSV files, and browser scans of AO3 lists and collections.
 - **Search and Organization:** title/author search, fandom and categorized tag filters, verified canonical-tag synonyms, saved custom collections, automatic collection rules, grouping, and seeded random sorting. Author pages group works already in your library.
@@ -15,7 +16,7 @@ A private application for organizing AO3 works and series, tracking reading prog
 - **Data Portability:** CSV ZIP exports, complete JSON backups, saved private backups, restore previews with safety copies, and optional DNF cleanup with an archive of compact reading records.
 - **Browser Companions:** Chrome/Edge metadata retrieval, Library Sync, and AO3 reading controls; Safari reading controls through a userscript.
 
-Reading statistics and automatic email chapter notifications are not implemented. The Stats page is a placeholder. Metadata retrieval and full series details run when requested; future installments are not automatically imported.
+Statistics use dated chapter completion records; older progress without chapter history cannot be backfilled accurately. Reading sessions and automatic email chapter notifications are not implemented. Metadata retrieval and full series details run when requested; future installments are not automatically imported. For repeated collection-loading timeouts, see the [performance troubleshooting and rollout notes](docs/PERFORMANCE.md#compact-catalog-and-shared-read-scheduling).
 
 ## Quick Preview
 

@@ -592,7 +592,7 @@ it('loads series cards and suggestions without reading full work documents', asy
  try {
   // A trigger-maintained plain column lets this transaction invalidate the large
   // source documents without changing the stored series projection under test.
-  await db.exec('alter table public.library_search_documents alter column series_story drop expression')
+  await db.exec('alter table public.library_search_documents alter column series_story drop expression, alter column catalog_story drop expression')
   await db.exec('alter table public.library_search_documents disable trigger all')
   await db.exec(`update public.library_search_documents set story='null'::jsonb`)
   await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
@@ -657,4 +657,49 @@ it('reuses one owner-scoped series pool across filters and invalidates it after 
   expect(other.stories.some(story=>story.notes.includes('Changed cached series note'))).toBe(false)
   await expect(db.query('select * from public.library_query_cache')).rejects.toThrow('permission denied')
  } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
+})
+
+
+it('loads catalog and navigation from compact documents while retaining exact responses and ownership', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const snapshot = async () => {
+   await db.exec('reset role;update public.library_query_state set navigation_revision=-1 where user_id=auth.uid();set role authenticated')
+   const result = (await db.query<{ catalog: {stories:Story[]}; navigation: unknown }>('select public.library_catalog() catalog,public.library_navigation_snapshot() navigation')).rows[0]
+   result.catalog.stories.sort((a,b)=>a.id.localeCompare(b.id))
+   return result
+  }
+  const before = await snapshot()
+  await db.exec('reset role;alter table public.library_search_documents alter column catalog_story drop expression;alter table public.library_search_documents disable trigger all')
+  // Full source documents remain unavailable throughout both reads. Neither RPC
+  // may reconstruct metadata or access the general work browsing pool.
+  await db.exec("update public.library_search_documents set story='null'::jsonb")
+  const pool = (await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_query_pool(jsonb,boolean)'::regprocedure")).rows[0]
+  await db.exec(pool.definition.replace(pool.source,"begin raise exception 'Unexpected full document pool'; end;"))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  expect(await snapshot()).toEqual(before)
+  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${bob}'`)
+  const other = await snapshot() as { catalog: { stories: Story[] }; navigation: unknown }
+  expect(other.catalog.stories.every(story => story.id !== (before.catalog as {stories: Story[]}).stories[0].id)).toBe(true)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('refreshes compact catalog fields and automatic memberships after personal and metadata edits', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const saved = (await documents())[0]
+  await db.query("update public.library_entries set reading_status='re_reading',is_favorite=true,last_read_chapter=2,metadata_overrides=metadata_overrides||$2::jsonb where id=$1",[saved.id,JSON.stringify({title:'Compact edited title',fandoms:['Compact Fandom']})])
+  const automatic = (await db.query<{id:string}>(`insert into public.collections(name,automatic_rules) values ('Compact Automatic','{"filters":{"fandoms":["Compact Fandom"]},"terms":[]}'::jsonb) returning id`)).rows[0].id
+  const catalog = (await db.query<{r:{stories:Story[]}}>('select public.library_catalog() r')).rows[0].r
+  const compact = catalog.stories.find(story => story.id === saved.id)!
+  expect(compact).toMatchObject({reading_status:'re_reading',is_favorite:true,last_read_chapter:2,metadata:{title:'Compact edited title',fandoms:['Compact Fandom']}})
+  expect(compact.metadata).not.toHaveProperty('summary')
+  expect(compact).not.toHaveProperty('reading_history')
+  expect(compact.automaticCollectionIds).toContain(automatic)
+  await db.query("update public.library_entries set metadata_overrides=metadata_overrides||'{\"fandoms\":[\"Other Fandom\"]}'::jsonb where id=$1",[saved.id])
+  const changed = (await db.query<{r:{stories:Story[]}}>('select public.library_catalog() r')).rows[0].r.stories.find(story=>story.id===saved.id)!
+  expect(changed.automaticCollectionIds).not.toContain(automatic)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })

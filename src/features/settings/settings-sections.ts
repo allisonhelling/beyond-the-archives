@@ -28,3 +28,9 @@ export const dnfCleanupSettingsSection = {
   title: 'DNF Cleanup',
   description: 'Automatically remove DNF details and preserve compact reading records',
 }
+
+export const readingStatsSettingsSection = {
+ id: 'settings-reading-stats',
+ title: 'Reading Statistics',
+ description: 'Reading speed for estimated reading time',
+}

@@ -1,3 +1,4 @@
+import { readingSpeedKey } from '../stats/preferences'
 import { brandSlug } from '../../lib/brand'
 import { downloadFile } from '../../lib/download'
 import { supabase } from '../../lib/supabase'
@@ -10,7 +11,7 @@ import { backupBucket, backupFileLimit, type SavedBackup } from '../../types/bac
 
 // Explicit allowlist: never export Supabase sessions or device credentials.
 export const browserPreferenceKeys = [dateFormatKey, displaySettingsKey, pageSizeKey,
-  readingPreferencesKey, collectionSortKey] as const
+  readingPreferencesKey, collectionSortKey, readingSpeedKey] as const
 
 export { backupBucket }
 export type { SavedBackup }

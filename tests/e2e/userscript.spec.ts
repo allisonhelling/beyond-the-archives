@@ -372,6 +372,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 0 / 10', { exact: true })).toBeVisible()
   await bottom.getByRole('button', { name: 'Read', exact: true }).click()
+  await expect(top.getByRole('status')).toHaveText('Marked As Read Through Chapter 4')
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
   await page.evaluate(() => {
    document.getElementById('ao3-library-companion')!.remove()
@@ -380,6 +381,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.addScriptTag({ content: script })
   await expect(bottom.getByRole('button', { name: 'Finish Fic', exact: true })).toBeVisible()
   await bottom.getByRole('button', { name: 'Finish Fic', exact: true }).click()
+  await expect(top.getByRole('status')).toHaveText('Marked As Read Through Chapter 10')
   await expect(top.getByText('Finished', { exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 10 / 10', { exact: true })).toBeVisible()
@@ -594,6 +596,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
 })
 
 test('built userscript saves unsaved works through first-chapter and completion actions', async ({ page }) => {
+ test.setTimeout(90000) // Bundle build plus four page loads and chapter captures.
  const directory = await mkdtemp(join(tmpdir(), 'ao3-unsaved-reading-'))
  try {
   execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
@@ -633,7 +636,7 @@ test('built userscript saves unsaved works through first-chapter and completion 
     await expect(top.getByRole('button', { name: 'Reading', exact: true })).toBeVisible()
    } else await expect(top.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
    await (action.bottom ? bottom : top).getByRole('button', { name: action.label, exact: true }).click()
-   await expect(top.getByRole('status')).toHaveText('Saved')
+   await expect(top.getByRole('status')).toHaveText(action.label === 'Reading' ? 'Saved' : `Marked As Read Through Chapter ${action.chapter}`)
    const saved = await page.evaluate(() => (window as Window & { unsavedReadingRequests: { p_action: string; p_input: Record<string, unknown> }[] }).unsavedReadingRequests.find(request => request.p_action === 'save')!.p_input)
    expect(saved).toMatchObject({ status: action.status, progress: action.progress })
    if (action.label === 'Reading') expect(saved).not.toHaveProperty('chapter_read')

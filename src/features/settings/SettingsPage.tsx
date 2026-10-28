@@ -1,3 +1,5 @@
+import { ReadingStatsSettings } from '../stats/ReadingStatsSettings'
+import { readingStatsSettingsSection } from './settings-sections'
 import { PersonalRatingSettings } from './PersonalRatingSettings'
 import { DnfCleanupSettings } from './DnfCleanupSettings'
 import { dnfCleanupSettingsSection } from './settings-sections'
@@ -23,6 +25,7 @@ import './settings.css'
 const settingsSections: { id: string; title: string; description: string; component: () => ReactNode; aliases?: string[] }[] = [
   { ...accountSettingsSection, component: AccountSettings },
   { ...personalRatingSettingsSection, component: PersonalRatingSettings },
+  { ...readingStatsSettingsSection, component: ReadingStatsSettings },
   { ...dnfCleanupSettingsSection, component: DnfCleanupSettings },
   { ...browsingSettingsSection, component: BrowsingSettings },
   { ...displaySettingsSection, component: DisplaySettings },

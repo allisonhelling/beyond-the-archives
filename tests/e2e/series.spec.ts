@@ -329,11 +329,11 @@ test('series collection failures share retry styling and recover results and sug
  await expect(page.getByRole('heading', { name: 'No Stories Here Yet' })).toBeVisible()
 })
 
-test('series results load before suggestions without concurrent series scans', async ({ page }) => {
+test('series results load before suggestions without concurrent catalog or series scans', async ({ page }) => {
  const tables=await fixture(page)
  tables.works.push({id:'queued-work',ao3_work_id:987,title:'Queued work',verified_chapters:{}})
  tables.library_entries.push({id:'queued-entry',work_id:'queued-work',original_url:'https://archiveofourown.org/works/987',reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{series_memberships:[{id:789,name:'Queued series',url:'https://archiveofourown.org/series/789',position:1}]}})
- let releaseResults!:()=>void,releaseSuggestions!:()=>void,resultsActive=false,suggestionsActive=false,overlaps=0
+ let releaseResults!:()=>void,releaseSuggestions!:()=>void,resultsActive=false,suggestionsActive=false,navigationActive=false,catalogActive=false,overlaps=0
  const resultsGate=new Promise<void>(resolve=>{releaseResults=resolve}),suggestionsGate=new Promise<void>(resolve=>{releaseSuggestions=resolve})
  const requests:string[]=[]
  await page.route('**/rest/v1/rpc/query_library',async route=>{
@@ -351,8 +351,17 @@ test('series results load before suggestions without concurrent series scans', a
  })
  await page.route('**/rest/v1/rpc/library_navigation_snapshot',async route=>{
   requests.push('navigation')
-  if(resultsActive||suggestionsActive) {overlaps++;return route.fulfill({status:500,json:{code:'57014',message:'Concurrent navigation scan timed out'}})}
+  if(resultsActive||suggestionsActive||catalogActive) {overlaps++;return route.fulfill({status:500,json:{code:'57014',message:'Concurrent navigation scan timed out'}})}
+  navigationActive=true
   await route.fallback()
+  navigationActive=false
+ })
+ await page.route('**/rest/v1/rpc/library_catalog',async route=>{
+  requests.push('catalog')
+  if(resultsActive||suggestionsActive||navigationActive) {overlaps++;return route.fulfill({status:500,json:{code:'57014',message:'Concurrent catalog scan timed out'}})}
+  catalogActive=true
+  await route.fallback()
+  catalogActive=false
  })
  try {
   await page.goto('/library?shelf=series');await login(page)
@@ -361,8 +370,12 @@ test('series results load before suggestions without concurrent series scans', a
   await expect(page.locator('.series-card h2')).toContainText('Queued series')
   await expect.poll(()=>requests).toEqual(['results','suggestions'])
   expect(overlaps).toBe(0)
+  await page.getByRole('navigation',{name:'Library Shelves',exact:true}).getByRole('button',{name:'New Collection',exact:true}).last().click()
+  await expect(page.getByRole('dialog',{name:'New Collection',exact:true})).toBeVisible()
+  expect(requests).not.toContain('catalog')
   releaseSuggestions()
-  await expect.poll(()=>requests).toEqual(['results','suggestions','navigation'])
+  await expect.poll(()=>requests.slice(0,4)).toEqual(['results','suggestions','navigation','catalog'])
+  expect(requests.filter(name=>name==='catalog')).toHaveLength(1)
   expect(overlaps).toBe(0)
   await expect(page.locator('[data-results-loading]')).toHaveCount(0)
   await expect(page.locator('.error-message-retry')).toHaveCount(0)

@@ -192,7 +192,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await expect(bar.getByRole('button', { name: 'Mark Read', exact: true })).toHaveCount(0)
   await expect(ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Resume Reading', exact: true })).toHaveCount(0)
   await ao3.locator('#ao3-library-progress').getByRole('button', { name: 'Mark Read', exact: true }).click()
-  await expect(bar.getByRole('status')).toHaveText('Saved')
+  await expect(bar.getByRole('status')).toHaveText('Marked As Read Through Chapter 1')
   await expect(bar.getByText('Ch. 1 / 6', { exact: true })).toBeVisible()
   expect(barEntries.get(123)).toMatchObject({ notes: 'Edited directly from Chrome', status: 'reading', progress: 1 })
   expect(barRequests.at(-1)!.p_input.chapter_read).toEqual({ chapter: 1, chapter_id: '910', word_count: 3 })
@@ -256,7 +256,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   await expect(nextBar.getByRole('status')).toHaveText('Saved')
   await nextWork.goto('https://archiveofourown.org/works/456/chapters/960')
   await nextBar.getByRole('button', { name: 'Mark Read', exact: true }).click()
-  await expect(nextBar.getByRole('status')).toHaveText('Saved')
+  await expect(nextBar.getByRole('status')).toHaveText('Marked As Read Through Chapter 6')
   expect(barEntries.get(456)).toMatchObject({ status: 'waiting_for_updates', progress: 6 })
   for (const surface of [nextBar, nextWork.locator('#ao3-library-progress')]) await expect(surface.locator('.reading-summary strong')).toHaveText('Waiting for Updates')
   // Series previews reuse the same explicit-request boundary and never queue works.

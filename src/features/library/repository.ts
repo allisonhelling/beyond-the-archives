@@ -153,9 +153,12 @@ export async function reorderCollections(ids: string[]) {
   const { error } = await client().rpc('reorder_collections', { p_ids: ids }); failure(error)
 }
 
-export async function loadCatalog() {
+export async function loadCatalog(signal?: AbortSignal) {
   if (sampleMode) return loadLibrary()
-  const { data, error } = await client().rpc('library_catalog')
+  let request = client().rpc('library_catalog')
+  if (signal) request = request.abortSignal(signal)
+  const { data, error } = await request
+  if (signal?.aborted) throw new DOMException('Library request cancelled', 'AbortError')
   if (error || !data) throw new Error('Could not load your library. Apply the latest migrations and check your connection.')
   const result = data as unknown as { stories: Story[]; collections: Collection[]; series: SeriesRecord[] }
   result.stories = result.stories.map(storyCatalogEntry)

@@ -30,6 +30,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const revisionRequest = useRef<Promise<void> | null>(null)
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const catalogRequest = useRef<Promise<void> | null>(null)
+  const catalogController = useRef<AbortController | null>(null)
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const generation = useRef(0)
@@ -42,7 +43,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const seriesReads = useRef<Promise<unknown>>(Promise.resolve())
   const readQuery = useCallback(<T,>(hasSeries: boolean, signal: AbortSignal, read: () => Promise<T>) => {
     if (!hasSeries) return read()
-    // Pages, suggestions and navigation aggregate the same reader's series.
+    // Pages, suggestions, catalog and navigation share the reader's database budget.
     // Queue them so concurrent scans cannot exhaust the database time budget.
     const task = seriesReads.current.catch(() => {}).then(() => {
       if (signal.aborted) throw new DOMException('Library request cancelled', 'AbortError')
@@ -79,9 +80,10 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const queue = useRef<Promise<void>>(Promise.resolve())
   const ensureCatalog = useCallback(async () => {
     if (catalogRequest.current) return catalogRequest.current
-    const life = lifecycle.current
+    const life = lifecycle.current, controller = new AbortController()
+    catalogController.current = controller
     const task = queue.current.catch(() => {}).then(async () => {
-      const next = await loadCatalog()
+      const next = await readQuery(!sampleMode, controller.signal, () => loadCatalog(controller.signal))
       if (life !== lifecycle.current) return
       setData(previous => {
         const ids = new Set(next.stories.map(story => story.id))
@@ -92,8 +94,11 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     })
     queue.current = task
     catalogRequest.current = task
-    try { await task } catch (error) { catalogRequest.current = null; setError(error instanceof Error ? error.message : 'Could not load your library.'); throw error }
-  }, [boundDetails])
+    try { await task } catch (error) {
+      if (life === lifecycle.current && catalogRequest.current === task) { catalogRequest.current = null; setError(error instanceof Error ? error.message : 'Could not load your library.') }
+      throw error
+    }
+  }, [boundDetails, readQuery])
   // Unknown old records and series can affect any pool. Known manual collection
   // and author scopes can safely retain their pages when an edit is unrelated.
   const invalidateQueries = useCallback((affected: (query: LibraryQuery) => boolean) => {
@@ -373,7 +378,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       finally { if (life === lifecycle.current) setLoading(false) }
     })()
     const pages = cache.current, facetCache = facets.current, heights = rowHeights, lifeRef = lifecycle, requests = generation
-    return () => { lifeRef.current++; requests.current++; catalogRequest.current = null; pages.clear(); facetCache.clear(); heights.clear(); temporaryPageSizes.clear() }
+    return () => { lifeRef.current++; requests.current++; catalogRequest.current = null; catalogController.current?.abort(); catalogController.current = null; pages.clear(); facetCache.clear(); heights.clear(); temporaryPageSizes.clear() }
   }, [ensureCatalog, rowHeights, temporaryPageSizes])
   return <Context.Provider value={{ ...data, hasCachedPage, navigation, navigationError, navigationLoading, revisionError, checkRevision, retryCounts, catalogLoaded, ensureCatalog, fetchFacets, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, tagRevision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
     {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading Updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss Undo Notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous, notice.saved ?? {}); await refreshStory(notice.storyId) }} />)}</section>}

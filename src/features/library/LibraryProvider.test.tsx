@@ -349,3 +349,41 @@ it('loads the catalog after the development StrictMode cleanup cancels its first
  await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
  expect(view.result.current.stories.map(story=>story.id)).toEqual(['one','two'])
 })
+
+
+it('queues and coalesces catalog loading behind series results, and series reads behind the catalog',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper})
+ await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ let finishPage!:(value:typeof result)=>void
+ mocks.query.mockImplementationOnce(()=>new Promise(resolve=>{finishPage=resolve}))
+ const seriesQuery={...query,shelf:'series'},signal=new AbortController().signal
+ const page=view.result.current.fetchPage(seriesQuery,1,50,signal)
+ await waitFor(()=>expect(mocks.query).toHaveBeenCalledOnce())
+ const catalog=view.result.current.ensureCatalog(),duplicate=view.result.current.ensureCatalog()
+ expect(mocks.catalog).not.toHaveBeenCalled()
+ let finishCatalog!:(value:{stories:Story[];collections:never[];series:never[]})=>void
+ mocks.catalog.mockImplementationOnce(()=>new Promise(resolve=>{finishCatalog=resolve}))
+ await act(async()=>{finishPage(result);await page})
+ await waitFor(()=>expect(mocks.catalog).toHaveBeenCalledOnce())
+ const facets=view.result.current.fetchFacets(seriesQuery,signal)
+ expect(mocks.facets).not.toHaveBeenCalled()
+ await act(async()=>{finishCatalog({stories:[],collections:[],series:[]});await catalog;await duplicate;await facets})
+ expect(mocks.catalog).toHaveBeenCalledOnce()
+ expect(mocks.facets).toHaveBeenCalledOnce()
+ expect(mocks.catalog.mock.calls[0][0]).toBeInstanceOf(AbortSignal)
+})
+
+it('cancels catalog requests queued behind a series read when the provider unmounts',async()=>{
+ const view=renderHook(()=>useLibrary(),{wrapper})
+ await waitFor(()=>expect(view.result.current.loading).toBe(false))
+ let finishPage!:(value:typeof result)=>void
+ mocks.query.mockImplementationOnce(()=>new Promise(resolve=>{finishPage=resolve}))
+ const page=view.result.current.fetchPage({...query,shelf:'series'},1,50,new AbortController().signal)
+ await waitFor(()=>expect(mocks.query).toHaveBeenCalledOnce())
+ const catalog=view.result.current.ensureCatalog()
+ const aborted=expect(catalog).rejects.toMatchObject({name:'AbortError'})
+ const obsolete=expect(page).rejects.toMatchObject({name:'AbortError'})
+ view.unmount()
+ await act(async()=>{finishPage(result);await obsolete;await aborted})
+ expect(mocks.catalog).not.toHaveBeenCalled()
+})

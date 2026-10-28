@@ -1,0 +1,56 @@
+.stats-page { display: grid; gap: 24px; min-width: 0; }
+.stats-page > *, .stats-page section { min-width: 0; }
+.stats-page .page-heading, .stats-page .settings-card { margin: 0; }
+.stats-page h2 { font-size: 27px; margin-bottom: 16px; }
+.stats-page h3 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.stats-page section > .muted { margin: 10px 0; }
+.stats-period { display: grid; gap: 16px; }
+.stats-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.stats-controls label { display: inline-flex; align-items: center; gap: 10px; margin: 0; }
+.stats-controls input:not([type=checkbox]) { width: 150px; margin: 0; }
+.stats-controls .check-label input { width: auto; margin: 0; }
+.stats-controls select { width: auto; }
+.stats-picker-heading { justify-content: space-between; margin: 16px 0; }
+.stats-calendar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stats-grid, .stats-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
+.stats-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stats-metric > strong { font-family: var(--font-serif); font-size: clamp(24px, 3vw, 36px); color: var(--color-brand); }
+.stats-statuses { display: flex; flex-wrap: wrap; gap: 24px; margin: 22px 0; }
+.stats-statuses > div { display: grid; gap: 6px; }
+.stats-statuses strong { font-size: 26px; color: var(--color-brand); }
+.stats-statuses span { font-size: 13px; }
+.stats-breakdown { min-width: 0; }
+.stats-breakdown ul { display: grid; gap: 16px; list-style: none; padding: 0; margin: 20px 0 0; }
+.stats-breakdown li > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 14px; overflow-wrap: anywhere; }
+.stats-breakdown li strong { font-weight: 550; }
+.stats-breakdown meter { display: block; width: 100%; height: 10px; margin-top: 6px; accent-color: var(--color-brand); }
+.stats-breakdown meter::-webkit-meter-bar { background: var(--color-brand-soft); border: none; }
+.stats-breakdown meter::-webkit-meter-optimum-value { background: var(--color-brand); }
+.stats-breakdown meter::-moz-meter-bar { background: var(--color-brand); }
+.stats-page #habits-heading ~ .settings-card { margin-bottom: 18px; }
+.stats-comparison { margin: 14px 0; }
+.stats-comparison strong { color: var(--color-brand); font-size: 24px; }
+.stats-chart-scroll, .stats-table-scroll { overflow-x: auto; max-width: 100%; }
+.stats-bars { display: flex; align-items: end; gap: 5px; min-width: 650px; margin: 24px 0; }
+.stats-bars-daily-year { min-width: 6500px; }
+.stats-bar-column { flex: 1; min-width: 0; text-align: center; }
+.stats-bar-column svg { width: 100%; height: 150px; fill: var(--color-brand); border-bottom: 1px solid var(--color-border); }
+.stats-bar-column span { display: block; font-size: 10px; writing-mode: vertical-rl; margin: 8px auto; height: 48px; }
+.stats-page details summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: var(--color-link); }
+.stats-page table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 16px; }
+.stats-page caption { text-align: left; margin-bottom: 10px; }
+.stats-page th, .stats-page td { text-align: left; border-bottom: 1px solid var(--color-border); padding: 10px; }
+.stats-page td { font-variant-numeric: tabular-nums; }
+.stats-heatmap { min-width: 760px; }
+.stats-heatmap td { text-align: center; border: 3px solid #fffdfb; }
+.stats-heatmap [data-level="0"] { background: var(--color-brand-soft); }
+.stats-heatmap [data-level="1"] { background: #edb9b2; }
+.stats-heatmap [data-level="2"] { background: #d9857b; }
+.stats-heatmap [data-level="3"] { background: #b94d46; color: white; }
+.stats-heatmap [data-level="4"] { background: var(--color-brand); color: white; }
+@media (max-width: 700px) {
+ .stats-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .stats-grid { grid-template-columns: minmax(0, 1fr); }
+ .stats-controls { gap: 8px; }
+ .stats-calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

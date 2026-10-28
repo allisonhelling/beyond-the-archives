@@ -103,7 +103,7 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261028000400_revision_cached_series.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261028000600_compact_library_catalog.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
 
 ## Revision-Based Navigation and Counts
 
@@ -197,3 +197,22 @@ SQL regressions count merger evaluations across sorting, text changes, mixed res
 
 
 One authorized hosted check of complete RPC copies on 28 October 2026 returned the same 541 series before/after cache reuse. The final cold page took 6,972 ms including the cache write; subsequent suggestions took 261 ms, a sort change 700 ms and an In a Series filter 669 ms. These individual observations used an eight-second statement budget and rolled back all private derived-cache writes. The first read after invalidation remains expensive and needs monitoring under concurrent hosted load. No production migration or frontend deployment was performed by this measurement.
+
+### Compact Catalog and Shared Read Scheduling
+
+The reported 28 October 2026 failures include both `library_catalog` and `library_navigation_snapshot` at the same timestamp, as well as a later `query_library` failure. The edge logs identify failing RPCs but do not supply PostgreSQL execution plans or the underlying error details. Code inspection found catalog loading outside the series/navigation queue, while catalog and navigation still extracted fields repeatedly from full work documents. These paths could compete with a cold series request despite the earlier series cache.
+
+Migration `20261028000600_compact_library_catalog.sql` stores the existing compact catalog fields in `library_search_documents.catalog_story` through a shared immutable projector. The generated column backfills existing documents and follows effective source updates atomically, using the same owner policy. Catalog and navigation work reads consume that small projection; cold series candidate selection uses it before loading larger series inputs. Collection/series payloads, exact counts, shelf semantics, automatic memberships and ownership retain their existing contracts. The frontend also schedules catalog RPCs through the existing series/navigation queue, coalesces them and aborts queued/active catalog transport on lifecycle cleanup. Ordinary work reads remain independent.
+
+A local embedded PostgreSQL comparison used one synthetic reader with 5,000 works, 541 saved series and 300 source chapter-map entries per work. The same database and complete RPCs were used before/after, and all JSON responses matched. Individual observations:
+
+| Operation | Before | After |
+| --- | ---: | ---: |
+| Catalog | 2,047 ms | 214 ms |
+| Navigation Snapshot | 1,982 ms | 761 ms |
+| Cold Series Page, 50 Results | 942 ms | 993 ms |
+| Warm Series Page, 50 Results | 212 ms | 277 ms |
+
+The improvement is in catalog/navigation overhead; this comparison does **not** establish a faster cold series merger or production latency. Raw local results are saved to the ignored `artifacts/performance/compact-catalog.json`. SQL regressions make full work documents and the general work pool unavailable while checking catalog/navigation responses, ownership and projection updates. Provider regressions cover catalog/page/facet ordering, request coalescing, unmount cancellation and StrictMode startup.
+
+Rollout requires applying ordered migrations through this version and deploying the matching frontend. This change has not been applied or measured on the hosted database in this session. Reproduce the actual browser flow after deployment and inspect the PostgreSQL error/plan if the cold series request still exceeds its existing budget; earlier temporary copies and local timings are insufficient proof of production resolution.

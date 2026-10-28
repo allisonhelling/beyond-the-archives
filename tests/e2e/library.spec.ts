@@ -698,9 +698,10 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   const panel = page.getByRole('region', { name: 'Reading Filters' })
   await expect((await ordering(page)).getByRole('button', { name: 'Group', exact: true })).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Work Status', exact: true })).toBeVisible()
-  const sizing = await page.locator('.reading-toolbar .filter-input, .reading-toolbar input[type=search], .reading-filters .filter-input, .reading-filters input').evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, font: getComputedStyle(element).fontSize })))
+  const sizing = await page.locator('.reading-toolbar .filter-input, .reading-toolbar input[type=search], .reading-filters .filter-input, .reading-filters input').evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, font: getComputedStyle(element).fontSize, textInput: element.matches('input:not([type=checkbox], [type=radio]), textarea, select') })))
   expect(sizing.length).toBeGreaterThan(8)
-  for (const control of sizing) { expect(control.height).toBe(36); expect(control.font).toBe('14px') }
+  const touchText = await page.evaluate(() => matchMedia('(max-width: 1100px), (any-pointer: coarse)').matches)
+  for (const control of sizing) { expect(control.height).toBe(36); expect(control.font).toBe(touchText && control.textInput ? '16px' : '14px') }
   const characterBounds = await panel.getByLabel('Characters', { exact: true }).boundingBox()
   const tagBounds = await panel.getByLabel('Tags', { exact: true }).boundingBox()
   expect(characterBounds!.height).toBe(tagBounds!.height)
@@ -2303,7 +2304,7 @@ test('adds stories to custom collections from story actions and collection pages
   await expect(page.locator('.results-count')).toHaveCount(0)
   await expect(addToCollection.locator('svg')).toHaveCount(0)
   await expect(addToCollection).toHaveCSS('font-size', '13px')
-  await expect(addToCollection).toHaveCSS('min-height', '34px')
+  await expect(addToCollection).toHaveCSS('min-height', '44px')
   await addToCollection.click()
   const stories = page.getByRole('dialog', { name: 'Add Stories to Night reads' })
   await expect(stories.locator('.choice-description').first()).toHaveCSS('font-size', '12px')
