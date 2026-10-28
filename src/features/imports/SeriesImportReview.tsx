@@ -1,3 +1,4 @@
+import { readSeriesReviewDraft, saveSeriesReviewDraft, seriesReviewScope } from './series-review-draft'
 import { Dialog } from '../../components/Dialog'
 import { Pagination } from '../library/browsing/Pagination'
 import { WorkSummary } from '../library/summaries/WorkSummary'
@@ -21,7 +22,8 @@ function SeriesScopeAction({ label, scope, disabled, expanded, onClick }: { labe
  return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className="text-button clickable-text" aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
 }
 
-export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: externalBusy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works' }: {
+export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: externalBusy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected Works', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works', draftScope, onImportSelected }: {
+ draftScope?: string; onImportSelected?(works: SeriesPreview['works']): Promise<boolean>
  bookmarkGroupingUnavailable?: boolean; relatedSeriesLabel?: string
  bookmarkedSeriesIds?: ReadonlySet<number>
  previewCache?: ReadonlyMap<number, SeriesPreview>; onPreview?(preview: SeriesPreview): void
@@ -34,11 +36,16 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  text: string; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
  onConfirm(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[], selections: SeriesWorkSelection[]): void; onCancel(): void
 }) {
- const { refreshSeries, stories = [], series: savedSeries = [], catalogLoaded } = useLibrary({ catalog: true })
- const busy = externalBusy || catalogLoaded === false
- const savedIds = new Set([...suppliedSavedIds, ...stories.flatMap(story => story.work.ao3_work_id ? [Number(story.work.ao3_work_id)] : [])])
+ const { userId = 'local', refreshSeries, stories = [], series: savedSeries = [], catalogLoaded } = useLibrary({ catalog: true })
+ const scope = draftScope ?? seriesReviewScope(text)
+ const [draft] = useState(() => readSeriesReviewDraft(userId, scope))
+ const [importedIds, setImportedIds] = useState(() => new Set(draft?.importedIds ?? []))
+ const [importing, setImporting] = useState(false)
+ const [draftSaved, setDraftSaved] = useState(true)
+ const busy = importing || externalBusy || catalogLoaded === false
+ const savedIds = new Set([...importedIds, ...suppliedSavedIds, ...stories.flatMap(story => story.work.ao3_work_id ? [Number(story.work.ao3_work_id)] : [])])
  const savedSeriesIds = new Set([...savedSeries.map(series => series.ao3_series_id), ...stories.flatMap(story => story.metadata ? seriesMemberships(story).map(series => series.id) : [])])
- const [readingStatus, setReadingStatus] = useState<Status>(initialReadingStatus)
+ const [readingStatus, setReadingStatus] = useState<Status>(draft?.readingStatus ?? initialReadingStatus)
  const series = useMemo(() => {
   const entries = new Map(extractUrls(text).flatMap(url => {
    const result = classifyUrl(url)
@@ -47,7 +54,11 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   return bookmarkedSeriesIds ? new Map([...entries].sort(([a], [b]) => Number(bookmarkedSeriesIds.has(b)) - Number(bookmarkedSeriesIds.has(a)))) : entries
  }, [text, bookmarkedSeriesIds])
  const direct = groupWorks(extractUrls(text))
- const [reviews, setReviews] = useState<Record<number, Review>>(() => Object.fromEntries([...initialPreviews, ...(previewCache?.values() ?? [])].map(preview => [preview.seriesId, { preview, selected: new Set<number>() }])))
+ const [reviews, setReviews] = useState<Record<number, Review>>(() => {
+  const initial: Record<number, Review> = Object.fromEntries(Object.entries(draft?.selected ?? {}).map(([id, ids]) => [id, { selected: new Set(ids) }]))
+  for (const preview of [...initialPreviews, ...(previewCache?.values() ?? [])]) initial[preview.seriesId] = { preview, selected: initial[preview.seriesId]?.selected ?? new Set() }
+  return initial
+ })
  const [loading, setLoading] = useState<number>()
  const [savingAll, setSavingAll] = useState(false)
  const [savingDetails, setSavingDetails] = useState(false)
@@ -64,8 +75,11 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   }
  }, [])
  function cancel() { active.current = false; previewRequest.current?.abort(); onCancel() }
- const [page, setPage] = useState(1)
- const [shownSeries, setShownSeries] = useState<Set<number>>(() => new Set())
+ const [page, setPage] = useState(draft?.page ?? 1)
+ const [shownSeries, setShownSeries] = useState<Set<number>>(() => new Set(draft?.shownSeries ?? []))
+ useEffect(() => {
+  setDraftSaved(saveSeriesReviewDraft(userId, scope, { selected: Object.fromEntries(Object.entries(reviews).map(([id, review]) => [id, [...review.selected]])), page, shownSeries: [...shownSeries], importedIds: [...importedIds], readingStatus }))
+ }, [userId, scope, reviews, page, shownSeries, importedIds, readingStatus])
  const contentRef = useRef<HTMLElement>(null)
  const saveDescription = 'Load and save full series details from AO3'
  const selections: SeriesWorkSelection[] = [...series.keys()].map(id => ({
@@ -80,13 +94,13 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   if (!active.current) return
   const request = new AbortController(); previewRequest.current = request; loadingId.current = id
   setLoading(id)
-  setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(), error: undefined } }))
+  setReviews(current => ({ ...current, [id]: { ...current[id], selected: current[id]?.selected ?? new Set(), error: undefined } }))
   try {
    const preview = await previewSeries(url, { signal: request.signal })
    if (!active.current || request.signal.aborted) return
    onPreview?.(preview)
-   setReviews(current => ({ ...current, [id]: { preview, selected: new Set() } }))
-  } catch (error) { if (active.current && !request.signal.aborted) setReviews(current => ({ ...current, [id]: { selected: new Set(), error: error instanceof Error ? error.message : 'Could not preview series. Please retry.' } })) }
+   setReviews(current => ({ ...current, [id]: { ...current[id], preview, selected: current[id]?.selected ?? new Set() } }))
+  } catch (error) { if (active.current && !request.signal.aborted) setReviews(current => ({ ...current, [id]: { ...current[id], selected: current[id]?.selected ?? new Set(), error: error instanceof Error ? error.message : 'Could not preview series. Please retry.' } })) }
   finally { if (active.current && !request.signal.aborted) setLoading(undefined) }
  }, [onPreview])
  useEffect(() => {
@@ -124,6 +138,13 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
    setReviews(current => ({ ...current, [id]: { ...current[id], error: error instanceof Error ? error.message : 'Could not save series details.' } }))
   } finally { setLoading(undefined); setSavingDetails(false) }
  }
+ async function importSelected() {
+  if (!onImportSelected || !selected.size || disabled) return
+  const ids = [...selected.keys()]
+  setImporting(true)
+  try { if (await onImportSelected([...selected.values()])) setImportedIds(current => new Set([...current, ...ids])) }
+  finally { setImporting(false) }
+ }
  function setVisibility(show: boolean, seriesId?: number) {
   setReviews(current => Object.fromEntries(Object.entries(current).map(([key, review]) => {
    if (seriesId !== undefined && Number(key) !== seriesId) return [key, review]
@@ -150,7 +171,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  function select(id: number, ids: number[]) { setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(ids) } })) }
  const title = automatic ? 'Import All Series Works' : 'Choose Works From Series'
  const disabled = busy || loading !== undefined || savingAll
- const cannotCancel = externalBusy || savingDetails
+ const cannotCancel = importing || externalBusy || savingDetails
  const reviewPages: { series: Map<number, { url: string; works: SeriesPreview['works'] }>; count: number }[] = [{ series: new Map(), count: 0 }]
  for (const [id, url] of series) {
   const works = reviews[id]?.preview?.works ?? []
@@ -182,6 +203,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   {automatic && ready && !canConfirm && <p role="status">No new available series works to import. Already saved works are kept.</p>}
   {!singleSeries && <p>{series.size} series detected · {direct.size} directly linked works included.</p>}
   <p className="field-help">{automatic ? 'All available series works are included automatically.' : 'Only selected works are added to your library.'}{!singleSeries && ' Previews are temporary unless you choose to save full series details. Saving details includes information about unsaved works; it does not add them to your library.'} For extension previews, keep this page open and complete any AO3 sign-in in the separate series preview window.</p>
+   {onImportSelected && <p className="field-help">Import Selected Works keeps this review open and the scan paused. Finishing the batch closes this review{confirmLabel === 'Import Batch and Continue' ? ' and resumes scanning' : ''}.</p>}
   {showReadingStatus && <><ImportReadingStatus value={readingStatus} disabled={disabled} onChange={status => { setReadingStatus(status); onReadingStatusChange?.(status) }} />
   <p className="field-help">Applies to the reviewed series and all works imported from these links.</p></>}
   {!singleSeries && <div className="form-actions series-preview-controls" role="group" aria-label="All Series Top Controls">
@@ -241,7 +263,13 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
    <SeriesScopeAction label="Hide All" scope="all series" disabled={disabled} onClick={() => setVisibility(false)} />
    <SeriesScopeAction label="Select All" scope="all series" disabled={disabled || automatic} onClick={() => setAllSelected(true)} />
   </div>}
-  <div className={`form-actions${fitActions ? ' form-actions-fit' : ''}`}><button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={cannotCancel} onClick={cancel}>{cancelLabel}</button></div>
+  <footer className="series-review-actions" aria-label="Series Import Actions">
+   <p role="status">{selected.size} selected works{draftSaved && ' · Saved in this browser'}</p>
+   {!draftSaved && <p className="error-message">Review progress could not be saved in this browser. Keep this window open to retain your selections.</p>}
+   <div className={`form-actions${fitActions || onImportSelected ? ' form-actions-fit' : ''}`}>
+   {onImportSelected && !automatic && <button type="button" className="button primary" disabled={disabled || !selected.size} onClick={() => void importSelected()}>{importing ? 'Importing Selected Works…' : 'Import Selected Works'}</button>}
+   <button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={cannotCancel} onClick={cancel}>{cancelLabel}</button></div>
+  </footer>
  </section>
  return embedded ? content : <Dialog title={title} className="series-review-dialog" busy={cannotCancel} onClose={cancel}>{content}</Dialog>
 }

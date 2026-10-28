@@ -137,6 +137,34 @@ it('shows navigation and pages without requesting the catalog, and deduplicates 
  expect(mocks.catalog).toHaveBeenCalledTimes(1)
  expect(view.result.current.catalogLoaded).toBe(true)
 })
+it('keeps the loaded catalog usable across consecutive targeted series saves', async () => {
+ const view=renderHook(()=>useLibrary({catalog:true}),{wrapper})
+ await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
+ await act(()=>view.result.current.checkRevision(true))
+ const works=view.result.current.stories
+ for (const id of [7,8]) {
+  const record={ao3_series_id:id,metadata:{title:`Series ${id}`}}
+  mocks.series.mockResolvedValueOnce(record)
+  mocks.revision.mockResolvedValue(id-6)
+  await act(()=>view.result.current.refreshSeries(id))
+  expect(view.result.current.catalogLoaded).toBe(true)
+  expect(view.result.current.series).toContainEqual(record)
+ }
+ expect(view.result.current.stories).toBe(works)
+ expect(mocks.catalog).toHaveBeenCalledOnce()
+})
+it('reloads the catalog when a series save also observes unrelated revisions', async () => {
+ const view=renderHook(()=>useLibrary({catalog:true}),{wrapper})
+ await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
+ await act(()=>view.result.current.checkRevision(true))
+ mocks.series.mockResolvedValueOnce({ao3_series_id:7})
+ mocks.revision.mockResolvedValue(2)
+ mocks.catalog.mockResolvedValueOnce({stories:[story('new')],collections:[],series:[{ao3_series_id:7}]})
+ await act(()=>view.result.current.refreshSeries(7))
+ await waitFor(()=>expect(mocks.catalog).toHaveBeenCalledTimes(2))
+ await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
+ expect(view.result.current.stories.map(story=>story.id)).toEqual(['new'])
+})
 it('caches facets across filters, sorting and pagination, and preserves unrelated collection pages after an edit',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))

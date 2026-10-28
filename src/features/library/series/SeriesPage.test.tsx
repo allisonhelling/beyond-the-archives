@@ -102,7 +102,7 @@ it('shows import failures inside the review dialog and retains the selection for
  const dialog = screen.getByRole('dialog', { name:'Review Series' })
  fireEvent.click(within(dialog).getAllByRole('button', { name: 'Show Series Works' })[0])
  fireEvent.click(within(dialog).getByRole('checkbox', { name:'Part 2: Unsaved sequel' }))
- await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name:'Import Selected' })) })
+ await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name:'Import Selected Works' })) })
  expect(within(dialog).getByRole('alert')).toHaveTextContent('Import unavailable')
  expect(within(dialog).getByRole('checkbox', { name:'Part 2: Unsaved sequel' })).toBeChecked()
 })

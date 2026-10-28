@@ -222,7 +222,7 @@ test('series imports require explicit work selection and fit desktop and mobile'
  await story.check()
  expect(submitted).toEqual([])
  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
- await page.getByRole('button', { name: 'Import Selected', exact: true }).click()
+ await page.getByRole('button', { name: 'Import Selected Works', exact: true }).click()
  await expect(page.getByText(/Batch saved\./)).toBeVisible()
  expect(submitted).toEqual(['https://archiveofourown.org/works/101'])
 })

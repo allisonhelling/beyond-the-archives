@@ -137,7 +137,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   busy = true; message.textContent = ''; surfaces.forEach(surface => surface.querySelectorAll('button').forEach(button => { button.disabled = true }))
   try { await action() }
   catch (error) { if (error instanceof EditConflict) showConflict(error); message.textContent = error instanceof Error ? error.message : 'Connection failed. Your draft is preserved.' }
-  finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); if (!message.querySelector('.undo-read')) progressBars.forEach(surface => { surface.message.textContent = message.textContent === 'Saved' ? '' : message.textContent }) }
+  finally { busy = false; renderToolbar(); surfaces.forEach(surface => surface.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' })); if (!message.querySelector('.undo-read')) progressBars.forEach(surface => { surface.message.textContent = message.textContent === 'Saved' ? '' : message.textContent }) }
  }
  async function rpc(action, input = {}, secret = connection?.secret) {
   const backend = new URL(backendUrl)

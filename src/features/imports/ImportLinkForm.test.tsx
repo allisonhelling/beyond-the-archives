@@ -91,7 +91,7 @@ it('reviews a series in place without creating a work',async()=>{
  expect(screen.getByRole('combobox',{name:'Reading Status'})).toHaveValue('to_read')
  fireEvent.change(screen.getByRole('combobox',{name:'Reading Status'}),{target:{value:'finished'}})
  fireEvent.click(screen.getByRole('checkbox',{name:'Part 1: First fic'}))
- fireEvent.click(screen.getByRole('button',{name:'Import Selected'}))
+ fireEvent.click(screen.getByRole('button',{name:'Import Selected Works'}))
  await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/101',true,'finished',[77]))
  expect(screen.getByRole('heading',{name:'Importing Selected Works'})).toBeVisible()
 })

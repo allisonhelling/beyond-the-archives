@@ -2676,7 +2676,7 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  await seriesFooter.getByRole('button', { name: 'Save', exact: true }).click()
  await expect(picker.getByRole('button', { name:'Save', exact:true })).toHaveCount(0)
  await picker.getByRole('checkbox', { name: 'Part 1: The story' }).check()
- await picker.getByRole('button', { name: 'Import Selected', exact: true }).click()
+ await picker.getByRole('button', { name: 'Import Selected Works', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Series Import Finished' })).toBeVisible()
  await expect(page.getByRole('status').filter({ hasText: 'Your selected works have finished processing.' })).toHaveCSS('padding-bottom', '24px')
  await expect(page).toHaveURL(/\/add$/)
@@ -2804,7 +2804,7 @@ test('a completed direct fic import offers its related series and imports only s
  await expect(notice.getByRole('checkbox', { name: 'Part 1: The story' })).toBeDisabled()
  await expect(notice.getByRole('checkbox', { name: 'Part 4: Art extras' })).not.toBeChecked()
  await notice.getByRole('group', { name: 'Series Selection Controls' }).getByRole('button', { name: 'Select All', exact: true }).click()
- await notice.getByRole('button', { name: 'Import Selected', exact: true }).click()
+ await notice.getByRole('button', { name: 'Import Selected Works', exact: true }).click()
  await expect.poll(() => submissions.length).toBe(2)
  expect(submissions[1]).toEqual({ p_urls: ['https://archiveofourown.org/works/102'], p_update_reading_location: false, p_reading_status: 'to_read', p_series_ids: [77] })
  expect(tables.library_entries).toHaveLength(2)
@@ -2989,10 +2989,14 @@ test('unknown AO3 Rec is editable on tiles and details and controls Recs members
  await selectLibraryShelf(page, 'Recs')
  await expect(card).toHaveCount(1)
  await card.getByRole('heading', { name: 'Personal Rec choice', exact: true }).getByRole('link').click()
+ const back = page.getByRole('link', { name: 'Back to Library', exact: true })
+ await expect(back).toHaveAttribute('href', /[?&]shelf=recs(?:&|$)/)
  await page.getByRole('button', { name: 'Remove Rec', exact: true }).click()
  await expect(page.getByRole('button', { name: 'Mark as Rec', exact: true })).toHaveAttribute('aria-pressed', 'false')
+ await expect(page.getByRole('button', { name: 'Mark as Rec', exact: true })).toBeEnabled()
  expect(tables.library_entries[0]).toMatchObject({ is_rec: false, is_favorite: false })
- await page.getByRole('link', { name: 'Back to Library', exact: true }).click()
+ await back.click()
+ await expect(page.getByRole('button', { name: 'Recs', exact: true })).toHaveAttribute('aria-pressed', 'true')
  await expect(page.getByRole('heading', { name: 'Your Library', exact: true })).toBeVisible()
  await expect(card).toHaveCount(0)
  await selectLibraryShelf(page, 'All Works')
@@ -3424,12 +3428,12 @@ for (const preceding of [20, 28]) test(`series reviews keep series together afte
  await pages.getByRole('button', { name: 'Prev', exact: true }).click()
  await expect(dialog.getByRole('checkbox', { name: 'Part 1: Paged Work 1', exact: true })).toBeChecked()
  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
- await dialog.getByRole('button', { name: 'Import Selected', exact: true }).click()
+ await dialog.getByRole('button', { name: 'Import Selected Works', exact: true }).click()
  await expect(dialog).toHaveCount(0)
  expect(submitted).toEqual([['https://archiveofourown.org/works/1', `https://archiveofourown.org/works/${offset}`]])
 })
 
-test('End Scan opens collected series review and finishes through the normal import flow', async ({ page }, info) => {
+test('End Scan review survives reload and imports selected works before finishing', async ({ page }, info) => {
  await fixture(page)
  await page.clock.install()
  const preview = { ...seriesPreview, seriesId: 99, normalizedUrl: 'https://archiveofourown.org/series/99', title: 'Collected Series', works: [501, 502].map((id, index) => ({ ...seriesPreview.works[0], workId: id, position: index + 1, title: `Collected Work ${id}`, url: `https://archiveofourown.org/works/${id}` })) }
@@ -3441,11 +3445,12 @@ test('End Scan opens collected series review and finishes through the normal imp
  })
  await page.addInitScript(({ preview }) => {
   localStorage.setItem('ao3-library-extension-id', 'a'.repeat(32))
-  let state = { id: 'ended-scan', status: 'running', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', pages: 1, count: 2, skipped: 0, error: '', endedEarly: false, hasMore: false, seriesReviewVersion: 1, seriesBehavior: 'choose', seenSeries: [preview.normalizedUrl] }
-  Object.assign(window, { completeEndScanChecks: () => { state = { ...state, status: 'ready' } } })
+  let state = JSON.parse(sessionStorage.getItem('test-ended-scan') ?? 'null') ?? { id: 'ended-scan', status: 'running', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full', pages: 1, count: 2, skipped: 0, error: '', endedEarly: false, hasMore: false, seriesReviewVersion: 1, seriesBehavior: 'choose', seenSeries: [preview.normalizedUrl] }
+  Object.assign(window, { completeEndScanChecks: () => { state = { ...state, status: 'ready' }; sessionStorage.setItem('test-ended-scan', JSON.stringify(state)) } })
   Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime: { sendMessage: (_id: string, message: { action?: string }, callback: (reply: unknown) => void) => {
    if (message.action === 'end') state = { ...state, endedEarly: true }
    if (message.action === 'finish') state = { ...state, status: 'complete' }
+   sessionStorage.setItem('test-ended-scan', JSON.stringify(state))
    if (message.action === 'page') callback({ ok: true, seriesUrl: preview.normalizedUrl, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) })
    else callback({ ok: true, state })
   } } } })
@@ -3469,9 +3474,22 @@ test('End Scan opens collected series review and finishes through the normal imp
  expect(imported).toHaveLength(0)
  await dialog.getByRole('button', { name: 'Show Series Works', exact: true }).click()
  await dialog.getByRole('checkbox', { name: 'Part 1: Collected Work 501', exact: true }).check()
+ await page.reload()
+ await expect(dialog).toBeVisible()
+ await expect(dialog.getByRole('checkbox', { name: 'Part 1: Collected Work 501', exact: true })).toBeChecked()
+ await dialog.evaluate(element => { element.scrollTop = 0 })
+ const actions = dialog.locator('footer[aria-label="Series Import Actions"]')
+ const bounds = (await actions.boundingBox())!
+ expect(bounds.y).toBeGreaterThanOrEqual(0)
+ expect(bounds.y + bounds.height).toBeLessThanOrEqual(await page.evaluate(() => innerHeight))
  await dialog.getByRole('button', { name: 'Import Selected Works', exact: true }).click()
+ await expect(dialog.getByRole('checkbox', { name: 'Part 1: Collected Work 501', exact: true })).toBeDisabled()
+ await expect(dialog.getByRole('checkbox', { name: 'Part 2: Collected Work 502', exact: true })).toBeEnabled()
+ await expect(dialog).toBeVisible()
+ expect(imported).toEqual([[501]])
+ await page.screenshot({ path: test.info().outputPath('series-review-incremental-import.png') })
+ await dialog.getByRole('button', { name: 'Finish Import', exact: true }).click()
  await expect(dialog).toHaveCount(0)
- await expect(page.getByText(/Imported 1 works; kept 0 existing works/)).toBeVisible()
  expect(imported).toEqual([[501]])
  await expect(end).toHaveCount(0)
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

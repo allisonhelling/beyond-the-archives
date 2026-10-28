@@ -54,9 +54,8 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 button, input, select, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: var(--control-padding); min-height: var(--control-size); }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
-.undo-read { color: #970000; border: 0; background: transparent; padding: 0 4px; min-height: 0; }
-.undo-read:hover { text-decoration: underline; }
-@media (max-width: 650px), (any-pointer: coarse) { .undo-read { text-decoration: underline; } }
+.undo-read { color: var(--accent); border-color: var(--accent); min-height: max(44px, var(--control-size)); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.undo-read:hover { background: var(--color-brand-soft); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .6; cursor: default; }
 .brand-icon { display: grid; place-items: center; color: var(--color-brand); }

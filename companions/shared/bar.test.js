@@ -1332,7 +1332,7 @@ it('retains unsaved actions after a failed save and does not offer Finish Fic fo
  expect(within(root).getByRole('button', { name: 'Add to Library' })).toBeEnabled()
 })
 
-it.each(['safari', 'chrome'])('shows an actionable read notice below the %s toolbar and sends a strict Undo', async browser => {
+it.each(['safari', 'chrome'].flatMap(browser => ['top', 'bottom'].map(surface => ({ browser, surface }))))('restores the read action from the $surface Undo on $browser', async ({ browser, surface }) => {
  const before = { version: 'v1', status: 'reading', progress: 3, notes: 'Keep', rating: 4, tags: [], collections: [] }
  entry = { ...before }
  network.mockImplementation(async ({ data }) => {
@@ -1345,12 +1345,17 @@ it.each(['safari', 'chrome'])('shows an actionable read notice below the %s tool
  const notice = within(root).getByRole('status')
  await waitFor(() => expect(notice).toHaveTextContent('Marked As Read Through Chapter 4'))
  expect(root.querySelector('.toolbar').nextElementSibling).toBe(notice)
- const undo = within(notice).getByRole('button', { name: 'Undo' })
+ const undo = within(surface === 'top' ? notice : bottomRoot).getByRole('button', { name: 'Undo' })
  expect(undo).toHaveClass('undo-read')
  expect(within(bottomRoot).getByRole('button', { name: 'Undo' })).toBeVisible()
  await waitFor(() => expect(undo).toBeEnabled())
  fireEvent.click(undo)
  await waitFor(() => expect(notice).toHaveTextContent('Read Marking Undone'))
  expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v2', status: 'reading', progress: 3, undo_read: 'read-id' })
- expect(root.querySelector('.chapter-progress')).toHaveTextContent('Ch. 3 / 10')
+ for (const bar of [root, bottomRoot]) {
+  expect(bar.querySelector('.chapter-progress')).toHaveTextContent('Ch. 3 / 10')
+  expect(within(bar).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+  expect(bar).toHaveTextContent('Read Marking Undone')
+ }
+ expect(entry).toEqual({ ...before, version: 'v3' })
 })

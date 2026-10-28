@@ -1,7 +1,7 @@
 import { recordReadingTransition } from '../../src/features/library/reading-history'
 import type { Story } from '../../src/features/library/model'
 import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { libraryQueryFixture } from './library-query-fixture'
 // Browser contract fixtures persist independently of the page and Auth session.
 // Real PostgreSQL/RLS coverage is in supabase/tests and the local integration runner.
@@ -154,5 +154,8 @@ export async function selectLibraryShelf(page: Page, name: string) {
   const shelves = page.getByRole('navigation', { name: 'Library Shelves', exact: true })
   const spine = shelves.getByRole('button', { name, exact: true })
   if (!await spine.isVisible()) await shelves.getByRole('button', { name: 'Show All Collections', exact: true }).click()
+  const opensEditor = await spine.getAttribute('aria-haspopup') === 'dialog'
   await spine.click()
+  // Editing opens a dialog; browsing must commit the chosen shelf first.
+  if (!opensEditor) await expect(spine).toHaveAttribute('aria-pressed', 'true')
 }

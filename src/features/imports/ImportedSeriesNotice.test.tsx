@@ -34,7 +34,7 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()
  expect(mocks.submit).not.toHaveBeenCalled(); expect(mocks.remember).not.toHaveBeenCalled()
  fireEvent.click(screen.getAllByRole('button', { name: 'Select All' })[0])
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected' })) })
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' })) })
  expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false, 'to_read', [77])
 })
 
@@ -64,7 +64,7 @@ it('keeps the preview and selections available after a failed selected-work impo
  await act(async () => { render(<ImportedSeriesNotice reviewRelatedSeries stories={mocks.stories as never} />) })
  fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' }))
- await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected' })) })
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' })) })
  expect(screen.getByRole('alert')).toHaveTextContent('Import unavailable')
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).toBeEnabled()
  expect(mocks.submit).toHaveBeenCalledOnce()

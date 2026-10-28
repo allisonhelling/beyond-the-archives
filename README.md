@@ -14,7 +14,9 @@ A private application for organizing AO3 works and series, tracking reading prog
 - **Series Pages:** review related installments, save optional full series details, and manage series notes, favorites, and collections independently of individual works.
 - **Display Settings:** configurable work/series tiles and information pages, separate desktop/mobile arrangements, and previews at custom screen sizes.
 - **Data Portability:** CSV ZIP exports, complete JSON backups, saved private backups, restore previews with safety copies, and optional DNF cleanup with an archive of compact reading records.
-- **Browser Companions:** Chrome/Edge metadata retrieval, Library Sync, and AO3 reading controls; Safari reading controls through a userscript.
+- **Browser Companions:** Chrome/Edge metadata retrieval, Library Sync, and AO3 reading controls; Safari reading controls through a userscript. Read confirmations in both bars offer Undo with visible day/night styling.
+
+Series scan reviews save your selections and review page in this browser so reloading can restore your progress. **Import Selected Works** saves checked installments while keeping the review open and scanning paused. Use **Import Batch and Continue** when you are ready to finish that batch and resume scanning, or **Finish Import** for the final batch.
 
 Statistics use dated chapter completion records; older progress without chapter history cannot be backfilled accurately. Reading sessions and automatic email chapter notifications are not implemented. Metadata retrieval and full series details run when requested; future installments are not automatically imported. For repeated collection-loading timeouts, see the [performance troubleshooting and rollout notes](docs/PERFORMANCE.md#compact-catalog-and-shared-read-scheduling).
 

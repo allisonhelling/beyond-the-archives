@@ -1,3 +1,4 @@
+import { verifyReadUndo } from './read-undo-controls'
 import { verifyReadingActionOrder } from './reading-action-controls'
 import { mergeEdits, type EditValues, type MergeResult } from '../../src/features/library/edit-merge'
 import { statuses } from '../../src/features/library/model'
@@ -46,7 +47,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
       if (state.fail) { state.fail = false; return { status: 503, responseText: '{}' } }
       state.entry = { ...body.p_input, id: 'fic-entry', version: 'v1' }
      }
-     if (body.p_action === 'progress') state.entry = { ...state.entry, ...body.p_input, version: 'v2' }
+     if (body.p_action === 'progress') state.entry = { ...state.entry, ...body.p_input, version: 'v2', ...((body.p_input.chapter_read || body.p_input.undo_read) && { readingHistory: body.p_input.undo_read ? [] : [{ action: 'chapter_read', id: 'fixture-read', chapter: body.p_input.progress, undo: {} }] }) }
      return { status: 200, responseText: JSON.stringify({ entry: state.entry, ratingInfo: state.ratingInfo, collections: [{ id: 'weekend', name: 'Weekend reads' }, { id: 'night', name: 'Night reads' }] }) }
     },
    } })
@@ -328,6 +329,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await bottom.screenshot({ path: `test-results/userscript-bottom-toolbar-${page.viewportSize()!.width}.png` })
   await expect(bottom.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await expect(bottom.getByRole('button', { name: 'Connection', exact: true })).toHaveCount(0)
+  await verifyReadUndo(top, bottom, 'Read', 'Ch. 3 / 10', 'Ch. 4 / 10')
   await bottom.getByRole('button', { name: 'Read', exact: true }).click()
   expect(await page.evaluate(() => (window as unknown as {userscriptTestState:{requests:{p_input:{chapter_read?:unknown}}[]}}).userscriptTestState.requests.at(-1)!.p_input.chapter_read)).toEqual({chapter:4,chapter_id:'104',word_count:3})
   for (const surface of [top, bottom]) {
@@ -372,7 +374,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 0 / 10', { exact: true })).toBeVisible()
   await bottom.getByRole('button', { name: 'Read', exact: true }).click()
-  await expect(top.getByRole('status')).toHaveText('Marked As Read Through Chapter 4')
+  await expect(top.getByRole('status')).toContainText('Marked As Read Through Chapter 4')
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
   await page.evaluate(() => {
    document.getElementById('ao3-library-companion')!.remove()
@@ -381,7 +383,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.addScriptTag({ content: script })
   await expect(bottom.getByRole('button', { name: 'Finish Fic', exact: true })).toBeVisible()
   await bottom.getByRole('button', { name: 'Finish Fic', exact: true }).click()
-  await expect(top.getByRole('status')).toHaveText('Marked As Read Through Chapter 10')
+  await expect(top.getByRole('status')).toContainText('Marked As Read Through Chapter 10')
   await expect(top.getByText('Finished', { exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
    await expect(surface.getByText('Ch. 10 / 10', { exact: true })).toBeVisible()

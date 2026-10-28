@@ -178,7 +178,7 @@ it('marks library works and direct links unavailable and keeps counts current wh
  expect(choice(4)).not.toBeChecked()
  expect(series.getByText(/4 visible works · 2 in library · 0 selected/)).toBeVisible()
  fireEvent.click(choice(4))
- fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([4])
  expect(confirm.mock.calls[0][3][0].works.map((work: { workId: number }) => work.workId)).toEqual([4])
 })
@@ -200,7 +200,7 @@ it('keeps a series larger than the page target together and preserves selections
  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
  fireEvent.click(toggle)
  expect(screen.getByRole('checkbox', { name: 'Part 65: Work 65' })).toBeChecked()
- fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([65])
 })
 it.each([
@@ -226,7 +226,7 @@ it.each([
  fireEvent.click(last.getByRole('checkbox', { name: 'Part 5: Work 5' }))
  fireEvent.click(pagination().getByRole('button', { name: 'Prev' }))
  expect(within(screen.getByRole('region', { name: 'Series 7 • Series 7' })).getByRole('checkbox', { name: 'Part 1: Work 1' })).toBeChecked()
- fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([1, 5])
 })
 it('applies bulk selection and saving across hidden series pages and deduplicates overlapping works', async () => {
@@ -238,7 +238,7 @@ it('applies bulk selection and saving across hidden series pages and deduplicate
  const saveAll = within(screen.getByLabelText('All Series Controls')).getByRole('button', { name: 'Save All Series' })
  await act(async () => { fireEvent.click(saveAll) })
  expect(mocks.remember.mock.calls.map(([preview]) => preview.seriesId)).toEqual(previews.map(preview => preview.seriesId))
- fireEvent.click(screen.getByText('Import Selected', { selector: 'button' }))
+ fireEvent.click(screen.getByText('Import Selected Works', { selector: 'button' }))
  expect(confirm.mock.calls[0][0]).toHaveLength(1)
  expect(confirm.mock.calls[0][2]).toHaveLength(35)
  // This deliberately renders 30 series and saves 35; allow for full-suite contention.
@@ -279,7 +279,7 @@ it.each([
  const ordered = Array.from(review.children).filter(node => node.tagName === 'H2' || node.classList.contains('series-import-preview'))
  expect(ordered[0]).toHaveTextContent(headings[0])
  fireEvent.click(within(screen.getByRole('group', { name: 'All Series Top Controls' })).getByRole('button', { name: 'Select All' }))
- fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  expect(confirm.mock.calls[0][2]).toEqual(order)
  expect(confirm.mock.calls[0][0]).toHaveLength(1)
 })
@@ -307,7 +307,7 @@ it('counts and marks catalog works already saved even when the import path suppl
  expect(saved).toBeDisabled()
  fireEvent.click(within(screen.getByRole('group', { name: 'Series Selection Controls' })).getByRole('button', { name: 'Select All' }))
  expect(screen.getByText(/2 visible works · 1 in library · 1 selected/)).toBeVisible()
- fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
  expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([2])
 })
 
@@ -438,4 +438,45 @@ it('can cancel Save All while full details are still loading, before any write',
  expect(cancel).toHaveBeenCalledOnce()
  await act(async () => { finish({ ...partial, basic: false }) })
  expect(mocks.remember).not.toHaveBeenCalled()
+})
+
+it('restores selections, expanded series and the review page after remounting', () => {
+ const previews = [longPreview(7, 28), longPreview(8, 12)]
+ const props = { text: previews.map(preview => preview.normalizedUrl).join('\n'), initialPreviews: previews, savedIds: new Set<number>(), busy: false, onConfirm: vi.fn(), onCancel: vi.fn() }
+ const first = render(<SeriesImportReview {...props} />)
+ fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 1: Work 1' }))
+ fireEvent.click(within(screen.getAllByRole('navigation', { name: 'Result Pages' })[0]).getByRole('button', { name: 'Next' }))
+ fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ first.unmount()
+ render(<SeriesImportReview {...props} />)
+ expect(screen.getByRole('region', { name: 'Series 8 • Series 8' })).toBeVisible()
+ expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
+ fireEvent.click(within(screen.getAllByRole('navigation', { name: 'Result Pages' })[0]).getByRole('button', { name: 'Prev' }))
+ expect(screen.getByRole('checkbox', { name: 'Part 1: Work 1' })).toBeChecked()
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
+ expect(props.onConfirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([1, 2])
+})
+
+it('retains restored choices while previews are downloaded again', async () => {
+ const preview = longPreview(7, 2)
+ const props = { text: preview.normalizedUrl, savedIds: new Set<number>(), busy: false, onConfirm: vi.fn(), onCancel: vi.fn() }
+ const first = render(<SeriesImportReview {...props} initialPreviews={[preview]} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Show Series Works' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ first.unmount()
+ mocks.preview.mockResolvedValueOnce(preview)
+ render(<SeriesImportReview {...props} />)
+ expect(await screen.findByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
+})
+
+it('warns when browser storage is unavailable without losing the current selection', () => {
+ vi.stubGlobal('localStorage', { getItem: () => { throw new Error('Unavailable') }, setItem: () => { throw new Error('Unavailable') } })
+ const preview = longPreview(7, 2)
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Show Series Works' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ expect(screen.getByText(/Review progress could not be saved/)).toBeVisible()
+ expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
 })

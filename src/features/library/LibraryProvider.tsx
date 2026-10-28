@@ -10,7 +10,7 @@ import { libraryQueryHasSeries, libraryFacetScope, loadLibraryFacets, loadLibrar
 type ReadingUndo = { id: string; storyId: string; title: string; message: string; saved?: { status: Story['reading_status']; progress: number }; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
 const revisionCheckInterval = 45_000
 const pageCacheKey = (query: LibraryQuery, page: number, size: number) => JSON.stringify([query, page, size])
-type LibraryState = { retryCounts: () => Promise<void>; navigationLoading: boolean; revisionError: string; checkRevision: (force?: boolean) => Promise<void>; hasCachedPage: (query: LibraryQuery, page: number, size: number) => boolean; tagRevision: number; navigation: LibraryNavigation; navigationError: string; catalogLoaded: boolean; ensureCatalog: () => Promise<void>; fetchFacets: (query: LibraryQuery, signal: AbortSignal) => Promise<LibraryFacets>; temporaryPageSizes: Map<LibraryQuery['mode'], number>; rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
+type LibraryState = { userId: string; retryCounts: () => Promise<void>; navigationLoading: boolean; revisionError: string; checkRevision: (force?: boolean) => Promise<void>; hasCachedPage: (query: LibraryQuery, page: number, size: number) => boolean; tagRevision: number; navigation: LibraryNavigation; navigationError: string; catalogLoaded: boolean; ensureCatalog: () => Promise<void>; fetchFacets: (query: LibraryQuery, signal: AbortSignal) => Promise<LibraryFacets>; temporaryPageSizes: Map<LibraryQuery['mode'], number>; rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
 const Context = createContext<LibraryState | null>(null)
 export function LibraryProvider({ children, userId = 'sample' }: { children: ReactNode; userId?: string }) {
   const [data, setData] = useState<{ stories: Story[]; collections: Collection[]; series?: SeriesRecord[] }>({ stories: [], collections: [], series: [] })
@@ -140,12 +140,12 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     setRevision(value => value + 1)
     return false
   }, [invalidate, reloadCollections])
-  const recordOwnRevision = useCallback(async (version: number) => {
+  const recordOwnRevision = useCallback(async (version: number, expectedChanges = 0) => {
     if (sampleMode) return
     try {
       const next = await loadLibraryRevision()
       if (version !== generation.current) return
-      if (serverRevision.current !== undefined && next > serverRevision.current) {
+      if (serverRevision.current !== undefined && next > serverRevision.current + expectedChanges) {
         invalidate()
         catalogRequest.current = null; setCatalogLoaded(false)
       }
@@ -266,7 +266,10 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       const record = await loadSeriesRecord(id)
       if (version !== generation.current) return
       setData(previous => ({ ...previous, series: [...(previous.series ?? []).filter(item => item.ao3_series_id !== id), ...(record ? [record] : [])] }))
-      if (invalidate) { await recordOwnRevision(version); if (version === generation.current) setRevision(value => value + 1) }
+      // The targeted read already reconciles one series edit. Rebuilding the
+      // catalog here would disable catalog consumers after every picker save.
+      // Additional revisions still require reconciliation of unknown changes.
+      if (invalidate) { await recordOwnRevision(version, 1); if (version === generation.current) setRevision(value => value + 1) }
     })
     queue.current = task
     await task
@@ -380,7 +383,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     const pages = cache.current, facetCache = facets.current, heights = rowHeights, lifeRef = lifecycle, requests = generation
     return () => { lifeRef.current++; requests.current++; catalogRequest.current = null; catalogController.current?.abort(); catalogController.current = null; pages.clear(); facetCache.clear(); heights.clear(); temporaryPageSizes.clear() }
   }, [ensureCatalog, rowHeights, temporaryPageSizes])
-  return <Context.Provider value={{ ...data, hasCachedPage, navigation, navigationError, navigationLoading, revisionError, checkRevision, retryCounts, catalogLoaded, ensureCatalog, fetchFacets, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, tagRevision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
+  return <Context.Provider value={{ ...data, userId, hasCachedPage, navigation, navigationError, navigationLoading, revisionError, checkRevision, retryCounts, catalogLoaded, ensureCatalog, fetchFacets, rowHeights, temporaryPageSizes, series: data.series ?? [], loading, error, revision, tagRevision, refresh, refreshCollections, refreshSeries, refreshStory, loadDetails, retainDetails, fetchPage, markAllRead, markFinished, removeStory }}>
     {undoNotices.length > 0 && <section className="reading-undo-notices" aria-label="Reading Updates">{undoNotices.map(notice => <UndoNotice key={notice.id} id={notice.id} message={notice.message} dismissLabel={`Dismiss Undo Notification for ${notice.title}`} onDismiss={dismissUndo} onUndo={async () => { if (notice.removed) await restoreStory(notice.removed); else if (notice.previous) await updateEntry(notice.storyId, notice.previous, notice.saved ?? {}); await refreshStory(notice.storyId) }} />)}</section>}
     {children}
   </Context.Provider>
