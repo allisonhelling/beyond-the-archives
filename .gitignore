@@ -15,6 +15,5 @@ supabase/.temp/
 supabase/.branches/
 .DS_Store
 .Rhistory
-AGENTS.md
 
 artifacts/performance/

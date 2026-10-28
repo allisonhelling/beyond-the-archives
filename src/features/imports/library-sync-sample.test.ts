@@ -183,3 +183,31 @@ it('deduplicates repair summaries across pages and preserves acknowledged counts
  const next={metadata:1,series:0,reading:1,ids:{metadata:['one'],series:[],reading:['two']}}
  expect(librarySyncRepairs({repairPages:{1:retry,2:next}})).toEqual({metadata:1,series:1,reading:2})
 })
+
+it('applies a selected incoming bookmark in sample mode and rejects a later stale review', async () => {
+ const { applyLibrarySyncBookmark } = await import('./repository')
+ const rows = readAo3Rows([{ title: 'Reviewable bookmark', link: 'https://archiveofourown.org/works/9990901', source_list: 'bookmarks', chapters: '2/2', date: '2026-10-01', 'bookmark date': '2026-10-20', 'bookmark notes': 'Saved notes', 'bookmark tags': 'Saved tag' }]) as CsvWork[]
+ await submitLibrarySync(rows)
+ const incoming = { ...rows[0], notes: 'Chosen incoming notes', tags: ['Chosen tag'], bookmarkDate: '2026-09-01' }
+ const result = await submitLibrarySync([incoming])
+ const conflict = result.bookmarkConflicts![0]
+ expect(conflict.incomingWork).toEqual(expect.objectContaining(incoming))
+ expect((await loadSampleLibrary()).stories.find(story => story.id === conflict.id)).toMatchObject({ notes: 'Saved notes', reading_status: 'finished' })
+ await applyLibrarySyncBookmark(conflict)
+ expect((await loadSampleLibrary()).stories.find(story => story.id === conflict.id)).toMatchObject({ notes: 'Chosen incoming notes', personalTags: ['Chosen tag'], reading_status: 'reading', last_read_chapter: 0, finished_at: null })
+ await expect(applyLibrarySyncBookmark(conflict)).rejects.toThrow('changed after bookmark review')
+ expect(rpc).not.toHaveBeenCalled()
+})
+
+it('applies only notes and tags when selecting an incoming deleted bookmark', async () => {
+ const { applyLibrarySyncBookmark } = await import('./repository')
+ const normal = readAo3Rows([{ title: 'Deleted review', link: 'https://archiveofourown.org/works/9990902', source_list: 'bookmarks', chapters: '2/2', date: '2026-10-01', 'bookmark date': '2026-10-20', 'bookmark id': '9990902', 'bookmark notes': 'Saved note' }]) as CsvWork[]
+ await submitLibrarySync(normal)
+ const deleted = readAo3Rows([{ title: '', link: 'https://archiveofourown.org/bookmarks/9990902', source_list: 'bookmarks', work_status: 'deleted', 'bookmark id': '9990902', 'bookmark notes': 'Incoming deleted note', 'bookmark tags': 'Deleted tag' }]) as CsvWork[]
+ const result = await submitLibrarySync(deleted), conflict = result.bookmarkConflicts![0]
+ const before = (await loadSampleLibrary()).stories.find(story => story.id === conflict.id)!
+ await applyLibrarySyncBookmark(conflict)
+ const after = (await loadSampleLibrary()).stories.find(story => story.id === conflict.id)!
+ expect(after).toMatchObject({ notes: 'Incoming deleted note', personalTags: ['Deleted tag'], reading_status: before.reading_status, last_read_chapter: before.last_read_chapter, finished_at: before.finished_at, metadata: before.metadata, collectionIds: before.collectionIds, personal_rating: before.personal_rating, is_favorite: before.is_favorite })
+ expect(rpc).not.toHaveBeenCalled()
+})

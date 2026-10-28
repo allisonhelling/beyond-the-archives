@@ -591,3 +591,52 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   }
  } finally { await rm(directory, { recursive: true, force: true }) }
 })
+
+test('built userscript saves unsaved works through first-chapter and completion actions', async ({ page }) => {
+ const directory = await mkdtemp(join(tmpdir(), 'ao3-unsaved-reading-'))
+ try {
+  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
+  const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
+  await page.route('https://archiveofourown.org/**', route => {
+   const current = Number(new URL(route.request().url()).pathname.split('/').at(-1)) - 100
+   return route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Unsaved story</h2><div class="summary module"><blockquote>Summary</blockquote></div><dl class="work meta"><dd class="chapters">3/3</dd></dl><select id="selected_id">${[1, 2, 3].map(chapter => `<option value="${100 + chapter}">${chapter}. Chapter</option>`).join('')}</select><div id="chapters"><div id="chapter-${current}" class="chapter"><div class="userstuff"><p>Only three words.</p></div></div></div></div><div id="kudos">Kudos</div></main></body></html>` })
+  })
+  for (const action of [
+   { chapter: 1, bottom: false, label: 'Reading', status: 'reading', progress: 0 },
+   { chapter: 1, bottom: true, label: 'Mark Read', status: 'reading', progress: 1 },
+   { chapter: 2, bottom: false, label: 'Mark Read', status: 'reading', progress: 2 },
+   { chapter: 3, bottom: true, label: 'Finish Fic', status: 'finished', progress: 3 },
+  ]) {
+   await page.goto(`https://archiveofourown.org/works/123/chapters/${100 + action.chapter}`)
+   await page.evaluate(() => {
+    const attach = Element.prototype.attachShadow
+    Element.prototype.attachShadow = function (options) { return attach.call(this, { ...options, mode: 'open' }) }
+    let entry: Record<string, unknown> | null = null
+    Object.assign(window, { unsavedReadingRequests: [], userscriptTestApi: {
+     getValue: async (_key: string, fallback: unknown) => _key.startsWith('connection:') ? { userId: 'alice', secret: 'fixture-secret' } : fallback,
+     setValue: async () => {}, deleteValue: async () => {},
+     xmlHttpRequest: async ({ data }: { data: string }) => {
+      const request = JSON.parse(data)
+      ;(window as Window & { unsavedReadingRequests: object[] }).unsavedReadingRequests.push(request)
+      if (request.p_action === 'save') entry = { ...request.p_input, id: 'quick-saved', version: 'v1' }
+      return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+     },
+    } })
+   })
+   await page.addScriptTag({ content: `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);` })
+   const top = page.locator('#ao3-library-companion'), bottom = page.locator('#ao3-library-progress')
+   await expect(top.getByRole('button', { name: 'Add to Library', exact: true })).toBeVisible()
+   await expect(bottom.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
+   if (action.chapter === 1) {
+    await expect(top.getByRole('button', { name: 'To Read', exact: true })).toBeVisible()
+    await expect(top.getByRole('button', { name: 'Reading', exact: true })).toBeVisible()
+   } else await expect(top.getByRole('button', { name: 'To Read', exact: true })).toHaveCount(0)
+   await (action.bottom ? bottom : top).getByRole('button', { name: action.label, exact: true }).click()
+   await expect(top.getByRole('status')).toHaveText('Saved')
+   const saved = await page.evaluate(() => (window as Window & { unsavedReadingRequests: { p_action: string; p_input: Record<string, unknown> }[] }).unsavedReadingRequests.find(request => request.p_action === 'save')!.p_input)
+   expect(saved).toMatchObject({ status: action.status, progress: action.progress })
+   if (action.label === 'Reading') expect(saved).not.toHaveProperty('chapter_read')
+   else expect(saved.chapter_read).toMatchObject({ chapter: action.chapter, word_count: 3 })
+  }
+ } finally { await rm(directory, { recursive: true, force: true }) }
+})

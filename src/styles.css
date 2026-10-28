@@ -174,7 +174,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .confirmation-heading h2 { font-size: 24px; }
 .confirmation-description { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .confirmation-description p + p { margin-top: 10px; }
-.sync-issue-list > li + li { border-top: 1px solid var(--color-border); margin-top: 16px; padding-top: 16px; }
+.sync-issue-list > li { border-top: 1px solid var(--color-border); margin-top: 16px; padding-top: 16px; }
 .confirmation-dialog .form-actions { margin-top: 24px; justify-content: flex-end; }
 .confirmation-dialog .form-actions .button { flex: 1; }
 .collection-dialog { width: min(960px, calc(100vw - 32px)); overflow-x: hidden; touch-action: pan-y; }
@@ -894,6 +894,9 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .series-import-work .series-work-choice { display: flex; align-items: baseline; gap: .5rem; margin-block: 4px 0; font-size: var(--series-work-heading-size); font-weight: 650; }
 .series-import-work .series-work-choice input { width: auto; flex-shrink: 0; }
 .sync-reports-trigger { white-space: nowrap; }
+.bookmark-conflict-list { display: grid; grid-template-columns: repeat(var(--story-grid-columns), minmax(0, 1fr)); gap: var(--story-grid-gap); list-style: none; padding: 0; margin: 1.5rem 0 0; }
+.bookmark-conflict-list > li { min-width: 0; overflow-wrap: anywhere; }
+.bookmark-conflict-list dd { white-space: pre-wrap; }
 .import-results { overflow-x: auto; margin-top: var(--space-4, 1rem); }
 .import-results caption { letter-spacing: .08em; word-spacing: .16em; }
 .import-results td { font-size: var(--minimum-text-size); }

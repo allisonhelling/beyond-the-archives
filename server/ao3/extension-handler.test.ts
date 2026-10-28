@@ -59,3 +59,12 @@ it('requires a matching chapter index for bookmark dates and reports missing rel
  await handler(request({ navigationUrl: 'https://archiveofourown.org/works/123/navigate', navigationHtml }))
  expect(finish).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ metadata: expect.objectContaining({ chapter_dates: expect.objectContaining({ '6': '2024-01-01' }) }) }))
 })
+
+it('accepts archived snapshots only for a matching archived job and never substitutes the live page', async () => {
+ const sourceUrl = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123'
+ expect((await handler(request({ url: sourceUrl }))).status).toBe(400)
+ findJob.mockResolvedValue({ ...job, sourceUrl })
+ expect((await handler(request())).status).toBe(400)
+ expect(await (await handler(request({ url: sourceUrl }))).json()).toEqual({ committed: true })
+ expect(finish).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl }), expect.objectContaining({ metadata: expect.objectContaining({ title: 'A & B' }) }))
+})

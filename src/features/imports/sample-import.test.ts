@@ -38,3 +38,11 @@ it('allows later bookmark imports to refresh automatically captured sample metad
  await importSampleWorks([{ source: 'bookmarks', workId: 123, url: 'https://archiveofourown.org/works/123', metadata: { title: 'Latest AO3 title', kudos: 0 }, bookmarkDate: null, updatedDate: null, notes: 'Bookmark notes', tags: [] }])
  expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 123)).toMatchObject({ metadata: { title: 'Latest AO3 title', kudos: 0 }, notes: '', reading_status: 'to_read', metadata_overrides: {} })
 })
+
+it('imports a Wayback snapshot into the sample library using its original archived destination', async () => {
+ const url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123?view_full_work=true'
+ mocks.capture.mockResolvedValue({ url, html })
+ await importSampleWorkUrls([url], 'to_read', [])
+ expect(mocks.capture).toHaveBeenCalledWith(url)
+ expect((await loadSampleLibrary()).stories.find(story => story.work.ao3_work_id === 123)).toMatchObject({ original_url: url, metadata: { title: 'A & B', authors: ['One', 'Two'] }, last_read_chapter: 0 })
+})

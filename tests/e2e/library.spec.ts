@@ -2667,7 +2667,7 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  await expect(picker.getByRole('button', { name: 'Hide Series Works', exact: true })).toHaveCount(2)
  await expect(seriesFooter.getByRole('button', { name: 'Save', exact: true })).toHaveAccessibleDescription('Load and save full series details from AO3')
  await seriesFooter.getByRole('button', { name: 'Save', exact: true }).click()
- await expect(picker.getByRole('button', { name:'Full Series Details Saved', exact:true }).first()).toBeDisabled()
+ await expect(picker.getByRole('button', { name:'Save', exact:true })).toHaveCount(0)
  await picker.getByRole('checkbox', { name: 'Part 1: The story' }).check()
  await picker.getByRole('button', { name: 'Import Selected', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Series Import Finished' })).toBeVisible()
@@ -3518,3 +3518,82 @@ for (const source of ['library', 'reading'] as const) {
   }
  })
 }
+
+test('bookmark conflicts offer explicit choices in a spaced responsive grid with maroon links', async ({ page }, info) => {
+ await fixture(page)
+ await page.addInitScript(() => {
+  let complete = false
+  const state = () => ({ id: 'bookmark-review-scan', status: complete ? 'complete' : 'ready', pages: 1, count: 2, skipped: 0, error: '', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full' })
+  const runtime = { sendMessage(_id: string, request: { action?: string }, callback: (result: object) => void) {
+   if (request.action === 'finish') complete = true
+   callback(request.action === 'page' ? { ok: true, rows: [401, 402].map(id => ({ title: `Bookmark ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'bookmarks', 'bookmark notes': 'Incoming note', 'bookmark tags': 'Incoming tag' })) } : { ok: true, state: state() })
+  } }
+  Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime } })
+ })
+ const reviewed = [401, 402].map(id => ({ id: `bookmark-${id}`, workId: id, version: '2026-10-27T12:00:00Z', title: `Bookmark ${id}`, status: 'to_read', progress: 0, notes: 'Saved note', tags: ['Saved tag'] }))
+ const choices: Record<string, unknown>[] = []
+ await page.route('**/rest/v1/rpc/preview_ao3_csv_import', route => route.fulfill({ json: reviewed }))
+ await page.route('**/rest/v1/rpc/submit_ao3_library_sync', route => {
+  choices.push(...route.request().postDataJSON().p_rows)
+  return route.fulfill({ json: { batch: null, imported: route.request().postDataJSON().p_rows[0].choice === 'overwrite' ? 1 : 0, kept: 0 } })
+ })
+ await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({ json: { reports: [], total: 0 } }))
+ await page.goto('/imports'); await login(page)
+ await page.getByRole('button', { name: 'Import Scanned Works', exact: true }).click()
+ const summary = page.getByText('2 Bookmark Conflicts — Review Personal Data', { exact: true })
+ await summary.click()
+ const list = page.locator('.bookmark-conflict-list')
+ const first = list.getByRole('listitem').nth(0), second = list.getByRole('listitem').nth(1)
+ const link = first.getByRole('link', { name: 'Bookmark 401' })
+ await expect(link).toHaveCSS('color', 'rgb(128, 0, 32)')
+ await link.hover()
+ await expect(link).toHaveCSS('text-decoration-line', 'underline')
+ const a = (await first.boundingBox())!, b = (await second.boundingBox())!
+ if (info.project.name === 'desktop') { expect(Math.abs(a.y - b.y)).toBeLessThan(2); expect(b.x).toBeGreaterThan(a.x) }
+ else { expect(b.y).toBeGreaterThan(a.y + a.height); expect(Math.abs(a.x - b.x)).toBeLessThan(2) }
+ const description = (await list.locator('..').locator(':scope > p').boundingBox())!
+ expect(a.y - description.y - description.height).toBeGreaterThanOrEqual(20)
+ expect(choices.every(choice => !choice.choice)).toBe(true)
+ await first.getByRole('button', { name: 'Keep Saved Data' }).click()
+ await expect(page.getByText('1 Bookmark Conflicts — Review Personal Data', { exact: true })).toBeVisible()
+ expect(choices).toHaveLength(2)
+ await list.getByRole('button', { name: 'Use Incoming Bookmark' }).click()
+ await expect(list).toHaveCount(0)
+ expect(choices.at(-1)).toMatchObject({ workId: 402, choice: 'overwrite', expectedVersion: reviewed[1].version })
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('accepts a Wayback work link and keeps the snapshot as the saved reading destination', async ({ page }) => {
+ const tables = await fixture(page)
+ const url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/17199254?view_full_work=true'
+ let submitted: unknown
+ await page.route('**/rest/v1/rpc/submit_import_urls', route => {
+  submitted = route.request().postDataJSON().p_urls
+  tables.works.push({ id: 'archive-work', ao3_work_id: 17199254, title: null, verified_chapters: {} })
+  tables.library_entries.push({ id: 'archive-entry', work_id: 'archive-work', original_url: url, reading_status: 'to_read', last_read_chapter: 0, notes: '', is_favorite: false, metadata_overrides: {}, extension_metadata: { title: 'Archived Fic', authors: ['Archived Author'] } })
+  tables.import_batches.push({ id: 'archive-batch', created_at: '2026-10-27T12:00:00Z' })
+  tables.import_items.push({ id: 'archive-item', batch_id: 'archive-batch', entry_id: 'archive-entry', original_url: url, ao3_work_id: 17199254, status: 'completed', metadata_status: 'completed', result: 'imported', ordinal: 1 })
+  return route.fulfill({ json: 'archive-batch' })
+ })
+ await page.goto('/add'); await login(page)
+ await page.getByRole('textbox', { name: 'AO3 Work or Series Link' }).fill(url)
+ await page.getByRole('button', { name: 'Import from Link', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Archived Fic', exact: true })).toBeVisible()
+ expect(submitted).toEqual([url])
+ await expect(page.getByRole('heading', { name: 'Archived Fic', exact: true }).getByRole('link')).toHaveAttribute('href', url)
+})
+
+test('separates the skipped-entry introduction from the first work with a divider', async ({ page }) => {
+ await fixture(page)
+ const report = { id: 'skip-report', completed_at: '2026-10-27T12:00:00Z', report: { id: 'skip-scan', status: 'complete', pages: 1, count: 1, skipped: 1, error: '', url: 'https://archiveofourown.org/users/reader/bookmarks', skippedEntries: [{ title: 'Skipped Work', url: 'https://archiveofourown.org/works/123', sourceUrl: 'https://archiveofourown.org/users/reader/bookmarks', reason: 'Unavailable listing' }] } }
+ await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({ json: { reports: [report], total: 1 } }))
+ await page.goto('/imports'); await login(page)
+ await page.getByRole('button', { name: 'View Saved Sync Reports' }).click()
+ await page.getByRole('button', { name: '1 Unsupported Entries Skipped' }).click()
+ const dialog = page.getByRole('dialog', { name: 'Skipped AO3 Entries' })
+ const first = dialog.getByRole('listitem').first()
+ await expect(first).toHaveCSS('border-top-style', 'solid')
+ await expect(first).toHaveCSS('border-top-width', '1px')
+ await expect(first).toHaveCSS('padding-top', '16px')
+ await expect(first.getByRole('link', { name: 'Skipped Work' })).toBeVisible()
+})

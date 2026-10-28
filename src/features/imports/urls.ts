@@ -1,10 +1,18 @@
+/** Only fixed Wayback snapshots of the real AO3 host are supported. */
+export function waybackSnapshot(original: string): { url: string; timestamp: string; targetUrl: string } | null {
+ const value = original.trim()
+ const match = value.match(/^https:\/\/web\.archive\.org\/web\/(\d{14})(?:id_|if_)?\/(https?:\/\/(?:www\.)?archiveofourown\.org\/[^\s]*)$/)
+ return match ? { url: value, timestamp: match[1], targetUrl: match[2] } : null
+}
+
 /** A normalized URL is a candidate, never evidence that a destination exists. */
-export type WorkIdentity = { workId: number; chapterId: string | null; original: string; normalizedUrl: string }
+export type WorkIdentity = { workId: number; chapterId: string | null; original: string; normalizedUrl: string; archiveUrl?: string }
 export function parseWorkUrl(original: string): WorkIdentity {
   const value = original.trim()
-  const match = value.match(/^https?:\/\/(?:www\.)?archiveofourown\.org\/(?:collections\/[^/?#\s]+\/)?works\/([1-9]\d*)(?:\/chapters\/([1-9]\d*))?\/?(?:[?#][^\s]*)?$/)
+  const archive = waybackSnapshot(value)
+  const match = (archive?.targetUrl ?? value).match(/^https?:\/\/(?:www\.)?archiveofourown\.org\/(?:collections\/[^/?#\s]+\/)?works\/([1-9]\d*)(?:\/chapters\/([1-9]\d*))?\/?(?:[?#][^\s]*)?$/)
   if (!match || !Number.isSafeInteger(Number(match[1])) || (match[2] && !Number.isSafeInteger(Number(match[2])))) throw new Error('Enter a supported AO3 work URL with valid work and chapter identifiers, such as https://archiveofourown.org/works/123.')
-  return { workId: Number(match[1]), chapterId: match[2] ?? null, original, normalizedUrl: `https://archiveofourown.org/works/${match[1]}` }
+  return { workId: Number(match[1]), chapterId: match[2] ?? null, original, normalizedUrl: `https://archiveofourown.org/works/${match[1]}`, ...(archive && { archiveUrl: archive.url }) }
 }
 export type SeriesIdentity = { seriesId: number; normalizedUrl: string }
 export type SeriesPreview = SeriesIdentity & { nextUrl?: string; basic?: boolean; fetchedAt?: string; title: string; description: string; complete?: boolean | null; creators?: string[]; creatorLinks?: Record<string, string>; begun?: string; updated?: string; creatorNotes?: string; wordCount?: number | null; workCount?: number | null; works: { workId: number; url: string; position: number | null; title: string; authors: string[]; authorLinks?: Record<string, string>; fandoms?: string[]; rating?: string; relationshipTags?: string[]; characterTags?: string[]; additionalTags?: string[]; archiveWarnings?: string[]; categories?: string[]; language?: string; bookmarks?: number | null; comments?: number | null; hits?: number | null; kudos?: number | null; updated?: string; summary: string; summary_html?: string; tags: string[]; wordCount: number | null; chapters: string; complete: boolean | null }[] }
@@ -24,7 +32,7 @@ export function seriesPageUrl(url: string, seriesId = parseSeriesUrl(url).series
 export function classifyUrl(original: string): { kind: 'valid'; identity: WorkIdentity } | { kind: 'series'; identity: SeriesIdentity } | { kind: 'unrelated' | 'invalid' | 'unsupported'; message: string } {
   let host = ''
   try { host = new URL(original.trim()).hostname } catch { /* The AO3-looking malformed case below is tracked. */ }
-  if (!['archiveofourown.org', 'www.archiveofourown.org'].includes(host) && !/^https?:\/\/(?:www\.)?archiveofourown\.org(?:[/:?#]|$)/.test(original.trim())) return { kind: 'unrelated', message: 'Unrelated URL ignored.' }
+  if (!['archiveofourown.org', 'www.archiveofourown.org', 'web.archive.org'].includes(host) && !/^https?:\/\/(?:www\.)?archiveofourown\.org(?:[/:?#]|$)/.test(original.trim())) return { kind: 'unrelated', message: 'Unrelated URL ignored.' }
   try { return { kind: 'series', identity: parseSeriesUrl(original) } } catch { /* Try a work identity next. */ }
   try { return { kind: 'valid', identity: parseWorkUrl(original) } }
   catch { return { kind: original.includes('/works/') ? 'invalid' : 'unsupported', message: 'A valid AO3 work URL is required; standalone chapter, user and other pages are unsupported.' } }

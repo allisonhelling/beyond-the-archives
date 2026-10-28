@@ -20,7 +20,7 @@ import { formatDate } from '../../lib/dates'
 import { useLibrarySyncStatus } from './LibrarySyncProvider'
 import { connectExtension, librarySyncCommand } from './extension'
 import { readAo3Rows, uniqueCsvWorks, csvWorkKey, type CsvConflict, type CsvWork } from './ao3-csv'
-import { previewSeries, submitLibrarySync } from './repository'
+import { applyLibrarySyncBookmark, previewSeries, submitLibrarySync } from './repository'
 import { SeriesImportReview } from './SeriesImportReview'
 import { LibrarySyncReportHistory, LibrarySyncSummary } from './LibrarySyncReports'
 import { librarySyncReports } from './library-sync-reports'
@@ -181,6 +181,17 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Import failed. Retry to continue safely.'); setMessage('Saved pages remain available. Retrying keeps works already imported.') }
   finally { pending.current = false; setBusy(false) }
  }
+ async function resolveBookmark(conflict: CsvConflict, incoming: boolean) {
+  if (pending.current) return
+  pending.current = true; setBusy(true); setError('')
+  try {
+   if (incoming) await applyLibrarySyncBookmark(conflict)
+   setConflicts(current => current.filter(saved => csvWorkKey(saved) !== csvWorkKey(conflict)))
+   setMessage(`${incoming ? 'Incoming bookmark applied' : 'Saved personal data kept'} for ${conflict.title || `AO3 Work ${conflict.workId}`}.`)
+   if (incoming) await onImported(null)
+  } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not apply the bookmark choice. Try again.') }
+  finally { pending.current = false; setBusy(false) }
+ }
  const autoSave = useEffectEvent(() => { void requestSave() })
  useEffect(() => {
   if (state?.status !== 'ready' || !state.autoImport && !state.endedEarly) return
@@ -193,7 +204,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  return <section className="settings-card story-form" aria-labelledby="library-sync-heading">
   <h2 id="library-sync-heading">AO3 Library Sync</h2>
   {sampleMode && <p className="field-help">Sample imports use the extension with Local selected and save only to this browser’s sample library. No library account or background worker is needed. Select Local in the companion’s extension settings and enter its ID in this app’s Settings before starting.</p>}
-  <p className="scan-introduction">Scan works across pages using AO3 Library Companion. Existing notes, personal tags, ratings, and progress are kept.</p>
+  <p className="scan-introduction">Scan works across pages using AO3 Library Companion. Review differences in bookmark notes, personal tags, and reading state after importing. Saved personal data stays unchanged until you choose incoming data.</p>
   <p className="field-help">By default, new bookmarks dated after the work’s latest update are marked Finished, with the bookmark date as the finished date.</p>
   <p className="field-help">Ensure that bookmarks are sorted by "Date Bookmarked". Changing the sort order may cause the scanner to miss entries.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void action('start') }}>
@@ -246,7 +257,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    void save()
   }} onCancel={() => { setSeriesReview(null); selection.current = null; setError('') }} />}
   <LibrarySyncReportHistory key={`${state?.id}:${state?.status}`} latest={state?.status === 'complete' ? state : undefined} />
-  {conflicts.length > 0 && <details><summary>{conflicts.length} Bookmark Conflicts — Personal Data Kept</summary><p>These incoming bookmarks differ in notes, personal tags, or reading state. Saved notes, tags, and reading state were kept. Older bookmark dates take precedence and Rec is enabled if either version selected it. Use CSV import to overwrite personal data if desired.</p><ul>{conflicts.map(conflict => <li key={csvWorkKey(conflict)}><Link to={`/stories/${conflict.id}`}>{conflict.title || `AO3 Work ${conflict.workId}`}</Link><dl><dt>Reading State Before Import</dt><dd>{statuses[conflict.status as keyof typeof statuses]} · {conflict.progress} chapters read · Finished: {formatDate(conflict.finishedAt)}</dd>{conflict.incomingReading && <><dt>Incoming Reading State</dt><dd>{statuses[conflict.incomingReading.status]} · {conflict.incomingReading.progress} chapters read · Finished: {formatDate(conflict.incomingReading.finishedAt)}</dd></>}<dt>Saved Personal Notes</dt><dd>{conflict.notes || 'None'}</dd><dt>Incoming Bookmark Notes</dt><dd>{conflict.incomingNotes || 'None'}</dd><dt>Saved Personal Tags</dt><dd>{conflict.tags.join(', ') || 'None'}</dd><dt>Incoming Bookmark Tags</dt><dd>{conflict.incomingTags?.join(', ') || 'None'}</dd></dl></li>)}</ul></details>}
+  {conflicts.length > 0 && <details><summary>{conflicts.length} Bookmark Conflicts — Review Personal Data</summary><p>These incoming bookmarks differ in notes, personal tags, or reading state. Choose saved personal data or the incoming bookmark for each work. Saved data stays unchanged until you apply an incoming bookmark. Incoming data replaces notes, personal tags, and reading state; deleted bookmarks replace only notes and tags. Ratings, favorites, and collections are kept. Older bookmark dates take precedence and Rec is enabled if either version selected it.</p><ul className="bookmark-conflict-list">{conflicts.map(conflict => <li key={csvWorkKey(conflict)}><Link className="clickable-text" to={`/stories/${conflict.id}`}>{conflict.title || `AO3 Work ${conflict.workId}`}</Link><dl><dt>Saved Reading State</dt><dd>{statuses[conflict.status as keyof typeof statuses]} · {conflict.progress} chapters read · Finished: {formatDate(conflict.finishedAt)}</dd>{conflict.incomingReading && <><dt>Incoming Reading State</dt><dd>{statuses[conflict.incomingReading.status]} · {conflict.incomingReading.progress} chapters read · Finished: {formatDate(conflict.incomingReading.finishedAt)}</dd></>}<dt>Saved Personal Notes</dt><dd>{conflict.notes || 'None'}</dd><dt>Incoming Bookmark Notes</dt><dd>{conflict.incomingNotes || 'None'}</dd><dt>Saved Personal Tags</dt><dd>{conflict.tags.join(', ') || 'None'}</dd><dt>Incoming Bookmark Tags</dt><dd>{conflict.incomingTags?.join(', ') || 'None'}</dd></dl><div className="form-actions"><button type="button" className="button secondary" disabled={busy} onClick={() => void resolveBookmark(conflict, false)}>Keep Saved Data</button><button type="button" className="button primary" disabled={busy} onClick={() => void resolveBookmark(conflict, true)}>Use Incoming Bookmark</button></div></li>)}</ul></details>}
   {usernameKind && <Dialog title={usernameKind === 'bookmarks' ? 'Import Bookmarks' : 'Import Marked for Later'} busy={busy} onClose={() => setUsernameKind(null)}><form className="story-form" onSubmit={event => {
    event.preventDefault()
    try {

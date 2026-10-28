@@ -56,8 +56,8 @@ async function api(auth, path, body) {
  if (!response.ok) throw new Error('Library request failed.')
  return response.json()
 }
-function matchingWork(url, workId) {
- try { return parseWorkUrl(url).workId === workId && new URL(url).origin === 'https://archiveofourown.org' }
+function matchingWork(url, workId, sourceUrl) {
+ try { const identity = parseWorkUrl(url); return identity.workId === workId && (sourceUrl ? Boolean(identity.archiveUrl) : new URL(url).origin === 'https://archiveofourown.org') }
  catch { return false }
 }
 // Each capture lane reuses its own extension-created tab. A matching user tab
@@ -139,13 +139,13 @@ async function pump() {
     return
    }
   } else {
-   tab = await captureTab(`https://archiveofourown.org/works/${active.workId}`, candidate => matchingWork(candidate, active.workId), 'workTabId', version)
+   tab = await captureTab(active.sourceUrl ?? `https://archiveofourown.org/works/${active.workId}`, candidate => matchingWork(candidate, active.workId, active.sourceUrl), 'workTabId', version)
    active.tabId = tab.id
    await storage.session.set({ active })
   }
   await chrome.action.setBadgeText({ text: 'WAIT' })
   const navigationUrl = `https://archiveofourown.org/works/${active.workId}/navigate`
-  if (active.workPage ? tab.url !== navigationUrl : !matchingWork(tab.url, active.workId)) return
+  if (active.workPage ? tab.url !== navigationUrl : !matchingWork(tab.url, active.workId, active.sourceUrl)) return
   const jobs = await api(auth, `/rest/v1/metadata_jobs?id=eq.${encodeURIComponent(active.id)}&select=status,lease_token`)
   if (jobs[0]?.status !== 'processing' || jobs[0]?.lease_token !== active.token) {
    await storage.session.remove('active')
@@ -157,8 +157,8 @@ async function pump() {
   const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureMetadataPage, injectImmediately: true, args: active.workPage ? [tab.status !== 'complete', 'navigation'] : [tab.status !== 'complete'] })
   const page = results[0]?.result
   if (version !== connectionVersion || !page) return
-  if (active.workPage ? page.url !== navigationUrl : !matchingWork(page.url, active.workId)) return
-  if (active.chapterDates && !active.workPage && !page.notFound) {
+  if (active.workPage ? page.url !== navigationUrl : !matchingWork(page.url, active.workId, active.sourceUrl)) return
+  if (!active.sourceUrl && active.chapterDates && !active.workPage && !page.notFound) {
    active.workPage = page
    await storage.session.set({ active })
    await storage.session.set({ ao3LastNavigation: Date.now() })
@@ -198,14 +198,14 @@ async function previewPage(url, pageType = 'series') {
  try {
   const work = pageType === 'work'
   const identity = work ? parseWorkUrl(url) : parseSeriesUrl(url)
-  const targetUrl = work ? identity.normalizedUrl : seriesPageUrl(url, identity.seriesId)
+  const targetUrl = work ? identity.archiveUrl ?? identity.normalizedUrl : seriesPageUrl(url, identity.seriesId)
   const version = connectionVersion
   const state = await storage.session.get(['auth', 'sampleAuth', 'syncSample'])
   if (work && !state.syncSample) throw new Error('Direct work captures are available only in local sample mode.')
   const auth = state.syncSample ? state.sampleAuth : state.auth
   if (!auth || auth.expiresAt * 1000 <= Date.now()) throw new Error('Reconnect the extension in Settings, then retry.')
   const matches = candidate => {
-   try { return work ? matchingWork(candidate, identity.workId) : seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
+   try { return work ? matchingWork(candidate, identity.workId, identity.archiveUrl) : seriesPageUrl(candidate, identity.seriesId) === targetUrl } catch { return false }
   }
   const tab = await captureTab(targetUrl, matches, work ? 'previewTabId' : 'seriesPreviewTabId', version, work ? undefined : 'seriesPreviewWindowId')
   const deadline = Date.now() + 120000
@@ -320,7 +320,7 @@ function checkRequestedTab(tabId) {
 }
 chrome.webNavigation.onDOMContentLoaded.addListener(({ tabId, frameId }) => {
  if (frameId === 0) checkRequestedTab(tabId)
-}, { url: [{ schemes: ['https'], hostEquals: 'archiveofourown.org' }] })
+}, { url: [{ schemes: ['https'], hostEquals: 'archiveofourown.org' }, { schemes: ['https'], hostEquals: 'web.archive.org' }] })
 chrome.tabs.onUpdated.addListener((tabId, change) => {
  if (change.status === 'complete') checkRequestedTab(tabId)
 })

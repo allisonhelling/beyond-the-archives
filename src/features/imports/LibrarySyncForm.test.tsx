@@ -3,13 +3,13 @@ import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), collection: vi.fn(), preview: vi.fn(), reports: vi.fn(), reading: vi.fn(), sample: false }))
+const mocks = vi.hoisted(() => ({ command: vi.fn(), connect: vi.fn(), submit: vi.fn(), applyBookmark: vi.fn(), collection: vi.fn(), preview: vi.fn(), reports: vi.fn(), reading: vi.fn(), sample: false }))
 vi.mock('../../lib/sample-mode', () => ({ get sampleMode() { return mocks.sample } }))
 vi.mock('./extension', () => ({ librarySyncCommand: mocks.command, connectExtension: mocks.connect }))
 vi.mock('../library/repository', () => ({ saveCollection: mocks.collection }))
 vi.mock('./library-sync-reports', () => ({ librarySyncReports: mocks.reports }))
 vi.mock('./import-reading-review', async importOriginal => ({ ...await importOriginal<typeof import('./import-reading-review')>(), reviewImportReading: mocks.reading }))
-vi.mock('./repository', () => ({ submitLibrarySync: mocks.submit, previewSeries: mocks.preview }))
+vi.mock('./repository', () => ({ submitLibrarySync: mocks.submit, applyLibrarySyncBookmark: mocks.applyBookmark, previewSeries: mocks.preview }))
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn() }) }))
 vi.mock('../auth/auth-context', () => ({ useAuth: () => ({ session: { user: { id: 'test' } } }) }))
 import { LibrarySyncForm } from './LibrarySyncForm'
@@ -291,13 +291,18 @@ it('lets a paused scan use a new interval without losing its saved pages', async
  expect(screen.getByLabelText(/^Time Between Page Requests/)).toHaveValue(120)
 })
 
-it('reports affected bookmark works after sync while keeping existing personal data', async () => {
+it('offers saved or incoming personal data with shared maroon work links after sync', async () => {
  mocks.submit.mockResolvedValue({ batch: null, imported: 0, kept: 1, bookmarkConflicts: [{ workId: 10, id: 'saved-bookmark', title: 'Changed bookmark', notes: 'Library note', tags: ['Library tag'], incomingNotes: 'AO3 note', incomingTags: ['AO3 tag'] }] })
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
- const summary = await screen.findByText('1 Bookmark Conflicts — Personal Data Kept')
+ const summary = await screen.findByText('1 Bookmark Conflicts — Review Personal Data')
  fireEvent.click(summary)
  expect(screen.getByRole('link', { name: 'Changed bookmark' })).toHaveAttribute('href', '/stories/saved-bookmark')
+ expect(screen.getByRole('link', { name: 'Changed bookmark' })).toHaveClass('clickable-text')
+ expect(screen.getByRole('link', { name: 'Changed bookmark' }).closest('ul')?.className).toBe('bookmark-conflict-list')
+ expect(screen.getByRole('button', { name: 'Keep Saved Data' })).toBeEnabled()
+ expect(screen.getByRole('button', { name: 'Use Incoming Bookmark' })).toBeEnabled()
+ expect(mocks.applyBookmark).not.toHaveBeenCalled()
  expect(screen.getByText('Library note')).toBeVisible()
  expect(screen.getByText('AO3 note')).toBeVisible()
  expect(screen.getByText('Library tag')).toBeVisible()
@@ -878,4 +883,29 @@ it('offers continuation for an imported ended scan and resumes its saved identit
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('continue', { scanId: 'scan', delaySeconds: 20 }))
  expect(await screen.findByRole('button', { name: 'Pause Scan' })).toBeEnabled()
  expect(screen.queryByRole('button', { name: 'Continue From Previous Scan' })).not.toBeInTheDocument()
+})
+
+it.each([false, true])('applies an explicit bookmark choice (incoming: %s)', async incoming => {
+ const conflict = { workId: 10, id: 'saved-bookmark', version: 'v1', title: 'Changed bookmark', notes: 'Saved note', tags: [], incomingNotes: 'AO3 note', incomingTags: [] }
+ mocks.submit.mockResolvedValue({ batch: null, imported: 0, kept: 1, bookmarkConflicts: [conflict] })
+ mocks.applyBookmark.mockResolvedValue({ batch: null, imported: 1, kept: 0 })
+ const imported = vi.fn(async () => {})
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={imported} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ fireEvent.click(await screen.findByText('1 Bookmark Conflicts — Review Personal Data'))
+ fireEvent.click(screen.getByRole('button', { name: incoming ? 'Use Incoming Bookmark' : 'Keep Saved Data' }))
+ await waitFor(() => expect(screen.queryByText('1 Bookmark Conflicts — Review Personal Data')).not.toBeInTheDocument())
+ if (incoming) { expect(mocks.applyBookmark).toHaveBeenCalledWith(conflict); expect(imported).toHaveBeenLastCalledWith(null) }
+ else expect(mocks.applyBookmark).not.toHaveBeenCalled()
+})
+it('retains the bookmark comparison when an incoming choice cannot be saved', async () => {
+ mocks.submit.mockResolvedValue({ batch: null, imported: 0, kept: 1, bookmarkConflicts: [{ workId: 10, id: 'saved', title: 'Changed bookmark', notes: '', tags: [] }] })
+ mocks.applyBookmark.mockRejectedValue(new Error('This work changed after bookmark review.'))
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn(async () => {})} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ fireEvent.click(await screen.findByText('1 Bookmark Conflicts — Review Personal Data'))
+ fireEvent.click(screen.getByRole('button', { name: 'Use Incoming Bookmark' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('This work changed after bookmark review.')
+ expect(screen.getByRole('button', { name: 'Use Incoming Bookmark' })).toBeEnabled()
+ expect(screen.getByRole('link', { name: 'Changed bookmark' })).toBeVisible()
 })

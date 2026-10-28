@@ -3,14 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SeriesImportOptions, SeriesImportSettings } from './SeriesImportOptions'
 import { saveSeriesImportBehavior, useSeriesImportBehavior } from './series-import-preferences'
 import { SeriesImportReview } from './SeriesImportReview'
-const mocks = vi.hoisted(() => ({ preview: vi.fn(), remember: vi.fn(), stories: [] as { work: { ao3_work_id: number } }[] }))
+const mocks = vi.hoisted(() => ({ preview: vi.fn(), remember: vi.fn(), series: [] as { ao3_series_id: number }[], stories: [] as { metadata?: { series_memberships?: { id: number; name: string; url: string; position: number | null }[] }; work: { ao3_work_id: number } }[] }))
 vi.mock('../library/series/series-repository', () => ({ rememberSeries: mocks.remember }))
 vi.mock('./repository', () => ({ previewSeries: mocks.preview }))
-vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn(), stories: mocks.stories }) }))
+vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refreshSeries: vi.fn(), stories: mocks.stories, series: mocks.series }) }))
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) })
- mocks.stories = []
+ mocks.stories = []; mocks.series = []
  vi.clearAllMocks()
  mocks.preview.mockImplementation(async (url: string) => ({ seriesId: Number(url.split('/').at(-1)), title: 'Series', works: [1, 2].map(workId => ({ workId, url: `https://archiveofourown.org/works/${workId}`, title: `Work ${workId}`, authors: [], tags: [], summary: '', wordCount: null, chapters: '1/1', complete: true })) }))
 })
@@ -139,7 +139,8 @@ it('applies footer controls to all series and saves details without importing wo
  fireEvent.click(saveAll)
  await waitFor(() => expect(mocks.remember).toHaveBeenCalledTimes(2))
  expect(confirm).not.toHaveBeenCalled()
- expect(screen.getAllByRole('button', { name: 'Full Series Details Saved' })).toHaveLength(4)
+ expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Save All Series' })).not.toBeInTheDocument()
 })
 
 function longPreview(seriesId = 7, count = 65) {
@@ -260,7 +261,8 @@ it('shows footer controls only while series works are shown', async () => {
  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })) })
  expect(mocks.remember).toHaveBeenCalledWith(preview)
- for (const save of screen.getAllByRole('button', { name: 'Full Series Details Saved' })) expect(save).toBeDisabled()
+ expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Save All Series' })).not.toBeInTheDocument()
 })
 
 it.each([
@@ -306,4 +308,31 @@ it('counts and marks catalog works already saved even when the import path suppl
  expect(screen.getByText(/2 visible works · 1 in library · 1 selected/)).toBeVisible()
  fireEvent.click(screen.getByRole('button', { name: 'Import Selected' }))
  expect(confirm.mock.calls[0][0].map((work: { workId: number }) => work.workId)).toEqual([2])
+})
+
+it.each(['saved record', 'saved work membership'])('hides Save for a series already in the library through a %s', async source => {
+ if (source === 'saved record') mocks.series = [{ ao3_series_id: 7 }]
+ else mocks.stories = [{ work: { ao3_work_id: 100 }, metadata: { series_memberships: [{ id: 7, name: 'Series', url: 'https://archiveofourown.org/series/7', position: 1 }] } }]
+ const first = longPreview(7, 2), second = longPreview(8, 2)
+ render(<SeriesImportReview text={`${first.normalizedUrl}\n${second.normalizedUrl}`} initialPreviews={[first, second]} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ const saved = within(screen.getByRole('region', { name: 'Series 7 • Series 7' }))
+ expect(saved.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ fireEvent.click(saved.getByRole('button', { name: 'Show Series Works' }))
+ expect(saved.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ expect(within(screen.getByRole('region', { name: 'Series 8 • Series 8' })).getByRole('button', { name: 'Save' })).toBeVisible()
+ fireEvent.click(screen.getByRole('button', { name: 'Save All Series' }))
+ await waitFor(() => expect(mocks.remember).toHaveBeenCalledExactlyOnceWith(second))
+ expect(screen.queryByRole('button', { name: 'Save All Series' })).not.toBeInTheDocument()
+})
+
+it('keeps Save and work selections available when saving a missing series fails', async () => {
+ const preview = longPreview(7, 2)
+ mocks.remember.mockRejectedValueOnce(new Error('Save unavailable'))
+ render(<SeriesImportReview text={preview.normalizedUrl} initialPreviews={[preview]} savedIds={new Set()} busy={false} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Show Series Works' }))
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0])
+ expect(await screen.findByRole('alert')).toHaveTextContent('Save unavailable')
+ expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeEnabled()
+ expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
 })

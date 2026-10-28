@@ -163,3 +163,26 @@ it('retains connection and capture errors when retrieving missing scan names', a
  await expect(previewSeries('https://archiveofourown.org/series/77', { viaExtension: true, firstPageOnly: true })).rejects.toThrow('Complete AO3 sign-in')
  expect(invoke).not.toHaveBeenCalled()
 })
+
+it('uses the saved post-import version for bookmark choices and submits an explicit overwrite', async () => {
+ const { submitLibrarySync, applyLibrarySyncBookmark } = await import('./repository')
+ const incoming = { workId: 401, source: 'bookmarks' as const, url: 'https://archiveofourown.org/works/401', metadata: { title: 'Work' }, notes: 'Incoming note', tags: ['Incoming'], bookmarkDate: null, updatedDate: null }
+ const saved = { id: 'entry', workId: 401, version: 'before', title: 'Work', notes: 'Saved note', tags: [], status: 'to_read', progress: 0 }
+ rpc.mockResolvedValueOnce({ data: [saved], error: null })
+  .mockResolvedValueOnce({ data: { batch: null, imported: 0, kept: 1 }, error: null })
+  .mockResolvedValueOnce({ data: [{ ...saved, version: 'after' }], error: null })
+ const result = await submitLibrarySync([incoming])
+ const conflict = result.bookmarkConflicts![0]
+ expect(conflict).toMatchObject({ version: 'after', incomingWork: incoming })
+ rpc.mockResolvedValueOnce({ data: { batch: null, imported: 1, kept: 0 }, error: null })
+ await applyLibrarySyncBookmark(conflict)
+ expect(rpc).toHaveBeenLastCalledWith('submit_ao3_library_sync', { p_rows: [expect.objectContaining({ choice: 'overwrite', expectedVersion: 'after', notes: 'Incoming note' })] })
+ rpc.mockResolvedValueOnce({ error: { code: '40001' } })
+ await expect(applyLibrarySyncBookmark(conflict)).rejects.toThrow('changed after bookmark review')
+})
+
+it('does not report an incoming bookmark as applied when an older server keeps it', async () => {
+ const { applyLibrarySyncBookmark } = await import('./repository')
+ rpc.mockResolvedValueOnce({ data: { batch: null, imported: 0, kept: 1 }, error: null })
+ await expect(applyLibrarySyncBookmark({ workId: 401, id: 'entry', version: 'reviewed', title: 'Work', status: 'to_read', progress: 0, notes: '', tags: [], incomingWork: { workId: 401, source: 'bookmarks', url: 'https://archiveofourown.org/works/401', metadata: { title: 'Work' }, notes: 'Incoming', tags: [], bookmarkDate: null, updatedDate: null } })).rejects.toThrow('not applied. Apply the latest database migrations')
+})

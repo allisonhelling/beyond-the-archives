@@ -1012,17 +1012,19 @@ it('closes the progress popup so conflicting edits can be reviewed', async () =>
  expect(input).toHaveValue(4)
 })
 
-it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => ({ browser, fromBottom }))))('quick-saves an unsaved work as To Read on $browser (bottom: $fromBottom)', async ({ browser, fromBottom }) => {
+it.each(['safari', 'chrome'])('quick-saves an unsaved work as To Read only at the first chapter top on %s', async browser => {
  network.mockImplementation(async ({ data }) => {
   const request = JSON.parse(data)
   if (request.p_action === 'save') entry = { ...request.p_input, id: 'quick-entry', version: 'v1' }
   return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
  })
- await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
- const surface = fromBottom ? bottomRoot : root
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/101', { browser })
+ const surface = root
  const add = within(surface).getByRole('button', { name: 'Add to Library' })
  const toRead = within(surface).getByRole('button', { name: 'To Read', exact: true })
  expect(add.nextElementSibling).toBe(toRead)
+ expect(toRead.nextElementSibling).toBe(within(root).getByRole('button', { name: 'Reading', exact: true }))
+ expect(within(bottomRoot).queryByRole('button', { name: 'To Read', exact: true })).not.toBeInTheDocument()
  fireEvent.click(toRead)
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
  expect(entry).toMatchObject({ status: 'to_read', progress: 0, notes: '', tags: [], collections: [], metadata: { title: 'Test' } })
@@ -1250,4 +1252,79 @@ it.each(['safari', 'chrome'])('saves work favorite and recommended choices from 
  await waitFor(() => expect(entry).toMatchObject({ favorite: true, rec: true }))
  const body = JSON.parse(network.mock.lastCall[0].data)
  expect(body.p_input).toMatchObject({ favorite: true, rec: true, base: { favorite: false, rec: false } })
+})
+
+it.each(['safari', 'chrome'].flatMap(browser => [
+ { chapter: 1, bottom: false, label: 'Reading', progress: 0, status: 'reading' },
+ { chapter: 1, bottom: true, label: 'Mark Read', progress: 1, status: 'reading' },
+ { chapter: 4, bottom: false, label: 'Mark Read', progress: 4, status: 'reading' },
+ { chapter: 4, bottom: true, label: 'Mark Read', progress: 4, status: 'reading' },
+ { chapter: 10, bottom: false, label: 'Mark Read', progress: 10, status: 'finished' },
+ { chapter: 10, bottom: true, label: 'Finish Fic', progress: 10, status: 'finished' },
+].map(value => ({ browser, ...value }))))('saves unsaved $browser chapter $chapter through $label (bottom: $bottom)', async ({ browser, chapter, bottom, label, progress, status }) => {
+ document.querySelector('#selected_id').insertAdjacentHTML('beforeend', '<option value="110">10. Last</option>')
+ document.querySelector('#workskin').insertAdjacentHTML('beforeend', `<div id="chapters"><div id="chapter-${chapter}" class="chapter"><div class="userstuff"><p>Only three words.</p></div></div></div>`)
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'save') entry = { ...request.p_input, id: 'quick-entry', version: 'v1' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, `https://archiveofourown.org/works/123/chapters/${100 + chapter}`, { browser })
+ const surface = bottom ? bottomRoot : root
+ expect(within(bottomRoot).queryByRole('button', { name: 'To Read', exact: true })).not.toBeInTheDocument()
+ if (chapter !== 1) for (const bar of [root, bottomRoot]) expect(within(bar).queryByRole('button', { name: /^(To Read|Reading)$/ })).not.toBeInTheDocument()
+ fireEvent.click(within(surface).getByRole('button', { name: label, exact: true }))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ expect(entry).toMatchObject({ status, progress, notes: '', tags: [], collections: [] })
+ const request = JSON.parse(network.mock.lastCall[0].data)
+ expect(request.p_action).toBe('save')
+ expect(request.p_input).toMatchObject({ version: null, base: {}, metadata: { title: 'Test' } })
+ if (label === 'Reading') expect(request.p_input).not.toHaveProperty('chapter_read')
+ else expect(request.p_input.chapter_read).toMatchObject({ chapter, chapter_id: String(100 + chapter), word_count: 3 })
+ for (const bar of [root, bottomRoot]) expect(bar.querySelector('.chapter-progress')).toHaveTextContent(`Ch. ${progress} / 10`)
+})
+
+it.each(['safari', 'chrome'])('offers Finish Fic for an unsaved one-shot bottom bar on %s', async browser => {
+ document.querySelector('dd.chapters').textContent = '1/1'
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'save') entry = { ...request.p_input, id: 'one-shot', version: 'v1' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/101', { browser })
+ expect(within(root).getByRole('button', { name: 'Reading', exact: true })).toBeVisible()
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Finish Fic' }))
+ await waitFor(() => expect(entry).toMatchObject({ status: 'finished', progress: 1 }))
+})
+
+it.each(['safari', 'chrome'])('saves only the selected unsaved Entire Work chapter on %s', async browser => {
+ entireWork()
+ network.mockImplementation(async ({ data }) => {
+  const request = JSON.parse(data)
+  if (request.p_action === 'save') entry = { ...request.p_input, id: 'entire-work', version: 'v1' }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, entireWorkUrl, { browser })
+ const bars = chapterSurfaces()
+ expect(within(root).getByRole('button', { name: 'Reading', exact: true })).toBeVisible()
+ expect(within(root).getByRole('button', { name: 'To Read', exact: true })).toBeVisible()
+ for (const [index, bar] of bars.entries()) {
+  expect(within(bar).queryByRole('button', { name: 'To Read', exact: true })).not.toBeInTheDocument()
+  expect(within(bar).getByRole('button', { name: index === 2 ? 'Finish Fic' : 'Mark Read' })).toBeVisible()
+ }
+ fireEvent.click(within(bars[1]).getByRole('button', { name: 'Mark Read' }))
+ await waitFor(() => expect(entry).toMatchObject({ status: 'reading', progress: 2 }))
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input.chapter_read).toMatchObject({ chapter: 2, chapter_id: '102', word_count: 2 })
+})
+
+it('retains unsaved actions after a failed save and does not offer Finish Fic for a WIP', async () => {
+ document.querySelector('dd.chapters').textContent = '4/?'
+ await mount()
+ expect(within(bottomRoot).queryByRole('button', { name: 'Finish Fic' })).not.toBeInTheDocument()
+ network.mockResolvedValue({ status: 503, responseText: '{}' })
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Mark Read' }))
+ await waitFor(() => expect(within(root).getByRole('status')).not.toHaveTextContent(/^$/))
+ expect(entry).toBeNull()
+ expect(within(bottomRoot).getByRole('button', { name: 'Mark Read' })).toBeEnabled()
+ expect(within(root).getByRole('button', { name: 'Add to Library' })).toBeEnabled()
 })

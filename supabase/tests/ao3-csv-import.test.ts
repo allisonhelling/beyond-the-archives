@@ -80,9 +80,11 @@ it('denies anonymous CSV reads and writes', async () => {
  await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${alice}'`)
 })
 
-it('imports library listing snapshots without work requests and forces keep even on a malicious overwrite', async () => {
+it('imports listing snapshots without requests and rejects overwrites without a reviewed version', async () => {
  const before = await entry(101)
- const result = (await db.query<{ result: { batch: string; imported: number; kept: number } }>('select public.submit_ao3_library_sync($1) result', [JSON.stringify([row(101, { choice: 'overwrite', notes: 'Must not replace' }), row(901)])])).rows[0].result
+ await expect(db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(101, { choice: 'overwrite', notes: 'Must not replace' }), row(901)])])).rejects.toThrow('CSV conflicts changed')
+ expect(await entry(901)).toBeUndefined()
+ const result = (await db.query<{ result: { batch: string; imported: number; kept: number } }>('select public.submit_ao3_library_sync($1) result', [JSON.stringify([row(101), row(901)])])).rows[0].result
  expect(result).toMatchObject({ imported: 1, kept: 1 })
  expect(await entry(101)).toEqual(before)
  expect(await entry(901)).toMatchObject({ extension_metadata: { title: 'Work 901' } })
@@ -203,4 +205,25 @@ it('uses inherited series bookmark dates for reading state without sharing a boo
  const sources = await db.query<{ ao3_work_id: number; source_bookmark: object }>('select w.ao3_work_id,e.source_bookmark from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id between 1995 and 1998 order by w.ao3_work_id')
  expect(sources.rows.slice(0, 3).every(row => !Object.hasOwn(row.source_bookmark, 'id'))).toBe(true)
  expect(sources.rows[3].source_bookmark).toMatchObject({ id: '91998', date: '2026-10-25' })
+})
+
+it('applies explicitly reviewed sync bookmarks with version checks and no queued metadata requests', async () => {
+ const workId = 880001
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([row(workId)])])
+ const original = await entry(workId)
+ const incoming = row(workId, { notes: 'Incoming chosen note', tags: ['Chosen tag'], bookmarkDate: '2026-09-01' })
+ await db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([incoming])])
+ expect(await entry(workId)).toMatchObject({ notes: original.notes, reading_status: original.reading_status })
+ const saved = await entry(workId)
+ const result = (await db.query<{ result: { batch: string } }>('select public.submit_ao3_library_sync($1) result', [JSON.stringify([{ ...incoming, choice: 'overwrite', expectedVersion: saved.updated_at }])])).rows[0].result
+ expect(await entry(workId)).toMatchObject({ notes: 'Incoming chosen note', reading_status: 'reading', last_read_chapter: 0, finished_at: null })
+ expect((await db.query<{ name: string }>('select t.name from public.personal_tags t join public.library_entry_tags l on l.personal_tag_id=t.id where l.library_entry_id=$1', [saved.id])).rows).toEqual([{ name: 'Chosen tag' }])
+ expect((await db.query<{ status: string }>('select status from public.metadata_jobs where batch_id=$1', [result.batch])).rows.every(job => job.status === 'completed')).toBe(true)
+ const reviewed = await entry(workId)
+ await db.query("update public.library_entries set notes='Later personal edit' where id=$1", [saved.id])
+ await expect(db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([{ ...incoming, choice: 'overwrite', expectedVersion: reviewed.updated_at }])])).rejects.toThrow('CSV conflicts changed')
+ expect(await entry(workId)).toMatchObject({ notes: 'Later personal edit' })
+ await db.exec(`set request.jwt.claim.sub='${bob}'`)
+ await expect(db.query('select public.submit_ao3_library_sync($1)', [JSON.stringify([{ ...incoming, choice: 'overwrite', expectedVersion: reviewed.updated_at }])])).rejects.toThrow('CSV conflicts changed')
+ await db.exec(`set request.jwt.claim.sub='${alice}'`)
 })

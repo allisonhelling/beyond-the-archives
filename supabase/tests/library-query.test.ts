@@ -347,6 +347,7 @@ it('counts compact series with the same shelf fields without building preview me
   // Turn preview aggregation into a deterministic failure instead of timing it.
   await db.exec(fn.definition.replace('LANGUAGE sql', 'LANGUAGE plpgsql').replace(fn.source, "begin raise exception 'Unexpected preview aggregation'; end;"))
   await db.exec('set role authenticated')
+  expect((await db.query('select * from public.library_series_results($1,true)', [stories])).rows).toHaveLength(compact.length)
   expect((await db.query<{ result: Record<string, unknown> }>('select public.library_navigation() result')).rows[0].result).toHaveProperty('all')
   await expect(db.query('select * from public.library_series_results($1)', [stories])).rejects.toThrow('Unexpected preview aggregation')
  } finally {
@@ -514,4 +515,37 @@ it('retries a page if a newer revision appears between identity selection and do
   expect(after.stories.map(story=>story.id)).not.toContain(before.stories[0].id)
   expect(after.revision).toBe((await db.query<{r:number}>('select public.library_revision() r')).rows[0].r)
  } finally {await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`)}
+})
+
+it('does not build series search text for facets or In a Series Only without a text search', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const fn = (await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_search_text(jsonb,text)'::regprocedure")).rows[0]
+  await db.exec(fn.definition.replace('LANGUAGE sql','LANGUAGE plpgsql').replace(fn.source,"begin raise exception 'Unexpected search text construction'; end;"))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  for (const shelf of ['all', 'series']) {
+   const scope = {mode:'library',shelf,filters:{showSeries:true,inSeries:true},includeFacets:false}
+   expect((await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify(scope)])).rows[0].r.total).toBeGreaterThan(0)
+   expect((await db.query<{r:{total:number}}>('select public.library_query_facets($1) r',[JSON.stringify(scope)])).rows[0].r.total).toBeGreaterThan(0)
+  }
+  await expect(query({showSeries:true,inSeries:true,within:'force a fresh text search'})).rejects.toThrow('Unexpected search text construction')
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('aggregates merged series metadata once per series while preserving compact navigation', async () => {
+ const stories = JSON.stringify(await documents())
+ await db.exec('reset role;begin')
+ try {
+  const fn = (await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_unique_values(jsonb)'::regprocedure")).rows[0]
+  await db.exec('create sequence public.series_aggregations;grant usage,select on sequence public.series_aggregations to authenticated')
+  await db.exec(fn.definition.replace('LANGUAGE sql','LANGUAGE plpgsql').replace(fn.source,"begin perform nextval('public.series_aggregations'); return ("+fn.source.trim().replace(/;$/,'')+'); end;'))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const full = (await db.query('select * from public.library_series_results($1)',[stories])).rows
+  expect(full.length).toBeGreaterThan(0)
+  expect((await db.query<{n:number}>('select last_value::integer n from public.series_aggregations')).rows[0].n).toBe(full.length * 7)
+  await db.exec("reset role;select setval('public.series_aggregations',1,false);set role authenticated")
+  const compact = (await db.query('select * from public.library_series_results($1,true)',[stories])).rows
+  expect(compact).toHaveLength(full.length)
+  expect((await db.query<{is_called:boolean}>('select is_called from public.series_aggregations')).rows[0].is_called).toBe(false)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })

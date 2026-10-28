@@ -1,4 +1,4 @@
-import { parseWorkUrl } from '../imports/urls'
+import { parseWorkUrl, waybackSnapshot } from '../imports/urls'
 import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-Reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
@@ -47,6 +47,8 @@ export function validateProgress(value: number, metadata: Metadata) {
   return value
 }
 export function chapterUrl(story: Story, position = nextUnread(story.last_read_chapter)) {
+  // A verified AO3 chapter ID does not prove that Wayback captured that URL.
+  if (story.original_url && waybackSnapshot(savedWorkUrl(story))) return null
   const map = story.work.verified_chapters as Record<string, Json>
   const chapter = map?.[String(position)]
   return typeof chapter === 'string' && /^[1-9]\d*$/.test(chapter) ? `https://archiveofourown.org/works/${story.work.ao3_work_id}/chapters/${chapter}` : null

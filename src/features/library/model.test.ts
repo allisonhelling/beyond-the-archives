@@ -88,3 +88,11 @@ it('formats AO3 calendar dates without UTC boundary shifts and rejects impossibl
  expect(ao3Date('2026-09-03')).toBe('Sep 03, 2026')
  for(const value of ['2026-02-29','2026-04-31']) expect(ao3Date(value)).toBe('Unknown')
 })
+
+it('keeps an archived reading destination instead of inventing a live next-chapter URL', async () => {
+ const { chapterUrl, savedWorkUrl } = await import('./model')
+ const original_url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123?view_full_work=true'
+ const story = { original_url, metadata: {}, last_read_chapter: 1, work: { ao3_work_id: 123, verified_chapters: { 2: '920' } } } as unknown as Parameters<typeof chapterUrl>[0]
+ expect(chapterUrl(story)).toBeNull()
+ expect(savedWorkUrl(story)).toBe(original_url)
+})

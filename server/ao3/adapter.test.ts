@@ -114,3 +114,28 @@ it('retains safe summary formatting through the metadata validation boundary', (
  const result = validateMetadata(parseMetadata(html, 123, 'https://archiveofourown.org/works/123'))
  expect(result.metadata).toMatchObject({ summary: 'A summary & more.', summary_html: '<p>A <em>summary</em> &amp; <strong>more</strong>.</p>' })
 })
+
+it('retrieves a requested archived snapshot and normalizes replay links without fetching live AO3', async () => {
+ const sourceUrl = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123?view_full_work=true'
+ const html = fixture('work').replaceAll('href="/', 'href="/web/20251007001146/https://archiveofourown.org/')
+ const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(html, { headers: { 'content-type': 'text/html' } }))
+ const result = await retrieveMetadata({ workId: 123, normalizedUrl: 'https://archiveofourown.org/works/123', sourceUrl, chapterDates: true }, fetcher)
+ expect(result.metadata).toMatchObject({ title: 'A & B', authors: ['One', 'Two'], author_links: { One: 'https://archiveofourown.org/users/One/pseuds/One' }, series_memberships: [{ id: 77 }] })
+ expect(result.sourceUrl).toBe(sourceUrl)
+ expect(fetcher).toHaveBeenCalledTimes(1)
+ expect(fetcher.mock.calls[0][0]).toBe(sourceUrl)
+})
+it('rejects archive redirects to live AO3, other works, or unrelated origins before following them', async () => {
+ const sourceUrl = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123'
+ for (const location of ['https://archiveofourown.org/works/123', 'https://example.com/', 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/456']) {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 302, headers: { location } }))
+  expect((await retrieveMetadata({ workId: 123, normalizedUrl: 'https://archiveofourown.org/works/123', sourceUrl }, fetcher)).metadata).toBeNull()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+ }
+})
+it('passes archived sources from the existing queue claim to the retrieval adapter', async () => {
+ const sourceUrl = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123'
+ const retrieve = vi.fn().mockResolvedValue(parse())
+ await runWorkerOnce({ claim: vi.fn().mockResolvedValue({ id: 'j', token: 't', workId: 123, sourceUrl }), finish: vi.fn().mockResolvedValue(true) }, retrieve)
+ expect(retrieve).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl, workId: 123 }))
+})

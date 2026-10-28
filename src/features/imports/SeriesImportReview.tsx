@@ -6,6 +6,7 @@ import { ExternalLink } from 'lucide-react'
 import { useLibrary } from '../library/LibraryProvider'
 import { rememberSeries } from '../library/series/series-repository'
 import { Tooltip } from '../../components/Tooltip'
+import { seriesMemberships } from '../library/series/series'
 import type { Status } from '../library/model'
 import { ImportReadingStatus } from './ImportReadingStatus'
 import { previewSeries } from './repository'
@@ -33,9 +34,10 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  text: string; initialPreviews?: SeriesPreview[]; savedIds: Set<number>; busy: boolean
  onConfirm(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[], selections: SeriesWorkSelection[]): void; onCancel(): void
 }) {
- const { refreshSeries, stories = [], catalogLoaded } = useLibrary({ catalog: true })
+ const { refreshSeries, stories = [], series: savedSeries = [], catalogLoaded } = useLibrary({ catalog: true })
  const busy = externalBusy || catalogLoaded === false
  const savedIds = new Set([...suppliedSavedIds, ...stories.flatMap(story => story.work.ao3_work_id ? [Number(story.work.ao3_work_id)] : [])])
+ const savedSeriesIds = new Set([...savedSeries.map(series => series.ao3_series_id), ...stories.flatMap(story => story.metadata ? seriesMemberships(story).map(series => series.id) : [])])
  const [readingStatus, setReadingStatus] = useState<Status>(initialReadingStatus)
  const series = useMemo(() => {
   const entries = new Map(extractUrls(text).flatMap(url => {
@@ -82,7 +84,9 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  useEffect(() => {
   if (automatic && ready && canConfirm && loading === undefined && !savingAll && !busy && !automaticStarted.current) { automaticStarted.current = true; confirmAutomatic() }
  }, [automatic, ready, canConfirm, loading, savingAll, busy])
+ const seriesSaved = (id: number) => savedSeriesIds.has(id) || Boolean(reviews[id]?.detailsSaved)
  async function saveDetails(id: number, url: string) {
+  if (seriesSaved(id)) return
   setLoading(id)
   setReviews(current => ({ ...current, [id]: { ...current[id], selected: current[id]?.selected ?? new Set(), error: undefined } }))
   try {
@@ -116,7 +120,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  }
  async function saveAllDetails() {
   setSavingAll(true)
-  try { for (const [id, url] of series) if (!reviews[id]?.detailsSaved) await saveDetails(id, url) }
+  try { for (const [id, url] of series) if (!seriesSaved(id)) await saveDetails(id, url) }
   finally { setSavingAll(false) }
  }
  function select(id: number, ids: number[]) { setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(ids) } })) }
@@ -175,7 +179,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
     <SeriesScopeAction label="Clear Selection" scope={scope} disabled={disabled} onClick={() => select(id, [])} />
     <SeriesScopeAction label={expanded ? 'Hide All' : 'View All'} scope={scope} disabled={!preview.works.length} expanded={expanded} onClick={() => setVisibility(!expanded, id)} />
    </>
-   const saveControl = !singleSeries && <Tooltip description={review?.detailsSaved ? 'Full Series Details Saved' : saveDescription}>{tooltipId => <button type="button" className="button secondary" aria-describedby={tooltipId} disabled={disabled || !preview || review?.detailsSaved} onClick={() => void saveDetails(id, url)}>{review?.detailsSaved ? 'Full Series Details Saved' : 'Save'}</button>}</Tooltip>
+   const saveControl = !singleSeries && catalogLoaded !== false && !seriesSaved(id) && <Tooltip description={saveDescription}>{tooltipId => <button type="button" className="button secondary" aria-describedby={tooltipId} disabled={disabled || !preview} onClick={() => void saveDetails(id, url)}>Save</button>}</Tooltip>
    const worksToggle = !!preview?.works.length && <button type="button" className="text-button clickable-text" aria-expanded={shownSeries.has(id)} onClick={() => setShownSeries(current => {
     const next = new Set(current)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -208,7 +212,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   {pagination}
   <p className="field-help">Selections and bulk actions apply across all pages. Overlapping selections are imported once. Original series part numbers are preserved when work metadata loads.</p>
   {!singleSeries && <div className="form-actions series-preview-controls" aria-label="All Series Controls">
-   <Tooltip portal description={saveDescription}>{id => <button type="button" className="button secondary" aria-describedby={id} disabled={disabled || !ready || [...series.keys()].every(id => reviews[id]?.detailsSaved)} onClick={() => void saveAllDetails()}>Save All Series</button>}</Tooltip>
+   {catalogLoaded !== false && [...series.keys()].some(id => !seriesSaved(id)) && <Tooltip portal description={saveDescription}>{id => <button type="button" className="button secondary" aria-describedby={id} disabled={disabled || !ready} onClick={() => void saveAllDetails()}>Save All Series</button>}</Tooltip>}
    <SeriesScopeAction label="Hide All" scope="all series" disabled={disabled} onClick={() => setVisibility(false)} />
    <SeriesScopeAction label="Select All" scope="all series" disabled={disabled || automatic} onClick={() => setAllSelected(true)} />
   </div>}

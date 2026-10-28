@@ -95,3 +95,11 @@ it('reviews a series in place without creating a work',async()=>{
  await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/101',true,'finished',[77]))
  expect(screen.getByRole('heading',{name:'Importing Selected Works'})).toBeVisible()
 })
+
+it('submits the complete Wayback work link instead of replacing it with live AO3', async () => {
+ show()
+ const url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/17199254?view_full_work=true'
+ fireEvent.change(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' }), { target: { value: url } })
+ fireEvent.click(screen.getByRole('button', { name: 'Import from Link' }))
+ await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith(url))
+})

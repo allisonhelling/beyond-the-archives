@@ -101,7 +101,7 @@ Recent shared-metadata reuse was considered and left disabled: explicit metadata
 
 ## Rollout
 
-Apply all versioned migrations through `20261027000300_library_query_cache_write_access.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
+Apply all versioned migrations through `20261027000600_series_query_evaluation.sql` before deploying the frontend. The frontend requires its new facets and navigation RPCs. The first migration backfills private search documents and adds source-maintenance triggers; the second adds paginated import history and queue fairness; the third batches metadata projections and skips unchanged updates. No hosted migration, deployment or AO3 retrieval was performed by these checks.
 
 ## Revision-Based Navigation and Counts
 
@@ -122,3 +122,20 @@ Old cards and their exact total stay together while a newer result loads. Pagina
 `npm run perf:db` records both the revision/cache-aware RPC and the production candidate-selection statement, explained separately without caching. It includes a repeated navigation read and a sort change. Embedded timings are development observations, not hosted latency or concurrent-write guarantees. Apply the migration before deploying the updated client.
 
 A local single-process run on 27 October 2026 used 1,000 works per reader and three readers. The first 50-work page took 12 ms, the last page 9 ms, a sort change 13 ms, and a filtered 250-work page 176 ms. Navigation took 215 ms initially and less than 1 ms from its revision cache. The compact catalog took 126 ms without automatic collections and 141 ms with five automatic collections. The existing full series path took 672 ms. Bulk fixture setup analyzes the derived membership table before steady-state reads, as it already does for the other fixture tables. These are individual embedded measurements, not hosted percentiles or concurrent-write measurements.
+
+## Series Filters and Suggestions
+
+Migration `20261027000600_series_query_evaluation.sql` addresses repeated series evaluation in the Series shelf and **In a Series + Show Series** result/facet queries. The existing merger now materializes membership, grouping, merged works and metadata stages once per series. Navigation explicitly skips merged previews and metadata. The pool computes normalized search text only for the requested scope when text terms exist; Series-only pools retain work context for aggregation without emitting individual work cards.
+
+One local PGlite comparison used 4,908 works and 442 series for one reader, with the existing synthetic fixture and additional empty saved series. Before/after responses were identical for every scenario, including exact totals, card payloads and facets. Timings are single observations, not hosted latency guarantees:
+
+| Operation | Before | After |
+| --- | ---: | ---: |
+| Series suggestions | 1,492 ms | 308 ms |
+| First 50 series | 3,195 ms | 629 ms |
+| In a Series + Show Series, 50 results | 3,378 ms | 1,071 ms |
+| Mixed work/series suggestions | 1,580 ms | 471 ms |
+| Work-only fandom-filtered page | 596 ms | 597 ms |
+| Work-only suggestions | 223 ms | 222 ms |
+
+`npm run perf:db` now includes `series-facets`, `mixed-facets`, and `in-series-page` alongside the existing series page. SQL regressions count aggregate evaluations per series, reject unnecessary search-text construction, exercise real text searches, and verify compact navigation does not evaluate full preview metadata. Existing ownership, browser/SQL filter parity, alias, paging, and automatic-collection checks remain applicable. Apply the migration to the hosted database; local fixtures do not establish that an existing hosted deployment has been upgraded or that its timeout is resolved.

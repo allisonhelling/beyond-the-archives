@@ -260,12 +260,28 @@ function applySampleBookmarkHistory(story: Story, row: CsvWork, preserveReading 
 }
 
 /** Refresh automatic observations while preserving existing personal data. */
-export async function importSampleWorks(works: CsvWork[]) {
+export async function importSampleWorks(works: (CsvWork & { choice?: 'keep' | 'overwrite'; expectedVersion?: string })[]) {
  let imported = 0, kept = 0, metadataRepaired = 0, seriesRepaired = 0, readingCorrections = 0
  const repairWorkIds = { metadata: [] as string[], series: [] as string[], reading: [] as string[] }
  for (const row of works) {
-  const data = read()
-  const existing = data.stories.find(story => row.bookmarkId && sourceBookmark(story).id === String(row.bookmarkId) || row.workId !== null && story.work.ao3_work_id === row.workId)
+  let data = read()
+  let existing = data.stories.find(story => row.bookmarkId && sourceBookmark(story).id === String(row.bookmarkId) || row.workId !== null && story.work.ao3_work_id === row.workId)
+  if (row.choice === 'overwrite' && row.source === 'bookmarks') {
+   if (!existing || existing.updated_at !== row.expectedVersion) throw new Error('This work changed after bookmark review. Import the scan again to review its latest saved data.')
+   const reading = bookmarkReadingState(row), deleted = row.workStatus === 'deleted'
+   await saveSampleStory({ id: existing.id, url: existing.original_url, metadata: existing.metadata, metadataChanges: {},
+    status: deleted ? existing.reading_status : reading.status, progress: deleted ? existing.last_read_chapter : reading.progress,
+    notes: row.notes, tags: row.tags, personalRating: existing.personal_rating, favorite: existing.is_favorite, rec: existing.is_rec,
+    collections: existing.collectionIds, base: editSnapshot(existing) })
+   data = read(); existing = find(data, existing.id)
+   if (!deleted) {
+    const oldFinished = existing.finished_at
+    const finishedAt = reading.finishedAt ? new Date(reading.finishedAt).toISOString() : null
+    existing.finished_at = finishedAt
+    existing.reading_history = existing.reading_history?.map(event => event.action === 'finished' && event.at === oldFinished && finishedAt ? { ...event, at: finishedAt } : event)
+    existing.reading_provenance = { source: 'manual', progressKnown: importProgressKnown(row) }
+   }
+  }
   const incoming = nonemptyMetadata(row.metadata)
   const automatic = { ...incoming, ...(incoming.is_complete === undefined ? {} : { publication_status: incoming.is_complete ? 'complete' as const : 'in_progress' as const }) }
   if (existing) {
@@ -275,7 +291,7 @@ export async function importSampleWorks(works: CsvWork[]) {
    if (row.workStatus === 'deleted') {
     existing.work_status = 'deleted'
     existing.metadata.publication_status = 'deleted'
-    write(data); kept++; continue
+    write(data); if (row.choice === 'overwrite') imported++; else kept++; continue
    }
    if (existing.work.ao3_work_id === null && row.workId !== null) { existing.work = makeWork(row.workId); existing.work_id = existing.work.id; existing.original_url = row.url }
    existing.work_status = 'available'
@@ -297,7 +313,7 @@ export async function importSampleWorks(works: CsvWork[]) {
      const next = { ...provenance }; delete next.review; existing.reading_provenance = next as unknown as Json
     }
    }
-   write(data); kept++; continue
+   write(data); if (row.choice === 'overwrite') imported++; else kept++; continue
   }
   const reading = bookmarkReadingState(row), finished = reading.status === 'finished'
   const metadata: Story['metadata'] = { ...blankMetadata, ...row.metadata, title: row.metadata.title || `Deleted Work — Bookmark #${row.bookmarkId}`,

@@ -41,7 +41,7 @@ profile('local', localEnv, localEnv.EXTENSION_LOCAL_APP_ORIGIN)
 const defaultId = values.local ? 'local' : 'hosted'
 if (!profiles[defaultId]) throw new Error(`Configure the ${defaultId} public Supabase URL, publishable key, and matching website origin.`)
 const { appOrigin, backend, publicKey } = profiles[defaultId]
-const version = '0.7.4'
+const version = '0.7.6'
 const define = {
  __EXTENSION_ENVIRONMENTS__: JSON.stringify(profiles), __DEFAULT_ENVIRONMENT__: JSON.stringify(defaultId),
  'process.env.NODE_ENV': JSON.stringify('production'),
@@ -67,7 +67,7 @@ await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  manifest_version: 3, name: values.local ? 'AO3 Library Companion (Local)' : 'AO3 Library Companion', version, minimum_chrome_version: '120',
  description: 'Save and edit works directly on AO3, import requested metadata, and scan lists from your connected library.',
  permissions: ['storage', 'unlimitedStorage', 'alarms', 'scripting', 'webNavigation'],
- host_permissions: ['https://archiveofourown.org/*', ...new Set(Object.values(profiles).map(profile => `${profile.backend}/*`))],
+ host_permissions: ['https://archiveofourown.org/*', 'https://web.archive.org/*', ...new Set(Object.values(profiles).map(profile => `${profile.backend}/*`))],
  externally_connectable: { matches: Object.values(profiles).map(profile => `${profile.appOrigin}/*`) },
  options_ui: { page: 'options.html', open_in_tab: true },
  background: { service_worker: 'background.js', type: 'module' },

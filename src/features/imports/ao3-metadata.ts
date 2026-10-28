@@ -1,3 +1,4 @@
+import { waybackSnapshot } from './urls.ts'
 import type { CheerioAPI } from 'cheerio'
 import { readSummary } from '../library/summaries/summary.ts'
 
@@ -31,6 +32,19 @@ export function readAuthors($: CheerioAPI, nodes: ReturnType<CheerioAPI>, source
 
 /** Shared extraction for website imports and the inline AO3 companion. */
 export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
+ const archive = waybackSnapshot(sourceUrl)
+ if (archive) {
+  // Restore replay-rewritten links before the existing identity/metadata parser.
+  $('a[href], link[href]').each((_, node) => {
+   const href = $(node).attr('href')!
+   try {
+    const replay = waybackSnapshot(new URL(href, sourceUrl).href)
+    const target = replay?.targetUrl ?? new URL(href, archive.targetUrl).href
+    if (/^https?:\/\/(?:www\.)?archiveofourown\.org\//.test(target)) $(node).attr('href', target.replace(/^http:\/\//, 'https://').replace('://www.archiveofourown.org/', '://archiveofourown.org/'))
+   } catch { /* Unrelated archive controls are ignored by existing selectors. */ }
+  })
+  sourceUrl = archive.targetUrl
+ }
  const metadata: AutomaticMetadata = { title: $('h2.title').first().text().trim() }
  const summary = $('.summary.module blockquote').first()
  if (summary.length) Object.assign(metadata, readSummary(summary.html() ?? ''))
@@ -52,7 +66,7 @@ export function extractWorkMetadata($: CheerioAPI, sourceUrl: string) {
  if(published) metadata.ao3_published_at=published
  if(updated) metadata.ao3_updated_at=updated
  const memberships: NonNullable<AutomaticMetadata['series_memberships']>=[]
- $('dd.series .position').each((_,node)=>{ const link=$(node).find('a[href*="/series/"]').first(); const m=link.attr('href')?.match(/^\/series\/([1-9]\d*)$/); const position=$(node).text().match(/Part\s+(\d+)\s+of/i); if(m && Number.isSafeInteger(Number(m[1]))) memberships.push({id:Number(m[1]),name:link.text().trim(),url:`https://archiveofourown.org/series/${m[1]}`,position:position?count(position[1])??null:null}) })
+ $('dd.series .position').each((_,node)=>{ const link=$(node).find('a[href*="/series/"]').first(); const m=link.attr('href')?.match(/^(?:https:\/\/archiveofourown\.org)?\/series\/([1-9]\d*)$/); const position=$(node).text().match(/Part\s+(\d+)\s+of/i); if(m && Number.isSafeInteger(Number(m[1]))) memberships.push({id:Number(m[1]),name:link.text().trim(),url:`https://archiveofourown.org/series/${m[1]}`,position:position?count(position[1])??null:null}) })
  if(memberships.length || $('dl.work.meta').length) { metadata.series_checked=true; metadata.series_memberships=memberships; metadata.series=memberships.map(s=>s.name) }
  const chapters: Record<string,string>={}
  // Only explicit numbered options verify position. Never use chapter IDs or DOM index as chapter numbers.

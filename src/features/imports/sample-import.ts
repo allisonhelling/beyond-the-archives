@@ -19,7 +19,7 @@ export async function importSampleWorkUrls(urls: string[], status: Status, serie
   if (requested) await new Promise(resolve => setTimeout(resolve, 15000))
   requested = true
   const original = links.at(-1)!
-  const page = await captureWorkWithExtension(original.normalizedUrl)
+  const page = await captureWorkWithExtension(original.archiveUrl ?? original.normalizedUrl)
   if (parseWorkUrl(page.url).workId !== workId) throw new Error('AO3 returned another work. Your pasted links have been preserved; retry the import.')
   const { metadata: automatic, chapters } = extractWorkMetadata(load(page.html), page.url)
   if (!automatic.title) throw new Error('The requested work is not ready. Complete AO3 sign-in or confirmation, then retry.')

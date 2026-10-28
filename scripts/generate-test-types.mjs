@@ -69,6 +69,8 @@ try {
       submit_import_urls: { Args: { p_urls: string[]; p_update_reading_location?: boolean; p_reading_status?: Database['public']['Enums']['reading_status']; p_series_ids?: number[] }; Returns: string | null }
       cancel_import_batch: { Args: { p_batch: string }; Returns: undefined }
       retry_metadata_job: { Args: { p_job: string }; Returns: undefined }
+      ao3_source_target: { Args: { p_url: string }; Returns: string }
+      metadata_job_archive_source: { Args: { p_job: string }; Returns: string | null }
       claim_extension_job: { Args: Record<string, never>; Returns: Json }
       approve_import_progress: { Args: { p_item: string }; Returns: undefined }
       clear_metadata_override: { Args: { p_entry: string; p_field: string }; Returns: undefined }

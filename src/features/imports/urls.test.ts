@@ -43,3 +43,22 @@ it('waits for both URL processing and metadata jobs before reporting a finished 
  expect(importFinished({ items: [{ status: 'completed', metadata_status: 'completed' }], jobs: [{ status: 'processing' }] })).toBe(false)
  expect(importFinished({ items: [{ status: 'completed', metadata_status: 'completed' }, { status: 'failed' }], jobs: [{ status: 'failed' }] })).toBe(true)
 })
+
+it('accepts fixed Wayback AO3 snapshots while preserving snapshot and chapter identities', () => {
+ const url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/17199254?view_full_work=true'
+ expect(parseWorkUrl(url)).toEqual({ workId: 17199254, chapterId: null, original: url, normalizedUrl: 'https://archiveofourown.org/works/17199254', archiveUrl: url })
+ expect(classifyUrl(url).kind).toBe('valid')
+ expect(extractUrls(`Import <${url}> and https://archiveofourown.org/works/17199254`)).toHaveLength(2)
+ expect(groupWorks([url, 'https://archiveofourown.org/works/17199254']).size).toBe(1)
+ expect(parseWorkUrl('https://web.archive.org/web/20251007001146id_/http://www.archiveofourown.org/works/123/chapters/456')).toMatchObject({ workId: 123, chapterId: '456' })
+})
+it.each([
+ 'https://web.archive.org.evil.test/web/20251007001146/https://archiveofourown.org/works/123',
+ 'https://web.archive.org/web/20251007001146/https://evil.test/works/123',
+ 'https://web.archive.org/web/20251007001146/https://archiveofourown.org.evil.test/works/123',
+ 'https://web.archive.org/web/20251007001146/https://user@archiveofourown.org/works/123',
+ 'https://web.archive.org/web/20251007001146/https://archiveofourown.org:444/works/123',
+ 'https://web.archive.org/web/*/https://archiveofourown.org/works/123',
+ 'https://web.archive.org/web/2025/https://archiveofourown.org/works/123',
+ 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/series/123',
+])('rejects unsupported or unsafe archived work URLs: %s', url => expect(() => parseWorkUrl(url)).toThrow())

@@ -211,7 +211,8 @@ test('series preview follows Next pages before offering all works for import', a
  const heading = dialog.locator('.series-import-heading')
  await expect(heading.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
  await save.click()
- await expect(dialog.getByRole('button', { name: 'Full Series Details Saved' }).first()).toBeDisabled()
+ await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
+ await expect(dialog.getByRole('button', { name: 'Save All Series', exact: true })).toHaveCount(0)
  expect(tables.library_series).toHaveLength(1)
  expect(tables.library_entries).toHaveLength(0)
 })
@@ -271,4 +272,29 @@ test('series review tooltips escape scrolling controls and Save comes first', as
  await expect(page.getByRole('tooltip')).toBeVisible()
  await assertTooltip(dialog.getByRole('button', { name: 'Save All Series', exact: true }))
  await page.screenshot({ path: test.info().outputPath('visible-series-tooltip.png') })
+})
+
+test('series review saves only series missing from the library', async ({ page }) => {
+ const tables = await fixture(page), now = '2026-10-27T12:00:00Z'
+ tables.library_series.push({ id: 'saved-series', ao3_series_id: 77, created_at: now, updated_at: now, notes: '', is_favorite: false, metadata: { seriesId: 77, title: 'Series 77', normalizedUrl: 'https://archiveofourown.org/series/77', basic: false, works: [] } })
+ tables.works.push({ id: 'member-work', ao3_work_id: 800, verified_chapters: {} })
+ tables.library_entries.push({ id: 'member-entry', work_id: 'member-work', original_url: 'https://archiveofourown.org/works/800', metadata_overrides: { title: 'Saved installment', authors: [], series: ['Series 88'], series_memberships: [{ id: 88, name: 'Series 88', url: 'https://archiveofourown.org/series/88', position: 1 }] }, reading_status: 'to_read', last_read_chapter: 0, notes: '', is_favorite: false, created_at: now, updated_at: now })
+ await page.route('**/functions/v1/series-preview', route => {
+  const url = route.request().postDataJSON().url as string, id = Number(new URL(url).pathname.split('/').at(-1))
+  return route.fulfill({ json: { preview: { seriesId: id, normalizedUrl: url, title: `Series ${id}`, description: '', works: [{ workId: id * 10, url: `https://archiveofourown.org/works/${id * 10}`, title: 'Installment', authors: [], tags: [], summary: '', wordCount: null, chapters: '1/1', complete: true }] } } })
+ })
+ await page.goto('/imports'); await login(page)
+ await page.getByRole('textbox', { name: 'AO3 URLs', exact: true }).fill([77, 88, 89].map(id => `https://archiveofourown.org/series/${id}`).join('\n'))
+ await page.getByRole('button', { name: 'Review Series', exact: true }).click()
+ const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
+ await expect(dialog.getByRole('region', { name: 'Series 89 • Series 89' }).getByRole('button', { name: 'Save', exact: true })).toBeVisible()
+ for (const id of [77, 88]) {
+  const series = dialog.getByRole('region', { name: `Series ${id} • Series ${id}` })
+  await expect(series.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
+  await series.getByRole('button', { name: 'Show Series Works', exact: true }).click()
+  await expect(series.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
+ }
+ await dialog.getByRole('button', { name: 'Save All Series', exact: true }).click()
+ await expect(dialog.getByRole('button', { name: 'Save All Series', exact: true })).toHaveCount(0)
+ expect(tables.library_series.map(series => series.ao3_series_id).sort()).toEqual([77, 89])
 })

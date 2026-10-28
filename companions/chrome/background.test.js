@@ -370,3 +370,21 @@ it.each([false, true])('recovers a closed series tab in its separate window (win
  expect(state.seriesPreviewTabId).toBe(10)
  expect(state.seriesPreviewWindowId).toBe(windowClosed ? 89 : 88)
 })
+
+it('captures the archived source of a claimed job without opening the live work or chapter index', async () => {
+ const sourceUrl = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123?view_full_work=true'
+ fetcher.mockImplementation(async url => {
+  if (url.endsWith('/auth/v1/user')) return Response.json({ id: 'alice' })
+  if (url.endsWith('/claim_extension_job')) return Response.json({ ...job, sourceUrl, chapterDates: true })
+  if (url.includes('/metadata_jobs?')) return Response.json([{ status: 'processing', lease_token: job.token }])
+  return Response.json({ committed: true })
+ })
+ chrome.tabs.get.mockResolvedValue({ id: 7, status: 'complete', url: sourceUrl })
+ chrome.scripting.executeScript.mockResolvedValue([{ result: { url: sourceUrl, html: '<h2 class="title">Archived</h2>' } }])
+ await connect(); await tick()
+ expect(chrome.tabs.create).toHaveBeenCalledWith({ url: sourceUrl, active: false })
+ await alarm()
+ await vi.waitFor(() => expect(state.active).toBeUndefined())
+ expect(fetcher).toHaveBeenCalledWith('https://project.supabase.co/functions/v1/extension-metadata', expect.objectContaining({ body: expect.stringContaining(sourceUrl) }))
+ expect(chrome.tabs.update).not.toHaveBeenCalled()
+})

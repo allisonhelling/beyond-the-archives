@@ -281,6 +281,19 @@ export async function mountLibrary(doc = document, href = location.href, options
   else input.removeAttribute('max')
   dialog.showModal(); input.focus(); input.select()
  }
+ function isFinalChapter(current) {
+  return Boolean(current && current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters)
+ }
+ async function saveUnsaved(status, current, markRead = false) {
+  if (!tile) Object.assign(page, await collectWorkPage(doc, href))
+  const progress = markRead ? current : 0
+  validateProgress(progress, page.metadata)
+  const readingStatus = markRead && current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status
+  accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: readingStatus, progress, notes: '', rating: null, tags: [], collections: [],
+   ...(markRead && { chapter_read: captureChapterRead(doc, { ...page, current }, href) }) }))
+  await syncProgressDraft()
+  message.textContent = 'Saved'
+ }
  function renderReadingToggle(parent, current, top) {
   if (['reading', 're_reading', 'paused_reading'].includes(entry.status)) {
    const paused = entry.status === 'paused_reading'
@@ -316,7 +329,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
    node('span', 'Read', indicator)
   } else if (!(entry.status === 'paused_reading' && top && current === entry.progress + 1)) {
-   const final = current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters
+   const final = isFinalChapter(current)
    const starting = ['to_read', 'paused_reading'].includes(entry.status)
    const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
    const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
@@ -356,12 +369,14 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (!loaded) button('Load Saved Entry', load, center)
   else if (!entry) {
    panelButton('Add to Library', 'editor', () => openEditor(current), center)
-   if (!page.series) button('To Read', async () => {
-    if (!tile) Object.assign(page, await collectWorkPage(doc, href))
-    accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: 'to_read', progress: 0, notes: '', rating: null, tags: [], collections: [] }))
-    await syncProgressDraft()
-    message.textContent = 'Saved'
-   }, center)
+   if (!page.series) {
+    const top = parent === toolbar
+    if (tile || top && current === 1) button('To Read', () => saveUnsaved('to_read', current), center)
+    if (!tile && current) {
+     if (top && current === 1) button('Reading', () => saveUnsaved('reading', current), center)
+     else button(!top && isFinalChapter(current) ? 'Finish Fic' : 'Mark Read', () => saveUnsaved('reading', current, true), center)
+    }
+   }
   }
   else {
    if (page.series) node('span', 'Series saved', center)

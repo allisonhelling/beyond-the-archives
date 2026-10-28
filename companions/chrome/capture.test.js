@@ -123,3 +123,15 @@ it.each(['series', 'navigation'])('never captures an unparsed %s document', asyn
  document.body.innerHTML = '<div id="main"><h2 class="heading">Series</h2><dl class="series meta"></dl><ol class="series work index chapter"></ol></div>'
  expect(await captureMetadataPage(false, kind)).toBeNull()
 })
+
+it('captures only AO3 metadata from explicitly requested archived work pages', async () => {
+ vi.stubGlobal('location', new URL('https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123?view_full_work=true'))
+ document.documentElement.innerHTML = fixture
+ document.querySelector('dl').classList.add('work', 'meta')
+ document.body.insertAdjacentHTML('beforeend', '<div id="wm-ipp-base">Archive toolbar</div><div id="chapters">PRIVATE CHAPTER TEXT</div>')
+ const captured = await captureMetadataPage()
+ expect(captured.html).not.toMatch(/Archive toolbar|PRIVATE CHAPTER TEXT/)
+ expect(parseMetadata(captured.html, 123, captured.url).metadata.title).toBe('A & B')
+ vi.stubGlobal('location', new URL('https://web.archive.org/web/20251007001146/https://evil.test/works/123'))
+ expect(await captureMetadataPage()).toBeNull()
+})

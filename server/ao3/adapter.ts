@@ -1,7 +1,7 @@
 import { parseChapterDates } from './chapter-dates.ts'
 import { load } from 'cheerio'
 import { readBoundedBody } from './read-body.ts'
-import { parseWorkUrl } from '../../src/features/imports/urls.ts'
+import { parseWorkUrl, waybackSnapshot } from '../../src/features/imports/urls.ts'
 import { extractWorkMetadata, type AutomaticMetadata } from '../../src/features/imports/ao3-metadata.ts'
 export type { AutomaticMetadata } from '../../src/features/imports/ao3-metadata.ts'
 export type RetrievalResult = { metadata: AutomaticMetadata | null; chapters: Record<string,string>; category: string | null; message: string | null; retryable: boolean; pauseSeconds: number; sourceUrl?: string }
@@ -9,6 +9,7 @@ export function failure(category: string, message: string, retryable = false, pa
 /** Pure fixture-testable parser. No database or personal reading data enters this adapter. */
 export function parseMetadata(html: string, workId: number, sourceUrl: string): RetrievalResult {
  const $ = load(html)
+ const { metadata, chapters } = extractWorkMetadata($, sourceUrl)
  // A missing page is evidence for a user decision, never an automatic deletion.
  if (!$('h2.title').length && /Error\s+404/i.test($('#main h2, #main h1').text()) && /The page you were looking for doesn['’]t exist\./i.test($('#main').text())) return failure('not_found', "Error 404: The page you were looking for doesn't exist.")
  if ($('#main #new_user, #main form[action="/users/login"]').length || /This work is only available to registered users|you must be logged in to access|This work could have adult content/i.test($.text())) return failure('restricted','AO3 sign-in is required. Edit this saved work manually.')
@@ -22,18 +23,26 @@ export function parseMetadata(html: string, workId: number, sourceUrl: string): 
  // AO3 chapter navigation URL is not a supported import URL, but is strong page identity evidence.
  if ($(`a[href="/works/${workId}/navigate"], a[href="/works/${workId}?view_full_work=true"]`).length) identityVerified = true
  if (!identityVerified) return failure('parser_failure','The page did not provide verifiable work identity.')
- const { metadata, chapters } = extractWorkMetadata($, sourceUrl)
  const partial = !metadata.authors || metadata.published_chapters === undefined
  return {metadata,chapters,category:partial?'partial':null,message:partial?'Some metadata is unavailable. Unknown fields were preserved.':null,retryable:false,pauseSeconds:0,sourceUrl}
 }
 /** Fetch only an allowlisted normalized work URL. Redirects are inspected before following. No cookies/auth or restriction bypass. */
-export async function retrieveMetadata(input: { workId: number; normalizedUrl: string; chapterDates?: boolean }, fetcher: typeof fetch = fetch): Promise<RetrievalResult> {
+export async function retrieveMetadata(input: { workId: number; normalizedUrl: string; sourceUrl?: string; chapterDates?: boolean }, fetcher: typeof fetch = fetch): Promise<RetrievalResult> {
  const expected=`https://archiveofourown.org/works/${input.workId}`
  if (!Number.isSafeInteger(input.workId) || input.workId<1 || input.normalizedUrl!==expected) return failure('invalid_identity','Invalid metadata identity.')
- const result = await retrieveAo3Document(expected, url => parseWorkUrl(url).workId === input.workId, fetcher)
- if (!('html' in result)) return result
+ let target = expected
+ if (input.sourceUrl) {
+  try {
+   const identity = parseWorkUrl(input.sourceUrl)
+   if (!identity.archiveUrl || identity.workId !== input.workId) return failure('invalid_identity', 'Invalid archived work identity.')
+   target = identity.archiveUrl
+  } catch { return failure('invalid_identity', 'Invalid archived work identity.') }
+ }
+ const result = await retrieveAo3Document(target, url => parseWorkUrl(url).workId === input.workId && Boolean(waybackSnapshot(url)) === Boolean(input.sourceUrl), fetcher)
+ if (!('html' in result)) return input.sourceUrl ? { ...result, category: result.category === 'not_found' ? 'unavailable' : result.category, message: result.message?.replaceAll('AO3', 'Wayback Machine') ?? null } : result
  const parsed = parseMetadata(result.html, input.workId, result.sourceUrl)
- if (!input.chapterDates || !parsed.metadata) return parsed
+ if (input.sourceUrl && parsed.category === 'not_found') return failure('unavailable', 'This archived capture does not contain the work. The saved work remains editable.')
+ if (input.sourceUrl || !input.chapterDates || !parsed.metadata) return parsed
  if (parsed.metadata.published_chapters === 1 && parsed.metadata.ao3_published_at) {
   parsed.metadata.chapter_dates = { '1': parsed.metadata.ao3_published_at.slice(0, 10) }; return parsed
  }
@@ -48,6 +57,7 @@ export async function retrieveMetadata(input: { workId: number; normalizedUrl: s
 export async function retrieveAo3Document(expected: string, matches: (url: string) => boolean, fetcher: typeof fetch = fetch, followRedirects = true): Promise<RetrievalResult | { html: string; sourceUrl: string }> {
  let target=expected
  try {
+  if (!['https://archiveofourown.org', 'https://web.archive.org'].includes(new URL(expected).origin)) return failure('invalid_identity', 'Unsupported metadata origin.')
   for(let redirects=0;redirects<3;redirects++) {
    const response=await fetcher(target,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'PrivateAO3Library/0.3 (public metadata; no authentication)','Accept':'text/html'}})
    if(response.status===429) { const retry=response.headers.get('retry-after'); const seconds=retry && /^\d+$/.test(retry)?Number(retry):retry?Math.ceil((Date.parse(retry)-Date.now())/1000):3600; return failure('rate_limited','AO3 rate-limited retrieval. All requests are paused; retry later.',true,Math.max(3600,Math.min(seconds||3600,2147483647))) }
@@ -68,7 +78,7 @@ export async function retrieveAo3Document(expected: string, matches: (url: strin
     if (!followRedirects) return failure('redirect','AO3 redirected the preview. Use the browser extension or retry later.')
     const location=response.headers.get('location'); if(!location) return failure('redirect','AO3 returned an unverifiable redirect.')
     const next=new URL(location,target)
-    if(next.origin!=='https://archiveofourown.org') return failure('redirect','AO3 redirected outside the allowed origin.')
+    if(next.origin!==new URL(expected).origin) return failure('redirect','AO3 redirected outside the allowed origin.')
     if(next.pathname.startsWith('/users/login')) return failure('restricted','AO3 sign-in is required. Use manual metadata.')
     try { if(!matches(next.href)) return failure('changed_identity','AO3 redirected to a different work. The saved identity was preserved.') } catch { return failure('redirect','AO3 redirected to an unsupported page.') }
     if(next.searchParams.has('view_adult')) return failure('restricted','AO3 requires an adult-content confirmation. Use manual metadata.')

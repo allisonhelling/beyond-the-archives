@@ -133,13 +133,14 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  return data as unknown as { batch: string | null; imported: number; kept: number; metadataRepaired: number; seriesRepaired: number; readingCorrections: number }
 }
 
-export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string; reviewExisting?: boolean; readingStatusOrigin?: 'default' | 'manual' }) {
- works = works.map(work => ({ ...work, ...(readingStatus ? { importReadingStatus: readingStatus, ...(scan?.readingStatusOrigin ? { importReadingStatusOrigin: scan.readingStatusOrigin } : {}) } : {}), reviewExisting: scan?.reviewExisting ?? true }))
- const conflicts = works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
+export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string; reviewExisting?: boolean; readingStatusOrigin?: 'default' | 'manual' }, approved?: import('./ao3-csv').CsvConflict) {
+ works = works.map(work => ({ ...work, ...(readingStatus ? { importReadingStatus: readingStatus, ...(scan?.readingStatusOrigin ? { importReadingStatusOrigin: scan.readingStatusOrigin } : {}) } : {}), reviewExisting: scan?.reviewExisting ?? true, ...(approved && csvWorkKey(work) === csvWorkKey(approved) ? { choice: 'overwrite' as const, expectedVersion: approved.version } : {}) }))
+ const conflicts = !approved && works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
  let result: { batch: string | null; imported: number; kept: number; metadataRepaired?: number; seriesRepaired?: number; readingCorrections?: number; repairWorkIds?: Record<'metadata' | 'series' | 'reading', string[]> }
  if (sampleMode) result = await (await import('../library/sample/repository')).importSampleWorks(works)
  else {
   const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json, ...(scan ? { p_scan_id: scan.id, p_source_url: scan.url } : {}) })
+  if (error?.code === '40001') throw new Error('This work changed after bookmark review. Import the scan again to review its latest saved data.')
   if (error) throw new Error('Could not import this scan page. Apply the latest database migrations and check your connection; retry safely to preserve personal data.')
   result = data as unknown as typeof result
  }
@@ -147,8 +148,19 @@ export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], co
   const saved = await previewCsvImport(works)
   await addStoriesToCollections(saved.map(work => work.id), [collectionId])
  }
+ // The sync itself can update the entry version; review must compare against
+ // the saved post-import version rather than the earlier preview.
+ const current = conflicts.length ? await previewCsvImport(works) : []
  return { ...result, ...(conflicts.length ? { bookmarkConflicts: conflicts.map(conflict => {
   const incoming = works.find(work => csvWorkKey(work) === csvWorkKey(conflict))
-  return { ...conflict, incomingNotes: incoming?.notes, incomingTags: incoming?.tags, incomingReading: incoming ? bookmarkReadingState(incoming) : undefined }
+  return { ...conflict, ...current.find(saved => saved.id === conflict.id), incomingWork: incoming, incomingNotes: incoming?.notes, incomingTags: incoming?.tags, incomingReading: incoming ? bookmarkReadingState(incoming) : undefined }
  }) } : {}) }
+}
+
+/** Reuse listing validation, optimistic version checks and completed-job handling. */
+export async function applyLibrarySyncBookmark(conflict: import('./ao3-csv').CsvConflict) {
+ if (!conflict.incomingWork) throw new Error('Import the scan again to review this bookmark before applying it.')
+ const result = await submitLibrarySync([conflict.incomingWork], undefined, undefined, undefined, conflict)
+ if (result.imported !== 1) throw new Error('The incoming bookmark was not applied. Apply the latest database migrations, then retry.')
+ return result
 }

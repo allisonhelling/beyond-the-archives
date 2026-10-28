@@ -3,7 +3,7 @@ import { failure, parseMetadata, withChapterDates, type RetrievalResult } from '
 import { validateMetadata } from './metadata-service.ts'
 import { parseWorkUrl } from '../../src/features/imports/urls.ts'
 
-export type ExtensionJob = { id: string; userId: string; token: string; workId: number; expiresAt: string; status: string; mode: string; chapterDates?: boolean }
+export type ExtensionJob = { id: string; userId: string; token: string; workId: number; expiresAt: string; status: string; mode: string; chapterDates?: boolean; sourceUrl?: string }
 type Dependencies = {
  authenticate(token: string): Promise<string | null>
  job(id: string): Promise<ExtensionJob | null>
@@ -32,14 +32,15 @@ export function extensionHandler(deps: Dependencies) {
    if (input.timedOut === true) result = failure('extension_waiting', 'The browser did not supply a loaded work within five minutes. Complete AO3 sign-in or confirmation, then retry from import history.', true)
    else {
     if (typeof input.url !== 'string' || typeof input.html !== 'string') return reply({ error: 'Missing page snapshot.' }, 400)
-    try { if (parseWorkUrl(input.url).workId !== job.workId) return reply({ error: 'Work identity mismatch.' }, 400) }
+    try { const identity = parseWorkUrl(input.url); if (identity.workId !== job.workId || Boolean(identity.archiveUrl) !== Boolean(job.sourceUrl)) return reply({ error: 'Work identity mismatch.' }, 400) }
     catch { return reply({ error: 'Unsupported work URL.' }, 400) }
     result = validateMetadata(parseMetadata(input.html, job.workId, input.url))
-    if (job.chapterDates && result.metadata) {
+    if (job.sourceUrl && result.category === 'not_found') result = failure('unavailable', 'This archived capture does not contain the work. The saved work remains editable.')
+    if (!job.sourceUrl && job.chapterDates && result.metadata) {
      if (input.navigationHtml !== undefined && (typeof input.navigationHtml !== 'string' || input.navigationUrl !== `https://archiveofourown.org/works/${job.workId}/navigate`)) return reply({ error: 'Chapter index identity mismatch.' }, 400)
      result = validateMetadata(withChapterDates(result, input.navigationHtml as string | undefined, job.workId))
     }
-    if (!result.metadata && result.category !== 'not_found') return reply({ waiting: true, category: result.category })
+    if (!result.metadata && !['not_found', ...(job.sourceUrl ? ['unavailable'] : [])].includes(result.category ?? '')) return reply({ waiting: true, category: result.category })
    }
    const committed = await deps.finish(job, result)
    return reply({ committed }, committed ? 200 : 409)

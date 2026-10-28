@@ -38,16 +38,13 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  expect(mocks.submit).toHaveBeenCalledWith('https://archiveofourown.org/works/102', false, 'to_read', [77])
 })
 
-it('saves the full preview only on request without importing its works', async () => {
+it('keeps related-series selection without offering Save for a series already represented in the library', async () => {
  await act(async () => { render(<ImportedSeriesNotice stories={mocks.stories as never} />) })
  expect(mocks.remember).not.toHaveBeenCalled()
  fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' }))
- await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]) })
- expect(mocks.preview).toHaveBeenCalledOnce()
- expect(mocks.remember).toHaveBeenCalledWith(expect.objectContaining({ seriesId: 77, works: expect.arrayContaining([expect.objectContaining({ workId: 102 })]) }))
- expect(mocks.refresh).toHaveBeenCalledWith(77)
- expect(screen.getAllByRole('button', { name: 'Full Series Details Saved' })[0]).toBeDisabled()
+ expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Save All Series' })).not.toBeInTheDocument()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).toBeChecked()
  expect(mocks.submit).not.toHaveBeenCalled()
 })
@@ -62,12 +59,13 @@ it('deduplicates shared series and stays dismissed when the library refreshes', 
  expect(mocks.preview).toHaveBeenCalledOnce()
  expect(mocks.remember).not.toHaveBeenCalled()
 })
-it('keeps the preview and selections available after a failed full-details save', async () => {
- mocks.remember.mockRejectedValue(new Error('Save unavailable'))
+it('keeps the preview and selections available after a failed selected-work import', async () => {
+ mocks.submit.mockRejectedValue(new Error('Import unavailable'))
  await act(async () => { render(<ImportedSeriesNotice stories={mocks.stories as never} />) })
- await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]) })
- expect(screen.getByRole('alert')).toHaveTextContent('Save unavailable')
  fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' }))
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import Selected' })) })
+ expect(screen.getByRole('alert')).toHaveTextContent('Import unavailable')
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).toBeEnabled()
- expect(mocks.submit).not.toHaveBeenCalled()
+ expect(mocks.submit).toHaveBeenCalledOnce()
 })
