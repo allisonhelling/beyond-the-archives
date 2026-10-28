@@ -5,11 +5,15 @@ import tailwindcss from '@tailwindcss/vite'
 import svgr from 'vite-plugin-svgr'
 import { loadEnv } from 'vite'
 import { validateBrowserEnv } from './scripts/build-env'
+import { brandName, brandTagline } from './src/lib/brand'
 
 export default defineConfig(({ mode }) => {
   validateBrowserEnv(loadEnv(mode, process.cwd(), 'VITE_'))
   return {
-    plugins: [react(), tailwindcss(), svgr()],
+    plugins: [react(), tailwindcss(), svgr(), {
+      name: 'site-branding',
+      transformIndexHtml: html => html.replaceAll('__SITE_NAME__', brandName).replaceAll('__SITE_TAGLINE__', brandTagline),
+    }],
     // Browser tests need stable pages while reports and other files are written.
     server: { watch: mode === 'e2e' ? null : undefined },
     build: {

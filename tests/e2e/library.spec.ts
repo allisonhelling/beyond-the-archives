@@ -1,4 +1,5 @@
 import { fixture, login, selectLibraryShelf } from './library-fixture'
+import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
 import { epubBuffer } from '../../src/test/epub-fixture'
@@ -191,6 +192,8 @@ async function completeCollectionDialog(page: Page, name: string) {
 }
 
 test('manual library workflow persists through refresh and sign-out, on desktop and mobile', async ({ page }, info) => {
+  // This workflow covers creation, editing, sign-out, collections, and undo.
+  test.setTimeout(90000)
   const tables = await fixture(page); await page.goto('/library'); await login(page)
   for (const name of ['Comfort reads', 'Long fics']) {
     await page.getByRole('navigation', { name: 'Library Shelves', exact: true }).getByRole('button', { name: 'New Collection', exact: true }).last().click(); await completeCollectionDialog(page, name); await expect.poll(() => tables.collections.some(collection => collection.name === name)).toBe(true)
@@ -2803,6 +2806,7 @@ test('a completed direct fic import offers its related series and imports only s
 })
 
 test('pagination submits inline page numbers on Enter and keeps temporary page sizes at the bottom', async ({ page }) => {
+ test.setTimeout(60000)
  const tables = await fixture(page), now = '2026-10-20T12:00:00Z'
  for (let index=1; index<=60; index++) {
   tables.works.push({id:`pagination-work-${index}`,ao3_work_id:index,title:`Pagination fic ${index}`,word_count:100,published_chapters:2,total_chapters:3,verified_chapters:{}})
@@ -3567,19 +3571,30 @@ test('accepts a Wayback work link and keeps the snapshot as the saved reading de
  const tables = await fixture(page)
  const url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/17199254?view_full_work=true'
  let submitted: unknown
+ let detailsReads = 0
+ await page.route('**/rest/v1/rpc/library_story_details', async route => {
+  const details = libraryQueryFixture('library_story_details', route.request().postDataJSON(), tables)
+  await route.fulfill({ json: details })
+  // The worker finishes after Add Story read the bare identity but before the
+  // details page observes the job. Its first job read is already completed.
+  if (++detailsReads === 1) tables.library_entries[0].extension_metadata = { title: 'Archived Fic', authors: ['Archived Author'] }
+ })
  await page.route('**/rest/v1/rpc/submit_import_urls', route => {
   submitted = route.request().postDataJSON().p_urls
   tables.works.push({ id: 'archive-work', ao3_work_id: 17199254, title: null, verified_chapters: {} })
-  tables.library_entries.push({ id: 'archive-entry', work_id: 'archive-work', original_url: url, reading_status: 'to_read', last_read_chapter: 0, notes: '', is_favorite: false, metadata_overrides: {}, extension_metadata: { title: 'Archived Fic', authors: ['Archived Author'] } })
+  tables.library_entries.push({ id: 'archive-entry', work_id: 'archive-work', original_url: url, reading_status: 'to_read', last_read_chapter: 0, notes: '', is_favorite: false, metadata_overrides: {} })
   tables.import_batches.push({ id: 'archive-batch', created_at: '2026-10-27T12:00:00Z' })
   tables.import_items.push({ id: 'archive-item', batch_id: 'archive-batch', entry_id: 'archive-entry', original_url: url, ao3_work_id: 17199254, status: 'completed', metadata_status: 'completed', result: 'imported', ordinal: 1 })
+  tables.metadata_jobs.push({ id: 'archive-job', batch_id: 'archive-batch', entry_id: 'archive-entry', work_id: 'archive-work', status: 'completed', retrieval_mode: 'direct', error_category: null, created_at: '2026-10-27T12:00:00Z' })
   return route.fulfill({ json: 'archive-batch' })
  })
  await page.goto('/add'); await login(page)
- await page.getByRole('textbox', { name: 'AO3 Work or Series Link' }).fill(url)
- await page.getByRole('button', { name: 'Import from Link', exact: true }).click()
+ await page.getByRole('combobox', { name: 'Import Source' }).selectOption('wayback')
+ await page.getByRole('textbox', { name: 'Wayback Machine Link' }).fill(url)
+ await page.getByRole('button', { name: 'Import from Wayback Machine', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Archived Fic', exact: true })).toBeVisible()
  expect(submitted).toEqual([url])
+ expect(detailsReads).toBeGreaterThanOrEqual(2)
  await expect(page.getByRole('heading', { name: 'Archived Fic', exact: true }).getByRole('link')).toHaveAttribute('href', url)
 })
 

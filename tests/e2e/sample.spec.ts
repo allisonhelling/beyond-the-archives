@@ -11,6 +11,41 @@ async function showSeries(page: Page) {
  if (await toggle.getAttribute('aria-pressed') === 'false') await toggle.click()
 }
 
+test('sample logout previews branded login and recovery, preserves edits, and accepts Sample / 123', async ({ page }) => {
+ const requests: string[] = []
+ await page.route(/https:\/\/(?:[^/]+\.)?(?:supabase\.co|archiveofourown\.org)\//, route => { requests.push(route.request().url()); return route.abort() })
+ await page.goto('/library')
+ await expect(page.getByRole('heading', { name: 'Your Library', exact: true })).toBeVisible()
+ const library = await page.evaluate(() => localStorage.getItem('between-chapters:sample-library:v1'))
+ await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
+ await page.getByRole('button', { name: 'Log Out', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Welcome Back.', exact: true })).toBeVisible()
+ await expect(page).toHaveTitle('Beyond the Archives')
+ await expect(page.locator('.brand')).toContainText('beyond the archives')
+ await expect(page.locator('.brand-subtitle')).toHaveText('A PRIVATE AO3 ORGANIZER')
+ await expect(page.locator('.public-footer > span').first()).toHaveText('Beyond the Archives')
+ await page.reload()
+ await expect(page.getByRole('heading', { name: 'Welcome Back.', exact: true })).toBeVisible()
+ await expect(page.getByLabel('Username', { exact: true })).toHaveValue('Sample')
+ for (const width of [1440, 375, 320]) {
+  await page.setViewportSize({ width, height: 900 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+ }
+ await page.getByLabel('Password', { exact: true }).fill('wrong')
+ await page.getByRole('button', { name: 'Sign In to Your Library', exact: true }).click()
+ await expect(page.getByRole('alert')).toContainText('Use Sample and password 123')
+ await page.getByRole('button', { name: 'Forgot Your Password?', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Find Your Way Back.', exact: true })).toBeVisible()
+ await page.getByRole('button', { name: 'Send Recovery Link', exact: true }).click()
+ await expect(page.getByRole('status')).toContainText('no recovery email is sent')
+ await page.getByRole('button', { name: 'Back to Sign In', exact: true }).click()
+ await page.getByLabel('Password', { exact: true }).fill('123')
+ await page.getByRole('button', { name: 'Sign In to Your Library', exact: true }).click()
+ await expect(page.getByRole('heading', { name: 'Your Library', exact: true })).toBeVisible()
+ expect(await page.evaluate(() => localStorage.getItem('between-chapters:sample-library:v1'))).toBe(library)
+ expect(requests).toEqual([])
+})
+
 test('sample collections preview the new designs alongside the selected default artwork', async ({ page }, info) => {
  await page.goto('/library')
  await page.getByRole('button', {name:'Edit Collections',exact:true}).click()

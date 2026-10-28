@@ -394,7 +394,7 @@ function LibraryContent() {
 export function AddStoryPage() {
   const [params, setParams] = useSearchParams()
   const importing = !['manual', 'epub'].includes(params.get('import') ?? '')
-  return <><div className="page-heading"><div><h1>Add Story</h1><p>Import metadata from an AO3 link or EPUB, or enter information by hand.</p></div></div><LibraryBoundary>
+  return <><div className="page-heading"><div><h1>Add Story</h1><p>Import metadata from an AO3 link, Wayback Machine snapshot, or EPUB, or enter information by hand.</p></div></div><LibraryBoundary>
     <div className="library-toolbar"><button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', importing ? 'manual' : 'link'); return next })}>{importing ? 'Enter Manually' : 'Import from Link'}</button>{importing && <button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', 'epub'); return next })}>Import from EPUB</button>}</div>
     {importing ? <ImportLinkForm /> : <StoryForm />}
   </LibraryBoundary></>
@@ -440,7 +440,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   const { loadDetails, retainDetails } = library
   useEffect(() => !example && id ? retainDetails([id]) : undefined, [example, id, retainDetails])
   useEffect(() => { if (!example && id && (!candidateStory || candidateStory.detailsLoaded === false)) void loadDetails([id]).catch(() => {}) }, [example, id, candidateStory, loadDetails])
-  const metadataRefresh = useMetadataRefresh(example || story?.detailsLoaded === false ? undefined : story)
+  const metadataRefresh = useMetadataRefresh(example || story?.detailsLoaded === false ? undefined : story, typeof location.state?.importBatchId === 'string' ? location.state.importBatchId : undefined)
   const metadataRefreshProps = { ...metadataRefresh, unavailable: story?.work.ao3_work_id === null, onRefresh: () => void metadataRefresh.refresh() }
   return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story}>{({ favorite, rec, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
     <div className="page-heading story-details-heading work-details-heading"><div>

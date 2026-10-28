@@ -1,3 +1,4 @@
+import { brandName } from '../src/lib/brand.ts'
 import { build, loadEnv } from 'vite'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -55,7 +56,7 @@ await build({
 })
 await build({
  configFile: false, define,
- build: { outDir, emptyOutDir: false, minify: false, lib: { entry: 'companions/chrome/content.js', name: 'AO3LibraryBar', formats: ['iife'], fileName: () => 'content.js' } },
+ build: { outDir, emptyOutDir: false, minify: false, lib: { entry: 'companions/chrome/content.js', name: 'BeyondTheArchivesBar', formats: ['iife'], fileName: () => 'content.js' } },
 })
 await build({
  configFile: false, define,
@@ -64,7 +65,7 @@ await build({
 for (const file of ['options.html', 'options.css']) await writeFile(join(outDir, file), await readFile(`companions/chrome/${file}`, 'utf8'))
 await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  ...(values.local ? { key: localExtensionKey } : {}),
- manifest_version: 3, name: values.local ? 'AO3 Library Companion (Local)' : 'AO3 Library Companion', version, minimum_chrome_version: '120',
+ manifest_version: 3, name: `${brandName} Companion${values.local ? ' (Local)' : ''}`, version, minimum_chrome_version: '120',
  description: 'Save and edit works directly on AO3, import requested metadata, and scan lists from your connected library.',
  permissions: ['storage', 'unlimitedStorage', 'alarms', 'scripting', 'webNavigation'],
  host_permissions: ['https://archiveofourown.org/*', 'https://web.archive.org/*', ...new Set(Object.values(profiles).map(profile => `${profile.backend}/*`))],

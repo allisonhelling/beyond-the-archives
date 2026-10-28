@@ -1,3 +1,4 @@
+import { brandSlug } from '../../src/lib/brand.ts'
 import { readBoundedBytes } from '../ao3/read-body.ts'
 import { backupFileLimit, backupRetentionCount, type SavedBackup } from '../../src/types/backups.ts'
 
@@ -46,7 +47,7 @@ export function backupHandler(deps: BackupDependencies) {
     // Recover any previous interrupted cleanup before permitting another file.
     // With an in-policy account this only reads the existing three copies.
     await retainLatestBackups(deps,user)
-    const name = `between-chapters-backup-${new Date().toISOString().replace(/[:.]/g,'-')}-${crypto.randomUUID()}.json${contentType === 'application/gzip' ? '.gz' : ''}`
+    const name = `${brandSlug}-backup-${new Date().toISOString().replace(/[:.]/g,'-')}-${crypto.randomUUID()}.json${contentType === 'application/gzip' ? '.gz' : ''}`
     await deps.upload(`${user}/${name}`, body.bytes, contentType!)
     uploaded = true
    }

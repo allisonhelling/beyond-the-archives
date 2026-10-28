@@ -1,12 +1,12 @@
 # Project Overview and Specifications
 
-Current repository specification for **Between Chapters / AO3 Library & Reading Tracker**, reviewed **27 October 2026**, package version **0.1.5**. This describes implemented behavior, not a claim that a hosted deployment has been upgraded. The ordered SQL migrations, generated types, and source files are authoritative for exact database signatures and validation.
+Current repository specification for **Beyond the Archives — A PRIVATE AO3 ORGANIZER**, reviewed **27 October 2026**, package version **0.1.5**. This describes implemented behavior, not a claim that a hosted deployment has been upgraded. The ordered SQL migrations, generated types, and source files are authoritative for exact database signatures and validation.
 
 [Run and Use the App](../README.md) · [Implementation and Operations](IMPLEMENTATION.md) · [Engineering Instructions](../AGENTS.md)
 
 ## Purpose and Current Scope
 
-Between Chapters is an invitation-only, private AO3 library and reading tracker. It separates a work’s factual AO3 information from each reader’s progress, corrections, notes, ratings, and organization. Readers can save a work even when AO3 metadata is inaccessible, then correct or recover information without losing reading history.
+Beyond the Archives is an invitation-only, private AO3 library and reading tracker. It separates a work’s factual AO3 information from each reader’s progress, corrections, notes, ratings, and organization. Readers can save a work even when AO3 metadata is inaccessible, then correct or recover information without losing reading history.
 
 The application has three cooperating parts: a responsive website, Supabase authentication/database/functions, and optional browser companions. Direct metadata retrieval uses a separately running trusted worker. A development-only sample library substitutes browser storage for account-backed persistence.
 
@@ -38,7 +38,7 @@ Implemented capabilities include manual and link entry, bulk imports, CSV review
 | `/features` | Feature explanations and roadmap |
 | `/import-fic` | Compatibility redirect to `/add?import=link` |
 
-Authentication gates the connected application; sample mode provides its own local session behavior. Settings and Log Out are exposed in the profile menu. Secondary settings/import/series pages load lazily, while reading/library routes are eager. Route definitions live in [`App.tsx`](../src/app/App.tsx).
+Authentication gates the connected application; development-only sample mode starts signed in and supports logout and re-entry with username **Sample** and password **123** through the same login screen. Sample logout survives reloads within the tab and preserves saved browser data; password recovery is a local UI preview. Settings and Log Out are exposed in the profile menu. Secondary settings/import/series pages load lazily, while reading/library routes are eager. Route definitions live in [`App.tsx`](../src/app/App.tsx).
 
 ## Work Identity and Metadata Contract
 
@@ -114,7 +114,7 @@ Series link imports, scanned series, and Related Series review reuse the shared 
 | EPUB | Up to 50 MB; metadata-only local recovery with bounded decompression and corruption checks; encrypted metadata unsupported. Missing fields preserve editor values, and existing identity cannot change. |
 | Library Sync | Explicit browser scan with durable account-scoped checkpoints; page-sized import transactions; 500 pages per batch across listings/series. |
 
-Wayback imports preserve the historical source in submission history and new entries. Replay-rewritten links are normalized for metadata/identity parsing. Historical observations remain private, do not verify a live canonical URL or current availability, and preserve manual corrections. Archive requests cannot redirect to live AO3 or another work; no current chapter-index request is added. Saved reading destinations retain the capture instead of assuming another archived chapter exists. Missing archive metadata leaves the saved identity editable. Chrome/Edge v0.7.6 requires archive host permission; Safari is not used for import retrieval.
+Add Story offers **Import Source → Import from Wayback Machine** with a dedicated snapshot URL field; pasting a supported snapshot in the normal link field selects this source automatically. The work details page observes the originating import batch so metadata and failures remain visible when retrieval finishes during navigation. Wayback imports preserve the historical source in submission history and new entries. Replay-rewritten links are normalized for metadata/identity parsing. Historical observations remain private, do not verify a live canonical URL or current availability, and preserve manual corrections. Archive requests cannot redirect to live AO3 or another work; no current chapter-index request is added. Saved reading destinations retain the capture instead of assuming another archived chapter exists. Missing archive metadata leaves the saved identity editable. Chrome/Edge v0.7.6 requires archive host permission; Safari is not used for import retrieval.
 
 Link submissions can save bare work identities while retrieval is pending, restricted, or unavailable. Import history preserves inputs/results and exposes retry/cancellation where allowed. An explicit existing-work chapter import may change reading location; bulk repeat-import observations preserve personal history unless the reader approves corrections. Later personal edits invalidate conflicting proposals or queued inference.
 
@@ -149,7 +149,7 @@ Desktop/mobile retrieval preferences are independent at the 1,100 CSS-pixel layo
 
 ## Display, Exports, and Data Lifecycle
 
-Display settings independently arrange tiles and information pages for work/series and mobile/desktop profiles. Field visibility, grouping, and order are configurable; tag shapes/colors remain shared. Desktop tile editors preview both profiles with independent save/cancel. Screen previews share the actual responsive styles and support preset or exact dimensions. New metadata fields start hidden to preserve existing arrangements.
+Display settings independently arrange tiles and information pages for work/series and mobile/desktop profiles. Field visibility, grouping, and order are configurable; tag shapes/colors remain shared. Desktop tile editors preview both profiles with independent save/cancel. Screen previews share the actual responsive styles and support preset or exact dimensions. New metadata fields start hidden to preserve existing arrangements. Phone collection editing places Done Editing beside Select Collections. Companion chapter controls use a full-width toolbar row on phones and retain their reading-action order.
 
 CSV ZIP export supports works, series, collections, memberships, and optional archived reading records. It covers all pages and includes private organization. Structured cells use JSON; spreadsheet-formula-like text is escaped. CSV is an analysis/export format, not a complete restore format.
 
@@ -166,3 +166,17 @@ Hosted deployments require the complete ordered migrations through `202610270006
 `npm run check` covers lint, TypeScript/build, Vitest, integration-configuration tests, and security checks. Playwright, live local Supabase integration, database lint, dependency audit, and performance runners are separate. Embedded PostgreSQL tests exercise real migrations/RLS but simulate the Auth contract; browser tests use mocked transport. Neither demonstrates deployed AO3 throughput or hosted latency. The [verification reference](IMPLEMENTATION.md#verify) gives commands and prerequisites; [Performance](PERFORMANCE.md) distinguishes measured results from outstanding hosted acceptance targets.
 
 Future changes must update the user README, this current specification, and implementation/focused guides according to [AGENTS.md](../AGENTS.md#documentation-responsibilities), keeping procedures in one authoritative location and replacing stale claims.
+
+## Future Considerations
+
+### Brand and Supported Scope
+
+The product name remains **Beyond the Archives** as its supported scope grows. Website headers display **beyond the archives** in lowercase; all other product-name placements use Title Case, and taglines remain uppercase. The current tagline is defined centrally in `src/lib/brand.ts`; choose a broader tagline when the implemented functionality supports that focus.
+
+| Stage | Product Name | Tagline |
+| --- | --- | --- |
+| Now — AO3 Only | Beyond the Archives | A PRIVATE AO3 ORGANIZER |
+| Future — Fanfiction Focused | Beyond the Archives | A PRIVATE FANFICTION ORGANIZER |
+| Future — All Online Fiction | Beyond the Archives | A PRIVATE FICTION ORGANIZER |
+
+The future scopes are considerations, not implemented source support.

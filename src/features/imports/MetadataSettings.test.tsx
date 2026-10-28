@@ -59,7 +59,7 @@ it('allows the shared extension ID on the local app', async () => {
  await waitFor(() => expect(screen.getByRole('button', { name: 'Save Metadata Mode' })).toBeEnabled())
  fireEvent.change(screen.getByLabelText('Desktop Metadata Retrieval'), { target: { value: 'extension' } })
  expect(screen.getByLabelText(/^Extension ID/)).not.toHaveAttribute('readonly')
- expect(screen.getByText(/Use AO3 Library Companion with Local selected/)).toBeVisible()
+ expect(screen.getByText(/Use Beyond the Archives Companion with Local selected/)).toBeVisible()
 })
 
 it('connects the shared companion in local sample mode without saving backend preferences', async () => {

@@ -1,3 +1,4 @@
+import { brandName, brandSlug } from '../src/lib/brand.ts'
 import { build, loadEnv } from 'vite'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -22,7 +23,7 @@ for (const url of [backend, app]) {
 }
 const version = JSON.parse(await readFile('package.json', 'utf8')).version
 const metadata = `// ==UserScript==
-// @name AO3 Library
+// @name ${brandName}
 // @description Save reading progress and private library details on AO3.
 // @version ${version}
 // @match https://archiveofourown.org/*
@@ -41,11 +42,11 @@ await build({ configFile: false, define: {
  __BRAND_ICON__: JSON.stringify(renderToStaticMarkup(createElement(BookOpen, { size: 23, strokeWidth: 1.6, 'aria-hidden': true }))),
  __APP_ORIGIN__: JSON.stringify(app.origin), __SCRIPT_VERSION__: JSON.stringify(version),
 }, build: { outDir: values.outDir, emptyOutDir: true, minify: false,
- lib: { entry: 'companions/safari/content.js', name: 'AO3Library', formats: ['iife'], fileName: () => 'ao3-library.user.js' },
+ lib: { entry: 'companions/safari/content.js', name: 'BeyondTheArchives', formats: ['iife'], fileName: () => `${brandSlug}.user.js` },
 } })
 // Vite's final transform can strip Rollup comments; Userscripts requires this
 // header at the start of the actual installable file.
-const scriptPath = join(values.outDir, 'ao3-library.user.js')
+const scriptPath = join(values.outDir, `${brandSlug}.user.js`)
 await writeFile(scriptPath, metadata + await readFile(scriptPath, 'utf8'))
-await writeFile(join(values.outDir, 'ao3-library.meta.js'), metadata)
-console.log(`Userscript v${version} built in ${values.outDir}. Install ao3-library.user.js in Userscripts.`)
+await writeFile(join(values.outDir, `${brandSlug}.meta.js`), metadata)
+console.log(`Userscript v${version} built in ${values.outDir}. Install ${brandSlug}.user.js in Userscripts.`)

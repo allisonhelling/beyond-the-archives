@@ -2,18 +2,47 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { initialAuthType, supabase } from '../../lib/supabase'
 import { AuthContext } from './auth-context'
+import { sampleMode } from '../../lib/sample-mode'
+import { brandSlug } from '../../lib/brand'
+
+const sampleAuthKey = `${brandSlug}:sample-auth:v1`
 
 // React StrictMode remounts effects. Consume a one-time email token only once.
 let pendingVerification: { token: string; promise: Promise<{ error: unknown }> } | null = null
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(Boolean(supabase))
+  const [sampleSignedIn, setSampleSignedIn] = useState(() => {
+    if (!sampleMode) return false
+    try { return sessionStorage.getItem(sampleAuthKey) !== 'signed-out' } catch { return true }
+  })
+  const [loading, setLoading] = useState(!sampleMode && Boolean(supabase))
   const [error, setError] = useState<string | null>(null)
-  const [needsPassword, setNeedsPassword] = useState(initialAuthType === 'invite' || initialAuthType === 'recovery')
+  const [needsPassword, setNeedsPassword] = useState(!sampleMode && (initialAuthType === 'invite' || initialAuthType === 'recovery'))
+
+  function sampleAuthentication(signedIn: boolean) {
+    try { sessionStorage.setItem(sampleAuthKey, signedIn ? 'signed-in' : 'signed-out') } catch { /* In-memory preview still works without browser storage. */ }
+    setSampleSignedIn(signedIn)
+  }
+  async function signIn(login: string, password: string) {
+    if (sampleMode) {
+      if (login.trim() !== 'Sample' || password !== '123') throw new Error('Invalid sample credentials.')
+      sampleAuthentication(true)
+      return
+    }
+    if (!supabase) throw new Error('Authentication is not configured.')
+    const { error } = await supabase.auth.signInWithPassword({ email: login.trim(), password })
+    if (error) throw error
+  }
+  async function signOut() {
+    if (sampleMode) { sampleAuthentication(false); return }
+    if (!supabase) throw new Error('Authentication is not configured.')
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  }
 
   useEffect(() => {
-    if (!supabase) return
+    if (sampleMode || !supabase) return
     const client = supabase
     let active = true
     let authEventReceived = false
@@ -60,5 +89,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { active = false; subscription.unsubscribe() }
   }, [])
 
-  return <AuthContext value={{ session, loading, error, needsPassword, passwordSaved: () => setNeedsPassword(false) }}>{children}</AuthContext>
+  return <AuthContext value={{ authenticated: sampleMode ? sampleSignedIn : Boolean(session), signIn, signOut, session, loading, error, needsPassword, passwordSaved: () => setNeedsPassword(false) }}>{children}</AuthContext>
 }

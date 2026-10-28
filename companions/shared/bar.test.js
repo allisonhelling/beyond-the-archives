@@ -373,10 +373,10 @@ it.each(['to_read', 'reading', 're_reading'])('offers Finish Fic on the actual f
 it.each([false, true])('keeps one logo in the main bar when panels open (saved entry: %s)', async saved => {
  if (saved) entry = { id: 'fic-entry', version: 'v1', status: 'reading', progress: 1, notes: '', rating: null, tags: [], collections: [] }
  await mount()
- const footer = within(root).getByText(/AO3 Library v/)
+ const footer = within(root).getByText(/Beyond the Archives v/)
  expect(footer.querySelector('a')).toHaveAttribute('href', 'https://library.test/settings#ios-safari-userscript')
  expect(footer.hidden).toBe(true)
- expect(within(root).getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', saved ? 'https://library.test/stories/fic-entry' : 'https://library.test/library')
+ expect(within(root).getByRole('link', { name: 'View in Beyond the Archives' })).toHaveAttribute('href', saved ? 'https://library.test/stories/fic-entry' : 'https://library.test/library')
  const toolbar = root.querySelector('.library-link').parentElement
  if (saved) {
   const summary = root.querySelector('.reading-summary')
@@ -723,7 +723,7 @@ it('uses only the logo and counts published chapters when the planned total is h
 it('centers the disconnected Chrome instructions in the collapsed row and reuses them when expanded', async () => {
  storage.clear()
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser: 'chrome' })
- const footer = within(root).getByText(/AO3 Library v/)
+ const footer = within(root).getByText(/Beyond the Archives v/)
  expect(root.querySelector('.toolbar-progress')).toContainElement(footer)
  expect(footer).toHaveClass('inline-instructions')
  fireEvent.click(findButton('Connect Library'))

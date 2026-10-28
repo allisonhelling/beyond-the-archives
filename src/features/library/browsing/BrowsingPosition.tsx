@@ -20,7 +20,11 @@ export function BrowsingPosition() {
     previousRoute.current = path
     const saved = returning && !preserve ? positions.current.get(path) : undefined
     let lastPosition = saved ?? { y: window.scrollY, focus: null }
+    let restoring = Boolean(saved && browsing)
     function remember() {
+      // Loading results can temporarily clamp the viewport to a shorter page.
+      // Keep the saved destination until restoration finishes or the user scrolls.
+      if (restoring) return
       const focused = document.activeElement
       lastPosition = { y: window.scrollY, focus: focused instanceof HTMLElement ? focused.id || null : null }
     }
@@ -37,12 +41,16 @@ export function BrowsingPosition() {
       if (saved && browsing) {
         window.scrollTo(0, saved.y)
         if (saved.focus) document.getElementById(saved.focus)?.focus({ preventScroll: true })
-        if ((pending || saved.focus && !document.getElementById(saved.focus) || document.documentElement.scrollHeight < saved.y + window.innerHeight) && attempts++ < 900) frame = requestAnimationFrame(restore)
+        if ((pending || saved.focus && !document.getElementById(saved.focus) || document.documentElement.scrollHeight < saved.y + window.innerHeight) && attempts++ < 900) {
+          frame = requestAnimationFrame(restore)
+          return
+        }
+        restoring = false
       } else if (!preserve) window.scrollTo(0, 0)
     }
     // Result data may arrive after this route mounts; retry until it has height.
     frame = requestAnimationFrame(restore)
-    const cancel = () => { stopped = true; cancelAnimationFrame(frame) }
+    const cancel = (event?: Event) => { stopped = true; cancelAnimationFrame(frame); if (event) { restoring = false; remember() } }
     window.addEventListener('wheel', cancel, { once: true, passive: true })
     window.addEventListener('touchstart', cancel, { once: true, passive: true })
     // Capture while this page is still present. Reading scrollY during route

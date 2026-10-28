@@ -24,6 +24,7 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 @media (max-width: 650px) {
  .toolbar:has(.reading-summary) { grid-template-columns: max-content minmax(0, 1fr); overflow-x: visible; }
  .toolbar > .toolbar-progress { min-width: 0; }
+ .toolbar:has(.reading-summary) > .toolbar-progress { grid-column: 1 / -1; }
  .reading-summary { flex-wrap: wrap; min-width: 0; }
  .toolbar:has(.reading-summary) > .toolbar-actions { grid-column: 1 / -1; flex-wrap: wrap; justify-content: center; }
 }

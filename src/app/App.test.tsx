@@ -5,6 +5,9 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { StrictMode } from 'react'
 import App from './App'
 
+const preview = vi.hoisted(() => ({ sample: false }))
+vi.mock('../lib/sample-mode', () => ({ get sampleMode() { return preview.sample } }))
+
 vi.mock('../features/library/repository', async importOriginal => ({
   ...await importOriginal<typeof import('../features/library/repository')>(),
   loadCatalog: async () => ({ stories: [], collections: [], series: [] }),
@@ -33,6 +36,8 @@ vi.mock('../lib/supabase', () => ({
 }))
 
 beforeEach(() => {
+  preview.sample = false
+  sessionStorage.clear()
   vi.clearAllMocks()
   auth.session = null
   auth.listener = null
@@ -46,6 +51,38 @@ beforeEach(() => {
 })
 
 describe('private app access and navigation', () => {
+  it('uses the shared login page for sample logout, recovery preview, and local sign-in', async () => {
+    preview.sample = true
+    const user = userEvent.setup()
+    const view = render(<App />)
+    await screen.findByRole('heading', { name: 'Currently Reading' })
+    await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
+    await user.click(screen.getByRole('button', { name: 'Log Out' }))
+    expect(await screen.findByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
+    expect(document.querySelector('.brand')).toHaveTextContent('beyond the archives')
+    expect(document.querySelector('.brand-subtitle')).toHaveTextContent('A PRIVATE AO3 ORGANIZER')
+    expect(document.querySelector('.public-footer > span')).toHaveTextContent('Beyond the Archives')
+    expect(screen.getByLabelText('Username')).toHaveValue('Sample')
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Sign In to Your Library' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Use Sample and password 123')
+    await user.click(screen.getByRole('button', { name: 'Forgot Your Password?' }))
+    await user.click(screen.getByRole('button', { name: 'Send Recovery Link' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('no recovery email is sent')
+    await user.click(screen.getByRole('button', { name: 'Back to Sign In' }))
+    await user.type(screen.getByLabelText('Password'), '123')
+    await user.click(screen.getByRole('button', { name: 'Sign In to Your Library' }))
+    expect(await screen.findByRole('heading', { name: 'Currently Reading' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
+    await user.click(screen.getByRole('button', { name: 'Log Out' }))
+    view.unmount()
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
+    expect(auth.getSession).not.toHaveBeenCalled()
+    expect(auth.signInWithPassword).not.toHaveBeenCalled()
+    expect(auth.signOut).not.toHaveBeenCalled()
+    expect(auth.resetPasswordForEmail).not.toHaveBeenCalled()
+  })
   it('protects every route from unauthenticated visitors', async () => {
     for (const path of ['/reading', '/library', '/authors/Writer', '/stats', '/settings', '/features']) {
       window.history.replaceState(null, '', path)

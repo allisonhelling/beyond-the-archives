@@ -1,3 +1,4 @@
+import { brandSlug } from '../../lib/brand'
 import { downloadFile } from '../../lib/download'
 import { createZip } from '../../lib/zip'
 import { allRows, loadLibrary } from '../library/repository'
@@ -82,5 +83,5 @@ export async function exportLibraryCsv(selection: readonly CsvFile[]) {
       }) : Promise.resolve([]),
   ])
   const files = libraryCsvFiles(library, selection, records)
-  downloadFile(createZip(files), `between-chapters-export-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`)
+  downloadFile(createZip(files), `${brandSlug}-export-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`)
 }

@@ -1,3 +1,4 @@
+import { brandSlug } from '../../src/lib/brand.ts'
 import { parseChapterDates } from './chapter-dates.ts'
 import { load } from 'cheerio'
 import { readBoundedBody } from './read-body.ts'
@@ -59,7 +60,7 @@ export async function retrieveAo3Document(expected: string, matches: (url: strin
  try {
   if (!['https://archiveofourown.org', 'https://web.archive.org'].includes(new URL(expected).origin)) return failure('invalid_identity', 'Unsupported metadata origin.')
   for(let redirects=0;redirects<3;redirects++) {
-   const response=await fetcher(target,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'PrivateAO3Library/0.3 (public metadata; no authentication)','Accept':'text/html'}})
+   const response=await fetcher(target,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':`${brandSlug}/0.3 (public metadata; no authentication)`,'Accept':'text/html'}})
    if(response.status===429) { const retry=response.headers.get('retry-after'); const seconds=retry && /^\d+$/.test(retry)?Number(retry):retry?Math.ceil((Date.parse(retry)-Date.now())/1000):3600; return failure('rate_limited','AO3 rate-limited retrieval. All requests are paused; retry later.',true,Math.max(3600,Math.min(seconds||3600,2147483647))) }
    if(response.headers.get('cf-mitigated')==='challenge') return failure('blocked','AO3 returned a blocking challenge. Retrieval is paused.',true,86400)
    if(response.status===403) return failure('blocked','AO3 blocked retrieval. All requests are paused for 24 hours.',true,86400)

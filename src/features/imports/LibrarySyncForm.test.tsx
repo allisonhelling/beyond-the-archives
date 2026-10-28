@@ -515,7 +515,7 @@ it('rejects an older extension that would silently ignore the requested chapter-
  fireEvent.click(screen.getByRole('checkbox', { name: 'Check Chapter Publication Dates' }))
  fireEvent.change(screen.getByLabelText('AO3 Username'), { target: { value: 'reader' } })
  fireEvent.click(screen.getByRole('button', { name: 'Start Import' }))
- expect(await screen.findByRole('alert')).toHaveTextContent('Rebuild and reload AO3 Library Companion')
+ expect(await screen.findByRole('alert')).toHaveTextContent('Rebuild and reload Beyond the Archives Companion')
  expect(mocks.command).toHaveBeenCalledWith('discard', { scanId: 'scan' })
 })
 
@@ -756,7 +756,7 @@ it('preserves a legacy safety-limit scan and explains that recovery requires an 
  await screen.findByRole('dialog', { name: 'AO3 Scan Limit Reached' })
  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
  expect(screen.getByRole('button', { name: 'Prepare Saved Batch' })).toBeDisabled()
- expect(screen.getByText(/Rebuild and reload AO3 Library Companion to recover/)).toBeVisible()
+ expect(screen.getByText(/Rebuild and reload Beyond the Archives Companion to recover/)).toBeVisible()
  expect(screen.queryByRole('button', { name: 'Resume Scan' })).not.toBeInTheDocument()
  expect(screen.queryByRole('button', { name: 'Import Scanned Works' })).not.toBeInTheDocument()
  fireEvent.click(screen.getByRole('button', { name: 'Discard Scan' }))

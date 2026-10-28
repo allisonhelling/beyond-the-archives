@@ -10,8 +10,9 @@ it('builds a standalone installable file with a leading Userscripts header and p
  try {
   const env = { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example', SUPABASE_SERVICE_ROLE_KEY: 'do_not_embed_this_canary' }
   execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env, stdio: 'pipe' })
-  const script = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
+  const script = await readFile(join(directory, 'dist/beyond-the-archives.user.js'), 'utf8')
   expect(script.startsWith('// ==UserScript==\n')).toBe(true)
+  expect(script).toContain('// @name Beyond the Archives')
   expect(script).toContain('// @inject-into content')
   expect(script).toContain('// @match https://archiveofourown.org/*')
   expect(script).toContain('// @grant GM.xmlHttpRequest')
@@ -31,6 +32,6 @@ it('rejects loopback backends and app links in every userscript build before cre
   for (const args of [[], ['--hosted']]) for (const patch of [{ VITE_SUPABASE_URL: 'http://127.0.0.1:54321' }, { EXTENSION_APP_ORIGIN: 'http://localhost:5173' }, { VITE_SUPABASE_URL: 'https://localhost' }, { VITE_SUPABASE_URL: 'https://[::1]' }]) {
    expect(() => execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', ...args, '--outDir', join(directory, 'rejected')], { env: { ...base, ...patch }, stdio: 'pipe' })).toThrow('Safari userscripts require hosted HTTPS backend and app origins')
   }
-  await expect(readFile(join(directory, 'rejected/ao3-library.user.js'))).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(readFile(join(directory, 'rejected/beyond-the-archives.user.js'))).rejects.toMatchObject({ code: 'ENOENT' })
  } finally { await rm(directory, { recursive: true, force: true }) }
 },30000)

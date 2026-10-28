@@ -19,7 +19,8 @@ jobs:
       - run: deno check --config supabase/functions/deno.json supabase/functions/*/index.ts
       - run: npm audit --audit-level=moderate
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --grep-invert @performance
+      - run: npm run perf:browser
       - uses: actions/upload-artifact@v7
         if: failure() && hashFiles('test-results/**') != ''
         with:

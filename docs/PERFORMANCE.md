@@ -39,6 +39,8 @@ The performance workflow issued three page queries: the initial 50 results, 250 
 - `npm run perf:browser`: desktop and mobile Chromium checks, including large-page rendering, transferred JSON, JavaScript heap (where available), full-library search, page-cache reuse, and navigation/scroll restoration.
 - `npm run perf:hosted`: read-only concurrent queries using explicitly provided `PERF_SUPABASE_URL`, `PERF_PUBLISHABLE_KEY`, and comma-separated `PERF_ACCESS_TOKENS` for at least two test readers. `PERF_ROUNDS` defaults to five. Use dedicated representative test libraries. The runner checks every returned work's owner, measures exact HEAD counts, and reports direct and extension metadata-job throughput separately. It never prints tokens, notes or metadata. No hosted credentials or representative hosted environment were supplied for this change.
 
+CI excludes the `@performance` benchmark from its parallel functional run and runs `npm run perf:browser` afterward with one worker. The 3-second large-page target is unchanged; measure it without simultaneous functional browser workloads.
+
 Reports go to ignored `artifacts/performance/`. Browser checks use mocked Auth/PostgREST; SQL tests independently exercise actual projections, search parity, source updates, grants, RLS, pagination boundaries and series behavior. Run `npm run check` and the relevant Playwright checks as well.
 
 ## Query and Cache Decisions

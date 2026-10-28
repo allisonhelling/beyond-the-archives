@@ -79,24 +79,27 @@ test('library and reading actions fit their headers and filters across viewport 
   await expect(toolbar.getByRole('button', { name: 'Mass Refresh All Stories on Page' })).toHaveCount(0)
   await expect(header.getByRole('link', { name: 'Add Story', exact: true })).toHaveCount(0)
   await expect(page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true })).toBeVisible({ visible: width > 1100 })
-  const series = (await toolbar.getByRole('button', { name: 'Show Series', exact: true }).boundingBox())!
-  const filters = (await toolbar.getByRole('button', { name: 'Filters', exact: true }).boundingBox())!
-  expect(series.y).toBeCloseTo(filters.y, 0)
-  expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
-  if (width > 1100) {
-   const controls = await toolbar.locator(':scope > .custom-dropdown, :scope > .suggestion-search, :scope > .fandom-select, :scope > button').all()
-   for (const control of controls) expect((await control.boundingBox())!.y).toBeCloseTo(series.y, 0)
-  }
-  const status = page.locator('.pagination-inline [role=status]')
-  await expect(status).toContainText('1–50 of 113 works')
-  const previous = (await page.locator('.pagination-inline').getByRole('button', { name: 'Prev', exact: true }).boundingBox())!
-  const next = (await page.locator('.pagination-inline').getByRole('button', { name: 'Next', exact: true }).boundingBox())!
-  const count = (await status.boundingBox())!
-  expect(Math.abs(previous.y + previous.height / 2 - (next.y + next.height / 2))).toBeLessThan(2)
-  expect(previous.y + previous.height / 2).toBeGreaterThanOrEqual(count.y)
-  expect(previous.y + previous.height / 2).toBeLessThanOrEqual(count.y + count.height)
-  expect(await status.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  // Resize and asynchronously loaded shelf counts can reflow the toolbar.
+  await expect(async () => {
+   const series = (await toolbar.getByRole('button', { name: 'Show Series', exact: true }).boundingBox())!
+   const filters = (await toolbar.getByRole('button', { name: 'Filters', exact: true }).boundingBox())!
+   expect(series.y).toBeCloseTo(filters.y, 0)
+   expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
+   if (width > 1100) {
+    const controls = await toolbar.locator(':scope > .custom-dropdown, :scope > .suggestion-search, :scope > .fandom-select, :scope > button').all()
+    for (const control of controls) expect((await control.boundingBox())!.y).toBeCloseTo(series.y, 0)
+   }
+   const status = page.locator('.pagination-inline [role=status]')
+   await expect(status).toContainText('1–50 of 113 works')
+   const previous = (await page.locator('.pagination-inline').getByRole('button', { name: 'Prev', exact: true }).boundingBox())!
+   const next = (await page.locator('.pagination-inline').getByRole('button', { name: 'Next', exact: true }).boundingBox())!
+   const count = (await status.boundingBox())!
+   expect(Math.abs(previous.y + previous.height / 2 - (next.y + next.height / 2))).toBeLessThan(2)
+   expect(previous.y + previous.height / 2).toBeGreaterThanOrEqual(count.y)
+   expect(previous.y + previous.height / 2).toBeLessThanOrEqual(count.y + count.height)
+   expect(await status.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }).toPass({ timeout: 5000 })
  }
  await page.locator('.fandom-trigger').click()
  const rows = page.locator('.fandom-options .check-label')

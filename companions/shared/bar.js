@@ -1,3 +1,4 @@
+import { brandName } from '../../src/lib/brand'
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
@@ -33,7 +34,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  }
  const root = host.attachShadow({ mode: 'closed' })
  const style = doc.createElement('style'); style.textContent = styles; root.append(style)
- const section = doc.createElement('section'); section.setAttribute('aria-label', 'AO3 Library'); root.append(section)
+ const section = doc.createElement('section'); section.setAttribute('aria-label', brandName); root.append(section)
  if (tile) tile.element.append(host)
  else if (page.series) doc.querySelector('#main .series.work.index')?.before(host)
  else doc.querySelector('#workskin')?.before(host)
@@ -73,7 +74,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  editorPanel.id = 'library-editor'; connectionPanel.id = 'library-connection'
  panel.append(editorPanel, connectionPanel)
  const conflictPanel = doc.createElement('div'); section.append(conflictPanel)
- const footer = doc.createElement('small'); footer.textContent = `AO3 Library v${__SCRIPT_VERSION__} · `
+ const footer = doc.createElement('small'); footer.textContent = `${brandName} v${__SCRIPT_VERSION__} · `
  const update = doc.createElement('a'); update.href = `${appOrigin}/settings#${browser === 'chrome' ? 'ao3-browser-bar' : 'ios-safari-userscript'}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & Update Instructions'
  footer.append(update); section.append(footer)
  showPanel(null)
@@ -340,7 +341,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   renderReadingToggle(actions, current, top)
  }
  function libraryLink(parent) {
-  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', 'View in Between Chapters Library')
+  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', `View in ${brandName}`)
   // Trusted, build-time Lucide logo markup; no page or user content is injected.
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }

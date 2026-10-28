@@ -1,8 +1,8 @@
-# AO3 Library for iOS Safari / Userscripts
+# Beyond the Archives for iOS Safari / Userscripts
 
 This companion runs in the free [Userscripts app](https://github.com/quoid/userscripts). It adds an inline, compact library panel to AO3 work/chapter and series pages, plus visible work tiles on AO3 listings, search results, tag pages, bookmarks, and author profiles. It shares the tracker's URL/progress helpers, reading statuses, public-key validation, and atomic database save; it does not require the Chrome extension.
 
-Chrome and Edge use the same bar and editor through the [native AO3 Library Companion extension](../chrome/README.md#pair-the-ao3-bar). Each browser has its own pairing and local drafts.
+Chrome and Edge use the same bar and editor through the [native Beyond the Archives Companion extension](../chrome/README.md#pair-the-ao3-bar). Each browser has its own pairing and local drafts.
 
 Explicit chapter read actions count the loaded chapter locally and save only its chapter number/ID, word count, server timestamp, and reread flag in the existing private reading history. Summaries and notes are excluded; unavailable text produces an unknown count, and skipped chapters are not estimated. The web app shows these records under **Chapter Reading History** on the work info page. Apply `20261024000500_chapter_read_history.sql`, deploy the website, rebuild the userscript, and replace the installed file. See the [shared feature notes](../../docs/IMPLEMENTATION.md#ao3-metadata-capture-and-display) for counting and backup behavior.
 
@@ -26,12 +26,14 @@ EXTENSION_APP_ORIGIN=https://your-library.example.com
 npm run build:userscript
 ```
 
-Output: `userscript/dist/ao3-library.user.js` and a metadata file. Every userscript build loads `.env.local.hosted` and requires hosted HTTPS backend and app origins. Localhost builds are rejected before writing files. Explicit environment variables can supply hosted public settings in CI. `npm run build:userscript:hosted` is an alias of the same build command; there is no local userscript build mode.
+When upgrading from the previous app name, replace the old userscript file so only one library userscript is enabled.
+
+Output: `userscript/dist/beyond-the-archives.user.js` and a metadata file. Every userscript build loads `.env.local.hosted` and requires hosted HTTPS backend and app origins. Localhost builds are rejected before writing files. Explicit environment variables can supply hosted public settings in CI. `npm run build:userscript:hosted` is an alias of the same build command; there is no local userscript build mode.
 
 ## Install and Connect
 
 1. Install Userscripts, open its app, and select a scripts directory accessible in Files.
-2. Copy the generated `ao3-library.user.js` into that directory. Alternatively host it at an HTTPS URL ending in `.user.js`, visit that URL in Safari, and use the Userscripts popup's install prompt. The build does not host the file automatically.
+2. Copy the generated `beyond-the-archives.user.js` into that directory. Alternatively host it at an HTTPS URL ending in `.user.js`, visit that URL in Safari, and use the Userscripts popup's install prompt. The build does not host the file automatically.
 3. Enable Userscripts under Safari extensions in iOS Settings. Allow it on `archiveofourown.org`; do not grant broad access to all websites. If Safari asks for network access, allow only your configured Supabase backend. The script matches HTTPS AO3 work URLs only, skips frames, and sends requests only to that compiled backend. Userscripts' documented metadata does not provide a `@connect` network allowlist; destination restriction is enforced by this script's fixed request URL and Safari permissions.
 4. Open the Userscripts Safari popup once to load the new file, then reload an AO3 work.
 5. Sign into your library website and open **Settings → iOS Safari userscript**. Name the device and create a code. Copy the full code into **Connect Library** on AO3 within five minutes. Codes are single-use and creating another replaces unused codes. Never paste a password, AO3 credential, or Supabase session token.

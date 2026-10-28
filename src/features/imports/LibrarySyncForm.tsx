@@ -81,7 +81,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    if (name === 'start' && reply.state && unsupportedOption) {
     const discarded = await librarySyncCommand('discard', { scanId: reply.state.id })
     setState(discarded.state ?? null)
-    throw new Error(`Rebuild and reload AO3 Library Companion before using ${unsupportedOption}. The unsupported scan was discarded; start it again after updating.`)
+    throw new Error(`Rebuild and reload Beyond the Archives Companion before using ${unsupportedOption}. The unsupported scan was discarded; start it again after updating.`)
    }
    setState(reply.state ?? null)
    if (['start', 'set-delay', 'resume', 'continue'].includes(name)) setDelayDraft(null)
@@ -204,7 +204,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
  return <section className="settings-card story-form" aria-labelledby="library-sync-heading">
   <h2 id="library-sync-heading">AO3 Library Sync</h2>
   {sampleMode && <p className="field-help">Sample imports use the extension with Local selected and save only to this browser’s sample library. No library account or background worker is needed. Select Local in the companion’s extension settings and enter its ID in this app’s Settings before starting.</p>}
-  <p className="scan-introduction">Scan works across pages using AO3 Library Companion. Review differences in bookmark notes, personal tags, and reading state after importing. Saved personal data stays unchanged until you choose incoming data.</p>
+  <p className="scan-introduction">Scan works across pages using Beyond the Archives Companion. Review differences in bookmark notes, personal tags, and reading state after importing. Saved personal data stays unchanged until you choose incoming data.</p>
   <p className="field-help">By default, new bookmarks dated after the work’s latest update are marked Finished, with the bookmark date as the finished date.</p>
   <p className="field-help">Ensure that bookmarks are sorted by "Date Bookmarked". Changing the sort order may cause the scanner to miss entries.</p>
   <form className="story-form" onSubmit={event => { event.preventDefault(); void action('start') }}>
@@ -239,7 +239,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   <p className="field-help">Uses one scan tab with your selected request interval; background alarms may make it slower. Existing work imports finish first. Keep Chrome running. If sign-in or a request restriction blocks the scan, an alert lets you open the scan tab. Resolve the issue there, then resume manually. Checkpoints stay on this device until imported or discarded.</p>
   {state?.status === 'discarded' ? <p role="status">Scan discarded.</p> : <>
   {state && <LibrarySyncSummary key={state.id} state={state} />}
-  {state?.status === 'paused' && isLibrarySyncSafetyLimit(state) && state.batchVersion !== 1 && <p className="field-help">Rebuild and reload AO3 Library Companion to recover this saved scan. Keep the scan saved while updating.</p>}
+  {state?.status === 'paused' && isLibrarySyncSafetyLimit(state) && state.batchVersion !== 1 && <p className="field-help">Rebuild and reload Beyond the Archives Companion to recover this saved scan. Keep the scan saved while updating.</p>}
   {state?.error && <p role="alert" className="error-message">{state.error}</p>}
   </>}
   {state?.status === 'ready' && state.importToCollection && state.collection && <label>New Collection Name<input value={collectionName ?? state.collection.name} disabled={busy || Boolean(state.collectionId) || createdCollection?.scanId === state.id} onChange={event => setCollectionName(event.target.value)} /></label>}

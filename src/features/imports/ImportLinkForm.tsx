@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useLibrary } from '../library/LibraryProvider'
 import type { Status } from '../library/model'
 import { sampleMode } from '../../lib/sample-mode'
-import { importFinished, classifyUrl, parseWorkUrl, selectedImportText, type SeriesPreview } from './urls'
+import { importFinished, classifyUrl, parseWorkUrl, waybackSnapshot, selectedImportText, type SeriesPreview } from './urls'
 import { importHistory, submitImport } from './repository'
 
 type ImportItem = Awaited<ReturnType<typeof importHistory>>['items'][number]
@@ -15,7 +15,9 @@ export function ImportLinkForm() {
   const library = useLibrary(), { refresh } = library
   const location = useLocation()
   const navigate = useNavigate()
-  const [url, setUrl] = useState(typeof location.state?.workUrl === 'string' ? location.state.workUrl : ''), [batch, setBatch] = useState(''), [item, setItem] = useState<ImportItem>()
+  const initialUrl = typeof location.state?.workUrl === 'string' ? location.state.workUrl : ''
+  const [url, setUrl] = useState(initialUrl), [batch, setBatch] = useState(''), [item, setItem] = useState<ImportItem>()
+  const [source, setSource] = useState<'ao3' | 'wayback'>(() => waybackSnapshot(initialUrl) ? 'wayback' : 'ao3')
   const [reviewing, setReviewing] = useState(''), [multiple, setMultiple] = useState(false), [finishedBatch, setFinishedBatch] = useState(false), [entries, setEntries] = useState<string[]>([])
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const complete = !!item && !['pending', 'processing'].includes(item.status)
@@ -49,6 +51,7 @@ export function ImportLinkForm() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true)
     try {
+      if (source === 'wayback' && !waybackSnapshot(url)) throw new Error('Paste a full Wayback Machine snapshot link to an AO3 work, including its 14-digit capture timestamp.')
       if (classifyUrl(url).kind === 'series') { setReviewing(url.trim()); return }
       parseWorkUrl(url)
       const id = await submitImport(url.trim())
@@ -69,9 +72,10 @@ export function ImportLinkForm() {
   }
   return <>
     {sampleMode ? <section className="settings-card import-link-form"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a Story Manually</Link></section> : reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} key={reviewing} text={reviewing} savedIds={new Set((library.stories ?? []).flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} busy={busy} onConfirm={(works, status, seriesIds) => void importSelected(works, status, seriesIds)} onCancel={() => setReviewing('')} /> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
-      <label>AO3 Work or Series Link<input type="url" required value={url} disabled={busy} onChange={event => setUrl(event.target.value)} placeholder="https://archiveofourown.org/works/123" /></label>
-      <p className="field-help">AO3 work links and fixed Wayback Machine snapshots of AO3 works are supported. Paste the full archived link to import its saved metadata.</p>
-      <button className="button primary" disabled={busy}>{busy ? 'Importing…' : 'Import from Link'}</button>
+      <label>Import Source<select value={source} disabled={busy} onChange={event => setSource(event.target.value as typeof source)}><option value="ao3">AO3 Work or Series Link</option><option value="wayback">Import from Wayback Machine</option></select></label>
+      <label>{source === 'wayback' ? 'Wayback Machine Link' : 'AO3 Work or Series Link'}<input type="url" required value={url} disabled={busy} onChange={event => { setUrl(event.target.value); if (waybackSnapshot(event.target.value)) setSource('wayback') }} placeholder={source === 'wayback' ? 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123' : 'https://archiveofourown.org/works/123'} /></label>
+      <p className="field-help">{source === 'wayback' ? 'Paste the full archived AO3 work link, including its capture timestamp, to import the metadata saved in that snapshot.' : 'Paste an AO3 work or series link. For an archived work, choose Import from Wayback Machine or paste its full snapshot link.'}</p>
+      <button className="button primary" disabled={busy}>{busy ? 'Importing…' : source === 'wayback' ? 'Import from Wayback Machine' : 'Import from Link'}</button>
     </form> : multiple ? <section className="settings-card series-import-result" aria-label="Series Import Result"><h2>{finishedBatch ? 'Series Import Finished' : 'Importing Selected Works'}</h2><p className={finishedBatch ? 'series-import-finished' : undefined} role="status">{finishedBatch ? 'Your selected works have finished processing.' : 'Your selected works are saved. Retrieving their metadata…'}</p><ul>{entries.map(id => <li key={id}><Link className="clickable-text" to={`/stories/${id}`} state={{ importBatchId: batch }}>{library.stories?.find(story => story.id === id)?.metadata.title ?? 'View Saved Work'}</Link></li>)}</ul><div className="form-actions"><Link className="button secondary" to="/library?shelf=series">View Series Collection</Link><button className="button secondary" onClick={() => { setBatch(''); setMultiple(false); setItem(undefined); setEntries([]) }}>Add Another Story</button></div></section> : <>
       {!complete ? <section className="settings-card"><p role="status">Retrieving metadata… Your fic is saved; this may take a few minutes. If using the extension, keep your browser running and complete any AO3 confirmation in its requested tab.</p><Link className="clickable-text" to="/imports">View Import History</Link></section> : <section className="settings-card" aria-label="Import Result">
         <h2>Import Result</h2>

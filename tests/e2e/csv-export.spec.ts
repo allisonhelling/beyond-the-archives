@@ -27,7 +27,7 @@ test('downloads selected CSVs and the whole library in one ZIP on desktop and mo
   const allDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Download CSV ZIP' }).click()
   const download = await allDownload
-  expect(download.suggestedFilename()).toMatch(/^between-chapters-export-.*\.zip$/)
+  expect(download.suggestedFilename()).toMatch(/^beyond-the-archives-export-.*\.zip$/)
   const archive = await readFile((await download.path())!)
   expect(archive.readUInt32LE(0)).toBe(0x04034b50)
   const text = archive.toString('utf8')

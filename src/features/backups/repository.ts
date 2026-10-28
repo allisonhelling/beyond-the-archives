@@ -1,3 +1,4 @@
+import { brandSlug } from '../../lib/brand'
 import { downloadFile } from '../../lib/download'
 import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
@@ -30,7 +31,7 @@ async function createBackup() {
   }
   const backup = { ...data, browser_preferences }
   const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' })
-  const filename = `between-chapters-backup-${String(data.exported_at).replace(/[^0-9TZ]/g, '-')}.json`
+  const filename = `${brandSlug}-backup-${String(data.exported_at).replace(/[^0-9TZ]/g, '-')}.json`
   return { blob, filename }
 }
 

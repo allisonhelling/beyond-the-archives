@@ -53,7 +53,7 @@ export function MetadataSettings() {
  }
  return <section id={metadataSettingsSection.id} tabIndex={-1} className="settings-card">
   <h2>{metadataSettingsSection.title}</h2>
-  {isLocalApp() && <p className="muted">Use AO3 Library Companion with Local selected in its extension settings. Build the extension with <code>npm run build:extension</code>, load <code>extension/dist</code> in Chrome, then reconnect. Enter the same extension ID you use for the hosted library. The older local build remains available as a fallback.</p>}
+  {isLocalApp() && <p className="muted">Use Beyond the Archives Companion with Local selected in its extension settings. Build the extension with <code>npm run build:extension</code>, load <code>extension/dist</code> in Chrome, then reconnect. Enter the same extension ID you use for the hosted library. The older local build remains available as a fallback.</p>}
   <form className="story-form" onSubmit={event => void save(event)}>
    <fieldset className="settings-subsection" disabled={busy || (!sampleMode && !ready)}>
     <legend>{sampleMode ? 'Extension Connection' : 'Retrieval Mode'}</legend>
@@ -65,7 +65,7 @@ export function MetadataSettings() {
      </select></label>)}</div>
      <p className="field-help">New import and refresh requests use the choice for the layout they are started from. Existing requests keep their selected mode. For Safari, use Direct Retrieval; the Safari userscript does not process import metadata jobs. Connect the companion separately in each browser that uses Browser Extension.</p>
     </>}
-    {(sampleMode || currentMode === 'extension') && <label>Extension ID<input value={id} onChange={event => setId(event.target.value)} autoComplete="off" spellCheck={false} /><small className="muted">Copy the ID from chrome://extensions or edge://extensions after installing AO3 Library Companion. Select the matching Hosted or Local environment in the extension settings.</small></label>}
+    {(sampleMode || currentMode === 'extension') && <label>Extension ID<input value={id} onChange={event => setId(event.target.value)} autoComplete="off" spellCheck={false} /><small className="muted">Copy the ID from chrome://extensions or edge://extensions after installing Beyond the Archives Companion. Select the matching Hosted or Local environment in the extension settings.</small></label>}
     <p className="muted">The extension reads only works requested by Import URLs or Refresh metadata and series explicitly requested for import preview. Library listing scans are started separately from Mass Import from AO3. It reuses a matching AO3 tab or opens one, then waits for the work to load. Complete any sign-in or confirmation in that tab. Metadata imports are explicit. If you pair the AO3 Browser Bar separately, visiting a work or series loads its saved library details; saving changes still requires your action.</p>
     <p className="muted">Browser metadata stays private and preserves manual corrections and reading progress. Keep this app open for long batches. If you close it, processing continues until the current sign-in token expires. After restarting the browser or signing in again, open this app to reconnect.</p>
     {!sampleMode && <button className="button secondary" type="submit">{busy ? 'Connecting and Saving…' : 'Save Metadata Mode'}</button>}

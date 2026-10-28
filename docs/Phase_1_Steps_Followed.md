@@ -1,6 +1,6 @@
-# AO3 Library & Reading Tracker
+# Beyond the Archives — Phase 1 Report
 
-Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **between chapters**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
+Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **Beyond the Archives**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
 
 The code foundation is implemented; a hosted Supabase project and production deployment have **not** been provisioned. Phase 2 has not started. Navigation destinations deliberately show planned features rather than story-management controls.
 

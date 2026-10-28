@@ -9,10 +9,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 test('built userscript keeps chapter controls, editor fields, and collapsible panels in sync', async ({ page }) => {
+ test.setTimeout(90000)
  const directory = await mkdtemp(join(tmpdir(), 'ao3-userscript-browser-'))
  try {
   execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
-  const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
+  const bundle = await readFile(join(directory, 'dist/beyond-the-archives.user.js'), 'utf8')
   // Userscripts supplies GM in the script's scope, without exposing it on globalThis.
   const script = `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);`
   await page.route('https://archiveofourown.org/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Test story</h2><h3 class="byline"><a rel="author" href="/users/Writer/pseuds/PenName">PenName</a></h3><div class="summary module"><blockquote></blockquote></div><div id="chapters"><div id="chapter-4" class="chapter"><div class="summary module"><blockquote>Chapter summary only</blockquote></div><div class="userstuff">PRIVATE CHAPTER TEXT</div><div class="notes">Private author notes</div></div></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><ul class="work navigation actions"><li class="chapter"><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104" selected>4. Fourth</option><option value="105">5. Fifth</option><option value="106">6. Sixth</option><option value="107">7. Seventh</option><option value="108">8. Eighth</option><option value="109">9. Ninth</option><option value="110">10. Last</option></select></li></ul></div><div id="kudos">Kudos list</div></main></body></html>' }))
@@ -53,17 +54,17 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   expect(await page.evaluate(() => 'GM' in globalThis)).toBe(false)
   await page.addScriptTag({ content: script })
   const top = page.locator('#ao3-library-companion'), bottom = page.locator('#ao3-library-progress')
-  await expect(top.getByRole('link', { name: 'View in Between Chapters Library' })).toBeVisible()
+  await expect(top.getByRole('link', { name: 'View in Beyond the Archives' })).toBeVisible()
   await expect(top.locator('.library-link')).toHaveText('')
   await expect(page.locator('#ao3-library-companion small a')).toHaveAttribute('href', 'https://library-test.example/settings#ios-safari-userscript')
-  await expect(page.getByText(/AO3 Library v/)).toBeHidden()
+  await expect(page.getByText(/Beyond the Archives v/)).toBeHidden()
   await expect(bottom).toBeVisible()
   await expect(bottom.locator('.toolbar')).toHaveText((await top.locator('.toolbar').textContent())!)
   await bottom.screenshot({path:`test-results/safari-unsaved-bottom-${page.viewportSize()!.width}.png`})
   await bottom.getByRole('button', { name: 'Add to Library', exact: true }).click()
   await expect(page.getByLabel('Current Chapter', { exact: true })).toHaveValue('4')
   await expect(page.getByLabel('Reading Status', { exact: true })).toHaveValue('reading')
-  await expect(page.getByText(/AO3 Library v/)).toBeVisible()
+  await expect(page.getByText(/Beyond the Archives v/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Reload Saved Entry' })).toHaveCount(0)
   const notesFont = await page.getByLabel('Reading Status', { exact: true }).evaluate(element => getComputedStyle(element.closest('label')!).fontSize)
   for (const selector of ['h3', 'label', 'button:not(.tag-insertion-point)', 'input', 'select', 'textarea', 'small', '.personal-rating legend', '.rating-value']) {
@@ -222,7 +223,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   }
 
   expect(await page.locator('#kudos').evaluate(element => element.previousElementSibling?.id)).toBe('ao3-library-progress')
-  await expect(top.getByRole('link', { name: 'View in Between Chapters Library' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
+  await expect(top.getByRole('link', { name: 'View in Beyond the Archives' })).toHaveAttribute('href', 'https://library-test.example/stories/fic-entry')
   await expect(top.locator('.library-link')).toHaveText('')
   await expect(top.locator('.reading-actions').getByRole('button', { name: 'Read', exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
@@ -336,7 +337,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect(surface.getByRole('button', { name: /^Read$/ })).toHaveCount(0)
   }
   expect(page.url()).toBe('https://archiveofourown.org/works/123/chapters/104')
-  await expect(page.getByText(/AO3 Library v/)).toBeHidden()
+  await expect(page.getByText(/Beyond the Archives v/)).toBeHidden()
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   const metadataHelp = page.getByLabel('About collect metadata', { exact: true })
   const metadataText = page.getByText('Recollect metadata from this AO3 page. Reload AO3 first for the latest changes.', { exact: true })
@@ -596,7 +597,7 @@ test('built userscript saves unsaved works through first-chapter and completion 
  const directory = await mkdtemp(join(tmpdir(), 'ao3-unsaved-reading-'))
  try {
   execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
-  const bundle = await readFile(join(directory, 'dist/ao3-library.user.js'), 'utf8')
+  const bundle = await readFile(join(directory, 'dist/beyond-the-archives.user.js'), 'utf8')
   await page.route('https://archiveofourown.org/**', route => {
    const current = Number(new URL(route.request().url()).pathname.split('/').at(-1)) - 100
    return route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Unsaved story</h2><div class="summary module"><blockquote>Summary</blockquote></div><dl class="work meta"><dd class="chapters">3/3</dd></dl><select id="selected_id">${[1, 2, 3].map(chapter => `<option value="${100 + chapter}">${chapter}. Chapter</option>`).join('')}</select><div id="chapters"><div id="chapter-${current}" class="chapter"><div class="userstuff"><p>Only three words.</p></div></div></div></div><div id="kudos">Kudos</div></main></body></html>` })

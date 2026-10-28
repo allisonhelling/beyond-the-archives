@@ -12,8 +12,8 @@ type Job = NonNullable<Awaited<ReturnType<typeof readJob>>>
 const story = { id: 'entry-1', original_url: 'https://archiveofourown.org/works/123' } as Story
 const job = (status: string, extra: Partial<Job> = {}) => ({ status, error_category: null, error_message: null, next_attempt_at: '2026-10-16T12:00:00Z', ...extra }) as Job
 async function tick(ms=5000) { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
-async function mount() {
-  const hook = renderHook(() => useMetadataRefresh(story))
+async function mount(importBatchId?: string) {
+  const hook = renderHook(() => useMetadataRefresh(story, importBatchId))
   await act(async () => {})
   return hook
 }
@@ -25,6 +25,23 @@ beforeEach(() => {
   mocks.reload.mockResolvedValue(undefined)
 })
 afterEach(() => { vi.useRealTimers() })
+
+it('reloads metadata when an Add Story import completes before the details page mounts', async () => {
+  mocks.read.mockResolvedValue(job('completed'))
+  const { result } = await mount('import-batch')
+  expect(mocks.read).toHaveBeenCalledWith(story.id, 'import-batch')
+  expect(mocks.reload).toHaveBeenCalledWith([story.id])
+  expect(result.current.status).toBe('completed')
+  await tick()
+  expect(mocks.reload).toHaveBeenCalledTimes(1)
+})
+
+it('shows failure from the current import even if it finished before navigation', async () => {
+  mocks.read.mockResolvedValue(job('failed', { error_message: 'The archived snapshot is unavailable.' }))
+  const { result } = await mount('import-batch')
+  expect(result.current.status).toBe('failed')
+  expect(result.current.message).toContain('The archived snapshot is unavailable.')
+})
 
 it('keeps queued and processing requests busy until the worker succeeds and reloads metadata', async () => {
   const { result } = await mount()

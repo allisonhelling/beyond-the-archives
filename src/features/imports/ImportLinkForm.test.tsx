@@ -100,6 +100,23 @@ it('submits the complete Wayback work link instead of replacing it with live AO3
  show()
  const url = 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/17199254?view_full_work=true'
  fireEvent.change(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' }), { target: { value: url } })
- fireEvent.click(screen.getByRole('button', { name: 'Import from Link' }))
+ expect(screen.getByRole('combobox', { name: 'Import Source' })).toHaveValue('wayback')
+ fireEvent.click(screen.getByRole('button', { name: 'Import from Wayback Machine' }))
  await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith(url))
+})
+
+it('offers a Wayback source option and requires a full snapshot rather than a live link', async () => {
+ show()
+ const source = screen.getByRole('combobox', { name: 'Import Source' })
+ expect(source).toHaveValue('ao3')
+ fireEvent.change(source, { target: { value: 'wayback' } })
+ const input = screen.getByRole('textbox', { name: 'Wayback Machine Link' })
+ for (const url of ['https://archiveofourown.org/works/123', 'https://web.archive.org/web/*/https://archiveofourown.org/works/123']) {
+  fireEvent.change(input, { target: { value: url } })
+  fireEvent.click(screen.getByRole('button', { name: 'Import from Wayback Machine' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('including its 14-digit capture timestamp')
+ }
+ expect(mocks.submit).not.toHaveBeenCalled()
+ fireEvent.change(source, { target: { value: 'ao3' } })
+ expect(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' })).toBeVisible()
 })

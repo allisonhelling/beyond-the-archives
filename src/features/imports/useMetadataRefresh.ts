@@ -25,7 +25,7 @@ function jobFeedback(job: Job): Feedback {
   }
 }
 
-export function useMetadataRefresh(story: Story | undefined) {
+export function useMetadataRefresh(story: Story | undefined, importBatchId?: string) {
   const { refresh: refreshLibrary } = useLibrary()
   const entryId = story?.id
   const [feedback, setFeedback] = useState<Feedback & { entryId: string }>()
@@ -53,21 +53,22 @@ export function useMetadataRefresh(story: Story | undefined) {
   useEffect(() => {
     if (!entryId || sampleMode) return
     let active = true
-    let observing = request?.entryId === entryId
+    let observing = request?.entryId === entryId || Boolean(importBatchId)
     const version = generation.current
     let failures = 0
     let timer: ReturnType<typeof setTimeout> | undefined
     async function poll() {
       let again = false
       try {
-        const job = await metadataRefreshJob(entryId!, request && request.entryId === entryId ? request.batchId : undefined)
+        const job = await metadataRefreshJob(entryId!, request && request.entryId === entryId ? request.batchId : importBatchId)
         if (!active || version !== generation.current) return
-        if (!job && request?.entryId === entryId) throw new Error('Waiting for metadata refresh status. Check import history for details.')
+        if (!job && (request?.entryId === entryId || importBatchId)) throw new Error('Waiting for metadata refresh status. Check import history for details.')
         failures = 0
         const result = job ? jobFeedback(job) : idle
         again = result.busy
         if (again) observing = true
-        // Past terminal jobs belong to a previous visit; only show results observed here.
+        // A navigation from Add Story owns its batch even if it finished before
+        // this page mounted. Ordinary visits still suppress past terminal jobs.
         const visible = observing ? result : idle
         setFeedback({ ...visible, entryId: entryId! })
         if (job && !again && observing) {
@@ -86,7 +87,7 @@ export function useMetadataRefresh(story: Story | undefined) {
     }
     void poll()
     return () => { active = false; clearTimeout(timer) }
-  }, [entryId, request, refreshLibrary])
+  }, [entryId, request, refreshLibrary, importBatchId])
 
   async function refresh() {
     if (!story || current.busy || submitting.current || sampleMode) return

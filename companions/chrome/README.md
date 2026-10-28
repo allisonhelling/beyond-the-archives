@@ -1,4 +1,4 @@
-# AO3 Library Companion (Chrome / Edge)
+# Beyond the Archives Companion (Chrome / Edge)
 
 For the inline library controls in iOS Safari's free Userscripts app, see [the userscript companion](../safari/README.md). Build its installable file with `npm run build:userscript`.
 
@@ -56,7 +56,7 @@ For local use, run `npm run dev` and open `http://127.0.0.1:5173/settings` (use 
 
 ## Pair the AO3 Bar
 
-Use one installed **AO3 Library Companion** for both environments. Click its toolbar icon (or open **Extension options** on its Extensions card) and choose **Hosted** or **Local**, then click **Switch environment**. The selector lists the configured website, defaults to Hosted, and remembers your choice. Disable the older separate local extension to avoid two companions competing for the AO3 bar.
+Use one installed **Beyond the Archives Companion** for both environments. Click its toolbar icon (or open **Extension options** on its Extensions card) and choose **Hosted** or **Local**, then click **Switch environment**. The selector lists the configured website, defaults to Hosted, and remembers your choice. Disable the older separate local extension to avoid two companions competing for the AO3 bar.
 
 Pause running scans and finish current imports, previews, or saves before switching. Reload open AO3 tabs afterward; their bar shows the active environment and warns if it has changed. Requests from an inactive website and stale AO3 tabs are rejected instead of being sent to another database. Draft edits in stale tabs continue to be preserved for their original environment.
 
@@ -64,7 +64,7 @@ Pair once in each environment. Switching back reuses that environment's pairing 
 
 In both websites' metadata settings, enter the same installed extension ID. If Local is absent from the selector, configure local public settings in `.env.local`, rebuild, and reload the extension. Use `EXTENSION_LOCAL_APP_ORIGIN` for a nondefault local website port; optional `EXTENSION_LOCAL_SUPABASE_URL` and `EXTENSION_LOCAL_SUPABASE_PUBLISHABLE_KEY` environment variables override the local backend during builds.
 
-After rebuilding, reload AO3 Library Companion at `chrome://extensions` (or `edge://extensions`), then reload AO3. Existing AO3 tabs need a reload to receive the new content script.
+After rebuilding, reload Beyond the Archives Companion at `chrome://extensions` (or `edge://extensions`), then reload AO3. Existing AO3 tabs need a reload to receive the new content script.
 
 1. Open the library website’s **Settings → AO3 Browser Bar**.
 2. Give this browser a device name and create a pairing code.
@@ -118,7 +118,7 @@ Each successful page is saved in extension local storage, scoped to the connecte
 
 ### Local Build, Page Ranges, and Sample Imports
 
-Run `npm run build:extension:local` with the local app's public Supabase configuration in `.env.local`. This reads development configuration, ignores the hosted `EXTENSION_APP_ORIGIN`, and writes **AO3 Library Companion (Local)** to `extension/local/dist`. The standard shared extension in `extension/dist` is preserved; using its environment selector is the recommended testing workflow. The public manifest key gives the local companion a stable ID, selected automatically by the app on loopback hostnames; both local and hosted Settings accept the shared extension ID, while the local build ID remains a fallback.
+Run `npm run build:extension:local` with the local app's public Supabase configuration in `.env.local`. This reads development configuration, ignores the hosted `EXTENSION_APP_ORIGIN`, and writes **Beyond the Archives Companion (Local)** to `extension/local/dist`. The standard shared extension in `extension/dist` is preserved; using its environment selector is the recommended testing workflow. The public manifest key gives the local companion a stable ID, selected automatically by the app on loopback hostnames; both local and hosted Settings accept the shared extension ID, while the local build ID remains a fallback.
 
 Load the local folder in Chrome (replace an older local installation without the fixed ID once), use `http://127.0.0.1:5173`, and reconnect in Settings. For another local origin/port, set `EXTENSION_LOCAL_APP_ORIGIN` when building; it must match the website exactly. Apply pending local migrations with `npx supabase migration up --local`, without resetting the database.
 

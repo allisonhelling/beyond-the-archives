@@ -15,6 +15,33 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); Object.defineProperty(window, 'scrollY', scrollDescriptor) })
 function flushFrame() { act(() => { const pending = frames; frames = []; pending.forEach(callback => callback(0)) }) }
 
+it('keeps the saved destination when pending results clamp scroll before leaving again', async () => {
+ const router = createMemoryRouter([{
+  element: <><BrowsingPosition /><Outlet /></>,
+  children: [
+   { path: '/stories/:id', element: <p>Work Details</p> },
+   { path: '*', element: <><p data-results-loading="true">Loading Results</p><Link to="/stories/one">Open Work</Link></> },
+  ],
+ }], { initialEntries: ['/library'] })
+ const view = render(<RouterProvider router={router} />)
+ flushFrame()
+ Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 })
+ fireEvent.scroll(window)
+ await act(() => router.navigate('/stories/one'))
+ flushFrame()
+ await act(() => router.navigate(-1))
+ Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+ fireEvent.scroll(window)
+ flushFrame()
+ // Leaving while results are still loading must not replace 640 with zero.
+ await act(() => router.navigate('/stories/one'))
+ flushFrame()
+ await act(() => router.navigate(-1))
+ flushFrame()
+ expect(window.scrollTo).toHaveBeenLastCalledWith(0, 640)
+ view.unmount(); router.dispose()
+})
+
 it.each(['/library?shelf=favorites&page=2', '/reading?shelf=view_all', '/authors/Writer', '/series/77'].flatMap(path => [true,false].map(back => ({path,back}))))(
  'restores the pre-navigation scroll and focus from $path after details (browser Back: $back)', async ({path,back}) => {
  const router = createMemoryRouter([{

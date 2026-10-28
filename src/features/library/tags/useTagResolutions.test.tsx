@@ -9,7 +9,7 @@ import { AuthContext } from '../../auth/auth-context'
 import { useTagResolutions } from './useTagResolutions'
 import { tagResolutionEvent } from './tag-resolution'
 const canonical={category:'character',name:'Alya Césaire',status:'canonical',canonical_name:'Alya Césaire',checked_at:'2026-10-26',attempted_at:'2026-10-26'}
-const auth=(user:string)=>({session:{user:{id:user}} as Session,loading:false,error:null,needsPassword:false,passwordSaved:()=>{}})
+const auth=(user:string)=>({authenticated:true,signIn:async()=>{},signOut:async()=>{},session:{user:{id:user}} as Session,loading:false,error:null,needsPassword:false,passwordSaved:()=>{}})
 afterEach(()=>{vi.useRealTimers();vi.clearAllMocks()})
 it('loads cached evidence before the paced lookup and stops retrying when suggestions close',async()=>{
  vi.useFakeTimers()

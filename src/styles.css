@@ -30,8 +30,8 @@ h1, h2 { font-family: var(--font-serif); font-weight: 400; }
 .eyebrow { display: block; font-size: 13px; letter-spacing: .15em; font-weight: 650; line-height: 1.6; }
 .accent { color: #970000; }
 .muted { color: #756363; font-size: max(var(--work-tile-min-font-size, 0px), 14px); line-height: 1.8; }
-.brand { display: flex; align-items: center; gap: 11px; font-family: var(--font-serif); font-size: 28px; line-height: 1.15; letter-spacing: -.7px; white-space: nowrap; }
-.brand-icon { display: grid; place-items: center; width: 43px; height: 43px; background: #f8e6e3; color: #970000; border-radius: 12px; }
+.brand { display: flex; min-width: 0; align-items: center; gap: 11px; font-family: var(--font-serif); font-size: 28px; line-height: 1.15; letter-spacing: -.7px; white-space: normal; }
+.brand-icon { display: grid; flex-shrink: 0; place-items: center; width: 43px; height: 43px; background: #f8e6e3; color: #970000; border-radius: 12px; }
 .brand-subtitle { display: block; line-height: 1.5; white-space: normal; font-family: var(--font-sans); font-size: 11px; letter-spacing: .04em; margin-top: 0; color: #756363; }
 .public-header { width: 100%; max-width: 1320px; padding: 37px 52px; margin: auto; display: flex; align-items: center; justify-content: space-between; }
 .desktop-note { color: #756363; font-size: 13px; }
@@ -464,13 +464,13 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .library-heading-actions { position: relative; }
   .library-heading-actions .dropdown-compact { position: static; }
   .library-heading-actions .dropdown-panel { left: 0; right: auto; width: 100%; min-width: 0; }
-  .library-editing { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto max-content; gap: 8px; }
+  .library-editing { position: relative; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px; }
   .library-editing .collection-selection-toolbar, .library-editing .library-heading-actions { display: contents; }
   .library-editing h1 { grid-column: 1 / -1; grid-row: 1; }
   .library-editing .custom-dropdown { grid-column: 1; grid-row: 2; }
   .library-editing .library-create-action { grid-column: 1; grid-row: 2; justify-self: start; }
   .library-editing .collection-hidden { grid-column: 3; grid-row: 2; }
-  .library-editing .collection-select { grid-column: 1; grid-row: 3; justify-self: start; }
+  .library-editing .collection-select { grid-column: 2; grid-row: 2; justify-self: start; min-width: 0; }
   .library-editing .collection-selection-trigger { grid-column: 2; grid-row: 3; justify-self: end; white-space: nowrap; }
   .library-editing .collection-bulk-edit { grid-column: 3; grid-row: 3; }
   .library-editing .button { padding-inline: 8px; }

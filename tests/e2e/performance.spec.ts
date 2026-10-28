@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 import { libraryQueryFixture } from './library-query-fixture'
 import { fixture, login } from './library-fixture'
 
-test('10,000-work library pages incrementally and restores a large page after details',async({page},info)=>{
+test('10,000-work library pages incrementally and restores a large page after details', { tag: '@performance' }, async({page},info)=>{
  test.setTimeout(90000)
  const tables=await fixture(page)
  for(let n=0;n<10000;n++) {
@@ -82,7 +82,7 @@ test('10,000-work library pages incrementally and restores a large page after de
 })
 
 
-test('tab return refreshes revision-bound totals, permits stale navigation, and retains counts after failure',async({page})=>{
+test('tab return refreshes revision-bound totals, permits stale navigation, and retains counts after failure', { tag: '@performance' }, async({page})=>{
  const tables=await fixture(page)
  for(let n=1;n<=30;n++) {
   tables.works.push({id:`revision-work-${n}`,ao3_work_id:n,title:`Revision Work ${n}`,published_chapters:1,total_chapters:1,is_complete:true,verified_chapters:{}})

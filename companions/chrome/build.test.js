@@ -18,6 +18,7 @@ it('loads hosted settings by default, preserves local builds, and rejects mixed 
   await writeFile(join(directory, '.env.local.hosted'), 'VITE_SUPABASE_URL=https://extension-test.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_hosted_test\nEXTENSION_APP_ORIGIN=https://library-test.example\n')
   build()
   const hosted = JSON.parse(await readFile(join(directory, 'extension/dist/manifest.json'), 'utf8'))
+  expect(hosted.name).toBe('Beyond the Archives Companion')
   expect(hosted.host_permissions).toContain('https://extension-test.supabase.co/*')
   expect(hosted.externally_connectable.matches).toEqual(['https://library-test.example/*', 'http://127.0.0.1:5173/*'])
   expect(hosted.options_ui.page).toBe('options.html')
@@ -29,6 +30,7 @@ it('loads hosted settings by default, preserves local builds, and rejects mixed 
   }
   build(['--local'])
   const local = JSON.parse(await readFile(join(directory, 'extension/local/dist/manifest.json'), 'utf8'))
+  expect(local.name).toBe('Beyond the Archives Companion (Local)')
   expect(local.host_permissions).toContain('http://127.0.0.1:54321/*')
   expect(local.externally_connectable.matches).toContain('http://127.0.0.1:5173/*')
   expect(() => build(['--outDir', 'rejected'], { VITE_SUPABASE_URL: 'http://127.0.0.1:54321' })).toThrow('Hosted extension builds cannot use a local Supabase backend')
