@@ -12,8 +12,10 @@ export function captureChapterRead(doc, page, href) {
  const chapters = doc.querySelector('#chapters')
  const chapter = chapters?.querySelector(`#chapter-${page.current}`)
  const containers = chapters?.querySelectorAll('.chapter') ?? []
- const only = containers.length === 1 && !/^chapter-[0-9]+$/.test(containers[0].id) ? containers[0] : null
- const scope = chapter ?? only ?? (containers.length === 0 ? chapters : null)
+ const ordinal = containers.length === 1 ? Number(/^chapter-([1-9]\d*)$/.exec(containers[0].id)?.[1]) || null : null
+ const loaded = readPage(doc, href)?.current ?? ordinal ?? (!parseWorkUrl(href).chapterId ? 1 : null)
+ const only = loaded === page.current && containers.length === 1 && !/^chapter-[0-9]+$/.test(containers[0].id) ? containers[0] : null
+ const scope = chapter ?? only ?? (containers.length === 0 && loaded === page.current ? chapters : null)
  const body = scope?.querySelector(':scope > .userstuff')
  let wordCount = null
  if (body && typeof Intl.Segmenter === 'function') {
@@ -25,7 +27,30 @@ export function captureChapterRead(doc, page, href) {
   wordCount = 0
   for (const segment of segments) if (segment.isWordLike) wordCount++
  }
- return { chapter: page.current, chapter_id: page.chapters?.[page.current] ?? parseWorkUrl(href).chapterId ?? null, word_count: wordCount }
+ return { chapter: page.current, chapter_id: page.chapters?.[page.current] ?? (loaded === page.current ? parseWorkUrl(href).chapterId : null) ?? null, word_count: wordCount }
+}
+
+/** Count every newly completed chapter, fetching one full-work page only for missing text. */
+export async function collectChapterRead(doc, page, href, previousProgress = 0, fetcher = globalThis.fetch) {
+ const current = captureChapterRead(doc, page, href)
+ if (!current || page.current <= previousProgress) return current
+ const earlier = []
+ for (let chapter = previousProgress + 1; chapter < page.current; chapter++) {
+  earlier.push(captureChapterRead(doc, { ...page, current: chapter }, href))
+ }
+ if (earlier.some(read => read.word_count === null)) {
+  try {
+   const url = `https://archiveofourown.org/works/${page.work}?view_full_work=true&view_adult=true`
+   const response = await fetcher(url, { credentials: 'same-origin', signal: AbortSignal.timeout(20000) })
+   if (!response.ok || parseWorkUrl(response.url).workId !== page.work) throw new Error('Work unavailable')
+   const full = new DOMParser().parseFromString(await response.text(), 'text/html')
+   if (readPage(full, response.url)?.work !== page.work) throw new Error('Work unavailable')
+   for (let index = 0; index < earlier.length; index++) {
+    if (earlier[index].word_count === null) earlier[index] = captureChapterRead(full, { ...page, current: earlier[index].chapter }, response.url)
+   }
+  } catch { /* Keep progress saveable; unavailable text has an explicit unknown count. */ }
+ }
+ return { ...current, ...(earlier.length && { previous_chapters: earlier }) }
 }
 
 /** AO3 numbers full-work chapter containers by their reading order. */

@@ -860,7 +860,6 @@ it('continues an imported ended scan at its next uncaptured primary page', async
  await collect()
  await sync.command({ action: 'end', scanId: id })
  expect(local.librarySync.canContinue).toBe(true)
- await expect(sync.command({ action: 'continue', scanId: id })).rejects.toThrow(/Import/)
  await sync.command({ action: 'finish', scanId: id })
  expect(local[baselineKey]).toBeUndefined()
  // A new service worker must recover the same continuation from durable storage.
@@ -914,4 +913,15 @@ it('retains explicitly supplied series lists when related-series discovery is di
  chrome.scripting.executeScript.mockImplementation(async()=>[{result:{url:local.librarySync.requestUrl,rows:[],seriesUrls:local.librarySync.kind==='series'?[direct]:[],skipped:0,hasNext:false}}])
  for(let n=0;n<4;n++)await collect()
  expect((await sync.command({action:'status'})).state).toMatchObject({reviewRelatedSeries:false,seenSeries:[direct],status:'ready'})
+})
+
+it('continues an ended scan before import without losing its unimported checkpoints', async () => {
+ await start()
+ const { id } = local.librarySync
+ chrome.scripting.executeScript.mockImplementation(async () => [{ result: { url: local.librarySync.requestUrl, rows: [row(1)], skipped: 0, hasNext: true } }])
+ await collect()
+ await sync.command({ action: 'end', scanId: id })
+ const result = await sync.command({ action: 'continue', scanId: id })
+ expect(result.state).toMatchObject({ status: 'running', batchStart: 0, pages: 1, endedEarly: false })
+ expect(local[`librarySync:${id}:1`].rows).toEqual([row(1)])
 })

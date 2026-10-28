@@ -186,3 +186,17 @@ it('does not report an incoming bookmark as applied when an older server keeps i
  rpc.mockResolvedValueOnce({ data: { batch: null, imported: 0, kept: 1 }, error: null })
  await expect(applyLibrarySyncBookmark({ workId: 401, id: 'entry', version: 'reviewed', title: 'Work', status: 'to_read', progress: 0, notes: '', tags: [], incomingWork: { workId: 401, source: 'bookmarks', url: 'https://archiveofourown.org/works/401', metadata: { title: 'Work' }, notes: 'Incoming', tags: [], bookmarkDate: null, updatedDate: null } })).rejects.toThrow('not applied. Apply the latest database migrations')
 })
+
+it('stops loading further series pages when a preview is cancelled', async () => {
+ session.mockResolvedValue({ data: { session: { user: { id: 'reader' } } } })
+ settings.mockResolvedValue({ data: { retrieval_mode: 'worker' }, error: null })
+ const controller = new AbortController()
+ const url = 'https://archiveofourown.org/series/77'
+ invoke.mockImplementationOnce(async () => {
+  controller.abort()
+  return { data: { preview: { seriesId: 77, normalizedUrl: url, title: 'Series', works: [], nextUrl: `${url}?page=2` } }, error: null }
+ })
+ await expect(previewSeries(url, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+ expect(invoke).toHaveBeenCalledTimes(1)
+ expect(invoke).toHaveBeenCalledWith('series-preview', { body: { url }, signal: controller.signal })
+})

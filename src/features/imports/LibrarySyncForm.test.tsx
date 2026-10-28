@@ -872,8 +872,8 @@ it('offers existing-entry review only for Full Scan and retains the opt-out in i
  expect(mocks.command.mock.calls.filter(([action])=>action==='start')[1][1]).not.toHaveProperty('reviewExisting')
 })
 
-it('offers continuation for an imported ended scan and resumes its saved identity', async () => {
- let state = { ...ready, status: 'complete', endedEarly: true, canContinue: true, delaySeconds: 20 }
+it.each(['ready', 'complete'])('offers continuation for a %s ended scan and resumes its saved identity', async status => {
+ let state = { ...ready, status, endedEarly: true, canContinue: true, delaySeconds: 20 }
  mocks.command.mockImplementation(async action => {
   if (action === 'continue') state = { ...state, status: 'running', endedEarly: false, canContinue: false }
   return { state }

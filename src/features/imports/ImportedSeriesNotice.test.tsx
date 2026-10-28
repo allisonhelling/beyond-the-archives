@@ -28,7 +28,7 @@ it('waits for completed metadata, then offers an explicit picker that excludes s
  expect(screen.getByRole('dialog', { name: 'Related Series' })).toBeVisible()
  expect(screen.getByText('Saved fic')).toBeVisible()
  expect(mocks.refresh).toHaveBeenCalledOnce()
- expect(mocks.preview).toHaveBeenCalledWith('https://archiveofourown.org/series/77')
+ expect(mocks.preview).toHaveBeenCalledWith('https://archiveofourown.org/series/77', { signal: expect.any(AbortSignal) })
  fireEvent.click(screen.getAllByRole('button', { name: 'Show Series Works' })[0])
  expect(screen.getByRole('checkbox', { name: 'Part 1: Fic 101' })).toBeDisabled()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Fic 102' })).not.toBeChecked()

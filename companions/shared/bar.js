@@ -3,7 +3,7 @@ import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
 import { active, caughtUpReadingStatus, parseLines, statuses, validateProgress } from '../../src/features/library/model'
-import { captureChapterRead, collectWorkPage, readPage, readWorkTiles, readChapterSections, chapterDefaults } from './page'
+import { collectChapterRead, collectWorkPage, readPage, readWorkTiles, readChapterSections, chapterDefaults } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
 import { mountPersonalControls, mountConflictReview } from './personal-controls'
@@ -137,7 +137,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   busy = true; message.textContent = ''; surfaces.forEach(surface => surface.querySelectorAll('button').forEach(button => { button.disabled = true }))
   try { await action() }
   catch (error) { if (error instanceof EditConflict) showConflict(error); message.textContent = error instanceof Error ? error.message : 'Connection failed. Your draft is preserved.' }
-  finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); progressBars.forEach(surface => { surface.message.textContent = message.textContent === 'Saved' ? '' : message.textContent }) }
+  finally { busy = false; renderToolbar(); root.querySelectorAll('button').forEach(button => { if (!conflictPanel.contains(button)) button.disabled = Boolean(pendingConflict) || button.dataset.atBoundary === 'true' }); if (!message.querySelector('.undo-read')) progressBars.forEach(surface => { surface.message.textContent = message.textContent === 'Saved' ? '' : message.textContent }) }
  }
  async function rpc(action, input = {}, secret = connection?.secret) {
   const backend = new URL(backendUrl)
@@ -190,12 +190,26 @@ export async function mountLibrary(doc = document, href = location.href, options
   validateProgress(value, page.metadata)
   const previous = entry
   entry = { ...entry, progress: value, status }; renderToolbar()
-  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, ...(markRead && { chapter_read: captureChapterRead(doc, { ...page, current }, href) }) })) }
+  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, ...(markRead && { chapter_read: await collectChapterRead(doc, { ...page, current }, href, previous?.progress ?? 0) }) })) }
   catch (error) { entry = previous; renderToolbar(); throw error }
   renderToolbar()
   await syncProgressDraft()
-  message.textContent = 'Saved'
+  if (markRead) showReadNotice(previous, value)
+  else message.textContent = 'Saved'
   renderToolbar()
+ }
+ function showReadNotice(previous, chapter) {
+  const read = entry?.readingHistory?.at(-1)
+  const version = entry?.version
+  for (const notice of [message, ...progressBars.map(surface => surface.message)]) {
+   notice.textContent = `Marked As Read Through Chapter ${chapter} `
+   if (read?.action !== 'chapter_read' || !read.undo) continue
+   const undo = button('Undo', async () => {
+    accept(await rpc('progress', { version, status: previous?.status ?? 'to_read', progress: previous?.progress ?? 0, undo_read: read.id }))
+    await syncProgressDraft(); message.textContent = 'Read Marking Undone'
+   }, notice)
+   undo.className = 'undo-read'
+  }
  }
  function entryValues(value = entry) {
   return value ? { status: value.status, progress: value.progress, notes: value.notes, rating: value.rating ?? null, favorite: value.favorite ?? false, rec: value.rec ?? false, tags: value.tags, collections: value.collections } : {}
@@ -286,14 +300,16 @@ export async function mountLibrary(doc = document, href = location.href, options
   return Boolean(current && current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters)
  }
  async function saveUnsaved(status, current, markRead = false) {
+  const previous = entry
   if (!tile) Object.assign(page, await collectWorkPage(doc, href))
   const progress = markRead ? current : 0
   validateProgress(progress, page.metadata)
   const readingStatus = markRead && current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status
   accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: readingStatus, progress, notes: '', rating: null, tags: [], collections: [],
-   ...(markRead && { chapter_read: captureChapterRead(doc, { ...page, current }, href) }) }))
+   ...(markRead && { chapter_read: await collectChapterRead(doc, { ...page, current }, href, previous?.progress ?? 0) }) }))
   await syncProgressDraft()
-  message.textContent = 'Saved'
+  if (markRead) showReadNotice(previous, progress)
+  else message.textContent = 'Saved'
  }
  function renderReadingToggle(parent, current, top) {
   if (['reading', 're_reading', 'paused_reading'].includes(entry.status)) {
@@ -608,8 +624,9 @@ export async function mountLibrary(doc = document, href = location.href, options
    const control = node('span', '', input.parentElement); control.className = 'field-control'; control.append(input)
    infoHelp(control, title, description)
   }
+  const flags = node('div', '', fieldset); flags.className = 'row'
   for (const [key, title] of [['favorite', 'Favorite'], ['rec', 'Recommended']]) {
-   const checkbox = field(title, 'input', key); checkbox.type = 'checkbox'; checkbox.checked = draft[key]
+   const checkbox = field(title, 'input', key); checkbox.type = 'checkbox'; checkbox.checked = draft[key]; flags.append(checkbox.parentElement)
   }
   const status = field('Reading Status', 'select', 'status')
   for (const [key, title] of Object.entries(readingStatuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
@@ -674,9 +691,12 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (value === null) throw new Error('The published chapter count is unavailable. Reload AO3 before finishing the work.')
     validateProgress(value, page.metadata)
     await api.setValue(draftKey(), draft)
-    const chapterRead = !tile && (page.current === value || chapterSections.some(({ current }) => current === value)) && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? captureChapterRead(doc, { ...page, current: value }, href) : null
+    const previous = entry
+    const chapterRead = !tile && (page.current === value || chapterSections.some(({ current }) => current === value)) && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? await collectChapterRead(doc, { ...page, current: value }, href, entry?.progress ?? 0) : null
     accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), favorite: draft.favorite ?? false, rec: draft.rec ?? false, tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
-    message.textContent = 'Saved'; clearEditor(); draft = null; showPanel(null)
+    if (chapterRead) showReadNotice(previous, value)
+    else message.textContent = 'Saved'
+    clearEditor(); draft = null; showPanel(null)
     await api.deleteValue(draftKey()).catch(() => { message.textContent = 'Saved. Could not clear the local draft.' })
    } finally { fieldset.disabled = false }
   }) })

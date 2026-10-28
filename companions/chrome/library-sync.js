@@ -96,10 +96,11 @@ export function createLibrarySync({ auth, available, changed, schedule = () => {
    await write(state); return { state }
   }
   if (message.action === 'continue') {
-   if (state.status !== 'complete' || !state.endedEarly || !state.continuation?.length) throw new Error('Import the ended scan before continuing.')
+   if (!['ready', 'complete'].includes(state.status) || !state.endedEarly || !state.continuation?.length) throw new Error('Wait for the ended scan to finish before continuing.')
    const [source, ...sources] = state.continuation
    state.currentUrl = source.url; state.kind = source.kind; state.page = source.page ?? 1; state.sources = sources
-   state.batchStart = state.pages; state.hasMore = false; state.captured = false; state.done = false
+   if (state.status === 'complete') state.batchStart = state.pages
+   state.hasMore = false; state.captured = false; state.done = false
    state.endedEarly = false; state.partial = Boolean(state.limited); state.canContinue = false; state.continuation = undefined
    state.status = 'running'; state.retryNavigation = true; state.error = ''; state.attention = undefined; state.attentionId = undefined
    if (message.delaySeconds !== undefined) state.delaySeconds = requestDelay(message.delaySeconds)

@@ -9,9 +9,17 @@ import { brandName, brandTagline } from './src/lib/brand'
 
 export default defineConfig(({ mode }) => {
   validateBrowserEnv(loadEnv(mode, process.cwd(), 'VITE_'))
+  const manifest = JSON.stringify({ name: brandName, short_name: brandName, start_url: '/', display: 'standalone', background_color: '#faf8f4', theme_color: '#faf8f4' })
   return {
     plugins: [react(), tailwindcss(), svgr(), {
       name: 'site-branding',
+      configureServer(server) {
+        server.middlewares.use('/manifest.webmanifest', (_request, response) => {
+          response.setHeader('Content-Type', 'application/manifest+json')
+          response.end(manifest)
+        })
+      },
+      generateBundle() { this.emitFile({ type: 'asset', fileName: 'manifest.webmanifest', source: manifest }) },
       transformIndexHtml: html => html.replaceAll('__SITE_NAME__', brandName).replaceAll('__SITE_TAGLINE__', brandTagline),
     }],
     // Browser tests need stable pages while reports and other files are written.

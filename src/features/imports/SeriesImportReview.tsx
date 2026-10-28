@@ -50,6 +50,20 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  const [reviews, setReviews] = useState<Record<number, Review>>(() => Object.fromEntries([...initialPreviews, ...(previewCache?.values() ?? [])].map(preview => [preview.seriesId, { preview, selected: new Set<number>() }])))
  const [loading, setLoading] = useState<number>()
  const [savingAll, setSavingAll] = useState(false)
+ const [savingDetails, setSavingDetails] = useState(false)
+ const requested = useRef(new Set([...initialPreviews.map(preview => preview.seriesId), ...(previewCache?.keys() ?? [])]))
+ const loadingId = useRef<number | null>(null)
+ const previewRequest = useRef<AbortController | null>(null)
+ const active = useRef(true)
+ useEffect(() => {
+  const requests = requested.current
+  active.current = true
+  return () => {
+   active.current = false; previewRequest.current?.abort()
+   if (loadingId.current !== null) requests.delete(loadingId.current)
+  }
+ }, [])
+ function cancel() { active.current = false; previewRequest.current?.abort(); onCancel() }
  const [page, setPage] = useState(1)
  const [shownSeries, setShownSeries] = useState<Set<number>>(() => new Set())
  const contentRef = useRef<HTMLElement>(null)
@@ -63,38 +77,43 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  const ready = [...series.keys()].every(id => reviews[id]?.preview)
  const canConfirm = allowEmpty || direct.size + selected.size > 0
  const load = useCallback(async (id: number, url: string) => {
+  if (!active.current) return
+  const request = new AbortController(); previewRequest.current = request; loadingId.current = id
   setLoading(id)
   setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(), error: undefined } }))
   try {
-   const preview = await previewSeries(url)
+   const preview = await previewSeries(url, { signal: request.signal })
+   if (!active.current || request.signal.aborted) return
    onPreview?.(preview)
    setReviews(current => ({ ...current, [id]: { preview, selected: new Set() } }))
-  } catch (error) { setReviews(current => ({ ...current, [id]: { selected: new Set(), error: error instanceof Error ? error.message : 'Could not preview series. Please retry.' } })) }
-  finally { setLoading(undefined) }
+  } catch (error) { if (active.current && !request.signal.aborted) setReviews(current => ({ ...current, [id]: { selected: new Set(), error: error instanceof Error ? error.message : 'Could not preview series. Please retry.' } })) }
+  finally { if (active.current && !request.signal.aborted) setLoading(undefined) }
  }, [onPreview])
- const requested = useRef(new Set([...initialPreviews.map(preview => preview.seriesId), ...(previewCache?.keys() ?? [])]))
  useEffect(() => {
-  if (loading !== undefined || savingAll) return
+  if (!active.current || loading !== undefined || savingAll) return
   const next = [...series].find(([id]) => !requested.current.has(id))
   if (next) { const [id, url] = next; requested.current.add(id); void load(id, url) }
  }, [series, load, loading, savingAll, reviews])
- useEffect(() => { onBusyChange?.(loading !== undefined || savingAll); return () => onBusyChange?.(false) }, [loading, savingAll, onBusyChange])
+ useEffect(() => { onBusyChange?.(savingDetails); return () => onBusyChange?.(false) }, [savingDetails, onBusyChange])
  function confirmImport() { onConfirm([...selected.values()], readingStatus, [...series.keys()].filter(id => reviews[id]?.preview), selections) }
  const confirmAutomatic = useEffectEvent(() => confirmImport())
  useEffect(() => {
-  if (automatic && ready && canConfirm && loading === undefined && !savingAll && !busy && !automaticStarted.current) { automaticStarted.current = true; confirmAutomatic() }
+  if (active.current && automatic && ready && canConfirm && loading === undefined && !savingAll && !busy && !automaticStarted.current) { automaticStarted.current = true; confirmAutomatic() }
  }, [automatic, ready, canConfirm, loading, savingAll, busy])
  const seriesSaved = (id: number) => savedSeriesIds.has(id) || Boolean(reviews[id]?.detailsSaved)
  async function saveDetails(id: number, url: string) {
-  if (seriesSaved(id)) return
+  if (!active.current || seriesSaved(id)) return
+  const request = new AbortController(); previewRequest.current = request
   setLoading(id)
   setReviews(current => ({ ...current, [id]: { ...current[id], selected: current[id]?.selected ?? new Set(), error: undefined } }))
   try {
    const cached = [reviews[id]?.preview, previewCache?.get(id)].find(preview => preview && !preview.basic)
-   const preview = cached ?? await previewSeries(url)
+   const preview = cached ?? await previewSeries(url, { signal: request.signal })
+   if (!active.current || request.signal.aborted) return
    onPreview?.(preview)
    // Retain the download even if persistence fails, so retrying only saves it.
    setReviews(current => ({ ...current, [id]: { ...current[id], preview } }))
+   setSavingDetails(true)
    await rememberSeries(preview)
    setReviews(current => ({ ...current, [id]: { ...current[id], preview, detailsSaved: true } }))
    // The write has completed. Queued library reads must not block the picker.
@@ -103,7 +122,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
    })
   } catch (error) {
    setReviews(current => ({ ...current, [id]: { ...current[id], error: error instanceof Error ? error.message : 'Could not save series details.' } }))
-  } finally { setLoading(undefined) }
+  } finally { setLoading(undefined); setSavingDetails(false) }
  }
  function setVisibility(show: boolean, seriesId?: number) {
   setReviews(current => Object.fromEntries(Object.entries(current).map(([key, review]) => {
@@ -131,6 +150,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  function select(id: number, ids: number[]) { setReviews(current => ({ ...current, [id]: { ...current[id], selected: new Set(ids) } })) }
  const title = automatic ? 'Import All Series Works' : 'Choose Works From Series'
  const disabled = busy || loading !== undefined || savingAll
+ const cannotCancel = externalBusy || savingDetails
  const reviewPages: { series: Map<number, { url: string; works: SeriesPreview['works'] }>; count: number }[] = [{ series: new Map(), count: 0 }]
  for (const [id, url] of series) {
   const works = reviews[id]?.preview?.works ?? []
@@ -221,7 +241,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
    <SeriesScopeAction label="Hide All" scope="all series" disabled={disabled} onClick={() => setVisibility(false)} />
    <SeriesScopeAction label="Select All" scope="all series" disabled={disabled || automatic} onClick={() => setAllSelected(true)} />
   </div>}
-  <div className={`form-actions${fitActions ? ' form-actions-fit' : ''}`}><button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={disabled} onClick={onCancel}>{cancelLabel}</button></div>
+  <div className={`form-actions${fitActions ? ' form-actions-fit' : ''}`}><button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={cannotCancel} onClick={cancel}>{cancelLabel}</button></div>
  </section>
- return embedded ? content : <Dialog title={title} className="series-review-dialog" busy={disabled} onClose={onCancel}>{content}</Dialog>
+ return embedded ? content : <Dialog title={title} className="series-review-dialog" busy={cannotCancel} onClose={cancel}>{content}</Dialog>
 }

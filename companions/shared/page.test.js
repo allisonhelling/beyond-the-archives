@@ -2,7 +2,7 @@ import fixture from '../../server/ao3/fixtures/work.html?raw'
 import { parseMetadata } from '../../server/ao3/adapter.ts'
 import { captureMetadataPage } from '../chrome/capture.js'
 import { expect, it, vi } from 'vitest'
-import { captureChapterRead, collectWorkPage, readPage, readWorkTiles } from './page'
+import { captureChapterRead, collectChapterRead, collectWorkPage, readPage, readWorkTiles } from './page'
 
 function page(chapter, total = '10', full = false) {
  const doc = new DOMParser().parseFromString(`<h2 class="title">Test</h2><dl class="work meta"><dd class="chapters">10/${total}</dd></dl><select id="selected_id">${Array.from({ length: 10 }, (_, i) => `<option value="${100 + i}">${i + 1}. Title</option>`).join('')}</select><div id="chapters">PRIVATE CHAPTER TEXT</div>`, 'text/html')
@@ -133,4 +133,17 @@ it.each([1, 4])('identifies loaded chapter %i when a skin omits chapter navigati
  const result = readPage(doc, 'https://archiveofourown.org/works/123/chapters/940')
  expect(result).toMatchObject({ current: chapter, chapters: { [chapter]: '940' } })
  expect(JSON.stringify(result)).not.toContain('PRIVATE CHAPTER TEXT')
+})
+
+it('counts earlier newly completed chapters from one full-work fetch without returning text', async () => {
+ const url = 'https://archiveofourown.org/works/123/chapters/104'
+ const doc = new DOMParser().parseFromString('<h2 class="title">Test</h2><div id="chapters"><div class="chapter" id="chapter-4"><div class="userstuff">Current chapter text.</div></div></div>', 'text/html')
+ const fullUrl = 'https://archiveofourown.org/works/123?view_full_work=true&view_adult=true'
+ const fetcher = vi.fn().mockResolvedValue({ ok: true, url: fullUrl, text: async () => '<h2 class="title">Test</h2><div id="chapters">' + [1, 2, 3, 4].map(chapter => `<div class="chapter" id="chapter-${chapter}"><div class="userstuff">Earlier text.</div><div class="notes">Excluded notes.</div></div>`).join('') + '</div>' })
+ const result = await collectChapterRead(doc, { work: 123, current: 4, chapters: { 2: '102', 3: '103', 4: '104' } }, url, 1, fetcher)
+ expect(result).toMatchObject({ chapter: 4, word_count: 3, previous_chapters: [{ chapter: 2, word_count: 2 }, { chapter: 3, word_count: 2 }] })
+ expect(fetcher).toHaveBeenCalledTimes(1)
+ expect(JSON.stringify(result)).not.toMatch(/Earlier|Current|Excluded/)
+ const unavailable = await collectChapterRead(doc, { work: 123, current: 4 }, url, 2, vi.fn().mockRejectedValue(new Error('Sign in')))
+ expect(unavailable.previous_chapters).toMatchObject([{ chapter: 3, chapter_id: null, word_count: null }])
 })

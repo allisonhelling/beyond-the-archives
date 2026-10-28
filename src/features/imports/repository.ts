@@ -67,7 +67,8 @@ export async function markWorkDeleted(entryId: string, jobId: string) {
  if (error) throw new Error('Could not mark the work as deleted. Apply the latest migrations and retry.')
 }
 
-export async function previewSeries(url: string, options: { firstPageOnly?: boolean; viaExtension?: boolean } = {}): Promise<SeriesPreview> {
+export async function previewSeries(url: string, options: { firstPageOnly?: boolean; viaExtension?: boolean; signal?: AbortSignal } = {}): Promise<SeriesPreview> {
+ options.signal?.throwIfAborted()
  const identity = parseSeriesUrl(url)
  let useExtension = sampleMode || Boolean(options.viaExtension)
  if (useExtension) {
@@ -84,17 +85,19 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
  const pages: SeriesPreview[] = []
  const visited = new Set<string>()
  while (nextUrl) {
+  options.signal?.throwIfAborted()
   const pageUrl = seriesPageUrl(nextUrl, identity.seriesId)
   if (visited.has(pageUrl)) throw new Error('Series preview returned a repeated page. Retry the preview.')
   visited.add(pageUrl)
   let body: { url: string; html?: string } = { url: pageUrl }
   if (useExtension) body = await previewSeriesWithExtension(pageUrl)
+  options.signal?.throwIfAborted()
   let page: SeriesPreview, nextPageDelayMs: number | undefined
   if (sampleMode || options.viaExtension) {
    const { parseSeries } = await import('./ao3-series')
    page = parseSeries(body.html ?? '', body.url)
   } else {
-   const { data, error } = await client().functions.invoke('series-preview', { body })
+   const { data, error } = await client().functions.invoke('series-preview', { body, ...(options.signal && { signal: options.signal }) })
    if (error) {
     let message = 'Could not preview this series. Check the series-preview function is deployed, then retry or skip it.'
     try { const response = error.context as Response; const detail = await response.json(); if (typeof detail.error === 'string') message = detail.error } catch { /* Use the connection guidance. */ }
@@ -103,6 +106,7 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
    if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
    page = data.preview as SeriesPreview; nextPageDelayMs = data.nextPageDelayMs
   }
+  options.signal?.throwIfAborted()
   pages.push(page)
   if (options.firstPageOnly) break
   nextUrl = page.nextUrl

@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SeriesImportOptions, SeriesImportSettings } from './SeriesImportOptions'
@@ -381,4 +382,60 @@ it('reports a failed library refresh without offering to save the series again',
  expect(await screen.findByRole('alert')).toHaveTextContent('Series details were saved, but the library could not refresh.')
  expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
  expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+})
+
+it.each(['Cancel', 'Close Dialog', 'Escape'])('allows %s during preview loading and ignores late results', async control => {
+ let resolve!: (preview: { seriesId: number; title: string; works: [] }) => void
+ mocks.preview.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+ const cancel = vi.fn(), confirm = vi.fn(), cache = vi.fn(), busy = vi.fn()
+ render(<SeriesImportReview automatic text={'https://archiveofourown.org/series/7\nhttps://archiveofourown.org/series/8'} savedIds={new Set()} busy={false} onCancel={cancel} onConfirm={confirm} onPreview={cache} onBusyChange={busy} />)
+ expect(await screen.findByText('Loading Series…')).toBeVisible()
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+ expect(screen.getByRole('button', { name: 'Close Dialog' })).toBeEnabled()
+ expect(busy).toHaveBeenLastCalledWith(false)
+ const signal = mocks.preview.mock.calls[0][1].signal as AbortSignal
+ if (control === 'Escape') fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }))
+ else fireEvent.click(screen.getByRole('button', { name: control }))
+ expect(cancel).toHaveBeenCalledOnce()
+ expect(signal.aborted).toBe(true)
+ await act(async () => { resolve({ seriesId: 7, title: 'Late preview', works: [] }) })
+ expect(mocks.preview).toHaveBeenCalledTimes(1)
+ expect(cache).not.toHaveBeenCalled()
+ expect(confirm).not.toHaveBeenCalled()
+})
+
+it('keeps dismissal blocked while series details are being saved', async () => {
+ let finish!: () => void
+ mocks.remember.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+ render(<SeriesImportReview text="https://archiveofourown.org/series/7" savedIds={new Set()} busy={false} onCancel={vi.fn()} onConfirm={vi.fn()} />)
+ const save = await screen.findByRole('button', { name: 'Save' })
+ await waitFor(() => expect(save).toBeEnabled())
+ fireEvent.click(save)
+ await waitFor(() => expect(mocks.remember).toHaveBeenCalledOnce())
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+ expect(screen.getByRole('button', { name: 'Close Dialog' })).toBeDisabled()
+ await act(async () => { finish() })
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+})
+
+it('restarts an interrupted preview during Strict Mode effect replay', async () => {
+ render(<StrictMode><SeriesImportReview text="https://archiveofourown.org/series/7" savedIds={new Set()} busy={false} onCancel={vi.fn()} onConfirm={vi.fn()} /></StrictMode>)
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Save All Series' })).toBeEnabled())
+ expect(screen.queryByText('Loading Series…')).not.toBeInTheDocument()
+ expect(mocks.preview.mock.calls[0][1].signal.aborted).toBe(true)
+})
+
+it('can cancel Save All while full details are still loading, before any write', async () => {
+ const partial = { seriesId: 7, normalizedUrl: 'https://archiveofourown.org/series/7', title: 'Series', description: '', basic: true, works: [] }
+ let finish!: (preview: typeof partial) => void
+ mocks.preview.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+ const cancel = vi.fn()
+ render(<SeriesImportReview text={partial.normalizedUrl} initialPreviews={[partial]} savedIds={new Set()} busy={false} onCancel={cancel} onConfirm={vi.fn()} />)
+ fireEvent.click(screen.getByRole('button', { name: 'Save All Series' }))
+ await waitFor(() => expect(mocks.preview).toHaveBeenCalledOnce())
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+ fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+ expect(cancel).toHaveBeenCalledOnce()
+ await act(async () => { finish({ ...partial, basic: false }) })
+ expect(mocks.remember).not.toHaveBeenCalled()
 })

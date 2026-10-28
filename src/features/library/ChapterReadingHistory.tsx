@@ -11,9 +11,9 @@ export function ChapterReadingHistory({ history, ...attributes }: { history?: Re
   <p className="muted">No chapter reads recorded yet.</p>
  </dd></div>
  const words = reads.reduce((total, read) => total + (read.word_count ?? 0), 0)
- return <div {...attributes}>{heading}<dd><details className="details-disclosure">
+ return <div {...attributes}>{heading}<dd><details className="details-disclosure chapter-reading-history">
   <summary>{reads.length.toLocaleString()} {reads.length === 1 ? 'Chapter Read' : 'Chapter Reads'} · {words.toLocaleString()} Recorded Words</summary>
-  <p className="field-help">Chapter text is counted locally when marked read; notes and summaries are excluded. Counts may differ from AO3. Rereads count separately. Skipped chapters have no recorded count.</p>
+  <p className="field-help">Chapter text is counted locally when marked read; notes and summaries are excluded. Counts may differ from AO3. Rereads count separately. Earlier chapters marked read together are counted when their text is available. Unavailable chapter counts are shown as unknown. Undo removes the reads recorded by that action.</p>
   <ol>{reads.map((read, index) => <li key={read.id ?? index}>Chapter {read.chapter} · {read.word_count === null ? 'Word Count Unavailable' : `${read.word_count.toLocaleString()} Words`} · {read.is_reread ? 'Re-Read' : 'First Read'} · <time dateTime={read.at}>{formatDateTime(read.at)}</time></li>)}</ol>
  </details></dd></div>
 }

@@ -8,6 +8,7 @@ const mountLibrary = (doc, href, options = {}) => mountSharedLibrary(doc, href, 
 
 let root, bottomRoot, storage, network, entry, accountRatingInfo
 beforeEach(() => {
+ vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Unavailable in test')))
  document.body.innerHTML = '<main id="main"><div id="workskin"><h2 class="title">Test</h2><div class="summary module"><blockquote><p>Work summary.</p></blockquote></div><dl class="work meta"><dd class="chapters">10/10</dd></dl><ul class="work navigation actions"><li class="chapter"><select id="selected_id"><option value="101">1. First</option><option value="102">2. Second</option><option value="103">3. Third</option><option value="104">4. Fourth</option></select></li></ul></div><div id="kudos">Kudos list</div></main>'
  const attach = Element.prototype.attachShadow
  vi.spyOn(Element.prototype, 'attachShadow').mockImplementation(function (options) { const surface = attach.call(this, options); if (this.id === 'ao3-library-companion') root = surface; else bottomRoot = surface; return surface })
@@ -80,7 +81,7 @@ it.each(['safari', 'chrome'])('captures an explicit chapter-finished editor save
  const finished = within(root).getByLabelText('This Chapter Is Finished')
  fireEvent.click(finished)
  fireEvent.submit(finished.closest('form'))
- await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Marked As Read Through Chapter 4'))
  const input = JSON.parse(network.mock.lastCall[0].data).p_input
  expect(input).toMatchObject({ progress: 4, chapter_read: { chapter: 4, chapter_id: '104', word_count: null } })
 })
@@ -163,7 +164,7 @@ it('marks this chapter finished without transmitting or replacing personal field
  await mount()
  fireEvent.click(findButton('Read'))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
- expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading', chapter_read: { chapter: 4, chapter_id: '104', word_count: null } })
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading', chapter_read: { chapter: 4, chapter_id: '104', word_count: null, previous_chapters: [{ chapter: 2, chapter_id: '102', word_count: null }, { chapter: 3, chapter_id: '103', word_count: null }] } })
 
 })
 it('offers reconnection on expired authorization without showing a false save confirmation', async () => {
@@ -363,7 +364,8 @@ it.each(['to_read', 'reading', 're_reading'])('offers Finish Fic on the actual f
  expect(within(root).getByText('Ch. 1 / 10')).toBeInTheDocument()
  fireEvent.click(within(bottomRoot).getByRole('button', { name: status === 'to_read' ? 'Mark Read' : 'Finish Fic' }))
  await waitFor(() => expect(entry).toMatchObject({ status: 'finished', progress: 10 }))
- expect(entry.chapter_read).toEqual({ chapter: 10, chapter_id: '110', word_count: null })
+ expect(entry.chapter_read).toMatchObject({ chapter: 10, chapter_id: '110', word_count: null })
+ expect(entry.chapter_read.previous_chapters.map(read => read.chapter)).toEqual([2, 3, 4, 5, 6, 7, 8, 9])
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByRole('button', { name: 'Re-Read' })).toBeInTheDocument()
   expect(within(surface).getByText('Finished', { exact: true })).toBeInTheDocument()
@@ -431,6 +433,7 @@ it('places only progress controls before kudos and immediately updates both bars
   expect(within(surface).getByText('Ch. 4 / 10')).toBeInTheDocument()
   expect(within(surface).getByText('Read')).toBeInTheDocument()
  }
+ await waitFor(() => expect(finish).toBeTypeOf('function'))
  finish({ status: 503, responseText: '{}' })
  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Could not save'))
  for (const surface of [root, bottomRoot]) {
@@ -1155,7 +1158,7 @@ it.each(['safari', 'chrome'].flatMap(browser => readingActionCases.flatMap(scena
   const action = (fromBottom ? bottomRoot : root).querySelector('.complete-chapter, .reading-toggle')
   const changesProgress = !['Start Reading', 'Resume'].includes(action.textContent)
   fireEvent.click(action)
-  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent('Saved'))
+  await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(changesProgress ? `Marked As Read Through Chapter ${chapter}` : 'Saved'))
   const input = JSON.parse(network.mock.lastCall[0].data).p_input
   expect(input).toMatchObject({ progress: changesProgress ? chapter : progress, status: changesProgress && chapter === 10 ? 'finished' : 'reading' })
   if (changesProgress) expect(input.chapter_read).toMatchObject({ chapter, chapter_id: String(100 + chapter) })
@@ -1213,7 +1216,7 @@ it.each(['safari', 'chrome'].flatMap(browser => ['10/?', '10/15'].flatMap(chapte
   await waitFor(()=>expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
  }
  fireEvent.click(within(surface).getByRole('button',{name:['to_read','paused_reading'].includes(status)?'Mark Read':'Read',exact:true}))
- await waitFor(()=>expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ await waitFor(()=>expect(within(root).getByRole('status')).toHaveTextContent('Marked As Read Through Chapter 10'))
  expect(entry).toMatchObject({status:'waiting_for_updates',progress:10,notes:'Keep notes',rating:4,tags:['Mine']})
  expect(JSON.parse(network.mock.lastCall[0].data).p_input.chapter_read).toMatchObject({chapter:10,chapter_id:'110'})
  for(const bar of [root,bottomRoot]) {
@@ -1274,7 +1277,7 @@ it.each(['safari', 'chrome'].flatMap(browser => [
  expect(within(bottomRoot).queryByRole('button', { name: 'To Read', exact: true })).not.toBeInTheDocument()
  if (chapter !== 1) for (const bar of [root, bottomRoot]) expect(within(bar).queryByRole('button', { name: /^(To Read|Reading)$/ })).not.toBeInTheDocument()
  fireEvent.click(within(surface).getByRole('button', { name: label, exact: true }))
- await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(/^Saved$/))
+ await waitFor(() => expect(within(root).getByRole('status')).toHaveTextContent(label === 'Reading' ? 'Saved' : `Marked As Read Through Chapter ${chapter}`))
  expect(entry).toMatchObject({ status, progress, notes: '', tags: [], collections: [] })
  const request = JSON.parse(network.mock.lastCall[0].data)
  expect(request.p_action).toBe('save')
@@ -1327,4 +1330,27 @@ it('retains unsaved actions after a failed save and does not offer Finish Fic fo
  expect(entry).toBeNull()
  expect(within(bottomRoot).getByRole('button', { name: 'Mark Read' })).toBeEnabled()
  expect(within(root).getByRole('button', { name: 'Add to Library' })).toBeEnabled()
+})
+
+it.each(['safari', 'chrome'])('shows an actionable read notice below the %s toolbar and sends a strict Undo', async browser => {
+ const before = { version: 'v1', status: 'reading', progress: 3, notes: 'Keep', rating: 4, tags: [], collections: [] }
+ entry = { ...before }
+ network.mockImplementation(async ({ data }) => {
+  const { p_action, p_input } = JSON.parse(data)
+  if (p_action === 'progress') entry = p_input.undo_read ? { ...before, version: 'v3' } : { ...entry, progress: 4, version: 'v2', readingHistory: [{ action: 'chapter_read', id: 'read-id', chapter: 4, undo: {} }] }
+  return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
+ })
+ await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
+ fireEvent.click(within(bottomRoot).getByRole('button', { name: 'Read' }))
+ const notice = within(root).getByRole('status')
+ await waitFor(() => expect(notice).toHaveTextContent('Marked As Read Through Chapter 4'))
+ expect(root.querySelector('.toolbar').nextElementSibling).toBe(notice)
+ const undo = within(notice).getByRole('button', { name: 'Undo' })
+ expect(undo).toHaveClass('undo-read')
+ expect(within(bottomRoot).getByRole('button', { name: 'Undo' })).toBeVisible()
+ await waitFor(() => expect(undo).toBeEnabled())
+ fireEvent.click(undo)
+ await waitFor(() => expect(notice).toHaveTextContent('Read Marking Undone'))
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v2', status: 'reading', progress: 3, undo_read: 'read-id' })
+ expect(root.querySelector('.chapter-progress')).toHaveTextContent('Ch. 3 / 10')
 })

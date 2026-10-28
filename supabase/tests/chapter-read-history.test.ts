@@ -101,3 +101,35 @@ it('keeps a paused reread classification when an explicit editor save completes 
  expect(entry.status).toBe('paused_reading')
  expect(chapterReadEvents(entry.readingHistory)).toMatchObject([{ chapter: 4, word_count: 500, is_reread: true }])
 })
+
+it('records a chapter range atomically and Undo restores progress, dates, and history', async () => {
+ const before = await save(130, { status: 'paused_reading', progress: 1 })
+ const capture = { ...progress(before, 4, 400, 'finished'), chapter_read: { chapter: 4, chapter_id: '104', word_count: 400, previous_chapters: [{ chapter: 2, chapter_id: '102', word_count: 200 }, { chapter: 3, chapter_id: '103', word_count: null }] } }
+ const saved = (await request(130, 'progress', capture)).entry
+ expect(chapterReadEvents(saved.readingHistory).map(read => [read.chapter, read.word_count])).toEqual([[2, 200], [3, null], [4, 400]])
+ const undo = chapterReadEvents(saved.readingHistory).at(-1)!.id
+ const restored = (await request(130, 'progress', { version: saved.version, status: before.status, progress: before.progress, undo_read: undo })).entry
+ expect(restored).toMatchObject({ status: before.status, progress: before.progress, readingHistory: before.readingHistory })
+ await db.exec('reset role')
+ const row = (await db.query<{ finished_at: string | null }>('select finished_at from public.library_entries where id=$1', [before.id])).rows[0]
+ expect(row.finished_at).toBeNull()
+ await expect(request(130, 'progress', { version: restored.version, status: before.status, progress: before.progress, undo_read: undo })).rejects.toThrow(/changed/i)
+})
+
+it('rejects stale undo and malformed chapter ranges without altering recorded reads', async () => {
+ const before = await save(131)
+ const saved = (await request(131, 'progress', progress(before, 1, 100))).entry
+ const later = (await request(131, 'progress', progress(saved, 2, 200))).entry
+ await expect(request(131, 'progress', { version: saved.version, status: before.status, progress: 0, undo_read: chapterReadEvents(saved.readingHistory)[0].id })).rejects.toThrow(/changed/i)
+ for (const previous_chapters of [[{ chapter: 3, chapter_id: null, word_count: 30 }], [{ chapter: 1, chapter_id: null, word_count: 1 }, { chapter: 1, chapter_id: null, word_count: 2 }]]) {
+  await expect(request(131, 'progress', { ...progress(later, 3, 300), chapter_read: { chapter: 3, chapter_id: null, word_count: 300, previous_chapters } })).rejects.toThrow()
+ }
+ expect(chapterReadEvents((await request(131, 'get')).entry.readingHistory)).toHaveLength(2)
+})
+
+it('allows undo on a newly saved read while retaining the library entry', async () => {
+ const saved = await save(132, { progress: 1, chapter_read: { chapter: 1, chapter_id: null, word_count: 100 } })
+ const restored = (await request(132, 'progress', { version: saved.version, status: 'to_read', progress: 0, undo_read: chapterReadEvents(saved.readingHistory)[0].id })).entry
+ expect(restored).toMatchObject({ id: saved.id, progress: 0, status: 'to_read' })
+ expect(chapterReadEvents(restored.readingHistory)).toEqual([])
+})
