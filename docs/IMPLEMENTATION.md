@@ -347,6 +347,8 @@ GitHub Actions runs lint/build/tests/security/audit/browser checks and a separat
 
 ## Vercel Deployment
 
+The separate EPUB reader uses `reader/vercel.json` and a different Vercel project with Root Directory `reader`. Its shared-source access, clean dependency installs, and deployment settings are maintained in the [reader deployment guide](../reader/docs/IMPLEMENTATION.md#vercel-deployment). The configuration below applies to the organizer.
+
 Connect your eventual GitHub repository to Vercel, choose Vite, and use `npm run build` with output `dist`. Set **only** the two public environment variables for the frontend. `vercel.json` supplies SPA route fallback, CSP and other security headers. Hosted Supabase uses `*.supabase.co`; update CSP deliberately if using a custom Supabase domain. Configure the exact production Auth URL/redirect and server `APP_ORIGIN` before inviting your production account. Verify an invite, sign-in, refresh, recovery, sign-out, unauthenticated API denial, and isolation using two accounts before relying on production.
 
 Local builds do not push commits, migrate hosted databases, or deploy services. Never commit `.env.local` or server credentials. Verify the target environment independently before rollout.

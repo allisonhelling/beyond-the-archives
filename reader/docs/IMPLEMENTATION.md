@@ -64,6 +64,16 @@ Organizer progress below an already-read chapter cannot manufacture missing even
 
 Disconnect clears credentials; account-bound events and local content remain. Reconnect/foreground requests arriving during an active sync queue one follow-up run, so an offline startup result cannot swallow a reconnect. No closed-app background sync is promised. The service worker caches only same-origin build resources and does not cache account API responses. Application updates install a complete version before activation; existing open clients retain their prior worker until closed. Deploy releases atomically to avoid deleting resources needed by older tabs.
 
+## Vercel Deployment
+
+Use a separate Vercel project for the reader, connected to the same repository. Set **Root Directory** to `reader`, select **Vite**, and enable **Include source files outside of the Root Directory in the Build Step** under Root Directory settings. Shared components and the root lockfile live outside `reader`; this option is required. See [Vercel’s monorepo guidance](https://vercel.com/docs/monorepos/monorepo-faq).
+
+`reader/vercel.json` supplies the install command `npm ci --include=dev --prefix .. && npm ci --include=dev`, build command `npm run build`, output directory `dist`, and SPA fallback while keeping PWA assets outside the fallback. Both installs include build-time dependencies even when the environment omits development packages by default. The root install resolves dependencies imported by shared source files; the reader install supplies its compiler, bundler, and runtime packages. Vite deduplicates React and React DOM so shared and reader components use the same runtime.
+
+The reader lockfile uses registry packages with integrity checks rather than links into another local checkout. A log showing only 13 linked packages installed followed by `tsc: command not found` can indicate an older lockfile containing local dependency links. Deploy the repaired lockfile/configuration and redeploy without the previous build cache. Also check for installation overrides that omit development dependencies. Node engine-range and npm configuration warnings are separate from that missing-compiler failure.
+
+Validate installation from a clean full checkout with the configured install command and build; a build using existing parent `node_modules` does not verify portability. Keep the root organizer Vercel project’s Root Directory and configuration unchanged. No organizer environment variables are required merely to open the reader; users configure an optional organizer connection in the app.
+
 ## Future Organizer Integration
 
 The organizer remains responsible for its future cached Offline hub, Downloaded in Reader filter, and Open/Manage links. It must distinguish last-reported installation availability from Available Here verified by the running reader. The existing backend has no reader-availability reporting endpoint; this reader does not invent one or claim status has been reported. A future report needs stable installation identity, work ID, active version, availability, account ownership, and report timestamp, with tombstones for removed files. Organizer cache preparation does not prepare this separate reader origin.

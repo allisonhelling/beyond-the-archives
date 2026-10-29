@@ -21,6 +21,10 @@ npm run preview
 
 Open http://127.0.0.1:4174 while online, wait for **Reader prepared for offline use**, and import EPUBs. After preparation, reopen this same origin offline. Different ports, browsers, profiles, and installed applications can have separate storage. Deploy the built `dist` directory at the root of its own HTTPS origin; native packaging is out of scope.
 
+## Hosting
+
+Deploy the reader as its own Vercel project using Root Directory `reader`, with **Include source files outside of the Root Directory in the Build Step** enabled. The checked-in reader configuration installs both dependency sets and builds `dist`. See the [deployment guide](docs/IMPLEMENTATION.md#vercel-deployment) for exact settings and troubleshooting.
+
 ## Reading
 
 Import AO3-generated or ordinary reflowable EPUB 2/3 files. Search saved titles, authors, fandoms, tags, summaries, series, collections, publisher, or AO3 work ID. Metadata search and the Fandoms multi-select stay visible on the collapsed toolbar. The **Filters** button opens the filter box; **Hide** closes it without clearing selections. Basic expanded filters cover reading status, author, rating, and organizer collection. Expand **More Metadata Filters**, **Length & Popularity**, and **Publication & File Dates** for:

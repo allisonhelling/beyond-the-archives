@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react(), {
+export default defineConfig({ resolve: { dedupe: ['react', 'react-dom'] }, plugins: [react(), {
   name: 'offline-shell',
   generateBundle(_, bundle) {
     const files = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', ...Object.keys(bundle).map(path => `/${path}`)]
