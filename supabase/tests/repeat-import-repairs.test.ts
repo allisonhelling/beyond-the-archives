@@ -4,6 +4,8 @@ import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Shared embedded PostgreSQL harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
 import type { ReadingReviews } from '../../src/features/imports/import-reading-review'
+import { automaticCollectionRules } from '../../src/features/library/collections/automatic-collections'
+import { defaultReadingFilters } from '../../src/features/library/reading-search'
 let db: PGlite
 const alice='10000000-0000-0000-0000-000000000001',bob='10000000-0000-0000-0000-000000000002'
 beforeAll(async()=>{
@@ -17,6 +19,54 @@ const row=(changes={})=>({workId:8001,url:'https://archiveofourown.org/works/800
 async function sync(rows:object[]) { return (await db.query<{result:Record<string,number>}>('select public.submit_ao3_library_sync($1) result',[JSON.stringify(rows)])).rows[0].result }
 async function entry() { return (await db.query<{id:string;reading_status:string;last_read_chapter:number;finished_at:string|null;reading_history:{action:string;at:string}[];reading_provenance:Record<string,unknown>;extension_metadata:Record<string,unknown>;metadata_overrides:Record<string,unknown>;notes:string}>('select * from public.library_entries where user_id=auth.uid()')).rows[0] }
 async function review(ids:string[]=[],action='list') {return (await db.query<{result:ReadingReviews}>('select public.review_import_reading($1,$2) result',[ids,action])).rows[0].result}
+it('projects each listing work once after all import writes, including repairs and reading provenance',async()=>{
+ await db.query('insert into public.collections(name,automatic_rules) values($1,$2)',[
+  'Imported Fandom',JSON.stringify(automaticCollectionRules({...defaultReadingFilters,fandoms:['Test Fandom']})),
+ ])
+ await db.exec(`reset role;
+  create temp table document_refreshes(id uuid);
+  create function pg_temp.count_document_refresh() returns trigger language plpgsql security definer as $$
+   begin insert into pg_temp.document_refreshes values(new.id); return null; end $$;
+  create trigger count_document_refresh after insert or update on public.library_search_documents
+   for each row execute function pg_temp.count_document_refresh();
+  set role authenticated;`)
+ const rows=Array.from({length:20},(_,index)=>row({workId:8001+index,url:`https://archiveofourown.org/works/${8001+index}`,metadata:{title:'Repair test',published_chapters:3,fandoms:['Test Fandom']}}))
+ expect(await sync(rows)).toMatchObject({imported:20})
+ expect((await db.query('select count(*)::integer total from public.automatic_collection_works')).rows[0]).toEqual({total:20})
+ await db.exec('reset role')
+ expect((await db.query('select count(*)::integer total,count(distinct id)::integer works from document_refreshes')).rows[0]).toEqual({total:20,works:20})
+ expect((await db.query(`select count(*)::integer total from public.library_search_documents d
+  join public.library_entries e using(id) where d.story->'reading_provenance'=e.reading_provenance
+  and d.story->'metadata'->>'title'='Repair test'`)).rows[0]).toEqual({total:20})
+ await db.exec('truncate document_refreshes; set role authenticated')
+ const repairs=rows.map(work=>({...work,metadata:{...work.metadata,title:'Repaired title',fandoms:['Other Fandom']}}))
+ expect(await sync(repairs)).toMatchObject({kept:20,metadataRepaired:20})
+ expect((await db.query('select count(*)::integer total from public.automatic_collection_works')).rows[0]).toEqual({total:0})
+ await db.exec('reset role')
+ expect((await db.query('select count(*)::integer total,count(distinct id)::integer works from document_refreshes')).rows[0]).toEqual({total:20,works:20})
+ await db.exec('truncate document_refreshes; set role authenticated')
+ expect(await sync(repairs)).toMatchObject({kept:20,metadataRepaired:0})
+ await db.exec('reset role')
+ expect((await db.query('select count(*)::integer total from document_refreshes')).rows[0]).toEqual({total:0})
+ await db.exec('set role authenticated')
+})
+it('preserves an enclosing document batch until its owner flushes it',async()=>{
+ await db.exec("select set_config('app.defer_library_documents','on',true)")
+ await sync([row()])
+ expect((await db.query('select count(*)::integer total from public.library_search_documents')).rows[0]).toEqual({total:0})
+ expect((await db.query("select current_setting('app.defer_library_documents') value")).rows[0]).toEqual({value:'on'})
+ await db.exec('reset role; select public.flush_library_documents(); set role authenticated')
+ expect((await db.query('select count(*)::integer total from public.library_search_documents')).rows[0]).toEqual({total:1})
+})
+it('rolls back source writes and pending projections together when a listing import fails',async()=>{
+ await db.exec('savepoint failed_import')
+ await expect(sync([row(),row({workId:8002,url:'https://archiveofourown.org/works/8002',metadata:{}})])).rejects.toThrow('CSV title is required')
+ await db.exec('rollback to savepoint failed_import')
+ expect((await db.query('select count(*)::integer total from public.library_entries')).rows[0]).toEqual({total:0})
+ expect((await db.query('select count(*)::integer total from public.library_search_documents')).rows[0]).toEqual({total:0})
+ expect(await sync([row()])).toMatchObject({imported:1})
+ expect((await db.query('select count(*)::integer total from public.library_search_documents')).rows[0]).toEqual({total:1})
+})
 it('repairs series metadata and proposes legacy reading corrections without changing personal history',async()=>{
  await sync([row({source:'marked_for_later'})])
  await db.exec('reset role')

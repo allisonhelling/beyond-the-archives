@@ -179,7 +179,7 @@ Create manual or automatic custom collections, choose colors and symbols, and or
 
 ### Import Lists and Review Changes
 
-If a scan import fails, keep the saved scan and selections. The error identifies the saved page and series when available, includes the server’s error code/message, and gives guidance for connection, sign-in, schema, or timeout problems. Retry from the existing review after resolving the reported problem.
+If a scan import fails, keep the saved scan and selections. The error identifies the saved page and series when available, includes the server’s error code/message, and gives guidance for connection, sign-in, schema, or timeout problems. For a database timeout (`57014`), check Import History before retrying; repeated timeouts need investigation. Retry from the existing review after resolving the reported problem.
 
 Open **Add → Import History from AO3** or `/imports`. Link batches accept up to 2,000 URL tokens. CSV imports accept up to 2,000 unique works and 20 MB per review. Review series selections and personal-data conflicts before confirming. Optional chapter-date checks estimate progress strictly before a bookmark’s date; missing or same-day evidence stays unconfirmed.
 
