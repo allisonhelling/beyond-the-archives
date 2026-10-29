@@ -226,7 +226,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
     <SeriesScopeAction label="Clear Selection" scope={scope} disabled={disabled} onClick={() => select(id, [])} />
     <SeriesScopeAction label={expanded ? 'Hide All' : 'View All'} scope={scope} disabled={!preview.works.length} expanded={expanded} onClick={() => setVisibility(!expanded, id)} />
    </>
-   const saveControl = !singleSeries && catalogLoaded !== false && !seriesSaved(id) && <Tooltip description={saveDescription}>{tooltipId => <button type="button" className="button secondary series-preview-save" aria-describedby={tooltipId} disabled={disabled || !preview} onClick={() => void saveDetails(id, url)}>Save</button>}</Tooltip>
+   const saveControl = !singleSeries && catalogLoaded !== false && !seriesSaved(id) && <Tooltip portal description={saveDescription}>{tooltipId => <button type="button" className="button secondary series-preview-save" aria-describedby={tooltipId} disabled={disabled || !preview} onClick={() => void saveDetails(id, url)}>Save</button>}</Tooltip>
    const worksToggle = !!preview?.works.length && <button type="button" className="text-button clickable-text" aria-expanded={shownSeries.has(id)} onClick={() => setShownSeries(current => {
     const next = new Set(current)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -267,8 +267,8 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
    <p role="status">{selected.size} selected works{draftSaved && ' · Saved in this browser'}</p>
    {!draftSaved && <p className="error-message">Review progress could not be saved in this browser. Keep this window open to retain your selections.</p>}
    <div className={`form-actions${fitActions || onImportSelected ? ' form-actions-fit' : ''}`}>
-   {onImportSelected && !automatic && <button type="button" className="button primary" disabled={disabled || !selected.size} onClick={() => void importSelected()}>{importing ? 'Importing Selected Works…' : 'Import Selected Works'}</button>}
-   <button className="button primary" disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={cannotCancel} onClick={cancel}>{cancelLabel}</button></div>
+   {onImportSelected && !automatic && <button type="button" className="button primary" title="Import selected works and remain in Work Selection" disabled={disabled || !selected.size} onClick={() => void importSelected()}>{importing ? 'Importing Selected Works…' : 'Import Selected Works'}</button>}
+   <button className="button primary" title={!automatic && confirmLabel === 'Import Batch and Continue' ? 'Import the current batch, close Work Selection, and continue scanning' : undefined} disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={cannotCancel} onClick={cancel}>{cancelLabel}</button></div>
   </footer>
  </section>
  return embedded ? content : <Dialog title={title} className="series-review-dialog" busy={cannotCancel} onClose={cancel}>{content}</Dialog>

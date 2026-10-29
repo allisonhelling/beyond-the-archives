@@ -1,8 +1,8 @@
 import type { Metadata, Story } from '../library/model'
 import { chapterReadEvents, type ChapterReadEvent } from '../library/reading-history'
-import type { DateFormat } from '../../lib/dates'
+import { formatDate, type DateFormat } from '../../lib/dates'
 
-export type Period = { year: number; month: number; mode: 'monthly' | 'yearly' }
+export type Period = { year: number; month: number; mode: 'monthly' | 'yearly' | 'all_time' }
 export type StatsWork = Pick<Story, 'id' | 'created_at' | 'reading_status' | 'reading_history' | 'personal_rating'> & { key: string; metadata: Metadata; archived: boolean }
 export type Observation = { work: StatsWork; event: ChapterReadEvent; unique: boolean; pass: number }
 export type Bucket = { label: string; value: number; key?: string }
@@ -14,20 +14,23 @@ export const dimensions: { key: Dimension; title: string }[] = [
 ]
 export const months = Array.from({ length: 12 }, (_, index) => new Date(2024, index, 1).toLocaleString('en-US', { month: 'long' }))
 export function periodBounds(period: Period): [number, number] {
+ if (period.mode === 'all_time') return [-Infinity, Infinity]
  const start = new Date(0), end = new Date(0)
  start.setFullYear(period.year, period.mode === 'yearly' ? 0 : period.month, 1); start.setHours(0, 0, 0, 0)
  end.setFullYear(period.year + (period.mode === 'yearly' ? 1 : 0), period.mode === 'yearly' ? 0 : period.month + 1, 1); end.setHours(0, 0, 0, 0)
  return [start.getTime(), end.getTime()]
 }
 export function shiftPeriod(period: Period, offset: number): Period {
+ if (period.mode === 'all_time') return period
  const month = period.month + (period.mode === 'monthly' ? offset : 0)
  return { ...period, year: period.year + (period.mode === 'yearly' ? offset : Math.floor(month / 12)), month: (month % 12 + 12) % 12 }
 }
 export function periodText(period: Period, format: DateFormat): string {
- return period.mode === 'yearly' ? String(period.year).padStart(4, '0') : format === 'YMD'
+ return period.mode === 'all_time' ? 'All Time' : period.mode === 'yearly' ? String(period.year).padStart(4, '0') : format === 'YMD'
   ? `${String(period.year).padStart(4, '0')}-${String(period.month + 1).padStart(2, '0')}` : `${String(period.month + 1).padStart(2, '0')}/${String(period.year).padStart(4, '0')}`
 }
 export function parsePeriod(value: string, period: Period, format: DateFormat): Period | null {
+ if (period.mode === 'all_time') return null
  const match = period.mode === 'yearly' ? /^(\d{4})$/.exec(value.trim()) : (format === 'YMD' ? /^(\d{4})-(\d{1,2})$/ : /^(\d{1,2})\/(\d{4})$/).exec(value.trim())
  if (!match) return null
  const year = Number(match[period.mode === 'yearly' || format === 'YMD' ? 1 : 2]), month = period.mode === 'yearly' ? period.month : Number(match[format === 'YMD' ? 2 : 1]) - 1
@@ -99,7 +102,7 @@ export function statusProgress(works: StatsWork[], period: Period): Bucket[] {
  const [start, end] = periodBounds(period), counts = new Map<string, number>()
  for (const work of works) {
   const history = (work.reading_history ?? []).filter(event => Number.isFinite(Date.parse(event.at))).sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
-  const activity = history.some(event => Date.parse(event.at) >= start && Date.parse(event.at) < end) || Date.parse(work.created_at) >= start && Date.parse(work.created_at) < end
+  const activity = period.mode === 'all_time' || history.some(event => Date.parse(event.at) >= start && Date.parse(event.at) < end) || Date.parse(work.created_at) >= start && Date.parse(work.created_at) < end
   if (!activity) continue
   const status = history.filter(event => Date.parse(event.at) < end).at(-1)?.status ?? work.reading_status
   counts.set(status, (counts.get(status) ?? 0) + 1)
@@ -112,6 +115,15 @@ export function heatmap(data: Observation[]): number[][] {
  return grid
 }
 export function timeBuckets(data: Observation[], period: Period, daily = false): Bucket[] {
+ if (period.mode === 'all_time') {
+  const values = new Map<string, number>()
+  for (const { event } of data) {
+   const date = new Date(event.at)
+   const key = String(date.getFullYear()).padStart(4, '0') + (daily ? `-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : '')
+   values.set(key, (values.get(key) ?? 0) + (event.word_count ?? 0))
+  }
+  return [...values].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => ({ label: daily ? formatDate(key) : key, value }))
+ }
  const count = period.mode === 'yearly' && !daily ? 12 : Math.round((Date.UTC(period.year, period.mode === 'yearly' ? 12 : period.month + 1, 1) - Date.UTC(period.year, period.mode === 'yearly' ? 0 : period.month, 1)) / 86400000)
  const values = Array<number>(count).fill(0)
  for (const { event } of data) {

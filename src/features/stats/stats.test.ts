@@ -52,6 +52,20 @@ describe('reading statistics', () => {
   expect(statusProgress([story], october)).toEqual([{ label: 'reading', value: 1 }])
   expect(statusProgress([work([], { created_at: '2026-12-01T12:00:00' })], october)).toEqual([])
  })
+ it('includes all dates, preserves repeat classification, and groups all-time charts by date and year', () => {
+  const period: Period = { ...october, mode: 'all_time' }
+  const all = observations([work([...records, event('older', 10, '2025-10-01T12:00:00', 50)])])
+  const data = inPeriod(all, period)
+  expect(totals(data)).toMatchObject({ words: 1050, unique: 750, reread: 300, chapters: 7 })
+  expect(timeBuckets(data, period)).toEqual([{ label: '2025', value: 50 }, { label: '2026', value: 1000 }])
+  const days = timeBuckets(data, period, true)
+  expect(days.reduce((sum, row) => sum + row.value, 0)).toBe(1050)
+  expect(new Set(days.map(row => row.label)).size).toBe(days.length)
+  expect(timeBuckets([], period, true)).toEqual([])
+  expect(statusProgress([work([], { created_at: '1900-01-01', reading_status: 'finished' })], period)).toEqual([{ label: 'finished', value: 1 }])
+  expect(shiftPeriod(period, 1)).toEqual(period)
+  expect(parsePeriod('2026', period, 'YMD')).toBeNull()
+ })
  it('keeps empty data finite and excludes unknown words from estimates', () => {
   expect(totals([]).words).toBe(0)
   expect(distribution(observations([work([records[4]])]), 'rating', 'words', true)).toEqual([])
