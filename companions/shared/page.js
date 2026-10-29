@@ -1,3 +1,4 @@
+import { chapterWordCount } from '../../src/features/library/chapter-word-count'
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { parseSeries, parseWorkBlurbs } from '../../src/features/imports/ao3-series'
 import { load } from 'cheerio'
@@ -17,16 +18,7 @@ export function captureChapterRead(doc, page, href) {
  const only = loaded === page.current && containers.length === 1 && !/^chapter-[0-9]+$/.test(containers[0].id) ? containers[0] : null
  const scope = chapter ?? only ?? (containers.length === 0 && loaded === page.current ? chapters : null)
  const body = scope?.querySelector(':scope > .userstuff')
- let wordCount = null
- if (body && typeof Intl.Segmenter === 'function') {
-  const copy = body.cloneNode(true)
-  copy.querySelectorAll('script, style, noscript, iframe, .summary, .notes, .landmark, [hidden], [aria-hidden="true"]').forEach(node => node.remove())
-  // Block boundaries separate words; inline formatting must not split a word.
-  copy.querySelectorAll('p, div, li, blockquote, br, hr, h1, h2, h3, h4, h5, h6, td, tr').forEach(node => { node.before(' '); node.after(' ') })
-  const segments = new Intl.Segmenter(undefined, { granularity: 'word' }).segment(copy.textContent ?? '')
-  wordCount = 0
-  for (const segment of segments) if (segment.isWordLike) wordCount++
- }
+ const wordCount = chapterWordCount(body)
  return { chapter: page.current, chapter_id: page.chapters?.[page.current] ?? (loaded === page.current ? parseWorkUrl(href).chapterId : null) ?? null, word_count: wordCount }
 }
 

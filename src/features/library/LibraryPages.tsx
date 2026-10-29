@@ -54,6 +54,7 @@ import { NewCollectionDialog } from './collections/NewCollectionDialog'
 import { CollectionShelf } from './collections/CollectionShelf'
 import { SpineOrnament } from './collections/SpineOrnament'
 import { ReadingDashboard } from './ReadingDashboard'
+import { PublicationStatusIndicator } from './PublicationStatusIndicator'
 import { publicationStatuses } from './publication-status'
 
 export function LibraryBoundary({ children }: { children: ReactNode }) {
@@ -169,9 +170,8 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
   const story = useStorySnapshot(candidate)!
   if (story.detailsLoaded === false) return <article className="story-card work-card" aria-busy="true"><p role="status">Loading work details…</p></article>
   const origin = { returnTo: location.pathname + location.search }
-  const { label: publicationLabel, Icon: PublicationIcon } = publicationStatuses[story.metadata.publication_status]
   return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
-    <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<Tooltip description={publicationLabel}>{descriptionId => <span className="publication-icon" role="img" aria-label={publicationLabel} aria-describedby={descriptionId} tabIndex={0}><PublicationIcon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
+    <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
 <DisplayInfo group="workTile">{{
       ...workMetadataFields(story, 'tile'),
       personalRating: <div className="tile-personal-rating"><StarRating value={story.personal_rating} /></div>,

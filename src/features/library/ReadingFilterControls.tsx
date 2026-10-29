@@ -1,3 +1,5 @@
+import { useFilterDraft } from '../../components/useFilterDraft'
+import { ActiveFilters } from '../../components/ActiveFilters'
 import { Fragment, useId, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, FileText, Heart, Info, Layers3, SlidersHorizontal, Star } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -10,7 +12,7 @@ import { SearchSuggestions } from './SearchSuggestions'
 import { ratingLabel, ratings, tagNames, type Story } from './model'
 import { filterPublicationLabel, readingFilterTags } from './reading-filter-labels'
 import { publicationStatuses } from './publication-status'
-import { defaultReadingFilters, normalize, type ReadingFilters } from './reading-search'
+import { defaultReadingFilters, filterReading, normalize, type ReadingFilters } from './reading-search'
 
 type FandomOption = { name: string; count: number }
 function FandomSelect({ options, selected, onChange, label = 'Select Fandoms' }: { label?: string; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
@@ -36,12 +38,20 @@ function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: st
   const label = authorOnly ? 'Search Author' : 'Search Title or Author'
   return <SearchSuggestions label={label} placeholder={label} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
-export function ReadingFilterControls({ stories, filters, onChange, mode = 'library', orderingControls, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, worksOnly = false, defaultScope }: {
+export function ReadingFilterControls({ stories, filters: appliedFilters, onChange, mode = 'library', orderingControls, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, worksOnly = false, defaultScope }: {
   worksOnly?: boolean; defaultScope?: string; stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode
   suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
 }) {
+  const [draft, setDraft] = useFilterDraft(appliedFilters, `${mode}:${defaultScope}`)
+  // Collection rules are already a draft saved by the enclosing collection form.
+  const filters = automaticCollection ? appliedFilters : draft
+  const editFilters = automaticCollection ? onChange : setDraft
   const [confirmLibraryDefault, setConfirmLibraryDefault] = useState(false)
   const [defaultMessage, setDefaultMessage] = useState('')
+  let draftError = ''
+  if (!automaticCollection) {
+    try { filterReading([], filters) } catch (error) { draftError = (error as Error).message }
+  }
   const defaultLabel = defaultScope?.startsWith('author:') ? 'Author' : 'Collection'
   function saveDefault(library = false) {
     saveFilterDefaults(filters, library ? undefined : defaultScope ?? `${mode}:all`)
@@ -64,10 +74,13 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
   const characters = suggestions?.characters ?? localCharacters
   const additionalTags = suggestions?.tags ?? localTags
   const fandoms = fandomOptions ?? localFandoms
-  function clearFilters() { onChange({ ...defaultReadingFilters, sort: filters.sort, groupBy: filters.groupBy, ...(filters.randomSeed && { randomSeed: filters.randomSeed }) }) }
-  function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { onChange({ ...filters, [key]: value }) }
+  function clearFilters() {
+    const next = { ...defaultReadingFilters, sort: appliedFilters.sort, groupBy: appliedFilters.groupBy, ...(appliedFilters.randomSeed && { randomSeed: appliedFilters.randomSeed }) }
+    setDraft(next); onChange(next)
+  }
+  function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { editFilters({ ...filters, [key]: value }) }
   const publicationLabel = (value: keyof typeof publicationStatuses) => filterPublicationLabel(value, mode === 'series')
-  const activeFilters = readingFilterTags(filters, { authorOnly: automaticCollection, series: mode === 'series', seriesVisibility: mode === 'library' && !worksOnly })
+  const activeFilters = readingFilterTags(appliedFilters, { authorOnly: automaticCollection, series: mode === 'series', seriesVisibility: mode === 'library' && !worksOnly })
   const oneShotControl = <Dropdown fitContent label="One-Shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
   const membershipToggles = <>
       <button type="button" className={`button ${filters.excludeLaterSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.excludeLaterSeries)} onClick={() => change('excludeLaterSeries', !filters.excludeLaterSeries)}><Layers3 size={17} />Exclude Later Series Works</button>
@@ -82,6 +95,7 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
       <FandomSelect label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       {mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
+      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply Filters</button>}
       {!alwaysExpanded && <button type="button" className={`button filter-toggle ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series Filters' : mode === 'library' ? 'Library Filters' : 'Reading Filters'}><div className="filter-grid">
@@ -108,7 +122,8 @@ export function ReadingFilterControls({ stories, filters, onChange, mode = 'libr
       <details className="search-help"><summary aria-label="Search Syntax and Modes"><Info size={18} /></summary><div id={helpId}><p><strong>Any Field</strong> combines saved titles, authors, fandoms, AO3 tags, personal tags, summaries, notes, ratings, statuses, and URLs. <strong>Summary</strong> searches only the fic’s summary. <strong>Notes</strong> searches only your private notes.</p><ul><li><code>book*</code> — any characters: book, books, booking.</li><li><code>Harry Potter</code> — AND: both terms must occur.</li><li><code>Harry || Potter</code> — OR: either or both terms.</li><li><code>"Harry Lockhart"</code> — words in exact sequence.</li><li><code>Harry -Lockhart</code> — include Harry, exclude Lockhart.</li></ul><p>AND and NOT apply before OR. Use a backslash to escape literal symbols, such as <code>\*</code>, <code>\-</code>, <code>\"</code>, <code>\|</code>, or <code>\\</code>. Matching ignores case and accents. Searches stay within the selected {mode === 'library' ? 'shelf' : 'tile'} and filters.</p></div></details></div>
       <Dropdown label="Search In" value={filters.scope} onChange={value => change('scope', value as ReadingFilters['scope'])} options={[{ value: 'any', label: 'Any Field' }, { value: 'summary', label: 'Summary' }, { value: 'notes', label: 'Notes' }]} />
     </div></div><div className="form-actions"><button type="button" className="button secondary" onClick={clearFilters}>Clear All Filters</button>{!alwaysExpanded && <button type="button" className="button secondary" onClick={() => setExpanded(false)}>Hide</button>}<div className="filter-default-actions"><button type="button" className="button secondary" disabled={automaticCollection && !defaultScope} title={automaticCollection && !defaultScope ? 'Save the Collection First' : undefined} onClick={() => { try { saveDefault() } catch { setDefaultMessage('Could not save defaults. Check browser storage and retry.') } }}>Save as {defaultLabel} Default</button><button type="button" className="button secondary" onClick={() => setConfirmLibraryDefault(true)}>Save as Library Default</button></div></div>{defaultMessage && <p role="status">{defaultMessage}</p>}</section>}
+    {draftError && <p role="alert">{draftError}</p>}
     {confirmLibraryDefault && <ConfirmationDialog title="Save as Library Default?" confirmLabel="Save as Library Default" pendingLabel="Saving…" onClose={() => setConfirmLibraryDefault(false)} onConfirm={async () => saveDefault(true)}><p>The current filters will become the default for all collections and categories, replacing any collection defaults saved on this browser.</p></ConfirmationDialog>}
-    {activeFilters.length > 0 && <div className="active-reading-filters" aria-label="Active Filters"><div className="filter-chips">{activeFilters.map(({ label, category }, index) => <Fragment key={label}>{index > 0 && <span aria-hidden="true" className={`info-separator${category && category === activeFilters[index - 1].category ? ' filter-category-separator' : ' filter-category-boundary'}`} data-tag-category={category}><MetadataTags values={['•']} category={category ?? null} shape="bullets" /></span>}<MetadataTags values={[label]} category={category ?? null} /></Fragment>)}</div><button type="button" className="text-button" onClick={clearFilters}>Clear All Filters</button></div>}
+    {activeFilters.length > 0 && <ActiveFilters onClear={clearFilters}>{activeFilters.map(({ label, category }, index) => <Fragment key={label}>{index > 0 && <span aria-hidden="true" className={`info-separator${category && category === activeFilters[index - 1].category ? ' filter-category-separator' : ' filter-category-boundary'}`} data-tag-category={category}><MetadataTags values={['•']} category={category ?? null} shape="bullets" /></span>}<MetadataTags values={[label]} category={category ?? null} /></Fragment>)}</ActiveFilters>}
   </>
 }

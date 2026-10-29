@@ -43,7 +43,8 @@ export async function readEpub(buffer: ArrayBuffer): Promise<EpubMetadata> {
  if (values('creator').length) captured.authors = values('creator')
  if (values('subject').length) captured.ao3_tags = values('subject')
  if (values('language')[0]) captured.language = values('language')[0]
- if (values('description')[0]) Object.assign(captured, readSummary(values('description')[0]))
+ const description = elements(metadataNode, 'description')[0]
+ if (description) Object.assign(captured, readSummary(description.children.length ? description.innerHTML : description.textContent ?? '', 'auto'))
  const series = elements(metadataNode, 'meta').find(item => item.getAttribute('name') === 'calibre:series')?.getAttribute('content')?.trim()
  if (series) captured.series = [series]
 

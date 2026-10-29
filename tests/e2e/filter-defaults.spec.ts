@@ -15,6 +15,7 @@ test('personal tag filters and collection/library defaults survive navigation an
  const filters = page.getByRole('region',{name:'Library Filters',exact:true})
  await filters.getByLabel('Personal Tags',{exact:true}).fill('Comfort')
  await filters.getByLabel('Personal Tags',{exact:true}).press('Enter')
+ await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(1)
  await filters.getByRole('button',{name:'Save as Collection Default',exact:true}).click()
  await page.goto('/library')

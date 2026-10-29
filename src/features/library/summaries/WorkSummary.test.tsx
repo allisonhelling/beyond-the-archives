@@ -42,3 +42,11 @@ it('removes unsafe link destinations while retaining their labels', () => {
  expect(container.querySelector('a[href^="javascript:"], a[href^="data:"]')).toBeNull()
  expect(container).toHaveTextContent('Bad Data Good')
 })
+
+it('renders plain metadata line breaks while escaping literal text', () => {
+ const metadata = readSummary('First & second.\nNext line.\n\nLast <3', 'auto')
+ const { container } = render(<WorkSummary metadata={metadata} />)
+ expect(metadata.summary).toBe('First & second.\nNext line.\n\nLast <3')
+ expect(container.querySelectorAll('br')).toHaveLength(3)
+ expect(container).toHaveTextContent('Last <3')
+})

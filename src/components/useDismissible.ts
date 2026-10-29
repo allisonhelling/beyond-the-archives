@@ -1,12 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 
 // Share outside-click, outside-focus, and Escape dismissal across menus and suggestions.
-export function useDismissible<T extends HTMLElement>(open: boolean, close: () => void, { outsideEvent = 'pointerdown', dismissOnFocus = true }: { outsideEvent?: 'pointerdown' | 'click'; dismissOnFocus?: boolean } = {}) {
+export function useDismissible<T extends HTMLElement>(open: boolean, close: () => void, { outsideEvent = 'pointerdown', dismissOnFocus = true, additionalRefs }: { outsideEvent?: 'pointerdown' | 'click'; dismissOnFocus?: boolean; additionalRefs?: RefObject<HTMLElement | null>[] } = {}) {
   const ref = useRef<T>(null)
   useEffect(() => {
     if (!open) return
     function outside(event: Event) {
-      if (ref.current && !event.composedPath().includes(ref.current)) close()
+      if (ref.current && !event.composedPath().includes(ref.current) && !additionalRefs?.some(extra => extra.current && event.composedPath().includes(extra.current))) close()
     }
     function escape(event: KeyboardEvent) { if (event.key === 'Escape') close() }
     document.addEventListener(outsideEvent, outside, true)
@@ -17,6 +17,6 @@ export function useDismissible<T extends HTMLElement>(open: boolean, close: () =
       if (dismissOnFocus) document.removeEventListener('focusin', outside)
       document.removeEventListener('keydown', escape)
     }
-  }, [open, close, outsideEvent, dismissOnFocus])
+  }, [open, close, outsideEvent, dismissOnFocus, additionalRefs])
   return ref
 }

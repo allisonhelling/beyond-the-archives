@@ -33,3 +33,15 @@ it('does not execute XML entities or import unsafe summary HTML', async () => {
  files[2].content = '<!DOCTYPE package [<!ENTITY source SYSTEM "https://example.com">]>' + files[2].content
  await expect(readEpub(await epubBuffer(files))).rejects.toThrow('Unsupported XML')
 })
+
+it.each([
+ ['First line.\nSecond line.\n\nLast paragraph.', 'First line.\nSecond line.\n\nLast paragraph.'],
+ ['&lt;p&gt;First &lt;em&gt;line&lt;/em&gt;.&lt;br/&gt;Second line.&lt;/p&gt;&lt;p&gt;Last paragraph.&lt;/p&gt;', 'First line.\nSecond line.\n\nLast paragraph.'],
+ ['<p>First <em>line</em>.<br/>Second line.</p><p>Last paragraph.</p>', 'First line.\nSecond line.\n\nLast paragraph.'],
+])('preserves package description formatting: %s', async (description, summary) => {
+ const files = epubFiles({ preface: false })
+ files[2].content = files[2].content.replace(/<dc:description>.*?<\/dc:description>/s, `<dc:description>${description}</dc:description>`)
+ const result = await readEpub(await epubBuffer(files))
+ expect(result.metadata.summary).toBe(summary)
+ expect(result.metadata.summary_html).toContain('<br')
+})
