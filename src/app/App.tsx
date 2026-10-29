@@ -1,3 +1,4 @@
+import { TagAppearanceSync } from '../features/library/display/TagAppearanceSync'
 import { PersonalRatingProvider } from '../features/settings/PersonalRatingSettings'
 import { LibrarySyncProvider } from '../features/imports/LibrarySyncProvider'
 import { BrowsingPosition } from '../features/library/browsing/BrowsingPosition'
@@ -79,7 +80,7 @@ function AuthGate() {
   if (sampleMode && authenticated) return <LibraryProvider><LibrarySyncProvider><PersonalRatingProvider><SamplePreview /><Shell /></PersonalRatingProvider></LibrarySyncProvider></LibraryProvider>
   if (loading) return <div className="loading-state" role="status"><LoadingIcon /><p>Opening your reading space…</p></div>
   if (!authenticated || !session || needsPassword) return <AuthScreen />
-  return <LibraryProvider key={session.user.id} userId={session.user.id}><LibrarySyncProvider><PersonalRatingProvider userId={session.user.id}><Shell /></PersonalRatingProvider></LibrarySyncProvider></LibraryProvider>
+  return <LibraryProvider key={session.user.id} userId={session.user.id}><LibrarySyncProvider><PersonalRatingProvider userId={session.user.id}><TagAppearanceSync userId={session.user.id} /><Shell /></PersonalRatingProvider></LibrarySyncProvider></LibraryProvider>
 }
 
 function SamplePreview() {

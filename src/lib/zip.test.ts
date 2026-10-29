@@ -43,3 +43,12 @@ it('rejects truncated archives, duplicate or unsafe resource paths, and encrypte
  view.setUint16(central + 8, 1, true)
  await expect(openZip(buffer).readText('metadata.xml')).rejects.toThrow('Encrypted')
 })
+it('reads binary EPUB resources without UTF-8 conversion and enforces caller budgets', async () => {
+ const binary = new Uint8Array([0, 127, 128, 255, 13, 10])
+ const buffer = await createZip([{ name: 'image.png', content: binary }, { name: 'other.png', content: binary }]).arrayBuffer()
+ expect(await openZip(buffer).readBytes('image.png')).toEqual(binary)
+ await expect(openZip(buffer, { resource: 5, total: 20 }).readBytes('image.png')).rejects.toThrow('size limit')
+ const bounded = openZip(buffer, { resource: 6, total: 10 })
+ await bounded.readBytes('image.png')
+ await expect(bounded.readBytes('other.png')).rejects.toThrow('size limit')
+})

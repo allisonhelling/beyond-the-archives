@@ -17,8 +17,15 @@ export function plainText(element: ReturnType<CheerioAPI>) {
 
 // Keep semantic AO3 formatting without importing page styles or active content.
 const allowed = new Set(['div', 'p', 'br', 'em', 'strong', 'i', 'b', 'u', 's', 'strike', 'del', 'ins', 'blockquote', 'ul', 'ol', 'li', 'hr', 'sub', 'sup', 'code', 'pre', 'a', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'cite', 'q', 'abbr'])
-export function readSummary(html: string) {
- const $ = load(html, undefined, false)
+export function readSummary(html: string, format: 'html' | 'text' | 'auto' = 'html') {
+ const isText = format === 'text' || (format === 'auto' && !/<\/?[a-z][^>]*>/i.test(html))
+ // XML serializers can emit <br></br>; HTML parsers treat the closing tag as another break.
+ const $ = load(isText ? '' : html.replace(/<\/br\s*>/gi, ''), undefined, false)
+ if (isText) {
+  // Use the parser to escape literal text, then give stored newlines HTML breaks.
+  $.root().text(html.trim().replace(/\r\n?/g, '\n'))
+  $.root().html(($.root().html() ?? '').replaceAll('\n', '<br>'))
+ }
  $('script, style, iframe, object, embed, svg, math, form, input, button, textarea, select, template, noscript').remove()
  const summary = plainText($.root())
  $('*').toArray().reverse().forEach(node => {

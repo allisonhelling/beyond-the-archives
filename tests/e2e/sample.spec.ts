@@ -8,7 +8,10 @@ const originalSeriesCard = (page: Page) => page.locator('.series-card').filter({
 
 async function showSeries(page: Page) {
  const toggle = page.getByRole('button', { name: 'Show Series', exact: true })
- if (await toggle.getAttribute('aria-pressed') === 'false') await toggle.click()
+ if (await toggle.getAttribute('aria-pressed') === 'false') {
+  await toggle.click()
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+ }
 }
 
 test('sample logout previews branded login and recovery, preserves edits, and accepts Sample / 123', async ({ page }) => {
@@ -133,9 +136,10 @@ test('series share work layouts, search contained fics, organize independently a
  await expect(text.nth(0)).toBeVisible(); await expect(text.nth(1)).toBeVisible()
  await expect(card.getByRole('link', { name: 'View Saved Work: Play It Again', exact: true }).locator('.lucide-book-open-text')).toBeVisible()
  const search = page.getByLabel('Search Title or Author', { exact: true })
- await search.fill("This Doesn't Hurt"); await expect(card).toHaveCount(1)
- await search.fill('Missing story'); await expect(card).toHaveCount(0)
+ await search.fill("This Doesn't Hurt"); await page.getByRole('button', { name: 'Apply Filters', exact: true }).click(); await expect(card).toHaveCount(1)
+ await search.fill('Missing story'); await page.getByRole('button', { name: 'Apply Filters', exact: true }).click(); await expect(card).toHaveCount(0)
  await search.fill('')
+ await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
  await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
  await card.getByRole('button', { name: 'Mark Favorite', exact: true }).click()
  await expect(card.getByRole('button', { name: 'Unmark Favorite', exact: true })).toBeVisible()
@@ -162,8 +166,10 @@ test('series share work layouts, search contained fics, organize independently a
  await page.goto('/library?shelf=series')
  await page.locator('.reading-toolbar').getByRole('button', { name: 'Filters', exact: true }).click()
  await page.getByLabel('Search Within Results', { exact: true }).fill('accidentally adopted')
+ await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
  await expect(card).toHaveCount(1)
  await page.getByLabel('Search Within Results', { exact: true }).fill('nonexistent summary')
+ await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
  await expect(card).toHaveCount(0)
  await page.getByRole('button', { name: 'Clear All Filters', exact: true }).first().click()
  await card.getByRole('link', { name: 'View Series Details', exact: true }).click()

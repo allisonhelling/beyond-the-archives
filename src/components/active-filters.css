@@ -1,0 +1,5 @@
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.filter-chips .metadata-tag { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.active-reading-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0 0 20px; }
+.active-reading-filters .filter-chips { margin: 0; flex: 1; }
+.active-reading-filters > .text-button { flex-shrink: 0; border: 0; background: transparent; min-height: 36px; padding: 0; color: var(--color-brand); }

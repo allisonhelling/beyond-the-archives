@@ -1,3 +1,4 @@
+import { normalizeSearchText as normalizeTag } from '../../../lib/search-text'
 export const ao3TagCategories = ['relationship', 'character', 'freeform'] as const
 export type Ao3TagCategory = typeof ao3TagCategories[number]
 export type TagResolution = { category: Ao3TagCategory; name: string; status: 'canonical' | 'synonym' | 'custom' | 'unverified'; canonical_name: string | null; checked_at: string; attempted_at: string }
@@ -6,7 +7,7 @@ export function validAo3TagName(value: unknown): value is string { return typeof
 export const hasTagFilters = (filters?: { relationship?: string; characters?: string; tags?: string }) => Boolean(filters?.relationship || filters?.characters || filters?.tags)
 export const hasTagRules = (rules: unknown) => hasTagFilters((rules as { filters?: Parameters<typeof hasTagFilters>[0] } | null)?.filters)
 export const tagResolutionEvent = 'ao3-tag-resolutions-updated'
-export const normalizeTag = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
+export { normalizeTag }
 function verifiedTags(records: TagResolution[]) {
  const roots = new Map(records.map(record => [`${record.category}:${record.name}`, record.status]))
  return records.filter((record): record is TagResolution & { canonical_name: string } => Boolean(record.canonical_name && ['canonical','synonym'].includes(record.status)

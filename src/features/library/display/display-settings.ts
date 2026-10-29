@@ -29,7 +29,7 @@ export const tagColors = {
  relationships: { label: 'Relationships', color: '#6b3f70', example: 'Dick Grayson & Bruce Wayne' }, characters: { label: 'Characters', color: '#355c70', example: 'Bruce Wayne' }, tags: { label: 'Additional Tags', color: '#715443', example: 'Fluff' }, warnings: { label: 'AO3 Warnings', color: '#970000', example: 'No Archive Warnings Apply' }, collections: { label: 'Custom Collections', color: '#4e684c', example: 'Comfort Reads' }, personalTags: { label: 'Personal Tags', color: '#715443', example: 'Read Again' },
 } as const
 export type TagCategory = keyof typeof tagColors
-export const tagShapes = { pill: 'Rounded Pill', curved: 'Curved Rectangles', sharp: 'Sharp Rectangles', bullets: 'Text With Bullet Separators', commas: 'Text With Comma Separators' } as const
+export const tagShapes = { filled: 'Filled Chips', pill: 'Rounded Pill', curved: 'Curved Rectangles', sharp: 'Sharp Rectangles', bullets: 'Text With Bullet Separators', commas: 'Text With Comma Separators' } as const
 export type TagShape = keyof typeof tagShapes
 export const shortDisplayDivider = (key: string) => key.startsWith('divider:short-')
 
@@ -131,6 +131,10 @@ export function tagAppearance(raw: string): TagAppearance {
   const colors = global ? global.colors : Object.assign({}, ...legacy.map(value => value?.colors ?? {}).reverse())
   return { shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
 }
+export function sameTagAppearance(a: TagAppearance | null | undefined, b: TagAppearance | null | undefined) {
+ if (!a || !b) return a === b
+ return a.shape === b.shape && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
+}
 export function displayPreferences(raw = displaySnapshot(), layout: DisplayLayout = 'desktop'): DisplayPreferences {
   return { ...Object.fromEntries((Object.keys(displayGroups) as DisplayGroup[]).map(group => [group, displayPreference(group, raw, layout)])), tagAppearance: tagAppearance(raw) } as DisplayPreferences
 }
@@ -146,6 +150,11 @@ export function saveDisplay(preferences: DisplayPreferences, layout: DisplayLayo
   }
   const { tagAppearance, ...groups } = preferences
   writeDisplay({ ...saved, ...(layout === 'mobile' ? { mobile: groups } : groups), tagAppearance })
+}
+export function saveTagAppearance(appearance: TagAppearance) {
+ let saved: Record<string, unknown> = {}
+ try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
+ writeDisplay({ ...saved, tagAppearance: appearance })
 }
 function writeDisplay(preferences: object) {
   const raw = JSON.stringify(preferences)

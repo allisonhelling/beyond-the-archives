@@ -1,0 +1,36 @@
+/* Only digits use this face; the rest of each serif label falls through to Georgia. */
+@font-face {
+  font-family: 'Serif Numerals';
+  src: local('Times New Roman'), local('TimesNewRomanPSMT'), local('Liberation Serif'), local('Times-Roman');
+  font-weight: 400;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Serif Numerals';
+  src: local('Times New Roman Bold'), local('TimesNewRomanPS-BoldMT'), local('Liberation Serif Bold'), local('Times-Bold');
+  font-weight: 700;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+
+/* Shared palette and typography for the organizer and independent reader. */
+:root {
+  --font-archive-serif: 'Serif Numerals', Georgia, 'Times New Roman', serif;
+  --radius-surface: 0px;
+  --radius-compact-control: 4px;
+  --radius-control: 6px;
+  --radius-filter-panel: var(--radius-surface);
+  --radius-work-card: var(--radius-surface);
+  --color-control-border: #dfcbc5;
+  --color-filter-border: #e6c8c1;
+  --color-paper: #F7F0E3;
+  --color-surface: #fcf7ec;
+  --color-surface-secondary: #f1e1d1;
+  --color-border: #e8ddda;
+  --color-link: #800020;
+  --color-brand: #970000;
+  --color-brand-hover: #750000;
+  --color-brand-soft: var(--color-surface-secondary);
+}

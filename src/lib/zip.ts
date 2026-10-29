@@ -13,11 +13,11 @@ function checksum(data: Uint8Array) {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-export function createZip(files: { name: string; content: string }[]): Blob {
+export function createZip(files: { name: string; content: string | Uint8Array<ArrayBuffer> }[]): Blob {
   const encoder = new TextEncoder(), parts: BlobPart[] = [], directory: Uint8Array<ArrayBuffer>[] = []
   let offset = 0, directorySize = 0
   for (const file of files) {
-    const name = encoder.encode(file.name), data = encoder.encode(file.content)
+    const name = encoder.encode(file.name), data = typeof file.content === 'string' ? encoder.encode(file.content) : file.content
     const crc = checksum(data)
     const local = new Uint8Array(30 + name.length), header = new DataView(local.buffer)
     header.setUint32(0, 0x04034b50, true)
@@ -57,7 +57,7 @@ export function createZip(files: { name: string; content: string }[]): Blob {
 }
 
 /** Read selected EPUB resources only, with bounded decompression and CRC checks. */
-export function openZip(buffer: ArrayBuffer) {
+export function openZip(buffer: ArrayBuffer, limits = { resource: zipTextLimit, total: 4 * zipTextLimit }) {
   const bytes = new Uint8Array(buffer), view = new DataView(buffer)
   const invalid = () => new Error('Invalid or unsupported EPUB ZIP archive.')
   if (bytes.length < 22 || bytes.length > zipMaxBytes) throw invalid()
@@ -84,17 +84,17 @@ export function openZip(buffer: ArrayBuffer) {
   return {
     names: [...entries.keys()],
     size: (name: string) => entries.get(name)?.size,
-    async readText(name: string) {
+    async readBytes(name: string) {
       const entry = entries.get(name)
       if (!entry) throw new Error(`Missing EPUB resource: ${name}`)
       if (entry.flags & 1) throw new Error('Encrypted EPUB metadata cannot be imported.')
-      if (entry.size > zipTextLimit || total + entry.size > 4 * zipTextLimit) throw new Error('EPUB metadata exceeds the import size limit.')
+      if (entry.size > limits.resource || total + entry.size > limits.total) throw new Error('EPUB resources exceed the import size limit.')
       const offset = entry.offset
       if (offset + 30 > start || view.getUint32(offset, true) !== 0x04034b50 || view.getUint16(offset + 8, true) !== entry.method || view.getUint16(offset + 6, true) !== entry.flags) throw invalid()
       const nameLength = view.getUint16(offset + 26, true), dataStart = offset + 30 + nameLength + view.getUint16(offset + 28, true)
       if (dataStart + entry.compressed > start || new TextDecoder().decode(bytes.subarray(offset + 30, offset + 30 + nameLength)) !== name) throw invalid()
       const compressed = bytes.slice(dataStart, dataStart + entry.compressed)
-      let data: Uint8Array = compressed
+      let data: Uint8Array<ArrayBuffer> = compressed
       if (entry.method === 8) {
         let stream: DecompressionStream
         try { stream = new DecompressionStream('deflate-raw') }
@@ -117,7 +117,8 @@ export function openZip(buffer: ArrayBuffer) {
       } else if (entry.method !== 0) throw invalid()
       if (data.length !== entry.size || checksum(data) !== entry.crc) throw new Error('The EPUB is damaged. Try another copy of the file.')
       total += data.length
-      return new TextDecoder().decode(data)
+      return data
     },
+    async readText(name: string): Promise<string> { return new TextDecoder().decode(await this.readBytes(name)) },
   }
 }
