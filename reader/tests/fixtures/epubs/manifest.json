@@ -1,0 +1,26 @@
+[
+  {
+    "file": "Trust Me, I'm an Alchemist - metisket.epub",
+    "bytes": 177419,
+    "sha256": "7892be7fbce5870d90b460424cb60c56f74a037232a9dc487dee284ad364351a",
+    "title": "Trust Me, I'm an Alchemist",
+    "source": "https://archiveofourown.org/works/23818510",
+    "authors": [
+      "metisket"
+    ],
+    "words": 54791,
+    "chapters": 5
+  },
+  {
+    "file": "reverse bird psychology - Bee_4.epub",
+    "bytes": 96789,
+    "sha256": "9ab880d084ed7554d213af49a038de7b4b8f582c9a0e8687b3341f06a8d9758f",
+    "title": "reverse bird psychology",
+    "source": "https://archiveofourown.org/works/39062268",
+    "authors": [
+      "Bee_4"
+    ],
+    "words": 672,
+    "chapters": 1
+  }
+]
