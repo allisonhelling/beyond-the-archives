@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, initialProgress, nextUnread, parseWorkUrl, validateProgress, type Work } from './model'
+import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, initialProgress, nextUnread, parseWorkUrl, progressReadingStatus, validateProgress, type Work } from './model'
 it('projects deleted availability without losing saved work fields or manual corrections', () => {
   const work = { title: 'Source title', summary: 'Saved summary', is_complete: true, published_chapters: 8, automatic_metadata: {} } as Work
   const manual = { title: 'My title', publication_status: 'complete' }
@@ -8,6 +8,21 @@ it('projects deleted availability without losing saved work fields or manual cor
   expect(manual.publication_status).toBe('complete')
 })
 describe('manual AO3 identity and progress', () => {
+  it.each([
+    ['complete', 0, 'to_read'], ['complete', 1, 'reading'], ['complete', 3, 'finished'],
+    ['in_progress', 0, 'to_read'], ['in_progress', 1, 'reading'], ['in_progress', 3, 'waiting_for_updates'],
+    ['abandoned', 0, 'to_read'], ['abandoned', 1, 'reading'], ['abandoned', 3, 'finished'],
+    ['unknown', 0, 'to_read'], ['unknown', 1, 'reading'], ['unknown', 3, 'reading'],
+    ['deleted', 0, 'to_read'], ['deleted', 1, 'reading'], ['deleted', 3, 'reading'],
+  ] as const)('maps footer progress to status for %s at chapter %s', (publication_status, progress, expected) => {
+    expect(progressReadingStatus(progress, { ...blankMetadata, publication_status, published_chapters: 3 })).toBe(expected)
+  })
+  it('handles unknown published counts and rejects invalid edits before deriving a status', () => {
+    expect(progressReadingStatus(3, blankMetadata)).toBe('reading')
+    expect(progressReadingStatus(3, { ...blankMetadata, publication_status: 'complete', total_chapters: 3 })).toBe('finished')
+    expect(progressReadingStatus(0, { ...blankMetadata, publication_status: 'complete', published_chapters: 0 })).toBe('to_read')
+    for (const invalid of [-1, 1.5, NaN, Infinity, 4]) expect(() => progressReadingStatus(invalid, { ...blankMetadata, published_chapters: 3 })).toThrow()
+  })
   it('accepts AO3 author and pseud pages and rejects unrelated or unsafe destinations', () => {
     for (const url of ['https://archiveofourown.org/users/Author', 'https://archiveofourown.org/users/Author/pseuds/PenName', 'https://archiveofourown.org/users/Author/profile', 'https://archiveofourown.org/users/Author/works']) expect(authorPageUrl(` ${url} `)).toBe(url)
     for (const url of [undefined, '', 'javascript:alert(1)', 'https://example.com/users/Author', 'https://archiveofourown.org.evil.test/users/Author', 'https://name@archiveofourown.org/users/Author', 'https://archiveofourown.org/works/123', 'https://archiveofourown.org/users/']) expect(authorPageUrl(url)).toBeNull()

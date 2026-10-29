@@ -14,7 +14,7 @@ it('saves completed sync totals and diagnostics through account storage and repo
  await librarySyncReports(2)
  expect(rpc).toHaveBeenLastCalledWith('library_sync_report_history', { p_page: 2 })
  rpc.mockResolvedValue({ error: { message: 'Connection failed' } })
- await expect(librarySyncReports(1, state)).rejects.toThrow('Saved scan pages remain available for retry')
+ await expect(librarySyncReports(1, state)).rejects.toThrow('Server response: Connection failed')
 })
 it('explains a missing Phase 3 migration instead of suggesting a one-link batch is too large',async()=>{
  rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'Internal database details'}})
@@ -185,6 +185,17 @@ it('does not report an incoming bookmark as applied when an older server keeps i
  const { applyLibrarySyncBookmark } = await import('./repository')
  rpc.mockResolvedValueOnce({ data: { batch: null, imported: 0, kept: 1 }, error: null })
  await expect(applyLibrarySyncBookmark({ workId: 401, id: 'entry', version: 'reviewed', title: 'Work', status: 'to_read', progress: 0, notes: '', tags: [], incomingWork: { workId: 401, source: 'bookmarks', url: 'https://archiveofourown.org/works/401', metadata: { title: 'Work' }, notes: 'Incoming', tags: [], bookmarkDate: null, updatedDate: null } })).rejects.toThrow('not applied. Apply the latest database migrations')
+})
+
+it.each(['preview', 'csv', 'scan'] as const)('retains the database failure for %s instead of blaming migrations', async boundary => {
+ const { previewCsvImport, submitCsvImport, submitLibrarySync } = await import('./repository')
+ const row = { workId: 401, source: 'marked_for_later' as const, url: 'https://archiveofourown.org/works/401', metadata: { title: 'Series installment' }, notes: '', tags: [], bookmarkDate: null, updatedDate: null }
+ const original = { code: '57014', message: 'canceling statement due to statement timeout', details: 'Server details', hint: null }
+ rpc.mockResolvedValueOnce({ data: null, error: original })
+ const request = boundary === 'preview' ? previewCsvImport([row]) : boundary === 'csv' ? submitCsvImport([row], [], {}) : submitLibrarySync([row])
+ await expect(request).rejects.toMatchObject({ cause: original, message: expect.stringContaining('[57014] canceling statement due to statement timeout') })
+ expect(rpc).toHaveBeenCalledOnce()
+ expect(connect).not.toHaveBeenCalled()
 })
 
 it('stops loading further series pages when a preview is cancelled', async () => {

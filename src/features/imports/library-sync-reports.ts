@@ -1,4 +1,5 @@
 import { sampleMode } from '../../lib/sample-mode'
+import { importError } from './import-error'
 import { supabase } from '../../lib/supabase'
 import type { Json } from '../../types/database'
 import type { LibrarySyncState } from './extension'
@@ -22,6 +23,6 @@ export async function librarySyncReports(page = 1, state?: LibrarySyncState): Pr
  }
  if (!supabase) throw new Error('Connect your library to save sync reports.')
  const { data, error } = await supabase.rpc('library_sync_report_history', { p_page: page, ...(report ? { p_report: report as unknown as Json } : {}) })
- if (error) throw new Error('Could not save or load sync reports. Apply the latest database migrations and check your connection. Saved scan pages remain available for retry.')
+ if (error) throw importError('Could not save or load sync reports', error)
  return data as unknown as LibrarySyncReports
 }

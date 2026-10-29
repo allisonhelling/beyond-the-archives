@@ -1,3 +1,4 @@
+import { BookFusionImport } from '../library/bookfusion/BookFusionImport'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { LibrarySyncForm } from './LibrarySyncForm'
@@ -62,6 +63,7 @@ export function ImportPage() {
  const resultPagination = data.summary&&<Pagination page={data.summary.page} pages={data.summary.pages} total={visibleCount} size={50} onPage={setResultPage}/>
  return <div className="mass-import-page"><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Paste work or series links. Import series using your default or the option chosen for this import. Fixed Wayback Machine links to AO3 works are also supported. Valid work identities are saved immediately; metadata arrives gradually.</p></div></div>
  <LibrarySyncForm onImported={async id=>{if(id)setSelected(id);await library.refresh();if(!sampleMode)await reload()}} />
+ <BookFusionImport />
  <CsvImportForm onImported={async id=>{if(id)setSelected(id);await library.refresh();if(!sampleMode)await reload()}} />
  {reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
  <h2>Import Work or Series Links</h2>

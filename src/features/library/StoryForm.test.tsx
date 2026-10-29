@@ -76,3 +76,18 @@ it('preserves missing metadata and draft fields and requests the original URL wh
  expect(screen.getByLabelText('AO3 URL')).toHaveValue('')
  expect(mocks.save).not.toHaveBeenCalled()
 })
+
+it('saves, distinguishes, and removes BookFusion links through private metadata overrides', async () => {
+ render(<MemoryRouter><StoryForm story={exampleWork} section="metadata" onCancel={() => {}} /></MemoryRouter>)
+ const url = 'https://www.bookfusion.com/reader/123?location=chapter-2'
+ fireEvent.change(screen.getByLabelText('BookFusion Link'), { target: { value: url } })
+ fireEvent.click(screen.getByRole('button', { name: 'Save Story' }))
+ expect(await screen.findByRole('alert')).toHaveTextContent('Choose Bookmark')
+ expect(mocks.save).not.toHaveBeenCalled()
+ fireEvent.change(screen.getByLabelText('BookFusion Link Type'), { target: { value: 'bookmark' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Save Story' }))
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ metadataChanges: expect.objectContaining({ bookfusion_link: { url, kind: 'bookmark' } }) })))
+ fireEvent.change(screen.getByLabelText('BookFusion Link'), { target: { value: '' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Save Story' }))
+ await waitFor(() => expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({ metadataChanges: expect.objectContaining({ bookfusion_link: null }) })))
+})

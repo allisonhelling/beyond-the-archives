@@ -95,3 +95,15 @@ it('matches client reload merges for nulls, lists, deletions and nested metadata
   expect(sql).toEqual(mergeEdits(base, local, saved))
  }
 })
+
+it('persists private BookFusion associations, detects concurrent replacements, and removes links', async () => {
+ const { number, id, base } = await seed()
+ const bookfusion_link = { url: 'https://www.bookfusion.com/reader/test', kind: 'book' }
+ await save(id, number, { metadata: { bookfusion_link } }, base)
+ const saved = await snapshot(id)
+ expect(saved).toMatchObject({ notes: base.notes, progress: base.progress, metadata: { bookfusion_link } })
+ await expect(save(id, number, { metadata: { bookfusion_link: { url: 'https://www.bookfusion.com/reader/other', kind: 'book' } } }, base)).rejects.toThrow(/Review/)
+ await expect(save(id, number, { metadata: { bookfusion_link } }, saved, bob)).rejects.toThrow(/no longer available/)
+ await save(id, number, { metadata: { bookfusion_link: null } }, saved)
+ expect((await snapshot(id)).metadata).toMatchObject({ bookfusion_link: null })
+})

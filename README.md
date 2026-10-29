@@ -6,9 +6,11 @@ A private application for organizing AO3 works and series, tracking reading prog
 
 ## Major Features
 
+- **BookFusion Links:** save a book or fixed-location bookmark link on a work page and open it from the bookspine footer. Match saved AO3 works with a Calibre mapping CSV. See [BookFusion setup and report import](docs/BOOKFUSION.md).
+
 - **Library and Currently Reading:** shelves, favorites, editable Recs, personal star ratings, notes, tags, and reading statuses from To Read through Finished or Did Not Finish.
 - **Reading Statistics:** section tabs for monthly, yearly, and all-time chapter word totals, re-reads, reading-time estimates, status progression, taxonomy profiles, favorites, trends, and activity heatmaps. Set your reading speed in Settings → Reading Statistics.
-- **Reading Progress:** chapter tracking, pause/resume, rereads, reading date ranges, and chapter reading history recorded by the browser companion. Reading status stays separate from AO3 publication status.
+- **Reading Progress:** chapter tracking, pause/resume, rereads, reading date ranges, and chapter reading history recorded by the browser companion. Footer edits also update reading status: To Read at zero, Reading partway through, and Finished or Waiting for Updates when caught up with a completed or ongoing work. Reading status stays separate from AO3 publication status.
 - **Flexible Imports:** work/chapter links, series selection, manual entry, metadata recovery from EPUBs, scraper CSV files, and browser scans of AO3 lists and collections.
 - **Search and Organization:** title/author search, fandom and categorized tag filters, verified canonical-tag synonyms, saved custom collections, automatic collection rules, grouping, and seeded random sorting. Author pages group works already in your library.
 - **Series Pages:** review related installments, save optional full series details, and manage series notes, favorites, and collections independently of individual works.
@@ -176,6 +178,8 @@ Choose 25, 50, 100, or 250 results per page. Toolbar page-size changes last unti
 Create manual or automatic custom collections, choose colors and symbols, and organize shelf order with **Edit Collections**. Hiding a collection preserves its contents and applies in this browser; **View Hidden** lets you restore it. Deleting a collection preserves its works. When browsing series, results load before filter suggestions and collection counts; those may appear afterward. Series pages initially show saved works only. **Load** saves full available AO3 series details; choose individual installments to import. Series review shows **Save** only for series not already in your library; **Save All Series** skips existing series. Saving returns control after the write completes; library refresh continues in the background. **Check Series Containing Imported Works** is unchecked for each new import. Leave it off to handle only directly bookmarked or explicitly supplied series; enable it to also check memberships of imported works. This applies to list scans, CSV files, pasted links, and Add Story link imports. **Remove** discards downloaded series details while preserving your library and personal series data.
 
 ### Import Lists and Review Changes
+
+If a scan import fails, keep the saved scan and selections. The error identifies the saved page and series when available, includes the server’s error code/message, and gives guidance for connection, sign-in, schema, or timeout problems. Retry from the existing review after resolving the reported problem.
 
 Open **Add → Import History from AO3** or `/imports`. Link batches accept up to 2,000 URL tokens. CSV imports accept up to 2,000 unique works and 20 MB per review. Review series selections and personal-data conflicts before confirming. Optional chapter-date checks estimate progress strictly before a bookmark’s date; missing or same-day evidence stays unconfirmed.
 

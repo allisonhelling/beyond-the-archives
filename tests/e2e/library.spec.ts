@@ -973,6 +973,43 @@ test('publication tiles exclude waiting and unknown works and update after chang
 })
 
 
+for (const surface of ['library', 'details'] as const) test(`book-spine footer saves reading status with chapter edits on ${surface}`, async ({ page }) => {
+  const tables = await fixture(page)
+  const publications = ['complete', 'in_progress', 'abandoned'] as const
+  for (const [index, publication_status] of publications.entries()) {
+    tables.works.push({ id: `progress-work-${index}`, ao3_work_id: index + 1, verified_chapters: {} })
+    tables.library_entries.push({ id: `progress-entry-${index}`, work_id: `progress-work-${index}`, reading_status: 'paused_reading', last_read_chapter: 1, is_favorite: false, notes: 'Keep this note', original_url: `https://archiveofourown.org/works/${index + 1}`, created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: `Progress ${publication_status}`, publication_status, published_chapters: 3, total_chapters: publication_status === 'in_progress' ? 5 : 3 } })
+  }
+  await page.goto('/library'); await login(page)
+  for (const [index, publication] of publications.entries()) {
+    await page.goto(surface === 'library' ? '/library' : `/stories/progress-entry-${index}`)
+    const container = surface === 'library' ? page.locator(`[data-story-id="progress-entry-${index}"]`) : page.locator('.story-details-page')
+    const footer = container.locator('.book-spine-footer')
+    const finalStatus = publication === 'in_progress' ? 'waiting_for_updates' : 'finished'
+    // Reverse from a terminal status as well as advance from zero/intermediate progress.
+    for (const [chapter, status] of [[0, 'to_read'], [1, 'reading'], [3, finalStatus], [1, 'reading']] as const) {
+      await footer.locator('.chapter-progress-button').click()
+      const editor = page.getByRole('dialog', { name: 'Edit Chapter Progress' })
+      await editor.getByLabel('Last Fully Read Chapter').fill(String(chapter))
+      await editor.getByRole('button', { name: 'Save Progress', exact: true }).click()
+      await expect(editor).toHaveCount(0)
+      await expect.poll(() => tables.library_entries[index].reading_status).toBe(status)
+      expect(tables.library_entries[index].last_read_chapter).toBe(chapter)
+      await expect(footer.locator('.spine-status')).toHaveAttribute('aria-label', status === 'to_read' ? 'To Read' : status === 'waiting_for_updates' ? 'Waiting for Updates' : status === 'finished' ? 'Finished' : 'Reading')
+    }
+    await footer.getByRole('button', { name: 'Mark as Caught Up', exact: true }).click()
+    await expect.poll(() => tables.library_entries[index].reading_status).toBe(finalStatus)
+    expect(tables.library_entries[index].last_read_chapter).toBe(3)
+    await page.getByRole('region', { name: 'Reading Updates' }).getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect.poll(() => tables.library_entries[index].reading_status).toBe('reading')
+    expect(tables.library_entries[index].last_read_chapter).toBe(1)
+    expect(tables.library_entries[index].notes).toBe('Keep this note')
+    await page.reload()
+    await expect(footer.locator('.spine-status')).toHaveAttribute('aria-label', 'Reading')
+    await expect(footer.locator('.chapter-progress-button')).toHaveText('Ch. 1 / 3')
+  }
+})
+
 test('book-spine footer reflects saved progress and preserves chapter actions', async ({ page }, info) => {
   const tables = await fixture(page)
   for (const [index, total, published, progress] of [[1, 10, 8, 5], [2, 10, 10, 10], [3, null, null, 2], [4, 0, 0, 0]] as const) {

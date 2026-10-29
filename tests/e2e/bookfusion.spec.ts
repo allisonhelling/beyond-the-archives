@@ -1,0 +1,31 @@
+import { expect, test } from '@playwright/test'
+import { fixture, login } from './library-fixture'
+
+test('BookFusion links persist, appear after caught-up, and distinguish bookmarks on desktop and mobile', async ({ page }) => {
+  const tables = await fixture(page)
+  await page.goto('/add?import=manual'); await login(page)
+  await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/12345')
+  await page.getByLabel('Title', { exact: true }).fill('BookFusion Linked Work')
+  await page.getByLabel('BookFusion Link', { exact: true }).fill('https://www.bookfusion.com/reader/123')
+  await page.getByRole('button', { name: 'Save Story', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'BookFusion Linked Work', exact: true })).toBeVisible()
+  const footer = page.locator('.book-spine-footer')
+  const link = footer.getByRole('link', { name: 'Open in BookFusion' })
+  await expect(link).toHaveAttribute('href', 'https://www.bookfusion.com/reader/123')
+  const caughtUp = await footer.getByRole('button', { name: 'Mark as Caught Up' }).boundingBox()
+  const bookfusion = await link.boundingBox()
+  expect(bookfusion!.x).toBeGreaterThan(caughtUp!.x)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.reload()
+  await expect(link).toBeVisible()
+  await page.getByRole('button', { name: 'Edit BookFusion Link', exact: true }).click()
+  const bookmark = 'https://www.bookfusion.com/reader/123?location=chapter-2#bookmark'
+  await page.getByLabel('BookFusion Link', { exact: true }).fill(bookmark)
+  await page.getByLabel('BookFusion Link Type').selectOption('bookmark')
+  await page.getByRole('button', { name: 'Save Story', exact: true }).click()
+  await expect(link).toHaveAttribute('href', bookmark)
+  expect(tables.library_entries[0].metadata_overrides).toMatchObject({ bookfusion_link: { url: bookmark, kind: 'bookmark' } })
+  await page.goto('/library')
+  await expect(page.locator('.story-card .book-spine-footer').getByRole('link', { name: 'Open in BookFusion' })).toHaveAttribute('href', bookmark)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})

@@ -143,6 +143,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   if (state.seenSeries?.length && (selection.current?.scanId !== state.id || selection.current.batchStart !== (state.batchStart ?? 0))) return false
   pending.current = true; setBusy(true); setError(''); setMessage('')
   let imported = 0, kept = 0, batch: string | null = null
+  let pageContext = ''
   const differences = new Map<string, CsvConflict>(seriesReview ? conflicts.map(conflict => [csvWorkKey(conflict), conflict]) : [])
   let reportState = state
   const repairPages = { ...state.repairPages }
@@ -163,8 +164,10 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    // Page-sized transactions support large libraries and safe, idempotent retry.
    for (let offset = state.batchStart ?? 0; offset < state.pages; offset++) {
     const page = (state.startPage ?? 1) + offset
+    pageContext = `Saved page ${page}`
     setMessage(`Importing saved page ${offset - (state.batchStart ?? 0) + 1} of ${state.pages - (state.batchStart ?? 0)}…`)
     const reply = await librarySyncCommand('page', { page, scanId: state.id })
+    if (reply.seriesUrl) pageContext += ` (${reply.seriesUrl})`
     const rows = uniqueCsvWorks(readAo3Rows(reply.rows ?? []).filter((row): row is CsvWork => row.workId !== undefined && (finish && !reply.seriesUrl || typeof row.workId === 'number' && selection.current?.ids.has(row.workId) === true)))
     if (!rows.length) continue
     const result = await submitLibrarySync(rows, collectionId, state.readingStatus, { id: state.id, url: state.url, reviewExisting: state.reviewExisting ?? false, ...(state.readingStatusOrigin ? { readingStatusOrigin: state.readingStatusOrigin } : {}) })
@@ -182,6 +185,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
     }
     imported += result.imported; kept += result.kept; batch = result.batch ?? batch
    }
+   pageContext = ''
    // Save the report before acknowledging: finish deletes the scan checkpoints.
    if (finish) {
     if (!state.hasMore) await librarySyncReports(1, reportState)
@@ -193,7 +197,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
    setMessage(`Updated AO3 information for ${repairs.metadata} works, including series information for ${repairs.series} works. Found ${repairs.reading} possible reading-status corrections. Imported ${imported} works; kept ${kept} existing works. Non-empty AO3 metadata was refreshed; existing personal data was preserved.${!finish ? ' Selected works were imported. This review remains open and scanning stays paused.' : state.hasMore ? ' Scanning continues with the remaining pages.' : ''}`)
    await onImported(batch)
    return true
-  } catch (failure) { setError(failure instanceof Error ? failure.message : 'Import failed. Retry to continue safely.'); setMessage('Saved pages remain available. Retrying keeps works already imported.'); return false }
+  } catch (failure) { setError(`${pageContext ? `${pageContext}: ` : ''}${failure instanceof Error ? failure.message : 'Import failed. Retry to continue safely.'}`); setMessage('Saved pages remain available. Retrying keeps works already imported.'); return false }
   finally { if (!finish) selection.current = null; pending.current = false; setBusy(false) }
  }
  async function resolveBookmark(conflict: CsvConflict, incoming: boolean) {

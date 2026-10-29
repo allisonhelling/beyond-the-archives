@@ -1,3 +1,5 @@
+import { BookFusionFields } from './bookfusion/BookFusionFields'
+import { validateBookFusionLink } from './bookfusion/bookfusion'
 import { EditConflictReview } from './EditConflictReview'
 import { editSnapshot, EditConflict } from './edit-merge'
 import { Info } from 'lucide-react'
@@ -56,7 +58,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   }
   function field<K extends keyof Metadata>(key: K, value: Metadata[K]) { setMetadata(m => ({ ...m, [key]: value })) }
   function editedMetadata(): Metadata {
-    return { ...metadata, manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
+    return { ...metadata, ...(metadata.bookfusion_link !== undefined && { bookfusion_link: metadata.bookfusion_link?.url.trim() ? validateBookFusionLink(metadata.bookfusion_link) : null }), manual_url: url, title: metadata.title.trim(), authors: parseLines(authors), fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
   }
   function urlDefaults() {
     if (story || statusTouched) return
@@ -105,6 +107,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     {epubMessage && <p role="status">{epubMessage}</p>}
     <label>AO3 URL<input required type="url" readOnly={story?.work.ao3_work_id === null} value={url} onChange={e => setUrl(e.target.value)} onBlur={urlDefaults} /></label>
     <p className="field-help">{story ? 'You can update the link for this work. The original submission is preserved separately; work identity cannot be changed.' : 'Chapter IDs are not chapter numbers. Unverified links do not set progress; enter chapters read below.'}</p>
+    <BookFusionFields value={metadata.bookfusion_link} onChange={value => field('bookfusion_link', value)} />
     <label>Title<input required value={metadata.title} onChange={e => field('title', e.target.value)} /></label>
     <div className="form-grid"><label>Authors (one per line)<textarea rows={3} value={authors} onChange={e => setAuthors(e.target.value)} /></label><label>Fandoms (one per line)<textarea rows={3} value={fandoms} onChange={e => setFandoms(e.target.value)} /></label></div>
     {!!parseLines(authors).length && <div className="form-grid">{parseLines(authors).map(author => <label key={author}>AO3 Author Page for {author} (optional)<input type="url" placeholder="https://archiveofourown.org/users/username" value={metadata.author_links?.[author] ?? ''} onChange={e => field('author_links', { ...metadata.author_links, [author]: e.target.value })} /></label>)}</div>}

@@ -12,12 +12,18 @@ The application has three cooperating parts: a responsive website, Supabase auth
 
 Implemented capabilities include manual and link entry, bulk imports, CSV review, browser-list scanning, series previews and saved series details, author pages, advanced filtering, automatic collections, chapter history, exports, full backup restore, and DNF archiving. `/stats` provides calendar-filtered reading statistics. Automatic email notifications, automatic future-installment import, and scheduled backup creation are not delivered features. Roadmap text and early phase reports may describe plans beyond the current implementation.
 
+## BookFusion Linking
+
+Work information includes a private BookFusion Link and explicit book/bookmark kind. Book links omit queries/fragments to avoid a fixed location; bookmarks retain their exact URL. Only HTTPS destinations on `bookfusion.com` or `www.bookfusion.com` without credentials or custom ports are clickable. The shared work-card/details bookspine footer places Open in BookFusion after the caught-up action. BookFusion controls reading position independently of organizer chapter history.
+
+The implemented Calibre report workflow exports AO3 URLs, upload identifiers, titles and authors with a read-only Python helper, then previews exact AO3 work-ID matches for selected-link saves. Missing links and identities, duplicate matches, and concurrent changes require review. Upload identifiers alone do not generate URLs. No live companion integration or BookFusion progress synchronization is implemented. See [BookFusion](BOOKFUSION.md) for the report contract, limits, and complete procedure.
+
 ## Main Workflows
 
 1. An operator configures Supabase and invites an account. The reader accepts the invitation, sets a password, and signs in. Recovery links return through `/auth/callback`.
 2. The reader adds a work manually, submits a link, recovers metadata from an EPUB, reviews CSV data, or explicitly starts a browser scan. Personal library identity can persist before metadata retrieval succeeds.
 3. Library and Currently Reading show server-paged results. The reader filters, groups, sorts, opens details, edits personal information, or follows an AO3 reading link.
-4. Website reading controls change saved progress/status. The AO3 companion also supports in-page reading actions and chapter records from the loaded chapter.
+4. Website reading controls change saved progress/status. Footer chapter edits save both atomically: zero → To Read, intermediate chapters → Reading, and all published chapters → Finished for completed/abandoned works or Waiting for Updates for ongoing works. Unknown/deleted publication status remains Reading for positive progress; a complete work with only a known total finishes at that total. Mark as Caught Up applies the published count and offers Undo for both fields. The AO3 companion also supports in-page reading actions and chapter records from the loaded chapter.
 5. New metadata observations refresh factual information. Private manual corrections retain precedence; proposed historical reading changes require review.
 6. Settings provides display preferences, retrieval choices, exports, backups, restoration, and optional DNF cleanup. Full backups provide recovery of details that a compact DNF archive intentionally omits.
 
@@ -112,7 +118,7 @@ Series link imports, scanned series, and Related Series review reuse the shared 
 | Series links | Preview and select installments before importing; saving details does not automatically import missing works. |
 | CSV | Up to 2,000 unique works and 20 MB per review; supports scraper exports and source-list distinctions; personal-data conflict review supports Keep/Overwrite. |
 | EPUB | Up to 50 MB; metadata-only local recovery with bounded decompression and corruption checks; encrypted metadata unsupported. Missing fields preserve editor values, and existing identity cannot change. |
-| Library Sync | Explicit browser scan with durable account-scoped checkpoints; page-sized import transactions; 500 pages per batch across listings/series. |
+| Library Sync | Explicit browser scan with durable account-scoped checkpoints; page-sized import transactions; 500 pages per batch across listings/series. Failures retain checkpoints/selections and expose server code/message plus saved page/series context when available. |
 
 Add Story offers **Import Source → Import from Wayback Machine** with a dedicated snapshot URL field; pasting a supported snapshot in the normal link field selects this source automatically. The work details page observes the originating import batch so metadata and failures remain visible when retrieval finishes during navigation. Wayback imports preserve the historical source in submission history and new entries. Replay-rewritten links are normalized for metadata/identity parsing. Historical observations remain private, do not verify a live canonical URL or current availability, and preserve manual corrections. Archive requests cannot redirect to live AO3 or another work; no current chapter-index request is added. Saved reading destinations retain the capture instead of assuming another archived chapter exists. Missing archive metadata leaves the saved identity editable. Chrome/Edge v0.7.6 requires archive host permission; Safari is not used for import retrieval.
 

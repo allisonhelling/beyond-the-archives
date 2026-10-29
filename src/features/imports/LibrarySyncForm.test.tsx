@@ -1,3 +1,4 @@
+import { importError } from './import-error'
 import { saveSeriesImportBehavior } from './series-import-preferences'
 import { LibrarySyncProvider } from './LibrarySyncProvider'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -458,6 +459,8 @@ it('keeps the chosen series works through an interrupted upload and retry', asyn
  fireEvent.click(await screen.findByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Finish Import' }))
  expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
+ expect(screen.getByRole('alert')).toHaveTextContent(`Saved page 2 (${seriesUrl})`)
+ expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
  expect(mocks.command.mock.calls.some(([action]) => action === 'finish')).toBe(false)
  fireEvent.click(screen.getByRole('button', { name: 'Finish Import' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
@@ -960,13 +963,15 @@ it('imports selected works without finishing the scan and restores that review a
 
 it('keeps selected works available after an incremental import fails', async () => {
  scannedSeries()
- mocks.submit.mockRejectedValueOnce(new Error('Connection lost'))
+ mocks.submit.mockRejectedValueOnce(importError('Could not import this scan page', { code: '57014', message: 'canceling statement due to statement timeout' }))
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
  fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
  fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
  fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
  fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
- expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
+ expect(await screen.findByRole('alert')).toHaveTextContent('[57014] canceling statement due to statement timeout')
+ expect(screen.getByRole('alert')).toHaveTextContent(`Saved page 2 (${seriesUrl})`)
+ expect(screen.getByRole('alert')).not.toHaveTextContent('migrations')
  expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeChecked()
  expect(screen.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeEnabled()
  fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))

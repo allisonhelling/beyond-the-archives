@@ -14,7 +14,7 @@ export type CsvConflict = { workId: number | null; bookmarkId?: number; id: stri
 export type CsvChoice = 'keep' | 'overwrite'
 
 /** RFC 4180 fields, including escaped quotes, embedded newlines, BOM and CRLF. */
-export function parseCsv(text: string): Record<string, string>[] {
+export function parseCsv(text: string, requiredHeaders?: readonly string[]): Record<string, string>[] {
  const rows: string[][] = [], row: string[] = []
  let cell = '', quoted = false, closed = false
  text = text.replace(/^\ufeff/, '')
@@ -32,7 +32,8 @@ export function parseCsv(text: string): Record<string, string>[] {
  if (quoted) throw new Error('The CSV ends inside a quoted field.')
  row.push(cell); if (row.some(value => value.trim())) rows.push(row)
  const headers = rows.shift()?.map(value => value.trim().toLowerCase()) ?? []
- if (!headers.includes('link') || !headers.includes('title') || new Set(headers).size !== headers.length) throw new Error('Choose an AO3 scraper CSV with unique title and link columns.')
+ const required = requiredHeaders ?? ['link', 'title']
+ if (required.some(header => !headers.includes(header)) || new Set(headers).size !== headers.length) throw new Error(requiredHeaders ? `Choose a CSV with unique ${required.join(' and ')} columns.` : 'Choose an AO3 scraper CSV with unique title and link columns.')
  return rows.map((values, index) => {
   if (values.length !== headers.length) throw new Error(`CSV row ${index + 2} has ${values.length} fields; expected ${headers.length}.`)
   return Object.fromEntries(headers.map((header, i) => [header, values[i]]))

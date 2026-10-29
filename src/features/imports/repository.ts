@@ -1,4 +1,5 @@
 import { localExtensionConnectionHelp } from './extension-config'
+import { importError } from './import-error'
 import { bookmarkConflicts, bookmarkReadingState, csvWorkKey } from './ao3-csv'
 import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
@@ -119,7 +120,7 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
 export async function previewCsvImport(works: import('./ao3-csv').CsvWork[]): Promise<import('./ao3-csv').CsvConflict[]> {
  if (sampleMode) return (await import('../library/sample/repository')).previewSampleCsvImport(works)
  const { data, error } = await client().rpc('preview_ao3_csv_import', { p_work_ids: works.flatMap(work => work.workId === null ? [] : [work.workId]), p_bookmark_ids: works.flatMap(work => work.bookmarkId ? [work.bookmarkId] : []) })
- if (error) throw new Error('Could not check CSV conflicts. Apply the latest database migrations and retry.')
+ if (error) throw importError('Could not check CSV conflicts', error)
  return (data as unknown as import('./ao3-csv').CsvConflict[]).map(conflict => {
   const incoming = works.find(work => work.workId !== null && work.workId === conflict.workId || work.bookmarkId && work.bookmarkId === conflict.bookmarkId)
   return incoming ? { ...conflict, workId: incoming.workId } : conflict
@@ -131,7 +132,7 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
  const { data, error } = await client().rpc('submit_ao3_csv_import', { p_rows: rows as unknown as import('../../types/database').Json })
  if (error) {
   if (error.code === '40001') throw new Error('Your library changed after CSV review. Choose the files again to refresh conflicts before importing.')
-  throw new Error('Could not confirm the CSV import. Check import history and your connection before retrying. Apply the latest database migrations if this feature is new.')
+  throw importError('Could not confirm the CSV import', error)
  }
  void connectExtension().catch(() => {})
  return data as unknown as { batch: string | null; imported: number; kept: number; metadataRepaired: number; seriesRepaired: number; readingCorrections: number }
@@ -145,7 +146,7 @@ export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], co
  else {
   const { data, error } = await client().rpc('submit_ao3_library_sync', { p_rows: works as unknown as import('../../types/database').Json, ...(scan ? { p_scan_id: scan.id, p_source_url: scan.url } : {}) })
   if (error?.code === '40001') throw new Error('This work changed after bookmark review. Import the scan again to review its latest saved data.')
-  if (error) throw new Error('Could not import this scan page. Apply the latest database migrations and check your connection; retry safely to preserve personal data.')
+  if (error) throw importError('Could not import this scan page', error)
   result = data as unknown as typeof result
  }
  if (collectionId) {

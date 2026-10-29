@@ -1,3 +1,4 @@
+import { BookFusionButton } from './bookfusion/BookFusionFields'
 import { RetryError } from '../../components/RetryError'
 import { sampleMode } from '../../lib/sample-mode'
 import { ChapterReadingHistory } from './ChapterReadingHistory'
@@ -33,7 +34,7 @@ import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type React
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, Info, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, validateProgress, type Collection, type Status, type Story } from './model'
+import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, progressReadingStatus, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -102,7 +103,7 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
   function closeProgress() { setProgressOpen(false); setError(''); progressTrigger.current?.focus() }
   const editProgress = <div className="progress-editor" ref={progressRef} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeProgress() } }}>
     <button ref={progressTrigger} className="chapter-progress-button" title="Edit Chapter Progress" aria-label={`Chapter ${story.last_read_chapter} of ${story.metadata.published_chapters ?? '?'} — Edit Progress`} aria-haspopup="dialog" aria-expanded={progressOpen} aria-controls={progressOpen ? progressId : undefined} disabled={blocked} onClick={() => { editBase.current = editSnapshot(story); setProgress(String(story.last_read_chapter)); setError(''); setProgressOpen(!progressOpen) }}><strong>Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</strong></button>
-    {progressOpen && <div id={progressId} role="dialog" aria-modal="false" className="progress-popover" aria-label="Edit Chapter Progress"><form onSubmit={event => { event.preventDefault(); try { if (!progress.trim()) throw new Error('Enter chapters read.'); validateProgress(Number(progress), story.metadata); void change({ last_read_chapter: Number(progress) }, editBase.current).then(saved => { if (saved) closeProgress() }) } catch (e) { setError((e as Error).message) } }}><h2>Edit Chapter Progress</h2><label>Last Fully Read Chapter<input type="number" autoFocus required min="0" step="1" value={progress} onChange={e => setProgress(e.target.value)} /></label><p>of {story.metadata.total_chapters ?? '?'} · {story.metadata.published_chapters ?? '?'} published</p>{error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={blocked}>Save Progress</button><button className="button secondary" disabled={blocked} type="button" onClick={closeProgress}>Cancel</button></div></form></div>}
+    {progressOpen && <div id={progressId} role="dialog" aria-modal="false" className="progress-popover" aria-label="Edit Chapter Progress"><form onSubmit={event => { event.preventDefault(); try { if (!progress.trim()) throw new Error('Enter chapters read.'); const reading_status = progressReadingStatus(Number(progress), story.metadata); void change({ last_read_chapter: Number(progress), reading_status }, editBase.current).then(saved => { if (saved) closeProgress() }) } catch (e) { setError((e as Error).message) } }}><h2>Edit Chapter Progress</h2><label>Last Fully Read Chapter<input type="number" autoFocus required min="0" step="1" value={progress} onChange={e => setProgress(e.target.value)} /></label><p>of {story.metadata.total_chapters ?? '?'} · {story.metadata.published_chapters ?? '?'} published</p>{error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={blocked}>Save Progress</button><button className="button secondary" disabled={blocked} type="button" onClick={closeProgress}>Cancel</button></div></form></div>}
   </div>
   const tilePreference = useDisplayPreference('workTile')
   const finished = story.reading_status === 'finished'
@@ -157,6 +158,7 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
     <div className="spine-actions">
       <Tooltip description={`Read chapter ${nextUnread(story.last_read_chapter)}`}>{descriptionId => <a className="spine-action" href={next ?? savedWorkUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
       {caughtUp}
+      <BookFusionButton value={story.metadata.bookfusion_link} />
     </div>
   </footer>
 }
@@ -478,6 +480,10 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <dl className="metadata-list details-fic-fields">
 <DisplayInfo group="workInfo">{{
       ...workMetadataFields(story, 'info'),
+      bookfusion: <div><dt className="editable-field-heading"><span>BookFusion Link</span><button className="text-button" onClick={() => editSection('metadata')} aria-label="Edit BookFusion Link"><Pencil size={14} aria-hidden="true" />Edit</button></dt><dd>
+        <p className="field-help">{story.metadata.bookfusion_link ? story.metadata.bookfusion_link.kind === 'bookmark' ? 'Bookmark · opens a fixed location.' : 'Book · opens without a fixed location; BookFusion manages your reading position.' : 'Upload your EPUB to BookFusion, then add its reader or content link here.'}</p>
+        <BookFusionButton value={story.metadata.bookfusion_link} label />
+      </dd></div>,
       personalTags: <> <div><PersonalStoryField key={story.id} story={story} /></div> </>,
       saved: <> <div><dt>Saved</dt><dd>{formatDateTime(story.created_at)}</dd></div>{story.finished_at && <div><dt>Finished</dt><dd>{formatDateTime(story.finished_at)}</dd></div>}{story.reading_history?.filter(event => ['paused_reading', 'resumed'].includes(event.action)).map((event, index) => <div key={index}><dt>{event.action === 'resumed' ? 'Resumed' : 'Paused'}</dt><dd>{formatDateTime(event.at)}</dd></div>)} </>,
       chapterHistory: <ChapterReadingHistory history={story.reading_history} />,
