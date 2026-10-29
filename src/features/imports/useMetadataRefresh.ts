@@ -1,4 +1,5 @@
 import { formatDateTime } from '../../lib/dates'
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useRef, useState } from 'react'
 import { sampleMode } from '../../lib/sample-mode'
 import type { Story } from '../library/model'
@@ -41,6 +42,7 @@ export function useMetadataRefresh(story: Story | undefined, importBatchId?: str
   const submitting = useRef(false)
   const generation = useRef(0)
   const current = feedback && feedback.entryId === entryId ? feedback : idle
+  useActivity(current.busy, 'Retrieving work metadata…')
 
   useEffect(() => () => { generation.current += 1; submitting.current = false }, [entryId])
 

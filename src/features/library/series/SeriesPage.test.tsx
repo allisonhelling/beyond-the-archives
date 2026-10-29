@@ -7,12 +7,12 @@ import type { SeriesRecord } from './series'
 import type { SeriesPreview } from '../../imports/urls'
 
 const mocks = vi.hoisted(() => ({
- preview: vi.fn(), remember: vi.fn(), ensure: vi.fn(), remove: vi.fn(), note: vi.fn(), submit: vi.fn(), refresh: vi.fn(), refreshSeries: vi.fn(), loadDetails: vi.fn(), retainDetails: vi.fn(),
- stories: [] as Story[], series: [] as SeriesRecord[],
+ preview: vi.fn(), remember: vi.fn(), ensure: vi.fn(), remove: vi.fn(), note: vi.fn(), submit: vi.fn(), history: vi.fn(), refresh: vi.fn(), refreshSeries: vi.fn(), loadDetails: vi.fn(), retainDetails: vi.fn(),
+ catalogLoaded: true, stories: [] as Story[], series: [] as SeriesRecord[],
 }))
-vi.mock('../LibraryProvider', () => ({ useLibrary: () => ({ stories:mocks.stories,series:mocks.series,collections:[],loading:false,refresh:mocks.refresh,refreshSeries:mocks.refreshSeries,loadDetails:mocks.loadDetails,retainDetails:mocks.retainDetails }) }))
+vi.mock('../LibraryProvider', () => ({ useLibrary: () => ({ stories:mocks.stories,series:mocks.series,catalogLoaded:mocks.catalogLoaded,collections:[],loading:false,refresh:mocks.refresh,refreshSeries:mocks.refreshSeries,loadDetails:mocks.loadDetails,retainDetails:mocks.retainDetails }) }))
 vi.mock('../LibraryPages', () => ({ LibraryBoundary: ({ children }: { children: ReactNode }) => children, StoryCard: ({ story }: { story: Story }) => <article>{story.metadata.title}</article> }))
-vi.mock('../../imports/repository', () => ({ previewSeries:mocks.preview,submitImport:mocks.submit,importHistory:vi.fn() }))
+vi.mock('../../imports/repository', () => ({ previewSeries:mocks.preview,submitImport:mocks.submit,importHistory:mocks.history }))
 vi.mock('./series-repository', () => ({ rememberSeries:mocks.remember,ensureSeries:mocks.ensure,removeSeriesDetails:mocks.remove,saveSeriesNote:mocks.note,updateSeries:vi.fn(),finishSeries:vi.fn() }))
 import { SeriesPage } from './SeriesPage'
 import { SeriesCard } from './SeriesCollection'
@@ -30,12 +30,15 @@ beforeAll(() => {
 afterAll(() => { HTMLDialogElement.prototype.showModal = showModal; HTMLDialogElement.prototype.close = close })
 beforeEach(() => {
  vi.resetAllMocks()
+ mocks.catalogLoaded = true
+ mocks.submit.mockResolvedValue('refresh-batch')
+ mocks.history.mockResolvedValue({ batches: [{ id: 'refresh-batch' }], items: [], jobs: [], summary: { total: 1, active: true, counts: {} } })
  mocks.retainDetails.mockReturnValue(() => {})
  mocks.preview.mockResolvedValue(full)
  mocks.stories = [{ id:'saved-work',work:{ao3_work_id:101},metadata:{...blankMetadata,title:'Saved fic',authors:['Author'],word_count:200,series_memberships:[{id:77,name:'Series title',url,position:1}]},reading_status:'to_read' } as Story]
- mocks.series = []
+ mocks.series = [{ ...record({ ...full, basic:true, complete:undefined, works:[], wordCount:undefined, description:'' }), notes:'', is_favorite:false }]
 })
-it('builds a basic series page from saved works without fetching or persisting an AO3 listing', () => {
+it('builds a basic saved series page without fetching or persisting an AO3 listing', () => {
  show()
  expect(screen.getByRole('heading', { name:'Works in Your Library' })).toBeVisible()
  expect(screen.queryByRole('button', { name:'Hide Works Not in Library' })).not.toBeInTheDocument()
@@ -161,4 +164,53 @@ it('closes the embedded review while its preview is pending without importing a 
  await act(async () => { finish(full) })
  expect(mocks.submit).not.toHaveBeenCalled()
  expect(mocks.remember).not.toHaveBeenCalled()
+})
+
+it('refreshes saved inferred and preview-linked works while excluding unsaved and unrelated works', async () => {
+ mocks.series = [record({ ...full, works:[...full.works,{...full.works[0],workId:104,url:'https://archiveofourown.org/works/104',title:'Another unsaved sequel'}] })]
+ mocks.stories.push({ ...mocks.stories[0], id:'saved-sequel', work:{ ao3_work_id:102 }, metadata:{ ...blankMetadata, title:'Saved sequel' } } as Story)
+ mocks.stories.push({ ...mocks.stories[0], id:'unrelated', work:{ ao3_work_id:999 }, metadata:{ ...blankMetadata, title:'Unrelated' } } as Story)
+ show()
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name:'Refresh Works' })) })
+ expect(mocks.submit).toHaveBeenCalledExactlyOnceWith('https://archiveofourown.org/works/101\nhttps://archiveofourown.org/works/102', false)
+ expect(screen.getByRole('button', { name:'Refreshing Works…' })).toBeDisabled()
+ expect(screen.getByRole('status')).toHaveTextContent('Metadata refresh queued for 2 works')
+ expect(mocks.preview).not.toHaveBeenCalled()
+})
+
+it('disables work refresh when no series works are saved', () => {
+ mocks.stories = []
+ mocks.series = [record(full)]
+ show()
+ expect(screen.getByRole('button', { name:'Refresh Works' })).toBeDisabled()
+})
+
+it('allows retry after a series work refresh submission fails', async () => {
+ mocks.submit.mockRejectedValueOnce(new Error('Refresh unavailable'))
+ show()
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name:'Refresh Works' })) })
+ expect(screen.getByRole('status')).toHaveTextContent('Refresh unavailable')
+ expect(screen.getByRole('button', { name:'Refresh Works' })).toBeEnabled()
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name:'Refresh Works' })) })
+ expect(mocks.submit).toHaveBeenCalledTimes(2)
+})
+
+it('waits for the complete catalog before offering a refresh of all saved series works', () => {
+ mocks.catalogLoaded = false
+ show()
+ expect(screen.getByRole('button', { name:'Refresh Works' })).toBeDisabled()
+ expect(mocks.submit).not.toHaveBeenCalled()
+})
+
+it('does not create a page for a single inferred work but creates one for two saved works', () => {
+ mocks.series = []
+ const view = show()
+ expect(screen.getByText(/need at least two saved works/)).toBeVisible()
+ expect(screen.queryByRole('button', { name:'Refresh Works' })).not.toBeInTheDocument()
+ expect(screen.getByRole('link', { name:'View Series on AO3' })).toHaveAttribute('href',url)
+ view.unmount()
+ mocks.stories.push({ ...mocks.stories[0], id:'saved-work-2', work:{ao3_work_id:103} } as Story)
+ show()
+ expect(screen.getByRole('heading', { name:'Works in Your Library' })).toBeVisible()
+ expect(screen.getByRole('button', { name:'Refresh Works' })).toBeEnabled()
 })

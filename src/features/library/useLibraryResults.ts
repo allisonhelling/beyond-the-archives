@@ -1,4 +1,5 @@
 import { hasTagFilters, hasTagRules } from './tags/tag-resolution'
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useRef, useState } from 'react'
 import { useLibrary } from './LibraryProvider'
 import { libraryFacetScope, type LibraryFacets, type LibraryQuery, type LibraryResults } from './repository'
@@ -51,6 +52,7 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
   }, [facetKey, fetchFacets, enabled])
   const currentFacets = facetState.key === facetKey ? facetState : undefined
   const current = state.key === key
+  useActivity(enabled && (!current || facetState.key !== facetKey), !current ? 'Loading library results…' : 'Loading filter suggestions…')
   const results = current && !state.error ? { result: state.result, loading: false, retry } : { loading: enabled && !current, error: current ? state.error : undefined, previousResult: state.result, retry }
   return { ...results, facets: currentFacets?.result ?? (facetState.scopeKey === scopeKey ? facetState.result : undefined), facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
 }

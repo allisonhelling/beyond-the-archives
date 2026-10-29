@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { FilePicker } from '../../components/FilePicker'
 import './backups.css'
 import { useRef, useState } from 'react'
@@ -17,6 +18,7 @@ export function RestoreBackupSettings({ backups, disabled, onActiveChange, onRes
 }) {
   const [prepared, setPrepared] = useState<PreparedRestore | null>(null)
   const [selected, setSelected] = useState(''), [loading, setLoading] = useState(false)
+  useActivity(Boolean(loading), 'Reading your backup…')
   const [error, setError] = useState(''), [message, setMessage] = useState('')
   const pending = useRef(false)
   async function preview(source: File | SavedBackup) {

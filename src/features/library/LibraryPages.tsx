@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { BookFusionButton } from './bookfusion/BookFusionFields'
 import { RetryError } from '../../components/RetryError'
 import { sampleMode } from '../../lib/sample-mode'
@@ -65,6 +66,7 @@ type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode
 function StoryControls({ story, children }: { story: Story; children: (controls: CardControls) => ReactNode }) {
   const { refreshStory, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(String(story.last_read_chapter))
+  useActivity(Boolean(busy), 'Updating your library…')
   const [conflict, setConflict] = useState<EditConflict | null>(null)
   const blocked = busy || Boolean(conflict)
   const editBase = useRef(editSnapshot(story))
@@ -211,6 +213,7 @@ function LibraryContent() {
   const [params, setParams] = useSearchParams()
   const selected = params.get('shelf') ?? 'all'
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  useActivity(Boolean(busy), 'Updating your library…')
   const [collectionSort, setCollectionSort] = useState(initialCollectionSort)
   useEffect(() => {
     try { window.localStorage.setItem(collectionSortKey, JSON.stringify(collectionSort)) }
@@ -405,6 +408,7 @@ export function AddStoryPage() {
 function PersonalStoryField({ story }: { story: Story }) {
   const library = useLibrary()
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useActivity(Boolean(busy), 'Updating your library…')
   const [conflict, setConflict] = useState<EditConflict | null>(null)
   const [base, setBase] = useState<EditValues>(editSnapshot(story))
   const [text, setText] = useState('')

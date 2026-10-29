@@ -1,3 +1,4 @@
+import { useActivity } from '../lib/use-activity'
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { Dialog } from './Dialog'
 
@@ -7,6 +8,7 @@ export function ConfirmationDialog({ title, children, confirmLabel, onConfirm, o
   const descriptionId = useId()
   const cancelButton = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useActivity(Boolean(busy), 'Completing your request…')
   async function confirm() {
     setBusy(true); setError('')
     try { await onConfirm(); onClose() }

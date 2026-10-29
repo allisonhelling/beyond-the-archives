@@ -1,3 +1,4 @@
+import { useActivity } from '../lib/use-activity'
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
@@ -6,6 +7,7 @@ export function UndoNotice({ id, message, dismissLabel = 'Dismiss Undo Notificat
   onUndo: () => Promise<void>; onDismiss: (id: string) => void
 }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useActivity(Boolean(busy), 'Undoing changes…')
   useEffect(() => { const timer = window.setTimeout(() => onDismiss(id), durationMs); return () => window.clearTimeout(timer) }, [id, durationMs, onDismiss])
   async function undo() {
     setBusy(true); setError('')

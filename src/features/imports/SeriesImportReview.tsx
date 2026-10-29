@@ -1,4 +1,5 @@
 import { readSeriesReviewDraft, saveSeriesReviewDraft, seriesReviewScope } from './series-review-draft'
+import { useActivity } from '../../lib/use-activity'
 import { Dialog } from '../../components/Dialog'
 import { Pagination } from '../library/browsing/Pagination'
 import { WorkSummary } from '../library/summaries/WorkSummary'
@@ -22,12 +23,12 @@ function SeriesScopeAction({ label, scope, disabled, expanded, onClick }: { labe
  return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className="text-button clickable-text" aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
 }
 
-export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: externalBusy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected Works', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works', draftScope, onImportSelected }: {
+export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: externalBusy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected Works', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', status = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works', draftScope, onImportSelected }: {
  draftScope?: string; onImportSelected?(works: SeriesPreview['works']): Promise<boolean>
  bookmarkGroupingUnavailable?: boolean; relatedSeriesLabel?: string
  bookmarkedSeriesIds?: ReadonlySet<number>
  previewCache?: ReadonlyMap<number, SeriesPreview>; onPreview?(preview: SeriesPreview): void
- embedded?: boolean; singleSeries?: boolean; error?: string
+ embedded?: boolean; singleSeries?: boolean; error?: string; status?: string
  automatic?: boolean
  allowEmpty?: boolean
  showReadingStatus?: boolean; fitActions?: boolean; confirmLabel?: string; cancelLabel?: string
@@ -62,6 +63,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
  const [loading, setLoading] = useState<number>()
  const [savingAll, setSavingAll] = useState(false)
  const [savingDetails, setSavingDetails] = useState(false)
+ useActivity(busy || loading !== undefined || savingAll || savingDetails, loading !== undefined ? 'Loading series preview…' : savingAll || savingDetails ? 'Saving series details…' : catalogLoaded === false ? 'Loading saved works…' : 'Importing selected works…')
  const requested = useRef(new Set([...initialPreviews.map(preview => preview.seriesId), ...(previewCache?.keys() ?? [])]))
  const loadingId = useRef<number | null>(null)
  const previewRequest = useRef<AbortController | null>(null)
@@ -266,6 +268,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   <footer className="series-review-actions" aria-label="Series Import Actions">
    <p role="status">{selected.size} selected works{draftSaved && ' · Saved in this browser'}</p>
    {!draftSaved && <p className="error-message">Review progress could not be saved in this browser. Keep this window open to retain your selections.</p>}
+   {status && <p role="status">{status}</p>}
    <div className={`form-actions${fitActions || onImportSelected ? ' form-actions-fit' : ''}`}>
    {onImportSelected && !automatic && <button type="button" className="button primary" title="Import selected works and remain in Work Selection" disabled={disabled || !selected.size} onClick={() => void importSelected()}>{importing ? 'Importing Selected Works…' : 'Import Selected Works'}</button>}
    <button className="button primary" title={!automatic && confirmLabel === 'Import Batch and Continue' ? 'Import the current batch, close Work Selection, and continue scanning' : undefined} disabled={disabled || !ready || !canConfirm} onClick={confirmImport}>{automatic ? 'Retry Importing All Series Works' : confirmLabel}</button><button className="button secondary" disabled={cannotCancel} onClick={cancel}>{cancelLabel}</button></div>

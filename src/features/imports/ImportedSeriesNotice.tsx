@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { sampleMode } from '../../lib/sample-mode'
 import { useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { useEffect, useState } from 'react'
@@ -13,6 +14,7 @@ export function ImportedSeriesNotice({ stories, onImported, initialBehavior, rev
  const seriesBehavior = useSeriesImportBehavior(initialBehavior)
  const library = useLibrary()
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
+ useActivity(Boolean(busy), 'Importing selected series works…')
  const [dismissed, setDismissed] = useState(''), [reviewBusy, setReviewBusy] = useState(false)
  const reviewed = new Set(reviewedSeriesIds)
  const suggestions = reviewRelatedSeries ? stories.flatMap(story => { const series = seriesMemberships(story).filter(series => !reviewed.has(series.id)); return series.length ? [{ story, series }] : [] }) : []

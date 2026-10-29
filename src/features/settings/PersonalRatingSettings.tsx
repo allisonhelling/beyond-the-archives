@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sampleMode } from '../../lib/sample-mode'
@@ -64,6 +65,7 @@ export function PersonalRatingProvider({ children, userId }: { children: ReactNo
 export function PersonalRatingSettings() {
  const settings = useContext(SettingsContext)
  const [draft, setDraft] = useState<{ text: string; base: string | null } | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState('')
+ useActivity(Boolean(busy), 'Saving rating settings…')
  return <section id={personalRatingSettingsSection.id} tabIndex={-1} className="settings-card"><h2>{personalRatingSettingsSection.title}</h2><p>Explain what each star means to you. Saved changes apply to your account in the app and paired Chrome and Safari bars. Leave blank to hide the info icon.</p><form className="story-form" onSubmit={event => {
   event.preventDefault(); if (!settings || busy) return
   setBusy(true); setMessage('')

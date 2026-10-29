@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { BookFusionFields } from './bookfusion/BookFusionFields'
 import { validateBookFusionLink } from './bookfusion/bookfusion'
 import { EditConflictReview } from './EditConflictReview'
@@ -39,6 +40,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   const [base] = useState(story ? editSnapshot(story) : undefined)
   const [conflict, setConflict] = useState<EditConflict | null>(null)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  useActivity(Boolean(busy), 'Processing your story…')
   const [epubMessage, setEpubMessage] = useState('')
   async function importEpub(file: File) {
     setError(''); setEpubMessage(''); setBusy(true)

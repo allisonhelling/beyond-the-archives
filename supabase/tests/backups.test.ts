@@ -125,14 +125,15 @@ it('restores into empty application tables and exports more than the PostgREST r
   await restore(backup, alice, false)
   expect((await snapshot()).tables).toEqual(backup.tables)
   expect((await db.query('select id from public.metadata_worker_state')).rows).toEqual([{ id: 1 }])
-  // Bulk seed without per-row search work; the backup reads base tables directly.
+  // Exceed the configured 1,000-row API cap without turning this round-trip
+  // regression into a scale benchmark. Backup export reads base tables directly.
   await db.exec(`alter table public.library_entries disable trigger user;
-   insert into public.works(ao3_work_id,title) select n,'Scale work '||n from generate_series(10000,14001) n;
+   insert into public.works(ao3_work_id,title) select n,'Scale work '||n from generate_series(10000,11001) n;
    insert into public.library_entries(user_id,work_id,original_url,notes) select '${alice}',id,'https://archiveofourown.org/works/'||ao3_work_id,'Scale notes' from public.works where ao3_work_id>=10000;
    alter table public.library_entries enable trigger user;`)
   const large = await snapshot()
-  expect(large.tables.library_entries).toHaveLength(4003)
-  expect(large.tables.works).toHaveLength(4003)
+  expect(large.tables.library_entries).toHaveLength(1003)
+  expect(large.tables.works).toHaveLength(1003)
   await restore(large)
   expect((await snapshot()).tables).toEqual(large.tables)
 }, 30000)

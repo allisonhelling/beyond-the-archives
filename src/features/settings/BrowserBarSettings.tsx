@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { browserBarSettingsSection } from './settings-sections'
 import { formatDate } from '../../lib/dates'
 import { useEffect, useRef, useState } from 'react'
@@ -16,6 +17,7 @@ export function BrowserBarSettings() {
  const [name, setName] = useState('My browser')
  const [code, setCode] = useState('')
  const [busy, setBusy] = useState(false)
+ useActivity(Boolean(busy), 'Updating browser connections…')
  const [message, setMessage] = useState('')
  useEffect(() => {
   let active = true

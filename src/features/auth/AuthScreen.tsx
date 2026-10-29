@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useState, type FormEvent } from 'react'
 import { ArrowRight, BookOpen, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { Brand } from '../../components/Brand'
@@ -12,6 +13,7 @@ export function AuthScreen() {
   const [email, setEmail] = useState(sampleMode ? 'Sample' : '')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  useActivity(Boolean(busy), 'Signing in or updating your account…')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const configured = sampleMode || Boolean(supabase)

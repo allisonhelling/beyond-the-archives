@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
 import { useSeriesImportBehavior } from './series-import-preferences'
@@ -23,6 +24,7 @@ export function ImportLinkForm() {
   const [source, setSource] = useState<'ao3' | 'wayback'>(() => waybackSnapshot(initialUrl) ? 'wayback' : 'ao3')
   const [reviewing, setReviewing] = useState(''), [multiple, setMultiple] = useState(false), [finishedBatch, setFinishedBatch] = useState(false), [entries, setEntries] = useState<string[]>([])
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useActivity(Boolean(busy), 'Importing your work…')
   const complete = !!item && !['pending', 'processing'].includes(item.status)
   useEffect(() => {
     if (!batch) return

@@ -216,3 +216,19 @@ A local embedded PostgreSQL comparison used one synthetic reader with 5,000 work
 The improvement is in catalog/navigation overhead; this comparison does **not** establish a faster cold series merger or production latency. Raw local results are saved to the ignored `artifacts/performance/compact-catalog.json`. SQL regressions make full work documents and the general work pool unavailable while checking catalog/navigation responses, ownership and projection updates. Provider regressions cover catalog/page/facet ordering, request coalescing, unmount cancellation and StrictMode startup.
 
 Rollout requires applying ordered migrations through this version and deploying the matching frontend. This change has not been applied or measured on the hosted database in this session. Reproduce the actual browser flow after deployment and inspect the PostgreSQL error/plan if the cold series request still exceeds its existing budget; earlier temporary copies and local timings are insufficient proof of production resolution.
+
+
+## Chapter-Date Maps in Series Inputs
+
+The report of timeouts with 855 series led to another inspection of the cold merger inputs. Browser/list imports retain `chapter_dates` in effective metadata; the stored series projection previously omitted HTML summaries but still copied those maps through saved-work grouping and merging. Series cards, filtering and reading status consume chapter counts, not these dates.
+
+Migration `20261028000800_trim_series_chapter_dates.sql` removes `chapter_dates` in the existing immutable series projector and rebuilds affected stored inputs. Full work documents and chapter history keep their dates. Ownership, matching, paging, cache bounds and revision invalidation reuse their existing implementations. No new table, dependency or longer timeout is introduced.
+
+A local PGlite comparison used 5,000 works, 855 series (100 multi-work snapshots and 755 single-work snapshots), and 300 chapter dates per work. Three complete RPC reads per scenario cleared server caches before each request. Responses matched before/after, excluding the revision advanced by the projection backfill. Individual measurements in milliseconds were:
+
+| Cold Request | Before | After |
+| --- | --- | --- |
+| First 50 Series | 1,259 / 1,400 / 1,238 | 673 / 653 / 1,109 |
+| Filter Suggestions | 1,111 / 951 / 911 | 339 / 347 / 404 |
+
+These synthetic observations depend on the amount of chapter-date metadata; libraries without those maps may see little benefit. They do not establish the cause or resolution of the hosted timeout. The migration has not been applied to the hosted database in this session. After applying ordered migrations and deploying the frontend, verify the actual Series collection, suggestions and navigation RPCs under the existing statement budget. If timeouts persist, capture the PostgreSQL error and execution plan. Local comparison results are in the ignored `artifacts/performance/series-chapter-dates.json`; SQL regression coverage verifies that dates remain in full documents while series inputs omit them and merged browsing responses remain equal.

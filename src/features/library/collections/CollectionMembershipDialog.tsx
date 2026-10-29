@@ -1,3 +1,4 @@
+import { useActivity } from '../../../lib/use-activity'
 import { useRef, useState } from 'react'
 import { Dialog } from '../../../components/Dialog'
 import { useLibrary } from '../LibraryProvider'
@@ -9,6 +10,7 @@ export function CollectionMembershipDialog({ story, collection, onClose }: ({ st
   const { stories, collections, catalogLoaded, error: catalogError, ensureCatalog, refresh } = useLibrary({ catalog: Boolean(collection) })
   const existing = story ? story.collectionIds : stories.filter(item => item.collectionIds.includes(collection!.id)).map(item => item.id)
   const [selected, setSelected] = useState(existing), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false)
+  useActivity(Boolean(busy), 'Saving collection memberships…')
   const form = useRef<HTMLFieldSetElement>(null)
   const additions = selected.filter(id => !existing.includes(id))
   async function save() {

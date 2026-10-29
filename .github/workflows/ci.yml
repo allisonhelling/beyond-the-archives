@@ -41,3 +41,38 @@ jobs:
       - run: npm run test:integration
       - run: npx supabase stop
         if: always()
+  deploy-database:
+    name: Deploy Production Database
+    needs: [checks, supabase]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-database
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check Deployment Secrets
+        shell: bash
+        run: |
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+      - run: npm ci
+      - name: Link Production Project
+        run: npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Preview Pending Migrations
+        run: npx supabase db push --linked --skip-vault --dry-run
+      - name: Apply Pending Migrations
+        run: npx supabase db push --linked --skip-vault --yes

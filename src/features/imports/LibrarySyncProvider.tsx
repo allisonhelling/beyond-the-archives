@@ -1,4 +1,5 @@
 import { isLibrarySyncSafetyLimit } from './library-sync-state'
+import { useActivity } from '../../lib/use-activity'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Dialog } from '../../components/Dialog'
@@ -10,6 +11,7 @@ const Context = createContext<SyncStatus | null>(null)
 export function LibrarySyncProvider({ children }: { children: ReactNode }) {
  const [state, updateState] = useState<LibrarySyncState | null>(null)
  const [dismissed, setDismissed] = useState(''), [opening, setOpening] = useState(false), [openError, setOpenError] = useState('')
+ useActivity(state?.status === 'running' || opening, opening ? 'Opening your scan…' : 'Scanning your AO3 library…')
  const version = useRef(0), sampleConnected = useRef(false), alive = useRef(true), inFlight = useRef(false)
  const setState = useCallback((next: LibrarySyncState | null) => { version.current++; updateState(next) }, [])
  const refresh = useCallback(async () => {

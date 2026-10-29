@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { hasTagFilters, hasTagRules, tagResolutionEvent } from './tags/tag-resolution'
 import { useLocation } from 'react-router-dom'
 import type { SeriesRecord } from './series/series'
@@ -15,6 +16,7 @@ const Context = createContext<LibraryState | null>(null)
 export function LibraryProvider({ children, userId = 'sample' }: { children: ReactNode; userId?: string }) {
   const [data, setData] = useState<{ stories: Story[]; collections: Collection[]; series?: SeriesRecord[] }>({ stories: [], collections: [], series: [] })
   const [loading, setLoading] = useState(true)
+  useActivity(Boolean(loading), 'Loading your library…')
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
   const [tagRevision, setTagRevision] = useState(0)

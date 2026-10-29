@@ -961,6 +961,40 @@ it('imports selected works without finishing the scan and restores that review a
  expect(JSON.parse(localStorage.getItem('between-chapters:series-review:v1:local') ?? '{}')).toEqual({})
 })
 
+it('shows pending page progress inside the picker and releases imported works before history refresh finishes', async () => {
+ scannedSeries()
+ let finishImport!: (value: { batch: string; imported: number; kept: number }) => void
+ mocks.submit.mockImplementationOnce(() => new Promise(resolve => { finishImport = resolve }))
+ const onImported = vi.fn(() => new Promise<void>(() => {}))
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={onImported} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
+ const dialog = within(screen.getByRole('dialog', { name: 'Choose Works From Series' }))
+ expect(await dialog.findByText(`Importing 1 work from saved page 2 (${seriesUrl})…`)).toBeVisible()
+ await act(async () => finishImport({ batch: 'batch', imported: 1, kept: 0 }))
+ await waitFor(() => expect(onImported).toHaveBeenCalledWith('batch'))
+ await waitFor(() => expect(dialog.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeDisabled())
+ expect(dialog.getByRole('checkbox', { name: 'Part 3: Work 3' })).toBeEnabled()
+ expect(dialog.getByText(/Selected works were imported/)).toBeVisible()
+ expect(mocks.command.mock.calls.some(([action]) => ['finish', 'finish-batch', 'discard'].includes(action))).toBe(false)
+})
+
+it('keeps a completed incremental import successful when library refresh fails', async () => {
+ scannedSeries()
+ render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={async () => { throw new Error('History timed out') }} /></LibrarySyncProvider></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ fireEvent.click((await screen.findAllByRole('button', { name: 'Show Series Works' }))[0])
+ fireEvent.click(screen.getByRole('checkbox', { name: 'Part 2: Work 2' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Import Selected Works' }))
+ const dialog = within(screen.getByRole('dialog', { name: 'Choose Works From Series' }))
+ expect(await dialog.findByText(/Works were saved, but the library or import history could not refresh/)).toBeVisible()
+ await waitFor(() => expect(dialog.getByRole('checkbox', { name: 'Part 2: Work 2' })).toBeDisabled())
+ expect(dialog.getByRole('checkbox', { name: 'Part 3: Work 3' })).toBeEnabled()
+ expect(dialog.queryByRole('alert')).not.toBeInTheDocument()
+})
+
 it('keeps selected works available after an incremental import fails', async () => {
  scannedSeries()
  mocks.submit.mockRejectedValueOnce(importError('Could not import this scan page', { code: '57014', message: 'canceling statement due to statement timeout' }))

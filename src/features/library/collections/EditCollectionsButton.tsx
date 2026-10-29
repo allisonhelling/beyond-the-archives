@@ -1,3 +1,4 @@
+import { useActivity } from '../../../lib/use-activity'
 import { useEffect, useRef, useState } from 'react'
 import { FolderPlus, Pencil, Square } from 'lucide-react'
 import { Dialog } from '../../../components/Dialog'
@@ -13,6 +14,7 @@ export function EditCollectionsButton({ selectedIds, onSave, disabled = false, o
  const { collections, refresh } = useLibrary()
  const [open, setOpen] = useState(false), [selected, setSelected] = useState<string[]>([]), [base, setBase] = useState<string[]>([])
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [conflict, setConflict] = useState<EditConflict | null>(null)
+ useActivity(Boolean(busy), 'Saving collections…')
  const trigger = useRef<HTMLButtonElement>(null)
  const wasOpen = useRef(false)
  useEffect(() => {

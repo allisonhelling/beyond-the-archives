@@ -1,3 +1,4 @@
+import { useActivity } from '../../../lib/use-activity'
 import { isDisplayFieldHidden } from '../display/display-settings'
 import { useState, type ReactNode } from 'react'
 import { Check, MoreHorizontal } from 'lucide-react'
@@ -18,6 +19,7 @@ export function SeriesControls({ series, children }: { series: LibrarySeries; ch
  const { collections, refreshSeries, refresh: refreshWorks } = useLibrary()
  const refresh = () => refreshSeries(series.seriesId)
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [menuOpen, setMenuOpen] = useState(false), [finishing, setFinishing] = useState(false)
+ useActivity(Boolean(busy), 'Updating your series…')
  const [conflict, setConflict] = useState<EditConflict | null>(null)
  const menu = useDismissible<HTMLDetailsElement>(menuOpen, () => setMenuOpen(false))
  const tilePreference = useDisplayPreference('seriesTile')

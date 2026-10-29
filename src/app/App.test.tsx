@@ -27,7 +27,10 @@ const auth = vi.hoisted(() => ({
 vi.mock('../lib/supabase', () => ({
   initialAuthType: null,
   authRedirectUrl: () => 'http://localhost:3000/auth/callback',
-  supabase: { rpc: async () => ({ data: [], error: null }), auth: {
+  supabase: { rpc: async (name: string) => ({ data:
+    name === 'review_import_reading' ? { reviews: [], total: 0, changed: 0, skipped: 0 } :
+    name === 'paged_import_history' ? { batches: [], items: [], jobs: [] } :
+    name === 'library_sync_report_history' ? { reports: [], total: 0 } : [], error: null }), auth: {
     getSession: auth.getSession,
     onAuthStateChange: (cb: typeof auth.listener) => { auth.listener = cb; return { data: { subscription: { unsubscribe: auth.unsubscribe } } } },
     signInWithPassword: auth.signInWithPassword, signOut: auth.signOut,

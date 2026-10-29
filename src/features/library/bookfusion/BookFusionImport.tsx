@@ -1,3 +1,4 @@
+import { useActivity } from '../../../lib/use-activity'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FilePicker } from '../../../components/FilePicker'
@@ -12,6 +13,7 @@ export function BookFusionImport() {
   const [rows, setRows] = useState<MappingRow[]>([]), [stories, setStories] = useState<Story[]>([])
   const [selected, setSelected] = useState<number[]>([]), [results, setResults] = useState<Record<number, string>>({})
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useActivity(Boolean(busy), 'Processing BookFusion links…')
   const matches = matchMapping(rows, stories)
   async function preview(file: File) {
     setBusy(true); setError(''); setRows([]); setSelected([]); setResults({})

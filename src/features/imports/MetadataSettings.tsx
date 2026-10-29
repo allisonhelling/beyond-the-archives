@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useLayout } from '../../lib/use-layout'
 import { metadataRetrievalMode, type RetrievalMode } from './metadata-preferences'
 import { metadataSettingsSection } from './settings-sections'
@@ -18,6 +19,7 @@ export function MetadataSettings() {
  const [id, setId] = useState(extensionId)
  const [ready, setReady] = useState(false)
  const [busy, setBusy] = useState(false)
+ useActivity(Boolean(busy), 'Connecting and saving metadata settings…')
  const [message, setMessage] = useState('')
  useEffect(() => {
   let active = true

@@ -1,4 +1,5 @@
 import './backups.css'
+import { useActivity } from '../../lib/use-activity'
 import { backupSettingsSection } from './settings-sections'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CloudUpload, Download } from 'lucide-react'
@@ -18,6 +19,7 @@ export function BackupSettings() {
   const [listError, setListError] = useState('')
   const [deleting, setDeleting] = useState<SavedBackup | null>(null)
   const [restoring, setRestoring] = useState(false)
+  useActivity(Boolean(busy) || loading, busy ? 'Preparing your backup…' : 'Loading saved backups…')
   const loadId = useRef(0)
   const refresh = useCallback((signal?: AbortSignal) => {
     const request = ++loadId.current

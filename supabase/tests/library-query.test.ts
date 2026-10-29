@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises'
 import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Shared JS database harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
@@ -114,14 +115,15 @@ it('loads collections and series sorted by update date when a series has no upda
   expect((await query({sort:'updated',showSeries:true,updatedAfter:'2026-01-01'},1,25,shelf)).stories.some(s=>s.id==='series:1001')).toBe(false)
  }
 })
-it('returns inferred series without trying to remove metadata from a null personal record',async()=>{
+it('returns basic saved series with one owned work',async()=>{
  const saved=(await documents())[2]
  const membership={id:2000,name:'Inferred series',url:'https://archiveofourown.org/series/2000',position:1}
  await db.query("update public.library_entries set metadata_overrides=metadata_overrides||jsonb_build_object('series_memberships',$2::jsonb) where id=$1",[saved.id,JSON.stringify([membership])])
+ await db.query("select public.ensure_library_series(2000,'Inferred series')")
  for (const sort of ['added','added_reverse','alpha','alpha_reverse','updated','updated_reverse','ready','ready_reverse']) {
   const result=await query({sort},1,25,'series')
   const inferred=result.series.find(series=>series.seriesId===2000)
-  expect(inferred).toMatchObject({title:'Inferred series',record:null,savedStories:[{id:saved.id}]})
+  expect(inferred).toMatchObject({title:'Inferred series',savedStories:[{id:saved.id}]})
   expect(result.stories.some(story=>story.id==='series:2000')).toBe(true)
  }
 })
@@ -145,6 +147,7 @@ it('includes current work kudos, warnings and personal ratings in paginated seri
  const saved=(await documents())[0]
  const membership={id:3333,name:'Metadata series',url:'https://archiveofourown.org/series/3333',position:1}
  await db.query("update public.library_entries set personal_rating=3,metadata_overrides=metadata_overrides||jsonb_build_object('series_memberships',$2::jsonb,'kudos',2345,'archive_warnings',jsonb_build_array('Graphic Depictions Of Violence')) where id=$1",[saved.id,JSON.stringify([membership])])
+ await db.query("select public.ensure_library_series(3333,'Metadata series')")
  const series=(await query({},1,100,'series')).series.find(series=>series.seriesId===3333)!
  expect(series.savedStories[0].personal_rating).toBe(3)
  expect(series.works[0]).toMatchObject({kudos:2345,archiveWarnings:['Graphic Depictions Of Violence']})
@@ -636,6 +639,7 @@ it('reuses one owner-scoped series pool across filters and invalidates it after 
  try {
   const saved=(await db.query<{id:string}>('select id from public.library_search_documents where user_id=$1 limit 1',[alice])).rows[0]
   await db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{series_memberships}',$2::jsonb) where id=$1",[saved.id,JSON.stringify([{id:880099,name:'Cached series',url:'https://archiveofourown.org/series/880099',position:1}])])
+  await db.query("select public.ensure_library_series(880099,'Cached series')")
   await db.query("delete from public.library_query_cache where key='series-pool' and user_id=$1",[alice])
   const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_series_results(jsonb,boolean,boolean,boolean)'::regprocedure")).rows[0]
   await db.exec('create sequence public.series_cache_builds;grant usage,select on sequence public.series_cache_builds to authenticated')
@@ -701,5 +705,64 @@ it('refreshes compact catalog fields and automatic memberships after personal an
   await db.query("update public.library_entries set metadata_overrides=metadata_overrides||'{\"fandoms\":[\"Other Fandom\"]}'::jsonb where id=$1",[saved.id])
   const changed = (await db.query<{r:{stories:Story[]}}>('select public.library_catalog() r')).rows[0].r.stories.find(story=>story.id===saved.id)!
   expect(changed.automaticCollectionIds).not.toContain(automatic)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+
+it('excludes chapter-date maps from stored series inputs while preserving full works and merged results', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const definition=(await db.query<{definition:string}>("select pg_get_functiondef('public.library_series_input(jsonb)'::regprocedure) definition")).rows[0].definition
+  await db.exec(definition.replace("-'chapter_dates'",''))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const saved=(await documents())[0]
+  await db.query("update public.library_entries set metadata_overrides=metadata_overrides||$2::jsonb where id=$1",[saved.id,JSON.stringify({series_memberships:[{id:999,name:'Series title',url:'https://archiveofourown.org/series/999',position:1}]})])
+  await db.exec('reset role')
+  await db.query("update public.library_entries set extension_metadata=extension_metadata||jsonb_build_object('chapter_dates',(select jsonb_object_agg(n::text,'2026-10-01') from generate_series(1,300) n)) where id=$1",[saved.id])
+  await db.exec('set role authenticated')
+  const full=(await documents()).find(story=>story.id===saved.id)!
+  expect((full.metadata as unknown as {chapter_dates:object}).chapter_dates).toHaveProperty('300','2026-10-01')
+  expect((await db.query<{s:Story}>('select series_story s from public.library_search_documents where id=$1',[saved.id])).rows[0].s.metadata).toHaveProperty('chapter_dates')
+  await db.exec('reset role')
+  const migration=await readFile(new URL('../migrations/20261028000800_trim_series_chapter_dates.sql',import.meta.url),'utf8')
+  await db.exec(migration.replace(/^begin;/,'').replace(/commit;\s*$/,''))
+  await db.exec('set role authenticated')
+  const compact=(await db.query<{s:Story}>('select series_story s from public.library_search_documents where id=$1',[saved.id])).rows[0].s
+  expect(compact.metadata).not.toHaveProperty('chapter_dates')
+  expect((await documents()).find(story=>story.id===saved.id)).toEqual(full)
+  const allInputs=(await db.query<{s:Story}>('select series_story s from public.library_search_documents where user_id=auth.uid() order by id')).rows.map(row=>row.s)
+  const merge=async(inputs:Story[])=>(await db.query<{story:Story}>("select story,payload from public.library_series_results($1,false,true,true) order by story->>'id'",[JSON.stringify(inputs)])).rows
+  expect(await merge(allInputs)).toEqual(await merge(await documents()))
+  // Backfilling an existing document must regenerate the stored projection too.
+  await db.exec('reset role')
+  await db.query('update public.library_search_documents set story=story where id=$1',[saved.id])
+  expect((await db.query<{s:Story}>('select series_story s from public.library_search_documents where id=$1',[saved.id])).rows[0].s.metadata).not.toHaveProperty('chapter_dates')
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('requires two distinct owned works for inferred series across pages, facets and navigation', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const saved=(await documents()).slice(0,2)
+  const membership={id:991122,name:'Two Work Inference',url:'https://archiveofourown.org/series/991122',position:1}
+  const assign=async(id:string)=>db.query("update public.library_entries set metadata_overrides=metadata_overrides||jsonb_build_object('series_memberships',$2::jsonb) where id=$1",[id,JSON.stringify([membership,membership])])
+  await assign(saved[0].id)
+  const scope=JSON.stringify({mode:'library',shelf:'series',filters:{query:'Two Work Inference'}})
+  const facets=async()=>(await db.query<{r:{total:number}}>('select public.library_query_facets($1) r',[scope])).rows[0].r.total
+  const contains=async()=>(await query({},1,100,'series')).series.some(series=>series.seriesId===membership.id)
+  expect(await contains()).toBe(false)
+  const beforeFacets=await facets()
+  const navigation=async()=>(await db.query<{r:Record<string,{series:number}>}>('select public.library_navigation() r')).rows[0].r.series.series
+  const before=await navigation()
+  await assign(saved[1].id)
+  expect(await contains()).toBe(true)
+  expect((await query({},1,100,'series')).series.find(series=>series.seriesId===membership.id)).toMatchObject({record:null,savedStories:[expect.anything(),expect.anything()]})
+  expect(await facets()).toBe(beforeFacets+1)
+  expect(await navigation()).toBe(before+1)
+  await db.query("update public.library_entries set metadata_overrides=metadata_overrides-'series_memberships' where id=$1",[saved[1].id])
+  expect(await contains()).toBe(false)
+  expect(await facets()).toBe(beforeFacets)
+  expect(await navigation()).toBe(before)
  } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })

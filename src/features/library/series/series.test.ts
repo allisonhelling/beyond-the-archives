@@ -24,7 +24,9 @@ it('shows snapshots for owned works or a personally organized series, including 
  expect(librarySeries([story(999, false)], [{ ...record(), notes: '' }])).toEqual([])
 })
 it('uses membership metadata without a snapshot and rejects unsafe membership destinations', () => {
- expect(librarySeries([story(102)])[0]).toMatchObject({ seriesId: 77, title: 'My series', detailsLoaded: false, savedStories: [story(102)] })
+ expect(librarySeries([story(102)])).toEqual([])
+ expect(librarySeries([story(101),story(102)])[0]).toMatchObject({ seriesId: 77, title: 'My series', detailsLoaded: false, savedStories: [story(101),story(102)] })
+ expect(librarySeries([story(102),story(102)])).toEqual([])
  const unsafe = story(102); unsafe.metadata.series_memberships![0].url = 'https://evil.example/series/77'
  expect(seriesMemberships(unsafe)).toEqual([])
  expect(librarySeries([unsafe])).toEqual([])
@@ -76,7 +78,8 @@ it('keeps same-named works and series distinct by their AO3 IDs', () => {
  for (const saved of [first,second]) saved.metadata.title = 'Same fic title'
  first.metadata.series_memberships = [{id:77,name:'Same series title',url,position:1}]
  second.metadata.series_memberships = [{id:88,name:'Same series title',url:'https://archiveofourown.org/series/88',position:1}]
- const separate = librarySeries([first,second])
+ expect(librarySeries([first,second])).toEqual([])
+ const separate = librarySeries([first,second], [record({...preview,title:'Same series title',works:[]}),record({...preview,seriesId:88,title:'Same series title',works:[]})])
  expect(separate.map(series => [series.seriesId,series.title,series.works.map(work=>work.workId)])).toEqual([
   [77,'Same series title',[101]], [88,'Same series title',[102]],
  ])

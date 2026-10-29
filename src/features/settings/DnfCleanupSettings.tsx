@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -23,6 +24,7 @@ export function DnfCleanupSettings() {
  const [preview, setPreview] = useState<CleanupResult | null>(null), [confirm, setConfirm] = useState(false)
  const [archive, setArchive] = useState<ArchivedReading | null>(null), [page, setPage] = useState(0)
  const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState('')
+ useActivity(Boolean(busy), 'Processing reading cleanup…')
  const pending = useRef(false)
  const userId = session?.user.id
  function apply(result: CleanupResult) {

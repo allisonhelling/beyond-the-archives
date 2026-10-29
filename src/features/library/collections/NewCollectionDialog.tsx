@@ -1,3 +1,4 @@
+import { useActivity } from '../../../lib/use-activity'
 import { automaticCollectionRules, collectionRules } from './automatic-collections'
 import { defaultReadingFilters, type ReadingFilters } from '../reading-search'
 import { ReadingFilterControls } from '../ReadingFilterControls'
@@ -41,6 +42,7 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
   const [name, setName] = useState(collection?.name ?? ''), [color, setColor] = useState<string>(targets[0]?.color ?? collectionColors[0].value)
   const [symbol, setSymbol] = useState<string>(targets[0]?.symbol ?? collectionSymbols[0].value)
   const [saving, setSaving] = useState(false), [error, setError] = useState('')
+  useActivity(Boolean(saving), 'Saving your collection…')
   const deletion = useCollectionDeletion(targets, bulk, () => { onDeleted?.(); onClose() })
   const { removed, confirming: confirmDelete } = deletion
   const busy = saving || deletion.busy

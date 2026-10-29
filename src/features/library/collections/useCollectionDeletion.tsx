@@ -1,3 +1,4 @@
+import { useActivity } from '../../../lib/use-activity'
 import { useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { ConfirmationDialog } from '../../../components/ConfirmationDialog'
@@ -17,6 +18,7 @@ export function useCollectionDeletion(selectedTargets: Collection[], bulk: boole
   const targetKey = [...ids].sort().join(',')
   const deleted = useRef<string | null>(null), pending = useRef(false)
   const [removedKey, setRemoved] = useState<string | null>(null), [busy, setBusy] = useState(false)
+  useActivity(Boolean(busy), 'Removing collections…')
   const removed = removedKey === targetKey
   const [failure, setFailure] = useState({ key: '', message: '' })
   const error = failure.key === targetKey ? failure.message : ''

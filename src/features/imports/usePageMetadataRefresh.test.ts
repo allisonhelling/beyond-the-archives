@@ -32,11 +32,12 @@ it('uses the latest page after filtering and blocks repeated clicks while a batc
   expect(mocks.submit).toHaveBeenCalledExactlyOnceWith('https://archiveofourown.org/works/456', false)
 })
 
-it('reloads affected works when the batch finishes and permits another page refresh', async () => {
+it.each(['Page', 'Series'] as const)('reloads affected works and reports completion for a %s refresh', async scope => {
   mocks.history.mockResolvedValue({ batches: [{ id: 'batch-1' }], items: [], jobs: [], changes: [{ id: 'job', entry_id: 'entry-123', status: 'completed' }], summary: { total: 1, active: false, counts: {} } })
-  const view = renderHook(() => usePageMetadataRefresh([story(123)]))
+  const view = renderHook(() => usePageMetadataRefresh([story(123)], scope))
   await act(() => view.result.current.refresh())
   await waitFor(() => expect(view.result.current.status).toBe('completed'))
+  expect(view.result.current.message).toBe(`${scope} metadata refresh finished for 1 works.`)
   expect(view.result.current.busy).toBe(false)
   expect(mocks.refresh).toHaveBeenCalledWith(['entry-123'])
 })

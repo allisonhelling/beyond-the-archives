@@ -1,3 +1,5 @@
+import { usePageMetadataRefresh } from '../../imports/usePageMetadataRefresh'
+import { useActivity } from '../../../lib/use-activity'
 import { useSeriesImportBehavior } from '../../imports/series-import-preferences'
 import { workMetadataFields } from '../display/WorkMetadataFields'
 import { MetadataTags } from '../MetadataTags'
@@ -35,6 +37,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
  const [reviewBusy, setReviewBusy] = useState(false)
  const [hideUnsaved, setHideUnsaved] = useState(false)
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [review, setReview] = useState(false)
+ useActivity(Boolean(busy), 'Updating series details…')
  async function load() {
   setBusy(true); setError('')
   try { const next = await previewSeries(`https://archiveofourown.org/series/${seriesId}`); await rememberSeries(next); await refreshSeries(seriesId) }
@@ -48,6 +51,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
  }, [example, valid, record, refreshSeries, seriesId])
  const saved = example ?? librarySeries(library.stories, library.series ?? []).find(series => series.seriesId === seriesId)
  const series: LibrarySeries = saved ?? { ...details, seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: metadata?.title ?? `Series ${seriesId}`, description: details?.description ?? '', works: details?.works ?? [], savedStories: [], fandoms: [...new Set(details?.works.flatMap(work => work.fandoms ?? []) ?? [])], detailsLoaded: Boolean(details), record }
+ const workRefresh = usePageMetadataRefresh(example ? [] : series.savedStories, 'Series')
  const retained = example ? '' : series.savedStories.map(story => story.id).sort().join(',')
  useEffect(() => retained ? retainDetails(retained.split(',')) : undefined, [retained, retainDetails])
  const missing = example ? '' : series.savedStories.filter(story => story.detailsLoaded === false).map(story => story.id).sort().join(',')
@@ -59,6 +63,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
  const StatusIcon = readingStatusIcons[seriesReadingStatus(series)]
  const errorMessage = error && <p className="error-message" role="alert">{error}</p>
  if (!valid) return <p role="alert">This series identifier is invalid.</p>
+ if (!example && library.catalogLoaded && !record && !saved) return <LibraryBoundary><p>Series identified from your library need at least two saved works to have an organizer page.</p><a className="clickable-text" href={series.normalizedUrl} target="_blank" rel="noreferrer">View Series on AO3</a></LibraryBoundary>
  return <LibraryBoundary><SeriesControls series={series}>{({ favorite, collectionsField, finishButton }) => <div className="story-details-page series-details-page">
   <div className="page-heading story-details-heading"><div>
    <Link className="story-return-link clickable-text" to={returnTo} aria-label="Back to Series"><ArrowLeft size={16} aria-hidden="true" />Series</Link>
@@ -66,7 +71,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
     <DisplayInfo group="seriesHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> }}</DisplayInfo>
     <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> }}</DisplayInfo>
     <div className="story-title-toggles">{favorite}</div>
-    <div className="story-metadata-actions"><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
+    <div className="story-metadata-actions"><Tooltip description="Refresh AO3 metadata for all works in this series that are in your library">{tooltipId => <button className="button secondary" aria-describedby={tooltipId} aria-busy={workRefresh.busy} disabled={busy || workRefresh.busy || workRefresh.unavailable || !library.catalogLoaded || sampleMode} onClick={() => void workRefresh.refresh()}><RefreshCw size={16} aria-hidden="true" />{workRefresh.busy ? 'Refreshing Works…' : 'Refresh Works'}</button>}</Tooltip><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')
      try { await removeSeriesDetails(seriesId); await refreshSeries(seriesId) } catch (error) { setError(error instanceof Error ? error.message : 'Could not remove series details.') } finally { setBusy(false) }
     }}>Remove</button>}</Tooltip>}</div>
@@ -83,6 +88,7 @@ source: <>
 }}</DisplayInfo>
   </div></div>
 
+  {workRefresh.message && <p role="status">{workRefresh.message}</p>}
   {!review && errorMessage}
 
   {review && <Dialog title="Review Series" className="series-review-dialog" busy={busy || reviewBusy} onClose={() => setReview(false)}>{errorMessage}<SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} embedded singleSeries key={seriesId} text={series.normalizedUrl} savedIds={new Set(library.stories.flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} initialPreviews={details ? [details] : []} busy={busy} onBusyChange={setReviewBusy} onConfirm={async (works, status, seriesIds) => {

@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Info, LockKeyhole } from 'lucide-react'
@@ -73,6 +74,7 @@ export function StatsPage() {
  const panelProps = (id: StatsSection) => ({ role: 'tabpanel', id: `stats-panel-${id}`, 'aria-labelledby': `stats-tab-${id}`, hidden: activeSection !== id, tabIndex: 0 })
  const [period, setPeriod] = useState<Period>(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth(), mode: 'monthly' } })
  const [{ works, all }, setData] = useState<{ works: StatsWork[]; all: ReturnType<typeof observations> }>({ works: [], all: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [retry, setRetry] = useState(0)
+ useActivity(Boolean(loading), 'Loading reading statistics…')
  const [basis, setBasis] = useState<'words' | 'fics'>('fics'), [includeRereads, setIncludeRereads] = useState(true), [trendDimension, setTrendDimension] = useState<Dimension>('fandoms')
  useEffect(() => {
   let active = true

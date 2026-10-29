@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { initialAuthType, supabase } from '../../lib/supabase'
@@ -17,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { return sessionStorage.getItem(sampleAuthKey) !== 'signed-out' } catch { return true }
   })
   const [loading, setLoading] = useState(!sampleMode && Boolean(supabase))
+  useActivity(Boolean(loading), 'Opening your reading space…')
   const [error, setError] = useState<string | null>(null)
   const [needsPassword, setNeedsPassword] = useState(!sampleMode && (initialAuthType === 'invite' || initialAuthType === 'recovery'))
 

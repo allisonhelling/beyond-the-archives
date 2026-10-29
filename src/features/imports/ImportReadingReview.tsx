@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Pagination } from '../library/browsing/Pagination'
@@ -16,6 +17,7 @@ export function ImportReadingReview({ onChanged, actions, refreshKey }: { onChan
  const requestVersion = useRef(0), actionPending = useRef(false)
  const [data, setData] = useState<ReadingReviews>(), [page, setPage] = useState(1)
  const [selected, setSelected] = useState<string[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
+ useActivity(Boolean(busy), 'Reviewing reading corrections…')
  useEffect(() => {
   let active = true
   function check() {

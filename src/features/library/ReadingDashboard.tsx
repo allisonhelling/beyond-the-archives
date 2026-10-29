@@ -11,7 +11,7 @@ import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing/b
 import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
 import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
@@ -74,8 +74,14 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   function setFilters(update: (previous: ReadingFilters) => ReadingFilters) { const next = update(filters); setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize)) }
   // Normalize before user navigation can race a deferred effect from this route.
   // Local page-size edits stay temporary.
+  const normalized = useRef('')
   useLayoutEffect(() => {
     if (draft) return
+    const input = JSON.stringify([params.toString(), filters, urlSize, page, mode])
+    // Activity updates can commit again while Router navigation is pending.
+    // Do not repeat a replacement from the route being left behind.
+    if (normalized.current === input) return
+    normalized.current = input
     const next = writeBrowsing(params, filters, urlSize, page)
     if (!next.has('shelf')) next.set('shelf', mode === 'reading' ? 'view_all' : 'all')
     if (next.toString() !== params.toString()) setParams(next, { replace: true })

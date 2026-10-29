@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { BookFusionImport } from '../library/bookfusion/BookFusionImport'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
@@ -30,6 +31,7 @@ export function ImportPage() {
  const [resultView,setResultView]=useState<{batchId?:string;finished:boolean;status:string}>({finished:false,status:'all'})
  const [text,setText]=useState(typeof location.state?.seriesUrl==='string'?location.state.seriesUrl:''), [selected,setSelected]=useState<string>()
  const [error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false)
+ useActivity(Boolean(busy), 'Processing your import…')
  const history=useImportHistory(selected,1,resultPage,resultView.status,!sampleMode,busy)
  const {data,loading,reload}=history
  async function action(fn:()=>Promise<unknown>) {setBusy(true);setError('');try {await fn();if(sampleMode)await library.refresh();else await reload()}catch(e){setError(e instanceof Error?e.message:'Import operation failed.')}finally{setBusy(false)}}

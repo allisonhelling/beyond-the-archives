@@ -6,10 +6,12 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  const seriesUrl = 'https://archiveofourown.org/series/77'
  tables.works.push({id:'work-101',ao3_work_id:101,ao3_updated_at:'2026-10-20T00:00:00Z',verified_chapters:{},word_count:200})
  tables.library_entries.push({id:'entry-101',work_id:'work-101',original_url:'https://archiveofourown.org/works/101',metadata_overrides:{title:'Saved fic',authors:['Author'],word_count:200,series:['Related series'],series_memberships:[{id:77,name:'Related series',url:seriesUrl,position:1}]},reading_status:'to_read',last_read_chapter:0,notes:'Private work note',is_favorite:false,created_at:now,updated_at:now})
+ tables.works.push({id:'work-103',ao3_work_id:103,verified_chapters:{}})
+ tables.library_entries.push({...tables.library_entries[0],id:'entry-103',work_id:'work-103',original_url:'https://archiveofourown.org/works/103',metadata_overrides:{title:'Other saved fic',authors:['Author'],series:['Related series'],series_memberships:[{id:77,name:'Related series',url:seriesUrl,position:3}]}})
  let previews = 0
  await page.route('**/functions/v1/series-preview', route => {
   previews++
-  return route.fulfill({json:{preview:{seriesId:77,normalizedUrl:seriesUrl,title:'Related series',description:'AO3 series description',creatorNotes:'Creator notes',begun:'2020-01-02',updated:'2026-10-20',workCount:2,wordCount:900,complete:false,works:[
+  return route.fulfill({json:{preview:{seriesId:77,normalizedUrl:seriesUrl,title:'Related series',description:'AO3 series description',creatorNotes:'Creator notes',begun:'2020-01-02',updated:'2026-10-20',workCount:3,wordCount:900,complete:false,works:[
    {workId:101,url:'https://archiveofourown.org/works/101',position:1,title:'Saved fic',authors:['Author'],fandoms:['Preview fandom'],summary:'First summary',tags:[],wordCount:200,chapters:'1/1',complete:true},
    {workId:102,url:'https://archiveofourown.org/works/102',position:2,title:'Unsaved sequel',authors:['Author'],fandoms:['Preview fandom'],summary:'Second summary',summary_html:'<p>Second <em>summary</em></p>',tags:['Adventure'],wordCount:700,chapters:'1/?',complete:false},
   ]}}})
@@ -32,6 +34,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   const addBox = (await collection.getByRole('button', { name: 'Add to Collection' }).boundingBox())!
   expect(addBox.width).toBeLessThanOrEqual(collectionBox.width)
  }
+ await expect(page.getByRole('button', {name:'Refresh Works',exact:true})).toBeEnabled()
  await expect(page.getByRole('heading', {name:'Works in Your Library'})).toBeVisible()
  await expect(page.getByRole('button', {name:'Hide Works Not in Library'})).toHaveCount(0)
  expect(previews).toBe(0)
@@ -94,8 +97,8 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await page.getByRole('button', { name: 'Load', exact: true }).click()
  await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible()
  expect(tables.library_series).toHaveLength(1)
- expect(tables.library_entries).toHaveLength(1)
- expect(tables.works).toHaveLength(1)
+ expect(tables.library_entries).toHaveLength(2)
+ expect(tables.works).toHaveLength(2)
  await expect(page.getByRole('heading', {name:'Works in This Series'})).toBeVisible()
  await expect(page.getByRole('link', {name:'Part 2: Unsaved sequel'})).toBeVisible()
  const unsavedTile = page.locator('.work-card').filter({ has: page.getByRole('link', {name:'Part 2: Unsaved sequel'}) })
@@ -129,7 +132,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await expect(page.getByText('My personal series summary')).toBeVisible()
  await page.goto('/library?shelf=series')
  const card = page.locator('.series-card')
- await expect(card).toContainText('1 works')
+ await expect(card).toContainText('2 works')
  await expect(card.getByText('My personal series summary', {exact:true})).toBeVisible()
  await expect(card).not.toContainText('Unsaved sequel')
  await expect(card).not.toContainText('Second summary')
@@ -177,12 +180,13 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  const related = page.getByRole('dialog', {name:'Related Series',exact:true})
  await expect(related).toBeVisible()
  await expect(related).toContainText('Saved fic')
- await related.getByRole('button', { name: 'Show Series Works', exact: true }).first().click()
- await expect(related.getByRole('checkbox', {name:'Part 2: Unsaved sequel'})).not.toBeChecked()
+ // The shared draft restores the earlier expansion and explicit selection.
+ await expect(related.getByRole('button', { name: 'Hide Series Works', exact: true }).first()).toHaveAttribute('aria-expanded', 'true')
+ await expect(related.getByRole('checkbox', {name:'Part 2: Unsaved sequel'})).toBeChecked()
  expect(previews).toBe(3)
  await related.getByRole('button', {name:'Close Dialog'}).click()
  await expect(related).toHaveCount(0)
- expect(tables.library_entries).toHaveLength(1)
+ expect(tables.library_entries).toHaveLength(2)
 
 })
 
@@ -335,6 +339,8 @@ test('series results load before suggestions without concurrent catalog or serie
  const tables=await fixture(page)
  tables.works.push({id:'queued-work',ao3_work_id:987,title:'Queued work',verified_chapters:{}})
  tables.library_entries.push({id:'queued-entry',work_id:'queued-work',original_url:'https://archiveofourown.org/works/987',reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{series_memberships:[{id:789,name:'Queued series',url:'https://archiveofourown.org/series/789',position:1}]}})
+ tables.works.push({id:'queued-work-2',ao3_work_id:988,title:'Another queued work',verified_chapters:{}})
+ tables.library_entries.push({...tables.library_entries[0],id:'queued-entry-2',work_id:'queued-work-2',original_url:'https://archiveofourown.org/works/988'})
  let releaseResults!:()=>void,releaseSuggestions!:()=>void,resultsActive=false,suggestionsActive=false,navigationActive=false,catalogActive=false,overlaps=0
  const resultsGate=new Promise<void>(resolve=>{releaseResults=resolve}),suggestionsGate=new Promise<void>(resolve=>{releaseSuggestions=resolve})
  const requests:string[]=[]

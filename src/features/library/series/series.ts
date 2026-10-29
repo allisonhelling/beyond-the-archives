@@ -24,7 +24,7 @@ export function librarySeries(stories: Story[], records: SeriesRecord[] = []): L
   const group = groups.get(record.ao3_series_id)
   if (group || saved.length || preview.basic === false || record.is_favorite || record.is_rec || record.reading_status === 'finished' || record.collectionIds?.length || record.notes) groups.set(record.ao3_series_id, { title: preview.title, stories: [...new Map([...(group?.stories ?? []), ...saved].map(story => [story.id, story])).values()], record })
  }
- return [...groups].map(([seriesId, group]) => {
+ return [...groups].filter(([, group]) => group.record || group.stories.length > 1).map(([seriesId, group]) => {
   const preview = group.record?.metadata as unknown as SeriesPreview | undefined
   const works = new Map((preview?.works ?? []).map(work => [work.workId, work]))
   for (const story of group.stories) {

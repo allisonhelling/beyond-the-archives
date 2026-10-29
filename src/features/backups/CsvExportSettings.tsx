@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import './backups.css'
 import { csvExportSettingsSection } from './settings-sections'
 import { useRef, useState } from 'react'
@@ -7,6 +8,7 @@ import { csvFiles, exportLibraryCsv, type CsvFile } from './csv-export'
 export function CsvExportSettings() {
   const [selection, setSelection] = useState<CsvFile[]>(csvFiles.map(file => file.name))
   const [busy, setBusy] = useState(false), pending = useRef(false)
+  useActivity(Boolean(busy), 'Preparing your CSV download…')
   const [message, setMessage] = useState(''), [error, setError] = useState('')
   async function download() {
     if (pending.current || !selection.length) return

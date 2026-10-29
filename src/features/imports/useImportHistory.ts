@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useActivity } from '../../lib/use-activity'
 import { useLibrary } from '../library/LibraryProvider'
 import { importFinished } from './urls'
 import { importHistory, type ImportHistory } from './repository'
@@ -7,6 +8,7 @@ export function useImportHistory(selected: string | undefined, historyPage: numb
   const { refresh, checkRevision } = useLibrary()
   const [data, setData] = useState<ImportHistory>({ batches: [], items: [], jobs: [] })
   const [loading, setLoading] = useState(true), [error, setError] = useState('')
+  useActivity(enabled && (loading || Boolean(data.summary?.active ?? (data.jobs.some(job => ['pending', 'processing'].includes(job.status))))), loading ? 'Loading import history…' : 'Processing imported works…')
   const [loadedSelection, setLoadedSelection] = useState<string>()
   const queue = useRef<Promise<unknown>>(Promise.resolve()), version = useRef(0)
   const pendingEntries = useRef(new Set<string>())

@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { librarySyncRepairs } from './library-sync-state'
 import { useState } from 'react'
 import { Dialog } from '../../components/Dialog'
@@ -45,6 +46,7 @@ export function LibrarySyncReportHistory({ latest }: { latest?: LibrarySyncState
  const [history, setHistory] = useState<LibrarySyncReports | null>(null)
  const [page, setPage] = useState(1), [selected, setSelected] = useState('')
  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+ useActivity(Boolean(busy), 'Loading scan reports…')
  async function load(nextPage = page) {
   setBusy(true); setError('')
   try { const next = await librarySyncReports(nextPage, latest); setHistory(next); setPage(nextPage); setSelected(next.reports[0]?.id ?? '') }

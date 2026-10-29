@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
 import { ImportReadingReview } from './ImportReadingReview'
 import { sampleMode } from '../../lib/sample-mode'
@@ -21,6 +22,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
  const [checkChapterDates, setCheckChapterDates] = useState(false)
  const [prepared, setPrepared] = useState<Prepared>(), [choices, setChoices] = useState<Record<string, CsvChoice>>({})
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
+ useActivity(Boolean(busy), 'Processing CSV import…')
  const [seriesSources, setSeriesSources] = useState<CsvSource[]>()
  const pending = useRef(false)
  async function preview(files: File[]) {

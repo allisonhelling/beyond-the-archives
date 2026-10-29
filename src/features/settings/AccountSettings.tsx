@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { accountSettingsSection } from './settings-sections'
 import { useState } from 'react'
 import { LockKeyhole } from 'lucide-react'
@@ -9,6 +10,7 @@ export function AccountSettings() {
   const { session } = useAuth()
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  useActivity(Boolean(busy), 'Updating your account…')
   async function reset() {
     if (!supabase || !session?.user.email || busy) return
     setBusy(true)

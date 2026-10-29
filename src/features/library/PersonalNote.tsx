@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useRef, useState } from 'react'
 import { LockKeyhole, NotebookPen, Pencil } from 'lucide-react'
 import { EditConflict } from './edit-merge'
@@ -7,6 +8,7 @@ import { EditConflictReview } from './EditConflictReview'
 export function PersonalNote({ notes, onSave, onRefresh, disabled = false }: { notes: string; onSave: (notes: string, base: string) => Promise<void>; onRefresh: () => Promise<void>; disabled?: boolean }) {
  const [editing, setEditing] = useState(false), [draft, setDraft] = useState(''), [base, setBase] = useState('')
  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [conflict, setConflict] = useState<EditConflict | null>(null)
+ useActivity(Boolean(busy), 'Saving your note…')
  const trigger = useRef<HTMLButtonElement>(null)
  function close() { setConflict(null); setEditing(false); trigger.current?.focus() }
  function failed(error: unknown) { if (error instanceof EditConflict) setConflict(error); else setError(error instanceof Error ? error.message : 'Could not save your note.') }

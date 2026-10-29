@@ -1,3 +1,4 @@
+import { useActivity } from '../../lib/use-activity'
 import { useEffect, useId, useRef, useState } from 'react'
 import { EditConflict, type EditValues } from './edit-merge'
 import { ratingLabel, statuses } from './model'
@@ -16,6 +17,7 @@ export function EditConflictReview({ conflict, onSaved, onError, onCancel, colle
   useEffect(() => { region.current?.focus() }, [])
   const [choices, setChoices] = useState<Record<string, string>>({}), [combined, setCombined] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  useActivity(Boolean(busy), 'Saving resolved changes…')
   const format = (field: string, value: Json) => display(field, field === 'collections' && Array.isArray(value) ? value.map(id => collections.find(collection => collection.id === id)?.name ?? id) : value)
   async function save() {
     setBusy(true)
