@@ -6,7 +6,7 @@ import { libraryFacetScope, type LibraryFacets, type LibraryQuery, type LibraryR
 
 export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void } {
   const { hasCachedPage, fetchPage, fetchFacets, revision, tagRevision, collections } = useLibrary()
-  const [state, setState] = useState<{ key: string; result?: LibraryResults; error?: string }>({ key: '' })
+  const [state, setState] = useState<{ key: string; scopeKey?: string; result?: LibraryResults; error?: string }>({ key: '' })
   const [facetState, setFacets] = useState<{ key: string; scopeKey?: string; result?: LibraryFacets; error?: string }>({ key: '' })
   const [attempt, setAttempt] = useState(0)
   const automatic = collections?.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules))
@@ -14,6 +14,7 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
   const queryKey = JSON.stringify([query, page, size, aliasRevision])
   const key = JSON.stringify([queryKey, revision, attempt])
   const scopeKey = JSON.stringify(libraryFacetScope(query))
+  const resultScopeKey = JSON.stringify({ ...libraryFacetScope(query), shelf: query.shelf })
   const facetKey = JSON.stringify([scopeKey, revision, attempt, automatic ? tagRevision ?? 0 : 0])
   function retry() { setState(current => ({ ...current, key: '', error: undefined })); setAttempt(value => value + 1) }
   const { query: search, within, relationship, characters, tags, personalTags, updatedAfter, updatedBefore, ...controls } = query.filters
@@ -29,7 +30,7 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
     // Debouncing avoids a database scan for every character of a search.
     const load = () => {
       void fetchPage(query, page, size, controller.signal).then(result => {
-        if (!controller.signal.aborted) setState({ key, result })
+        if (!controller.signal.aborted) setState({ key, scopeKey: resultScopeKey, result })
       }).catch(error => {
         if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setState(current => ({ ...current, key, error: error instanceof Error ? error.message : 'Could not load results.' }))
       })
@@ -53,6 +54,6 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
   const currentFacets = facetState.key === facetKey ? facetState : undefined
   const current = state.key === key
   useActivity(enabled && (!current || facetState.key !== facetKey), !current ? 'Loading library results…' : 'Loading filter suggestions…')
-  const results = current && !state.error ? { result: state.result, loading: false, retry } : { loading: enabled && !current, error: current ? state.error : undefined, previousResult: state.result, retry }
+  const results = current && !state.error ? { result: state.result, loading: false, retry } : { loading: enabled && !current, error: current ? state.error : undefined, previousResult: state.scopeKey === resultScopeKey ? state.result : undefined, retry }
   return { ...results, facets: currentFacets?.result ?? (facetState.scopeKey === scopeKey ? facetState.result : undefined), facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
 }

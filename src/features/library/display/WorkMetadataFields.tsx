@@ -26,7 +26,7 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
     comments: `${count(metadata.comment_count)} comments`, hits: `${count(metadata.hits)} hits`,
     published: ao3Date(work.ao3_published_at), updated: ao3Date(work.ao3_updated_at),
     language: metadata.language || work.language || 'Unknown', publication: publicationStatuses[metadata.publication_status].label,
-    workId: work.ao3_work_id ?? 'Unknown', source: <a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">View on AO3</a>,
+    workId: work.ao3_work_id ?? 'Unknown', source: <a className="clickable-text" href={savedWorkUrl(story)} target="_blank" rel="noreferrer">View on AO3</a>,
     allTags: <MetadataTags values={metadata.ao3_tags} />,
   }
   return Object.fromEntries(Object.entries(values).map(([key, value]) => {

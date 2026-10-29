@@ -121,7 +121,7 @@ describe('private app access and navigation', () => {
     const user = userEvent.setup()
     render(<App />)
     await screen.findByRole('heading', { name: 'Currently Reading' })
-    for (const [label, title] of [['Library', 'Your Library'], ['Stats', 'Reading Stats'], ['Settings', 'Settings'], ['Features', 'The Next Chapters']]) {
+    for (const [label, title] of [['Library', 'Your Library'], ['Stats', 'Reading Stats'], ['Settings', 'Settings'], ['Features', 'Features']]) {
       if (label === 'Features') await user.click(screen.getByRole('button', { name: 'Profile Menu' }))
       await act(async () => {
         await user.click(within(screen.getByRole(label === 'Features' ? 'region' : 'navigation', { name: label === 'Features' ? 'Profile Menu' : 'Main Navigation' })).getByRole('link', { name: label }))
@@ -142,7 +142,7 @@ describe('private app access and navigation', () => {
     auth.session = fakeSession
     window.history.replaceState(null, '', path)
     render(<App />)
-    expect(await screen.findByRole('heading', { name: title })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: title }, { timeout: 5000 })).toBeVisible()
     expect(screen.getByRole('navigation', { name: 'Main Navigation' })).toBeVisible()
     expect(screen.queryByText('Loading page…')).not.toBeInTheDocument()
   })

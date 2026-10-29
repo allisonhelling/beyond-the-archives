@@ -26,7 +26,7 @@ A shared loading icon and short explanation appear while the app loads data, pro
 
 ## Quick Preview
 
-Requires Node **22.12+** and npm. From `FanficTrackerLibrary/`:
+Requires Node **22.12+** and npm. From `beyond-the-archives/`:
 
 ```sh
 npm ci
@@ -41,7 +41,7 @@ Both local development modes offer a **Local Preview** toolbar with device prese
 
 ## Run Locally
 
-Run commands from `FanficTrackerLibrary/`. Requires Node **22.12+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
+Run commands from `beyond-the-archives/`. Requires Node **22.12+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
 
 ### First-Time Setup and Database Upgrades
 
@@ -52,7 +52,7 @@ npx supabase migration up --local
 npx supabase status
 ```
 
-Run each command after the previous one succeeds. `supabase start` starts the Docker services in the background; leave Docker running. Apply migrations again after pulling database changes. Use migration upgrades for an existing database; resetting it is optional and destructive, as described below.
+Run each command after the previous one succeeds. `supabase start` starts the Docker services in the background; leave Docker running. The local Supabase stack is named `beyond-the-archives`. If you previously used `ao3-library-tracker`, preserve its data and stop that stack before starting the renamed stack; the different project ID does not automatically move its database. See the [rename instructions](docs/IMPLEMENTATION.md#project-names-and-app-origin). Apply migrations again after pulling database changes. Use migration upgrades for an existing database; resetting it is optional and destructive, as described below.
 
 On a fresh checkout only, create the browser configuration:
 
@@ -171,7 +171,9 @@ For a work not yet saved, the AO3 companion’s first-chapter top bar offers **T
 
 ### Browse, Filter, and Organize
 
-Library shelves include all saved statuses; Currently Reading focuses on active reading and its status sections. Filter by fandom, publication status, AO3 content rating, personal rating, favorites, Recs, tags, one-shot status, and other saved fields. Multiple fandoms match any selected fandom; selected character, relationship, and additional tags must each match. Verified Standard Tags include their verified synonyms; unverified names remain searchable.
+The Series collection contains series tiles only. Work summaries on series tiles start collapsed; use **Expand All Work Summaries** or **Collapse All Work Summaries** beside pagination to apply the choice throughout the collection. Individual summary toggles remain available.
+
+Library shelves include all saved statuses; Currently Reading focuses on active reading and its status sections. Filter by fandom, publication status, AO3 content rating, personal rating, favorites, Recs, tags, one-shot status, and other saved fields. Multiple fandoms match any selected fandom; selected character, relationship, and additional tags must each match. Verified Standard Tags include their verified synonyms; unverified names remain searchable. Tag suggestions sort names beginning with special characters last. The Features page provides a linked, detailed guide to the current workflows. The app uses a warm parchment page background, cream content surfaces, and a soft beige for progress and secondary panels. Cards and information panels use square corners; interactive controls stay rounded, and collection spines retain their 7px rounding while filter selectors use a compact 4px radius. Progress sections are centered and divided, and titles use the shared serif font.
 
 **Search Within Results** supports spaces for AND, `||` for OR, quoted phrases, leading `-` for NOT, `*` wildcards, and backslash escapes. Choose Any Field, Summary, or Notes as the scope. Search ignores case and accents. Invalid syntax shows an error.
 

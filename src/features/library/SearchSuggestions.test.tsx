@@ -20,3 +20,13 @@ it('places verified standard names first, separates other tags, and keeps keyboa
  expect(changed).toHaveBeenCalledWith('Alya Césaire')
  expect(input).toHaveFocus()
 })
+
+it('sorts special-character suggestions last and separates selected tags without bullets', () => {
+ records.value = []
+ render(<SearchSuggestions label="Tags" placeholder="Search tags" value="Selected, Another" onChange={vi.fn()} groups={[{label:'Tags',values:['!First','Zulu','Alpha','(Other)']}]} chips multiple tagCategory="tags" />)
+ fireEvent.focus(screen.getByLabelText('Tags', { exact: true }))
+ const popup = screen.getByRole('region', { name: 'Tags Suggestions' })
+ expect(within(popup).getAllByRole('button').map(button => button.textContent)).toEqual(['Alpha', 'Zulu', '!First', '(Other)'])
+ expect(screen.getByLabelText('Tags Selected Filters').textContent).toBe('Selected Another')
+ expect(screen.queryByText(/Standard tags include/)).not.toBeInTheDocument()
+})

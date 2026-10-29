@@ -12,12 +12,12 @@
 .display-edit-surface .display-edit-contents:is(:hover, :focus-visible, [data-display-selected="true"]) > * { outline: 2px dashed var(--color-brand); outline-offset: 2px; }
 .display-edit-surface[data-hide-information="true"] [data-display-field] { cursor: pointer; }
 .display-edit-surface[data-hide-information="true"] [data-display-field]:hover { outline-style: solid; background-color: var(--color-brand-soft); }
-.display-available { margin-block: 12px; padding: 16px; border: 1px solid var(--color-border); border-radius: 6px; }
+.display-available { margin-block: 12px; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-surface); }
 .display-available h4 { margin: 0 0 12px; }
 .display-available section + section { margin-top: 16px; }
 .display-available ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .display-available .button { padding: 6px 10px; }
-.display-save-bar { position: static; z-index: 2; padding: 14px; border: 1px solid var(--color-border); border-radius: 6px; background: #fffdfb; margin-block: 20px; }
+.display-save-bar { position: static; z-index: 2; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-surface); background: var(--color-surface); margin-block: 20px; }
 .display-save-bar .form-actions { margin: 0; }
 .display-save-bar .button { width: auto; flex: 1; }
 .display-page-links { margin-top: 24px; }
@@ -84,7 +84,7 @@
 
 .display-tag-shapes { margin-block: 16px; }
 .display-tag-shape-options { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-.tag-shape-option { display: grid; place-items: center; gap: 10px; border: 1px solid var(--color-border); border-radius: 6px; padding: 12px; background: #fffdfb; cursor: pointer; color: inherit; }
+.tag-shape-option { display: grid; place-items: center; gap: 10px; border: 1px solid var(--color-border); border-radius: 6px; padding: 12px; background: var(--color-surface); cursor: pointer; color: inherit; }
 .tag-shape-option > span:last-child { font-size: 12px; }
 .tag-shape-option[aria-pressed="true"] { outline: 2px solid var(--color-brand); outline-offset: 2px; }
 .display-edit-surface { font-size: 1rem; line-height: 1.5; color: #382b2b; position: relative; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

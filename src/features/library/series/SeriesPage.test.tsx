@@ -1,3 +1,4 @@
+import { SeriesSummaryContext } from './series-summary-context'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
@@ -127,20 +128,24 @@ it('toggles unsaved works without hiding saved works or series information', () 
  expect(screen.getByRole('link', { name:'Part 2: Unsaved sequel' })).toBeVisible()
 })
 
-it('shows only saved work titles and summaries on tiles, with the private series summary before controls', () => {
+it('starts saved work summaries collapsed and applies collection actions after individual toggles', () => {
  mocks.series = [record(full)]
  mocks.stories[0].metadata.summary = 'Saved work summary'
  const series = librarySeries(mocks.stories, mocks.series)[0]
- render(<MemoryRouter><SeriesCard series={series} /></MemoryRouter>)
- expect(screen.getByText(/1 works/)).toBeVisible()
- expect(screen.getByText('Saved work summary')).toBeVisible()
+ const tile = (expanded: boolean, revision: number) => <MemoryRouter><SeriesSummaryContext value={{ expanded, revision }}><SeriesCard series={series} /></SeriesSummaryContext></MemoryRouter>
+ const view = render(tile(false, 0))
+ const summary = screen.getByText('Saved work summary')
+ expect(summary.closest('details')).not.toHaveAttribute('open')
  expect(screen.queryByText('Sequel summary')).not.toBeInTheDocument()
  expect(screen.queryByText(/Unsaved sequel/)).not.toBeInTheDocument()
- const note = screen.getByText('Private note'), controls = screen.getByRole('button', { name:'Collapse All' })
+ const note = screen.getByText('Private note')
  expect(screen.getByText('Full description').compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
- expect(note.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
- fireEvent.click(controls)
- expect(screen.getByRole('button', { name:'Expand All' })).toBeVisible()
+ view.rerender(tile(true, 1))
+ expect(screen.getByText('Saved work summary').closest('details')).toHaveAttribute('open')
+ view.rerender(tile(false, 2))
+ expect(screen.getByText('Saved work summary').closest('details')).not.toHaveAttribute('open')
+ view.rerender(tile(true, 3))
+ expect(screen.getByText('Saved work summary').closest('details')).toHaveAttribute('open')
 })
 
 it('hides the unsaved-work toggle when every series work is in the library', () => {

@@ -8,14 +8,14 @@
 .settings-content h2:not(.display-edit-surface *) { font: 400 23px/1.3 var(--font-serif); margin: 0 0 16px; }
 .settings-content .section-title { margin-bottom: 16px; }
 .settings-content .section-title h2 { margin: 0; }
-.settings-content :is(h3, legend):not(.display-edit-surface *) { font: 600 18px/1.5 var(--font-sans); }
-.settings-content :is(h4, h5):not(.display-edit-surface *) { font: 600 var(--settings-text-size)/1.5 var(--font-sans); }
+.settings-content :is(h3, legend):not(.display-edit-surface *) { font: 600 18px/1.5 var(--font-serif); }
+.settings-content :is(h4, h5):not(.display-edit-surface *) { font: 600 var(--settings-text-size)/1.5 var(--font-serif); }
 .settings-subsection > legend + label, .settings-subsection > legend + form > label:first-child, .settings-subsection > legend + .form-controls-row > label { margin-top: 0; }
 .settings-subsection > legend > h3 { margin: 0; font: inherit; }
 .settings-subsection > p + p { margin-top: 12px; }
 .settings-subsection > :last-child { margin-bottom: 0; }
 .settings-card > p + .settings-subsection { margin-top: 24px; }
-.settings-content .settings-section > .settings-card { scroll-margin-top: 110px; }
+.settings-content .settings-section > .settings-card, .features-guide .settings-card { scroll-margin-top: 110px; }
 .settings-page { display: grid; grid-template-columns: 230px minmax(0, 1fr); align-items: start; gap: 20px; }
 .settings-outline { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; padding: 20px 0; border-right: 1px solid var(--color-border); }
 .settings-outline h2 { font: 20px var(--font-serif); margin-bottom: 16px; }
@@ -31,14 +31,19 @@
 .settings-section-list a:is(:hover, :focus-visible) { background: var(--color-brand-soft); }
 .settings-section-list svg { flex-shrink: 0; }
 .settings-section-label { display: grid; gap: 4px; }
+.settings-section-label > span { font-family: var(--font-serif); }
 .settings-section-label small { font-size: var(--minimum-text-size); font-weight: 400; line-height: 1.5; }
 
 @media (max-width: 900px) {
   .settings-page { grid-template-columns: minmax(0, 1fr); }
   .settings-outline, .settings-section { display: none; }
-  .settings-section-list { display: block; border: 1px solid var(--color-border); border-radius: 9px; overflow: hidden; background: #fffdfb; }
+  .settings-section-list { display: block; border: 1px solid var(--color-border); border-radius: var(--radius-surface); overflow: hidden; background: var(--color-surface); }
   .settings-section-list li:last-child a { border-bottom: 0; }
   .settings-page[data-section-open="true"] :is(.settings-index-heading, .settings-section-list) { display: none; }
   .settings-page[data-section-open="true"] .settings-section-back { display: block; margin-bottom: 20px; }
   .settings-section[data-selected="true"] { display: contents; }
+}
+
+@media (max-width: 900px) {
+  .features-guide .settings-outline { display: block; position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--color-border); }
 }

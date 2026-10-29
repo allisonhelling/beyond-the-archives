@@ -50,7 +50,7 @@
 .stats-page th, .stats-page td { text-align: left; border-bottom: 1px solid var(--color-border); padding: 10px; }
 .stats-page td { font-variant-numeric: tabular-nums; }
 .stats-heatmap { min-width: 760px; }
-.stats-heatmap td { text-align: center; border: 3px solid #fffdfb; }
+.stats-heatmap td { text-align: center; border: 3px solid var(--color-surface); }
 .stats-heatmap [data-level="0"] { background: var(--color-brand-soft); }
 .stats-heatmap [data-level="1"] { background: #edb9b2; }
 .stats-heatmap [data-level="2"] { background: #d9857b; }

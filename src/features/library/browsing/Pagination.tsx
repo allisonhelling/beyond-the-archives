@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
-export function Pagination({ page, pages, total, size, onPage, trailing, itemLabel = 'works', inlinePage = false, range, stale = false, countError = false }: { stale?: boolean; countError?: boolean; range?: { start: number; end: number }; inlinePage?: boolean; itemLabel?: string; trailing?: ReactNode; page: number; pages: number; total?: number; size: number; onPage: (page: number) => void }) {
+export function Pagination({ page, pages, total, size, onPage, leading, trailing, itemLabel = 'works', inlinePage = false, range, stale = false, countError = false }: { stale?: boolean; countError?: boolean; range?: { start: number; end: number }; inlinePage?: boolean; itemLabel?: string; leading?: ReactNode; trailing?: ReactNode; page: number; pages: number; total?: number; size: number; onPage: (page: number) => void }) {
   const [draft, setDraft] = useState({ page, value: String(page) })
   if (draft.page !== page) setDraft({ page, value: String(page) })
   const value = draft.page === page ? draft.value : String(page)
@@ -11,6 +11,7 @@ export function Pagination({ page, pages, total, size, onPage, trailing, itemLab
     if (Number.isInteger(next) && next >= 1 && (stale || next <= pages)) onPage(next)
   }} />
   return <nav className={`results-pagination${inlinePage ? ' pagination-inline' : ''}`} aria-label="Result Pages">
+    {leading && <div className="pagination-leading">{leading}</div>}
     {!inlinePage && <label className="pagination-page">Page{pageInput}</label>}
     <div className="pagination-controls">
       <button className="button secondary" disabled={page <= 1} onClick={() => onPage(page - 1)}>Prev</button>

@@ -4,7 +4,7 @@ import { BrowsingPosition } from '../features/library/browsing/BrowsingPosition'
 import { ExtensionConnection } from '../features/imports/ExtensionConnection'
 import { lazy, Suspense, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
-import { BookOpen, BookMarked, ChartNoAxesCombined, CircleCheck, History, LockKeyhole, LogOut, Plus, Settings, ShieldCheck, Sparkles } from 'lucide-react'
+import { BookOpen, BookMarked, ChartNoAxesCombined, History, LockKeyhole, LogOut, Plus, Settings, Sparkles } from 'lucide-react'
 import { LibraryProvider } from '../features/library/LibraryProvider'
 import { AddStoryPage, AuthorPage, LibraryPage, StoryDetailsPage } from '../features/library/LibraryPages'
 import { useDismissible } from '../components/useDismissible'
@@ -18,6 +18,7 @@ import { ActivityIndicator, LoadingIcon, LoadingStatus } from '../components/Act
 import { useActivity } from '../lib/use-activity'
 
 // Keep the reading and library routes eager; load secondary pages when visited.
+const FeaturesPage = lazy(() => import('./FeaturesPage').then(module => ({ default: module.FeaturesPage })))
 const StatsPage = lazy(() => import('../features/stats/StatsPage').then(module => ({ default: module.StatsPage })))
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then(module => ({ default: module.SettingsPage })))
 const ImportPage = lazy(() => import('../features/imports/ImportPage').then(module => ({ default: module.ImportPage })))
@@ -34,22 +35,6 @@ const navigation = [
   { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings },
 ]
 
-function FeaturesPage() {
-  return <><div className="page-heading"><div><h1>The Next Chapters</h1></div><span className="status-pill">PHASE 3</span></div><section className="settings-card" aria-labelledby="series-features-heading">
-    <h2 id="series-features-heading">Series Pages</h2>
-    <p><strong>Default Series Page.</strong> Works in your library are automatically grouped by their AO3 series, keeping their original part numbers. This page uses your saved works to show authors, fandoms, and word totals. Opening it does not download the full AO3 series. Official series totals and completion stay unknown until you load them.</p>
-    <p><strong>Loaded AO3 Details.</strong> Choose <strong>Load</strong> to save the series description, official statistics, and available work listing from AO3, including works outside your library. Saving these details does not add those works to your library.</p>
-    <p><strong>Refresh and Remove.</strong> <strong>Refresh</strong> updates the downloaded series information when you request it; the last-fetched time shows how recent it is. New works are not automatically imported. <strong>Remove</strong> deletes the downloaded details and returns to the default page, keeping your saved works, reading progress, notes, favorites, and collections.</p>
-    <p><strong>Review Related Works.</strong> After a fic import, the <strong>Related Series</strong> popup lets you review a series temporarily and choose individual works to import. Full details are saved only when you choose <strong>Load</strong>.</p>
-    <p>Your series reading status follows the works saved in your library. It is separate from whether the author has marked the AO3 series complete.</p>
-  </section><section className="roadmap-current"><ShieldCheck size={29} /><div><span className="eyebrow accent">PHASE 1 · FOUNDATION</span><h2>Your Private Library Is Ready.</h2><p>Invitation-only sign-in, account recovery, manual story entry, reading progress, favorites, private notes, and collections backed by row-level security.</p><span className="complete-label"><CircleCheck size={16} /> Foundation implemented · Phase 2 library, progress, favorites and collections available</span></div></section><div className="roadmap-grid">{[
-
-    ['03', 'Bring Your Stories Along', 'Bulk AO3 links, persistent import jobs, and respectful metadata retrieval.'],
-    ['04', 'Find Your Next Escape', 'Advanced search refinements. Reading statistics are available on the Stats page.'],
-    ['05', 'Stay in the Story', 'Email-powered chapter notifications and controlled metadata refreshes.'],
-    ['06', 'Keep What Matters', 'In-app restore, scheduled backups, and production hardening. Complete exports and administrator restore are available in Settings.'],
-  ].map(([phase, title, text]) => <section className="roadmap-card" key={phase}><span className="phase-number">{phase}</span><span className="eyebrow">{phase === '03' ? 'IMPLEMENTED · WORKER SETUP REQUIRED' : 'PLANNED'}</span><h2>{title}</h2><p>{text}</p></section>)}</div></>
-}
 
 function Shell() {
   const { session, signOut: endSession } = useAuth()

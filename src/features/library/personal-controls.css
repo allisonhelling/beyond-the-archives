@@ -15,7 +15,7 @@
   button.personal-tag-help-button { width: 44px; height: 44px; min-height: 44px; padding: 8px; }
   .personal-tag-help-button svg { width: 14px; height: 14px; }
 }
-.removable-tag { --tag-bg: var(--personal-tag-background, #fff); --tag-border: var(--personal-tag-border, #d1d5db); --tag-text: var(--personal-tag-text, #111); --tag-remove: var(--personal-tag-remove, #c92e3d); position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; gap: 0; min-width: 0; min-height: var(--personal-control-min-height, 0); max-width: 100%; padding: 3px 9px; overflow: hidden; border-color: var(--tag-border); border-radius: 999px; background-color: var(--tag-bg); color: var(--tag-text); text-align: left; transition: background-color 180ms ease, border-color 180ms ease; }
+.removable-tag { --tag-bg: var(--personal-tag-background, var(--color-surface)); --tag-border: var(--personal-tag-border, #d1d5db); --tag-text: var(--personal-tag-text, #111); --tag-remove: var(--personal-tag-remove, #c92e3d); position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; gap: 0; min-width: 0; min-height: var(--personal-control-min-height, 0); max-width: 100%; padding: 3px 9px; overflow: hidden; border-color: var(--tag-border); border-radius: 999px; background-color: var(--tag-bg); color: var(--tag-text); text-align: left; transition: background-color 180ms ease, border-color 180ms ease; }
 .removable-tag .tag-label { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; color: var(--tag-text); }
 .tag-remove-cap { position: absolute; inset-block: 0; right: 0; width: 33px; max-width: 100%; display: none; place-items: center; background-color: var(--tag-bg); color: var(--tag-remove); opacity: 0; transition: opacity 180ms ease, background-color 180ms ease; }
 .removable-tag.tag-selected { --tag-bg: var(--tag-highlight-bg); --tag-border: var(--tag-highlight-border); }
@@ -49,7 +49,7 @@ label.rating-star, span.rating-star { display: grid; place-items: center; positi
 }
 /* Presentation is shared across every metadata surface and the shape picker. */
 .categorized-tags { color: var(--tag-color); font-size: var(--personal-control-font-size, 13px); }
-.categorized-tags .metadata-tag { color: inherit; border-color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 8%, #fffdfb); }
+.categorized-tags .metadata-tag { color: inherit; border-color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 8%, var(--color-surface)); }
 .categorized-tags[data-tag-shape="curved"] .metadata-tag { border-radius: 5px; }
 .categorized-tags[data-tag-shape="sharp"] .metadata-tag { border-radius: 0; }
 .categorized-tags:is([data-tag-shape="bullets"], [data-tag-shape="commas"]) { display: inline; }

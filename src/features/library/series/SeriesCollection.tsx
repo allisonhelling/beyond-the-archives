@@ -4,7 +4,7 @@ import { CustomCollectionNames } from '../collections/CustomCollectionNames'
 import { StarRating } from '../StarRating'
 import { ao3Date } from '../model'
 import { DisplayInfo } from '../display/DisplayInfo'
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Tooltip } from '../../../components/Tooltip'
 import { AuthorNames } from '../AuthorNames'
@@ -13,17 +13,22 @@ import { readingStatusIcons } from '../collections/collection-appearance'
 import { publicationStatuses } from '../publication-status'
 import { seriesCompletionLabel, seriesInformation, seriesKudosLabel, seriesReadingLabel, type LibrarySeries } from './series'
 
+import { SeriesSummaryContext } from './series-summary-context'
+
 /** Summaries and navigation for the works listed on each series card. */
 export function SeriesWorkList({ series }: { series: LibrarySeries }) {
- const [closed, setClosed] = useState<Set<number>>(new Set())
+ const { expanded, revision } = useContext(SeriesSummaryContext)
+ return <SeriesWorkSummaries key={revision} series={series} expanded={expanded} />
+}
+function SeriesWorkSummaries({ series, expanded }: { series: LibrarySeries; expanded: boolean }) {
+ const [opened, setOpened] = useState<Set<number>>(() => new Set(expanded ? series.works.map(work => work.workId) : []))
  const location = useLocation()
  const savedById = new Map(series.savedStories.map(story => [story.work.ao3_work_id, story]))
  const works = series.works.flatMap(work => { const saved = savedById.get(work.workId); return saved ? [{ work, saved }] : [] })
- const allExpanded = works.length > 0 && works.every(({ work }) => !closed.has(work.workId))
- return <><div className="form-actions series-summary-controls"><button className="text-button" type="button" disabled={!works.length} onClick={() => setClosed(allExpanded ? new Set(works.map(({ work }) => work.workId)) : new Set())}>{allExpanded ? 'Collapse All' : 'Expand All'}</button></div>
+ return <>
   <ol className="series-work-list">{works.map(({ work, saved }) => {
    const Icon = readingStatusIcons[saved.reading_status]
-   return <li key={work.workId}><details open={!closed.has(work.workId)} onToggle={event => { const open = event.currentTarget.open; setClosed(current => { if (current.has(work.workId) === !open) return current; const next = new Set(current); if (open) next.delete(work.workId); else next.add(work.workId); return next }) }}>
+   return <li key={work.workId}><details open={opened.has(work.workId)} onToggle={event => { const open = event.currentTarget.open; setOpened(current => { if (current.has(work.workId) === open) return current; const next = new Set(current); if (open) next.add(work.workId); else next.delete(work.workId); return next }) }}>
     <summary><span className="series-work-title">{work.position ? `Part ${work.position}: ` : ''}{work.title}</span>{' '}<Tooltip description="View Saved Work">{id => <Link className="clickable-text series-work-link" to={`/stories/${saved.id}`} state={{ returnTo: location.pathname + location.search }} aria-label={`View Saved Work: ${work.title}`} aria-describedby={id} onClick={event => event.stopPropagation()}><Icon size={18} aria-hidden="true" /></Link>}</Tooltip></summary>
     {work.summary && <div className="story-summary"><WorkSummary metadata={work} /></div>}
    </details></li>

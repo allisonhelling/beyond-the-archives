@@ -26,11 +26,12 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   const progress = page.locator('.series-progress-state')
   const collection = page.getByRole('region', { name: 'Collections', exact: true })
   const progressBox = (await progress.boundingBox())!, collectionBox = (await collection.boundingBox())!
-  expect(collectionBox.x).toBeGreaterThan(progressBox.x)
-  expect(Math.abs(collectionBox.y - progressBox.y)).toBeLessThan(1)
+  expect(collectionBox.x).toBeCloseTo(progressBox.x, 0)
+  expect(collectionBox.y).toBeGreaterThanOrEqual(progressBox.y + progressBox.height)
+  await expect(collection).toHaveCSS('border-top-width', '1px')
   const chooseBox = (await page.getByRole('button', { name: 'Choose Works to Import' }).boundingBox())!
   expect(chooseBox.y).toBeGreaterThanOrEqual(collectionBox.y + collectionBox.height)
-  expect(chooseBox.x).toBeCloseTo(collectionBox.x, 0)
+  expect(chooseBox.x + chooseBox.width / 2).toBeCloseTo(collectionBox.x + collectionBox.width / 2, 0)
   const addBox = (await collection.getByRole('button', { name: 'Add to Collection' }).boundingBox())!
   expect(addBox.width).toBeLessThanOrEqual(collectionBox.width)
  }
@@ -117,7 +118,10 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   const hide = (await page.getByRole('button', {name:'Hide Works Not in Library'}).boundingBox())!
   const collections = (await page.getByRole('heading', {name:'Collections',exact:true}).boundingBox())!
   expect(Math.abs(hide.x + hide.width / 2 - choose.x - choose.width / 2)).toBeLessThan(1)
-  expect(Math.abs(hide.y + hide.height / 2 - collections.y - collections.height / 2)).toBeLessThan(1)
+  const progressSections = page.locator('.series-progress-columns > *')
+  await expect(progressSections.nth(1)).toHaveCSS('border-left-width', '1px')
+  await expect(progressSections.nth(2)).toHaveCSS('border-left-width', '1px')
+  expect(hide.x).toBeGreaterThan(collections.x)
   expect(hide.y + hide.height).toBeLessThan(choose.y)
  }
  await page.getByRole('button', {name:'Hide Works Not in Library'}).click()
@@ -133,6 +137,13 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await page.goto('/library?shelf=series')
  const card = page.locator('.series-card')
  await expect(card).toContainText('2 works')
+ await expect(page.locator('.work-card')).toHaveCount(0)
+ await expect(card.locator('.series-work-list details[open]')).toHaveCount(0)
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+ await page.getByRole('button', { name: 'Expand All Work Summaries', exact: true }).first().click()
+ await expect(card.locator('.series-work-list details[open]')).toHaveCount(2)
+ await page.getByRole('button', { name: 'Collapse All Work Summaries', exact: true }).first().click()
+ await expect(card.locator('.series-work-list details[open]')).toHaveCount(0)
  await expect(card.getByText('My personal series summary', {exact:true})).toBeVisible()
  await expect(card).not.toContainText('Unsaved sequel')
  await expect(card).not.toContainText('Second summary')

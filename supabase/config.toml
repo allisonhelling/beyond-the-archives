@@ -1,4 +1,4 @@
-project_id = "ao3-library-tracker"
+project_id = "beyond-the-archives"
 
 [api]
 enabled = true

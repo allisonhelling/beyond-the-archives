@@ -4,6 +4,8 @@
 
 .results-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 18px; }
 .pagination-trailing, .pagination-controls, .pagination-page, .pagination-size { display: flex; align-items: center; gap: 8px; }
+.pagination-leading { grid-column: 1; grid-row: 1; min-width: 0; }
+.pagination-leading + .pagination-page { grid-row: 2; }
 .pagination-trailing { grid-column: 3; justify-self: end; min-width: 0; gap: 0; }
 .pagination-inline .pagination-controls > [role=status] { white-space: nowrap; text-align: center; }
 .pagination-inline .pagination-page { display: inline-flex; vertical-align: middle; }
@@ -19,6 +21,7 @@
  .pagination-page { grid-column: 1; grid-row: 1; }
  .pagination-page input, .pagination-size select { min-height: 32px; padding: 5px 8px; }
  .pagination-page input { width: 2.5rem; padding-inline: 3px; }
+ .pagination-leading { grid-column: 1 / -1; grid-row: 3; }
  .pagination-controls { grid-column: 1 / -1; grid-row: 2; justify-self: center; gap: 6px; }
  .pagination-controls .button { padding-inline: 6px; }
  .pagination-inline .pagination-controls { flex-wrap: nowrap; justify-content: center; width: 100%; min-width: 0; gap: 4px; font-size: 12px; }

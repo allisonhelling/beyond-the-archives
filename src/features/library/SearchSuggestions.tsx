@@ -1,4 +1,4 @@
-import { tagSuggestionGroups, type Ao3TagCategory } from './tags/tag-resolution'
+import { compareTagSuggestions, tagSuggestionGroups, type Ao3TagCategory } from './tags/tag-resolution'
 import { useTagResolutions } from './tags/useTagResolutions'
 import { useId, useState, type KeyboardEvent } from 'react'
 import { useDismissible } from '../../components/useDismissible'
@@ -19,10 +19,10 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   const term = normalize((chips ? draft : multiple && appendSuggestion ? '' : multiple ? value.split(',').at(-1) ?? '' : value).trim())
   const chosen = chips ? selected.map(normalize) : multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(text => normalize(text.trim())) : []
   const category = ({ relationships: 'relationship', characters: 'character', tags: 'freeform' } as Partial<Record<TagCategory, Ao3TagCategory>>)[tagCategory!]
-  const candidates = [...new Set(groups.flatMap(group => group.values))].filter(text => normalize(text).includes(term)).sort((a,b) => a.localeCompare(b)).slice(0,8)
-  const { records, unavailable } = useTagResolutions(category, candidates, focused)
+  const candidates = [...new Set(groups.flatMap(group => group.values))].filter(text => normalize(text).includes(term)).sort(compareTagSuggestions).slice(0,8)
+  const { records } = useTagResolutions(category, candidates, focused)
   const resolvedGroups = category ? tagSuggestionGroups(groups.flatMap(group => group.values), term, records, category) : groups
-  const suggestions = resolvedGroups.map(group => ({ ...group, values: [...new Set(group.values)].filter(text => !chosen.includes(normalize(text)) && (category ? true : normalize(text).includes(term))).sort((a, b) => a.localeCompare(b)).slice(0, 8) }))
+  const suggestions = resolvedGroups.map(group => ({ ...group, values: [...new Set(group.values)].filter(text => !chosen.includes(normalize(text)) && (category ? true : normalize(text).includes(term))).sort(compareTagSuggestions).slice(0, 8) }))
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (chips && event.key === 'Enter' && event.target instanceof HTMLInputElement && draft.trim()) { event.preventDefault(); choose(draft.trim()); return }
     if (event.key === 'Escape') { setFocused(false); return }
@@ -48,8 +48,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
       {!suggestions.length && <p>No matching saved {label.toLocaleLowerCase()}.</p>}
       {suggestions.map(group => <section role={category ? 'group' : undefined} key={group.label} aria-label={`${group.label} Suggestions`}>{(!hideHeadings || category) && <span className="suggestion-heading">{group.label}</span>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
     </div>}
-    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} Selected Filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} Filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
-    {focused && category && <small className="suggestion-help">{unavailable ? 'AO3 tag verification is unavailable. Saved tag searches still work.' : 'Standard tags include AO3-verified synonyms. Other tags retain their original names; verification runs in the background.'}</small>}
     {help && <small className="suggestion-help">{help}</small>}
+    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} Selected Filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} Filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
   </div>
 }

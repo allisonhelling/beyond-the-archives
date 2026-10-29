@@ -110,3 +110,23 @@ it('retains the last result as stale during a revision refresh and after a count
  expect(view.result.current.previousResult).toMatchObject({revision:1,total:12})
  expect(view.result.current.result).toBeUndefined()
 })
+
+it('does not carry work results into the Series collection while its page loads', async () => {
+ mocks.fetchPage.mockResolvedValueOnce({ ...result, total: 1 }).mockImplementationOnce(() => new Promise(() => {}))
+ const view = renderHook(({ shelf }) => useLibraryResults({ ...query, shelf }, 1, 25, true), { initialProps: { shelf: 'all' } })
+ await waitFor(() => expect(view.result.current.result?.total).toBe(1))
+ view.rerender({ shelf: 'series' })
+ expect(view.result.current.loading).toBe(true)
+ expect(view.result.current.result).toBeUndefined()
+ expect(view.result.current.previousResult).toBeUndefined()
+})
+
+it.each(['library', 'reading'] as const)('clears tiles when switching %s collections, including after a failed load', async mode => {
+ mocks.fetchPage.mockResolvedValueOnce({ ...result, total: 1 }).mockRejectedValueOnce(new Error('Unavailable'))
+ const view = renderHook(({ shelf }) => useLibraryResults({ ...query, mode, shelf }, 1, 25, true), { initialProps: { shelf: 'view_all' } })
+ await waitFor(() => expect(view.result.current.result?.total).toBe(1))
+ view.rerender({ shelf: 'to_read' })
+ expect(view.result.current.previousResult).toBeUndefined()
+ await waitFor(() => expect(view.result.current.error).toBe('Unavailable'))
+ expect(view.result.current.previousResult).toBeUndefined()
+})

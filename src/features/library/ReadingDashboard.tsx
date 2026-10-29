@@ -1,3 +1,4 @@
+import { SeriesSummaryContext } from './series/series-summary-context'
 import { RetryError } from '../../components/RetryError'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { MetadataRefreshButton } from '../imports/MetadataControls'
@@ -58,6 +59,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const [params, setParams] = useSearchParams()
   const selected = author !== undefined ? 'all' : params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')
   const defaultScope = author !== undefined ? `author:${author}` : filterDefaultScope(mode, selected)
+  const [summaryState, setSummaryState] = useState({ scope: defaultScope, expanded: false, revision: 0 })
+  if (summaryState.scope !== defaultScope) setSummaryState({ scope: defaultScope, expanded: false, revision: summaryState.revision + 1 })
   const [defaults, setDefaults] = useState(() => ({ scope: defaultScope, filters: readFilterDefaults(defaultScope) }))
   if (defaults.scope !== defaultScope) setDefaults({ scope: defaultScope, filters: readFilterDefaults(defaultScope) })
   const decoded = readBrowsing(params, defaults.filters)
@@ -115,13 +118,13 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
   function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }
   error ||= remote.error ?? ''
-  const pagination = (inlinePage = false) => <Pagination stale={countsStale || Boolean(revisionError)} countError={Boolean(remote.error || revisionError)} inlinePage={inlinePage} page={currentPage} pages={pages} total={total} size={size} onPage={changePage} trailing={<><Tooltip pinOnClick description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per Page Information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per Page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
+  const pagination = (inlinePage = false) => <Pagination stale={countsStale || Boolean(revisionError)} countError={Boolean(remote.error || revisionError)} inlinePage={inlinePage} page={currentPage} pages={pages} total={total} size={size} onPage={changePage} leading={mode !== 'reading' && (mode === 'series' || filters.showSeries) ? <div className="series-summary-controls">{[true, false].map(expanded => <button key={String(expanded)} type="button" className="text-button" onClick={() => setSummaryState(current => ({ ...current, expanded, revision: current.revision + 1 }))}>{expanded ? 'Expand All Work Summaries' : 'Collapse All Work Summaries'}</button>)}</div> : undefined} trailing={<><Tooltip pinOnClick description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per Page Information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per Page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
   const orderingControls = <>
     <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
     <Dropdown label="Group" icon={ListTree} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
   </>
   const headerActions = <>{showActions && <>{refreshButton}{resultsActions}</>}</>
-  return <>
+  return <SeriesSummaryContext value={summaryState}>
     {confirmRefresh && <ConfirmationDialog title="Mass Refresh?" confirmLabel="Mass Refresh" pendingLabel="Refreshing…" onClose={() => setConfirmRefresh(false)} onConfirm={async () => { await metadataRefresh.refresh() }}><p>Refresh AO3 metadata for all works on this page?</p></ConfirmationDialog>}
     {renderHeader ? renderHeader(headerActions, sampleMode ? pool.length : remote.facets?.total) : <div className="library-heading-actions">{headerActions}</div>}
     {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View Import History</Link></p>}
@@ -137,5 +140,5 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     {error && <RetryError message={error} onRetry={remote.error ? remote.retry : undefined} />}
     {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
     {!error && !remote.loading && pagination()}
-  </>
+  </SeriesSummaryContext>
 }

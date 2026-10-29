@@ -475,7 +475,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       progress: <>       <section className="settings-card details-progress-panel" aria-label="Reading and Organization">
         <div className="story-section-heading"><h2>Your Progress</h2></div>
         <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />
-        <div className="details-reading-controls">{readingStatus}{rating}{collectionsField}</div>
+        <div className="details-reading-controls progress-sections">{readingStatus}<div className="progress-rating">{rating}</div>{collectionsField}</div>
       </section> </>,
       notes: <>
       <section className="details-private-notes" aria-label="Private Notes"><PersonalNote key={story.id} notes={story.notes} onSave={(notes, base) => updateEntry(story.id, { notes }, { notes: base })} onRefresh={() => library.refreshStory(story.id)} /></section> </>,
@@ -484,7 +484,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <dl className="metadata-list details-fic-fields">
 <DisplayInfo group="workInfo">{{
       ...workMetadataFields(story, 'info'),
-      bookfusion: <div><dt className="editable-field-heading"><span>BookFusion Link</span><button className="text-button" onClick={() => editSection('metadata')} aria-label="Edit BookFusion Link"><Pencil size={14} aria-hidden="true" />Edit</button></dt><dd>
+      bookfusion: <div><dt className="editable-field-heading"><span>BookFusion Link</span><button className="text-button" onClick={() => editSection('metadata')} aria-label="Edit BookFusion Link"><Pencil size={14} aria-hidden="true" /></button></dt><dd>
         <p className="field-help">{story.metadata.bookfusion_link ? story.metadata.bookfusion_link.kind === 'bookmark' ? 'Bookmark · opens a fixed location.' : 'Book · opens without a fixed location; BookFusion manages your reading position.' : 'Upload your EPUB to BookFusion, then add its reader or content link here.'}</p>
         <BookFusionButton value={story.metadata.bookfusion_link} label />
       </dd></div>,
@@ -504,5 +504,5 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
     {metadataRefresh.notFound && <ConfirmationDialog title="Mark Work as Deleted?" confirmLabel="Mark as Deleted" pendingLabel="Saving…" onConfirm={metadataRefresh.confirmDeleted} onClose={metadataRefresh.dismissNotFound}>
       <p>‘<a className="clickable-text" href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a>’ returns an Error 404: The page you were looking for doesn't exist. Would you like to mark the work as deleted? Your existing metadata and information will be preserved.</p>
     </ConfirmationDialog>}
-  </div>}</StoryControls> : <p>Story unavailable. <Link to={returnTo}>Return to {returnLabel}</Link></p>}</LibraryBoundary>
+  </div>}</StoryControls> : <p>Story unavailable. <Link className="clickable-text" to={returnTo}>Return to {returnLabel}</Link></p>}</LibraryBoundary>
 }

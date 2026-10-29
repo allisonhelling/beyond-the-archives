@@ -36,3 +36,9 @@ export function tagSuggestionGroups(values: string[], term: string, records: Tag
  }
  return [{ label: 'Standard Tags', values: [...standard] }, { label: 'Other / Unverified Tags', values: matching.filter(name => !standard.has(name)) }].filter(group => group.values.length)
 }
+
+/** Alphabetize letters/numbers first and punctuation-led names last. */
+export function compareTagSuggestions(a: string, b: string) {
+ const special = (value: string) => !/^[\p{L}\p{N}]/u.test(value.trim())
+ return Number(special(a)) - Number(special(b)) || a.localeCompare(b)
+}
