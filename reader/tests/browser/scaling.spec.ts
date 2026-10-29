@@ -51,7 +51,7 @@ async function calls(page: Page) {
 test('migrates 10,000 books, pages/searches the catalog, and loads only the opened book', async ({ page }) => {
   test.setTimeout(90_000)
   await seedLegacy(page, 10_000)
-  await expect(page.getByText('10000 works available here')).toBeVisible({ timeout: 45_000 })
+  await expect(page.getByText('10000 works downloaded')).toBeVisible({ timeout: 45_000 })
   await expect(page.locator('.story-card')).toHaveCount(24)
   await expect(page.getByRole('navigation', { name: 'Result Pages' })).toContainText('1–24 of 10000')
   expect((await calls(page))['contents.get'] ?? 0).toBe(0)
@@ -64,6 +64,8 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   await page.getByLabel('Go to Page').press('Enter')
   await expect(page.locator('.story-card')).toHaveCount(16)
   await page.getByLabel('Search Metadata').fill('Story 009999')
+  await expect(page.locator('.story-card')).toHaveCount(16)
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.getByLabel('Go to Page')).toHaveValue('1')
   await page.getByRole('button', { name: 'Manage EPUB', exact: true }).click()
