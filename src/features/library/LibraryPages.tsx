@@ -1,3 +1,4 @@
+import { WaybackLink } from './WaybackPage'
 import { ReadEpub } from '../offline/ReaderControls'
 import { useActivity } from '../../lib/use-activity'
 import { BookFusionButton } from './bookfusion/BookFusionFields'
@@ -123,6 +124,7 @@ function StoryControls({ story, children, readOnly = false }: { readOnly?: boole
       <summary aria-label={`Story Actions for ${story.metadata.title}`}><MoreHorizontal size={22} /></summary>
       <div className="menu-surface">
         {(['favorite', 'rec'] as const).filter(kind => isDisplayFieldHidden(tilePreference, kind)).map(kind => <PersonalToggleButton key={kind} kind={kind} menu selected={kind === 'favorite' ? story.is_favorite : story.is_rec} disabled={blocked} onChange={selected => void change(kind === 'favorite' ? { is_favorite: selected } : { is_rec: selected })} />)}
+        <WaybackLink url={savedWorkUrl(story)} menu />
         <Link className="menu-item" to={`/stories/${story.id}`} state={location.pathname.startsWith('/stories/') ? location.state : { returnTo: location.pathname + location.search }}><FileText size={16} aria-hidden="true" />View/Edit Details</Link>
         {story.reading_status !== 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'paused_reading' })}><readingStatusIcons.paused_reading size={16} aria-hidden="true" />Mark as Paused Reading</button>}
         {story.reading_status === 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: resumeReadingStatus(story) })}><readingStatusIcons.reading size={16} aria-hidden="true" />Resume Reading</button>}
@@ -460,7 +462,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> }}</DisplayInfo>}
         {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p> }}</DisplayInfo>}
-        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><ReadEpub workId={story.work.ao3_work_id} /><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><WaybackLink url={savedWorkUrl(story)} /><ReadEpub workId={story.work.ao3_work_id} /><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{
         stats: <> <dl className="details-story-stats">

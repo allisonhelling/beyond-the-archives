@@ -43,6 +43,6 @@ export function restorePosition(viewport: HTMLElement, preferences: Preferences,
   if (!range) { viewport.scrollLeft = preferences.layout === 'pages' ? viewport.scrollWidth - viewport.clientWidth : 0; viewport.scrollTop = preferences.layout === 'pages' ? 0 : viewport.scrollHeight; return }
   const rect = range.getBoundingClientRect()
   if (preferences.layout === 'pages') viewport.scrollLeft = Math.floor((viewport.scrollLeft + rect.left - bounds.left) / viewport.clientWidth) * viewport.clientWidth
-  else if (position.fraction === 0 && position.textOffset === undefined) viewport.scrollTop += section.getBoundingClientRect().top - bounds.top
+  else if (position.fraction === 0 && position.textOffset === undefined) viewport.scrollTop += section.getBoundingClientRect().top - bounds.top - (parseFloat(getComputedStyle(section.parentElement!).paddingTop) || 0)
   else viewport.scrollTop += rect.top - bounds.top - (position.textTop ?? 35)
 }

@@ -62,3 +62,6 @@ verify_jwt = false # Handler verifies bearer tokens with Auth before lease/Stora
 
 [functions.tag-resolution]
 verify_jwt = false # Handler verifies bearer tokens with Auth before cache access.
+
+[functions.wayback-lookup]
+verify_jwt = false # Handler verifies each bearer token with Supabase Auth.

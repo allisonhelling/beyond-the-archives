@@ -13,9 +13,6 @@ async function fixture(rich = false) {
 async function connectOrganizer(page: Page) {
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await page.getByLabel('Device Name (Optional)', { exact: true }).fill('Test Reader')
-  await page.getByText('Advanced Settings', { exact: true }).click()
-  await page.getByLabel('Backend URL').fill('https://organizer.test')
-  await page.getByLabel('Public API Key').fill('sb_publishable_test')
   await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
   await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -73,7 +70,7 @@ test('persists offline reading updates and retries them once without duplicating
   let remote = { id: 'entry-1', version: 'v1', status: 'to_read', progress: 0, notes: '', collections: [], tags: [] }
   let reads = 0
   const requests: Record<string, unknown>[] = []
-  await context.route('https://organizer.test/rest/v1/rpc/userscript_library', async route => {
+  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
     const request = route.request().postDataJSON()
     if (request.p_action === 'progress' || request.p_action === 'save') {
       requests.push(request.p_input)
@@ -338,6 +335,8 @@ test('opens saved work details from the shelf menu and reading title, including 
   await menu.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('button', { name: 'View Details', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View Details', exact: true })).toHaveCSS('text-align', 'left')
+  await expect(page.getByRole('button', { name: 'View Details', exact: true })).toHaveCSS('justify-content', 'flex-start')
   await page.keyboard.press('Escape')
   await expect(menu).toHaveAttribute('aria-expanded', 'false')
   await expect(menu).toBeFocused()
@@ -643,7 +642,7 @@ test('offers all organizer tag styles plus the filled-chip default and persists 
 
 test('opts into organizer formats, refreshes changes, caches them offline, and restores independent settings on unlink', async ({ page, context }) => {
   let remote = { shape: 'sharp', colors: { tags: '#123456' } }, tagGets = 0
-  await context.route('https://organizer.test/rest/v1/rpc/userscript_library', async route => {
+  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
     if (route.request().postDataJSON().p_action === 'tag_get') { tagGets++; await route.fulfill({ json: { tagAppearance: remote } }) }
     else await route.fulfill({ json: { entry: null, collections: [] } })
   })
@@ -725,7 +724,7 @@ test('waits for Apply with the panel hidden and preserves results for invalid dr
 })
 test('reports verified local files by stable installation identity and replaces reports after removal', async ({ page, context }) => {
   const reports: { installationId: string; name: string; works: string[] }[] = []
-  await context.route('https://organizer.test/rest/v1/rpc/userscript_library', async route => {
+  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
     const request = route.request().postDataJSON()
     if (request.p_action === 'reader_report') reports.push(request.p_input)
     await route.fulfill({ json: { entry: { id: 'entry', version: 'v1', status: 'reading', progress: 0, notes: '' }, collections: [] } })
@@ -746,12 +745,24 @@ test('reports verified local files by stable installation identity and replaces 
 })
 
 test('navigates repeated author notes and identical prose as separate chapters', async ({ page, context }) => {
-  const file = { name: 'chapter-notes.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await createZip(chapterNotesFiles()).arrayBuffer()) }
+  const files = chapterNotesFiles()
+  files[4].content = files[4].content.replace('<div class="userstuff module">', '<h3>Notes:</h3><blockquote><p>Opening notes.</p></blockquote><h3>Chapter Text</h3><div class="userstuff module">')
+  const file = { name: 'chapter-notes.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await createZip(files).arrayBuffer()) }
   await page.goto('/')
   await page.getByLabel('Import EPUB File').setInputFiles(file)
   await expect(page.getByLabel('Book Content')).toBeVisible()
+  await page.getByLabel('Chapter', { exact: true }).selectOption({ label: 'Notes:' })
+  const notesNavigation = page.getByRole('navigation', { name: 'Top Chapter Navigation' })
+  await expect(notesNavigation).toBeVisible()
+  await expect(page.locator('[data-chapter-content] h2')).toHaveCount(0)
+  await expect(page.locator('[data-chapter-content] hr')).toHaveCSS('border-top-color', 'rgb(0, 0, 0)')
+  const notesTop = (await notesNavigation.boundingBox())!.y
+  await page.getByLabel('Chapter', { exact: true }).selectOption({ label: 'Chapter 1' })
+  await expect(page.locator('[data-chapter-content]')).not.toContainText('Chapter Text')
+  await expect(page.locator('[data-chapter-content] blockquote + hr')).toHaveCSS('border-top-color', 'rgb(0, 0, 0)')
   await page.getByLabel('Chapter', { exact: true }).selectOption({ label: 'Chapter 2' })
   const top = page.getByRole('navigation', { name: 'Top Chapter Navigation' })
+  expect(Math.abs((await top.boundingBox())!.y - notesTop)).toBeLessThan(2)
   await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 2')
   await top.getByRole('button', { name: 'Next Chapter →', exact: true }).click()
   await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 3')
@@ -812,7 +823,7 @@ test('repairs a previously saved duplicate chapter ID and retains history offlin
 })
 
 
-test('pairs from an organizer link only after confirmation and preserves an existing connection', async ({ page }) => {
+test('automatically pairs from an organizer link and preserves an existing connection', async ({ page }) => {
   const requests: { p_action: string; p_input: { name?: string } }[] = []
   let paired = false
   await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
@@ -826,13 +837,7 @@ test('pairs from an organizer link only after confirmation and preserves an exis
   const url = readerPairingUrl('http://127.0.0.1:4174/', { ...hostedOrganizer, code: 'a'.repeat(64) })
   await page.goto(url)
   const dialog = page.getByRole('dialog', { name: 'Connect Organizer' })
-  await expect(dialog).toBeVisible()
   expect(new URL(page.url()).hash).toBe('')
-  expect(requests).toHaveLength(0)
-  await expect(page.getByLabel('Pairing Code', { exact: true })).toHaveValue('a'.repeat(64))
-  await expect(page.getByLabel('Backend URL')).toBeHidden()
-  await expect(page.getByLabel('Account Label')).toHaveCount(0)
-  await dialog.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await expect(dialog).toHaveCount(0)
   await expect.poll(() => requests.some(request => request.p_action === 'reader_report' && request.p_input.name === 'My Reader')).toBe(true)
   const readConnection = () => page.evaluate(async () => {
@@ -849,16 +854,13 @@ test('pairs from an organizer link only after confirmation and preserves an exis
   expect(await readConnection()).toEqual(existing)
 })
 
-test('uses hosted connection defaults and rejects privileged keys in advanced settings', async ({ page }) => {
+test('connects manually with hosted defaults without requesting backend settings', async ({ page }) => {
+  await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
   await page.goto('/')
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
-  await expect(page.getByLabel('Backend URL')).toBeHidden()
-  await page.getByText('Advanced Settings', { exact: true }).click()
-  await expect(page.getByLabel('Backend URL')).toHaveValue(hostedOrganizer.url)
-  await expect(page.getByLabel('Public API Key')).toHaveValue(hostedOrganizer.key)
-  await page.getByLabel('Public API Key').fill('sb_secret_forbidden')
+  await expect(page.getByLabel('Backend URL')).toHaveCount(0)
+  await expect(page.getByLabel('Public API Key')).toHaveCount(0)
   await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
   await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()
-  await expect(page.getByText('Enter an HTTPS backend URL and a publishable API key in Advanced Settings.')).toBeVisible()
-  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })

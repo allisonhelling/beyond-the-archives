@@ -23,7 +23,24 @@ export function ReadingView({ book, preferences, onPreferences, onPosition, onRe
   const pages = preferences.layout === 'pages', chapterBarVisible = preferences.chapterBar !== false
   useEffect(() => {
     const urls = Object.fromEntries(Object.entries(book.resources).map(([key, blob]) => [key, URL.createObjectURL(blob)]))
-    const html = Object.fromEntries(book.chapters.map(chapter => { const doc = new DOMParser().parseFromString(chapter.html, 'text/html'); const heading = doc.body.querySelector('h1, h2, h3, h4, h5, h6'); if (heading?.textContent?.replace(/\s+/g, ' ').trim() === chapter.title.replace(/\s+/g, ' ').trim()) heading.remove(); for (const image of doc.querySelectorAll('[data-resource]')) image.setAttribute('src', urls[image.getAttribute('data-resource')!] ?? ''); return [chapter.id, doc.body.innerHTML] }))
+    const html = Object.fromEntries(book.chapters.map(chapter => {
+      const doc = new DOMParser().parseFromString(chapter.html, 'text/html')
+      const heading = doc.body.querySelector('h1, h2, h3, h4, h5, h6')
+      const normalize = (text: string) => text.replace(/\s+/g, ' ').trim().replace(/^Notes:?$/i, 'Author Notes')
+      if (heading && normalize(heading.textContent ?? '') === normalize(chapter.title)) heading.remove()
+      for (const label of doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+        if (/^Chapter Text:?$/i.test(label.textContent?.trim() ?? '')) label.remove()
+      }
+      for (const notes of doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+        if (normalize(notes.textContent ?? '') !== 'Author Notes') continue
+        // AO3 notes are a heading followed by a blockquote of author prose.
+        const content = notes.nextElementSibling
+        if (content && content.nextElementSibling?.tagName !== 'HR') content.after(doc.createElement('hr'))
+      }
+      if (/^Notes:?$/i.test(chapter.title) && doc.body.lastElementChild?.tagName !== 'HR') doc.body.append(doc.createElement('hr'))
+      for (const image of doc.querySelectorAll('[data-resource]')) image.setAttribute('src', urls[image.getAttribute('data-resource')!] ?? '')
+      return [chapter.id, doc.body.innerHTML]
+    }))
     setRendered(html)
     return () => Object.values(urls).forEach(URL.revokeObjectURL)
   }, [book.id, book.resources, book.chapters])

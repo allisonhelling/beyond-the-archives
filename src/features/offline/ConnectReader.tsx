@@ -28,7 +28,7 @@ export function ConnectReader() {
       const url = readerPairingUrl(target.href, { ...config, code })
       if (tab && !tab.closed) tab.location.replace(url)
       else setHref(url)
-      setMessage('Confirm the connection in the reader within 5 minutes. Creating another pairing code replaces this unused code.')
+      setMessage('The reader will connect automatically. Open the link within 5 minutes. Creating another pairing code replaces this unused code.')
     } catch {
       tab?.close()
       setMessage('Could not connect the reader. Check your connection and sign-in, then try again.')
