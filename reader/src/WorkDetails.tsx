@@ -31,7 +31,7 @@ export function WorkDetails({ book, onClose, appearance }: { book: BookDetails; 
     <p className="muted">Information saved with this EPUB. Publication details may differ from the current online work.</p>
     {book.workId && /^[1-9]\d*$/.test(book.workId) && <p><a href={`https://archiveofourown.org/works/${book.workId}`} target="_blank" rel="noopener noreferrer">Open Work on AO3</a> · Work {book.workId}</p>}
     <dl className="work-details-list">{rows.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{label === 'Summary' ? <WorkSummary metadata={metadata} fallback="Unknown / Not Saved" /> : Array.isArray(value) ? value.length ? <ul>{value.map((item, index) => <li key={index}>{item}</li>)}</ul> : 'Unknown / Not Saved' : savedValue(value)}</dd></div>)}</dl>
-    <h4>All Tags</h4>{workTags(metadata).length ? <WorkTags tags={workTags(metadata)} limit={Infinity} appearance={appearance} /> : <p>Unknown / Not Saved</p>}
+    <h4>All Tags</h4>{workTags(metadata).length ? <WorkTags metadata={metadata} limit={Infinity} appearance={appearance} /> : <p>Unknown / Not Saved</p>}
     <h4>Your Reading Information</h4><dl className="work-details-list">{[
       { label: 'Reading Status', value: statuses[book.status] },
       { label: 'Sections Read', value: `${book.completed.length} of ${book.chapters.length}` },

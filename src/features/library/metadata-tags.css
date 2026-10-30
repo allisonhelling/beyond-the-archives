@@ -1,7 +1,7 @@
 .metadata-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .metadata-tag { border: 1px solid #dfcbc5; border-radius: 12px; padding: 3px 9px; font-size: var(--personal-control-font-size, 13px); line-height: 1.5; overflow-wrap: anywhere; max-width: 100%; }
 .categorized-tags { align-items: center; color: var(--tag-color); font-size: var(--personal-control-font-size, 13px); }
-.categorized-tags .metadata-tag { color: inherit; border-color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 8%, var(--color-surface)); }
+.categorized-tags .metadata-tag { color: var(--tag-color); border-color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 8%, var(--color-surface)); }
 .categorized-tags[data-tag-shape="curved"] .metadata-tag { border-radius: 5px; }
 .categorized-tags[data-tag-shape="sharp"] .metadata-tag { border-radius: 0; }
 .categorized-tags:is([data-tag-shape="bullets"], [data-tag-shape="commas"]) { display: inline; }

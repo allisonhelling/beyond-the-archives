@@ -4,9 +4,14 @@ const record=(name:string,status:TagResolution['status'],canonical_name:string|n
 const records=[record('Alya Césaire','canonical','Alya Césaire'),record('Alya (Miraculous Ladybug)','synonym','Alya Césaire'),record('Alya Césaire (Miraculous Ladybug)','synonym','Alya Césaire'),record('Custom Alya','custom',null)]
 it('shows the canonical first and retains raw custom/unverified tags without assuming their meaning',()=>{
  const names=records.map(r=>r.name)
- expect(tagSuggestionGroups(names,'alya',records,'character')).toEqual([{label:'Standard Tags',values:['Alya Césaire']},{label:'Other / Unverified Tags',values:['Alya (Miraculous Ladybug)','Alya Césaire (Miraculous Ladybug)','Custom Alya']}])
- expect(tagSuggestionGroups(['Alya (Miraculous Ladybug)'],'miraculous',records,'character')[0]).toEqual({label:'Standard Tags',values:['Alya Césaire']})
+ expect(tagSuggestionGroups(names,'alya',records,'character')).toEqual([{label:'Standard Tags',values:['Alya Césaire']},{label:'Other / Unverified Tags',values:['Custom Alya']}])
+ expect(tagSuggestionGroups(['Alya (Miraculous Ladybug)'],'miraculous',records,'character')).toEqual([{label:'Standard Tags',values:['Alya Césaire']}])
  expect(tagSuggestionGroups(names,'alya',[],'character')).toEqual([{label:'Other / Unverified Tags',values:names}])
+})
+it('deduplicates suggestions across repeated spellings and keeps verification category-specific',()=>{
+ const names=['Alya Césaire','ALYA CESAIRE','Alya (Miraculous Ladybug)','Custom Alya','custom alya','Custom Alya']
+ expect(tagSuggestionGroups(names,'alya',records,'character')).toEqual([{label:'Standard Tags',values:['Alya Césaire']},{label:'Other / Unverified Tags',values:['Custom Alya']}])
+ expect(tagSuggestionGroups(['Alya (Miraculous Ladybug)'],'alya',records,'freeform')).toEqual([{label:'Other / Unverified Tags',values:['Alya (Miraculous Ladybug)']}])
 })
 it('matches only verified synonyms for a canonical selection and preserves partial/raw searching and category boundaries',()=>{
  const aliases=tagAliasIndex(records)

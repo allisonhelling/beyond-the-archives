@@ -1,7 +1,7 @@
 import { fireEvent,render,screen,within } from '@testing-library/react'
 import { expect,it,vi } from 'vitest'
-const records=vi.hoisted(()=>({value:[] as {category:string;name:string;status:string;canonical_name:string|null}[]}))
-vi.mock('./tags/useTagResolutions',()=>({useTagResolutions:()=>({records:records.value,unavailable:false})}))
+const records=vi.hoisted(()=>({value:[] as {category:string;name:string;status:string;canonical_name:string|null}[],unavailable:false}))
+vi.mock('./tags/useTagResolutions',()=>({useTagResolutions:()=>({records:records.value,unavailable:records.unavailable})}))
 import { SearchSuggestions } from './SearchSuggestions'
 it('places verified standard names first, separates other tags, and keeps keyboard selection working',()=>{
  records.value=[{category:'character',name:'Alya Césaire',status:'canonical',canonical_name:'Alya Césaire'},{category:'character',name:'Alya (Miraculous Ladybug)',status:'synonym',canonical_name:'Alya Césaire'}]
@@ -11,14 +11,24 @@ it('places verified standard names first, separates other tags, and keeps keyboa
  fireEvent.change(input,{target:{value:'miraculous'}})
  const popup=screen.getByRole('region',{name:'Characters Suggestions'})
  const groups=within(popup).getAllByRole('group')
- expect(groups.map(group=>group.getAttribute('aria-label'))).toEqual(['Standard Tags Suggestions','Other / Unverified Tags Suggestions'])
+ expect(groups.map(group=>group.getAttribute('aria-label'))).toEqual(['Standard Tags Suggestions'])
  expect(within(groups[0]).getByRole('button',{name:'Alya Césaire'})).toBeVisible()
- expect(within(groups[1]).getByRole('button',{name:'Alya (Miraculous Ladybug)'})).toBeVisible()
+ expect(within(popup).getAllByRole('button')).toHaveLength(1)
+ expect(within(popup).queryByRole('button',{name:'Alya (Miraculous Ladybug)'})).not.toBeInTheDocument()
  input.focus();fireEvent.keyDown(input,{key:'ArrowDown'})
  expect(document.activeElement).toBe(within(groups[0]).getByRole('button'))
  fireEvent.click(document.activeElement!)
  expect(changed).toHaveBeenCalledWith('Alya Césaire')
  expect(input).toHaveFocus()
+})
+
+it('reports verification failures while retaining raw tag searching', () => {
+ records.value=[];records.unavailable=true
+ render(<SearchSuggestions label="Characters" placeholder="Search characters" value="" onChange={vi.fn()} groups={[{label:'Characters',values:['Custom Alya']}]} tagCategory="characters" />)
+ fireEvent.focus(screen.getByLabelText('Characters', {exact:true}))
+ expect(screen.getByRole('status')).toHaveTextContent('Tag verification is unavailable.')
+ expect(screen.getByRole('button', {name:'Custom Alya'})).toBeVisible()
+ records.unavailable=false
 })
 
 it('sorts special-character suggestions last and separates selected tags without bullets', () => {

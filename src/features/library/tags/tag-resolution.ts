@@ -22,20 +22,33 @@ export function tagAliasIndex(records: TagResolution[]): TagAliases {
  }
  return index
 }
+/** Keep source spelling and relative order within each verification tier. */
+export function prioritizeVerifiedTags(values: string[], records: TagResolution[], category: Ao3TagCategory) {
+ const names = new Set(verifiedTags(records).filter(record => record.category === category).map(record => normalizeTag(record.name)))
+ return [...values].sort((a,b) => Number(names.has(normalizeTag(b))) - Number(names.has(normalizeTag(a))))
+}
 export function tagMatches(values: string[], term: string, category: Ao3TagCategory, aliases?: TagAliases) {
  const categoryAliases = aliases?.[category]
  const names = categoryAliases && Object.hasOwn(categoryAliases, term) ? categoryAliases[term] : undefined
  return values.some(value => names ? Object.hasOwn(names, normalizeTag(value)) : normalizeTag(value).includes(term))
 }
-/** Standard names are also discoverable by their verified aliases. Raw tags stay intact. */
+/** Suggest each canonical name once, discoverable by aliases; saved tags stay intact. */
 export function tagSuggestionGroups(values: string[], term: string, records: TagResolution[], category: Ao3TagCategory) {
- const names = new Set(values), standard = new Set<string>(), normalized = normalizeTag(term)
- const matching = values.filter(name => normalizeTag(name).includes(normalized))
+ const names = new Set(values.map(normalizeTag)), standard = new Map<string,string>(), verified = new Set<string>(), normalized = normalizeTag(term)
+ const matching = new Map<string,string>()
+ for (const name of values) {
+  const key = normalizeTag(name)
+  if (key.includes(normalized) && !matching.has(key)) matching.set(key,name)
+ }
  for (const record of verifiedTags(records)) {
   if (record.category !== category) continue
-  if (names.has(record.name) && (normalizeTag(record.name).includes(normalized) || normalizeTag(record.canonical_name).includes(normalized))) standard.add(record.canonical_name)
+  const name = normalizeTag(record.name), canonical = normalizeTag(record.canonical_name)
+  verified.add(name)
+  if (names.has(name) && (name.includes(normalized) || canonical.includes(normalized))) {
+   if (!standard.has(canonical)) standard.set(canonical,record.canonical_name)
+  }
  }
- return [{ label: 'Standard Tags', values: [...standard] }, { label: 'Other / Unverified Tags', values: matching.filter(name => !standard.has(name)) }].filter(group => group.values.length)
+ return [{ label: 'Standard Tags', values: [...standard.values()] }, { label: 'Other / Unverified Tags', values: [...matching].filter(([key]) => !standard.has(key) && !verified.has(key)).map(([,name]) => name) }].filter(group => group.values.length)
 }
 
 /** Alphabetize letters/numbers first and punctuation-led names last. */

@@ -9,13 +9,13 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { MetadataTags } from '../MetadataTags'
-import { CollectionColorPicker } from '../collections/CollectionColorPicker'
+import { TagColorSettings } from './TagColorSettings'
 import { StoryCard, StoryDetailsPage } from '../LibraryPages'
 import { SeriesCard } from '../series/SeriesCollection'
 import { SeriesPage } from '../series/SeriesPage'
 import { DisplayEditorContext, type DisplayField } from './display-editor-context'
 import { exampleSeries, exampleWork } from './display-examples'
-import { displayGroups, displayDivider, displayFieldLabel, tagShapes, type TagShape, displayLine, displayPreferences, moveDisplaySelection, deleteDisplaySelection, tagColors, type TagCategory, type TagAppearance, removeDisplayLine, separateDisplayField, saveDisplay, sameTagAppearance, subscribeDisplay, type DisplayGroup, type DisplayPreferences } from './display-settings'
+import { displayGroups, displayDivider, displayFieldLabel, tagShapes, type TagShape, displayLine, displayPreferences, moveDisplaySelection, deleteDisplaySelection, type TagAppearance, removeDisplayLine, separateDisplayField, saveDisplay, sameTagAppearance, subscribeDisplay, type DisplayGroup, type DisplayPreferences } from './display-settings'
 
 const workTileGroups: DisplayGroup[] = ['workTile']
 const seriesTileGroups: DisplayGroup[] = ['seriesTile']
@@ -216,15 +216,11 @@ function DisplayEditor({ title, groups, state, children, showTitle = true, viewp
 }
 
 function TagAppearanceSettings({ state }: { state: Draft }) {
-  const [allColor, setAllColor] = useState<string>(tagColors.tags.color)
-  const [undoColors, setUndoColors] = useState<TagAppearance['colors'] | null>(null)
   const appearance = state.draft.tagAppearance
   function change(next: TagAppearance) { state.change({ ...state.draft, tagAppearance: next }) }
   return <DisplayEditorContext value={{ preferences: state.draft, groups: [], selected: null }}><section className="display-tag-appearance" aria-label="Site-Wide Tag Appearance"><p className="field-help">Tag shape and colors apply throughout the site and sync with your organizer account. Save applies your changes. Linked EPUB readers follow these settings; unlinked readers keep their own format.</p>
-    <fieldset className="display-tag-shapes settings-subsection"><legend>Tag Shape</legend><p className="field-help">Choose Filled Chips for the EPUB reader’s default tag style.</p><div className="display-tag-shape-options">{(Object.entries(tagShapes) as [TagShape, string][]).map(([shape, name]) => <button type="button" className="tag-shape-option" key={shape} aria-pressed={appearance.shape === shape} onClick={() => change({ ...appearance, shape })}><MetadataTags values={['Humor', 'Fluff']} shape={shape} /><span>{name}</span></button>)}</div></fieldset>
-    <fieldset className="display-tag-colors settings-subsection"><legend>Tag Colors</legend><div className="display-tag-color-grid">{(Object.keys(tagColors) as TagCategory[]).map(category => <div key={category} role="group" aria-label={`${tagColors[category].label} Color`}><span className="field-help">{tagColors[category].label}:</span><CollectionColorPicker showHex value={appearance.colors[category] ?? tagColors[category].color} onChange={color => change({ ...appearance, colors: { ...appearance.colors, [category]: color } })} /><span className="display-tag-example"><span>Ex.</span><MetadataTags values={[tagColors[category].example]} category={category} /></span></div>)}</div>
-      <div className="display-all-colors"><div role="group" aria-label="Change All Tags"><span className="field-help">Change All Tags:</span><CollectionColorPicker showHex value={allColor} onChange={setAllColor} /></div><button type="button" className="button secondary" disabled={!/^#[a-fA-F0-9]{6}$/.test(allColor)} onClick={() => { setUndoColors({ ...appearance.colors }); change({ ...appearance, colors: Object.fromEntries(Object.keys(tagColors).map(category => [category, allColor])) }) }}>Apply</button><button type="button" className="button secondary" disabled={!undoColors} onClick={() => { if (undoColors) { change({ ...appearance, colors: undoColors }); setUndoColors(null) } }}>Undo</button></div>
-    </fieldset>
+    <fieldset className="display-tag-shapes settings-subsection"><legend>Tag Shape</legend><p className="field-help">Filled Chips uses one Additional Tags color for all tags. Other styles use category colors.</p><div className="display-tag-shape-options">{(Object.entries(tagShapes) as [TagShape, string][]).map(([shape, name]) => <button type="button" className="tag-shape-option" key={shape} aria-pressed={appearance.shape === shape} onClick={() => change({ ...appearance, shape })}><MetadataTags values={['Humor', 'Fluff']} shape={shape} /><span>{name}</span></button>)}</div></fieldset>
+    <TagColorSettings appearance={appearance} onChange={change} />
   </section></DisplayEditorContext>
 }
 

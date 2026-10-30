@@ -131,24 +131,27 @@ test('rotates bounded sync batches, limits concurrency, and throttles automatic 
     await route.fulfill({ json: { entry: { id: `entry:${request.p_work}`, version: 'v2', status: 'reading', progress: 0, notes: 'Organizer note' }, collections: [] } })
     inFlight--
   })
+  async function checkpointAfter() {
+    return page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+      const value = await new Promise<{value: {after: string}} | undefined>(resolve => { const request = db.transaction('settings').objectStore('settings').get('sync-checkpoint:test-account'); request.onsuccess = () => resolve(request.result) }); db.close(); return value?.value.after
+    })
+  }
   await seedLegacy(page, 125, true)
-  await expect(page.getByRole('status').filter({ hasText: 'Checked 50 of 125' })).toBeVisible()
+  await expect.poll(checkpointAfter).toBe('000049')
+  await expect(page.getByRole('status').filter({ hasText: 'Checked 50 of 125' })).toHaveCount(0)
   expect(requested).toHaveLength(50)
   expect(maximum).toBeLessThanOrEqual(4)
   expect((await calls(page))['contents.get'] ?? 0).toBe(125)
   await page.reload()
-  await expect(page.getByRole('status').filter({ hasText: 'Organizer refresh will continue on a later sync' })).toBeVisible()
+  await expect.poll(async () => (await calls(page))['contents.get'] ?? 0).toBe(125)
+  await expect(page.getByRole('status').filter({ hasText: 'Organizer refresh will continue on a later sync' })).toHaveCount(0)
   expect(requested).toHaveLength(50)
   await page.getByRole('button', { name: 'Organizer & Sync' }).click()
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click()
   await expect.poll(() => requested.length).toBe(100)
   await expect(page.getByRole('dialog')).toHaveAttribute('aria-busy', 'false')
-  await expect.poll(async () => {
-    return page.evaluate(async () => {
-      const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
-      const value = await new Promise<{value: {after: string}}>(resolve => { const request = db.transaction('settings').objectStore('settings').get('sync-checkpoint:test-account'); request.onsuccess = () => resolve(request.result) }); db.close(); return value.value.after
-    })
-  }).toBe('000099')
+  await expect.poll(checkpointAfter).toBe('000099')
   expect(new Set(requested).size).toBe(100)
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click()
   await expect.poll(() => new Set(requested).size).toBe(125)

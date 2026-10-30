@@ -50,35 +50,6 @@
 .display-custom-divider.display-short-divider { align-self: flex-start; width: 48px; }
 .display-edit-surface .display-custom-divider { min-height: 12px; border-top: 0; border-bottom: 1px solid var(--color-border); }
 .display-edit-surface .display-short-divider { border-bottom-color: var(--color-brand); }
-.display-tag-colors { --tag-color-columns: 2; --tag-color-label-width: 115px; --tag-color-control-width: 100px; --tag-color-column-gap: 24px; margin-block: 16px; min-width: 0; }
-.display-tag-color-grid { position: relative; display: grid; grid-template-columns: repeat(var(--tag-color-columns), minmax(0, 1fr)); grid-template-rows: repeat(3, auto); grid-auto-flow: column; gap: 12px var(--tag-color-column-gap); }
-.display-tag-color-grid::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 50%; border-inline-start: 1px solid var(--color-border); pointer-events: none; }
-.display-tag-color-grid > div { display: grid; grid-template-columns: var(--tag-color-label-width) var(--tag-color-control-width) minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
-.display-tag-example { justify-self: start; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; font-size: 13px; white-space: normal; }
-.display-tag-color-grid .collection-custom-color { width: var(--tag-color-control-width); }
-.display-tag-color-grid .collection-color-picker[data-open] { position: absolute; z-index: 6; top: 100%; right: 0; width: min(220px, calc(100vw - 80px)); }
-
-.display-tag-colors .field-help { text-align: right; overflow-wrap: anywhere; }
-.display-tag-color-grid :is(.field-help, .collection-custom-color) { margin-top: 0; }
-.display-tag-appearance .collection-custom-color { font-size: 12px; }
-.display-tag-appearance .collection-color-trigger { width: 100%; gap: 6px; }
-.display-tag-appearance .collection-color-trigger, .display-all-colors > .button { height: 36px; min-height: 36px; padding: 7px 10px; font-size: 12px; line-height: 20px; }
-.display-all-colors > .button { width: auto; flex: 0 0 auto; }
-.display-all-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
-.display-all-colors > [role="group"] { width: max-content; max-width: 100%; display: grid; grid-template-columns: var(--tag-color-label-width) var(--tag-color-control-width); align-items: center; gap: 8px; }
-.display-all-colors .field-help { white-space: nowrap; }
-.display-all-colors :is(.field-help, .collection-custom-color) { margin-top: 0; }
-@media (max-width: 1100px) {
- .display-tag-colors { --tag-color-columns: 1; }
- .display-tag-color-grid { grid-template-rows: none; grid-auto-flow: row; }
- .display-tag-color-grid::before { display: none; }
- .display-all-colors .field-help { white-space: normal; }
-}
-@media (max-width: 600px) {
- .display-tag-color-grid > div, .display-all-colors > [role="group"] { grid-template-columns: var(--tag-color-control-width) minmax(0, 1fr); }
- .display-tag-color-grid > div > .field-help, .display-all-colors > [role="group"] > .field-help { grid-column: 1 / -1; text-align: left; }
- .display-all-colors > [role="group"] { width: 100%; }
-}
 .display-device-previews, .viewport-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 20px; }
 .display-device-editor, .viewport-size-fields { min-width: 0; }
 .viewport-size-fields { display: grid; gap: 8px; }

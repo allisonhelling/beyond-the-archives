@@ -379,7 +379,7 @@ test('information remains draggable while Hide/Show Information is open', async 
   await authors.scrollIntoViewIfNeeded()
   await dragInformation(page,authors.locator('a').first(),fandoms,info.project.name==='mobile')
   await expect(authors).toBeVisible()
-  expect(await authors.evaluate(node=>!!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!)&Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
+  expect(await authors.evaluate(node=>!!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
   expect(await stored(page)).toBeNull()
 })
 
@@ -394,7 +394,7 @@ test('inline grouped information drags from its text without selecting it', asyn
 
 test('global tag appearance, Apply and Undo are shared across tiles and pages',async({page})=>{
  const tables=await setup(page)
- tables.library_entries[0].metadata_overrides={...tables.library_entries[0].metadata_overrides as object,additional_tags:['Humor','Fluff']}
+ tables.library_entries[0].metadata_overrides={...tables.library_entries[0].metadata_overrides as object,additional_tags:['Humor','Fluff'],relationship_tags:['Alice/Bob'],character_tags:['Alice'],archive_warnings:['No Archive Warnings Apply'],ao3_tags:['Display fandom','Humor','Fluff']}
  const appearance=page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true})
  const work=editor(page,'Work Tile'),series=editor(page,'Series Tile')
  await expect(work.getByRole('group',{name:'Tag Shape',exact:true})).toHaveCount(0)
@@ -446,7 +446,17 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
   await expect(tags.locator('.metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
  }
  await page.goto('/reading')
- await expect(page.locator('.work-card .categorized-tags')).toHaveAttribute('data-tag-shape','sharp')
+ const renderedTagGroups = page.locator('.work-card .categorized-tags')
+ await expect(renderedTagGroups.first()).toBeVisible()
+ for (const tags of await renderedTagGroups.all()) await expect(tags).toHaveAttribute('data-tag-shape','sharp')
+ await expect(page.locator('.work-card .expandable-metadata-tags .tag-group-label')).toHaveCount(0)
+ const categorizedChips = page.locator('.work-card .expandable-metadata-tags .metadata-tag')
+ await expect(categorizedChips).toHaveCount(5)
+ for (const chip of await categorizedChips.all()) { await expect(chip).toBeVisible(); await expect(chip).toHaveCSS('border-radius','0px') }
+ await expect(categorizedChips.filter({hasText:'Display fandom'})).toHaveCount(0)
+ await page.reload()
+ await expect(page.locator('.work-card .expandable-metadata-tags .metadata-tag')).toHaveCount(5)
+ for (const chip of await page.locator('.work-card .expandable-metadata-tags .metadata-tag').all()) await expect(chip).toBeVisible()
  await expect(page.locator('.work-card .metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
 })
 
@@ -812,6 +822,14 @@ test('sample tile tooltips extend beyond the crop without moving their anchors',
  await setup(page)
  for (const kind of ['Work', 'Series']) {
   const desktop = page.getByRole('region', { name: `${info.project.name === 'mobile' ? 'Mobile' : 'Desktop'} ${kind} Tile Layout`, exact: true })
+  // Put the Favorite trigger near the crop edge using the supported tile editor.
+  // Default fandoms now precede the heading, so a short tooltip can fit inside.
+  if (kind === 'Work') {
+   const fandoms = field(desktop, 'workTile', 'fandoms')
+   await fandoms.click()
+   await page.keyboard.press('Backspace')
+   await expect(fandoms).toHaveCount(0)
+  }
   const preview = desktop.locator('iframe')
   const frame = preview.contentFrame()
   const anchor = frame.getByRole('button', { name: /^(?:Unmark|Mark) Favorite$/ }).first()

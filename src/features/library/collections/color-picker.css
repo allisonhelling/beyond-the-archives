@@ -1,0 +1,14 @@
+.collection-custom-color { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 13px; }
+.collection-color-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 7px 10px; min-height: 36px; }
+.collection-color-swatch { width: 18px; height: 18px; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: 4px; background: var(--cover-color); }
+.collection-color-hex input[type=text] { width: 8em; }
+.collection-color-picker[data-open] { flex-basis: 100%; min-width: 0; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-surface); background: var(--color-surface); box-shadow: 0 6px 16px #97000015; }
+.collection-color-controls { display: grid; gap: 14px; margin-bottom: 12px; }
+.collection-color-shade { position: relative; height: 128px; border-radius: 5px; background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), hsl(var(--picker-hue) 100% 50%); touch-action: none; cursor: crosshair; }
+.collection-color-shade:focus-within { outline: 2px solid var(--color-brand); outline-offset: 3px; }
+.collection-color-cursor { position: absolute; left: var(--picker-saturation); top: var(--picker-darkness); width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px #382b2b80; transform: translate(-50%, -50%); pointer-events: none; }
+.collection-color-hue { appearance: none; width: 100%; height: 14px; padding: 0; margin: 0; border: 0; border-radius: 999px; background: linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red); cursor: pointer; }
+.collection-color-hue::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border: 2px solid white; border-radius: 50%; background: hsl(var(--picker-hue) 100% 50%); box-shadow: 0 0 0 1px #382b2b80; }
+.collection-color-hue::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; background: hsl(var(--picker-hue) 100% 50%); box-shadow: 0 0 0 1px #382b2b80; }
+
+.collection-color-shade .sr-only, .collection-color-hex .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

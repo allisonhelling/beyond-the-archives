@@ -1,3 +1,5 @@
+import { collectionColors, collectionColorPattern } from './collection-colors'
+export { collectionColors, collectionColorPattern, defaultShelfColors } from './collection-colors'
 import type { Collection, Status, Story } from '../model'
 import type { SpineDesign } from './SpineDetails'
 import { Anchor, BookOpen, BookOpenText, Bookmark, Check, Cloud, Compass, Feather, Flame, FlaskConical, Flower2, Gem, Heart, KeyRound, Leaf, Library, Layers3, Moon, Music, Pause, Sparkle, ScrollText, Star, Sun, Telescope, X, type LucideIcon } from 'lucide-react'
@@ -7,16 +9,6 @@ export const automaticCollectionIcons: Partial<Record<string, LucideIcon>> = { a
 
 export const defaultShelfDesigns: Partial<Record<string, SpineDesign>> = { all: 'embossed-frame', series: 'book-stack', currently_reading: 'art-deco', paused_reading: 'linked-diamonds', to_read: 'library-deco', finished: 'arched', favorites: 'star-trails-cascading', recs: 'interlocking-circles', did_not_finish: 'raised-bands' }
 export const automaticCollectionSpineDesign: SpineDesign = 'lunar-phases'
-
-export const defaultShelfColors = { all: '#970000', currently_reading: '#214921', paused_reading: '#8b491e', to_read: '#243c5e', favorites: '#54254b', recs: '#92504e', finished: '#4a1b0f', did_not_finish: '#25211f', series: '#07534a' } as const
-
-export const collectionColors = [
-  { label: 'Burgundy', value: defaultShelfColors.all }, { label: 'Forest', value: defaultShelfColors.currently_reading },
-  { label: 'Navy', value: defaultShelfColors.to_read }, { label: 'Finished', value: defaultShelfColors.finished },
-  { label: 'One Shots', value: '#721613' },
-  { label: 'Plum', value: defaultShelfColors.favorites }, { label: 'Charcoal', value: defaultShelfColors.did_not_finish },
-  { label: 'Rose', value: defaultShelfColors.recs }, { label: 'Teal', value: defaultShelfColors.series },
-] as const
 
 export const collectionSymbols = [
   { value: 'flask', label: 'Flask', Icon: FlaskConical }, { value: 'moon', label: 'Moon', Icon: Moon },
@@ -91,7 +83,6 @@ export function moveCollectionIds(ids: string[], sourceId: string, targetId: str
   return remaining
 }
 
-export const collectionColorPattern = '^#[0-9a-fA-F]{6}$'
 
 export function getCollectionColors(collections: { color: string | null; default_key: string | null }[]) {
   const colors: { label: string; value: string }[] = [...collectionColors]

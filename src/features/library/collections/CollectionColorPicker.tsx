@@ -1,6 +1,7 @@
+import './color-picker.css'
 import { useId, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { useDismissible } from '../../../components/useDismissible'
-import { collectionColorPattern, collectionColors } from './collection-appearance'
+import { collectionColorPattern, collectionColors } from './collection-colors'
 
 type Hsv = { h: number; s: number; v: number }
 const validHex = new RegExp(collectionColorPattern)

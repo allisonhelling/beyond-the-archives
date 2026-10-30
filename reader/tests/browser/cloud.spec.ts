@@ -19,7 +19,7 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  const values=new Map<string,Value>(),receipts=new Map<string,Value>(),files=new Map<string,Buffer>()
  async function device(){
   const context=await browser.newContext();await signedIn(context)
-  await context.route('https://*.supabase.co/**',async route=>{
+  await context.route(url => /^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
    const request=route.request(),url=new URL(request.url())
    if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
    if(url.pathname.includes('/rpc/reader_cloud_apply')){

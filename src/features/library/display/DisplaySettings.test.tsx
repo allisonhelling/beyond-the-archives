@@ -355,3 +355,24 @@ it('preserves custom tile order and visibility when all tags belong to a grouped
  expect(preference.hidden).not.toContain('allTags')
  expect(preference.lines?.['line:custom']).toEqual(['words', 'allTags'])
 })
+
+it.each(['sharp', 'filled'] as const)('colors %s tile tags by category, excludes fandoms, and preserves uncategorized tags', shape => {
+ localStorage.setItem(displaySettingsKey, JSON.stringify({ tagAppearance: { shape, colors: { relationships: '#123abc', characters: '#456def', tags: '#789abc', warnings: '#aa0011' } } }))
+ const metadata = { ...exampleWork.metadata, fandoms: ['Batman'], ao3_tags: ['Batman', 'A/B', 'Alice', 'Fluff', 'Shared Tag', 'Uncategorized', 'Extra One', 'Extra Two', 'Fandom: Other'], archive_warnings: ['Warning'], relationship_tags: ['A/B'], character_tags: ['Alice'], categories: ['Gen'], additional_tags: ['Fluff', 'Batman', 'Shared Tag'] }
+ const view = render(<MemoryRouter>{workMetadataFields({ ...exampleWork, metadata }, 'tile').allTags}</MemoryRouter>)
+ const list = view.container.querySelector('.expandable-metadata-tags')!
+ expect(list.querySelectorAll('.metadata-tag')).toHaveLength(7)
+ fireEvent.click(within(list as HTMLElement).getByRole('button', { name: '+2 more' }))
+ expect(list.querySelectorAll('.metadata-tag')).toHaveLength(9)
+ for (const [category, color] of Object.entries({ warnings: '#aa0011', relationships: '#123abc', characters: '#456def', tags: '#789abc' })) {
+  const tags = list.querySelector(`.metadata-tag[data-tag-category="${category}"]`)!
+  expect(tags).toHaveStyle(`--tag-color: ${color}`)
+  expect(tags.closest('.metadata-tags')).toHaveAttribute('data-tag-shape', shape)
+  expect(tags.closest('.metadata-tags')).toHaveStyle('--tag-filled-color: #789abc')
+ }
+ expect(list).not.toHaveTextContent('Batman')
+ expect(list).not.toHaveTextContent('Fandom: Other')
+ expect(list).toHaveTextContent('Uncategorized')
+ fireEvent.click(within(list as HTMLElement).getByRole('button', { name: 'Show Less' }))
+ expect(list.querySelectorAll('.metadata-tag')).toHaveLength(7)
+})

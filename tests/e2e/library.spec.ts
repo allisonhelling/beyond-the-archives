@@ -883,7 +883,7 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await expect(page.locator('.story-card .status-pill')).toHaveCount(0)
   const card = page.locator('.story-card').filter({ has: page.getByRole('heading', { name: 'Unfinished read', exact: true }) })
   await expect(card.locator('.story-card-title').getByRole('img', { name: 'In Progress on AO3', exact: true })).toBeVisible()
-  await expect(card.locator('.story-facts')).not.toContainText('In Progress on AO3')
+  await expect(card.locator('.story-facts').filter({ hasText: 'In Progress on AO3' })).toHaveCount(0)
   await expect(card.locator('.story-card-title').getByRole('button', { name: 'Mark Favorite', exact: true })).toBeVisible()
   await expect(card.locator('.status-select')).toHaveCount(0)
   await expect(card).not.toContainText('Next unread')
@@ -2848,11 +2848,11 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
   await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.locator('.story-card h2')).toContainText('The story')
-  await expect(page.locator('.story-card .story-facts')).toHaveText('Part 1 of Stories and art • Rating unknown • 12,000 words')
-  await expect(page.locator('.story-card .story-facts').getByRole('link', { name: 'Stories and art', exact: true })).toHaveAttribute('href', '/series/77')
+  await expect(page.locator('.story-card .display-grouped-line.story-facts')).toHaveText('Part 1 of Stories and art • Rating unknown • 12,000 words')
+  await expect(page.locator('.story-card .display-grouped-line.story-facts').getByRole('link', { name: 'Stories and art', exact: true })).toHaveAttribute('href', '/series/77')
   await expect(page.locator('.story-card .series-membership')).toHaveCSS('text-transform','none')
   await expect(page.getByRole('link', { name: 'See Full Details…', exact: true })).toHaveCount(0)
-  const card = page.locator('.work-card'), facts = (await card.locator('.story-facts').boundingBox())!, summary = (await card.locator('.story-summary').boundingBox())!
+  const card = page.locator('.work-card'), facts = (await card.locator('.display-grouped-line.story-facts').boundingBox())!, summary = (await card.locator('.story-summary').boundingBox())!
   expect(facts.y + facts.height).toBeLessThanOrEqual(summary.y)
  }
 })
@@ -3220,7 +3220,7 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
  const summaryHtml = '<p>An <em>italic</em> and <strong>bold</strong> summary.</p><p>Another paragraph with a <a href="/works/123">link</a>.</p>'
  const formattedTags = Array.from({ length: 9 }, (_, index) => `Saved Tag ${index + 1}`)
  tables.works.push({ id: 'formatted-work', ao3_work_id: 123, title: 'Formatted work', summary, automatic_metadata: { summary_html: summaryHtml }, published_chapters: 2, total_chapters: 3, verified_chapters: {} })
- tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: { authors: ['Tile Author'], fandoms: ['Fandom Above Title'], ao3_tags: formattedTags }, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
+ tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: { authors: ['Tile Author'], fandoms: ['Fandom Above Title'], ao3_tags: [...formattedTags, 'Fandom Above Title'], archive_warnings: [formattedTags[0]], relationship_tags: [formattedTags[1]], character_tags: [formattedTags[2]], categories: [formattedTags[3]], additional_tags: formattedTags.slice(4) }, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
  await page.goto('/library'); await login(page)
  const tile = page.locator('.work-card')
  await expect(tile.getByText('Fandom Above Title', { exact: true })).toBeVisible()
@@ -3239,6 +3239,8 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
  expect(tagsBox.y).toBeGreaterThanOrEqual(factsBox.y + factsBox.height)
  await tagList.getByRole('button', { name: '+2 more', exact: true }).click()
  await expect(tagList.locator('.metadata-tag')).toHaveCount(9)
+ await expect(tagList.locator('.metadata-tag').filter({ hasText: 'Fandom Above Title' })).toHaveCount(0)
+ await expect(tagList.locator('.tag-group-label')).toHaveCount(0)
  await tagList.getByRole('button', { name: 'Show Less', exact: true }).click()
  await expect(tagList.locator('.metadata-tag')).toHaveCount(7)
  const originalViewport = page.viewportSize()!
@@ -3256,7 +3258,7 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), fonts = []
   while (walker.nextNode()) {
    const node = walker.currentNode, parent = node.parentElement
-   if (parent instanceof HTMLElement && !parent.closest('.work-fandoms, .metadata-tags') && parent.getClientRects().length && /[\p{L}\p{N}]/u.test(node.textContent ?? '')) fonts.push({ text: node.textContent?.trim(), size: parseFloat(getComputedStyle(parent).fontSize) })
+   if (parent instanceof HTMLElement && !parent.closest('.work-fandoms, .metadata-tags, .expandable-metadata-tags') && parent.getClientRects().length && /[\p{L}\p{N}]/u.test(node.textContent ?? '')) fonts.push({ text: node.textContent?.trim(), size: parseFloat(getComputedStyle(parent).fontSize) })
   }
   return fonts
  })

@@ -1,6 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { PublicationStatusIndicator } from '../../src/features/library/PublicationStatusIndicator'
 import { Dropdown } from '../../src/components/Dropdown'
+import { useDismissible } from '../../src/components/useDismissible'
+import { List, X, ChevronRight } from 'lucide-react'
 import { capturePosition, restorePosition } from './reading-position'
 import { chapterNumber, readingRanges, type Book, type Chapter, type Preferences, type ReadingPosition } from './model'
 
@@ -15,12 +17,18 @@ function ChapterNavigation({ chapters, index, onGo, position }: { chapters: Chap
   return <nav className="chapter-navigation" data-position={position} aria-label={`${position === 'top' ? 'Top' : 'Bottom'} Chapter Navigation`}><button disabled={index === 0} onClick={() => onGo(chapters[index - 1])}>← Previous Chapter</button><ChapterTitle chapters={chapters} index={index} onGo={onGo} heading={position === 'top'} /><button disabled={index === chapters.length - 1} onClick={() => onGo(chapters[index + 1])}>Next Chapter →</button></nav>
 }
 export function ReadingView({ book, preferences, onPreferences, onPosition, onRead, onClose, onViewDetails }: { book: Book; preferences: Preferences; onPreferences: (p: Preferences) => void; onPosition: (position: ReadingPosition) => void; onRead: (chapter: Chapter, through: boolean) => void; onClose: () => void; onViewDetails: () => void }) {
-  const [chapterId, setChapterId] = useState(book.position.chapter), [settings, setSettings] = useState(false), [rendered, setRendered] = useState<Record<string,string>>({})
+  const [chapterId, setChapterId] = useState(book.position.chapter), [settings, setSettings] = useState(false), [contents, setContents] = useState(false), [rendered, setRendered] = useState<Record<string,string>>({})
   const displayId = useId()
+  const contentsTrigger = useRef<HTMLButtonElement>(null)
+  const contentsPanel = useDismissible<HTMLElement>(contents, () => setContents(false), { additionalRefs: [contentsTrigger] })
+  function closeContents() { setContents(false); contentsTrigger.current?.focus() }
+  useEffect(() => { if (contents) contentsPanel.current?.focus({ preventScroll: true }) }, [contents, contentsPanel])
   const viewport = useRef<HTMLDivElement>(null), touch = useRef<number | null>(null), restore = useRef(book.position), restoring = useRef(true), restoredScroll = useRef({ top: 0, left: 0 }), latest = useRef(onPosition)
   latest.current = onPosition
   const current = book.chapters.find(c => c.id === chapterId) ?? book.chapters[0], index = book.chapters.indexOf(current)
-  const pages = preferences.layout === 'pages', chapterBarVisible = preferences.chapterBar !== false
+  const pages = preferences.layout === 'pages'
+  const proseChapters = book.chapters.filter(chapter => chapter.kind !== 'frontmatter')
+  const chapterCount = book.chapters.slice(0, index + 1).filter(chapter => chapter.kind !== 'frontmatter').length
   useEffect(() => {
     const urls = Object.fromEntries(Object.entries(book.resources).map(([key, blob]) => [key, URL.createObjectURL(blob)]))
     const html = Object.fromEntries(book.chapters.map(chapter => {
@@ -66,7 +74,7 @@ export function ReadingView({ book, preferences, onPreferences, onPosition, onRe
     const resize = new ResizeObserver(apply); resize.observe(el)
     void document.fonts.ready.then(apply)
     return () => { cancelled = true; cancelAnimationFrame(frame); resize.disconnect(); images.forEach(image => image.removeEventListener('load', apply)) }
-  }, [chapterId, rendered, preferences.content, preferences.layout, preferences.size, preferences.width, chapterBarVisible])
+  }, [chapterId, rendered, preferences.content, preferences.layout, preferences.size, preferences.width])
   function remember(force = false) {
     const el = viewport.current
     if (!el || !Object.keys(rendered).length) return
@@ -94,27 +102,56 @@ export function ReadingView({ book, preferences, onPreferences, onPosition, onRe
   }
   const keyboardTurn = useRef(turn)
   keyboardTurn.current = turn
+  const keyboardChapter = useRef<(direction: number) => void>(() => {})
+  keyboardChapter.current = direction => {
+    const candidates = direction > 0 ? book.chapters.slice(index + 1) : book.chapters.slice(0, index).reverse()
+    const next = candidates.find(chapter => chapter.kind !== 'frontmatter')
+    if (next) go(next)
+  }
   useEffect(() => {
-    if (!pages) return
     function keydown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || document.querySelector('dialog[open]')) return
       const target = event.target
-      if (target instanceof Element && target.closest('input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="slider"], [role="combobox"], [role="listbox"], [role="menu"], [aria-haspopup="listbox"][aria-expanded="true"]')) return
-      const direction = ['ArrowRight', 'PageDown'].includes(event.key) ? 1 : ['ArrowLeft', 'PageUp'].includes(event.key) ? -1 : 0
-      if (!direction) return
+      if (target instanceof Element && target.closest('.contents-panel, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="slider"], [role="combobox"], [role="listbox"], [role="menu"], [aria-haspopup="listbox"][aria-expanded="true"]')) return
+      const chapterDirection = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+      const pageDirection = pages ? ['PageDown', 'ArrowDown'].includes(event.key) ? 1 : ['PageUp', 'ArrowUp'].includes(event.key) ? -1 : 0 : 0
+      if (!chapterDirection && !pageDirection) return
       event.preventDefault()
-      keyboardTurn.current(direction)
+      if (chapterDirection) keyboardChapter.current(chapterDirection)
+      else keyboardTurn.current(pageDirection)
     }
     document.addEventListener('keydown', keydown)
     return () => document.removeEventListener('keydown', keydown)
   }, [pages])
+  useEffect(() => {
+    const element = viewport.current
+    if (!pages || !element) return
+    // Wheel events include touchpad momentum. Turn only once until the gesture rests.
+    const gesture = { delta: 0, last: 0, turned: false }
+    function wheel(event: WheelEvent) {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]')) return
+      if (event.target instanceof Element && event.target.closest('input, select, textarea, [contenteditable]:not([contenteditable="false"]), .custom-dropdown, [role="listbox"], [role="menu"]')) return
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+      if (!delta) return
+      event.preventDefault()
+      const now = performance.now()
+      if (now - gesture.last > 180) { gesture.delta = 0; gesture.turned = false }
+      gesture.last = now
+      if (gesture.turned) return
+      gesture.delta += delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element!.clientWidth : 1)
+      if (Math.abs(gesture.delta) >= 48) { gesture.turned = true; keyboardTurn.current(Math.sign(gesture.delta)) }
+    }
+    element.addEventListener('wheel', wheel, { passive: false })
+    return () => element.removeEventListener('wheel', wheel)
+  }, [pages])
   const chapters = preferences.content === 'entire' ? book.chapters : [current]
   return <div className="reading-screen">
-    <header className="reader-toolbar"><button onClick={() => { remember(true); onClose() }}>← Bookshelf</button><div className="reading-title"><strong><button className="title-button reading-work-name" onClick={onViewDetails} title="View Details">{book.metadata.title}</button><PublicationStatusIndicator portal placement="bottom" status={book.metadata.publication_status} /></strong><small>{book.metadata.authors.join(', ')}</small></div><button onClick={() => setSettings(!settings)} aria-expanded={settings}>Aa · Display</button><button className="chapter-bar-toggle" aria-expanded={chapterBarVisible} aria-controls={`${displayId}-chapter-bar`} onClick={() => onPreferences({ ...preferences, chapterBar: !chapterBarVisible })}>{chapterBarVisible ? 'Hide Chapter Bar' : 'Show Chapter Bar'}</button></header>
-    {chapterBarVisible && <div className="chapter-toolbar" id={`${displayId}-chapter-bar`} aria-label="Chapter Bar"><label>Chapter<select aria-label="Chapter" value={chapterId} onChange={e => go(book.chapters.find(c => c.id === e.target.value)!)}>{book.chapters.map((c, i) => <option key={i} value={c.id}>{c.title}</option>)}</select></label><span>{index + 1} / {book.chapters.length} sections</span><button disabled={current.kind === 'frontmatter' || book.completed.includes(current.id)} onClick={() => onRead(current, false)}>{current.kind === 'frontmatter' ? 'Front Matter' : book.completed.includes(current.id) ? '✓ Chapter Read' : 'Mark Chapter Read'}</button><button disabled={current.kind === 'frontmatter'} onClick={() => onRead(current, true)}>Mark Through Ch {chapterNumber(current, book.chapters) ?? '—'}</button></div>}
+    <header className="reader-toolbar"><button onClick={() => { remember(true); onClose() }}>← Bookshelf</button><button ref={contentsTrigger} className="contents-trigger" onClick={() => setContents(!contents)} aria-expanded={contents} aria-controls={contents ? `${displayId}-contents` : undefined}><List size={18} aria-hidden="true" />Contents</button><div className="reading-title"><strong><button className="title-button reading-work-name" onClick={onViewDetails} title="View Details">{book.metadata.title}</button><PublicationStatusIndicator portal placement="bottom" status={book.metadata.publication_status} /></strong><small>{book.metadata.authors.join(', ')}</small></div><span className="reader-chapter-count" aria-label="Chapter Progress">{chapterCount} / {proseChapters.length} chapters</span><button disabled={current.kind === 'frontmatter' || book.completed.includes(current.id)} onClick={() => onRead(current, false)}>{current.kind === 'frontmatter' ? 'Front Matter' : book.completed.includes(current.id) ? '✓ Chapter Read' : 'Mark Chapter Read'}</button><button disabled={current.kind === 'frontmatter'} onClick={() => onRead(current, true)}>Mark Through Ch {chapterNumber(current, book.chapters) ?? '—'}</button><button onClick={() => setSettings(!settings)} aria-expanded={settings}>Aa · Display</button></header>
+
+
     {settings && <div className="display-panel"><label>Content Shown<select value={preferences.content} onChange={e => onPreferences({ ...preferences, content: e.target.value as Preferences['content'] })}><option value="chapter">One Chapter</option><option value="entire">Entire Work</option></select></label><label>Reading Layout<select value={preferences.layout} onChange={e => onPreferences({ ...preferences, layout: e.target.value as Preferences['layout'] })}><option value="scroll">Continuous Scroll</option><option value="pages">Paginated</option></select></label>{(['size', 'width'] as const).map(key => { const range = readingRanges[key], id = `${displayId}-${key}`; return <label className="reading-range" key={key} htmlFor={id}><span>{range.label}<output htmlFor={id} aria-label={`${range.label} Value`}>{preferences[key]} px</output></span><input id={id} aria-label={range.label} aria-valuetext={`${preferences[key]} pixels`} type="range" min={range.min} max={range.max} step={range.step} value={preferences[key]} onChange={e => onPreferences({ ...preferences, [key]: Number(e.target.value) })} /></label> })}<label><input type="checkbox" checked={preferences.dark} onChange={e => onPreferences({ ...preferences, dark: e.target.checked })} /> Dark Mode</label></div>}
-    <div ref={viewport} className={`reading-viewport ${pages ? 'paginated' : ''}`} style={{ '--reading-size': `${preferences.size}px`, '--reading-width': `${preferences.width}px` } as CSSProperties} tabIndex={0} aria-label="Book Content" onScroll={() => remember()} onTouchStart={e => { touch.current = e.touches[0].clientX }} onTouchEnd={e => { if (pages && touch.current !== null) { const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 50) turn(dx < 0 ? 1 : -1) } touch.current = null }} onClick={e => { const target = e.target as HTMLElement, link = target.closest('a'); if (link?.hasAttribute('data-link')) { e.preventDefault(); const [path, fragment] = link.getAttribute('data-link')!.split('#'); const chapter = book.chapters.find(c => c.path === path); if (chapter) { go(chapter); if (fragment) requestAnimationFrame(() => viewport.current?.querySelector(`[id="${CSS.escape(fragment)}"]`)?.scrollIntoView()) } return } if (pages && !target.closest('a, button, .custom-dropdown') && !window.getSelection()?.toString()) { const rect = e.currentTarget.getBoundingClientRect(), x = e.clientX - rect.left; if (x < rect.width * .25 || x > rect.width * .75) turn(x > rect.width / 2 ? 1 : -1) } }}>
+    <div className="reading-body"><div ref={viewport} className={`reading-viewport ${pages ? 'paginated' : ''}`} style={{ '--reading-size': `${preferences.size}px`, '--reading-width': `${preferences.width}px` } as CSSProperties} tabIndex={0} aria-label="Book Content" onScroll={() => remember()} onTouchStart={e => { touch.current = e.touches[0].clientX }} onTouchEnd={e => { if (pages && touch.current !== null) { const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 50) turn(dx < 0 ? 1 : -1) } touch.current = null }} onClick={e => { const target = e.target as HTMLElement, link = target.closest('a'); if (link?.hasAttribute('data-link')) { e.preventDefault(); const [path, fragment] = link.getAttribute('data-link')!.split('#'); const chapter = book.chapters.find(c => c.path === path); if (chapter) { go(chapter); if (fragment) requestAnimationFrame(() => viewport.current?.querySelector(`[id="${CSS.escape(fragment)}"]`)?.scrollIntoView()) } return } if (pages && !target.closest('a, button, .custom-dropdown') && !window.getSelection()?.toString()) { const rect = e.currentTarget.getBoundingClientRect(), x = e.clientX - rect.left; if (x < rect.width * .25 || x > rect.width * .75) turn(x > rect.width / 2 ? 1 : -1) } }}>
       <div className="prose">{chapters.map((chapter, i) => { const sectionIndex = preferences.content === 'entire' ? i : index; return <section key={`${chapter.id}-${i}`} data-chapter={chapter.id} aria-label={chapter.title}>{!pages && <ChapterNavigation chapters={book.chapters} index={sectionIndex} onGo={go} position="top" />}{pages && <ChapterTitle chapters={book.chapters} index={sectionIndex} onGo={go} heading />}<div data-chapter-content dangerouslySetInnerHTML={{ __html: rendered[chapter.id] ?? '' }} />{!pages && <ChapterNavigation chapters={book.chapters} index={sectionIndex} onGo={go} position="bottom" />}</section> })}</div>
-    </div><footer className="reading-footer"><span>Position saves automatically · Chapter completion is explicit</span><span>{pages ? 'Swipe, tap the page edges, or use ←/→ and Page Up/Down' : 'Continuous Scroll'}</span></footer>
+    </div>{contents && <aside ref={contentsPanel} className="contents-panel" id={`${displayId}-contents`} aria-labelledby={`${displayId}-contents-heading`} tabIndex={-1} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeContents() } }}><div className="contents-heading"><h2 id={`${displayId}-contents-heading`}>Contents</h2><button type="button" aria-label="Close Contents" onClick={closeContents}><X size={20} aria-hidden="true" /></button></div><nav aria-label="Contents"><ol className="toc-list">{book.chapters.map(chapter => <li key={chapter.id}><button className="menu-item" aria-current={chapter.id === current.id ? 'location' : undefined} onClick={() => { go(chapter); closeContents() }}><span>{chapter.title}</span><ChevronRight size={18} aria-hidden="true" /></button></li>)}</ol></nav></aside>}</div><footer className="reading-footer"><span>Position saves automatically · Chapter completion is explicit</span><span>{pages ? '←/→ chapters · ↑/↓ or Page Up/Down, two-finger swipe, or tap edges for pages' : 'Continuous Scroll · ←/→ chapters'}</span></footer>
   </div>
 }

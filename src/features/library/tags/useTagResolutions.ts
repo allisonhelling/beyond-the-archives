@@ -5,6 +5,7 @@ import { sampleMode } from '../../../lib/sample-mode'
 import { tagResolutionEvent, type Ao3TagCategory, type TagResolution } from './tag-resolution'
 
 const empty:TagResolution[]=[]
+const cachedLoads=new Map<string,Promise<void>>()
 const stores=new Map<string,{records:TagResolution[];listeners:Set<()=>void>}>()
 function store(user:string){let state=stores.get(user);if(!state){state={records:[],listeners:new Set()};stores.set(user,state)}return state}
 function publish(user:string,rows:TagResolution[]){
@@ -13,6 +14,24 @@ function publish(user:string,rows:TagResolution[]){
  for(const row of rows){const key=`${row.category}:${row.name}`,prior=records.get(key);if((prior?.canonical_name||row.canonical_name)&&(!prior||prior.status!==row.status||prior.canonical_name!==row.canonical_name))changed=true;records.set(key,row)}
  state.records=[...records.values()];for(const listener of state.listeners)listener()
  if(changed)window.dispatchEvent(new CustomEvent(tagResolutionEvent,{detail:{userId:user}}))
+}
+// Share one paginated cache read across tiles and suggestion fields. Limiting this
+// to the eight lookup candidates hid already-verified tags elsewhere in a list.
+function loadCached(user:string){
+ let request=cachedLoads.get(user)
+ if(!request){request=(async()=>{
+  const rows:TagResolution[]=[]
+  for(let offset=0;;offset+=500){
+   const {data,error}=await supabase!.from('ao3_tag_resolutions').select('category,name,status,canonical_name,checked_at,attempted_at').eq('user_id',user).order('category').order('name').range(offset,offset+499)
+   if(error)throw error
+   rows.push(...(data as TagResolution[]??[]))
+   if(!data||data.length<500)break
+  }
+  // A paced lookup may have finished while this snapshot was in flight.
+  const current=new Map(store(user).records.map(row=>[`${row.category}:${row.name}`,row.attempted_at]))
+  publish(user,rows.filter(row=>(current.get(`${row.category}:${row.name}`)??'')<=row.attempted_at))
+ })().catch(error=>{cachedLoads.delete(user);throw error});cachedLoads.set(user,request)}
+ return request
 }
 const pending=new Map<string,Promise<{records:TagResolution[];retryAfterMs:number|null}>>()
 async function resolve(user:string,category:Ao3TagCategory,names:string[]){
@@ -29,13 +48,18 @@ export function useTagResolutions(category:Ao3TagCategory|undefined,names:string
  const snapshot=useCallback(()=>user?store(user).records:empty,[user])
  const records=useSyncExternalStore(subscribe,snapshot,()=>empty)
  const [unavailable,setUnavailable]=useState(false)
+ useEffect(()=>{
+  if(!user||!supabase||sampleMode)return
+  let alive=true
+  void loadCached(user).catch(()=>{if(alive)setUnavailable(true)})
+  return()=>{alive=false}
+ },[user])
  const key=JSON.stringify(names.slice(0,8))
  useEffect(()=>{
   if(!enabled||!user||!category||!supabase||sampleMode)return
   const requested=JSON.parse(key) as string[]
   if(!requested.length)return
   let alive=true,timer:ReturnType<typeof setTimeout>|undefined
-  const client=supabase
   async function lookup(){
    try{
     const result=await resolve(user!,category!,requested)
@@ -44,8 +68,6 @@ export function useTagResolutions(category:Ao3TagCategory|undefined,names:string
     if(result.retryAfterMs!==null)timer=setTimeout(()=>{if(alive)void lookup()},Math.max(35000,result.retryAfterMs))
    }catch{if(alive)setUnavailable(true)}
   }
-  // Read existing evidence immediately, then let the paced server resolve misses.
-  void client.from('ao3_tag_resolutions').select('category,name,status,canonical_name,checked_at,attempted_at').eq('user_id',user).eq('category',category).in('name',requested).then(({data})=>{if(alive&&data?.length)publish(user,data as TagResolution[])})
   timer=setTimeout(()=>void lookup(),750)
   return()=>{alive=false;clearTimeout(timer)}
  },[user,category,enabled,key])

@@ -9,6 +9,10 @@ test('orders standard tags first and matches verified aliases without merging re
   tables.works.push({id:`tag-work-${i}`,ao3_work_id:i+1,title:`Tagged story ${i}`,verified_chapters:{},automatic_metadata:{}})
   tables.library_entries.push({id:`tag-entry-${i}`,user_id:user,work_id:`tag-work-${i}`,original_url:`https://archiveofourown.org/works/${i+1}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,created_at:'2026-10-01T00:00:00Z',updated_at:'2026-10-01T00:00:00Z',metadata_overrides:{title:`Tagged story ${i}`,authors:['Author'],fandoms:['Miraculous Ladybug'],character_tags:[name],relationship_tags:[],additional_tags:[],ao3_tags:[name]}})
  }
+ // The canonical name sorts beyond the eight live lookup candidates. Cached
+ // verification must still classify it, and verified aliases are not unverified.
+ const metadata = tables.library_entries[0].metadata_overrides as {character_tags:string[]}
+ metadata.character_tags.push(...Array.from({length:12},(_,i)=>`Alya ${i}`))
  await page.goto('/library');await login(page)
  await expect(page.locator('.story-card')).toHaveCount(4)
  await page.getByRole('button',{name:'Filters',exact:true}).click()
@@ -17,6 +21,10 @@ test('orders standard tags first and matches verified aliases without merging re
  const standard=popup.getByRole('group',{name:'Standard Tags Suggestions'})
  const other=popup.getByRole('group',{name:'Other / Unverified Tags Suggestions'})
  await expect(standard.getByRole('button',{name:names[0],exact:true})).toBeVisible()
+ await expect(standard.getByRole('button')).toHaveCount(1)
+ await expect(popup.getByRole('group',{name:'Verified Synonyms Suggestions'})).toHaveCount(0)
+ for(const name of names.slice(1,3))await expect(popup.getByRole('button',{name,exact:true})).toHaveCount(0)
+ await expect(other.getByRole('button',{name:names[1],exact:true})).toHaveCount(0)
  await expect(popup.locator(':scope > section').first()).toHaveAttribute('aria-label','Standard Tags Suggestions')
  await expect(other).toHaveCSS('border-top-style','solid')
  await standard.getByRole('button',{name:names[0],exact:true}).click()

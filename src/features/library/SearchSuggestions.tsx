@@ -20,7 +20,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   const chosen = chips ? selected.map(normalize) : multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(text => normalize(text.trim())) : []
   const category = ({ relationships: 'relationship', characters: 'character', tags: 'freeform' } as Partial<Record<TagCategory, Ao3TagCategory>>)[tagCategory!]
   const candidates = [...new Set(groups.flatMap(group => group.values))].filter(text => normalize(text).includes(term)).sort(compareTagSuggestions).slice(0,8)
-  const { records } = useTagResolutions(category, candidates, focused)
+  const { records, unavailable } = useTagResolutions(category, candidates, focused)
   const resolvedGroups = category ? tagSuggestionGroups(groups.flatMap(group => group.values), term, records, category) : groups
   const suggestions = resolvedGroups.map(group => ({ ...group, values: [...new Set(group.values)].filter(text => !chosen.includes(normalize(text)) && (category ? true : normalize(text).includes(term))).sort(compareTagSuggestions).slice(0, 8) }))
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
@@ -45,6 +45,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
     <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'sr-only' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
     {focused && <div role={category ? 'region' : undefined} className="search-suggestions menu-surface" id={id} aria-label={`${label} Suggestions`}>
+      {category && unavailable && <p role="status">Tag verification is unavailable. Saved tags can still be searched.</p>}
       {!suggestions.length && <p>No matching saved {label.toLocaleLowerCase()}.</p>}
       {suggestions.map(group => <section role={category ? 'group' : undefined} key={group.label} aria-label={`${group.label} Suggestions`}>{(!hideHeadings || category) && <span className="suggestion-heading">{group.label}</span>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
     </div>}

@@ -3,7 +3,7 @@ import { afterEach,expect,it,vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 const api=vi.hoisted(()=>({cached:vi.fn(),invoke:vi.fn()}))
-vi.mock('../../../lib/supabase',()=>({supabase:{from:()=>({select:()=>({eq:()=>({eq:()=>({in:api.cached})})})}),functions:{invoke:api.invoke}}}))
+vi.mock('../../../lib/supabase',()=>({supabase:{from:()=>({select:()=>({eq:()=>({order:()=>({order:()=>({range:api.cached})})})})}),functions:{invoke:api.invoke}}}))
 vi.mock('../../../lib/sample-mode',()=>({sampleMode:false}))
 import { AuthContext } from '../../auth/auth-context'
 import { useTagResolutions } from './useTagResolutions'
@@ -38,4 +38,15 @@ it('keeps accounts isolated and leaves raw searching available when verification
  expect(view.result.current.records).toEqual([canonical])
  user='other-isolated-reader';view.rerender();await act(async()=>{})
  expect(view.result.current.records).toEqual([])
+})
+it('shares paginated evidence beyond eight candidates with tiles without triggering AO3 lookups',async()=>{
+ const first=Array.from({length:500},(_,i)=>({...canonical,name:`Character ${i}`,canonical_name:`Character ${i}`}))
+ api.cached.mockResolvedValueOnce({data:first}).mockResolvedValueOnce({data:[canonical]})
+ const wrapper=({children}:{children:ReactNode})=><AuthContext.Provider value={auth('paged-cache')}>{children}</AuthContext.Provider>
+ const view=renderHook(()=>({tile:useTagResolutions(undefined,[],false),filter:useTagResolutions('character',['Character 0'],false)}),{wrapper})
+ await act(async()=>{})
+ expect(api.cached.mock.calls).toEqual([[0,499],[500,999]])
+ expect(view.result.current.tile.records).toHaveLength(501)
+ expect(view.result.current.filter.records).toContainEqual(canonical)
+ expect(api.invoke).not.toHaveBeenCalled()
 })
