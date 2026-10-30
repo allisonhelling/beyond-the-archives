@@ -261,3 +261,7 @@ The separate [archives unfolded](reader/README.md) EPUB reader lives in `reader/
 EPUB summaries retain metadata paragraphs, line breaks, and safe emphasis in archives unfolded’s shelf previews and full details, using the organizer’s shared summary parser and renderer. Plain-text descriptions preserve literal newlines; existing local EPUB metadata is re-indexed without changing reading progress.
 
 The reader keeps author notes separate from chapter identities, so repeated notes or prose do not select multiple chapters. Older downloads repair automatically when opened; if a saved position was ambiguous, choose where to resume. Reading history is retained.
+
+Optional reader accounts add private EPUB cloud storage, selected downloads on other devices, and queued reading-state sync independently of organizer pairing. Guest reading remains offline and account-free. See the [reader account guide](reader/README.md#optional-reader-account).
+
+The reader’s **Manage Storage** control lets users choose local downloads to remove. A failed save caused by full browser storage opens that screen; browser eviction can still happen without advance warning when persistence is not granted. Both apps refresh their interface online and retain an offline fallback.

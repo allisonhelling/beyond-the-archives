@@ -10,7 +10,7 @@ export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[
   if (chapter.kind === 'frontmatter') return null
   return chapter.number ?? (Number(chapter.title.match(/^Chapter\s+(\d+)(?:\b|:)/i)?.[1]) || chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length)
 }
-export type Book = { id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
+export type Book = { fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
 export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
@@ -18,7 +18,7 @@ export type CatalogBook = Omit<BookDetails, 'chapters' | 'history' | 'completed'
 export function bookDetails(book: Book): BookDetails {
   const { file, resources: _resources, chapters, ...details } = book
   void _resources
-  return { ...details, hasFile: Boolean(file), chapters: chapters.map(({ html: _html, ...chapter }) => { void _html; return chapter }) }
+  return { ...details, fileBytes: file?.size ?? details.fileBytes, hasFile: Boolean(file), chapters: chapters.map(({ html: _html, ...chapter }) => { void _html; return chapter }) }
 }
 export function catalogBook(book: BookDetails): CatalogBook {
   const { chapters, history: _history, completed, notes: _notes, remote: _remote, position, ...catalog } = book

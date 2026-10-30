@@ -57,3 +57,13 @@ it('requires an online authenticated session', () => {
   expect(screen.getByRole('button', { name: 'Connect Reader' })).toBeDisabled()
   expect(mocks.rpc).not.toHaveBeenCalled()
 })
+it('keeps a usable pairing link even after opening the tab or when navigation is blocked', async () => {
+  const tab = { opener: window, closed: false, location: { replace: vi.fn(() => { throw new Error('Navigation blocked') }) }, close: vi.fn() }
+  vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window)
+  render(<ConnectReader />)
+  fireEvent.click(screen.getByRole('button', { name: 'Connect Reader' }))
+  const link = await screen.findByRole('link', { name: 'Open Reader' })
+  expect(new URL(link.getAttribute('href')!).hash).toContain('readerPairing=')
+  expect(tab.close).not.toHaveBeenCalled()
+  expect(screen.getByRole('status')).toHaveTextContent('connect automatically')
+})

@@ -26,8 +26,10 @@ export function ConnectReader() {
       const code = (data as { code: string }).code
       if (!/^[a-f0-9]{64}$/.test(code)) throw new Error('Invalid pairing code.')
       const url = readerPairingUrl(target.href, { ...config, code })
-      if (tab && !tab.closed) tab.location.replace(url)
-      else setHref(url)
+      setHref(url)
+      if (tab && !tab.closed) {
+        try { tab.location.replace(url) } catch { /* The explicit link remains usable if the browser blocks navigation. */ }
+      }
       setMessage('The reader will connect automatically. Open the link within 5 minutes. Creating another pairing code replaces this unused code.')
     } catch {
       tab?.close()

@@ -864,3 +864,19 @@ test('connects manually with hosted defaults without requesting backend settings
   await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
 })
+test('automatically consumes a pairing fragment delivered to an already open reader', async ({ page, context }) => {
+  const calls: string[] = []
+  await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
+    const input = route.request().postDataJSON()
+    calls.push(input.p_action)
+    await route.fulfill({ json: input.p_action === 'claim' ? { secret: 'b'.repeat(64) } : { entry: null } })
+  })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'The Bookshelf' })).toBeVisible()
+  await page.evaluate(pairing => { location.hash = new URLSearchParams({ readerPairing: JSON.stringify(pairing) }).toString() }, { ...hostedOrganizer, code: 'a'.repeat(64) })
+  await expect(page.getByRole('button', { name: 'Organizer & Sync', exact: true })).toBeVisible()
+  expect(calls).toContain('claim')
+  expect(new URL(page.url()).hash).toBe('')
+  await expect(page.getByLabel('Backend URL', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Public API Key', { exact: true })).toHaveCount(0)
+})

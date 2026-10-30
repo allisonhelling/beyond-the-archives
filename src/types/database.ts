@@ -850,6 +850,19 @@ export type Database = {
           { foreignKeyName: 'processing_logs_job_id_user_id_fkey'; columns: ['job_id', 'user_id']; isOneToOne: false; referencedRelation: 'metadata_jobs'; referencedColumns: ['id', 'user_id'] },
         ]
       }
+      reader_app_access: {
+        Row: {
+          user_id: string
+        }
+        Insert: {
+          user_id: string
+        }
+        Update: {
+          user_id?: string
+        }
+        Relationships: [
+        ]
+      }
       reader_availability: {
         Row: {
           device_id: string
@@ -880,6 +893,47 @@ export type Database = {
         }
         Relationships: [
           { foreignKeyName: 'reader_availability_device_id_fkey'; columns: ['device_id']; isOneToOne: false; referencedRelation: 'userscript_devices'; referencedColumns: ['id'] },
+        ]
+      }
+      reader_cloud_receipts: {
+        Row: {
+          user_id: string
+          id: string
+          result: Json
+        }
+        Insert: {
+          user_id: string
+          id: string
+          result: Json
+        }
+        Update: {
+          user_id?: string
+          id?: string
+          result?: Json
+        }
+        Relationships: [
+        ]
+      }
+      reader_cloud_values: {
+        Row: {
+          user_id: string
+          key: string
+          value: Json
+          revision: number
+        }
+        Insert: {
+          user_id: string
+          key: string
+          value: Json
+          revision?: number
+        }
+        Update: {
+          user_id?: string
+          key?: string
+          value?: Json
+          revision?: number
+        }
+        Relationships: [
         ]
       }
       reading_activity: {
@@ -1148,6 +1202,8 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      reader_has_access: { Args: Record<string, never>; Returns: boolean }
+      reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number }; Returns: Json }
       reading_stats_works: { Args: { p_after?: string; p_limit?: number }; Returns: Json }
       reader_offline_snapshot: { Args: Record<string, never>; Returns: Json }
       review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number }; Returns: Json }

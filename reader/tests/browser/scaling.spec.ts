@@ -1,12 +1,13 @@
 import { test, expect, type Page } from '@playwright/test'
 import { blankMetadata } from '../../../src/features/library/model'
+import { chapterVersion } from '../../src/epub'
 import { metadataVersion } from '../../src/metadata'
 
 // Seed the original schema so every scenario exercises the real browser's upgrade.
 async function seedLegacy(page: Page, count: number, connected = false) {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'The Bookshelf' })).toBeVisible()
-  await page.evaluate(async ({ metadata, version, count, connected }) => {
+  await page.evaluate(async ({ metadata, version, chapterVersion, count, connected }) => {
     await new Promise<void>((resolve, reject) => { const request = indexedDB.deleteDatabase('bta-reader'); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error) })
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('bta-reader', 1)
@@ -18,7 +19,7 @@ async function seedLegacy(page: Page, count: number, connected = false) {
       for (let index = 0; index < count; index++) {
         const id = String(index).padStart(6, '0'), chapter = `chapter:${id}`
         tx.objectStore('books').put({ id, workId: String(index + 1), active: true,
-          metadata: { ...metadata, title: `Story ${id}`, authors: ['Test Author'], fandoms: ['Test Fandom'] }, metadataVersion: version,
+          metadata: { ...metadata, title: `Story ${id}`, authors: ['Test Author'], fandoms: ['Test Fandom'] }, metadataVersion: version, chapterVersion,
           chapters: [{ id: chapter, ao3Id: String(index + 100), number: 1, title: 'Chapter One', html: `<p>Story ${id} prose.</p>`, words: 3, path: 'chapter.xhtml' }],
           resources: { 'art.png': new Blob(['image']) }, file: new Blob([`original-${id}`]),
           importedAt: '2026-01-01T00:00:00Z', metadataAt: '2026-01-01T00:00:00Z', position: { chapter, fraction: 0 },
@@ -33,7 +34,7 @@ async function seedLegacy(page: Page, count: number, connected = false) {
       tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
     })
     db.close()
-  }, { metadata: blankMetadata, version: metadataVersion, count, connected })
+  }, { metadata: blankMetadata, version: metadataVersion, chapterVersion, count, connected })
   await page.addInitScript(() => {
     const counts: Record<string, number> = {}
     Object.assign(window, { readerStorageCalls: counts })
@@ -78,6 +79,8 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   const writes = (await calls(page))['contents.put']
   await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
   await expect(page.getByRole('button', { name: '✓ Chapter Read' })).toBeVisible()
+  // Unknown publication metadata opens the existing explicit status-choice dialog.
+  await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
   await expect(page.getByText('1 sections read')).toBeVisible()
   expect((await calls(page))['contents.get']).toBe(1)
@@ -96,6 +99,12 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   expect(stored[2]).toHaveProperty('file')
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
+  await page.getByRole('button', { name: 'Manage Storage', exact: true }).click()
+  const storage = page.getByRole('dialog', { name: 'Manage Local Storage' })
+  await expect(storage.getByRole('button', { name: 'Remove Download', exact: true })).toHaveCount(24)
+  await storage.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(storage.getByLabel('Go to Page')).toHaveValue('2')
+  await expect(storage.getByRole('button', { name: 'Remove Download', exact: true })).toHaveCount(24)
 })
 
 test('shows browser storage usage and persistence status, including unavailable estimates', async ({ page }) => {
@@ -116,6 +125,7 @@ test('rotates bounded sync batches, limits concurrency, and throttles automatic 
   let inFlight = 0, maximum = 0
   await context.route('https://organizer.test/rest/v1/rpc/userscript_library', async route => {
     const request = route.request().postDataJSON()
+    if (request.p_action === 'reader_report') { await route.fulfill({ json: {} }); return }
     requested.push(String(request.p_work)); inFlight++; maximum = Math.max(maximum, inFlight)
     await new Promise(resolve => setTimeout(resolve, 15))
     await route.fulfill({ json: { entry: { id: `entry:${request.p_work}`, version: 'v2', status: 'reading', progress: 0, notes: 'Organizer note' }, collections: [] } })
@@ -125,7 +135,7 @@ test('rotates bounded sync batches, limits concurrency, and throttles automatic 
   await expect(page.getByRole('status').filter({ hasText: 'Checked 50 of 125' })).toBeVisible()
   expect(requested).toHaveLength(50)
   expect(maximum).toBeLessThanOrEqual(4)
-  expect((await calls(page))['contents.get'] ?? 0).toBe(0)
+  expect((await calls(page))['contents.get'] ?? 0).toBe(125)
   await page.reload()
   await expect(page.getByRole('status').filter({ hasText: 'Organizer refresh will continue on a later sync' })).toBeVisible()
   expect(requested).toHaveLength(50)
@@ -142,7 +152,8 @@ test('rotates bounded sync batches, limits concurrency, and throttles automatic 
   expect(new Set(requested).size).toBe(100)
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click()
   await expect.poll(() => new Set(requested).size).toBe(125)
-  expect((await calls(page))['contents.get'] ?? 0).toBe(0)
+  // Availability verifies all 125 local files on each sync; organizer pulls remain catalog-only.
+  expect((await calls(page))['contents.get'] ?? 0).toBe(375)
   expect((await calls(page))['books.getAll'] ?? 0).toBe(0)
 })
 

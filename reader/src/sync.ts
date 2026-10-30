@@ -57,7 +57,7 @@ async function performSync(connection: Connection, force: boolean) {
       const book = await getBookDetails(entry.id)
       if (!book || book.account !== connection.account || !book.workId) return
       const result = await rpc(connection, 'get', book.workId)
-      if (result.entry) await transaction(['books', 'catalog', 'pending'], tx => {
+      if (result.entry) await transaction(['books', 'catalog', 'pending', 'settings'], tx => {
         const queued = tx.objectStore('pending').getAll()
         queued.onsuccess = () => {
           if (queued.result.some((p: Pending) => p.book === book.id)) return

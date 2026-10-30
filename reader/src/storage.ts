@@ -1,9 +1,11 @@
+import { cloudBookFields, cloudPreferences, equal, type CloudEdit, type CloudValue } from './cloud-model'
 import { chapterVersion, importEpub } from './epub'
 import { repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
 
-export const bookStores = ['books', 'catalog', 'contents']
+export const readerOwner = localStorage.getItem('reader-cloud-owner') || ''
+export const bookStores = ['books', 'catalog', 'contents', 'settings']
 const database = new Promise<IDBDatabase>((resolve, reject) => {
-  const request = indexedDB.open('bta-reader', 2)
+  const request = indexedDB.open(readerOwner ? `bta-reader-account:${readerOwner}` : 'bta-reader', 2)
   request.onupgradeneeded = event => {
     const db = request.result, tx = request.transaction!
     if (event.oldVersion === 0) for (const name of ['books', 'pending', 'settings']) db.createObjectStore(name, { keyPath: 'id' })
@@ -26,13 +28,13 @@ export async function transaction(stores: string[], action: (tx: IDBTransaction)
   const db = await database
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(stores, 'readwrite')
-    tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error)
+    tx.oncomplete = () => resolve(); tx.onerror = event => reject((event.target as IDBRequest).error ?? tx.error); tx.onabort = () => reject(tx.error)
     try { action(tx) } catch (error) { tx.abort(); reject(error) }
   })
 }
-export async function all<T>(store: string): Promise<T[]> {
+export async function all<T>(store: string, prefix?: string): Promise<T[]> {
   const db = await database
-  return new Promise((resolve, reject) => { const req = db.transaction(store).objectStore(store).getAll(); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error) })
+  return new Promise((resolve, reject) => { const req = db.transaction(store).objectStore(store).getAll(prefix ? IDBKeyRange.bound(prefix, `${prefix}\uffff`) : undefined); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error) })
 }
 export async function get<T>(store: string, id: string): Promise<T | undefined> {
   const db = await database
@@ -52,8 +54,13 @@ export async function getBook(id: string): Promise<Book | undefined> {
       void _hasFile
       resolve({ ...state, ...body })
     }
-    tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error)
+    tx.onerror = event => reject((event.target as IDBRequest).error ?? tx.error); tx.onabort = () => reject(tx.error)
   })
+  if (book?.file && book.fileBytes === undefined) {
+    const size = book.file.size
+    await mutateBook(id, current => current.hasFile ? { ...current, fileBytes: size } : current)
+    book.fileBytes = size
+  }
   if (!book || book.chapterVersion === chapterVersion) return book
   const imported = await importEpub(book.file as File)
   await transaction(bookStores, tx => {
@@ -68,8 +75,15 @@ export async function getBook(id: string): Promise<Book | undefined> {
   })
   return getBook(id)
 }
-export function putBook(tx: IDBTransaction, book: Book | BookDetails) {
+export function putBook(tx: IDBTransaction, book: Book | BookDetails, fromCloud = false) {
   const details = 'file' in book ? bookDetails(book) : book
+  if (readerOwner && !fromCloud) {
+    const previous = tx.objectStore('books').get(book.id)
+    previous.onsuccess = () => {
+      const before = previous.result ? cloudBookFields(previous.result) : {}
+      for (const [field, value] of Object.entries(cloudBookFields(details))) if (!equal(before[field], value)) queueCloud(tx, `${book.id}/${field}`, value)
+    }
+  }
   tx.objectStore('books').put(details)
   tx.objectStore('catalog').put(catalogBook(details))
   if ('file' in book) {
@@ -88,11 +102,37 @@ export async function saveBook(book: Book | BookDetails, pending?: Pending, pres
 export async function removeDownload(book: BookDetails) {
   await transaction(bookStores, tx => { putBook(tx, { ...book, hasFile: false }); tx.objectStore('contents').delete(book.id) })
 }
-export async function setting(id: string, value: unknown) { await transaction(['settings'], tx => tx.objectStore('settings').put({ id, value })) }
+export async function setting(id: string, value: unknown) { await transaction(['settings'], tx => {
+  tx.objectStore('settings').put({ id, value })
+  if (readerOwner && id === 'preferences') queueCloud(tx, 'preferences', cloudPreferences(value as import('./model').Preferences))
+}) }
 export async function loadSetting<T>(id: string): Promise<T | undefined> { return (await get<{id: string; value: T}>('settings', id))?.value }
 export async function mutateBook(id: string, update: (book: BookDetails) => BookDetails, pendingId?: string) {
-  await transaction(pendingId ? ['books', 'catalog', 'pending'] : ['books', 'catalog'], tx => {
+  await transaction(pendingId ? ['books', 'catalog', 'pending', 'settings'] : ['books', 'catalog', 'settings'], tx => {
     const request = tx.objectStore('books').get(id)
     request.onsuccess = () => { if (request.result) putBook(tx, update(request.result)); if (pendingId) tx.objectStore('pending').delete(pendingId) }
+  })
+}
+
+export function queueCloud(tx: IDBTransaction, key: string, value: unknown) {
+  const store = tx.objectStore('settings'), baseline = store.get(`cloud-base:${key}`)
+  baseline.onsuccess = () => {
+    store.put({ id: `cloud-edit:${key}`, value: { id: crypto.randomUUID(), key, value, base: baseline.result?.value?.revision ?? 0 } satisfies CloudEdit })
+  }
+}
+export async function cloudEdits() {
+  return (await all<{ id: string; value: CloudEdit }>('settings', 'cloud-edit:')).filter(row => row.id.startsWith('cloud-edit:')).map(row => row.value)
+}
+export async function acceptCloud(value: CloudValue, edit?: CloudEdit) {
+  await transaction(['settings'], tx => {
+    const store = tx.objectStore('settings')
+    store.put({ id: `cloud-base:${value.key}`, value })
+    if (edit) {
+      const request = store.get(`cloud-edit:${value.key}`)
+      request.onsuccess = () => {
+        if (request.result?.value.id === edit.id) store.delete(`cloud-edit:${value.key}`)
+        else if (request.result) store.put({ ...request.result, value: { ...request.result.value, base: value.revision } })
+      }
+    }
   })
 }
