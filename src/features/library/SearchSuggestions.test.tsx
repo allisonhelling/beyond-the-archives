@@ -44,3 +44,21 @@ it('dismisses suggestions with Escape without clearing the search or triggering 
  expect(changed).not.toHaveBeenCalled()
  expect(parent).not.toHaveBeenCalled()
 })
+
+
+it('keeps inline suggestions in place through an outside press and dismisses after its click', () => {
+ const clicked = vi.fn()
+ render(<><SearchSuggestions label="Title" placeholder="Search titles" value="Pending" onChange={vi.fn()} groups={[{ label: 'Titles', values: ['Pending'] }]} /><button onClick={clicked}>Apply</button></>)
+ const input = screen.getByLabelText('Title', { exact: true }), apply = screen.getByRole('button', { name: 'Apply' })
+ fireEvent.focus(input)
+ fireEvent.pointerDown(apply)
+ fireEvent.focusIn(apply)
+ expect(input).toHaveAttribute('aria-expanded', 'true')
+ fireEvent.pointerUp(apply)
+ fireEvent.click(apply)
+ expect(clicked).toHaveBeenCalledOnce()
+ expect(input).toHaveAttribute('aria-expanded', 'false')
+ fireEvent.focus(input)
+ fireEvent.focusIn(apply)
+ expect(input).toHaveAttribute('aria-expanded', 'false')
+})

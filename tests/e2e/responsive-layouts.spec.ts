@@ -50,7 +50,7 @@ test('screen presets and custom sizes apply to tile, info-page and local develop
  await expect(frame.contentFrame().locator('.story-details-page')).toBeVisible()
  const ratingInfo = frame.contentFrame().getByRole('button', { name: 'Personal Rating Info', exact: true })
  await ratingInfo.focus()
- const tooltip = frame.contentFrame().getByRole('tooltip').filter({ hasText: 'Add how your personal rating system' })
+ const tooltip = page.getByRole('tooltip').filter({ hasText: 'Add how your personal rating system' })
  await expect(tooltip).toBeVisible()
  const iconBox = (await ratingInfo.boundingBox())!, helpBox = (await tooltip.boundingBox())!
  expect(helpBox.y).toBeGreaterThanOrEqual(iconBox.y + iconBox.height)

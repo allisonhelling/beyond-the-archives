@@ -113,17 +113,23 @@ it('dismisses undo notifications when navigating to a new page', async () => {
  expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
 })
 
-it('retains only the newest three notifications across reading and removal actions', async () => {
+it('replaces older notifications with the newest reading or removal action', async () => {
  const view = renderHook(() => useLibrary(), { wrapper })
  await waitFor(() => expect(view.result.current.loading).toBe(false))
  mocks.stories.mockImplementation(async (ids: string[]) => ids.map(id => story(id)))
- for (const id of ['first', 'second', 'third']) await act(() => view.result.current.markFinished(story(id)))
+ for (const id of ['first', 'second', 'third']) {
+  await act(() => view.result.current.markFinished(story(id)))
+  expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1)
+  expect(screen.getByRole('button', { name: `Dismiss Undo Notification for ${id}` })).toBeVisible()
+ }
  await act(() => view.result.current.removeStory(story('fourth')))
- expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
- expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for first' })).not.toBeInTheDocument()
+ expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1)
+ expect(screen.getByRole('button', { name: 'Dismiss Undo Notification for fourth' })).toBeVisible()
+ expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for third' })).not.toBeInTheDocument()
  await act(() => view.result.current.markFinished(story('fifth')))
- expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(3)
- expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for second' })).not.toBeInTheDocument()
+ expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1)
+ expect(screen.getByRole('button', { name: 'Dismiss Undo Notification for fifth' })).toBeVisible()
+ expect(screen.queryByRole('button', { name: 'Dismiss Undo Notification for fourth' })).not.toBeInTheDocument()
 })
 
 it('shows navigation and pages without requesting the catalog, and deduplicates on-demand catalog loads', async () => {

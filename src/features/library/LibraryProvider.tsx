@@ -347,11 +347,11 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const dismissUndo = useCallback((id: string) => setUndoNotices(notices => notices.filter(notice => notice.id !== id)), [])
   async function updateReadingWithUndo(story: Story, status: Story['reading_status'], chapters: number, message: string) {
     await updateEntry(story.id, { last_read_chapter: chapters, reading_status: status }, editSnapshot(story))
-    setUndoNotices(notices => [...notices.filter(notice => notice.storyId !== story.id), {
+    setUndoNotices(notices => [{
       id: crypto.randomUUID(), storyId: story.id, title: story.metadata.title, message,
       saved: { status, progress: chapters },
       previous: notices.find(notice => notice.storyId === story.id)?.previous ?? { last_read_chapter: story.last_read_chapter, reading_status: story.reading_status },
-    }].slice(-3))
+    }])
     await refreshStory(story.id)
   }
   async function markAllRead(story: Story) {
@@ -362,7 +362,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   async function removeStory(story: Story) {
     const snapshot = (await loadStories([story.id]))[0] ?? story
     await deleteStory(story.id)
-    setUndoNotices(notices => [...notices.filter(notice => notice.storyId !== story.id), { id: crypto.randomUUID(), storyId: story.id, title: story.metadata.title, message: `Removed “${story.metadata.title}” from your library.`, removed: snapshot }].slice(-3))
+    setUndoNotices([{ id: crypto.randomUUID(), storyId: story.id, title: story.metadata.title, message: `Removed “${story.metadata.title}” from your library.`, removed: snapshot }])
     await refreshStory(story.id)
   }
   async function markFinished(story: Story) {

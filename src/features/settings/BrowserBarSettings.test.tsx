@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 const mocks=vi.hoisted(()=>({rpc:vi.fn()}))
 vi.mock('../../lib/supabase',()=>({supabase:{rpc:mocks.rpc}}))
+vi.mock('../auth/auth-context',()=>({useAuth:()=>({authenticated:true})}))
 vi.mock('../../lib/sample-mode',()=>({sampleMode:false}))
 import { BrowserBarSettings } from './BrowserBarSettings'
 afterEach(()=>vi.unstubAllGlobals())

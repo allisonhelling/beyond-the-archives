@@ -81,6 +81,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { editFilters({ ...filters, [key]: value }) }
   const publicationLabel = (value: keyof typeof publicationStatuses) => filterPublicationLabel(value, mode === 'series')
   const activeFilters = readingFilterTags(appliedFilters, { authorOnly: automaticCollection, series: mode === 'series', seriesVisibility: mode === 'library' && !worksOnly })
+  const personalTagsControl = <SearchSuggestions label="Personal Tags" placeholder="Search personal tags" value={filters.personalTags ?? ''} onChange={value => change('personalTags', value)} groups={[{ label: 'Personal Tags', values: suggestions?.personalTags ?? localPersonalTags }]} multiple chips keepOpen hideHeadings />
   const oneShotControl = <Dropdown fitContent label="One-Shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
   const membershipToggles = <>
       <button type="button" className={`button ${filters.excludeLaterSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.excludeLaterSeries)} onClick={() => change('excludeLaterSeries', !filters.excludeLaterSeries)}><Layers3 size={17} />Exclude Later Series Works</button>
@@ -103,14 +104,15 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
       <SearchSuggestions label="Characters" tagCategory="characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
       <SearchSuggestions label="Tags" tagCategory="tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
 
-      <SearchSuggestions label="Personal Tags" placeholder="Search personal tags" value={filters.personalTags ?? ''} onChange={value => change('personalTags', value)} groups={[{ label: 'Personal Tags', values: suggestions?.personalTags ?? localPersonalTags }]} multiple chips keepOpen hideHeadings />
+      {automaticCollection && personalTagsControl}
 
-      <div className={`filter-choice-row${automaticCollection ? '' : ' filter-choices-beside-tags'}`}>
+      <div className="filter-choice-row">
+      {!automaticCollection && personalTagsControl}
       <Dropdown fitContent label="Content Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
       <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
-      {automaticCollection && oneShotControl}
+      {oneShotControl}
       <Dropdown fitContent label={mode !== 'reading' ? 'Publication Status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
-      {!automaticCollection && <>{oneShotControl}{membershipToggles}</>}
+      {!automaticCollection && membershipToggles}
       </div>
       <div className={automaticCollection ? "filter-date-options" : "filter-date-only"}>
         {automaticCollection && <div className="filter-choice-row filter-membership-toggles">{membershipToggles}</div>}

@@ -15,7 +15,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   const [appendSuggestion, setAppendSuggestion] = useState(false)
   const [draft, setDraft] = useState('')
   const selected = chips ? value.split(',').map(text => text.trim()).filter(Boolean) : []
-  const ref = useDismissible<HTMLDivElement>(focused, () => setFocused(false))
+  const ref = useDismissible<HTMLDivElement>(focused, () => setFocused(false), { outsideEvent: 'click' })
   const term = normalize((chips ? draft : multiple && appendSuggestion ? '' : multiple ? value.split(',').at(-1) ?? '' : value).trim())
   const chosen = chips ? selected.map(normalize) : multiple ? (appendSuggestion ? value.split(',') : value.split(',').slice(0, -1)).map(text => normalize(text.trim())) : []
   const category = ({ relationships: 'relationship', characters: 'character', tags: 'freeform' } as Partial<Record<TagCategory, Ao3TagCategory>>)[tagCategory!]

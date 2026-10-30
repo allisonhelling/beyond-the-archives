@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { hostedOrganizer, readerPairingUrl } from '../../../src/lib/reader-connection'
 import { createZip } from '../../../src/lib/zip'
 import { chapterNotesFiles, epubFiles } from '../../../src/test/epub-fixture'
 async function fixture(rich = false) {
@@ -11,11 +12,11 @@ async function fixture(rich = false) {
 }
 async function connectOrganizer(page: Page) {
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
-  await page.getByLabel('Installation Name').fill('Test Reader')
-  await page.getByLabel('Account Label').fill('Test Account')
+  await page.getByLabel('Device Name (Optional)', { exact: true }).fill('Test Reader')
+  await page.getByText('Advanced Settings', { exact: true }).click()
   await page.getByLabel('Backend URL').fill('https://organizer.test')
-  await page.getByLabel('Public API Key').fill('public-key')
-  await page.getByLabel('Pairing Code or Companion Secret').fill('a'.repeat(64))
+  await page.getByLabel('Public API Key').fill('sb_publishable_test')
+  await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
   await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
 }
@@ -808,4 +809,56 @@ test('repairs a previously saved duplicate chapter ID and retains history offlin
   })
   expect(history).toHaveLength(1)
   expect(history[0].id).toBe('legacy-read')
+})
+
+
+test('pairs from an organizer link only after confirmation and preserves an existing connection', async ({ page }) => {
+  const requests: { p_action: string; p_input: { name?: string } }[] = []
+  let paired = false
+  await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
+    expect(route.request().headers().apikey).toBe(hostedOrganizer.key)
+    const input = route.request().postDataJSON()
+    requests.push(input)
+    if (input.p_action === 'get' && !paired) return route.fulfill({ status: 401, json: { message: 'Pair this device first' } })
+    if (input.p_action === 'claim') { paired = true; return route.fulfill({ json: { secret: 'b'.repeat(64) } }) }
+    return route.fulfill({ json: { entry: null } })
+  })
+  const url = readerPairingUrl('http://127.0.0.1:4174/', { ...hostedOrganizer, code: 'a'.repeat(64) })
+  await page.goto(url)
+  const dialog = page.getByRole('dialog', { name: 'Connect Organizer' })
+  await expect(dialog).toBeVisible()
+  expect(new URL(page.url()).hash).toBe('')
+  expect(requests).toHaveLength(0)
+  await expect(page.getByLabel('Pairing Code', { exact: true })).toHaveValue('a'.repeat(64))
+  await expect(page.getByLabel('Backend URL')).toBeHidden()
+  await expect(page.getByLabel('Account Label')).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect.poll(() => requests.some(request => request.p_action === 'reader_report' && request.p_input.name === 'My Reader')).toBe(true)
+  const readConnection = () => page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+    return new Promise<unknown>(resolve => { const request = db.transaction('settings').objectStore('settings').get('connection'); request.onsuccess = () => { db.close(); resolve(request.result) } })
+  })
+  const existing = await readConnection()
+  await page.goto(url.replace('/#', '/?new-pairing=1#'))
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByText('A reader is already connected.', { exact: false })).toBeVisible()
+  expect(new URL(page.url()).hash).toBe('')
+  expect(requests.filter(request => request.p_action === 'claim')).toHaveLength(1)
+  expect(existing).toBeTruthy()
+  expect(await readConnection()).toEqual(existing)
+})
+
+test('uses hosted connection defaults and rejects privileged keys in advanced settings', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
+  await expect(page.getByLabel('Backend URL')).toBeHidden()
+  await page.getByText('Advanced Settings', { exact: true }).click()
+  await expect(page.getByLabel('Backend URL')).toHaveValue(hostedOrganizer.url)
+  await expect(page.getByLabel('Public API Key')).toHaveValue(hostedOrganizer.key)
+  await page.getByLabel('Public API Key').fill('sb_secret_forbidden')
+  await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
+  await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()
+  await expect(page.getByText('Enter an HTTPS backend URL and a publishable API key in Advanced Settings.')).toBeVisible()
+  await expect(page.getByRole('dialog')).toBeVisible()
 })

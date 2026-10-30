@@ -2593,9 +2593,11 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   const choices = page.locator('.filter-choice-row')
   const bounds = await Promise.all(['Content Rating', 'Publication Status', 'One-Shot'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
   if (info.project.name === 'desktop') {
-    for (const box of bounds) expect(Math.abs(box!.y - bounds[0]!.y)).toBeLessThan(2)
-    const labels = await choices.locator('.filter-label').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().y))
-    for (const y of labels) expect(Math.abs(y - labels[0])).toBeLessThan(2)
+    const alignment = await choices.locator('.custom-dropdown').evaluateAll(elements => elements.map(element => {
+      const label = element.querySelector('.filter-label')!.getBoundingClientRect(), trigger = element.querySelector('.dropdown-trigger')!.getBoundingClientRect()
+      return Math.abs(label.y + label.height / 2 - trigger.y - trigger.height / 2)
+    }))
+    for (const offset of alignment) expect(offset).toBeLessThan(2)
     expect(bounds[0]!.width).toBeGreaterThan(bounds[2]!.width)
   }
   for (const value of await choices.locator('.dropdown-trigger > span').all()) {
@@ -3737,12 +3739,16 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
  const filters=page.getByRole('region',{name:'Library Filters'})
  const row=filters.locator('.filter-choice-row').filter({has:page.getByRole('button',{name:'One-Shot',exact:true})})
  if(info.project.name==='desktop') {
-  const personal=(await filters.getByRole('searchbox',{name:'Personal Tags',exact:true}).boundingBox())!,choices=(await row.boundingBox())!
-  expect(choices.x).toBeGreaterThan(personal.x+personal.width)
+  const personal=(await row.locator(':scope > .suggestion-search').boundingBox())!,choices=(await row.boundingBox())!
+  expect(Math.abs(choices.x-personal.x)).toBeLessThan(1)
   expect(Math.abs(choices.y-personal.y)).toBeLessThan(1)
+  const content=(await row.getByRole('button',{name:'Content Rating',exact:true}).boundingBox())!
+  expect(content.x).toBeGreaterThan(personal.x+personal.width)
+  const children=await row.locator(':scope > *').evaluateAll(elements=>elements.map(element=>{const box=element.getBoundingClientRect();return {x:box.x,y:box.y}}))
+  for(let index=1;index<children.length;index++) if(children[index].y>children[index-1].y+2) expect(Math.abs(children[index].x-choices.x)).toBeLessThan(1)
  }
  await expect(row.locator(':scope > button')).toHaveText(['Exclude Later Series Works','In a Series','Favorites','Personal Notes','Recs'])
- expect(await row.getByRole('button',{name:'One-Shot',exact:true}).evaluate(node=>node.closest('.custom-dropdown')?.nextElementSibling?.textContent)).toBe('Exclude Later Series Works')
+ expect(await row.locator(':scope > .custom-dropdown > .dropdown-trigger').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(['Content Rating','Rating','One-Shot','Publication Status'])
  for(const name of ['Content Rating','Rating','Publication Status','One-Shot','Search In']) {
   await filters.getByRole('button',{name,exact:true}).click()
   const panel=page.getByRole(name==='Content Rating'||name==='Rating'||name==='Publication Status'?'dialog':'listbox',{name,exact:true})

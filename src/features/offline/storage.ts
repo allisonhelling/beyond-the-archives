@@ -1,3 +1,4 @@
+import { readerBaseUrl } from '../../lib/reader-connection'
 import type { Story } from '../library/model'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
@@ -13,8 +14,7 @@ export function readOfflineSnapshot(): OfflineSnapshot | undefined {
 export function saveOfflineSnapshot(snapshot: OfflineSnapshot) { localStorage.setItem(key, JSON.stringify(snapshot)) }
 export function clearOfflineSnapshot() { localStorage.removeItem(key); window.dispatchEvent(new Event(offlineCleared)) }
 export function readerWorkUrl(readerUrl: string, work: string | number): string {
-  const url = new URL(readerUrl)
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('Use an HTTPS reader URL.')
-  url.search = ''; url.hash = ''; url.searchParams.set('work', String(work))
+  const url = readerBaseUrl(readerUrl)
+  url.searchParams.set('work', String(work))
   return url.href
 }
