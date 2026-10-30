@@ -18,7 +18,7 @@ beforeAll(async () => {
 afterAll(async()=>{await db?.close()})
 async function request(action:string,input:object={},work=123,token=secret) {
  await db.exec('reset role;reset request.jwt.claim.sub;set role anon')
- return (await db.query<{result:{entry:{id:string;version:string;status:string;progress:number;notes:string;favorite:boolean};savedWorks:number[]}}>('select public.userscript_library($1,$2,$3,$4) result',[token,action,work,JSON.stringify(input)])).rows[0].result
+ return (await db.query<{result:{entry:{id:string;version:string;status:string;progress:number;notes:string;favorite:boolean;publication:{metadata:Story['metadata'];at:string}};savedWorks:number[]}}>('select public.userscript_library($1,$2,$3,$4) result',[token,action,work,JSON.stringify(input)])).rows[0].result
 }
 const metadata={...blankMetadata,title:'Test work',published_chapters:5,total_chapters:5,publication_status:'complete'}
 it('tracks every status path and includes re-reads in Finished, View All and the Re-Reading category',async()=>{
@@ -49,7 +49,7 @@ it('adds only selected series works with personal details, preserves saved works
  expect(result.entry).toMatchObject({notes:'Series reminder',favorite:true})
  expect(result.savedWorks).toEqual(expect.arrayContaining([123,456]))
  expect(result.savedWorks).not.toContain(789)
- expect((await request('get')).entry).toEqual(existing.entry)
+ expect((await request('get')).entry).toEqual({ ...existing.entry, publication: { ...existing.entry.publication, at: expect.any(String) } })
  expect((await request('get',{},456)).entry).toMatchObject({notes:'Selected work note',status:'finished',progress:5})
  await expect(request('series_save',input,77)).rejects.toThrow('Series changed')
  await expect(request('series_get',{},77,'invalid')).rejects.toThrow()

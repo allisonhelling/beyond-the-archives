@@ -1,7 +1,7 @@
-import type { Plugin } from 'vite'
+import type { Plugin } from 'rollup'
 
 /** Both applications cache only their own interface assets, never backend requests. */
-export function offlineShell(prefix: string, extraFiles: string[] = []): Plugin {
+export function offlineShell(prefix: string, extraFiles: string[] = []): Pick<Plugin, 'name' | 'generateBundle'> {
   return {
     name: `${prefix}-offline-shell`,
     generateBundle(_, bundle) {

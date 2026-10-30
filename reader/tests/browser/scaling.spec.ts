@@ -63,7 +63,7 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   await page.getByLabel('Go to Page').fill('417')
   await page.getByLabel('Go to Page').press('Enter')
   await expect(page.locator('.story-card')).toHaveCount(16)
-  await page.getByLabel('Search Metadata').fill('Story 009999')
+  await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Story 009999')
   await expect(page.locator('.story-card')).toHaveCount(16)
   await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)

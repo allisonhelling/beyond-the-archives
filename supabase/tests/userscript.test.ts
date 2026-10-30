@@ -15,7 +15,7 @@ async function user(id: string, action: () => Promise<void>) {
 async function manage(action: string, name = 'iPhone', id: string | null = null) {
  return (await db.query<{ result: { code: string } }>('select public.manage_userscript_device($1,$2,$3::uuid) as result', [action, name, id])).rows[0].result
 }
-type Result = { secret: string; userId: string; entry: { version: string; progress: number; notes: string; status: string; tags: string[]; collections: string[] } }
+type Result = { secret: string; userId: string; entry: { version: string; progress: number; notes: string; status: string; tags: string[]; collections: string[]; publication: { metadata: Record<string, unknown>; at: string } } }
 async function request(action: string, input: object = {}, token = secret, work = 123) {
  await db.exec('set role anon')
  try { return (await db.query<{ result: Result }>('select public.userscript_library($1,$2,$3,$4) as result', [token, action, work, JSON.stringify(input)])).rows[0].result }
@@ -110,7 +110,7 @@ it('refreshes private metadata and chapter mappings while preserving personal fi
  await expect(request('refresh_metadata', { ...input, chapters: { '4': '940' } }, device.secret, 789)).rejects.toThrow(/Invalid chapter/)
  await expect(request('refresh_metadata', { ...input, metadata: { title: 'Bad', kudos: -1 } }, device.secret, 789)).rejects.toThrow(/Invalid/)
  const refreshed = await request('refresh_metadata', input, device.secret, 789)
- expect(refreshed.entry).toEqual(current.entry)
+ expect(refreshed.entry).toEqual({ ...current.entry, publication: { at: expect.any(String), metadata: { ...current.entry.publication.metadata, title: 'My title', summary_html: '<p>Keep <em>summary</em></p>', published_chapters: 3, total_chapters: null, is_complete: false, publication_status: 'in_progress', kudos: 456, additional_tags: ['New tag'], last_metadata_check: expect.any(String), last_metadata_success: expect.any(String) } } })
  const after = (await db.query<{ entry: Record<string, unknown> }>('select to_jsonb(e) as entry from public.library_entries e where work_id=(select id from public.works where ao3_work_id=789)')).rows[0].entry
  expect(after).toEqual({ ...before, extension_metadata: expect.objectContaining({ title: 'New title', summary: 'Keep summary', summary_html: '<p>Keep <em>summary</em></p>', published_chapters: 3, total_chapters: null, publication_status: 'in_progress', additional_tags: ['New tag'], kudos: 456, last_metadata_success: expect.any(String) }), extension_chapters: { '3': '930' } })
  expect(after.extension_metadata).not.toHaveProperty('notes')
