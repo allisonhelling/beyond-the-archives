@@ -19,3 +19,7 @@ if (localPreview) {
 } else {
   root.render(<StrictMode><App /></StrictMode>)
 }
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.register('/sw.js').catch(() => { /* Online use remains available when storage is blocked. */ })
+}

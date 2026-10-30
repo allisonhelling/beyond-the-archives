@@ -1,0 +1,32 @@
+import { expect, test } from '@playwright/test'
+import { blankMetadata } from '../../src/features/library/model'
+test('cold starts a cached hub, filters retained tiles, and hands off identifiers without server lookups', async ({ page, context }) => {
+  await page.goto('/')
+  await page.evaluate(async () => { await navigator.serviceWorker.ready })
+  const snapshot = { userId: 'account', savedAt: '2026-10-29T12:00:00Z', readers: [{ id: 'installation', name: 'Laptop Reader', url: 'https://reader.example/', reportedAt: '2026-10-29T12:00:00Z', works: ['8001'] }], stories: [{ id: 'work', detailsLoaded: true, metadata: { ...blankMetadata, title: 'Cached Story', authors: ['Writer'], fandoms: ['Fandom'] }, work: { ao3_work_id: 8001, verified_chapters: {} }, collectionIds: [], personalTags: [], reading_status: 'reading', last_read_chapter: 0, notes: '', created_at: '2026-10-29T12:00:00Z', original_url: 'https://archiveofourown.org/works/8001' }] }
+  await page.evaluate(snapshot => localStorage.setItem('bta:offline-hub:v1', JSON.stringify(snapshot)), snapshot)
+  await page.close()
+  await context.setOffline(true)
+  const offline = await context.newPage()
+  const errors: string[] = []; offline.on('pageerror', error => errors.push(error.message))
+  await offline.goto('/library')
+  await expect(offline.getByRole('heading', { name: 'Offline', exact: true })).toBeVisible()
+  await expect(offline.getByRole('heading', { name: 'Cached Story', exact: true })).toBeVisible()
+  await expect(offline.getByText(/Last reported by Laptop Reader/)).toBeVisible()
+  await expect(offline.getByRole('link', { name: 'Read EPUB', exact: true })).toHaveAttribute('href', 'https://reader.example/?work=8001')
+  await offline.getByRole('searchbox', { name: 'Search Title or Author', exact: true }).fill('Missing')
+  await offline.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await expect(offline.locator('.story-card')).toHaveCount(0)
+  await offline.getByRole('searchbox', { name: 'Search Title or Author', exact: true }).fill('Cached')
+  await offline.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await expect(offline.locator('.story-card')).toHaveCount(1)
+  await offline.setViewportSize({ width: 390, height: 844 })
+  expect(await offline.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(errors).toEqual([])
+})
+test('does not claim an uncached installation can start offline', async ({ browser }) => {
+  const context = await browser.newContext({ offline: true })
+  const page = await context.newPage()
+  await expect(page.goto('http://127.0.0.1:4183/')).rejects.toThrow()
+  await context.close()
+})

@@ -1,5 +1,6 @@
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
-import { all, getBookDetails, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
+import { all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
+import { withPublication } from './model'
 import type { Book, BookDetails, Connection, Pending, Remote } from './model'
 export async function rpc(connection: Connection, action: string, work: string, input: Record<string, unknown> = {}): Promise<{entry: Remote | null; collections?: {id: string; name: string}[]; secret?: string; userId?: string; tagAppearance?: TagAppearance | null}> {
   const url = new URL(connection.backend)
@@ -21,6 +22,7 @@ export function synchronize(connection: Connection, force = false): Promise<stri
 }
 async function performSync(connection: Connection, force: boolean) {
   if (!navigator.onLine) return 'Offline. Changes are saved on this device.'
+  await reportAvailability(connection)
   const events = (await all<Pending>('pending')).filter(p => p.account === connection.account)
   for (const pending of events) {
     const book = await getBookDetails(pending.book)
@@ -31,7 +33,7 @@ async function performSync(connection: Connection, force: boolean) {
     try {
       const result = await rpc(connection, pending.action ?? 'progress', pending.work, pending.input)
       if (!result.entry) throw new Error('The organizer work no longer exists. Local reading history is retained.')
-      await mutateBook(book.id, current => ({ ...current, remote: result.entry! }), pending.id)
+      await mutateBook(book.id, current => ({ ...withPublication(current, result.entry!), remote: result.entry! }), pending.id)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Sync failed.'
       await transaction(['pending'], tx => tx.objectStore('pending').put({ ...pending, error: message }))
@@ -64,7 +66,7 @@ async function performSync(connection: Connection, force: boolean) {
             const current = request.result as BookDetails | undefined
             // A local edit/link or another sync may have changed the baseline in flight.
             if (!current || current.account !== connection.account || current.workId !== book.workId || current.remote?.version !== book.remote?.version) return
-            putBook(tx, { ...current, remote: result.entry!, status: result.entry!.status, notes: result.entry!.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
+            putBook(tx, { ...withPublication(current, result.entry!), remote: result.entry!, status: result.entry!.status, notes: result.entry!.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
           }
         }
       })
@@ -76,4 +78,15 @@ async function performSync(connection: Connection, force: boolean) {
     await setting(checkpointKey, { after: group.at(-1)!.id, at: Date.now() })
   }
   return `Reading updates are synced. Checked ${checked} of ${linked.length} linked versions.${linked.length > batch.length ? ' Sync Now checks the next batch.' : ''}`
+}
+
+// Resolve files from IndexedDB on this installation before reporting availability.
+export async function reportAvailability(connection: Connection) {
+  let installationId = await loadSetting<string>('installation-id')
+  if (!installationId) { installationId = crypto.randomUUID(); await setting('installation-id', installationId) }
+  const works = new Set<string>()
+  for (const entry of await listCatalog()) {
+    if (entry.active && entry.workId && entry.account === connection.account && entry.hasFile && await getBook(entry.id)) works.add(entry.workId)
+  }
+  await rpc(connection, 'reader_report', '0', { installationId, name: connection.name, url: new URL('/', location.href).href, works: [...works] })
 }

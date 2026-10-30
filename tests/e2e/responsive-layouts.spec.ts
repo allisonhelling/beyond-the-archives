@@ -161,7 +161,9 @@ test('mobile collection holds, filter defaults, inputs and work controls fit', a
   for (const width of [375, 390]) {
    await page.setViewportSize({ width, height: 900 })
    const ratingBox = (await rating.boundingBox())!, collectionBox = (await collection.boundingBox())!
-   expect(ratingBox.x + ratingBox.width).toBeLessThanOrEqual(collectionBox.x)
+   expect(collectionBox.y).toBeGreaterThanOrEqual(ratingBox.y + ratingBox.height)
+   expect(Math.abs(ratingBox.x + ratingBox.width / 2 - collectionBox.x - collectionBox.width / 2)).toBeLessThan(1)
+   await expect(collection).toHaveCSS('border-top-width', '1px')
    expect(ratingBox.height).toBeLessThan(30)
    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }

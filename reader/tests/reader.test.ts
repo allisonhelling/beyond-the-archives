@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import { epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub, sanitize } from '../src/epub'
-import { completionStatus, replaceBook } from '../src/model'
+import { completionStatus, replaceBook, withPublication } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 async function book() { const buffer = await epubBuffer(); return importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File) }
 describe('EPUB import and rendering', () => {
@@ -57,4 +57,17 @@ describe('Reading progress and versions', () => {
     const changed = replaceBook(old, { ...reordered, chapters: [{ ...old.chapters[1], id: 'changed' }] })
     expect(changed.resumeRequired).toBe(true); expect(changed.completed).toEqual([]); expect(changed.history).toEqual(old.history)
   })
+})
+
+it('rejects ambiguous chapter identities and uses newer publication snapshots without changing history', async () => {
+  const b = await book()
+  b.chapters = [{ ...b.chapters[1], id: 'ao3:1', ao3Id: '1', number: 1 }, { ...b.chapters[1], id: 'ao3:2', ao3Id: '1', number: 2 }]
+  b.completed = b.chapters.map(c => c.id); b.metadata.published_chapters = 2
+  expect(completionStatus(b)).toBe('reading')
+  const next = withPublication(b, { id: 'entry', version: '1', status: 'reading', progress: 0, notes: '', publication: { at: '2099-01-01T00:00:00Z', metadata: { ...b.metadata, published_chapters: 10, publication_status: 'in_progress' } } })
+  expect(next.metadata.published_chapters).toBe(10)
+  expect(next.history).toEqual(b.history)
+  const replaced = replaceBook({ ...next, remote: { id: 'entry', version: '1', status: 'reading', progress: 0, notes: '', publication: { metadata: next.metadata, at: next.metadataAt } } }, b)
+  expect(replaced.metadata.published_chapters).toBe(10)
+  expect(completionStatus(next)).toBe('reading')
 })

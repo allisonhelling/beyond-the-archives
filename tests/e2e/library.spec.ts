@@ -367,7 +367,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(recBounds.x).toBeGreaterThanOrEqual(favoriteBounds!.x + favoriteBounds!.width)
   expect(recBounds.x + recBounds.width).toBeLessThanOrEqual(metadataActions!.x)
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['BookFusion LinkEdit', 'Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', /^Chapter Reading History/, 'Last Edited', 'Other Metadata'])
+  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['BookFusion Link', 'Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', /^Chapter Reading History/, 'Last Edited', 'Other Metadata'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -389,17 +389,20 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const readingSection = page.getByRole('region', { name: 'Reading and Organization', exact: true })
   const metadataSection = page.locator('.details-fic-panel')
   expect((await readingSection.boundingBox())!.y).toBeLessThan((await metadataSection.boundingBox())!.y)
-  const statusBox = await readingSection.locator('.status-select').boundingBox()
-  const ratingBox = await readingSection.locator('.personal-rating').boundingBox()
-  if (info.project.name === 'mobile') {
-    expect(statusBox!.y + statusBox!.height).toBeLessThan(ratingBox!.y)
-    const collectionsBox = await readingSection.getByRole('region', { name: 'Collections', exact: true }).boundingBox()
-    expect(ratingBox!.x + ratingBox!.width).toBeLessThan(collectionsBox!.x)
-    expect(Math.abs(ratingBox!.y - collectionsBox!.y)).toBeLessThan(2)
-  } else {
-    expect(statusBox!.x + statusBox!.width).toBeLessThan(ratingBox!.x)
-    expect(statusBox!.width).toBeLessThanOrEqual(180)
-    expect(Math.abs(statusBox!.y - ratingBox!.y)).toBeLessThan(2)
+  const sections = readingSection.locator('.progress-sections > *')
+  await expect(sections).toHaveCount(3)
+  const sectionBoxes = await sections.evaluateAll(nodes => nodes.map(node => { const box = node.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height } }))
+  for (let index = 1; index < sectionBoxes.length; index++) {
+    const before = sectionBoxes[index - 1], after = sectionBoxes[index]
+    if (info.project.name === 'mobile') {
+      expect(after.y).toBeGreaterThanOrEqual(before.y + before.height)
+      await expect(sections.nth(index)).toHaveCSS('border-top-width', '1px')
+    } else {
+      expect(after.x).toBeGreaterThanOrEqual(before.x + before.width - 1)
+      expect(Math.abs(after.y - before.y)).toBeLessThan(2)
+      expect(Math.abs(after.width - before.width)).toBeLessThan(1)
+      await expect(sections.nth(index)).toHaveCSS('border-left-width', '1px')
+    }
   }
   await expect(readingSection.locator('.book-spine-footer')).toHaveCount(1)
   await expect(readingSection.getByRole('progressbar', { name: 'Chapters Read' })).toHaveAttribute('aria-valuetext', '3 of 6 chapters read')
@@ -434,9 +437,9 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await allTags.locator('summary').click()
   await expect(allTags.locator('.metadata-tag')).toHaveText(['A/B', 'A', 'Slow Burn'])
   await allTags.locator('summary').click()
-  const starPositions = await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height } }))
+  const starPositions = await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x - icons[0].getBoundingClientRect().x, y: r.y + scrollY, width: r.width, height: r.height } }))
   await page.getByRole('button', { name: 'Edit Personal Rating', exact: true }).click()
-  expect(await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height } }))).toEqual(starPositions)
+  expect(await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x - icons[0].getBoundingClientRect().x, y: r.y + scrollY, width: r.width, height: r.height } }))).toEqual(starPositions)
   await page.getByRole('radio', { name: '4 Out of 5 Stars', exact: true }).check()
   await expect(page.getByRole('radio', { name: '4 Out of 5 Stars', exact: true })).toHaveCSS('opacity', '0')
   const saveRating = page.getByRole('button', { name: 'Save Rating Changes', exact: true })
@@ -936,6 +939,9 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await workFilters.getByRole('button', { name: 'Work Status', exact: true }).click()
   await workFilters.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).check()
   await workFilters.getByRole('checkbox', { name: 'Complete on AO3', exact: true }).check()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await workFilters.getByRole('button', { name: 'Work Status', exact: true }).click()
   // View All excludes waiting works even when both publication statuses are selected.
   await expect(page.locator('.story-card').getByRole('heading').getByRole('link')).toHaveText(['Complete read', 'Unfinished reread'])
   await expect(workFilters.getByRole('checkbox', { name: 'Abandoned', exact: true })).toBeVisible()
@@ -1215,9 +1221,9 @@ test('library reuses filters across all statuses and scopes them to the selected
   await page.getByRole('textbox', { name: 'Private Notes', exact: true }).fill('New private note')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Private Notes', exact: true })).toHaveCount(0)
-  const starPositions = await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height } }))
+  const starPositions = await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x - icons[0].getBoundingClientRect().x, y: r.y + scrollY, width: r.width, height: r.height } }))
   await page.getByRole('button', { name: 'Edit Personal Rating', exact: true }).click()
-  expect(await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height } }))).toEqual(starPositions)
+  expect(await page.locator('.personal-rating .rating-stars svg').evaluateAll(icons => icons.map(icon => { const r = icon.getBoundingClientRect(); return { x: r.x - icons[0].getBoundingClientRect().x, y: r.y + scrollY, width: r.width, height: r.height } }))).toEqual(starPositions)
   await page.getByRole('radio', { name: '4 Out of 5 Stars', exact: true }).check()
   await expect(page.getByRole('radio', { name: '4 Out of 5 Stars', exact: true })).toHaveCSS('opacity', '0')
   const saveRating = page.getByRole('button', { name: 'Save Rating Changes', exact: true })
@@ -2314,9 +2320,13 @@ test('publication checkboxes combine statuses without a dead collection and aban
   await expect(cards).toHaveCount(2)
   await panel.getByRole('button', { name: 'Publication Status', exact: true }).click()
   await panel.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).check()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(cards).toHaveCount(3)
+  await panel.getByRole('button', { name: 'Publication Status', exact: true }).click()
   await panel.getByRole('checkbox', { name: 'Abandoned', exact: true }).uncheck()
   await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(cards).toHaveCount(1)
   await panel.getByRole('button', { name: 'Clear All Filters', exact: true }).click()
   await cards.getByRole('link', { name: 'Discontinued story 1', exact: true }).click()
@@ -2479,8 +2489,13 @@ test('automatic collections can be hidden and restored without losing stories', 
   await expect(page.locator('.story-card')).toHaveCount(1)
   await page.getByRole('checkbox', { name: 'Abandoned', exact: true }).uncheck()
   await page.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).check()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Publication Status', exact: true }).click()
   await page.getByRole('checkbox', { name: 'In Progress on AO3', exact: true }).uncheck()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
 })
 
@@ -2764,20 +2779,17 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
  await expect(finishSeries).toBeVisible()
  const importColumnBefore = (await chooseWorks.boundingBox())!
  if (page.viewportSize()!.width > 600) {
-  const finishBounds = (await finishSeries.boundingBox())!, addBounds = (await addCollection.boundingBox())!, chooseBounds = (await chooseWorks.boundingBox())!
-  const statusBounds = (await organization.locator('.series-reading-status').boundingBox())!
-  expect(Math.abs(statusBounds.y + statusBounds.height / 2 - addBounds.y - addBounds.height / 2)).toBeLessThan(1)
-  expect(Math.abs(chooseBounds.y - addBounds.y)).toBeLessThan(1)
-  expect(Math.abs(finishBounds.y + finishBounds.height / 2 - statusBounds.y - statusBounds.height / 2)).toBeLessThan(1)
-  expect(finishBounds.x).toBeGreaterThan(statusBounds.x + statusBounds.width)
-  const columns = await organization.locator('.series-progress-columns > *').evaluateAll(elements => elements.map(element => ({x: element.getBoundingClientRect().x, width: element.getBoundingClientRect().width})))
-  expect(Math.abs(columns[0].width - columns[1].width)).toBeLessThan(1)
+  const sections = organization.locator('.series-progress-columns > *')
+  await expect(sections).toHaveCount(3)
+  const columns = await sections.evaluateAll(elements => elements.map(element => ({ x: element.getBoundingClientRect().x, width: element.getBoundingClientRect().width })))
+  for (const column of columns) expect(Math.abs(column.width - columns[0].width)).toBeLessThan(1)
   const collectionsHeading = (await organization.getByRole('heading', { name: 'Collections', exact: true }).boundingBox())!
-  expect(Math.abs(collectionsHeading.x - columns[1].x - columns[1].width / 3)).toBeLessThan(1)
-  const importSpace = (await organization.locator('.series-import-actions').boundingBox())!
+  expect(Math.abs(collectionsHeading.x + collectionsHeading.width / 2 - columns[1].x - columns[1].width / 2)).toBeLessThan(1)
+  const importSpace = (await organization.locator('.series-import-actions').boundingBox())!, chooseBounds = (await chooseWorks.boundingBox())!
   expect(Math.abs(chooseBounds.x + chooseBounds.width / 2 - importSpace.x - importSpace.width / 2)).toBeLessThan(1)
-  expect(Math.abs((await organization.locator('.series-progress-row').boundingBox())!.height - finishBounds.height)).toBeLessThan(1)
+  await expect(sections.nth(1)).toHaveCSS('border-left-width', '1px')
  }
+
  await chooseWorks.click()
  await expect(page.getByRole('region', { name: 'Review Series Imports', exact: true })).toBeVisible()
  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -2831,6 +2843,7 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
   await expect(page.locator('.story-card')).toHaveCount(2)
   await openFilters(page)
   await page.getByRole('button', { name: 'In a Series', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.locator('.story-card h2')).toContainText('The story')
   await expect(page.locator('.story-card .story-facts')).toHaveText('Part 1 of Stories and art • Rating unknown • 12,000 words')
@@ -2956,6 +2969,7 @@ test('same-named works and series keep separate identities in tiles and series g
   await expect(group.locator('.work-card')).toHaveCount(1)
   await expect(group.locator('.work-card h2 a')).toHaveAttribute('href',`/stories/entry-${workId}`)
  }
+ for (const seriesId of [77,88]) tables.library_series.push({ id: `same-series-${seriesId}`, ao3_series_id: seriesId, notes: '', is_favorite: false, reading_status: 'to_read', created_at: now, metadata: { seriesId, title: 'Same series title', normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, works: [], basic: true } })
  await selectLibraryShelf(page,'Series')
  await expect(page.locator('.series-card')).toHaveCount(2)
  expect(await page.locator('.series-card h2 a').evaluateAll(links=>links.map(link=>link.getAttribute('href')).sort())).toEqual(['/series/77','/series/88'])

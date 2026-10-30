@@ -252,7 +252,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .story-metadata-actions { grid-column: 3; grid-row: 1; justify-self: end; display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-left: auto; }
 .story-metadata-label { display: none; }
 .story-metadata-edit { flex-shrink: 0; max-width: 150px; }
-.story-details-page { --details-text-size: var(--work-summary-text-size); --details-label-size: 14wpx; max-width: 960px; margin-inline: auto; }
+.story-details-page { --details-text-size: var(--work-summary-text-size); --details-label-size: 13px; max-width: 960px; margin-inline: auto; }
 .series-details-page { max-width: none; }
 .series-details-page > .details-fic-panel { margin-top: 32px; }
 .story-details-heading .story-return-link { margin-bottom: 4px; }
@@ -276,7 +276,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .activity-indicator-inline { position: sticky; top: 0; right: auto; bottom: auto; display: flex; max-width: 100%; padding: 8px 0; margin-bottom: 8px; border: 0; border-radius: 0; box-shadow: none; }
 @keyframes metadata-refresh-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .metadata-refresh-spinning, .loading-icon { animation: none; } }
-.details-fic-fields dt, .details-metadata-panel h2 { font-family: var(--font-serif); font-weight: 500; color: #756363; text-transform: uppercase; font-size: var(--details-label-size); letter-spacing: .08em; }
+.details-fic-fields dt, .settings-card.details-metadata-panel h2 { font-family: var(--font-serif); font-weight: 500; color: #756363; text-transform: uppercase; font-size: var(--details-label-size); letter-spacing: .08em; }
 .details-private-notes { padding: 0 4px; margin: 28px 0; }
 .story-title-row h1 a:hover { color: var(--color-brand); }
 .details-disclosure > summary { font-family: var(--font-serif); cursor: pointer; color: #756363; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; padding-block: 10px; }
@@ -439,7 +439,7 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .desktop-nav { display: none; }
   :root { --mobile-nav-height: 68px; scroll-padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 16px); }
   .app-shell { padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px)); }
-  .mobile-nav { position: fixed; z-index: 10; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px)); padding: 5px 12px calc(5px + env(safe-area-inset-bottom, 0px)); background: var(--color-surface); border-top: 1px solid var(--color-border); }
+  .mobile-nav { position: fixed; z-index: 10; inset: auto 0 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px)); padding: 5px 12px calc(5px + env(safe-area-inset-bottom, 0px)); background: var(--color-surface); border-top: 1px solid var(--color-border); }
   .mobile-nav a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 44px; color: #756363; font-size: 12px; }
   .mobile-nav a::before { content: ''; position: absolute; top: -5px; width: 32px; height: 3px; border-radius: 0 0 3px 3px; background: transparent; }
   .mobile-nav a.active { color: var(--color-brand); }

@@ -850,6 +850,38 @@ export type Database = {
           { foreignKeyName: 'processing_logs_job_id_user_id_fkey'; columns: ['job_id', 'user_id']; isOneToOne: false; referencedRelation: 'metadata_jobs'; referencedColumns: ['id', 'user_id'] },
         ]
       }
+      reader_availability: {
+        Row: {
+          device_id: string
+          user_id: string
+          installation_id: string
+          name: string
+          url: string
+          reported_at: string
+          works: Json
+        }
+        Insert: {
+          device_id: string
+          user_id: string
+          installation_id: string
+          name: string
+          url: string
+          reported_at?: string
+          works: Json
+        }
+        Update: {
+          device_id?: string
+          user_id?: string
+          installation_id?: string
+          name?: string
+          url?: string
+          reported_at?: string
+          works?: Json
+        }
+        Relationships: [
+          { foreignKeyName: 'reader_availability_device_id_fkey'; columns: ['device_id']; isOneToOne: false; referencedRelation: 'userscript_devices'; referencedColumns: ['id'] },
+        ]
+      }
       reading_activity: {
         Row: {
           id: string | null
@@ -1116,6 +1148,7 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      reader_offline_snapshot: { Args: Record<string, never>; Returns: Json }
       review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number }; Returns: Json }
       mark_work_deleted: { Args: { p_entry: string; p_job: string }; Returns: undefined }
       claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }

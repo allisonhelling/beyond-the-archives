@@ -4,7 +4,7 @@ export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
 export type ReaderMetadata = Metadata & { ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
 export type Chapter = { kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
-export type Remote = { id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
+export type Remote = { publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
 export type ReadingPosition = { chapter: string; fraction: number; textOffset?: number; textTop?: number; viewport?: { layout: Preferences['layout']; content: Preferences['content']; size: number; width: number; widthPx: number; heightPx: number; scrollHeight: number; scrollWidth: number; scrollTop: number; scrollLeft: number } }
 export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
   if (chapter.kind === 'frontmatter') return null
@@ -38,15 +38,34 @@ export function mapChapter(chapter: ChapterSummary, chapters: ChapterSummary[]) 
   const matches = chapters.filter(next => next.id === chapter.id)
   return matches.length === 1 ? matches[0] : undefined
 }
+export function hasVerifiedMapping(chapter: ChapterSummary, chapters: ChapterSummary[]): boolean {
+  return chapter.kind !== 'frontmatter' && Number.isSafeInteger(chapter.number) && chapter.number! > 0 &&
+    Boolean(chapter.ao3Id && /^[1-9]\d*$/.test(chapter.ao3Id)) &&
+    chapters.filter(other => other.kind !== 'frontmatter' && (other.number === chapter.number || other.ao3Id === chapter.ao3Id)).length === 1
+}
 export function completionStatus(book: BookDetails | Book): Status {
   const published = book.metadata.published_chapters
   if (!published || !['complete', 'in_progress'].includes(book.metadata.publication_status)) return book.status
-  for (let n = 1; n <= published; n++) if (!book.chapters.some(c => c.number === n && c.ao3Id && book.completed.includes(c.id))) return book.status === 'to_read' ? 'reading' : book.status
+  const mapped = new Map(book.chapters.filter(chapter => hasVerifiedMapping(chapter, book.chapters)).map(chapter => [chapter.number, chapter]))
+  for (let n = 1; n <= published; n++) {
+    const chapter = mapped.get(n)
+    if (!chapter || !book.completed.includes(chapter.id)) return book.status === 'to_read' ? 'reading' : book.status
+  }
   return caughtUpReadingStatus(book.status, book.metadata)
 }
 export function replaceBook(previous: BookDetails | Book, next: Book): Book {
   const old = previous.chapters.find(c => c.id === previous.position.chapter)
   const mapped = old && mapChapter(old, next.chapters)
-  return { ...next, workId: previous.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, status: previous.status, history: previous.history,
+  // Re-importing an older EPUB must not discard a newer organizer observation.
+  const publication = previous.remote?.publication
+  const retainPublication = publication && (next.metadata.published_chapters ?? 0) <= (publication.metadata.published_chapters ?? 0)
+  const metadata = retainPublication ? { ...next.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters } : next.metadata
+  return { ...next, metadata, metadataAt: retainPublication ? publication.at : next.metadataAt, workId: previous.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, status: previous.status, history: previous.history,
     completed: previous.completed.filter(id => next.chapters.some(c => c.id === id)), position: mapped ? { ...previous.position, chapter: mapped.id } : next.position, resumeRequired: !mapped }
+}
+
+export function withPublication<T extends BookDetails | Book>(book: T, remote?: Remote): T {
+  const publication = remote?.publication
+  if (!publication || Date.parse(publication.at) < Date.parse(book.metadataAt)) return book
+  return { ...book, metadata: { ...book.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters }, metadataAt: publication.at }
 }

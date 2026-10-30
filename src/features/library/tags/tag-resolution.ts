@@ -1,4 +1,4 @@
-import { normalizeSearchText as normalizeTag } from '../../../lib/search-text'
+import { normalizeSearchText as normalizeTag } from '../../../lib/search-text.ts'
 export const ao3TagCategories = ['relationship', 'character', 'freeform'] as const
 export type Ao3TagCategory = typeof ao3TagCategories[number]
 export type TagResolution = { category: Ao3TagCategory; name: string; status: 'canonical' | 'synonym' | 'custom' | 'unverified'; canonical_name: string | null; checked_at: string; attempted_at: string }

@@ -1,3 +1,4 @@
+import { ReaderControls } from '../offline/ReaderControls'
 import { SeriesSummaryContext } from './series/series-summary-context'
 import { RetryError } from '../../components/RetryError'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -46,7 +47,8 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading, author }: { stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode, total?: number) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading, author, localOnly = false }: { localOnly?: boolean; stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode, total?: number) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
+  const localResults = sampleMode || localOnly
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileQuery)
@@ -99,23 +101,23 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   }, [mode, stories, author])
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { setFilters(previous => ({ ...previous, [key]: value, ...(key === 'sort' && value === 'random' && { randomSeed: crypto.randomUUID() }) })) }
   let error = '', filtered: Story[] = []
-  try { filtered = filterItems(sampleMode ? pool : [], filters) } catch (e) { error = (e as Error).message }
+  try { filtered = filterItems(localResults ? pool : [], filters) } catch (e) { error = (e as Error).message }
   const localShown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
-  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(author !== undefined && { author }) }, page, size, !sampleMode && !error)
+  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(params.get('reader') && { reader: params.get('reader')! }), ...(author !== undefined && { author }) }, page, size, !localResults && !error)
   const displayed = remote.result ?? remote.previousResult
-  const countsStale = !sampleMode && !remote.result
-  const total = sampleMode ? localShown.length : displayed?.total
-  const pages = sampleMode ? Math.max(1, Math.ceil((total ?? 0) / size)) : displayed?.pages ?? 1
-  const currentPage = sampleMode ? Math.min(page, pages) : remote.result?.page ?? page
-  const shown = sampleMode ? localShown.slice((currentPage - 1) * size, currentPage * size) : remote.result?.stories ?? remote.previousResult?.stories ?? []
+  const countsStale = !localResults && !remote.result
+  const total = localResults ? localShown.length : displayed?.total
+  const pages = localResults ? Math.max(1, Math.ceil((total ?? 0) / size)) : displayed?.pages ?? 1
+  const currentPage = localResults ? Math.min(page, pages) : remote.result?.page ?? page
+  const shown = localResults ? localShown.slice((currentPage - 1) * size, currentPage * size) : remote.result?.stories ?? remote.previousResult?.stories ?? []
   const seriesById = new Map((remote.result ?? remote.previousResult)?.series.map(series => [`series:${series.seriesId}`, series]) ?? [])
   const refreshStories = shown.flatMap(story => seriesById.get(story.id)?.savedStories ?? [story])
   const metadataRefresh = usePageMetadataRefresh(refreshStories)
   const [confirmRefresh, setConfirmRefresh] = useState(false)
   const refreshButton = <MetadataRefreshButton {...metadataRefresh} unavailable={metadataRefresh.unavailable || remote.loading || Boolean(error || remote.error)} onRefresh={() => mobile ? setConfirmRefresh(true) : void metadataRefresh.refresh()} variant="icon" label="Mass Refresh All Stories on Page" description="Mass Refresh All Stories on Page" />
   useLayoutEffect(() => {
-    if ((sampleMode || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
-  }, [page, currentPage, remote.result, params, filters, urlSize, setParams])
+    if ((localResults || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
+  }, [page, currentPage, remote.result, params, filters, urlSize, setParams, localResults])
   function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }
   error ||= remote.error ?? ''
   const pagination = (inlinePage = false) => <Pagination stale={countsStale || Boolean(revisionError)} countError={Boolean(remote.error || revisionError)} inlinePage={inlinePage} page={currentPage} pages={pages} total={total} size={size} onPage={changePage} leading={mode !== 'reading' && (mode === 'series' || filters.showSeries) ? <div className="series-summary-controls">{[true, false].map(expanded => <button key={String(expanded)} type="button" className="text-button" onClick={() => setSummaryState(current => ({ ...current, expanded, revision: current.revision + 1 }))}>{expanded ? 'Expand All Work Summaries' : 'Collapse All Work Summaries'}</button>)}</div> : undefined} trailing={<><Tooltip pinOnClick description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per Page Information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per Page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
@@ -126,14 +128,15 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const headerActions = <>{showActions && <>{refreshButton}{resultsActions}</>}</>
   return <SeriesSummaryContext value={summaryState}>
     {confirmRefresh && <ConfirmationDialog title="Mass Refresh?" confirmLabel="Mass Refresh" pendingLabel="Refreshing…" onClose={() => setConfirmRefresh(false)} onConfirm={async () => { await metadataRefresh.refresh() }}><p>Refresh AO3 metadata for all works on this page?</p></ConfirmationDialog>}
-    {renderHeader ? renderHeader(headerActions, sampleMode ? pool.length : remote.facets?.total) : <div className="library-heading-actions">{headerActions}</div>}
+    {renderHeader ? renderHeader(headerActions, localResults ? pool.length : remote.facets?.total) : <div className="library-heading-actions">{headerActions}</div>}
     {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View Import History</Link></p>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard Sections">{displayedSections.map(([key, title, description, Icon]) => {
       const label = mobile && key === 'waiting' ? 'Waiting' : title
-      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, key), filters), urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{sampleMode ? error ? '—' : filtered.filter(story => inReadingSection(story, key)).length : displayed?.sections[key] ?? '—'}</span></button>
+      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, key), filters), urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{localResults ? error ? '—' : filtered.filter(story => inReadingSection(story, key)).length : displayed?.sections[key] ?? '—'}</span></button>
     })}</nav>}
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
-    <ReadingFilterControls worksOnly={author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
+    {!localOnly && mode === 'library' && <ReaderControls />}
+    <ReadingFilterControls worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
     {pagination(true)}
     {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retry} retryLabel="Retry Suggestions" />}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}

@@ -1,3 +1,4 @@
+import { ReadEpub } from '../offline/ReaderControls'
 import { useActivity } from '../../lib/use-activity'
 import { BookFusionButton } from './bookfusion/BookFusionFields'
 import { RetryError } from '../../components/RetryError'
@@ -64,7 +65,7 @@ export function LibraryBoundary({ children }: { children: ReactNode }) {
   return children
 }
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; rec: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode; collectionsField: ReactNode }
-function StoryControls({ story, children }: { story: Story; children: (controls: CardControls) => ReactNode }) {
+function StoryControls({ story, children, readOnly = false }: { readOnly?: boolean; story: Story; children: (controls: CardControls) => ReactNode }) {
   const { refreshStory, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(String(story.last_read_chapter))
   useActivity(Boolean(busy), 'Updating your library…')
@@ -132,6 +133,7 @@ function StoryControls({ story, children }: { story: Story; children: (controls:
         <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setRemoveOpen(true) }}><Trash2 size={16} aria-hidden="true" />Remove from Library</button>
       </div>
     </details></div>
+  if (readOnly) return children({ actions: null, favorite: null, rec: null, readingStatus: null, caughtUp: null, editProgress: <strong>Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</strong>, collectionsField: null, rating: <StarRating value={story.personal_rating} /> })
   return <>{children({ actions, favorite, rec, readingStatus, caughtUp, editProgress, collectionsField: <EditCollectionsButton onRefresh={() => refreshStory(story.id)} variant="field" disabled={blocked} automaticIds={story.automaticCollectionIds} selectedIds={story.collectionIds} description={`Choose collections for “${story.metadata.title}”.`} onSave={async (collections, baseline) => {
       const base = { ...editSnapshot(story), collections: baseline }
       await saveStory({ id: story.id, base, url: savedWorkUrl(story), metadata: story.metadata, metadataChanges: {}, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections, tags: story.personalTags })
@@ -165,13 +167,13 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
     </div>
   </footer>
 }
-export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?: string }) {
+export function StoryCard({ story: candidate, linkId, readOnly = false }: { story: Story; linkId?: string; readOnly?: boolean }) {
   const location = useLocation()
   const story = useStorySnapshot(candidate)!
   if (story.detailsLoaded === false) return <article className="story-card work-card" aria-busy="true"><p role="status">Loading work details…</p></article>
   const origin = { returnTo: location.pathname + location.search }
-  return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story}>{({ actions, caughtUp, editProgress }) => <>
-    <div className="story-card-title"><h2 aria-label={story.metadata.title}><Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
+  return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story} readOnly={readOnly}>{({ actions, caughtUp, editProgress }) => <>
+    <div className="story-card-title"><h2 aria-label={story.metadata.title}>{readOnly ? <span id={linkId}>{story.metadata.title}</span> : <Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
 <DisplayInfo group="workTile">{{
       ...workMetadataFields(story, 'tile'),
       personalRating: <div className="tile-personal-rating"><StarRating value={story.personal_rating} /></div>,
@@ -179,8 +181,9 @@ export function StoryCard({ story: candidate, linkId }: { story: Story; linkId?:
       notes: <p className="story-summary">{story.notes || 'No private notes saved.'}</p>,
       reading: <p className="story-facts">{statuses[story.reading_status]}</p>,
       saved: <p className="story-facts">Saved: {formatDateTime(story.created_at)}</p>,
-      progress: <> <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} /> </>
+      progress: <> {readOnly ? <p>{statuses[story.reading_status]} · Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</p> : <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />} </>
     }}</DisplayInfo>
+    {readOnly && <ReadEpub workId={story.work.ao3_work_id} />}
   </>}</StoryControls></article>
 }
 const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'],] as const
@@ -457,7 +460,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> }}</DisplayInfo>}
         {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p> }}</DisplayInfo>}
-        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><ReadEpub workId={story.work.ao3_work_id} /><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{
         stats: <> <dl className="details-story-stats">

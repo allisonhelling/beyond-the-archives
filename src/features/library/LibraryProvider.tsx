@@ -398,3 +398,17 @@ export function useLibrary({ catalog = false }: { catalog?: boolean } = {}) {
   useEffect(() => { if (catalog && !catalogLoaded) void ensureCatalog().catch(() => {}) }, [catalog, catalogLoaded, ensureCatalog, revision])
   return value
 }
+
+/** Read-only retained data is deliberately independent of the authenticated repository. */
+export function RetainedLibraryProvider({ stories, children }: { stories: Story[]; children: ReactNode }) {
+  const [temporaryPageSizes] = useState(() => new Map<LibraryQuery['mode'], number>())
+  const [rowHeights] = useState(() => new Map<string, number>())
+  const unavailable = async (): Promise<never> => { throw new Error('Sign in online to change your organizer library.') }
+  const noop = async () => {}
+  return <Context.Provider value={{ stories, collections: [], series: [], userId: 'retained', loading: false, error: '', revision: 0, tagRevision: 0,
+    catalogLoaded: true, ensureCatalog: noop, temporaryPageSizes, rowHeights, navigation: {}, navigationLoading: false, navigationError: '', revisionError: '',
+    checkRevision: noop, retryCounts: noop, hasCachedPage: () => false, fetchPage: unavailable, fetchFacets: unavailable,
+    refresh: unavailable, refreshCollections: unavailable, loadDetails: noop, retainDetails: () => () => {}, refreshSeries: unavailable, refreshStory: unavailable,
+    markAllRead: unavailable, markFinished: unavailable, removeStory: unavailable,
+  }}>{children}</Context.Provider>
+}

@@ -1,5 +1,6 @@
+import { offlineShell } from './scripts/offline-shell'
 
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import svgr from 'vite-plugin-svgr'
@@ -11,7 +12,7 @@ export default defineConfig(({ mode }) => {
   validateBrowserEnv(loadEnv(mode, process.cwd(), 'VITE_'))
   const manifest = JSON.stringify({ name: brandName, short_name: brandName, start_url: '/', display: 'standalone', background_color: '#faf8f4', theme_color: '#faf8f4' })
   return {
-    plugins: [react(), tailwindcss(), svgr(), {
+    plugins: [react(), tailwindcss(), svgr(), offlineShell('organizer', ['/manifest.webmanifest']), {
       name: 'site-branding',
       configureServer(server) {
         server.middlewares.use('/manifest.webmanifest', (_request, response) => {
@@ -31,7 +32,7 @@ export default defineConfig(({ mode }) => {
       maxWorkers: 2,
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
-      exclude: ['tests/e2e/**', 'node_modules/**'],
+      exclude: [...configDefaults.exclude, 'tests/e2e/**', 'tests/offline/**', 'reader/tests/browser/**'],
       restoreMocks: true,
     },
   }

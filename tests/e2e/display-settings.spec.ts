@@ -1,8 +1,10 @@
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { fixture, login } from './library-fixture'
+import type { TagAppearance } from '../../src/features/library/display/display-settings'
 
-async function setup(page: Page) {
+async function setup(page: Page, tagAppearance?: TagAppearance) {
   const tables = await fixture(page)
+  if (tagAppearance) tables.metadata_preferences.push({ user_id: '10000000-0000-0000-0000-000000000001', tag_appearance: tagAppearance })
   const timestamp = '2026-10-15T00:00:00Z'
   tables.works.push({ id: 'display-work', ao3_work_id: 123, canonical_url: 'https://archiveofourown.org/works/123', verified_chapters: {} })
   tables.library_entries.push({ id: 'display-entry', work_id: 'display-work', reading_status: 'reading', last_read_chapter: 1, notes: 'Work note', is_favorite: false, personal_rating: null, created_at: timestamp, updated_at: timestamp, original_url: 'https://archiveofourown.org/works/123', metadata_overrides: { title: 'Display work', authors: ['Display author'], fandoms: ['Display fandom'], ao3_tags: [], summary: 'Display summary', rating: 'Mature', publication_status: 'complete', published_chapters: 3, total_chapters: 3, word_count: 1000, series: ['Display series'], series_memberships: [{ id: 77, name: 'Display series', url: 'https://archiveofourown.org/series/77', position: 1 }] } })
@@ -311,7 +313,7 @@ test('tag shape choices and short dividers save from the real work preview', asy
   await expect(tags).toHaveAttribute('data-tag-shape','bullets')
   await expect(tags).toContainText('Batfamily Feels • Bruce Wayne is a Good Dad')
   const choices=page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true}).getByRole('group',{name:'Tag Shape',exact:true})
-  await expect(choices.locator('.metadata-tag')).toHaveCount(10)
+  await expect(choices.locator('.metadata-tag')).toHaveCount(12)
   await choices.getByRole('button',{name:'Humor Fluff Sharp Rectangles',exact:true}).click()
   await expect(tags).toHaveAttribute('data-tag-shape','sharp')
   await expect(tags.locator('.metadata-tag').first()).toHaveCSS('border-radius','0px')
@@ -694,14 +696,15 @@ test('AO3 Category and statistics can be added to work tiles and information pag
 })
 
 for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'page'] as const) test(`restores ${kind} ${layout} saved and unsaved customizations after confirmation`, async ({ page }) => {
- await setup(page)
  const group = layout === 'tile' ? `${kind}Tile` : `${kind}Info`
  const hiddenField = layout === 'tile' ? 'authors' : kind === 'work' ? 'summary' : 'begun'
  const saved = {
   [group]: { order: ['divider:custom', hiddenField], hidden: [hiddenField], lines: {} },
-  tagAppearance: { shape: 'sharp', colors: { tags: '#123456' } },
+  tagAppearance: { shape: 'sharp' as const, colors: { tags: '#123456' } },
   ...(kind === 'work' ? { seriesHeader: { order: ['source', 'authors'], hidden: ['authors'] } } : { workHeader: { order: ['stats', 'authors'], hidden: ['authors'] } }),
  }
+ // Account tag format and browser-local layouts are independent saved settings.
+ await setup(page, saved.tagAppearance)
  await page.evaluate(value => localStorage.setItem('between-chapters:display:v1', JSON.stringify(value)), saved)
  await page.reload()
  async function open() {

@@ -722,3 +722,24 @@ test('waits for Apply Filters with the panel hidden and preserves results for in
   await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(0)
 })
+test('reports verified local files by stable installation identity and replaces reports after removal', async ({ page, context }) => {
+  const reports: { installationId: string; name: string; works: string[] }[] = []
+  await context.route('https://organizer.test/rest/v1/rpc/userscript_library', async route => {
+    const request = route.request().postDataJSON()
+    if (request.p_action === 'reader_report') reports.push(request.p_input)
+    await route.fulfill({ json: { entry: { id: 'entry', version: 'v1', status: 'reading', progress: 0, notes: '' }, collections: [] } })
+  })
+  await page.goto('/')
+  await connectOrganizer(page)
+  await page.getByLabel('Import EPUB File').setInputFiles({ name: 'report.epub', mimeType: 'application/epub+zip', buffer: await fixture() })
+  await expect(page.getByLabel('Book Content')).toBeVisible()
+  await expect.poll(() => reports.at(-1)?.works).toEqual(['8001'])
+  const identity = reports.at(-1)!.installationId
+  expect(reports.at(-1)?.name).toBe('Test Reader')
+  await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.getByRole('button', { name: 'Manage EPUB', exact: true }).click()
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: 'Remove Download', exact: true }).click()
+  await expect.poll(() => reports.at(-1)?.works).toEqual([])
+  expect(reports.at(-1)?.installationId).toBe(identity)
+})

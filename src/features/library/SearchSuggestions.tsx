@@ -25,7 +25,7 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   const suggestions = resolvedGroups.map(group => ({ ...group, values: [...new Set(group.values)].filter(text => !chosen.includes(normalize(text)) && (category ? true : normalize(text).includes(term))).sort(compareTagSuggestions).slice(0, 8) }))
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (chips && event.key === 'Enter' && event.target instanceof HTMLInputElement && draft.trim()) { event.preventDefault(); choose(draft.trim()); return }
-    if (event.key === 'Escape') { setFocused(false); return }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setFocused(false); return }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     event.preventDefault()
     if (!focused) { setFocused(true); return }

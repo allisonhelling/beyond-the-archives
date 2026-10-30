@@ -30,3 +30,17 @@ it('sorts special-character suggestions last and separates selected tags without
  expect(screen.getByLabelText('Tags Selected Filters').textContent).toBe('Selected Another')
  expect(screen.queryByText(/Standard tags include/)).not.toBeInTheDocument()
 })
+
+it('dismisses suggestions with Escape without clearing the search or triggering a parent shortcut', () => {
+ records.value = []
+ const changed = vi.fn(), parent = vi.fn()
+ render(<div onKeyDown={parent}><SearchSuggestions label="Title" placeholder="Search titles" value="Pending search" onChange={changed} groups={[{ label: 'Titles', values: ['Pending search'] }]} /></div>)
+ const input = screen.getByLabelText('Title', { exact: true })
+ fireEvent.focus(input)
+ expect(input).toHaveAttribute('aria-expanded', 'true')
+ expect(fireEvent.keyDown(input, { key: 'Escape', cancelable: true })).toBe(false)
+ expect(input).toHaveValue('Pending search')
+ expect(input).toHaveAttribute('aria-expanded', 'false')
+ expect(changed).not.toHaveBeenCalled()
+ expect(parent).not.toHaveBeenCalled()
+})

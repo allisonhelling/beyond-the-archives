@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { recordReadingTransition } from '../../src/features/library/reading-history'
 import type { Story } from '../../src/features/library/model'
 import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
@@ -20,6 +21,17 @@ export async function fixture(page: Page) {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
     if (table === 'dnf_cleanup') return route.fulfill({ json: { settings: { enabled: false, hours: 168, protect_favorites: true, protect_personal: true, protect_collections: true }, eligible: 0, protected: 0, waiting: 0, removed: 0 } })
+    if (table === 'tag_appearance_settings') {
+      let settings = tables.metadata_preferences.find(row => row.user_id === user.id)
+      const input = body?.p_input as Row | undefined
+      const current = settings?.tag_appearance ?? null
+      if (input) {
+        if (!isDeepStrictEqual(input.base, current) && !isDeepStrictEqual(input.tagAppearance, current)) return route.fulfill({ status: 409, json: { code: '40001', message: 'Tag settings changed on another device.' } })
+        if (!settings) { settings = { user_id: user.id }; tables.metadata_preferences.push(settings) }
+        settings.tag_appearance = input.tagAppearance
+      }
+      return route.fulfill({ json: { tagAppearance: settings?.tag_appearance ?? null } })
+    }
     if (table === 'personal_rating_settings') {
       let settings = tables.metadata_preferences.find(row => row.user_id === user.id)
       const input = body?.p_input as Row | undefined

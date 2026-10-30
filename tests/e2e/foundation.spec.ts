@@ -52,7 +52,7 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
   if (mobile) {
     const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
-    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Import', 'Stats', 'Settings'])
+    await expect(nav.getByRole('link')).toHaveText(['Reading', 'Library', 'Offline', 'Import', 'Stats', 'Settings'])
     await expect(nav).toHaveCSS('position', 'fixed')
     const reservedHeight = await nav.evaluate(element => parseFloat(getComputedStyle(element.closest('.app-shell')!).getPropertyValue('--mobile-nav-height')))
     expect(reservedHeight).toBe(68)
@@ -66,7 +66,7 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   }
   await page.getByRole('button', { name: 'Profile Menu' }).click()
   await page.getByRole('link', { name: 'Features', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'The Next Chapters' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Features', exact: true })).toBeVisible()
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Log Out', exact: true }).click()

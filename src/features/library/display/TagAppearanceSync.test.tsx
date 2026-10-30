@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TagAppearanceSync } from './TagAppearanceSync'
-import { displaySnapshot, saveTagAppearance, tagAppearance, type TagAppearance } from './display-settings'
+import { displaySettingsKey, displaySnapshot, saveTagAppearance, tagAppearance, type TagAppearance } from './display-settings'
 const mocks = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('../../../lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }))
 let remote: TagAppearance | null
@@ -47,4 +47,13 @@ it('does not seed another account with the previous account’s format', async (
  render(<TagAppearanceSync userId="bob" />)
  await waitFor(() => expect(remote?.shape).toBe('bullets'))
  expect(tagAppearance(displaySnapshot()).shape).toBe('bullets')
+})
+
+it('does not write browser display settings when the account already matches the effective appearance', async () => {
+ render(<TagAppearanceSync userId="alice" />)
+ await waitFor(() => expect(remote?.shape).toBe('bullets'))
+ expect(localStorage.getItem(displaySettingsKey)).toBeNull()
+ act(() => window.dispatchEvent(new Event('focus')))
+ await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(3))
+ expect(localStorage.getItem(displaySettingsKey)).toBeNull()
 })

@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:unit": "vitest run src server",
     "test:db": "vitest run supabase/tests",
+    "test:offline": "npm run build && playwright test --config playwright.offline.config.ts",
     "test:e2e": "playwright test",
     "check:security": "node scripts/check-security.mjs",
     "check": "npm run lint && npm run build && npm test && npm run test:integration:config && npm run check:security",

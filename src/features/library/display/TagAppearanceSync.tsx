@@ -18,7 +18,7 @@ export function TagAppearanceSync({ userId }: { userId: string }) {
    const queued = localStorage.getItem(pendingKey)
    if (queued) { const saved = JSON.parse(queued); pending = saved.appearance; base = saved.base }
   } catch { /* Normal display storage remains usable without a pending cache. */ }
-  function apply(value: TagAppearance) { applying = true; try { saveTagAppearance(value) } finally { applying = false } }
+  function apply(value: TagAppearance) { if (same(value, tagAppearance(displaySnapshot()))) return; applying = true; try { saveTagAppearance(value) } finally { applying = false } }
   if (ownerChanged) apply(pending ?? seed)
   function queue(appearance: TagAppearance) {
    pending = appearance

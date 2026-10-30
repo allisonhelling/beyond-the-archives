@@ -39,6 +39,7 @@ vi.mock('../lib/supabase', () => ({
 }))
 
 beforeEach(() => {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
   preview.sample = false
   sessionStorage.clear()
   vi.clearAllMocks()
@@ -154,7 +155,7 @@ describe('private app access and navigation', () => {
     await screen.findByRole('heading', { name: 'Currently Reading' })
     expect(screen.getByRole('navigation', { name: 'Mobile Navigation' })).toBeInTheDocument()
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile Navigation' })
-    expect(within(mobileNav).getAllByRole('link').map(link => link.textContent)).toEqual(['Reading', 'Library', 'Import', 'Stats', 'Settings'])
+    expect(within(mobileNav).getAllByRole('link').map(link => link.textContent)).toEqual(['Reading', 'Library', 'Offline', 'Import', 'Stats', 'Settings'])
     await user.click(within(mobileNav).getByRole('link', { name: 'Library' }))
     expect(await screen.findByRole('heading', { name: 'Your Library' })).toBeVisible()
     expect(mobileNav).toBeInTheDocument()
@@ -262,4 +263,21 @@ it.each(['#ios-safari-userscript', '#ao3-browser-bar'])('scrolls the browser bar
     await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' }))
     expect(scroll.mock.contexts).toContain(heading.closest('section'))
   } finally { delete (HTMLElement.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView }
+})
+
+it('opens retained offline information without waiting for authentication', async () => {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  auth.getSession.mockReturnValue(new Promise(() => {}))
+  window.history.replaceState(null, '', '/stories/uncached')
+  render(<App />)
+  expect(await screen.findByRole('heading', { name: 'Offline' })).toBeVisible()
+  expect(screen.getByText(/No retained library is available/)).toBeVisible()
+  expect(document.querySelector('.loading-state')).not.toBeInTheDocument()
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+})
+it('offers retained access after an expired online session', async () => {
+  render(<App />)
+  await userEvent.click(await screen.findByRole('link', { name: 'Open Retained Offline Hub' }))
+  expect(await screen.findByRole('heading', { name: 'Offline' })).toBeVisible()
+  expect(screen.getByText(/Account operations require an online sign-in/)).toBeVisible()
 })

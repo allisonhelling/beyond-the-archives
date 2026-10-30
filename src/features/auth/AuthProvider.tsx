@@ -74,7 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (active) setNeedsPassword(true)
           if (active) window.history.replaceState(null, '', '/auth/callback')
         }
-        const { data, error: sessionError } = await client.auth.getSession()
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        const result = await Promise.race([
+          client.auth.getSession(),
+          new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Session check timed out.')), 8000) }),
+        ]).finally(() => clearTimeout(timeout))
+        const { data, error: sessionError } = result
         if (sessionError) throw sessionError
         if (active && !authEventReceived) setSession(data.session)
       } catch {
