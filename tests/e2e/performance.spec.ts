@@ -65,7 +65,7 @@ test('10,000-work library pages incrementally and restores a large page after de
  await expect(page.getByLabel('Search Title or Author',{exact:true})).toHaveValue('Story 09999')
  await page.keyboard.press('Escape')
  await expect(page.getByLabel('Search Title or Author',{exact:true})).toHaveValue('Story 09999')
- await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
+ await page.getByRole('button',{name:'Apply',exact:true}).click()
  await expect(page).toHaveURL(/query=Story(?:\+|%20)09999/)
  await expect(page.locator('.work-card')).toHaveCount(1)
  await expect(page.locator('.work-card h2')).toContainText('Story 09999')

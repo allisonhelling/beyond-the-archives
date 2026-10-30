@@ -24,18 +24,18 @@ import { ReadingFilterControls } from './ReadingFilterControls'
 import { filterReading, hasReadingFilters, inReadingSection, tracked, type ReadingFilters, type SortOrder } from './reading-search'
 
 const sortOptions: { value: SortOrder; label: string }[] = [
-  { value: 'added', label: 'Date Added' }, { value: 'added_reverse', label: 'Date Added (Oldest First)' },
-  { value: 'updated', label: 'Last Updated' }, { value: 'updated_reverse', label: 'Last Updated (Oldest First)' },
+  { value: 'added', label: 'Date Added' }, { value: 'added_reverse', label: 'Date Added • Oldest First' },
+  { value: 'updated', label: 'Last Updated' }, { value: 'updated_reverse', label: 'Last Updated • Oldest First' },
   { value: 'ready', label: 'Most Chapters Ready' }, { value: 'ready_reverse', label: 'Fewest Chapters Ready' },
   { value: 'random', label: 'Random' },
-  { value: 'alpha', label: 'Alphabetical' }, { value: 'alpha_reverse', label: 'Alphabetical (Z–A)' },
+  { value: 'alpha', label: 'Alphabetical' }, { value: 'alpha_reverse', label: 'Alphabetical • Z–A' },
 ]
 const groupOptions: { value: ReadingFilters['groupBy']; label: string }[] = [
   { value: 'none', label: 'None' }, { value: 'fandom', label: 'Fandom' },
   { value: 'author', label: 'Author' }, { value: 'series', label: 'Series' },
 ]
 function SortSelect({ value, onChange }: { value: SortOrder; onChange: (value: SortOrder) => void }) {
-  return <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
+  return <Dropdown fitContent label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
 }
 const mobileQuery = '(max-width: 650px)'
 const mobileSectionOrder: Partial<Record<string, number>> = { to_read: 4, waiting: 5, paused_reading: 6, view_all: 7 }

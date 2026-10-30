@@ -65,7 +65,7 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   await expect(page.locator('.story-card')).toHaveCount(16)
   await page.getByLabel('Search Metadata').fill('Story 009999')
   await expect(page.locator('.story-card')).toHaveCount(16)
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.getByLabel('Go to Page')).toHaveValue('1')
   await page.getByRole('button', { name: 'Manage EPUB', exact: true }).click()

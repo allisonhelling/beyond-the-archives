@@ -10,10 +10,10 @@ export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[
   if (chapter.kind === 'frontmatter') return null
   return chapter.number ?? (Number(chapter.title.match(/^Chapter\s+(\d+)(?:\b|:)/i)?.[1]) || chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length)
 }
-export type Book = { id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
+export type Book = { id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
-export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters'>
+export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
 export type CatalogBook = Omit<BookDetails, 'chapters' | 'history' | 'completed' | 'notes' | 'remote' | 'position'> & { position: Pick<ReadingPosition, 'chapter' | 'fraction'>; chapterCount: number; wordCount: number; completedCount: number }
 export function bookDetails(book: Book): BookDetails {
   const { file, resources: _resources, chapters, ...details } = book
@@ -68,4 +68,21 @@ export function withPublication<T extends BookDetails | Book>(book: T, remote?: 
   const publication = remote?.publication
   if (!publication || Date.parse(publication.at) < Date.parse(book.metadataAt)) return book
   return { ...book, metadata: { ...book.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters }, metadataAt: publication.at }
+}
+
+/** An unchanged file's resource paths can repair old section IDs without guessing. */
+export function repairChapterState(previous: Book | BookDetails, chapters: ChapterSummary[]): Pick<Book, 'position' | 'completed' | 'history' | 'resumeRequired'> {
+  function mapped(id: string) {
+    const old = previous.chapters.filter(chapter => chapter.id === id)
+    if (old.length !== 1) return
+    const matches = chapters.filter(chapter => chapter.path === old[0].path)
+    return matches.length === 1 ? matches[0] : undefined
+  }
+  const position = mapped(previous.position.chapter)
+  return {
+    position: position ? { ...previous.position, chapter: position.id } : { chapter: chapters[0].id, fraction: 0 },
+    completed: previous.completed.flatMap(id => { const chapter = mapped(id); return chapter ? [chapter.id] : [] }),
+    history: previous.history.map(event => ({ ...event, chapter: mapped(event.chapter)?.id ?? event.chapter })),
+    resumeRequired: Boolean(previous.resumeRequired || !position),
+  }
 }

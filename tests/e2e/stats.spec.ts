@@ -3,6 +3,8 @@ import { fixture, login } from './library-fixture'
 
 test('shows recorded stats, navigates periods, applies profile controls, and saves reading speed', async ({ page }, testInfo) => {
  const tables = await fixture(page)
+ const statsRequests: string[] = []
+ page.on('request', request => { if (request.url().includes('/rest/v1/')) statsRequests.push(new URL(request.url()).pathname.split('/').at(-1)!) })
  const metadata = { title: 'Stats Fic', authors: ['Stats Author'], fandoms: ['Stats Fandom'], rating: 'Mature', word_count: 2000, published_chapters: 2, total_chapters: 2, publication_status: 'complete', categories: ['Gen'], character_tags: ['Stats Character'], relationship_tags: [], additional_tags: ['Found Family'], ao3_tags: [], summary: '' }
  const chapter = (id: string, position: number, at: string, reread: boolean) => ({ id, action: 'chapter_read', chapter: position, chapter_id: null, at, word_count: 1000, is_reread: reread, status: 'finished' })
  tables.works.push({ id: 'stats-work', ao3_work_id: 123, verified_chapters: {} })
@@ -40,6 +42,7 @@ test('shows recorded stats, navigates periods, applies profile controls, and sav
   const dialog = page.getByRole('dialog', { name: yearly ? 'Choose a Year' : 'Choose a Month' })
   const input = dialog.getByLabel(yearly ? 'Exact Year' : 'Exact Month and Year', { exact: false })
   await expect(input).toBeFocused()
+  await expect(dialog.getByRole('button', { name: 'Go', exact: true })).toHaveCount(0)
   await input.fill(value)
   await input.press('Enter')
   await expect(dialog).toHaveCount(0)
@@ -47,7 +50,19 @@ test('shows recorded stats, navigates periods, applies profile controls, and sav
  await expect(page.getByLabel('Exact Month and Year', { exact: false })).toHaveCount(0)
  await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toHaveCount(0)
  await enterPeriod('10/2026')
+ expect(statsRequests.filter(name => name === 'reading_stats_works')).toHaveLength(1)
+ expect(statsRequests).not.toContain('work_tags')
  const dateButton = page.getByRole('button', { name: 'October 2026', exact: true })
+ const viewSize = await page.getByRole('combobox', { name: 'View', exact: true }).locator('..').evaluate(node => getComputedStyle(node).fontSize)
+ await expect(dateButton).toHaveCSS('font-size', viewSize)
+ await dateButton.focus()
+ await expect(dateButton).toHaveCSS('text-decoration-line', 'underline')
+ await expect(page.locator('.stats-statuses > div').nth(1)).toHaveCSS('border-left-width', '1px')
+ for (const category of await page.locator('.stats-statuses > div').all()) {
+  await expect(category).toHaveCSS('text-align', 'center')
+  const count = (await category.locator('strong').boundingBox())!, label = (await category.locator('span').boundingBox())!
+  expect(Math.abs(count.x + count.width / 2 - label.x - label.width / 2)).toBeLessThan(1)
+ }
  const calendar = page.getByRole('button', { name: 'Choose Period' })
  await expect(calendar).toHaveText('')
  const labelBox = (await dateButton.boundingBox())!, calendarBox = (await calendar.boundingBox())!
@@ -128,6 +143,9 @@ test('shows recorded stats, navigates periods, applies profile controls, and sav
  await openSection('Trends Over Time')
  await expect(page.getByRole('columnheader', { name: '2025', exact: true })).toBeVisible()
  await expect(page.getByRole('columnheader', { name: '2026', exact: true })).toBeVisible()
+ await expect(page.getByRole('button', { name: 'Today', exact: true })).toHaveCount(0)
+ await expect(page.locator('.stats-controls > strong')).toHaveCount(0)
+ await page.getByRole('combobox', { name: 'View', exact: true }).selectOption('monthly')
  await page.getByRole('button', { name: 'Today', exact: true }).click()
  await expect(page.getByRole('combobox', { name: 'View', exact: true })).toHaveValue('monthly')
  const current = await page.evaluate(() => new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' }))

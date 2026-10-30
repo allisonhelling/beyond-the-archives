@@ -20,3 +20,17 @@ export async function epubBuffer(files = epubFiles()): Promise<ArrayBuffer> {
   reader.readAsArrayBuffer(blob)
  })
 }
+
+/** AO3-style repeated author notes precede distinct chapter prose. */
+export function chapterNotesFiles() {
+ const files = epubFiles()
+ files[2].content = files[2].content.replace('</manifest>', '<item id="notes" href="notes.xhtml" media-type="application/xhtml+xml"/><item id="chapter2" href="chapter2.xhtml" media-type="application/xhtml+xml"/><item id="chapter3" href="chapter3.xhtml" media-type="application/xhtml+xml"/></manifest>').replace('<itemref idref="chapter"/>', '<itemref idref="notes"/><itemref idref="chapter"/><itemref idref="chapter2"/><itemref idref="chapter3"/>')
+ const note = '<blockquote class="userstuff"><p>The same opening author note.</p></blockquote>'
+ files.push({ name: 'OEBPS/notes.xhtml', content: `<html><body><h2>Notes:</h2>${note}</body></html>` })
+ for (const number of [1, 2, 3]) {
+  const content = `<html><body><div class="chapter"><h2 class="title">Chapter ${number}</h2>${number > 1 ? `<div class="chapter preface group"><div id="notes" class="notes module">${note}</div></div>` : ''}<div class="userstuff module"><p>${number === 1 ? 'First chapter prose.' : 'Repeated chapter prose.'}</p></div></div></body></html>`
+  if (number === 1) files[4].content = content
+  else files.push({ name: `OEBPS/chapter${number}.xhtml`, content })
+ }
+ return files
+}

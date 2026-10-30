@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { webcrypto } from 'node:crypto'
-import { epubBuffer, epubFiles } from '../../src/test/epub-fixture'
+import { chapterNotesFiles, epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub, sanitize } from '../src/epub'
-import { completionStatus, replaceBook, withPublication } from '../src/model'
+import { completionStatus, replaceBook, withPublication, repairChapterState } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 async function book() { const buffer = await epubBuffer(); return importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File) }
 describe('EPUB import and rendering', () => {
@@ -70,4 +70,34 @@ it('rejects ambiguous chapter identities and uses newer publication snapshots wi
   const replaced = replaceBook({ ...next, remote: { id: 'entry', version: '1', status: 'reading', progress: 0, notes: '', publication: { metadata: next.metadata, at: next.metadataAt } } }, b)
   expect(replaced.metadata.published_chapters).toBe(10)
   expect(completionStatus(next)).toBe('reading')
+})
+
+it('keeps notes and chapters distinct even when notes or chapter prose repeat', async () => {
+  const buffer = await epubBuffer(chapterNotesFiles())
+  const imported = await importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File)
+  expect(new Set(imported.chapters.map(chapter => chapter.id)).size).toBe(imported.chapters.length)
+  const notes = imported.chapters.find(chapter => chapter.title === 'Notes:')!
+  expect(notes.kind).toBe('frontmatter')
+  const first = imported.chapters.find(chapter => chapter.title === 'Chapter 1')!
+  const second = imported.chapters.find(chapter => chapter.title === 'Chapter 2')!
+  expect(first.id).not.toBe(second.id)
+  expect(second.id).not.toBe(notes.id)
+  expect(second.words).toBe(3)
+  expect(second.ao3Id).toBeNull()
+  expect(second.number).toBeNull()
+})
+it('repairs old section identities by file path while preserving history and flagging ambiguous resume positions', async () => {
+  const buffer = await epubBuffer(chapterNotesFiles())
+  const imported = await importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File)
+  const second = imported.chapters.find(chapter => chapter.title === 'Chapter 2')!
+  const old = { ...imported, chapters: imported.chapters.map(chapter => chapter === second || chapter.title === 'Notes:' ? { ...chapter, id: 'colliding-notes-id' } : chapter), position: { chapter: 'colliding-notes-id', fraction: .5 }, completed: ['colliding-notes-id'], history: [{ id: 'read', chapter: 'colliding-notes-id', at: imported.importedAt, words: 3, reread: false }] }
+  const ambiguous = repairChapterState(old, imported.chapters)
+  expect(ambiguous.resumeRequired).toBe(true)
+  expect(ambiguous.completed).toEqual([])
+  expect(ambiguous.history).toEqual(old.history)
+  old.chapters = old.chapters.map(chapter => chapter.path === second.path ? { ...chapter, id: 'old-chapter-two' } : chapter)
+  const clear = repairChapterState({ ...old, position: { chapter: 'old-chapter-two', fraction: .5 }, completed: ['old-chapter-two'] }, imported.chapters)
+  expect(clear.resumeRequired).toBe(false)
+  expect(clear.position).toEqual({ chapter: second.id, fraction: .5 })
+  expect(clear.completed).toEqual([second.id])
 })

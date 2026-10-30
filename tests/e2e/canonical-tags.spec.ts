@@ -22,7 +22,7 @@ test('orders standard tags first and matches verified aliases without merging re
  await standard.getByRole('button',{name:names[0],exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(4)
  await page.keyboard.press('Escape')
- await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
+ await page.getByRole('button',{name:'Apply',exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(3)
  await expect(page.getByRole('link',{name:'Tagged story 3',exact:true})).toHaveCount(0)
  for(const i of [0,1,2])await expect(page.getByRole('link',{name:`Tagged story ${i}`,exact:true})).toBeVisible()

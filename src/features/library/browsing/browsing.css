@@ -7,8 +7,8 @@
 .pagination-leading { grid-column: 1; grid-row: 1; min-width: 0; }
 .pagination-leading + .pagination-page { grid-row: 2; }
 .pagination-trailing { grid-column: 3; justify-self: end; min-width: 0; gap: 0; }
-.pagination-inline .pagination-controls > [role=status] { white-space: nowrap; text-align: center; }
-.pagination-inline .pagination-page { display: inline-flex; vertical-align: middle; }
+.pagination-controls > [role=status] { min-width: 0; white-space: normal; text-align: center; }
+.pagination-controls .pagination-page { display: inline-flex; vertical-align: middle; }
 .pagination-controls { grid-column: 2; white-space: nowrap; }
 .pagination-page { grid-column: 1; justify-self: start; white-space: nowrap; }
 .pagination-page input { width: 3.5rem; padding-inline: 4px; appearance: textfield; -moz-appearance: textfield; }

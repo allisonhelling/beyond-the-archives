@@ -34,6 +34,7 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      reading_stats_works: { Args: { p_after?: string; p_limit?: number }; Returns: Json }
       reader_offline_snapshot: { Args: Record<string, never>; Returns: Json }
       review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number }; Returns: Json }
       mark_work_deleted: { Args: { p_entry: string; p_job: string }; Returns: undefined }

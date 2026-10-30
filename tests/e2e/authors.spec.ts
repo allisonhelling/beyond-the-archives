@@ -40,7 +40,7 @@ test('author pages automatically group saved fics and reuse library filters, pag
  await expect(page.getByRole('button', { name: 'Save as Author Default', exact: true })).toBeVisible()
  await page.getByRole('button', { name: 'Favorites', exact: true }).click()
  await expect(page.locator('.story-card')).toHaveCount(3)
- await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+ await page.getByRole('button', { name: 'Apply', exact: true }).click()
  await expect(page.locator('.story-card')).toHaveCount(1)
  await expect(page.getByRole('heading', { name: 'Saved Fic 00', exact: true })).toBeVisible()
  await page.getByRole('button', { name: 'Clear All Filters', exact: true }).first().click()

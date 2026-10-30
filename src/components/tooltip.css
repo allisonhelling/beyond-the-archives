@@ -1,6 +1,7 @@
 .action-tooltip { position: relative; display: inline-flex; flex-shrink: 0; }
 .action-tooltip-content { position: absolute; z-index: 10; left: 50%; transform: translate(calc(-50% + var(--tooltip-shift, 0px)), var(--tooltip-y-shift, 0px)); bottom: calc(100% + 6px); width: max-content; max-width: min(220px, var(--tooltip-boundary-width, calc(100vw - 64px))); padding: 8px 10px; border: 1px solid #d8bb8d; border-radius: var(--radius-surface); background: #382b2b; color: #fff4de; box-shadow: 0 3px 10px #28000030; font: 13px/1.4 var(--font-sans); text-align: center; white-space: normal; text-transform: none; letter-spacing: normal; }
 .action-tooltip-content[data-portal] { position: fixed; left: var(--tooltip-shift, 0px); top: var(--tooltip-y-shift, 0px); bottom: auto; transform: none; }
+.action-tooltip-content[data-preview-portal] { transform: scale(var(--tooltip-preview-scale, 1)); transform-origin: top left; }
 .action-tooltip-content::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 6px; }
 .action-tooltip[data-placement="bottom"] .action-tooltip-content { top: calc(100% + 6px); bottom: auto; }
 .action-tooltip[data-placement="bottom"] .action-tooltip-content::after { top: auto; bottom: 100%; }

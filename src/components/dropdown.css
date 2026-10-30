@@ -5,8 +5,8 @@
 .dropdown-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
 .dropdown-trigger > span { min-width: 0; overflow-wrap: anywhere; }
 .dropdown-trigger > svg { flex-shrink: 0; }
-.dropdown-fit-content .dropdown-trigger > span { display: grid; overflow: visible; text-overflow: clip; }
-.dropdown-fit-content .dropdown-trigger > span > span, .dropdown-option-sizer > span { grid-area: 1 / 1; }
+.dropdown-fit-content:not(.dropdown-compact) .dropdown-trigger > span { display: grid; overflow: visible; text-overflow: clip; }
+.dropdown-fit-content:not(.dropdown-compact) .dropdown-trigger > span > span, .dropdown-option-sizer > span { grid-area: 1 / 1; }
 .dropdown-option-sizer { display: grid; visibility: hidden; white-space: nowrap; }
 .dropdown-option-sizer > span::after { content: attr(data-label); }
 .dropdown-fit-content .dropdown-panel { width: max-content; min-width: 100%; max-width: calc(100vw - 64px); }

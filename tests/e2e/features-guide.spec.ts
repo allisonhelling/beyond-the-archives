@@ -115,7 +115,7 @@ test('passive surfaces are square and progress sections are centered and divided
  const mobile = page.viewportSize()!.width <= 600
  await expect(sections.nth(1)).toHaveCSS(mobile ? 'border-top-width' : 'border-left-width', '1px')
  const headingFont = await page.getByRole('heading', { name: 'Layout Story', exact: true }).evaluate(element => getComputedStyle(element).fontFamily)
- await expect(panel.getByRole('heading', { name: 'Your Progress', exact: true })).toHaveCSS('font-family', headingFont)
+ await expect(panel.getByRole('heading', { name: 'Reading and Organization', exact: true })).toHaveCSS('font-family', headingFont)
  await expect(panel.locator('.rating-heading')).toHaveCSS('font-family', headingFont)
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
  await page.screenshot({ path: test.info().outputPath('progress-layout.png'), fullPage: true })

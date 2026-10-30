@@ -3,6 +3,7 @@ import { parseWorkUrl } from '../../src/features/imports/urls'
 import { chapterWordCount } from '../../src/features/library/chapter-word-count'
 import { openZip, zipMaxBytes } from '../../src/lib/zip'
 import { blankMetadata, type Book, type Chapter } from './model'
+export const chapterVersion = 2
 const parse = (text: string) => { if (/<!ENTITY/i.test(text)) throw new Error('Unsupported XML entities.'); const doc = new DOMParser().parseFromString(text.replace(/<!DOCTYPE[^>]*>/gi, ''), 'application/xml'); if (doc.querySelector('parsererror')) throw new Error('Invalid EPUB XML.'); return doc }
 const elements = (doc: Document, name: string) => [...doc.getElementsByTagNameNS('*', name)]
 export function resourcePath(base: string, href: string) { const url = new URL(href, `https://epub.invalid/${base}`); if (url.origin !== 'https://epub.invalid' || url.search) throw new Error('External EPUB resource.'); return decodeURIComponent(url.pathname.slice(1)) }
@@ -55,14 +56,24 @@ export async function importEpub(file: File): Promise<Book> {
     const heading = body.querySelector('.chapter h2, h2.title, h2.heading, h1'), chapterLink = heading?.querySelector('a[href]')?.getAttribute('href') ?? ''
     const match = chapterLink.match(/archiveofourown\.org\/works\/([1-9]\d*)\/chapters\/([1-9]\d*)/)
     const number = heading?.textContent?.match(/^\s*(?:Chapter\s+)?(\d+)[.:\s–-]/i)
-    const prose = body.querySelector('.chapter > .userstuff, #chapters > .userstuff, .userstuff:not(.summary):not(.notes)') ?? body
+    const prose = [...body.querySelectorAll('.userstuff')].find(node => !node.closest('.notes, .summary, #notes')) ?? body
     const text = prose.textContent?.replace(/\s+/g, ' ').trim() ?? ''
     const ao3Id = match && identities.size === 1 && identities.has(match[1]) ? match[2] : null
-    chapters.push({ kind: body.matches('.fff_titlepage, .fff_tocpage, .fff_logpage, .fff_coverpage') || body.querySelector('#preface, dl.tags') && !body.querySelector('.userstuff') ? 'frontmatter' : 'chapter', id: ao3Id ? `ao3:${ao3Id}` : `text:${await digest(new TextEncoder().encode(text).buffer)}`, ao3Id, number: match && number ? Number(number[1]) : null, title, html: sanitize(doc, item.path, resources), words: chapterWordCount(prose), path: item.path })
+    chapters.push({ kind: body.matches('.fff_titlepage, .fff_tocpage, .fff_logpage, .fff_coverpage') || /(?:^|\/)(?:titlepage|cover)\.(?:xhtml|html)$/i.test(item.path) || /^Notes:?$/i.test(title) || body.querySelector('#preface, dl.tags') && !body.querySelector('.userstuff') ? 'frontmatter' : 'chapter', id: ao3Id ? `ao3:${ao3Id}` : `text:${await digest(new TextEncoder().encode(text).buffer)}`, ao3Id, number: match && number ? Number(number[1]) : null, title, html: sanitize(doc, item.path, resources), words: chapterWordCount(prose), path: item.path })
+  }
+  // Equal prose or repeated source links must still address separate spine sections.
+  const counts = new Map<string, number>()
+  for (const chapter of chapters) counts.set(chapter.id, (counts.get(chapter.id) ?? 0) + 1)
+  const used = new Set<string>()
+  for (const chapter of chapters) {
+    const base = counts.get(chapter.id)! > 1 ? `${chapter.id}:resource:${encodeURIComponent(chapter.path)}` : chapter.id
+    let id = base, occurrence = 1
+    while (used.has(id)) id = `${base}:${++occurrence}`
+    chapter.id = id; used.add(id)
   }
   if (!chapters.length) throw new Error('No readable chapters found.')
   const metadata = { ...blankMetadata, title: elements(opf, 'title')[0]?.textContent || 'Untitled', authors: elements(opf, 'creator').map(el => el.textContent || ''), ao3_tags: elements(opf, 'subject').map(el => el.textContent || '') }
   // Reuse the organizer's richer AO3 extraction, while allowing standalone anthologies.
   try { const { readEpub } = await import('../../src/features/imports/epub'); Object.assign(metadata, (await readEpub(buffer)).metadata) } catch (error) { if (!(error instanceof Error) || !error.message.includes('multiple AO3 works')) throw error }
-  return { id: await digest(buffer), workId: identities.size === 1 ? [...identities][0] : null, active: true, metadata: mergeMetadata(metadata, extraMetadata), metadataVersion, chapters, resources, file, importedAt: new Date().toISOString(), metadataAt: new Date().toISOString(), position: { chapter: chapters[0].id, fraction: 0 }, completed: [], history: [], status: 'to_read', notes: '', collections: [] }
+  return { id: await digest(buffer), workId: identities.size === 1 ? [...identities][0] : null, active: true, chapterVersion, metadata: mergeMetadata(metadata, extraMetadata), metadataVersion, chapters, resources, file, importedAt: new Date().toISOString(), metadataAt: new Date().toISOString(), position: { chapter: chapters[0].id, fraction: 0 }, completed: [], history: [], status: 'to_read', notes: '', collections: [] }
 }

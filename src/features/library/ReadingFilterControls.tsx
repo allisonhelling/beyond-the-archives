@@ -95,7 +95,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
       <FandomSelect label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       {mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
-      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply Filters</button>}
+      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply</button>}
       {!alwaysExpanded && <button type="button" className={`button filter-toggle ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>}
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series Filters' : mode === 'library' ? 'Library Filters' : 'Reading Filters'}><div className="filter-grid">
@@ -105,13 +105,12 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
 
       <SearchSuggestions label="Personal Tags" placeholder="Search personal tags" value={filters.personalTags ?? ''} onChange={value => change('personalTags', value)} groups={[{ label: 'Personal Tags', values: suggestions?.personalTags ?? localPersonalTags }]} multiple chips keepOpen hideHeadings />
 
-      <div className="filter-choice-row">
+      <div className={`filter-choice-row${automaticCollection ? '' : ' filter-choices-beside-tags'}`}>
       <Dropdown fitContent label="Content Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
       <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
       {automaticCollection && oneShotControl}
       <Dropdown fitContent label={mode !== 'reading' ? 'Publication Status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
-      {!automaticCollection && oneShotControl}
-      {!automaticCollection && membershipToggles}
+      {!automaticCollection && <>{oneShotControl}{membershipToggles}</>}
       </div>
       <div className={automaticCollection ? "filter-date-options" : "filter-date-only"}>
         {automaticCollection && <div className="filter-choice-row filter-membership-toggles">{membershipToggles}</div>}

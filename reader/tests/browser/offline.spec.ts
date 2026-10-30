@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
-import { epubFiles } from '../../../src/test/epub-fixture'
+import { chapterNotesFiles, epubFiles } from '../../../src/test/epub-fixture'
 async function fixture(rich = false) {
   const files: { name: string; content: string | Uint8Array<ArrayBuffer> }[] = epubFiles()
   files[2].content = String(files[2].content).replace('<manifest>', '<manifest><item id="image" href="image.png" media-type="image/png"/>')
@@ -53,7 +53,7 @@ test('imports, reads, changes layout, and cold-starts offline with saved history
   await offline.goto('/')
   await expect(offline.getByRole('heading', { name: 'Recovered & Remembered' })).toBeVisible()
   await offline.getByLabel('Search Metadata').fill('Recovered Fandom')
-  await offline.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await offline.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(offline.locator('.story-card')).toHaveCount(1)
   await offline.getByRole('button', { name: 'Continue Reading' }).click()
   await expect(offline.getByLabel('Book Content')).toBeVisible()
@@ -152,7 +152,7 @@ test('filters rich EPUB metadata offline with ranges, dates, exclusions and rese
   await expect(page.getByText('it does not mean EPUB 2 or 3', { exact: false })).toHaveCount(0)
   await page.getByLabel('Updated From', { exact: true }).fill('2020-05-18')
   await page.getByLabel('Updated Through', { exact: true }).fill('2020-05-18')
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.getByLabel('AO3 Collection', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Work Link', { exact: true })).toHaveCount(0)
@@ -168,7 +168,7 @@ test('filters rich EPUB metadata offline with ranges, dates, exclusions and rese
   await page.getByRole('checkbox', { name: 'Edward Elric (1)', exact: true }).check()
   await page.keyboard.press('Escape')
   await expect(page.locator('.story-card')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'No Matching Stories' })).toBeVisible()
   await page.getByRole('button', { name: 'Clear All Filters' }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
@@ -596,7 +596,7 @@ test('shows removable applied filters below the box and keeps them visible when 
   await page.getByLabel('Minimum Words', { exact: true }).fill('50000')
   const applied = page.getByLabel('Active Filters', { exact: true })
   await expect(applied).toHaveCount(0)
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(applied).toContainText('Search: Recovered')
   await expect(applied).toContainText('Author: metisket')
   await expect(applied).toContainText('Words From: 50000')
@@ -634,7 +634,7 @@ test('offers all organizer tag styles plus the filled-chip default and persists 
   await expect(page.locator('.story-card .metadata-tags')).toHaveAttribute('data-tag-shape', 'commas')
   await expect(page.locator('.story-card .tag-separator').first()).toContainText(',')
   await page.getByLabel('Search Metadata').fill('Recovered')
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.getByLabel('Active Filters').locator('.metadata-tags')).toHaveAttribute('data-tag-shape', 'commas')
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
@@ -699,7 +699,7 @@ test('preserves summary formatting on the shelf and in work details', async ({ p
   expect(await details.innerText()).toContain('Last paragraph.')
 })
 
-test('waits for Apply Filters with the panel hidden and preserves results for invalid drafts', async ({ page }) => {
+test('waits for Apply with the panel hidden and preserves results for invalid drafts', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'pending-filters.epub', mimeType: 'application/epub+zip', buffer: await fixture(true) })
   await expect(page.getByLabel('Book Content')).toBeVisible()
@@ -707,19 +707,19 @@ test('waits for Apply Filters with the panel hidden and preserves results for in
   await page.getByLabel('Search Metadata').fill('No such story')
   await expect(page.locator('.story-card')).toHaveCount(1)
   await expect(page.getByLabel('Active Filters')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(0)
   await page.getByRole('button', { name: 'Clear All Filters', exact: true }).click()
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   await page.getByText('Length & Popularity', { exact: true }).click()
   await page.getByLabel('Minimum Words', { exact: true }).fill('60000')
   await page.getByLabel('Maximum Words', { exact: true }).fill('50000')
-  await expect(page.getByRole('button', { name: 'Apply Filters', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
   await expect(page.locator('.story-card')).toHaveCount(1)
   await page.getByLabel('Maximum Words', { exact: true }).fill('70000')
   await page.getByRole('region', { name: 'Bookshelf Filters' }).getByRole('button', { name: 'Hide', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(0)
 })
 test('reports verified local files by stable installation identity and replaces reports after removal', async ({ page, context }) => {
@@ -742,4 +742,70 @@ test('reports verified local files by stable installation identity and replaces 
   await page.getByRole('button', { name: 'Remove Download', exact: true }).click()
   await expect.poll(() => reports.at(-1)?.works).toEqual([])
   expect(reports.at(-1)?.installationId).toBe(identity)
+})
+
+test('navigates repeated author notes and identical prose as separate chapters', async ({ page, context }) => {
+  const file = { name: 'chapter-notes.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await createZip(chapterNotesFiles()).arrayBuffer()) }
+  await page.goto('/')
+  await page.getByLabel('Import EPUB File').setInputFiles(file)
+  await expect(page.getByLabel('Book Content')).toBeVisible()
+  await page.getByLabel('Chapter', { exact: true }).selectOption({ label: 'Chapter 2' })
+  const top = page.getByRole('navigation', { name: 'Top Chapter Navigation' })
+  await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 2')
+  await top.getByRole('button', { name: 'Next Chapter →', exact: true }).click()
+  await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 3')
+  await top.getByRole('button', { name: '← Previous Chapter', exact: true }).click()
+  await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 2')
+  await expect(page.getByLabel('Book Content')).toContainText('Repeated chapter prose.')
+  await expect(page.getByLabel('Book Content')).toContainText('The same opening author note.')
+  await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
+  await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await context.setOffline(true)
+  await page.reload()
+  await page.getByRole('button', { name: 'Continue Reading' }).click()
+  await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 2')
+})
+test('repairs a previously saved duplicate chapter ID and retains history offline', async ({ page, context }) => {
+  await page.goto('/')
+  await page.getByLabel('Import EPUB File').setInputFiles({ name: 'legacy-notes.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await createZip(chapterNotesFiles()).arrayBuffer()) })
+  await expect(page.getByLabel('Book Content')).toBeVisible()
+  await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error) })
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['books', 'contents', 'catalog'], 'readwrite')
+      for (const storeName of ['books', 'contents', 'catalog']) {
+        const store = tx.objectStore(storeName), request = store.getAll()
+        request.onsuccess = () => {
+          const book = request.result[0]
+          delete book.chapterVersion
+          if (book.chapters) for (const chapter of book.chapters) if (chapter.title === 'Notes:' || chapter.title === 'Chapter 2') chapter.id = 'legacy-collision'
+          if (book.position) book.position = { chapter: 'legacy-collision', fraction: .4 }
+          if (book.history) { book.history = [{ id: 'legacy-read', chapter: 'legacy-collision', at: '2026-01-01T00:00:00Z', words: 3, reread: false }]; book.completed = ['legacy-collision'] }
+          store.put(book)
+        }
+      }
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  })
+  await page.evaluate(async () => { await navigator.serviceWorker.ready })
+  await context.setOffline(true)
+  await page.reload()
+  await page.getByRole('button', { name: 'Continue Reading' }).click()
+  const resume = page.getByRole('dialog', { name: 'Choose Where to Resume' })
+  await expect(resume).toBeVisible()
+  await resume.getByLabel('Resume At').selectOption({ label: 'Chapter 2' })
+  await resume.getByRole('button', { name: 'Resume Reading', exact: true }).click()
+  const top = page.getByRole('navigation', { name: 'Top Chapter Navigation' })
+  await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 2')
+  await top.getByRole('button', { name: 'Next Chapter →', exact: true }).click()
+  await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 3')
+  const history = await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+    const books = await new Promise<{ history: { id: string }[] }[]>(resolve => { const request = db.transaction('books').objectStore('books').getAll(); request.onsuccess = () => resolve(request.result) })
+    db.close(); return books[0].history
+  })
+  expect(history).toHaveLength(1)
+  expect(history[0].id).toBe('legacy-read')
 })

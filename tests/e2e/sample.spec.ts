@@ -10,7 +10,7 @@ async function showSeries(page: Page) {
  const toggle = page.getByRole('button', { name: 'Show Series', exact: true })
  if (await toggle.getAttribute('aria-pressed') === 'false') {
   await toggle.click()
-  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
  }
 }
 
@@ -136,10 +136,10 @@ test('series share work layouts, search contained fics, organize independently a
  await expect(text.nth(0)).toBeVisible(); await expect(text.nth(1)).toBeVisible()
  await expect(card.getByRole('link', { name: 'View Saved Work: Play It Again', exact: true }).locator('.lucide-book-open-text')).toBeVisible()
  const search = page.getByLabel('Search Title or Author', { exact: true })
- await search.fill("This Doesn't Hurt"); await page.getByRole('button', { name: 'Apply Filters', exact: true }).click(); await expect(card).toHaveCount(1)
- await search.fill('Missing story'); await page.getByRole('button', { name: 'Apply Filters', exact: true }).click(); await expect(card).toHaveCount(0)
+ await search.fill("This Doesn't Hurt"); await page.getByRole('button', { name: 'Apply', exact: true }).click(); await expect(card).toHaveCount(1)
+ await search.fill('Missing story'); await page.getByRole('button', { name: 'Apply', exact: true }).click(); await expect(card).toHaveCount(0)
  await search.fill('')
- await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+ await page.getByRole('button', { name: 'Apply', exact: true }).click()
  await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
  await card.getByRole('button', { name: 'Mark Favorite', exact: true }).click()
  await expect(card.getByRole('button', { name: 'Unmark Favorite', exact: true })).toBeVisible()
@@ -166,10 +166,10 @@ test('series share work layouts, search contained fics, organize independently a
  await page.goto('/library?shelf=series')
  await page.locator('.reading-toolbar').getByRole('button', { name: 'Filters', exact: true }).click()
  await page.getByLabel('Search Within Results', { exact: true }).fill('accidentally adopted')
- await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+ await page.getByRole('button', { name: 'Apply', exact: true }).click()
  await expect(card).toHaveCount(1)
  await page.getByLabel('Search Within Results', { exact: true }).fill('nonexistent summary')
- await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
+ await page.getByRole('button', { name: 'Apply', exact: true }).click()
  await expect(card).toHaveCount(0)
  await page.getByRole('button', { name: 'Clear All Filters', exact: true }).first().click()
  await card.getByRole('link', { name: 'View Series Details', exact: true }).click()
@@ -221,7 +221,7 @@ test('series summary links open work details and work headings and collection ed
  await expect(page).toHaveURL(/\/stories\/sample-entry-862320$/)
  const panel = page.getByRole('region', { name: 'Reading and Organization' })
  await expect(page.locator('.details-story-stats > div').filter({ has: page.getByText('Date Updated', { exact: true }) }).locator('dd')).toHaveText('Jul 12, 2013')
- const progress = panel.getByRole('heading', { name: 'Your Progress', exact: true })
+ const progress = panel.getByRole('heading', { name: 'Reading and Organization', exact: true })
  const typography = await progress.evaluate(el => {const s = getComputedStyle(el);return {size:s.fontSize,family:s.fontFamily,weight:s.fontWeight,color:s.color,transform:s.textTransform,spacing:s.letterSpacing}})
  for (const label of [panel.locator('.status-select .details-control-heading'), panel.locator('.rating-heading')]) {
   await expect(label).toHaveCSS('font-size', typography.size)
@@ -300,7 +300,7 @@ test('series status follows individual work status changes and headers show date
  await expect(updated.locator('dd')).toHaveText('Aug 09, 2020')
  const progress = page.getByRole('region',{name:'Reading and Organization'})
  await expect(progress.locator('.series-reading-status')).toHaveText('To Read')
- const heading = (await progress.getByRole('heading',{name:'Your Progress',exact:true}).boundingBox())!
+ const heading = (await progress.getByRole('heading',{name:'Reading and Organization',exact:true}).boundingBox())!
  const collections = (await progress.getByRole('heading',{name:'Collections',exact:true}).boundingBox())!
  if (page.viewportSize()!.width > 600) {
   expect(Math.abs(heading.y-collections.y)).toBeLessThan(3)

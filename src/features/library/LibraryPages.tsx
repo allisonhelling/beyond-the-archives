@@ -476,7 +476,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
     {editing ? <StoryForm key={`${story.id}-${editing}`} story={story} section={editing} onCancel={() => editSection(null)} /> : <>
 <DisplayInfo group="workPage">{{
       progress: <>       <section className="settings-card details-progress-panel" aria-label="Reading and Organization">
-        <div className="story-section-heading"><h2>Your Progress</h2></div>
+        <div className="story-section-heading"><h2>Reading and Organization</h2></div>
         <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />
         <div className="details-reading-controls progress-sections">{readingStatus}<div className="progress-rating">{rating}</div>{collectionsField}</div>
       </section> </>,
@@ -487,7 +487,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <dl className="metadata-list details-fic-fields">
 <DisplayInfo group="workInfo">{{
       ...workMetadataFields(story, 'info'),
-      bookfusion: <div><dt className="editable-field-heading"><span>BookFusion Link</span><button className="text-button" onClick={() => editSection('metadata')} aria-label="Edit BookFusion Link"><Pencil size={14} aria-hidden="true" /></button></dt><dd>
+      bookfusion: <div><dt className="editable-field-heading"><span>BookFusion Link</span><button className="icon-button inline-edit-icon" onClick={() => editSection('metadata')} aria-label="Edit BookFusion Link"><Pencil size={14} aria-hidden="true" /></button></dt><dd>
         <p className="field-help">{story.metadata.bookfusion_link ? story.metadata.bookfusion_link.kind === 'bookmark' ? 'Bookmark · opens a fixed location.' : 'Book · opens without a fixed location; BookFusion manages your reading position.' : 'Upload your EPUB to BookFusion, then add its reader or content link here.'}</p>
         <BookFusionButton value={story.metadata.bookfusion_link} label />
       </dd></div>,

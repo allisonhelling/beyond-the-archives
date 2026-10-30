@@ -314,6 +314,15 @@ test('tag shape choices and short dividers save from the real work preview', asy
   await expect(tags).toContainText('Batfamily Feels • Bruce Wayne is a Good Dad')
   const choices=page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true}).getByRole('group',{name:'Tag Shape',exact:true})
   await expect(choices.locator('.metadata-tag')).toHaveCount(12)
+  const options = choices.locator('.tag-shape-option')
+  await expect(options).toHaveCount(6)
+  const tops = await options.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top))
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1)
+  await expect(choices).toHaveCSS('padding-top', '8px')
+  const unselected = options.filter({ hasText: 'Filled Chips' })
+  const fill = await unselected.evaluate(node => getComputedStyle(node).backgroundColor)
+  await unselected.focus()
+  await expect(unselected).not.toHaveCSS('background-color', fill)
   await choices.getByRole('button',{name:'Humor Fluff Sharp Rectangles',exact:true}).click()
   await expect(tags).toHaveAttribute('data-tag-shape','sharp')
   await expect(tags.locator('.metadata-tag').first()).toHaveCSS('border-radius','0px')
@@ -445,6 +454,12 @@ test('preview tiles match live tile widths and grouped-line indentation',async({
  await setup(page)
  await page.evaluate(() => { const raw = JSON.parse(localStorage.getItem('between-chapters:display:v1') ?? '{}'); raw.previewViewports = { mobile: { width: innerWidth, height: innerHeight }, desktop: { width: innerWidth, height: innerHeight } }; localStorage.setItem('between-chapters:display:v1', JSON.stringify(raw)); dispatchEvent(new Event('between-chapters:display-changed')) })
  const previewWidths=await Promise.all(['Work','Series'].map(async kind=>await editor(page,`${kind} Tile`).frameLocator('iframe').locator('article').first().evaluate(node => node.getBoundingClientRect().width)))
+ for (const kind of ['Work', 'Series']) {
+  const preview = editor(page, `${kind} Tile`).frameLocator('iframe')
+  const card = preview.locator('article').first()
+  expect(await card.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
+  for (const line of await card.locator('hr:visible').all()) expect(await line.evaluate(node => node.getBoundingClientRect().right <= node.closest('article')!.getBoundingClientRect().right)).toBe(true)
+ }
  const previewInset=await field(editor(page,'Work Tile'),'workTile','line:facts').evaluate(node=>node.getBoundingClientRect().left-node.closest('article')!.getBoundingClientRect().left)
  await page.goto('/reading')
  const live=page.locator('.work-card').first()
@@ -485,13 +500,16 @@ test('editor actions are centered, subsection titles interrupt borders, and cate
   const actions=node.querySelector('.display-editor-actions')!,buttons=[...actions.querySelectorAll('button')].map(button=>button.getBoundingClientRect()),section=actions.getBoundingClientRect()
   const sections=[...node.querySelectorAll('.display-tile-section')],toggle=sections[0].querySelector('.display-tile-heading > button')!,heading=sections[0].querySelector('h3')!
   const grid=node.querySelector('.display-tag-color-grid')!
-  return {allPickerLeft:node.querySelector('.display-all-colors .collection-color-trigger')!.getBoundingClientRect().left,actionCenter:(Math.min(...buttons.map(rect=>rect.left))+Math.max(...buttons.map(rect=>rect.right)))/2,sectionCenter:(section.left+section.right)/2,borders:sections.map(section=>getComputedStyle(section).borderTopWidth),headingCenter:(heading.getBoundingClientRect().top+heading.getBoundingClientRect().bottom)/2,toggleCenter:(toggle.getBoundingClientRect().top+toggle.getBoundingClientRect().bottom)/2,afterPreviewGap:sections[1].querySelector('.display-tile-heading > button')!.getBoundingClientRect().top-sections[0].querySelector('.viewport-preview-crop')!.getBoundingClientRect().bottom,columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,rows:[...grid.children].map(row=>{const label=row.querySelector(':scope > .field-help')!.getBoundingClientRect(),picker=row.querySelector('.collection-color-trigger')!.getBoundingClientRect(),tag=row.querySelector('.categorized-tags')!.getBoundingClientRect();return {rowCenter:(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2,labelX:label.right,pickerLeft:picker.left,pickerRight:picker.right,tagLeft:tag.left,labelY:(label.top+label.bottom)/2,pickerY:(picker.top+picker.bottom)/2,tagTop:tag.top,pickerBottom:picker.bottom}})}
+  return {allPickerLeft:node.querySelector('.display-all-colors .collection-color-trigger')!.getBoundingClientRect().left,actionCenter:(Math.min(...buttons.map(rect=>rect.left))+Math.max(...buttons.map(rect=>rect.right)))/2,sectionCenter:(section.left+section.right)/2,borders:sections.map(section=>getComputedStyle(section).borderTopWidth),headingCenter:(heading.getBoundingClientRect().top+heading.getBoundingClientRect().bottom)/2,toggleCenter:(toggle.getBoundingClientRect().top+toggle.getBoundingClientRect().bottom)/2,afterPreviewGap:sections[1].querySelector('.display-tile-heading > button')!.getBoundingClientRect().top-sections[0].querySelector('.viewport-preview-crop')!.getBoundingClientRect().bottom,gridWidth:grid.getBoundingClientRect().width,columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,rows:[...grid.children].map(row=>{const label=row.querySelector(':scope > .field-help')!.getBoundingClientRect(),picker=row.querySelector('.collection-color-trigger')!.getBoundingClientRect(),tag=row.querySelector('.categorized-tags')!.getBoundingClientRect();return {rowWidth:row.getBoundingClientRect().width,rowCenter:(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2,labelX:label.right,pickerLeft:picker.left,pickerRight:picker.right,tagLeft:tag.left,labelY:(label.top+label.bottom)/2,pickerY:(picker.top+picker.bottom)/2,tagTop:tag.top,tagCenter:(tag.top+tag.bottom)/2,pickerBottom:picker.bottom}})}
  })
  expect(layout.actionCenter).toBeCloseTo(layout.sectionCenter,0)
  expect(layout.borders).toEqual(['1px','1px'])
  expect(layout.headingCenter).toBeCloseTo(layout.toggleCenter,0)
  expect(layout.afterPreviewGap).toBeGreaterThanOrEqual(32)
  expect(layout.columns).toBe(info.project.name==='mobile'?1:2)
+ const divider = await page.locator('.display-tag-color-grid').evaluate(node => ({display:getComputedStyle(node,'::before').display,border:getComputedStyle(node,'::before').borderInlineStartWidth}))
+ if(layout.columns===2) { expect(divider.display).not.toBe('none');expect(divider.border).toBe('1px') }
+ else expect(divider.display).toBe('none')
  if(layout.columns===2) {
   expect(layout.rows[3].pickerLeft).toBeGreaterThan(layout.rows[0].pickerRight)
   expect(layout.rows[3].pickerY).toBe(layout.rows[0].pickerY)
@@ -499,12 +517,16 @@ test('editor actions are centered, subsection titles interrupt borders, and cate
  expect(layout.allPickerLeft).toBe(layout.rows[0].pickerLeft)
  for(const [index,row] of layout.rows.entries()) {
   expect(row.pickerLeft).toBe(layout.rows[layout.columns===1?0:index<3?0:3].pickerLeft)
-  expect(row.pickerLeft-row.labelX).toBe(8)
-  expect(Math.abs(row.labelY-row.pickerY)).toBeLessThan(1)
-  expect(row.tagTop).toBeGreaterThanOrEqual(row.pickerBottom)
+  if(info.project.name==='desktop') {
+   expect(row.pickerLeft-row.labelX).toBe(8)
+   expect(Math.abs(row.labelY-row.pickerY)).toBeLessThan(1)
+  } else expect(row.labelY).toBeLessThan(row.pickerY)
+  expect(row.tagLeft).toBeGreaterThan(row.pickerRight)
+  expect(Math.abs(row.tagCenter-row.pickerY)).toBeLessThan(1)
+  expect(row.rowWidth).toBeCloseTo((layout.gridWidth-(layout.columns-1)*24)/layout.columns,0)
  }
  for(const tag of await page.locator('.display-tag-color-grid .metadata-tag').all()) {
-  expect(await tag.evaluate(node=>{const range=document.createRange();range.selectNodeContents(node);return range.getClientRects().length})).toBe(1)
+  expect(await tag.evaluate(node=>node.getBoundingClientRect().right<=innerWidth)).toBe(true)
  }
  await expect(work.getByRole('button',{name:'Hide/Show Information',exact:true})).toBeVisible()
  await page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true}).screenshot({path:`test-results/tag-category-rows-${info.project.name}.png`})
@@ -784,4 +806,27 @@ test('example work expands editable other metadata and preserves its own field c
  await expect(field(editor(page, 'Example Work Info Page'), 'workOther', 'language')).toBeVisible()
  await expect(field(editor(page, 'Example Work Info Page'), 'workOther', 'canonical')).toHaveCount(0)
  await page.screenshot({ path: test.info().outputPath('expanded-other-metadata.png') })
+})
+
+test('sample tile tooltips extend beyond the crop without moving their anchors', async ({ page }, info) => {
+ await setup(page)
+ for (const kind of ['Work', 'Series']) {
+  const desktop = page.getByRole('region', { name: `${info.project.name === 'mobile' ? 'Mobile' : 'Desktop'} ${kind} Tile Layout`, exact: true })
+  const preview = desktop.locator('iframe')
+  const frame = preview.contentFrame()
+  const anchor = frame.getByRole('button', { name: /^(?:Unmark|Mark) Favorite$/ }).first()
+  await anchor.hover()
+  const tooltip = page.getByRole('tooltip', { name: 'Favorite', exact: true })
+  await expect(tooltip).toBeVisible()
+  await expect(anchor).toHaveAccessibleDescription('Favorite')
+  const crop = (await desktop.locator('.viewport-preview-crop').boundingBox())!, trigger = (await anchor.boundingBox())!, hint = (await tooltip.boundingBox())!
+  const scale = await preview.evaluate(node => node.getBoundingClientRect().width / (node as HTMLIFrameElement).offsetWidth)
+  expect(hint.y).toBeLessThan(crop.y)
+  expect(Math.abs(hint.y + hint.height + 6 * scale - trigger.y)).toBeLessThan(2)
+  expect(Math.abs(hint.x + hint.width / 2 - trigger.x - trigger.width / 2)).toBeLessThan(2)
+  // Hit testing above the crop confirms that the tooltip is painted, not clipped.
+  expect(await tooltip.evaluate((node, y) => node.contains(document.elementFromPoint(node.getBoundingClientRect().x + node.getBoundingClientRect().width / 2, y)), Math.min(crop.y - 1, hint.y + hint.height / 2))).toBe(true)
+  await page.mouse.move(0, 0)
+  await expect(tooltip).toHaveCount(0)
+ }
 })

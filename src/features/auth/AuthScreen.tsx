@@ -42,12 +42,12 @@ export function AuthScreen() {
   }
 
   return <div className="auth-page">
-    <header className="public-header"><Brand /><span className="eyebrow desktop-note">A LITTLE SPACE FOR YOUR NEXT CHAPTER</span></header>
+    <header className="public-header"><Brand /><span className="eyebrow desktop-note">YOUR STORIES, ALWAYS WITHIN REACH</span></header>
     <main id="main" className="auth-main">
       <section className="auth-intro">
-        <span className="eyebrow accent">THE STORIES STAY WITH YOU</span>
-        <h1>A Quiet Home for <br />Every <em>Story.</em></h1>
-        <p>A place for the fics you love, the worlds you return to, and the chapters still waiting for you.</p>
+        <span className="eyebrow accent">KEEP YOUR PLACE IN EVERY STORY</span>
+        <h1>Your Stories.<br />Your <em>Library.</em></h1>
+        <p>Organize the fics you love, track your reading, and return to the chapters waiting for you.</p>
         <div className="book-scene" aria-hidden="true"><div className="scene-circle" /><div className="book book-one"><span>ONE MORE CHAPTER</span></div><div className="book book-two"><span>WORLDS TO RETURN TO</span></div><div className="book book-three"><BookOpen size={36} strokeWidth={1} /><span>The Next<br /><em>Great Story</em></span></div><span className="scene-star star-one">✧</span><span className="scene-star star-two">✧</span></div>
         <div className="privacy-note"><ShieldCheck size={18} /><span>Private by design. Just you and your library.</span></div>
       </section>

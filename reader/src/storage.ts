@@ -1,4 +1,5 @@
-import { bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
+import { chapterVersion, importEpub } from './epub'
+import { repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
 
 export const bookStores = ['books', 'catalog', 'contents']
 const database = new Promise<IDBDatabase>((resolve, reject) => {
@@ -42,7 +43,7 @@ export const getBookDetails = (id: string) => get<BookDetails>('books', id)
 export async function getBook(id: string): Promise<Book | undefined> {
   // A single readonly snapshot prevents mixing a replacement/removal with old contents.
   const db = await database
-  return new Promise((resolve, reject) => {
+  const book = await new Promise<Book | undefined>((resolve, reject) => {
     const tx = db.transaction(['books', 'contents']), details = tx.objectStore('books').get(id), content = tx.objectStore('contents').get(id)
     tx.oncomplete = () => {
       const saved = details.result as BookDetails | undefined, body = content.result as BookContent | undefined
@@ -53,13 +54,26 @@ export async function getBook(id: string): Promise<Book | undefined> {
     }
     tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error)
   })
+  if (!book || book.chapterVersion === chapterVersion) return book
+  const imported = await importEpub(book.file as File)
+  await transaction(bookStores, tx => {
+    const details = tx.objectStore('books').get(id), contents = tx.objectStore('contents').get(id)
+    contents.onsuccess = () => {
+      const saved = details.result as BookDetails | undefined, body = contents.result as BookContent | undefined
+      // A concurrent read/removal may already have repaired or removed the file.
+      if (!saved?.hasFile || !body?.file || body.chapterVersion === chapterVersion) return
+      const current = { ...saved, ...body }
+      putBook(tx, { ...current, ...repairChapterState(current, imported.chapters), chapters: imported.chapters, resources: imported.resources, chapterVersion })
+    }
+  })
+  return getBook(id)
 }
 export function putBook(tx: IDBTransaction, book: Book | BookDetails) {
   const details = 'file' in book ? bookDetails(book) : book
   tx.objectStore('books').put(details)
   tx.objectStore('catalog').put(catalogBook(details))
   if ('file' in book) {
-    if (book.file) tx.objectStore('contents').put({ id: book.id, file: book.file, resources: book.resources, chapters: book.chapters } satisfies BookContent)
+    if (book.file) tx.objectStore('contents').put({ id: book.id, file: book.file, resources: book.resources, chapters: book.chapters, chapterVersion: book.chapterVersion } satisfies BookContent)
     else tx.objectStore('contents').delete(book.id)
   }
 }

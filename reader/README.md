@@ -46,7 +46,7 @@ Choose **One Chapter** or **Entire Work**, independently of **Continuous Scroll*
 
 **Manage EPUB** contains personal notes, reading status, optional work linking, active-version selection, replacement, removal, and rereading. Author notes remain in the book. Exact duplicates open the existing copy. Different versions offer replacement or retention. Uncertain replacement mapping prompts for a resume chapter. Removing the download retains reading history and position and does not delete organizer data.
 
-Search and filter edits remain pending until you choose **Apply Filters** in the bookshelf toolbar, including when the filter panel is hidden. Applied-filter chips show the current results. **Clear All Filters** resets immediately; removing an applied chip also updates the results immediately. Invalid ranges must be corrected before applying.
+Search and filter edits remain pending until you choose **Apply** in the bookshelf toolbar, including when the filter panel is hidden. Applied-filter chips show the current results. **Clear All Filters** resets immediately; removing an applied chip also updates the results immediately. Invalid ranges must be corrected before applying.
 
 ## Tag Format
 
