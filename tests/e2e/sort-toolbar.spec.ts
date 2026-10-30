@@ -10,14 +10,20 @@ test('keeps compact sort icons and labels aligned across toolbar widths', async 
    const toolbar = page.getByRole('region', { name: path === '/library' ? 'Library Toolbar' : 'Reading Toolbar' })
    const sort = toolbar.getByRole('button', { name: 'Sort', exact: true })
    await expect(sort).toBeVisible()
-   const bounds = (await sort.boundingBox())!, icon = (await sort.locator('.dropdown-label svg').boundingBox())!
-   expect(icon.y).toBeGreaterThanOrEqual(bounds.y)
-   expect(icon.y + icon.height).toBeLessThanOrEqual(bounds.y + bounds.height)
-   if (width > 650) {
-    const text = (await sort.locator('.dropdown-label-text').boundingBox())!
-    expect(text.x).toBeGreaterThanOrEqual(icon.x + icon.width)
-    expect(Math.abs(text.y + text.height / 2 - (icon.y + icon.height / 2))).toBeLessThan(1)
-   }
+   // A resize can reflow and adjust scrolling between separate locator reads.
+   await expect(async () => {
+    const { bounds, icon, text } = await sort.evaluate(button => ({
+     bounds: button.getBoundingClientRect().toJSON(),
+     icon: button.querySelector('.dropdown-label svg')!.getBoundingClientRect().toJSON(),
+     text: button.querySelector('.dropdown-label-text')!.getBoundingClientRect().toJSON(),
+    }))
+    expect(icon.y).toBeGreaterThanOrEqual(bounds.y)
+    expect(icon.y + icon.height).toBeLessThanOrEqual(bounds.y + bounds.height)
+    if (width > 650) {
+     expect(text.x).toBeGreaterThanOrEqual(icon.x + icon.width)
+     expect(Math.abs(text.y + text.height / 2 - (icon.y + icon.height / 2))).toBeLessThan(1)
+    }
+   }).toPass({ timeout: 5000 })
    await sort.click()
    const menu = page.getByRole('listbox', { name: 'Sort', exact: true })
    await expect(menu).toBeVisible()

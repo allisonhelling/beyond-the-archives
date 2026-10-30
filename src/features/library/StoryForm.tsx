@@ -1,10 +1,9 @@
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { useActivity } from '../../lib/use-activity'
 import { BookFusionFields } from './bookfusion/BookFusionFields'
 import { validateBookFusionLink } from './bookfusion/bookfusion'
 import { EditConflictReview } from './EditConflictReview'
 import { editSnapshot, EditConflict } from './edit-merge'
-import { Info } from 'lucide-react'
-import { Tooltip } from '../../components/Tooltip'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { authorPageUrl, blankMetadata, changedMetadata, initialProgress, isOneShot, parseLines, parseWorkUrl, ratingLabel, ratings, savedWorkUrl, statuses, tagNames, validateProgress, type Metadata, type Status, type Story } from './model'
@@ -118,7 +117,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     <p className="field-help">Abandoned means the author has discontinued the fic. Reading all published chapters moves it to Finished.</p>
     <div className="form-grid">{([['published_chapters', 'Published chapters'], ['total_chapters', 'Total chapters'], ['word_count', 'Word Count']] as const).map(([key, label]) => <label key={key}>{label}<input type="number" min={key === 'total_chapters' ? 1 : 0} step="1" placeholder="Unknown (?)" value={metadata[key] ?? ''} onChange={e => field(key, e.target.value === '' ? null : Number(e.target.value))} /></label>)}</div>
     <div className="editable-field-heading"><label className="check-label"><input type="checkbox" checked={isOneShot({ ...metadata, ao3_tags: [...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)], additional_tags: parseLines(additionalTags) }, section === 'metadata' && story ? story.personalTags : tags)} onChange={event => field('one_shot', event.target.checked)} />One-Shot</label>
-    <Tooltip pinOnClick description="Automatically marked for complete one-chapter works or One-shot, One shot, or Oneshot tags. You can correct this label, including works with extra art or other chapters.">{descriptionId => <button type="button" className="icon-button inline-edit-icon" aria-label="One-Shot Help" aria-describedby={descriptionId}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div>
+    <InfoTooltip description="Automatically marked for complete one-chapter works or One-shot, One shot, or Oneshot tags. You can correct this label, including works with extra art or other chapters." label="One-Shot Help" size={14} /></div>
     <label>Series Names (one per line, manually entered)<textarea rows={2} value={series} onChange={e => setSeries(e.target.value)} /></label>
     <div className="form-grid"><label>Relationship Tags (one per line)<textarea rows={3} value={relationships} onChange={e => setRelationships(e.target.value)} /></label><label>Characters (one per line)<textarea rows={3} value={characters} onChange={e => setCharacters(e.target.value)} /></label><label>Additional Tags (one per line)<textarea rows={3} value={additionalTags} onChange={e => setAdditionalTags(e.target.value)} /></label></div>
     {otherTags && <label>Other or Uncategorized AO3 Tags (one per line)<textarea rows={3} value={otherTags} onChange={e => setOtherTags(e.target.value)} /></label>}</fieldset>}

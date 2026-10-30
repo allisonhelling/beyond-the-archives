@@ -470,7 +470,9 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(ratingExplanation).toBeVisible()
   await expect(ratingExplanation).toHaveText(customRatingInfo)
   await expect(ratingExplanation).toHaveCSS('white-space', 'pre-wrap')
-  await expect(ratingExplanation).toHaveCSS('background-color', 'rgb(51, 51, 51)')
+  await expect(ratingExplanation).toHaveCSS('background-color', 'rgb(241, 225, 209)')
+  await expect(ratingExplanation).toHaveCSS('border-top-color', 'rgb(151, 0, 0)')
+  await expect(page.locator('.rating-info summary')).toHaveCSS('color', 'rgb(151, 0, 0)')
   const explanationBox = (await ratingExplanation.boundingBox())!
   const ratingControlsBox = (await page.locator('.rating-controls').boundingBox())!
   expect(explanationBox.width).toBeCloseTo(Math.min(420, ratingControlsBox.width), 0)
@@ -486,7 +488,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(reloadText).toBeVisible()
   await expect(reloadText).toContainText('Newer saved notes and other fields update only fields you have not edited here.')
   await expect(reloadText).toContainText('Reloading does not save your draft or refresh AO3 metadata.')
-  await expect(reloadText).toHaveCSS('background-color', 'rgb(51, 51, 51)')
+  await expect(reloadText).toHaveCSS('background-color', 'rgb(241, 225, 209)')
   await reloadHelp.click()
   await top.screenshot({ path: `test-results/userscript-dark-editor-${page.viewportSize()!.width}.png` })
   await page.evaluate(() => document.getElementById('ao3-library-companion')!.remove())

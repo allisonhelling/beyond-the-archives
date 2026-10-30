@@ -1,5 +1,4 @@
-import { Info } from 'lucide-react'
-import { Tooltip } from '../../components/Tooltip'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { useState, type ReactNode } from 'react'
 import { saveSeriesImportBehavior, useSeriesImportBehavior, type SeriesImportBehavior } from './series-import-preferences'
 import { seriesImportSettingsSection } from './settings-sections'
@@ -9,7 +8,7 @@ export function SeriesImportOptions({ defaultBehavior, override, onChange, revie
  reviewRelatedSeries: boolean; onReviewRelatedSeriesChange(value: boolean): void
  defaultBehavior: SeriesImportBehavior; override: boolean; onChange(value: boolean): void; disabled?: boolean; children?: ReactNode
 }) {
- return <div className="form-control series-import-options"><p className="field-help">Current series default: {descriptions[defaultBehavior]}.</p><div className="form-controls-row"><label className="check-label"><input type="checkbox" checked={override} disabled={disabled} onChange={event => onChange(event.target.checked)} />{defaultBehavior === 'all' ? 'Choose Series Works for This Import Only' : 'Automatically Save All Series Works for This Import Only'}</label>{children}</div><div className="editable-field-heading"><label className="check-label"><input type="checkbox" checked={reviewRelatedSeries} disabled={disabled} onChange={event => onReviewRelatedSeriesChange(event.target.checked)} />Check Series Containing Imported Works</label><Tooltip pinOnClick description="When unchecked, only directly bookmarked series or explicitly supplied series links are reviewed. Enable this to also check series that the imported works belong to. Your series import behavior applies to those series too.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Related Series Information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></div></div>
+ return <div className="form-control series-import-options"><p className="field-help">Current series default: {descriptions[defaultBehavior]}.</p><div className="form-controls-row"><label className="check-label"><input type="checkbox" checked={override} disabled={disabled} onChange={event => onChange(event.target.checked)} />{defaultBehavior === 'all' ? 'Choose Series Works for This Import Only' : 'Automatically Save All Series Works for This Import Only'}</label>{children}</div><div className="editable-field-heading"><label className="check-label"><input type="checkbox" checked={reviewRelatedSeries} disabled={disabled} onChange={event => onReviewRelatedSeriesChange(event.target.checked)} />Check Series Containing Imported Works</label><InfoTooltip description="When unchecked, only directly bookmarked series or explicitly supplied series links are reviewed. Enable this to also check series that the imported works belong to. Your series import behavior applies to those series too." label="Related Series Information" size={14} /></div></div>
 }
 export function SeriesImportSettings() {
  const { defaultBehavior } = useSeriesImportBehavior()

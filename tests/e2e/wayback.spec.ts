@@ -22,7 +22,10 @@ test('work actions open the newest checked Wayback result in a new tab and detai
  await expect(popup.getByRole('heading', { name: 'Archived Adult Warning' })).toBeVisible()
  await popup.close()
  await page.goto('/stories/wayback-entry')
- await expect(page.getByRole('link', { name: 'View in Wayback Machine', exact: true })).toBeVisible()
+ const updated = page.locator('.details-story-stats').locator('div').filter({has:page.locator('dt').filter({hasText:/^Date Updated$/})})
+ await expect(updated.getByRole('link', { name: 'View in Wayback Machine', exact: true })).toBeVisible()
+ await expect(page.locator('.story-metadata-actions').getByRole('link', { name: 'View in Wayback Machine', exact: true })).toHaveCount(0)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })
 test('lookup failures offer the work calendar and retry without altering library data', async ({ page }) => {
  await fixture(page)

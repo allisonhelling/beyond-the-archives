@@ -1,3 +1,4 @@
+import { Dropdown } from '../../components/Dropdown'
 import { ConnectReader } from './ConnectReader'
 import { useSearchParams } from 'react-router-dom'
 import { useOffline } from './OfflineProvider'
@@ -7,11 +8,19 @@ export function ReaderControls({ hub = false }: { hub?: boolean }) {
   const [params, setParams] = useSearchParams()
   const selected = params.get('reader') ?? (hub ? snapshot?.readers[0]?.id ?? '' : '')
   const reader = snapshot?.readers.find(reader => reader.id === selected)
-  return <section className="settings-card" aria-label="Reader Availability"><label>{hub ? 'Reader Installation' : 'Downloaded in Reader'}<select value={selected} onChange={event => { const next = new URLSearchParams(params); if (event.target.value) next.set('reader', event.target.value); else next.delete('reader'); next.set('page', '1'); setParams(next) }}>{!hub && <option value="">All Works</option>}{!snapshot?.readers.length && hub && <option value="">No Reader Reports Yet</option>}{snapshot?.readers.map(reader => <option key={reader.id} value={reader.id}>{reader.name}</option>)}</select></label>
-    {reader && <p>Last reported by {reader.name}: {new Date(reader.reportedAt).toLocaleString()}. The reader confirms local file availability when opened. This is not verified availability on this device.</p>}
+  const report = reader && <p className="field-help">Last reported by {reader.name}: {new Date(reader.reportedAt).toLocaleString()}. The reader confirms local file availability when opened. This is not verified availability on this device.</p>
+  const errorMessage = error && <p role="status">{error}</p>
+  function selectReader(value: string) {
+    const next = new URLSearchParams(params)
+    if (value) next.set('reader', value); else next.delete('reader')
+    next.set('page', '1'); setParams(next)
+  }
+  if (!hub) return <div className="reader-availability-filter"><Dropdown fitContent closeOnSelect label="Available Offline" value={selected} onChange={selectReader} options={[{ value: '', label: 'All Works' }, ...(snapshot?.readers.map(reader => ({ value: reader.id, label: reader.name })) ?? [])]} />{report}{errorMessage}</div>
+  return <section className="settings-card" aria-label="Reader Availability"><label>Reader Installation<select value={selected} onChange={event => selectReader(event.target.value)}>{!snapshot?.readers.length && hub && <option value="">No Reader Reports Yet</option>}{snapshot?.readers.map(reader => <option key={reader.id} value={reader.id}>{reader.name}</option>)}</select></label>
+    {report}
     {hub && <ConnectReader />}{hub && <p role="status">{shellReady && snapshot ? 'Organizer hub prepared for offline use.' : !snapshot ? 'Connect online and refresh reader reports to retain your hub.' : import.meta.env.DEV ? 'Development mode: build and preview to prepare offline use.' : 'Preparing the organizer interface and retained reports for offline use…'}</p>}
     {hub && <p>Initial setup requires connectivity. Prepare the reader for offline use and import EPUBs there separately. The hub does not cache reader files. Browser storage may be cleared; retained reports may be out of date.</p>}
-    {error && <p role="status">{error}</p>}{hub && <div className="form-actions"><button className="button secondary" disabled={!navigator.onLine} onClick={() => void refresh()}>Refresh Reader Reports</button>{snapshot && <button className="button secondary" onClick={clearOfflineSnapshot}>Clear Retained Hub</button>}</div>}
+    {errorMessage}{hub && <div className="form-actions"><button className="button secondary" disabled={!navigator.onLine} onClick={() => void refresh()}>Refresh Reader Reports</button>{snapshot && <button className="button secondary" onClick={clearOfflineSnapshot}>Clear Retained Hub</button>}</div>}
   </section>
 }
 export function ReadEpub({ workId }: { workId: number | null }) {

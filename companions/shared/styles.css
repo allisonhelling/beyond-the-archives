@@ -81,8 +81,9 @@ input[type="checkbox"] { width: var(--checkbox-size, 24px); }
 .rating-info { position: static; --help-width: 420px; --help-max-width: 100%; }
 .rating-info > span { white-space: pre-wrap; overflow-wrap: anywhere; }
 .field-info summary { cursor: pointer; list-style: none; color: var(--accent); display: grid; place-items: center; width: var(--control-size); min-height: var(--control-size); }
+.field-info summary:is(:hover, :focus-visible), .field-info[open] summary { color: #970000; background: color-mix(in srgb, #f1e1d1 75%, #970000); }
 .field-info summary::-webkit-details-marker { display: none; }
-.field-info > span { font: inherit; position: absolute; z-index: 1; top: 100%; right: 0; width: min(var(--help-width, 280px), var(--help-max-width, 70vw)); padding: 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); box-shadow: 0 3px 12px #0002; }
+.field-info > span { font: inherit; position: absolute; z-index: 1; top: 100%; right: 0; width: min(var(--help-width, 280px), var(--help-max-width, 70vw)); padding: 12px; border: 1px solid #970000; border-radius: 6px; color: #382b2b; background: #f1e1d1; box-shadow: 0 3px 12px #0002; }
 .text-toggle { padding: var(--control-padding) 8px; }
 .collection-picker { margin: var(--field-gap) 0; }
 .collection-heading h4 { margin: 0; font: inherit; }

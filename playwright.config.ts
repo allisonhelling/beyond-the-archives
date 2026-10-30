@@ -1,6 +1,8 @@
+import { playwrightOutputDir } from './scripts/playwright-output'
 import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
+  outputDir: playwrightOutputDir('e2e'),
   testDir: './tests/e2e',
   fullyParallel: true,
   workers: 2,

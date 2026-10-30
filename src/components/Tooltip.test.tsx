@@ -1,3 +1,4 @@
+import { InfoTooltip } from './InfoTooltip'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { Tooltip } from './Tooltip'
@@ -35,4 +36,19 @@ it('places portaled tooltips inside their dialog and outside scrolling controls'
  expect(screen.getByTestId('controls')).not.toContainElement(tooltip)
  fireEvent.blur(button)
  expect(tooltip).not.toBeVisible()
+})
+
+it('pins shared info help across blur and clears its pressed state with Escape', () => {
+ render(<InfoTooltip label="Date Help" description={<p>Saved AO3 dates.</p>} />)
+ const button = screen.getByRole('button', { name: 'Date Help' })
+ expect(button).toHaveAccessibleDescription('Saved AO3 dates.')
+ expect(button).toHaveAttribute('aria-pressed', 'false')
+ fireEvent.click(button)
+ fireEvent.mouseLeave(button)
+ fireEvent.blur(button)
+ expect(button).toHaveAttribute('aria-pressed', 'true')
+ expect(screen.getByRole('tooltip')).toBeVisible()
+ fireEvent.keyDown(button, { key: 'Escape' })
+ expect(button).toHaveAttribute('aria-pressed', 'false')
+ expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 })

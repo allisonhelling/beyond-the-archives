@@ -84,7 +84,7 @@ The organizer provides its cached Offline hub, Downloaded in Reader filter, Read
 
 ## Verification
 
-The repository-root Vitest run includes reader unit tests but excludes `reader/tests/browser/**`. Run reader browser tests with `npx playwright test` from `reader/`, using its own Playwright configuration; Vitest cannot execute Playwright `test()` declarations.
+The repository-root Vitest run includes reader unit tests but excludes `reader/tests/browser/**`. Run reader browser tests with `npx playwright test` from `reader/`, using its own Playwright configuration and per-run `test-results/reader/<run-id>/` artifact directory; Vitest cannot execute Playwright `test()` declarations.
 
 `tests/fixtures/epubs` contains the two original user-supplied FanFicFare books, an integrity/metadata manifest, and [fixture documentation](../tests/fixtures/epubs/README.md). `tests/real-epubs.test.ts` verifies their unchanged SHA-256 hashes and imports their metadata/chapter counts through the existing reader pipeline. The fixture files are not application seed data or public assets.
 

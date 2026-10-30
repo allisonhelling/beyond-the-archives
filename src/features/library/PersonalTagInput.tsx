@@ -1,6 +1,6 @@
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { GripVertical, Info, X } from 'lucide-react'
-import { Tooltip } from '../../components/Tooltip'
 
 const mobileTagQuery = '(max-width: 650px), (pointer: coarse)'
 const tagInstructions = 'Press Enter to add a tag. Use arrow keys to move between tags; Backspace selects, then deletes the previous tag.'
@@ -17,7 +17,7 @@ export function PersonalTagHelp({ inline = false }: { inline?: boolean }) {
   }, [])
   const description = mobile ? mobileTagInstructions : tagInstructions
   if (inline) return <details className="field-info personal-tag-help"><summary aria-label="Personal Tags Help" role="button"><Info aria-hidden="true" /></summary><span>{description}</span></details>
-  return <Tooltip pinOnClick description={description}>{descriptionId => <button type="button" className="icon-button inline-edit-icon personal-tag-help-button" aria-label="Personal Tags Help" aria-describedby={descriptionId}><Info size={12} aria-hidden="true" /></button>}</Tooltip>
+  return <InfoTooltip description={description} label="Personal Tags Help" size={12} buttonClassName="personal-tag-help-button" />
 }
 
 export function PersonalTagInput({ value, onChange, inlineHelp = false }: { value: string[]; onChange: (tags: string[]) => void; inlineHelp?: boolean }) {

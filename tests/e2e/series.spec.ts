@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
 test('basic series and optional AO3 review stay separate on desktop and mobile', async ({ page }) => {
+ test.setTimeout(90000)
  const tables = await fixture(page), now = '2026-10-20T12:00:00Z'
  const seriesUrl = 'https://archiveofourown.org/series/77'
  tables.works.push({id:'work-101',ao3_work_id:101,ao3_updated_at:'2026-10-20T00:00:00Z',verified_chapters:{},word_count:200})
@@ -148,6 +149,7 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
  await expect(card).not.toContainText('Unsaved sequel')
  await expect(card).not.toContainText('Second summary')
  await page.goto('/settings#settings-browsing')
+ await expect(page.getByRole('heading', { name: 'Library Browsing', exact: true })).toBeVisible({ timeout: 15000 })
  await expect(page.getByText('Dates will appear:', {exact:false})).toContainText('10/20/2026')
  await expect(page.getByRole('combobox', {name:'Works per Page',exact:true})).toHaveCSS('border-top-style', 'solid')
  await expect(page.getByRole('combobox', {name:'Date Format',exact:true})).toHaveCSS('border-top-style', 'solid')

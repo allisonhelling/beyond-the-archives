@@ -1,3 +1,4 @@
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { ReaderControls } from '../offline/ReaderControls'
 import { SeriesSummaryContext } from './series/series-summary-context'
 import { RetryError } from '../../components/RetryError'
@@ -15,11 +16,10 @@ import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Bell, RotateCcw, Pause, Bookmark, Clock, Info, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
+import { Bell, RotateCcw, Pause, Bookmark, Clock, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
 import { Dropdown } from '../../components/Dropdown'
-import { Tooltip } from '../../components/Tooltip'
 import { ReadingFilterControls } from './ReadingFilterControls'
 import { filterReading, hasReadingFilters, inReadingSection, tracked, type ReadingFilters, type SortOrder } from './reading-search'
 
@@ -120,7 +120,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   }, [page, currentPage, remote.result, params, filters, urlSize, setParams, localResults])
   function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }
   error ||= remote.error ?? ''
-  const pagination = (inlinePage = false) => <Pagination stale={countsStale || Boolean(revisionError)} countError={Boolean(remote.error || revisionError)} inlinePage={inlinePage} page={currentPage} pages={pages} total={total} size={size} onPage={changePage} leading={mode !== 'reading' && (mode === 'series' || filters.showSeries) ? <div className="series-summary-controls">{[true, false].map(expanded => <button key={String(expanded)} type="button" className="text-button" onClick={() => setSummaryState(current => ({ ...current, expanded, revision: current.revision + 1 }))}>{expanded ? 'Expand All Work Summaries' : 'Collapse All Work Summaries'}</button>)}</div> : undefined} trailing={<><Tooltip pinOnClick description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings.">{id => <button type="button" className="icon-button" aria-label="Works per Page Information" aria-describedby={id}><Info size={16} aria-hidden="true" /></button>}</Tooltip><label className="pagination-size">Works per Page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
+  const pagination = (inlinePage = false) => <Pagination stale={countsStale || Boolean(revisionError)} countError={Boolean(remote.error || revisionError)} inlinePage={inlinePage} page={currentPage} pages={pages} total={total} size={size} onPage={changePage} leading={mode !== 'reading' && (mode === 'series' || filters.showSeries) ? <div className="series-summary-controls">{[true, false].map(expanded => <button key={String(expanded)} type="button" className="text-button" onClick={() => setSummaryState(current => ({ ...current, expanded, revision: current.revision + 1 }))}>{expanded ? 'Expand All Work Summaries' : 'Collapse All Work Summaries'}</button>)}</div> : undefined} trailing={<><InfoTooltip description="Changing works per page here is temporary and resets when you reload the page. Change the default works per page in Settings." label="Works per Page Information" size={16} /><label className="pagination-size">Works per Page<select className="filter-input select-fit" value={size} onChange={event => { temporaryPageSizes.set(mode, Number(event.target.value)); setTemporarySize(Number(event.target.value)); setParams(writeBrowsing(params, filters, undefined)) }}>{pageSizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label></>} />
   const orderingControls = <>
     <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />
     <Dropdown label="Group" icon={ListTree} compact mobileIconOnly value={filters.groupBy} onChange={value => change('groupBy', value as ReadingFilters['groupBy'])} options={groupOptions} />
@@ -135,8 +135,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
       return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, key), filters), urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{localResults ? error ? '—' : filtered.filter(story => inReadingSection(story, key)).length : displayed?.sections[key] ?? '—'}</span></button>
     })}</nav>}
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
-    {!localOnly && mode === 'library' && <ReaderControls />}
-    <ReadingFilterControls worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
+    <ReadingFilterControls availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
     {pagination(true)}
     {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retry} retryLabel="Retry Suggestions" />}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}

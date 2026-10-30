@@ -1,11 +1,10 @@
-import { Info } from 'lucide-react'
-import { Tooltip } from '../../components/Tooltip'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { formatDateTime } from '../../lib/dates'
 import type { HTMLAttributes } from 'react'
 import { chapterReadEvents, type ReadingEvent } from './reading-history'
 
 export function ChapterReadingHistory({ history, ...attributes }: { history?: ReadingEvent[] } & HTMLAttributes<HTMLDivElement>) {
- const heading = <dt className="editable-field-heading">Chapter Reading History<Tooltip pinOnClick description="Mark a chapter read in the updated AO3 companion to record its word count, reading timestamp, and reread status.">{id => <button type="button" className="icon-button inline-edit-icon" aria-label="Chapter Reading History Information" aria-describedby={id}><Info size={14} aria-hidden="true" /></button>}</Tooltip></dt>
+ const heading = <dt className="editable-field-heading">Chapter Reading History<InfoTooltip description="Mark a chapter read in the updated AO3 companion to record its word count, reading timestamp, and reread status." label="Chapter Reading History Information" size={14} /></dt>
  const reads = chapterReadEvents(history)
  if (!reads.length) return <div {...attributes}>{heading}<dd>
   <p className="muted">No chapter reads recorded yet.</p>
