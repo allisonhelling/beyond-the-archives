@@ -1,0 +1,3 @@
+.avatar { width: 31px; height: 31px; border-radius: 50%; display: grid; place-items: center; background: var(--color-surface-secondary); color: var(--color-brand, #970000); font-family: var(--font-serif); font-size: 14px; }
+.profile-trigger.avatar { display: grid; width: 40px; height: 40px; min-height: 40px; padding: 0; border: 1px solid #e6c8c1; cursor: pointer; font-weight: 650; }
+.profile-trigger:hover, .profile-trigger[aria-expanded=true] { background: var(--color-brand, #970000); color: var(--color-surface, #fff); }

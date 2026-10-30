@@ -38,7 +38,7 @@ export function Tooltip({ description, children, placement = 'top', pinOnClick =
       const boundedTop = Math.max(dialog?.top ?? 0, 0) + 8
       const bottom = Math.min(dialog?.bottom ?? viewport.innerHeight, viewport.innerHeight) - 8
       if (info && height <= bottom - boundedTop) tooltip.current.style.removeProperty('position')
-      const y = dialog || portal ? Math.max(boundedTop, Math.min(top, bottom - height)) : top
+      const y = !previewFrame && (dialog || portal) ? Math.max(boundedTop, Math.min(top, bottom - height)) : top
       const x = Math.max(left, Math.min(centered, right - width))
       if (info && portal && !previewFrame && height > bottom - boundedTop) {
         // Let long help expand into the page/dialog's scrollable content.
@@ -63,7 +63,7 @@ export function Tooltip({ description, children, placement = 'top', pinOnClick =
     position(); windows.forEach(view => { view.addEventListener('resize', position); view.addEventListener('scroll', position, true) })
     return () => { windows.forEach(view => { view.removeEventListener('resize', position); view.removeEventListener('scroll', position, true) }) }
   }, [open, description, placement, portal, previewFrame, info])
-  const content = <span ref={tooltip} id={previewFrame ? `${id}-preview` : id} role="tooltip" data-portal={portal || Boolean(previewFrame) || undefined} data-preview-portal={Boolean(previewFrame) || undefined} className={`action-tooltip-content${info ? ' info-tooltip-content' : ''}`} style={{ '--tooltip-shift': `${shift.x}px`, '--tooltip-y-shift': `${shift.y}px` } as CSSProperties} hidden={!open}>{description}</span>
+  const content = <span ref={tooltip} id={previewFrame ? `${id}-preview` : id} role="tooltip" data-plain-text={info && typeof description === 'string' || undefined} data-portal={portal || Boolean(previewFrame) || undefined} data-preview-portal={Boolean(previewFrame) || undefined} className={`action-tooltip-content${info ? ' info-tooltip-content' : ''}`} style={{ '--tooltip-shift': `${shift.x}px`, '--tooltip-y-shift': `${shift.y}px` } as CSSProperties} hidden={!open}>{description}</span>
   return <span ref={anchor} className={`action-tooltip${info ? ' info-tooltip' : ''}`} data-placement={resolvedPlacement} onClick={pinOnClick ? event => { if (event.target instanceof Element && event.target.closest('button')) { setPinned(!pinned); setOpen(false) } } : undefined} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); setPinned(false); event.stopPropagation() } }}>
     {children(id, pinned)}
     {previewFrame && <span id={id} className="sr-only">{description}</span>}

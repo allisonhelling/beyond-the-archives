@@ -123,10 +123,10 @@ test('actual tile data sections support mouse and touch dragging', async ({ page
   const source = field(work, 'workTile', 'authors'), destination = field(work, 'workTile', 'fandoms')
   await work.locator('iframe').scrollIntoViewIfNeeded()
   await dragInformation(page, source.locator('a').first(), destination, info.project.name === 'mobile')
-  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
+  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
   expect(await stored(page)).toBeNull()
   await applyTileDrafts(page, 'Cancel')
-  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
+  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
 })
 
 for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kind} Info Page with independent Save and Cancel`, async ({ page }) => {

@@ -17,6 +17,6 @@ export function Pagination({ page, pages, total, size, onPage, leading, trailing
       <span role="status">{total === undefined ? 'Count unavailable' : total ? `${range?.start ?? (page - 1) * size + 1}–${range?.end ?? Math.min(page * size, total)} of ${total}` : '0 results'} {itemLabel} · <label className="pagination-page">Page{pageInput}of {pages}</label>{countError ? ' · Couldn’t update' : stale ? ' · Updating…' : ''}</span>
       <button className="button secondary" disabled={!stale && page >= pages} onClick={() => onPage(page + 1)}>Next</button>
     </div>
-    {!inlinePage && trailing && <div className="pagination-trailing">{trailing}</div>}
+    {trailing && <div className="pagination-trailing">{trailing}</div>}
   </nav>
 }

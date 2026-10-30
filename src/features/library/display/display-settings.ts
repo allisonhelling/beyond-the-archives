@@ -24,7 +24,7 @@ export function isDisplayFieldHidden(preference: DisplayPreference, field: strin
 }
 export type TagAppearance = { shape: TagShape; colors: Partial<Record<TagCategory, string>> }
 export type DisplayPreferences = Record<DisplayGroup, DisplayPreference> & { tagAppearance: TagAppearance }
-const defaultHidden: Partial<Record<DisplayGroup, string[]>> = { workTile: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'personalRating', 'collections', 'kudos', ...newWorkTileFields], workInfo: [...newWorkInfoFields], seriesTile: ['category', 'creatorNotes', 'updated', 'begun', 'relationships', 'characters', 'tags', 'warnings', 'personalRating', 'collections', 'kudos'], seriesInfo: ['category', 'libraryCount', 'words', 'relationships', 'characters', 'tags', 'warnings', 'kudos'] }
+const defaultHidden: Partial<Record<DisplayGroup, string[]>> = { workTile: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'personalRating', 'collections', 'kudos', ...newWorkTileFields.filter(field => field !== 'allTags')], workInfo: [...newWorkInfoFields], seriesTile: ['category', 'creatorNotes', 'updated', 'begun', 'relationships', 'characters', 'tags', 'warnings', 'personalRating', 'collections', 'kudos'], seriesInfo: ['category', 'libraryCount', 'words', 'relationships', 'characters', 'tags', 'warnings', 'kudos'] }
 export const tagColors = {
  relationships: { label: 'Relationships', color: '#6b3f70', example: 'Dick Grayson & Bruce Wayne' }, characters: { label: 'Characters', color: '#355c70', example: 'Bruce Wayne' }, tags: { label: 'Additional Tags', color: '#715443', example: 'Fluff' }, warnings: { label: 'AO3 Warnings', color: '#970000', example: 'No Archive Warnings Apply' }, collections: { label: 'Custom Collections', color: '#4e684c', example: 'Comfort Reads' }, personalTags: { label: 'Personal Tags', color: '#715443', example: 'Read Again' },
 } as const
@@ -79,7 +79,9 @@ export function displayFieldLabel(group: DisplayGroup, field: string) {
 }
 
 export function displayPreference(group: DisplayGroup, raw: string, layout: DisplayLayout = 'desktop'): DisplayPreference {
-  const keys = Object.keys(displayGroups[group].fields)
+  const fields = Object.keys(displayGroups[group].fields)
+  const leading = group === 'workTile' ? ['favorite', 'rec', 'fandoms', 'authors', 'series', 'rating', 'words', 'allTags'] : []
+  const keys = [...leading, ...fields.filter(key => !leading.includes(key))]
   let saved: Record<string, { order?: unknown; hidden?: unknown; lines?: unknown }> = {}
   try { saved = JSON.parse(raw) ?? {} } catch { /* Malformed preferences use defaults. */ }
   const profiles = saved as unknown as { mobile?: Record<string, { order?: unknown; hidden?: unknown; lines?: unknown }> }
@@ -100,6 +102,8 @@ export function displayPreference(group: DisplayGroup, raw: string, layout: Disp
   }
   const assigned = new Set<string>()
   const lines = Object.fromEntries(Object.entries(inputLines && typeof inputLines === 'object' && !Array.isArray(inputLines) ? inputLines : {}).filter(([id]) => displayLine(id)).map(([id, fields]) => [id, strings(fields).filter(key => { if (!keys.includes(key) || assigned.has(key)) return false; assigned.add(key); return true })]))
+  // Preserve visibility in existing custom tile arrangements, including grouped tags.
+  if (group === 'workTile' && strings(value?.order).length && !strings(value?.order).includes('allTags') && !assigned.has('allTags')) hidden.push('allTags')
   hidden = [...new Set([...hidden.filter(key => keys.includes(key) || Object.hasOwn(lines, key) || displayDivider(key)), ...(defaultHidden[group] ?? []).filter(key => !strings(value?.order).includes(key) && !assigned.has(key))])]
   return { order: [...new Set([...order, ...Object.keys(lines), ...keys])].filter(key => (keys.includes(key) || Object.hasOwn(lines, key) || displayDivider(key)) && !assigned.has(key)), hidden, lines }
 

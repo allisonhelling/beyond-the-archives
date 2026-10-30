@@ -1,0 +1,3 @@
+.work-fandoms { min-width: 0; overflow-wrap: anywhere; font: 650 var(--work-tile-label-size)/1.6 var(--font-sans); letter-spacing: 1px; color: var(--color-brand); }
+.work-card :is(.authors, .display-fact-value, .display-grouped-line) { color: var(--color-muted); }
+.story-card .metadata-tags { --personal-control-font-size: var(--work-tile-label-size); }

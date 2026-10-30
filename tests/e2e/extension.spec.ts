@@ -252,6 +252,8 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
   releaseImage!()
   await nextWork.waitForLoadState('load')
   expect(uploads).toHaveLength(2)
+  // Capture opens an inactive tab; activate it before simulating reader actions.
+  await nextWork.bringToFront()
   const nextBar = nextWork.locator('#ao3-library-companion')
   await nextBar.getByRole('button', { name: 'Add to Library', exact: true }).click()
   await nextBar.getByRole('button', { name: 'Save', exact: true }).click()

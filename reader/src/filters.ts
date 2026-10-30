@@ -67,7 +67,7 @@ export function filterErrors(filters: Filters) {
   })
 }
 export function matchesBook(book: Book | CatalogBook, filters: Filters, query: string): boolean {
-  if (!('hasFile' in book ? book.hasFile : book.file) || filterErrors(filters).length) return false
+  if (filterErrors(filters).length) return false
   for (const facet of facets) {
     const values = facet.values(book), selected = filters.selections[facet.key], excluded = filters.excluded[facet.key]
     const matches = (choice: string) => choice === unknownValue ? values.length === 0 : values.some(value => normalize(value.trim()) === normalize(choice.trim()))

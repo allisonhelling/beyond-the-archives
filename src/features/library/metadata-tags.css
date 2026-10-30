@@ -9,3 +9,5 @@
 .info-separator { font-size: calc(var(--personal-control-font-size, 13px) * .75); vertical-align: .08em; white-space: pre; }
 .categorized-tags button.metadata-tag { min-height: 0; font-family: inherit; font-weight: inherit; }
 .categorized-tags[data-tag-shape="filled"] .metadata-tag { display: inline-flex; align-items: center; min-height: 30px; padding: 4px 8px; border-color: transparent; border-radius: var(--radius-compact-control, 4px); background: var(--color-brand-soft); color: var(--tag-filled-color, var(--color-text, inherit)); }
+
+.expandable-metadata-tags .tags-toggle { display: inline-flex; align-items: center; min-height: 30px; padding: 4px 8px; border: 0; background: transparent; color: var(--color-brand); font: inherit; white-space: nowrap; }

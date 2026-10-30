@@ -23,6 +23,7 @@
   --radius-control: 6px;
   --radius-filter-panel: var(--radius-surface);
   --radius-work-card: var(--radius-surface);
+  --work-tile-label-size: 13px;
   --color-control-border: #dfcbc5;
   --color-filter-border: #e6c8c1;
   --color-paper: #F7F0E3;
@@ -30,6 +31,7 @@
   --color-surface-secondary: #f1e1d1;
   --color-border: #e8ddda;
   --color-link: #800020;
+  --color-muted: #756363;
   --color-brand: #970000;
   --color-brand-hover: #750000;
   --color-brand-soft: var(--color-surface-secondary);

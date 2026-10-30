@@ -114,7 +114,7 @@ async function openAddStory(page: Page) {
 async function ordering(page: Page) {
   const reading = new URL(page.url()).pathname === '/reading'
   await expect(page.getByRole('heading', { name: reading ? 'Currently Reading' : 'Your Library', exact: true })).toBeVisible()
-  return page.locator(reading ? '.library-heading-actions, .reading-toolbar' : '.reading-toolbar')
+  return page.locator('.pagination-inline, .reading-toolbar')
 }
 
 test('personal notes, ratings and Recs apply explicitly and share tag formatting', async ({ page }) => {
@@ -669,9 +669,9 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(toolbar.locator('.filter-name')).toHaveCount(0)
   await expect(toolbar.getByLabel('Search Title or Author', { exact: true })).toBeVisible()
   if (info.project.name === 'mobile') {
-    await expect(page.locator('.reading-toolbar').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+    await expect(page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
     await expect(toolbar.getByRole('button', { name: 'Group', exact: true })).toBeVisible()
-    await expect(page.locator('.reading-toolbar').getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
+    await expect(page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
     await expect(toolbar.getByRole('button',{name:'Group',exact:true})).toHaveAttribute('title','Group')
 
     await expect(page.locator('.reading-tiles strong').first()).toHaveCSS('font-size', '13px')
@@ -683,16 +683,16 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     for (const box of bounds) expect(Math.abs(box!.y - bounds[0]!.y)).toBeLessThan(1)
   }
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).press('ArrowDown')
-  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Date Added', exact: true })).toBeFocused()
+  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Date Added', exact: true })).toBeFocused()
   await page.keyboard.press('End')
   await page.keyboard.press('ArrowUp')
   await page.keyboard.press('Enter')
-  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('listbox')).toBeVisible()
+  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('listbox')).toBeVisible()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Alphabetical')
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('listbox')).toHaveCount(0)
+  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('listbox')).toHaveCount(0)
   await toolbar.getByPlaceholder('Search Title or Author').click()
   await expect(page.getByRole('region', { name: 'Titles Suggestions' })).toBeVisible()
   for (const heading of await page.locator('.search-suggestions .suggestion-heading').all()) {
@@ -818,7 +818,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(page.getByRole('alert').filter({ hasText: 'Close the quotation marks' })).toContainText('Close the quotation marks')
   await clear()
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Series', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Series', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect(page.getByRole('heading', { name: 'Garden series (1)' })).toBeVisible()
   await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('placeholder', 'mm/dd/yyyy')
@@ -1132,10 +1132,10 @@ test('sort and grouping preferences persist across navigation and refresh', asyn
   const toolbar = page.getByRole('region', { name: 'Reading Toolbar' })
   await expect(toolbar.getByRole('button', { name: 'Work Status', exact: true })).toHaveCount(0)
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Date Added', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Date Added', exact: true }).click()
   await page.keyboard.press('Escape')
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Author', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
   await openFilters(page)
   const panel = page.getByRole('region', { name: 'Reading Filters' })
@@ -1158,7 +1158,7 @@ test('random sort reshuffles when selected again and keeps its seed on reload',a
   tables.library_entries.push({id:`random-entry-${i}`,work_id:`random-work-${i}`,original_url:`https://archiveofourown.org/works/${i}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,metadata_overrides:{},created_at:'2026-10-21T00:00:00Z'})
  }
  await page.goto('/library');await login(page)
- const sort=page.locator('.reading-toolbar').getByRole('button',{name:'Sort',exact:true})
+ const sort=page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})
  await sort.click();await page.getByRole('option',{name:'Random',exact:true}).click()
  await expect(page.locator('.work-card')).toHaveCount(12)
  await expect(page).toHaveURL(/randomSeed=/)
@@ -1183,7 +1183,7 @@ test('invalid saved display preferences fall back to defaults', async ({ page })
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
   await expect((await ordering(page)).getByRole('button', { name: 'Group', exact: true })).toContainText('None')
   await page.goto('/library')
-  await expect(page.locator('.reading-toolbar').getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
+  await expect(page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
 })
 
@@ -1251,11 +1251,11 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(page.getByRole('navigation', { name: 'Dashboard Sections' })).toHaveCount(0)
   await expect(page.getByLabel('Search Title or Author', { exact: true })).toHaveCount(1)
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Date Added', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Date Added', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(cards.locator('h2 a')).toHaveText(['Library story 4', 'Library story 3', 'Library story 2', 'Library story 1'])
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions').getByRole('option', { name: 'Author', exact: true }).click()
+  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('heading', { name: 'Saved author (1)', exact: true })).toBeVisible()
   await openFilters(page)
@@ -2591,7 +2591,7 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   const filter = page.getByRole('button', { name: 'One-Shot', exact: true })
   await expect(filter).toContainText('Allowed')
   const choices = page.locator('.filter-choice-row')
-  const bounds = await Promise.all(['Content Rating', 'Publication Status', 'One-Shot'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
+  const bounds = await Promise.all(['Content Rating', 'Rating', 'One-Shot'].map(name => choices.getByRole('button', { name, exact: true }).boundingBox()))
   if (info.project.name === 'desktop') {
     const alignment = await choices.locator('.custom-dropdown').evaluateAll(elements => elements.map(element => {
       const label = element.querySelector('.filter-label')!.getBoundingClientRect(), trigger = element.querySelector('.dropdown-trigger')!.getBoundingClientRect()
@@ -2621,7 +2621,7 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   await page.getByRole('button', { name: 'Clear All Filters', exact: true }).first().click()
   await expect(filter).toContainText('Allowed')
   await expect(page.locator('.story-card')).toHaveCount(6)
-  const sort = page.locator('.reading-toolbar').getByRole('button', { name: 'Sort', exact: true })
+  const sort = page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })
   await sort.click()
   await page.getByRole('option', { name: 'Alphabetical • Z–A', exact: true }).click()
   const titles = page.locator('.story-card h2 > a')
@@ -3218,10 +3218,29 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
  const tables = await fixture(page)
  const summary = 'An italic and bold summary.\n\nAnother paragraph with a link.'
  const summaryHtml = '<p>An <em>italic</em> and <strong>bold</strong> summary.</p><p>Another paragraph with a <a href="/works/123">link</a>.</p>'
+ const formattedTags = Array.from({ length: 9 }, (_, index) => `Saved Tag ${index + 1}`)
  tables.works.push({ id: 'formatted-work', ao3_work_id: 123, title: 'Formatted work', summary, automatic_metadata: { summary_html: summaryHtml }, published_chapters: 2, total_chapters: 3, verified_chapters: {} })
- tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: {}, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
+ tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: { authors: ['Tile Author'], fandoms: ['Fandom Above Title'], ao3_tags: formattedTags }, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
  await page.goto('/library'); await login(page)
  const tile = page.locator('.work-card')
+ await expect(tile.getByText('Fandom Above Title', { exact: true })).toBeVisible()
+ await expect(tile.locator('.work-fandoms')).toHaveCSS('font-size', '13px')
+ await expect(tile.locator('.work-fandoms')).toHaveCSS('font-weight', '650')
+ await expect(tile.locator('.work-fandoms')).toHaveCSS('color', 'rgb(151, 0, 0)')
+ await expect(tile.locator('.authors')).toHaveCSS('color', 'rgb(117, 99, 99)')
+ await expect(tile.locator('.display-fact-value').first()).toHaveCSS('color', 'rgb(117, 99, 99)')
+ await expect(tile.locator('.authors a').first()).toHaveCSS('color', 'rgb(128, 0, 32)')
+ const titleBox = (await tile.locator('h2').boundingBox())!, fandomBox = (await tile.getByText('Fandom Above Title', { exact: true }).boundingBox())!
+ expect(fandomBox.y + fandomBox.height).toBeLessThanOrEqual(titleBox.y)
+ const tagList = tile.locator('.expandable-metadata-tags')
+ await expect(tagList.locator('.metadata-tag')).toHaveCount(7)
+ await expect(tagList.locator('.metadata-tag').first()).toHaveCSS('font-size', '13px')
+ const factsBox = (await tile.locator('.display-grouped-line').first().boundingBox())!, tagsBox = (await tagList.boundingBox())!
+ expect(tagsBox.y).toBeGreaterThanOrEqual(factsBox.y + factsBox.height)
+ await tagList.getByRole('button', { name: '+2 more', exact: true }).click()
+ await expect(tagList.locator('.metadata-tag')).toHaveCount(9)
+ await tagList.getByRole('button', { name: 'Show Less', exact: true }).click()
+ await expect(tagList.locator('.metadata-tag')).toHaveCount(7)
  const originalViewport = page.viewportSize()!
  const desktop = originalViewport.width > 1100
  await expect(tile.locator('.story-summary').first()).toHaveCSS('font-size', desktop ? '15px' : '13px')
@@ -3237,7 +3256,7 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), fonts = []
   while (walker.nextNode()) {
    const node = walker.currentNode, parent = node.parentElement
-   if (parent instanceof HTMLElement && parent.getClientRects().length && /[\p{L}\p{N}]/u.test(node.textContent ?? '')) fonts.push({ text: node.textContent?.trim(), size: parseFloat(getComputedStyle(parent).fontSize) })
+   if (parent instanceof HTMLElement && !parent.closest('.work-fandoms, .metadata-tags') && parent.getClientRects().length && /[\p{L}\p{N}]/u.test(node.textContent ?? '')) fonts.push({ text: node.textContent?.trim(), size: parseFloat(getComputedStyle(parent).fontSize) })
   }
   return fonts
  })
@@ -3782,8 +3801,9 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
   expect(Math.abs(choices.y-personal.y)).toBeLessThan(1)
   const content=(await row.getByRole('button',{name:'Content Rating',exact:true}).boundingBox())!
   expect(content.x).toBeGreaterThan(personal.x+personal.width)
-  const children=await row.locator(':scope > *').evaluateAll(elements=>elements.map(element=>{const box=element.getBoundingClientRect();return {x:box.x,y:box.y}}))
-  for(let index=1;index<children.length;index++) if(children[index].y>children[index-1].y+2) expect(Math.abs(children[index].x-choices.x)).toBeLessThan(1)
+  // Centered controls can have different top edges on the same flex line.
+  const children=await row.locator(':scope > *').evaluateAll(elements=>elements.map(element=>{const box=element.getBoundingClientRect();return {x:box.x,y:box.y,bottom:box.bottom}}))
+  for(let index=1;index<children.length;index++) if(children[index].y>=children[index-1].bottom+1) expect(Math.abs(children[index].x-choices.x)).toBeLessThan(1)
  }
  await expect(row.locator(':scope > button')).toHaveText(['Exclude Later Series Works','In a Series','Favorites','Personal Notes','Recs'])
  expect(await row.locator('.custom-dropdown > .dropdown-trigger').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(['Content Rating','Rating','One-Shot','Available Offline'])

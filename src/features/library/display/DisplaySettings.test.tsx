@@ -86,7 +86,7 @@ it('normalizes malformed, duplicate, obsolete and newly added fields', () => {
   expect(normalized.order[0]).toBe('summary')
   expect(normalized.order.flatMap(key => normalized.lines?.[key] ?? [key])).toHaveLength(Object.keys(displayGroups.workTile.fields).length)
   expect(normalized.order).not.toContain('obsolete')
-  expect(normalized.hidden).toEqual(['authors', ...defaults.hidden])
+  expect(normalized.hidden).toEqual(['authors', 'allTags', ...defaults.hidden])
 })
 
 it('does not apply a draft if storage rejects the save', () => {
@@ -163,7 +163,7 @@ it('keeps newly shown optional fields visible when saved inside a grouped line',
 it('moves a multi-selection into a line in display order and deletes containers independently of their information', () => {
   const original = displayPreference('workTile', '{}')
   const grouped = moveDisplaySelection(original, ['fandoms', 'authors'], 'line:facts')
-  expect(grouped.lines?.['line:facts']).toEqual(['series', 'rating', 'words', 'authors', 'fandoms'])
+  expect(grouped.lines?.['line:facts']).toEqual(['series', 'rating', 'words', 'fandoms', 'authors'])
   expect(grouped.order).not.toContain('authors')
   expect(moveDisplaySelection(grouped, ['line:facts', 'authors'], 'words')).toBe(grouped)
   const hidden = deleteDisplaySelection(grouped, ['authors', 'fandoms'])
@@ -236,7 +236,7 @@ it('shows a drop shadow in the same slot used by the move operation without savi
  const view=render(<DisplayEditorContext value={{preferences,groups:['workTile'],selected:null,dropPreview:{group:'workTile',preference:projected,fields:['authors']}}}><div className="display-edit-surface"><DisplayInfo group="workTile">{{authors:<p>Author</p>,fandoms:<p>Fandom</p>,summary:<p>Summary</p>}}</DisplayInfo></div></DisplayEditorContext>)
  const shadow=view.container.querySelector('.display-drop-shadow')!
  expect(shadow).toHaveTextContent('Author')
- expect(shadow.previousElementSibling).toHaveTextContent('Fandom')
+ expect(shadow.nextElementSibling).toHaveTextContent('Fandom')
  expect(localStorage.getItem(displaySettingsKey)).toBeNull()
 })
 
@@ -280,7 +280,7 @@ it.each(['tile', 'info'] as const)('renders every selectable AO3 field in the %s
  localStorage.setItem(displaySettingsKey, JSON.stringify({ [group]: { order: Object.keys(displayGroups[group].fields), hidden: [] } }))
  const story = { ...exampleWork, metadata: { ...exampleWork.metadata, categories: ['M/M'], language: 'English', bookmark_count: 0, comment_count: 123, hits: 4567 } }
  render(<MemoryRouter><DisplayInfo group={group}>{workMetadataFields(story, layout)}</DisplayInfo></MemoryRouter>)
- expect(screen.getByText('M/M')).toBeVisible()
+ expect(screen.getAllByText('M/M')[0]).toBeVisible()
  expect(screen.getByText('0 bookmarks')).toBeVisible()
  expect(screen.getByText('123 comments')).toBeVisible()
  expect(screen.getByText('4,567 hits')).toBeVisible()
@@ -289,9 +289,11 @@ it.each(['tile', 'info'] as const)('renders every selectable AO3 field in the %s
  expect(screen.getAllByText(/2017/).length).toBeGreaterThan(0)
 })
 
-it('keeps added AO3 fields hidden until selected, preserving saved layouts', () => {
+it('shows all tags by default while keeping other added AO3 fields hidden', () => {
  render(<MemoryRouter><DisplayInfo group="workTile">{workMetadataFields({ ...exampleWork, metadata: { ...exampleWork.metadata, categories: ['M/M'], language: 'English' } }, 'tile')}</DisplayInfo></MemoryRouter>)
- expect(screen.queryByText('M/M')).not.toBeInTheDocument()
+ expect(screen.queryByText(/^Category:/)).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button', { name: /more$/ }))
+ expect(screen.getByText('M/M')).toBeVisible()
  expect(screen.queryByText(/English/)).not.toBeInTheDocument()
  expect(screen.getByText(/66,463 words/)).toBeVisible()
 })
@@ -329,4 +331,27 @@ it('saves collection filters directly and requires confirmation for all-category
  expect(localStorage.getItem('between-chapters:filter-defaults:v1')).toContain('library:favorites')
  fireEvent.click(dialog.getByRole('button', {name:'Cancel'}))
  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+it('places default fandoms above the fixed heading and expandable tags below grouped facts', () => {
+ const fields = workMetadataFields(exampleWork, 'tile')
+ const view = render(<MemoryRouter><DisplayInfo group="workTile" heading={<h2>Work Heading</h2>} beforeHeading={['fandoms']}>{fields}</DisplayInfo></MemoryRouter>)
+ const heading = screen.getByRole('heading', { name: 'Work Heading' })
+ const fandoms = screen.getByText(exampleWork.metadata.fandoms.join(' · '))
+ expect(fandoms.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+ const tags = view.container.querySelector('.expandable-metadata-tags')!
+ expect(view.container.querySelector('.display-grouped-line')!.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+ expect(tags.querySelectorAll('.metadata-tag')).toHaveLength(7)
+ fireEvent.click(within(tags as HTMLElement).getByRole('button', { name: /more$/ }))
+ expect(tags.querySelectorAll('.metadata-tag').length).toBeGreaterThan(7)
+ fireEvent.click(within(tags as HTMLElement).getByRole('button', { name: 'Show Less' }))
+ expect(tags.querySelectorAll('.metadata-tag')).toHaveLength(7)
+})
+
+it('preserves custom tile order and visibility when all tags belong to a grouped line', () => {
+ const raw = JSON.stringify({ workTile: { order: ['authors', 'fandoms', 'line:custom'], hidden: [], lines: { 'line:custom': ['words', 'allTags'] } } })
+ const preference = displayPreference('workTile', raw)
+ expect(preference.order.slice(0, 3)).toEqual(['authors', 'fandoms', 'line:custom'])
+ expect(preference.hidden).not.toContain('allTags')
+ expect(preference.lines?.['line:custom']).toEqual(['words', 'allTags'])
 })

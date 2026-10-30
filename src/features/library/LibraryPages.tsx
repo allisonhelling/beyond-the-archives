@@ -176,8 +176,7 @@ export function StoryCard({ story: candidate, linkId, readOnly = false }: { stor
   if (story.detailsLoaded === false) return <article className="story-card work-card" aria-busy="true"><p role="status">Loading work details…</p></article>
   const origin = { returnTo: location.pathname + location.search }
   return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story} readOnly={readOnly}>{({ actions, caughtUp, editProgress }) => <>
-    <div className="story-card-title"><h2 aria-label={story.metadata.title}>{readOnly ? <span id={linkId}>{story.metadata.title}</span> : <Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>
-<DisplayInfo group="workTile">{{
+    <DisplayInfo group="workTile" beforeHeading={['fandoms']} heading={<div className="story-card-title"><h2 aria-label={story.metadata.title}>{readOnly ? <span id={linkId}>{story.metadata.title}</span> : <Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>}>{{
       ...workMetadataFields(story, 'tile'),
       personalRating: <div className="tile-personal-rating"><StarRating value={story.personal_rating} /></div>,
       collections: <div className="story-facts"><CustomCollectionNames ids={[...story.collectionIds, ...(story.automaticCollectionIds ?? [])]} /></div>,

@@ -3,6 +3,7 @@ import { ao3Date, ratingLabel, savedWorkUrl, tagNames, type Story } from '../mod
 import { AuthorNames } from '../AuthorNames'
 import { SeriesNames } from '../series/SeriesNames'
 import { MetadataTags } from '../MetadataTags'
+import { ExpandableMetadataTags } from '../ExpandableMetadataTags'
 import { WorkSummary } from '../summaries/WorkSummary'
 import { publicationStatuses } from '../publication-status'
 import { ao3MetadataLabels } from './ao3-fields'
@@ -27,16 +28,16 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
     published: ao3Date(work.ao3_published_at), updated: ao3Date(work.ao3_updated_at),
     language: metadata.language || work.language || 'Unknown', publication: publicationStatuses[metadata.publication_status].label,
     workId: work.ao3_work_id ?? 'Unknown', source: <a className="clickable-text" href={savedWorkUrl(story)} target="_blank" rel="noreferrer">View on AO3</a>,
-    allTags: <MetadataTags values={metadata.ao3_tags} />,
+    allTags: layout === 'tile' ? <ExpandableMetadataTags values={[...metadata.ao3_tags, ...tagNames(metadata, 'relationship'), ...tagNames(metadata, 'character'), ...tagNames(metadata, 'freeform'), ...(metadata.archive_warnings ?? []), ...(metadata.categories ?? [])]} /> : <MetadataTags values={metadata.ao3_tags} />,
   }
   return Object.fromEntries(Object.entries(values).map(([key, value]) => {
     const label = ao3MetadataLabels[key as keyof typeof ao3MetadataLabels]
     if (layout === 'info') return [key, <div key={key}><dt className={key === 'allTags' ? 'sr-only' : undefined}>{label}</dt><dd className={key === 'summary' ? 'story-summary story-details-summary' : undefined}>{key === 'allTags' ? <details className="details-disclosure"><summary>All Tags</summary>{value}</details> : value}</dd></div>]
     if (key === 'summary') return [key, <>{metadata.summary && <><hr className="story-summary-divider" /><div className="story-summary">{value}</div></>}</>]
     if (key === 'authors') return [key, <p className="authors">By {value}</p>]
-    if (key === 'fandoms') return [key, <p className="muted">{value}</p>]
+    if (key === 'fandoms') return [key, <p className="work-fandoms">{value}</p>]
     if (key === 'series' && !metadata.series?.length) return [key, false]
-    if (['relationships', 'characters', 'tags', 'warnings', 'category'].includes(key)) return [key, <div className="story-facts">{key === 'category' && 'Category: '}{value}</div>]
+    if (['relationships', 'characters', 'tags', 'warnings', 'category', 'allTags'].includes(key)) return [key, <div className="story-facts">{key === 'category' && 'Category: '}{value}</div>]
     return [key, <span className="display-fact-value">{['category', 'published', 'updated', 'language', 'workId', 'publication'].includes(key) && `${key === 'updated' ? 'Updated' : label}: `}{value}</span>]
   }))
 }

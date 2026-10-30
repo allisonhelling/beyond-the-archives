@@ -14,7 +14,7 @@ function editable(node: ReactNode, group: DisplayGroup, field: string, selected:
     ? cloneElement(element, attributes)
     : <div {...attributes} className={`display-edit-contents${moving ? ' display-drop-shadow' : ''}`}>{element}</div>
 }
-export function DisplayInfo({ group, children, separator, fields }: { group: DisplayGroup; children: Partial<Record<string, ReactNode>>; separator?: ReactNode; fields?: string[] }) {
+export function DisplayInfo({ group, children, separator, fields, heading, beforeHeading = [] }: { group: DisplayGroup; children: Partial<Record<string, ReactNode>>; separator?: ReactNode; fields?: string[]; heading?: ReactNode; beforeHeading?: string[] }) {
   const editor = useContext(DisplayEditorContext)
   const preference = useDisplayPreference(group)
   const drop = editor?.dropPreview?.group === group ? editor.dropPreview : undefined
@@ -43,5 +43,7 @@ export function DisplayInfo({ group, children, separator, fields }: { group: Dis
     </div>
     return <Fragment key={key}>{editing ? editable(content, group, key, (editor?.selectedFields ?? (editor?.selected ? [editor.selected] : [])).some(field => field.group === group && field.field === key), editor?.dropPreview?.group === group && editor.dropPreview.fields.includes(key)) : content}</Fragment>
   }
-  return <>{entries.map((key, index) => <Fragment key={key}>{renderEntry(key, index)}</Fragment>)}</>
+  const firstBody = entries.findIndex(key => !beforeHeading.includes(key))
+  const headingIndex = firstBody < 0 ? entries.length : firstBody
+  return <>{entries.map((key, index) => <Fragment key={key}>{index === headingIndex && heading}{renderEntry(key, index)}</Fragment>)}{headingIndex === entries.length && heading}</>
 }
