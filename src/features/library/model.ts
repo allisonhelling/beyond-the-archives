@@ -54,7 +54,10 @@ export function validateProgress(value: number, metadata: Metadata) {
   if ((metadata.published_chapters !== null && value > metadata.published_chapters) || (metadata.total_chapters !== null && value > metadata.total_chapters)) throw new Error('Progress cannot exceed the known chapter count.')
   return value
 }
-export function chapterUrl(story: Story, position = nextUnread(story.last_read_chapter)) {
+export function readChapter(story: Pick<Story, 'reading_status' | 'last_read_chapter'>) {
+  return story.reading_status === 'finished' ? 1 : nextUnread(story.last_read_chapter)
+}
+export function chapterUrl(story: Story, position = readChapter(story)) {
   // A verified AO3 chapter ID does not prove that Wayback captured that URL.
   if (story.original_url && waybackSnapshot(savedWorkUrl(story))) return null
   const map = story.work.verified_chapters as Record<string, Json>
@@ -74,6 +77,17 @@ export function savedWorkUrl(story: Pick<Story, 'metadata' | 'original_url'> & {
     if (typeof url === 'string' && parseWorkUrl(url).workId === story.work.ao3_work_id) return url
   } catch { /* Invalid legacy overrides cannot become clickable destinations. */ }
   return story.original_url
+}
+
+/** A finished work without a first-chapter mapping opens the work, not the last saved chapter. */
+export function readingUrl(story: Story) {
+ const next=chapterUrl(story)
+ if(next)return next
+ const saved=savedWorkUrl(story)
+ if(story.reading_status==='finished' && !waybackSnapshot(saved)) {
+  try {return parseWorkUrl(saved).normalizedUrl} catch { /* Preserve legacy and archived destinations. */ }
+ }
+ return saved
 }
 
 export function tagNames(metadata: Metadata, category: 'relationship' | 'character' | 'freeform'): string[] {

@@ -1,3 +1,6 @@
 .work-fandoms { min-width: 0; overflow-wrap: anywhere; font: 650 var(--work-tile-label-size)/1.6 var(--font-sans); letter-spacing: 1px; color: var(--color-brand); }
 .work-card :is(.authors, .display-fact-value, .display-grouped-line) { color: var(--color-muted); }
 .story-card :is(.metadata-tags, .expandable-metadata-tags) { --personal-control-font-size: var(--work-tile-label-size); font-size: var(--work-tile-label-size); }
+
+:is(.series-link, .author-link) { text-decoration: none; text-underline-offset: .15em; }
+:is(.series-link, .author-link):is(:hover, :focus-visible) { text-decoration: underline; }

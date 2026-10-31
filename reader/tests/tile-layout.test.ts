@@ -3,9 +3,10 @@ import { defaultPreferences, defaultTagAppearance } from '../src/model'
 import { defaultReaderTile, readerTilePreferences } from '../src/tile-layout'
 it('preserves the reader default arrangement and hides unsupported organizer fields',()=>{
  const tile=defaultReaderTile()
- expect(tile.order).toEqual(['authors','fandoms','series','line:facts','allTags','summary','progress'])
- expect(tile.lines?.['line:facts']).toEqual(['words','chapters','rating'])
+ expect(tile.order).toEqual(['authors','fandoms','line:facts','allTags','summary','progress'])
+ expect(tile.lines?.['line:facts']).toEqual(['series','words','rating'])
  expect(tile.hidden).toContain('notes')
+ expect(tile.hidden).toContain('chapters')
  expect(tile.hidden).not.toContain('allTags')
 })
 it('keeps desktop and mobile layouts independent while sharing the existing preference normalization',()=>{

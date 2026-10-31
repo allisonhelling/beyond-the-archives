@@ -49,7 +49,7 @@ test('reports storage exhaustion without deleting downloads, then removes only t
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
   await expect(page.locator('.story-card')).toHaveCount(2)
-  await expect(page.locator('.story-card .availability').filter({ hasText: 'Not Downloaded' })).toHaveCount(1)
+  await expect(page.locator('.story-card .availability').filter({ hasText: 'Available In Cloud' })).toHaveCount(1)
 })
 test('uses fresh pages online while retaining the prepared shell offline', async ({ page, context }) => {
   await page.goto('/')

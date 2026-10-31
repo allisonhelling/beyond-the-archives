@@ -1,3 +1,4 @@
+import { exampleWork } from './display/display-examples'
 import { describe, expect, it } from 'vitest'
 import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, initialProgress, nextUnread, parseWorkUrl, progressReadingStatus, validateProgress, type Work } from './model'
 it('projects deleted availability without losing saved work fields or manual corrections', () => {
@@ -110,4 +111,19 @@ it('keeps an archived reading destination instead of inventing a live next-chapt
  const story = { original_url, metadata: {}, last_read_chapter: 1, work: { ao3_work_id: 123, verified_chapters: { 2: '920' } } } as unknown as Parameters<typeof chapterUrl>[0]
  expect(chapterUrl(story)).toBeNull()
  expect(savedWorkUrl(story)).toBe(original_url)
+})
+
+it('opens finished works at chapter one without resetting saved progress',async()=>{
+ const {chapterUrl,readChapter,readingUrl}=await import('./model')
+ const story={...exampleWork,reading_status:'finished' as const,last_read_chapter:9,original_url:'https://archiveofourown.org/works/123/chapters/999',work:{...exampleWork.work,ao3_work_id:123,verified_chapters:{1:'100',10:'1000'}}}
+ expect(readChapter(story)).toBe(1)
+ expect(chapterUrl(story)).toBe('https://archiveofourown.org/works/123/chapters/100')
+ expect(readingUrl(story)).toBe('https://archiveofourown.org/works/123/chapters/100')
+ expect(story.last_read_chapter).toBe(9)
+ expect(readChapter({...story,reading_status:'waiting_for_updates'})).toBe(10)
+ expect(chapterUrl({...story,reading_status:'waiting_for_updates'})).toBe('https://archiveofourown.org/works/123/chapters/1000')
+ expect(readingUrl({...story,work:{...story.work,verified_chapters:{}}})).toBe('https://archiveofourown.org/works/123')
+ const archived={...story,original_url:'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123/chapters/999'}
+ expect(chapterUrl(archived)).toBeNull()
+ expect(readingUrl(archived)).toBe(archived.original_url)
 })

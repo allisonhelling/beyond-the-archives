@@ -68,7 +68,7 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await other.getByLabel('Work Actions',{exact:true}).click()
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Remove Download',exact:true}).click()
- await expect(other.locator('.story-card .availability')).toHaveText('Not Downloaded')
+ await expect(other.locator('.story-card .availability')).toHaveText('Available In Cloud')
  await other.getByRole('button',{name:'Manage Storage',exact:true}).click()
  const storage=other.getByRole('dialog',{name:'Manage Local Storage',exact:true})
  await expect(storage.locator('td[data-column=library]')).toHaveText('In Cloud')

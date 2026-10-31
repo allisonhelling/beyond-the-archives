@@ -1,3 +1,4 @@
+import { isTooltipPaintedAt } from './tooltip-assertions'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
@@ -18,6 +19,10 @@ test('basic series and optional AO3 review stay separate on desktop and mobile',
   ]}}})
  })
  await page.goto('/series/77'); await login(page)
+ const seriesName=page.locator('.story-title-row h1 .series-link')
+ await expect(seriesName).toHaveCSS('text-decoration-line','none')
+ await seriesName.hover()
+ await expect(seriesName).toHaveCSS('text-decoration-line','underline')
  if (page.viewportSize()!.width <= 600) {
   const fandoms = (await page.locator('.story-title-row .details-fandom-rating').boundingBox())!
   const favorite = (await page.locator('.story-title-row .favorite').boundingBox())!
@@ -277,10 +282,8 @@ test('series review tooltips escape scrolling controls and Save comes first', as
   await expect(tooltip).toBeVisible()
   await expect(tooltip).toHaveCSS('position', 'fixed')
   expect(await tooltip.evaluate(node => node.parentElement?.tagName)).toBe('DIALOG')
-  expect(await tooltip.evaluate(node => {
-   const bounds = node.getBoundingClientRect()
-   return node.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2))
-  })).toBe(true)
+  expect(await tooltip.evaluate(isTooltipPaintedAt)).toBe(true)
+  await expect(tooltip).toHaveCSS('pointer-events', 'none')
  }
  for (const name of ['Select All', 'Clear Selection', 'View All', 'Hide All']) await assertTooltip(top.getByRole('button', { name, exact: true }))
  await assertTooltip(dialog.locator('.series-import-heading').getByRole('button', { name: 'Save', exact: true }))

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { BulletSeparated } from '../BulletSeparated'
 import { ao3Date, ratingLabel, savedWorkUrl, tagNames, type Story } from '../model'
 import { AuthorNames } from '../AuthorNames'
 import { SeriesNames } from '../series/SeriesNames'
@@ -13,7 +14,7 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
   const { metadata, work } = story
   const count = (value: number | null | undefined) => value?.toLocaleString() ?? '?'
   const values: Record<keyof typeof ao3MetadataLabels, ReactNode> = {
-    authors: <AuthorNames metadata={metadata} destination={layout === 'info' ? 'ao3' : 'library'} />, fandoms: metadata.fandoms.join(' · ') || 'Fandom unknown',
+    authors: <AuthorNames metadata={metadata} destination={layout === 'info' ? 'ao3' : 'library'} />, fandoms: metadata.fandoms.length ? <BulletSeparated values={metadata.fandoms} /> : 'Fandom unknown',
     series: metadata.series?.length ? <SeriesNames metadata={metadata} /> : 'None saved',
     rating: ratingLabel(metadata.rating) || 'Rating unknown', words: `${count(metadata.word_count)} words`,
     chapters: `${metadata.published_chapters ?? '?'} / ${metadata.total_chapters ?? '?'} chapters`,

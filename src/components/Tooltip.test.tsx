@@ -52,3 +52,14 @@ it('pins shared info help across blur and clears its pressed state with Escape',
  expect(button).toHaveAttribute('aria-pressed', 'false')
  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 })
+
+it('dismisses pinned help on an outside press while preserving clicks inside the help', () => {
+ render(<><InfoTooltip label="Search Help" description={<p>Search syntax.</p>} /><button>Clear Filters</button></>)
+ const button = screen.getByRole('button', { name: 'Search Help' })
+ fireEvent.click(button)
+ fireEvent.pointerDown(screen.getByRole('tooltip'))
+ expect(button).toHaveAttribute('aria-pressed', 'true')
+ fireEvent.pointerDown(screen.getByRole('button', { name: 'Clear Filters' }))
+ expect(button).toHaveAttribute('aria-pressed', 'false')
+ expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+})

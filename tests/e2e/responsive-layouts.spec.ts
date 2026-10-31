@@ -71,6 +71,8 @@ test('library and reading actions fit their headers and filters across viewport 
   tables.library_entries.push({ id: `layout-entry-${index}`, work_id: `layout-work-${index}`, reading_status: 'reading', last_read_chapter: 1, notes: '', original_url: `https://archiveofourown.org/works/${index}`, metadata_overrides: { published_chapters: 10, total_chapters: 10, fandoms: [index % 2 ? 'Naruto' : 'Supernatural'] } })
  }
  await page.goto('/library?size=50'); await login(page)
+ // Exercise the sans-serif fallback used when Avenir/Segoe are unavailable.
+ await page.addStyleTag({ content: ':root { --font-sans: Arial, sans-serif; }' })
  for (const width of [1440, 1024, 430, 375, 320]) {
   await page.setViewportSize({ width, height: 900 })
   const header = page.locator('.library-heading-actions'), toolbar = page.locator('.reading-toolbar')

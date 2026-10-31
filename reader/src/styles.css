@@ -102,10 +102,10 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .work-details-list dt { font-weight: 600; }
 .work-details-list dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .work-details-list ul { margin: 0; padding-left: 18px; }
-.availability { color: var(--color-muted); font-size: 11px; white-space: nowrap; }
+.availability { display: inline-flex; align-items: center; gap: 4px; color: var(--color-muted); font-size: 11px; white-space: nowrap; }
 .story-card h2 { flex: 1; min-width: 0; margin: 2px 0 5px; font-size: 22px; overflow-wrap: anywhere; }
-.series-link { color: var(--color-brand); text-decoration: underline; text-underline-offset: .15em; }
-.title-button { background: transparent; border: 0; font: inherit; padding: 0; min-height: 0; text-align: left; }
+.series-link { color: var(--color-brand); }
+.title-button, .author-link { background: transparent; border: 0; font: inherit; padding: 0; min-height: 0; text-align: left; }
 .story-card .work-fandoms { margin: 2px 0 4px; }
 .byline { font-size: var(--reader-card-text-size); color: var(--color-muted); margin: 2px 0; }
 .tags { --personal-control-font-size: 11px; font-size: 11px; }
@@ -117,8 +117,7 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .tag-format-dialog .display-tag-colors legend { font: 20px var(--font-serif); margin-bottom: 12px; }
 .tag-format-dialog .display-tag-colors .field-help { font-size: 12px; color: var(--color-muted); }
 .summary { font-size: var(--reader-card-text-size); line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
-.work-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0; color: var(--color-muted); font-size: var(--reader-card-text-size); padding-bottom: 18px; }
-.work-facts > span + span::before { content: '•'; margin-right: 8px; }
+.work-facts { display: block; margin-top: 0; color: var(--color-muted); font-size: var(--reader-card-text-size); padding-bottom: 18px; }
 .card-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; justify-content: space-between; border-top: 1px solid var(--color-border); padding: 15px 0; margin-top: auto; font-size: var(--reader-card-text-size); }
 .card-actions { display: flex; gap: 10px; }
 .card-actions .primary { flex: 1; border-radius: 0; }
@@ -209,7 +208,7 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .download-count { grid-column: 2; grid-row: 2; }
 .reader-status-line { display: block; }
 .reader-account-state { white-space: nowrap; }
-.reader-account-state::before { content: '•'; margin-inline: 8px; }
+.reader-account-state::before { content: '•'; margin-inline: var(--bullet-divider-spacing); }
 .chapter-navigation { gap: 8px; }
 .chapter-navigation > button { padding: 8px 6px; font-size: 11px; }
 .reader-toolbar { padding: 10px; gap: 8px; flex-wrap: wrap; }

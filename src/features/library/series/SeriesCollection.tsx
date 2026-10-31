@@ -1,3 +1,4 @@
+import { BulletSeparated } from '../BulletSeparated'
 import { WorkTileTags } from '../WorkTileTags'
 import { WorkSummary } from '../summaries/WorkSummary'
 import { MetadataTags } from '../MetadataTags'
@@ -42,11 +43,11 @@ export function SeriesCard({ series, linkId }: { series: LibrarySeries; linkId?:
  const info = seriesInformation(series)
  const label = seriesCompletionLabel(series), Icon = publicationStatuses[series.complete === true ? 'complete' : series.complete === false ? 'in_progress' : 'unknown'].Icon
  return <article className="story-card series-card" data-story-id={`series:${series.seriesId}`}><SeriesControls series={series}>{({ actions }) => <>
-  <div className="story-card-title"><h2><Link id={linkId} to={`/series/${series.seriesId}`} state={origin}>{series.title}</Link>{'\u00a0'}<Tooltip description={label}>{id => <span className="publication-icon" role="img" aria-label={label} aria-describedby={id} tabIndex={0}><Icon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></h2>{actions}</div>
+  <div className="story-card-title"><h2><Link className="series-link" id={linkId} to={`/series/${series.seriesId}`} state={origin}>{series.title}</Link>{'\u00a0'}<Tooltip description={label}>{id => <span className="publication-icon" role="img" aria-label={label} aria-describedby={id} tabIndex={0}><Icon size={18} strokeWidth={1.6} aria-hidden="true" /></span>}</Tooltip></h2>{actions}</div>
 <DisplayInfo group="seriesTile">{{
 category: <div className="story-facts">Category: <MetadataTags values={info.categories} /></div>,
 authors: <> <p className="authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> </>,
-fandoms: <>   <p className="work-fandoms">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> </>,
+fandoms: <>   <p className="work-fandoms">{series.fandoms.length ? <BulletSeparated values={series.fandoms} /> : 'Fandom unknown'}</p> </>,
 reading: <span className="series-reading-status display-fact-value">{readingLabel === 'Finished' ? 'Finished Reading' : readingLabel}</span>,
 count: <span className="display-fact-value">{series.savedStories.length} works</span>,
 words: <span className="display-fact-value">{series.wordCount?.toLocaleString() ?? '?'} words</span>,

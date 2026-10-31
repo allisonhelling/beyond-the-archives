@@ -337,7 +337,8 @@ it('places default fandoms below the author line and expandable tags below group
  const fields = workMetadataFields(exampleWork, 'tile')
  const view = render(<MemoryRouter><DisplayInfo group="workTile" heading={<h2>Work Heading</h2>}>{fields}</DisplayInfo></MemoryRouter>)
  const heading = screen.getByRole('heading', { name: 'Work Heading' })
- const fandoms = screen.getByText(exampleWork.metadata.fandoms.join(' · '))
+ const fandoms = view.container.querySelector('.work-fandoms')!
+ expect(fandoms).toHaveTextContent(exampleWork.metadata.fandoms.join(' • '))
  const authors = view.container.querySelector('.authors')!
  expect(heading.compareDocumentPosition(authors) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  expect(authors.compareDocumentPosition(fandoms) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

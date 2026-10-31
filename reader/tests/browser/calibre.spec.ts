@@ -80,7 +80,7 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  await page.locator('.story-card').filter({hasText:'Calibre Title'}).last().getByRole('button',{name:'Manage EPUB',exact:true}).click()
  await expect(page.getByRole('textbox',{name:'Personal Notes',exact:true})).toHaveValue('Keep this reading history')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
- await expect(page.getByText('1 chapters read', {exact:true})).toHaveCount(1)
+ await expect(page.getByText(/^1 chapter read \/ \d+ chapters?$/)).toHaveCount(1)
  expect(requested).not.toContain('/books/0')
  repeatDelivery=true
  await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()

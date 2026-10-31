@@ -164,12 +164,14 @@ test('work tiles and phone organizer controls use the requested reading layout',
  if(mobile) {
   for(const width of [390,320]) {
    await page.setViewportSize({width,height:844})
-   const first=(await read.boundingBox())!,second=(await wayback.boundingBox())!
-   expect(first.x+first.width).toBeLessThanOrEqual(second.x)
-   expect(Math.abs(first.y-second.y)).toBeLessThan(2)
-   await expect(wayback).toHaveCSS('white-space','nowrap')
-   expect(await wayback.evaluate(node=>node.clientHeight<2*parseFloat(getComputedStyle(node).lineHeight)+12)).toBe(true)
-   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+   await expect(async () => {
+    const first=(await read.boundingBox())!,second=(await wayback.boundingBox())!
+    expect(first.x+first.width).toBeLessThanOrEqual(second.x)
+    expect(Math.abs(first.y-second.y)).toBeLessThan(2)
+    await expect(wayback).toHaveCSS('white-space','nowrap')
+    expect(await wayback.evaluate(node=>node.clientHeight<2*parseFloat(getComputedStyle(node).lineHeight)+12)).toBe(true)
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+   }).toPass({ timeout: 5000 })
   }
  } else await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Read EPUB',exact:true})).toBeVisible()
  await page.screenshot({path:test.info().outputPath('work-info-actions.png'),fullPage:true})

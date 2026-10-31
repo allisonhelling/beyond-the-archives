@@ -76,7 +76,13 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const page = draft?.source === currentUrl ? 1 : decoded.page, size = temporarySize ?? decoded.size
   const urlSize = temporarySize === undefined ? pageSize(params.get('size')) : undefined
   if (draft && draft.source !== currentUrl) setDraft(null)
-  function setFilters(update: (previous: ReadingFilters) => ReadingFilters) { const next = update(filters); setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize)) }
+  function setFilters(update: (previous: ReadingFilters) => ReadingFilters) {
+    const next = update(filters)
+    // Save the user's ordering before navigation can unmount this dashboard.
+    try { window.localStorage.setItem(readingPreferencesKey, JSON.stringify({ sort: next.sort, groupBy: next.groupBy })) }
+    catch { /* The current selections still work when browser storage is unavailable. */ }
+    setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize))
+  }
   // Normalize before user navigation can race a deferred effect from this route.
   // Local page-size edits stay temporary.
   const normalized = useRef('')
@@ -91,10 +97,6 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     if (!next.has('shelf')) next.set('shelf', mode === 'reading' ? 'view_all' : 'all')
     if (next.toString() !== params.toString()) setParams(next, { replace: true })
   }, [params, setParams, filters, urlSize, page, mode, draft])
-  useEffect(() => {
-    try { window.localStorage.setItem(readingPreferencesKey, JSON.stringify({ sort: filters.sort, groupBy: filters.groupBy })) }
-    catch { /* The current selections still work when browser storage is unavailable. */ }
-  }, [filters.sort, filters.groupBy])
   const pool = useMemo(() => {
     const works = author !== undefined ? stories.filter(story => story.metadata.authors.includes(author)) : stories
     return mode === 'reading' ? tracked(works) : works

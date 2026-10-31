@@ -24,6 +24,7 @@
   --radius-filter-panel: var(--radius-surface);
   --radius-work-card: var(--radius-surface);
   --work-tile-label-size: 13px;
+  --bullet-divider-spacing: 4px;
   --color-control-border: #dfcbc5;
   --color-filter-border: #e6c8c1;
   --color-paper: #F7F0E3;

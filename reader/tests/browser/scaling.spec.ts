@@ -82,7 +82,7 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   // Unknown publication metadata opens the existing explicit status-choice dialog.
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
-  await expect(page.getByText('1 chapters read')).toBeVisible()
+  await expect(page.getByText('1 chapter read / 1 chapter')).toBeVisible()
   expect((await calls(page))['contents.get']).toBe(1)
   expect((await calls(page))['contents.put']).toBe(writes)
   const stored = await page.evaluate(async () => {
@@ -101,10 +101,10 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
   await page.getByRole('button', { name: 'Manage Storage', exact: true }).click()
   const storage = page.getByRole('dialog', { name: 'Manage Local Storage' })
-  await expect(storage.getByRole('button', { name: 'Remove Download', exact: true })).toHaveCount(24)
+  await expect(storage.locator('tbody tr')).toHaveCount(24)
   await storage.getByRole('button', { name: 'Next', exact: true }).click()
   await expect(storage.getByLabel('Go to Page')).toHaveValue('2')
-  await expect(storage.getByRole('button', { name: 'Remove Download', exact: true })).toHaveCount(24)
+  await expect(storage.locator('tbody tr')).toHaveCount(24)
 })
 
 test('shows browser storage usage and persistence status, including unavailable estimates', async ({ page }) => {
@@ -199,7 +199,7 @@ test('removes only the selected download while preserving its state and other bo
   page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Remove Download', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(2)
-  await expect(page.locator('.story-card .availability').filter({ hasText: 'Not Downloaded' })).toHaveCount(1)
+  await expect(page.locator('.story-card .availability').filter({ hasText: 'Available In Cloud' })).toHaveCount(1)
   expect((await calls(page))['contents.get'] ?? 0).toBe(0)
   const removed = await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })

@@ -165,6 +165,8 @@ Choose **Add → Add Story**. Paste a work or chapter URL, choose **Enter Manual
 
 For a saved AO3 work, choose **View in Wayback Machine** from its story actions menu or details page. A new tab checks recent captures and opens the newest page it can verify, including adult-content warning pages. Login-only captures are skipped. If no recent page can be verified or the archive is unavailable, use **Browse Snapshot Calendar** or **Try Again**. The lookup does not change the saved story, and a working capture does not guarantee every chapter was archived.
 
+The **Read Chapter** action returns to chapter 1 for Finished works, without resetting chapters read, notes, or reading history. Other reading statuses continue from the next unread chapter. If chapter 1 has no verified link, the action opens the work’s base AO3 page; saved Wayback destinations stay unchanged.
+
 A verified chapter link sets the reading location: chapter 10 means nine fully read chapters. Unverified links retain their URL without guessing progress. Explicit chapter-link imports can change an existing work’s reading location; metadata-only refreshes preserve it. Manual metadata corrections take precedence over later automatic retrievals.
 
 ### Track Reading and Personal Details
@@ -273,3 +275,5 @@ The reader’s [Calibre companion](companions/calibre/README.md) sends selected 
 The reader accepts the same invited account email/password as the organizer, supports password recovery and optional email links, and can restore an enabled organizer connection on other signed-in devices. Connected apps can continue sign-in from each other, with a popup fallback for browser privacy restrictions. See [reader account setup](reader/docs/IMPLEMENTATION.md#connected-accounts-and-login-handoffs). Saved series names on reader work tiles open the matching saved works through the existing Series filter; remove its chip to return to the shelf.
 
 Both apps offer **Tag Format → All Tags Order** with up/down buttons for category ordering. Additional Tags is first by default. Save organizer changes with **Save**; reader changes save immediately and can follow the linked organizer.
+
+Repeated **Connect Reader** handoffs to the same reader reuse its existing organizer connection after checking account ownership. They do not create another active connection or change its saved reading-sync identity. Other reader devices remain independently connected.

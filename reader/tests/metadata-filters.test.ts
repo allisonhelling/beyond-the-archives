@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto'
 import { epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub } from '../src/epub'
 import { emptyFilters, facetOptions, facets, filterErrors, matchesBook, type FacetKey, type Filters } from '../src/filters'
-import { frontMatterMetadata, metadataDate, packageMetadata, publisherName, seriesNames } from '../src/metadata'
+import { frontMatterMetadata, metadataDate, metadataVersion, packageMetadata, publisherName, seriesNames } from '../src/metadata'
 import { blankMetadata, type Book } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 const parse = (text: string) => new DOMParser().parseFromString(text, 'application/xml')
@@ -176,7 +176,7 @@ it.each(['ao3','fanficfare'] as const)('uses the first story summary in %s antho
   expect(book.metadata.summary).toBe('First story.\n\nAnother paragraph.')
   expect(book.metadata.summary_html).toContain('<em>story</em>')
   expect(book.metadata.summary_html).not.toMatch(/Second story|Anthology overview|Chapter summary|Author notes|script|unsafe/)
-  expect(book.metadataVersion).toBe(3)
+  expect(book.metadataVersion).toBe(metadataVersion)
   // If the first story has no summary, use the package fallback, never the second story.
   files[3].content=frontMatter(8001,'')
   const missing=await epubBuffer(files)
@@ -195,4 +195,12 @@ it('shares saved series names between tiles and exact-name local filters',()=>{
  const metadata={...blankMetadata,series:['First Series',' First Series '],series_memberships:[{id:9,name:'Second Series',url:'https://archiveofourown.org/series/9',position:2}]}
  expect(seriesNames(metadata)).toEqual(['First Series','Second Series'])
  expect(facets.find(facet=>facet.key==='series')!.values({metadata} as Book)).toEqual(['First Series','Second Series'])
+})
+
+it('preserves saved AO3 series positions from EPUB front matter',()=>{
+ const result=frontMatterMetadata(parse('<html><body><div id="preface"><dl><dt>Series:</dt><dd>Part 2 of <a href="https://archiveofourown.org/series/99">First Series</a></dd><dt>Series:</dt><dd>Part 4 of <a href="/series/100">Second Series</a></dd></dl></div></body></html>'))
+ expect(result.metadata.series_memberships).toEqual([
+  {id:99,name:'First Series',url:'https://archiveofourown.org/series/99',position:2},
+  {id:100,name:'Second Series',url:'https://archiveofourown.org/series/100',position:4},
+ ])
 })

@@ -7,7 +7,7 @@ let db:PGlite
 const owner='30000000-0000-0000-0000-000000000001',other='30000000-0000-0000-0000-000000000002',unapproved='30000000-0000-0000-0000-000000000003'
 const installation='40000000-0000-0000-0000-000000000001',second='40000000-0000-0000-0000-000000000002'
 async function asUser(id=owner){await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${id}'`)}
-async function connection(action:string,device:string|null=null,secret:string|null=null){return(await db.query<{result:{enabled:boolean;secret?:string;userId?:string}}>('select public.reader_organizer_connection($1,$2,$3) result',[action,device,secret])).rows[0].result}
+async function connection(action:string,device:string|null=null,secret:string|null=null){return(await db.query<{result:{enabled:boolean;secret?:string;userId?:string;expiresAt?:string|null}}>('select public.reader_organizer_connection($1,$2,$3) result',[action,device,secret])).rows[0].result}
 beforeAll(async()=>{db=await createTestDatabase();await db.exec(`insert into auth.users values('${owner}'),('${other}'),('${unapproved}');insert into public.reader_app_access values('${owner}'),('${other}')`);await asUser()},30000)
 afterAll(async()=>{await db?.close()})
 it('requires granted account access and prevents direct writes',async()=>{
@@ -19,7 +19,7 @@ it('persists one account association and restores independent device credentials
  expect(await connection('status')).toEqual({enabled:false})
  await connection('enable')
  const a=await connection('restore',installation),b=await connection('restore',second)
- expect(a).toMatchObject({enabled:true,userId:owner});expect(a.secret).toHaveLength(64);expect(b.secret).not.toBe(a.secret)
+ expect(a).toMatchObject({enabled:true,userId:owner,expiresAt:null});expect(a.secret).toHaveLength(64);expect(b.secret).not.toBe(a.secret)
  await asUser(other);expect(await connection('status')).toEqual({enabled:false})
  expect((await db.query('select * from public.reader_organizer_links')).rows).toEqual([])
  await expect(connection('enable',null,a.secret!)).rejects.toThrow('different account')
@@ -53,4 +53,41 @@ it('binds one-time handoffs to verifier, origin, expiry, and a current account a
  expect(await consume()).toBe(owner);expect(await consume()).toBeNull()
  await db.query("insert into public.app_login_handoffs values($1,$2,$3,$4,now()-interval '1 second')",[code,challenge,owner,origin]);expect(await consume()).toBeNull()
  await db.query("update public.app_login_handoffs set expires_at=now()+interval '1 minute'");await db.query('delete from public.reader_organizer_links where user_id=$1',[owner]);expect(await consume()).toBeNull();await asUser()
+})
+
+it('reuses an existing reader credential for fresh pairing codes without adding a connection',async()=>{
+ await asUser()
+ const first=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','My Reader') result")).rows[0].result.code
+ const claim=async(code:string,existing?:string)=>{
+  await db.exec('reset role;reset request.jwt.claim.sub;set role anon')
+  return(await db.query<{result:{secret:string;reused?:boolean}}>("select public.userscript_library($1,'claim',1,$2) result",[code,JSON.stringify(existing?{existingSecret:existing}:{})])).rows[0].result
+ }
+ const original=await claim(first)
+ await asUser();const fresh=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','My Reader') result")).rows[0].result.code
+ expect(await claim(fresh,original.secret)).toMatchObject({secret:original.secret,reused:true})
+ await asUser()
+ const devices=(await db.query<{result:{paired:boolean}[]}>("select public.manage_userscript_device('list') result")).rows[0].result
+ expect(devices.filter(device=>device.paired)).toHaveLength(1)
+ expect(devices.filter(device=>!device.paired)).toHaveLength(0)
+ // Reusing a live secret must never revoke a different device's connection.
+ const otherCode=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Other Device') result")).rows[0].result.code
+ const otherDevice=await claim(otherCode)
+ expect(await claim(otherDevice.secret,original.secret)).toMatchObject({secret:original.secret,reused:true})
+ await asUser();expect((await db.query<{result:unknown[]}>("select public.manage_userscript_device('list') result")).rows[0].result).toHaveLength(2)
+ await asUser(other)
+ const foreignCode=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Foreign Reader') result")).rows[0].result.code
+ await expect(claim(foreignCode,original.secret)).rejects.toThrow('different organizer account')
+ await asUser()
+})
+it('replaces only the old credential registered to the same reader installation',async()=>{
+ await asUser();await connection('enable')
+ const first=await connection('restore',installation),independent=await connection('restore',second)
+ const code=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Replacement') result")).rows[0].result.code
+ await db.exec('reset role;reset request.jwt.claim.sub;set role anon')
+ const replacement=(await db.query<{result:{secret:string}}>("select public.userscript_library($1,'claim') result",[code])).rows[0].result.secret
+ await asUser();await connection('enable',installation,replacement)
+ await db.exec('reset role')
+ const live=async(secret:string)=>(await db.query("select id from public.userscript_devices where secret_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",[secret])).rows.length
+ expect(await live(first.secret!)).toBe(0);expect(await live(replacement)).toBe(1);expect(await live(independent.secret!)).toBe(1)
+ await asUser()
 })

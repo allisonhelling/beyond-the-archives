@@ -25,7 +25,7 @@ export function catalogBook(book: BookDetails): CatalogBook {
   void _history; void _notes; void _remote
   return { ...catalog, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.length, wordCount: chapters.reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: completed.length }
 }
-export type Connection = { expiresAt?: string; backend: string; key: string; secret: string; account: string; label: string; name: string }
+export type Connection = { expiresAt?: string | null; backend: string; key: string; secret: string; account: string; label: string; name: string }
 export type Pending = { id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
 export type Preferences = { tileLayouts?: Partial<Record<'mobile' | 'desktop', DisplayPreference>>; storageColumns?: string[]; storageSort?: { key: string; ascending: boolean }; content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
 export const defaultTagAppearance: TagAppearance = { shape: 'filled', colors: {} }

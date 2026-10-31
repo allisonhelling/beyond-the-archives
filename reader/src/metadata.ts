@@ -1,6 +1,6 @@
 import { readSummary } from '../../src/features/library/summaries/summary'
 import { isCalendarDate } from '../../src/lib/dates'
-import { parseWorkUrl } from '../../src/features/imports/urls'
+import { parseSeriesUrl, parseWorkUrl } from '../../src/features/imports/urls'
 import type { ReaderMetadata } from './model'
 
 /** Present the AO3 publisher consistently, including existing imported snapshots. */
@@ -10,7 +10,7 @@ export function publisherName(value: string | undefined) {
 export function seriesNames(metadata:ReaderMetadata):string[] {
   return [...new Set([...(metadata.series??[]),...(metadata.series_memberships??[]).map(series=>series.name)].map(name=>name.trim()).filter(Boolean))]
 }
-export const metadataVersion = 3
+export const metadataVersion = 4
 const unique = (values: string[]) => [...new Set(values.map(value => value.trim()).filter(Boolean))]
 const keyOf = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
 export function metadataDate(value: string): string | undefined {
@@ -117,6 +117,22 @@ export function frontMatterMetadata(doc: Document): { metadata: Partial<ReaderMe
     const text = fragment.textContent?.trim() ?? ''
     if (['summary', 'description'].includes(keyOf(label))) Object.assign(metadata, readSummary(fragment.innerHTML))
     else applyField(metadata, label, text, items.length ? items : links.length ? links : undefined)
+    if (keyOf(label) === 'series') {
+      const memberships = metadata.series_memberships ?? []
+      for (const link of fragment.querySelectorAll('a[href]')) {
+        try {
+          const series = parseSeriesUrl(new URL(link.getAttribute('href')!, 'https://archiveofourown.org').href)
+          let prefix = ''
+          for (let node = link.previousSibling; node; node = node.previousSibling) {
+            if (node.nodeType === 1 && (node as Element).querySelector('a[href*="/series/"]')) break
+            prefix = (node.textContent ?? '') + prefix
+          }
+          const position = prefix.match(/Part\s+(\d+)\s+of\s*$/i)
+          memberships.push({ id: series.seriesId, name: link.textContent?.trim() ?? '', url: series.normalizedUrl, position: position ? count(position[1]) ?? null : null })
+        } catch { /* Other series URLs retain their names without inventing positions. */ }
+      }
+      if (memberships.length) metadata.series_memberships = memberships
+    }
     if (['url', 'storyurl', 'storyurlsection'].includes(keyOf(label))) for (const value of [text, ...[...fragment.querySelectorAll('a[href]')].map(a => a.getAttribute('href') ?? '')]) {
       try { urls.push(parseWorkUrl(value.replace(/^URL:/i, '').trim()).normalizedUrl) } catch { /* Never infer identity from title or a numeric Story ID. */ }
     }

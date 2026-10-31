@@ -1,3 +1,4 @@
+import { BulletSeparated } from '../BulletSeparated'
 import { usePageMetadataRefresh } from '../../imports/usePageMetadataRefresh'
 import { useActivity } from '../../../lib/use-activity'
 import { useSeriesImportBehavior } from '../../imports/series-import-preferences'
@@ -67,9 +68,9 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
  return <LibraryBoundary><SeriesControls series={series}>{({ favorite, collectionsField, finishButton }) => <div className="story-details-page series-details-page">
   <div className="page-heading story-details-heading"><div>
    <Link className="story-return-link clickable-text" to={returnTo} aria-label="Back to Series"><ArrowLeft size={16} aria-hidden="true" />Series</Link>
-   <div className="story-title-row"><h1><a href={series.normalizedUrl} target="_blank" rel="noreferrer">{series.title}</a></h1>
+   <div className="story-title-row"><h1><a className="series-link" href={series.normalizedUrl} target="_blank" rel="noreferrer">{series.title}</a></h1>
     <DisplayInfo group="seriesHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> }}</DisplayInfo>
-    <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> }}</DisplayInfo>
+    <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.length ? <BulletSeparated values={series.fandoms} /> : 'Fandom unknown'}</p> }}</DisplayInfo>
     <div className="story-title-toggles">{favorite}</div>
     <div className="story-metadata-actions"><Tooltip description="Refresh AO3 metadata for all works in this series that are in your library">{tooltipId => <button className="button secondary" aria-describedby={tooltipId} aria-busy={workRefresh.busy} disabled={busy || workRefresh.busy || workRefresh.unavailable || !library.catalogLoaded || sampleMode} onClick={() => void workRefresh.refresh()}><RefreshCw size={16} aria-hidden="true" />{workRefresh.busy ? 'Refreshing Works…' : 'Refresh Works'}</button>}</Tooltip><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')

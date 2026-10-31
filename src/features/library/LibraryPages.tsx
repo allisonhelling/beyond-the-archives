@@ -1,3 +1,4 @@
+import { BulletSeparated } from './BulletSeparated'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { WaybackLink } from './WaybackPage'
 import { ReadEpub } from '../offline/ReaderControls'
@@ -38,7 +39,7 @@ import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type React
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, ao3Date, ratingLabel, chapterUrl, nextUnread, parseLines, savedWorkUrl, statuses, progressReadingStatus, type Collection, type Status, type Story } from './model'
+import { active, ao3Date, ratingLabel, chapterUrl, readChapter, readingUrl, parseLines, savedWorkUrl, statuses, progressReadingStatus, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -152,8 +153,8 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
   const published = story.metadata.published_chapters
   const knownPublished = published !== null && published > 0
   const read = Math.max(0, story.last_read_chapter)
-  const next = chapterUrl(story)
-  const readLabel = next ? `Read Chapter ${nextUnread(story.last_read_chapter)}` : 'Read on AO3'
+  const next = chapterUrl(story), position = readChapter(story)
+  const readLabel = next ? `Read Chapter ${position}` : 'Read on AO3'
   return <footer className="book-spine-footer">
     <div className="spine-progress">
       {editProgress}
@@ -164,7 +165,7 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
     <Tooltip description={statuses[story.reading_status]}>{descriptionId => <span className="spine-status" role="img" tabIndex={0} aria-label={statuses[story.reading_status]} aria-describedby={descriptionId}><StatusIcon size={18} aria-hidden="true" /></span>}</Tooltip>
     <span className="spine-divider" aria-hidden="true"><SpineOrnament /></span>
     <div className="spine-actions">
-      <Tooltip description={`Read chapter ${nextUnread(story.last_read_chapter)}`}>{descriptionId => <a className="spine-action" href={next ?? savedWorkUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
+      <Tooltip description={`Read chapter ${position}`}>{descriptionId => <a className="spine-action" href={readingUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
       {caughtUp}
       <BookFusionButton value={story.metadata.bookfusion_link} />
     </div>
@@ -465,7 +466,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       <div className="story-title-row">
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> }}</DisplayInfo>}
-        {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p> }}</DisplayInfo>}
+        {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating"><BulletSeparated values={[...(story.metadata.fandoms.length ? story.metadata.fandoms : ['Fandom unknown']), ratingLabel(story.metadata.rating) || 'Rating unknown']} /></p> }}</DisplayInfo>}
         {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions">{!readBesideWayback && <ReadEpub workId={story.work.ao3_work_id} />}<MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{

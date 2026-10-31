@@ -60,7 +60,7 @@ export async function restoreOrganizerConnection(existing?: Connection): Promise
   const installation=await readerInstallationId()
   const result=await readerCloud.rpc('reader_organizer_connection',{p_action:'restore',p_installation:installation})
   if(result.error)throw result.error
-  const value=result.data as {secret?:string;userId?:string;expiresAt?:string}
+  const value=result.data as {secret?:string;userId?:string;expiresAt?:string|null}
   if(!value.secret||value.userId!==readerOwner)throw new Error('Organizer connection could not be restored.')
   const next:Connection={expiresAt:value.expiresAt,backend:config.url.replace(/\/$/,''),key:config.key,secret:value.secret,account:`organizer:${readerOwner}`,name:'My Organizer',label:new URL(config.url).hostname}
   await transaction(['settings'],tx=>tx.objectStore('settings').put({id:'connection',value:next}))

@@ -28,7 +28,7 @@
 
 .display-grouped-line, .metadata-list > .display-grouped-line { display: block; min-width: 0; }
 .display-line-item { display: inline; overflow-wrap: anywhere; }
-.display-line-item > :is(p, span, div), .display-line-item > .display-edit-contents > :is(p, span) { display: inline; margin: 0; }
+.display-line-item > :is(p, span, div):not(.info-separator), .display-line-item > .display-edit-contents > :is(p, span) { display: inline; margin: 0; }
 .display-line-item .story-summary-divider { display: none; }
 
 .display-line-placeholder { padding: 12px; color: #756363; font-size: 13px; }

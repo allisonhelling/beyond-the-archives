@@ -1,3 +1,4 @@
+import { isTooltipPaintedAt } from './tooltip-assertions'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
@@ -848,7 +849,8 @@ test('sample tile tooltips extend beyond the crop without moving their anchors',
   expect(Math.abs(hint.y + hint.height + 6 * scale - trigger.y)).toBeLessThan(2)
   expect(Math.abs(hint.x + hint.width / 2 - trigger.x - trigger.width / 2)).toBeLessThan(2)
   // Hit testing above the crop confirms that the tooltip is painted, not clipped.
-  expect(await tooltip.evaluate((node, y) => node.contains(document.elementFromPoint(node.getBoundingClientRect().x + node.getBoundingClientRect().width / 2, y)), Math.min(crop.y - 1, hint.y + hint.height / 2))).toBe(true)
+  expect(await tooltip.evaluate(isTooltipPaintedAt, Math.min(crop.y - 1, hint.y + hint.height / 2))).toBe(true)
+  await expect(tooltip).toHaveCSS('pointer-events', 'none')
   await page.mouse.move(0, 0)
   await expect(tooltip).toHaveCount(0)
  }

@@ -723,7 +723,13 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await panel.getByLabel('Search Syntax and Modes').click()
   await expect(page.getByRole('tooltip').filter({hasText:'Any Field'})).toBeVisible()
   await panel.getByLabel('Search Syntax and Modes').click()
-  const clear = () => panel.getByRole('button', { name: 'Clear All Filters', exact: true }).click()
+  await expect(panel.getByLabel('Search Syntax and Modes')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('tooltip', { includeHidden: true }).filter({hasText:'Any Field'})).toHaveCSS('pointer-events', 'none')
+  const clear = async () => {
+    await panel.getByRole('button', { name: 'Clear All Filters', exact: true }).click()
+    await expect(page.locator('.active-reading-filters')).toHaveCount(0)
+    await expect(page).toHaveURL(url => url.searchParams.get('favorites') === 'false')
+  }
   await expect(panel.getByPlaceholder('Search Title or Author')).toHaveCount(0)
   await expect(panel.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /Select Fandoms/ })).toHaveCount(0)
@@ -1132,6 +1138,8 @@ test('sort and grouping preferences persist across navigation and refresh', asyn
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
   await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
+  await expect(page).toHaveURL(url => url.searchParams.get('groupBy') === 'author')
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('between-chapters:reading-preferences:v1') ?? '{}').groupBy)).toBe('author')
   await openFilters(page)
   const panel = page.getByRole('region', { name: 'Reading Filters' })
   await expect(panel.getByRole('button', { name: 'Work Status', exact: true })).toBeVisible()
@@ -2132,16 +2140,18 @@ test('selects collections for bulk appearance edits without changing summaries a
       if (fallback) await page.addStyleTag({ content: ':root { --font-sans: Arial, sans-serif; }' })
       for (const width of [320, 390]) {
         await page.setViewportSize({ width, height: 844 })
-        for (const [left, right] of [
-          [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
-          [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
-          [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
-        ]) {
-          const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
-          expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width)
-          expect(Math.abs(leftBox.y + leftBox.height / 2 - rightBox.y - rightBox.height / 2)).toBeLessThan(1)
-        }
-        await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
+        await expect(async () => {
+          for (const [left, right] of [
+            [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
+            [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
+            [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
+          ]) {
+            const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
+            expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width)
+            expect(Math.abs(leftBox.y + leftBox.height / 2 - rightBox.y - rightBox.height / 2)).toBeLessThan(1)
+          }
+          await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
+        }).toPass({ timeout: 5000 })
       }
     }
     await expect(page.getByRole('button', {name: 'Hidden', exact: true})).not.toHaveAttribute('aria-describedby')
@@ -3835,4 +3845,21 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
  await edit.focus()
  await expect(edit.locator('svg')).toHaveCSS('background-color','rgb(151, 0, 0)')
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+})
+
+test('finished works restart the Read Chapter link at one while preserving completion',async({page})=>{
+ const tables=await fixture(page),stamp='2026-10-31T12:00:00Z'
+ tables.works.push({id:'reread-link-work',ao3_work_id:91001,verified_chapters:{1:'91011',2:'91012',3:'91013'},published_chapters:3,total_chapters:3,is_complete:true})
+ tables.library_entries.push({id:'reread-link-entry',work_id:'reread-link-work',reading_status:'reading',last_read_chapter:1,notes:'Keep my notes',created_at:stamp,updated_at:stamp,original_url:'https://archiveofourown.org/works/91001/chapters/91013',metadata_overrides:{title:'Restart Link',published_chapters:3,total_chapters:3,publication_status:'complete'}})
+ await page.goto('/library');await login(page)
+ const card=page.locator('.work-card').filter({has:page.getByRole('link',{name:'Restart Link',exact:true})})
+ await expect(card.getByRole('link',{name:'Read Chapter 2',exact:true})).toHaveAttribute('href','https://archiveofourown.org/works/91001/chapters/91012')
+ await card.getByRole('button',{name:'Mark as Caught Up',exact:true}).click()
+ await expect(card.getByRole('link',{name:'Read Chapter 1',exact:true})).toHaveAttribute('href','https://archiveofourown.org/works/91001/chapters/91011')
+ await expect(card.getByRole('button',{name:'Chapter 3 of 3 — Edit Progress',exact:true})).toBeVisible()
+ await page.reload()
+ await expect(card.getByRole('link',{name:'Read Chapter 1',exact:true})).toHaveAttribute('href','https://archiveofourown.org/works/91001/chapters/91011')
+ await card.getByRole('link',{name:'Restart Link',exact:true}).click()
+ await expect(page.getByRole('link',{name:'Read Chapter 1',exact:true})).toHaveAttribute('href','https://archiveofourown.org/works/91001/chapters/91011')
+ await expect(page.getByText('Keep my notes',{exact:true})).toBeVisible()
 })
