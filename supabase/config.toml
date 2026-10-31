@@ -29,7 +29,7 @@ port = 54324
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:5173"
-additional_redirect_urls = ["http://127.0.0.1:5173/auth/callback", "http://127.0.0.1:5174", "http://127.0.0.1:4174"]
+additional_redirect_urls = ["http://127.0.0.1:5173/auth/callback", "http://127.0.0.1:5174", "http://127.0.0.1:4174", "http://127.0.0.1:5174/auth/callback", "http://127.0.0.1:4174/auth/callback"]
 jwt_expiry = 3600
 enable_signup = false
 enable_anonymous_sign_ins = false
@@ -68,3 +68,6 @@ verify_jwt = false # Handler verifies each bearer token with Supabase Auth.
 
 [functions.reader-inbox]
 verify_jwt = false # Handler verifies a revocable, delivery-only reader pairing token.
+
+[functions.app-login]
+verify_jwt = false # Issue verifies Auth; redeem consumes a verifier-bound one-time handoff.

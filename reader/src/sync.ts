@@ -1,5 +1,5 @@
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
-import { all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
+import { readerInstallationId, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
 import { withPublication } from './model'
 import type { Book, BookDetails, Connection, Pending, Remote } from './model'
 export async function rpc(connection: Connection, action: string, work: string, input: Record<string, unknown> = {}): Promise<{entry: Remote | null; collections?: {id: string; name: string}[]; secret?: string; userId?: string; tagAppearance?: TagAppearance | null}> {
@@ -82,8 +82,7 @@ async function performSync(connection: Connection, force: boolean) {
 
 // Resolve files from IndexedDB on this installation before reporting availability.
 export async function reportAvailability(connection: Connection) {
-  let installationId = await loadSetting<string>('installation-id')
-  if (!installationId) { installationId = crypto.randomUUID(); await setting('installation-id', installationId) }
+  const installationId = await readerInstallationId()
   const works = new Set<string>()
   for (const entry of await listCatalog()) {
     if (entry.active && entry.workId && entry.account === connection.account && entry.hasFile && await getBook(entry.id)) works.add(entry.workId)

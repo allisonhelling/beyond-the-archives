@@ -1,8 +1,9 @@
+import { WorkTileTags } from '../WorkTileTags'
 import { WorkSummary } from '../summaries/WorkSummary'
 import { MetadataTags } from '../MetadataTags'
 import { CustomCollectionNames } from '../collections/CustomCollectionNames'
 import { StarRating } from '../StarRating'
-import { ao3Date } from '../model'
+import { ao3Date, blankMetadata } from '../model'
 import { DisplayInfo } from '../display/DisplayInfo'
 import { useContext, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -45,10 +46,11 @@ export function SeriesCard({ series, linkId }: { series: LibrarySeries; linkId?:
 <DisplayInfo group="seriesTile">{{
 category: <div className="story-facts">Category: <MetadataTags values={info.categories} /></div>,
 authors: <> <p className="authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> </>,
-fandoms: <>   <p className="muted">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> </>,
+fandoms: <>   <p className="work-fandoms">{series.fandoms.join(' · ') || 'Fandom unknown'}</p> </>,
 reading: <span className="series-reading-status display-fact-value">{readingLabel === 'Finished' ? 'Finished Reading' : readingLabel}</span>,
 count: <span className="display-fact-value">{series.savedStories.length} works</span>,
 words: <span className="display-fact-value">{series.wordCount?.toLocaleString() ?? '?'} words</span>,
+allTags: <WorkTileTags metadata={{...blankMetadata,relationship_tags:info.relationships,character_tags:info.characters,additional_tags:info.tags,archive_warnings:info.warnings,categories:info.categories}} />,
 relationships: <div className="story-facts"><MetadataTags values={info.relationships} category="relationships" /></div>,
 characters: <div className="story-facts"><MetadataTags values={info.characters} category="characters" /></div>,
 tags: <div className="story-facts"><MetadataTags values={info.tags} /></div>,

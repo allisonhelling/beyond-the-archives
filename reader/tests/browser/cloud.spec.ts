@@ -1,18 +1,9 @@
 import { createHash } from 'node:crypto'
-import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
 import { epubFiles } from '../../../src/test/epub-fixture'
-const owner='10000000-0000-0000-0000-000000000001'
+import { account, owner, signedIn } from './account-fixture'
 type Value={key:string;value:unknown;revision:number}
-async function signedIn(context:BrowserContext) {
- await context.addInitScript(({owner})=>{
-  if (localStorage.getItem('cloud-test-initialized')) return
-  localStorage.setItem('cloud-test-initialized','true')
-  localStorage.setItem('reader-cloud-owner',owner)
-  localStorage.setItem('reader-cloud-auth',JSON.stringify({access_token:`${btoa('{}')}.${btoa(JSON.stringify({sub:owner,exp:Math.floor(Date.now()/1000)+3600}))}.test-signature`,refresh_token:'mock-refresh',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user:{id:owner,email:'reader@example.com',app_metadata:{},user_metadata:{},aud:'authenticated',created_at:'2026-01-01'}}))
- },{owner})
-}
-async function account(page:Page){await page.getByRole('button',{name:'Reader Account',exact:true}).click()}
 test('syncs originals and state without an organizer, downloads on a fresh device, and retains offline account isolation',async({browser})=>{
  test.setTimeout(60000)
  let loseNoteResponse = false, failDelete = false
@@ -78,7 +69,14 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Remove Download',exact:true}).click()
  await expect(other.locator('.story-card .availability')).toHaveText('Not Downloaded')
- await other.locator('.story-card').getByRole('button',{name:'Download EPUB',exact:true}).click()
+ await other.getByRole('button',{name:'Manage Storage',exact:true}).click()
+ const storage=other.getByRole('dialog',{name:'Manage Local Storage',exact:true})
+ await expect(storage.locator('td[data-column=library]')).toHaveText('In Cloud')
+ await storage.getByLabel('Select Visible Works',{exact:true}).check()
+ await storage.getByRole('button',{name:'Download',exact:true}).click()
+ await expect(storage.locator('td[data-column=library]')).toHaveText('Downloaded')
+ await storage.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await other.locator('.story-card').getByRole('button',{name:/Start Reading|Continue Reading/}).click()
  await expect(other.getByLabel('Book Content')).toBeVisible()
  await other.getByRole('button',{name:'← Bookshelf'}).click()
  // Offline edits on two devices retain a shared baseline and produce an explicit note conflict.
@@ -170,7 +168,9 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
 
 test('receives the account cloud inbox without the originating device pairing and publishes before acknowledgement',async({browser})=>{
  const context=await browser.newContext();await signedIn(context)
- const file=Buffer.from(await createZip(epubFiles()).arrayBuffer()),hash=createHash('sha256').update(file).digest('hex')
+ let file=Buffer.from(await createZip(epubFiles()).arrayBuffer()),hash=createHash('sha256').update(file).digest('hex')
+ const originalHash=hash
+ let delivery=0,downloads=0
  const values=new Map<string,Value>()
  let result='queued'
  await context.route(url=>/^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
@@ -178,20 +178,23 @@ test('receives the account cloud inbox without the originating device pairing an
   if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
   if(url.pathname.includes('/rpc/reader_cloud_apply')){
    const input=request.postDataJSON(),row={key:input.p_key,value:input.p_value,revision:1}
+   if(input.p_key.endsWith('/deleted') && input.p_value===true)for(const key of values.keys())if(key.startsWith(input.p_key.split('/')[0]+'/'))values.delete(key)
    values.set(row.key,row);return route.fulfill({json:row})
   }
-  if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()]})
+  if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()].filter(row=>!url.searchParams.getAll('key').some(value=>value.startsWith('like.')) || row.key.endsWith('/deleted'))})
   if(url.pathname.includes('/reader_import_inbox')){
    if(request.method()==='PATCH'){
-    expect(values.has(`${hash}/manifest`)).toBe(true)
+    expect(values.has(`${hash}/manifest`),JSON.stringify(request.postDataJSON())).toBe(true)
     result=request.postDataJSON().status
     return route.fulfill({status:204})
    }
-   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:'40000000-0000-0000-0000-000000000002',hash,metadata:{title:'Cloud Inbox Story'},status:'queued',message:''}] : []})
+   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:`40000000-0000-0000-0000-${String(delivery+2).padStart(12,'0')}`,hash,metadata:{title:delivery===2?'Updated Cloud Story':'Cloud Inbox Story',_calibre_uuid:'20000000-0000-0000-0000-000000000001'},status:'queued',message:''}] : []})
   }
   if(url.pathname.includes('/reader_transfer_destinations'))return route.fulfill({status:201,body:''})
   if(url.pathname.includes('/storage/v1/object/')){
+   if(request.method()==='DELETE')return route.fulfill({json:[]})
    if(request.method()==='POST')return route.fulfill({status:409,json:{statusCode:'409',error:'Duplicate',message:'Already exists'}})
+   downloads++
    return route.fulfill({body:file,contentType:'application/epub+zip'})
   }
   return route.fulfill({json:{}})
@@ -200,11 +203,32 @@ test('receives the account cloud inbox without the originating device pairing an
  await expect(page.locator('.story-card')).toHaveCount(1)
  await expect(page.getByRole('heading',{name:'Cloud Inbox Story'})).toBeVisible()
  await expect.poll(()=>result).toBe('imported')
+ await page.getByRole('button',{name:'Manage EPUB',exact:true}).click()
+ await page.getByLabel('Personal Notes',{exact:true}).fill('Keep cloud reading data')
+ await page.getByRole('button',{name:'Save Personal Notes',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Close Dialog',exact:true})).toBeEnabled()
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
  await expect(page.getByRole('button',{name:'Pair Calibre',exact:true})).toBeVisible()
  await page.getByRole('button',{name:'Pair Calibre',exact:true}).click()
  const pairing=JSON.parse(await page.getByLabel('Calibre Pairing Configuration').inputValue())
  expect(pairing.cloud).toBe(true);expect(pairing.account).toBe(owner)
+ delivery=1;result='queued'
+ await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
+ await expect.poll(()=>result).toBe('duplicate')
+ expect(downloads).toBe(1)
+ const changed=epubFiles();changed[2].content=changed[2].content.replace('</metadata>','<meta name="revision" content="2"/></metadata>')
+ file=Buffer.from(await createZip(changed).arrayBuffer());hash=createHash('sha256').update(file).digest('hex');delivery=2;result='queued'
+ await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
+ await expect.poll(()=>result).toBe('imported')
+ await expect.poll(()=>values.get(`${originalHash}/deleted`)?.value).toBe(true)
+ expect(values.has(`${originalHash}/manifest`)).toBe(false)
+ expect(downloads).toBe(2)
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ await expect(page.getByRole('button',{name:'Updated Cloud Story',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Manage EPUB',exact:true}).click()
+ await expect(page.getByRole('textbox',{name:'Personal Notes',exact:true})).toHaveValue('Keep cloud reading data')
  await context.close()
 })
 

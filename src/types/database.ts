@@ -1268,6 +1268,8 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      reader_organizer_connection: { Args: { p_action: string; p_installation?: string; p_secret?: string }; Returns: Json }
+      consume_app_login_handoff: { Args: { p_hash: string; p_challenge: string; p_origin: string }; Returns: string | null }
       reader_has_access: { Args: Record<string, never>; Returns: boolean }
       reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number }; Returns: Json }
       reading_stats_works: { Args: { p_after?: string; p_limit?: number }; Returns: Json }

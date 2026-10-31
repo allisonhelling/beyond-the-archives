@@ -1,10 +1,11 @@
+import { initialAuthIntent } from '../../src/lib/auth-account'
 import type { Database, Json } from '../../src/types/database'
 import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from '../../src/lib/config'
 import { hostedOrganizer } from '../../src/lib/reader-connection'
 import { type CloudEdit, type CloudValue } from './cloud-model'
-import { defaultPreferences, repairChapterState, type BookDetails, type Preferences } from './model'
-import { acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
+import { defaultPreferences, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
+import { readerInstallationId, acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
 import { digest, importEpub } from './epub'
 
 export const readerCloudConfig = readPublicConfig(import.meta.env) ?? hostedOrganizer
@@ -18,12 +19,53 @@ export const readerCloud = createClient<Database>(config.url, config.key, {
       const token = new Headers(init?.headers).get('Authorization')?.replace(/^Bearer /i, '')
       let subject: string | undefined
       try { subject = JSON.parse(atob((token?.split('.')[1] ?? '').replace(/-/g, '+').replace(/_/g, '/'))).sub } catch { /* The server still verifies the JWT signature. */ }
-      if (!readerOwner || subject !== readerOwner) return Promise.reject(new Error('Reader account changed. Reopen the matching account library before syncing.'))
+      let adopting=false
+      if(url.pathname==='/rest/v1/rpc/reader_organizer_connection' && typeof init?.body==='string'){
+        try {adopting=JSON.parse(init.body).p_action==='enable'} catch { /* Invalid bodies still fail closed. */ }
+      }
+      // Adoption can run before switching out of a guest library; the RPC verifies the paired owner.
+      if (!adopting && (!readerOwner || subject !== readerOwner)) return Promise.reject(new Error('Reader account changed. Reopen the matching account library before syncing.'))
     }
     const signal = AbortSignal.timeout(120000)
     return fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, signal]) : signal })
   } },
 })
+export let readerAuthIntent = initialAuthIntent
+export function clearReaderAuthIntent() {readerAuthIntent=null}
+readerCloud.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')readerAuthIntent='recovery'})
+export async function rememberOrganizerConnection(connection?: Connection) {
+  if (!connection) return
+  if(connection.backend.replace(/\/$/,'') !== config.url.replace(/\/$/,''))throw new Error('Sign in to the reader account for the connected organizer project.')
+  const { data } = await readerCloud.auth.getSession()
+  if (!data.session) return
+  const installation=await readerInstallationId()
+  const { error } = await readerCloud.rpc('reader_organizer_connection', { p_action:'enable', p_secret:connection.secret, p_installation:installation })
+  if (error) throw error
+  await transaction(['settings'],tx=>{tx.objectStore('settings').put({id:'organizer-account-link',value:data.session!.user.id});tx.objectStore('settings').delete('organizer-disabled-here')})
+}
+export async function restoreOrganizerConnection(existing?: Connection): Promise<Connection | undefined> {
+  if (!readerOwner) return existing
+  const { data } = await readerCloud.auth.getSession()
+  if (data.session?.user.id !== readerOwner) return existing
+  if(await loadSetting<boolean>('organizer-disabled-here'))return existing
+  const managed=existing?.account.startsWith('organizer:') || await loadSetting<string>('organizer-account-link')===readerOwner
+  if(existing && !managed){await rememberOrganizerConnection(existing);return existing}
+  const status=await readerCloud.rpc('reader_organizer_connection',{p_action:'status'})
+  if(status.error)throw status.error
+  if (!(status.data as {enabled?:boolean})?.enabled) {
+    if(existing && managed) await transaction(['settings'],tx=>tx.objectStore('settings').delete('connection'))
+    return undefined
+  }
+  if(existing && (!existing.expiresAt || Date.parse(existing.expiresAt)>Date.now()))return existing
+  const installation=await readerInstallationId()
+  const result=await readerCloud.rpc('reader_organizer_connection',{p_action:'restore',p_installation:installation})
+  if(result.error)throw result.error
+  const value=result.data as {secret?:string;userId?:string;expiresAt?:string}
+  if(!value.secret||value.userId!==readerOwner)throw new Error('Organizer connection could not be restored.')
+  const next:Connection={expiresAt:value.expiresAt,backend:config.url.replace(/\/$/,''),key:config.key,secret:value.secret,account:`organizer:${readerOwner}`,name:'My Organizer',label:new URL(config.url).hostname}
+  await transaction(['settings'],tx=>tx.objectStore('settings').put({id:'connection',value:next}))
+  return next
+}
 export type CloudConflict = CloudValue & { edit: CloudEdit }
 export async function switchLibrary(owner: string) {
   if (owner === readerOwner) return
@@ -48,8 +90,10 @@ async function upload(id: string) {
   await transaction(['settings'], tx => tx.objectStore('settings').put({id:`cloud-file:${id}`,value:true}))
 }
 let running: Promise<CloudConflict[]> | undefined
-export function syncCloud(): Promise<CloudConflict[]> {
+export function syncCloud(fresh = false): Promise<CloudConflict[]> {
   if (!readerOwner || !navigator.onLine) return Promise.resolve([])
+  // Import acknowledgement must see writes committed after an existing sync started.
+  if (fresh && running) return running.then(() => syncCloud())
   if (!running) running = (async () => navigator.locks ? await navigator.locks.request(`reader-cloud:${readerOwner}`, performSync) : await performSync())().finally(() => { running = undefined })
   return running!
 }

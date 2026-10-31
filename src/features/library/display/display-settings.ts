@@ -10,7 +10,7 @@ export const displayGroups = {
   workPage: { title: 'Work Pages · Sections', fields: { progress: 'Reading and Organization', notes: 'Private Notes', information: 'Story Information', metadata: 'Metadata Controls' } },
   workInfo: { title: 'Work Pages · Story Information', fields: { bookfusion: 'BookFusion Link', summary: ao3MetadataLabels.summary, relationships: ao3MetadataLabels.relationships, characters: ao3MetadataLabels.characters, tags: ao3MetadataLabels.tags, allTags: ao3MetadataLabels.allTags, personalTags: 'Personal Tags', saved: 'Saved Date', chapterHistory: 'Chapter Reading History', edited: 'Last Edited', other: 'Other Metadata', ...metadataLabels(newWorkInfoFields) } },
   workOther: { title: 'Work Pages · Other Metadata', fields: { ...ao3MetadataLabels, checked: 'Metadata Last Checked', canonical: 'Verified Canonical URL', original: 'Original Provided URL', provided: 'Updated Provided URL' } },
-  seriesTile: { title: 'Series Tiles', fields: { ...metadataLabels(['category']), favorite: 'Favorite Icon', rec: 'Recommended Icon', authors: 'Authors', fandoms: 'Fandoms', reading: 'Reading Status', count: 'Works in Library', words: 'Word Count', relationships: 'Relationships', characters: 'Characters', tags: 'Additional Tags', warnings: 'AO3 Warnings', personalRating: 'Personal Rating (Average)', collections: 'Custom Collections', kudos: 'AO3 Kudos', description: 'Description', notes: 'Private Notes', creatorNotes: 'Creator Notes', updated: 'Date Updated', begun: 'Series Begun', works: 'Work List' } },
+  seriesTile: { title: 'Series Tiles', fields: { allTags: ao3MetadataLabels.allTags, ...metadataLabels(['category']), favorite: 'Favorite Icon', rec: 'Recommended Icon', authors: 'Authors', fandoms: 'Fandoms', reading: 'Reading Status', count: 'Works in Library', words: 'Word Count', relationships: 'Relationships', characters: 'Characters', tags: 'Additional Tags', warnings: 'AO3 Warnings', personalRating: 'Personal Rating (Average)', collections: 'Custom Collections', kudos: 'AO3 Kudos', description: 'Description', notes: 'Private Notes', creatorNotes: 'Creator Notes', updated: 'Date Updated', begun: 'Series Begun', works: 'Work List' } },
   seriesHeader: { title: 'Series Pages · Header', fields: { authors: 'Authors', fandoms: 'Fandoms', stats: 'Statistics', source: 'Details Source and Last Fetched' } },
   seriesStats: { title: 'Series Pages · Statistics', fields: { words: 'Word Count', publication: 'Publication Status', updated: 'AO3 Series Updated', works: 'Work Count' } },
   seriesPage: { title: 'Series Pages · Sections', fields: { description: 'Description and Creator Notes', progress: 'Reading and Organization', notes: 'Private Notes', works: 'Works in Series', information: 'Series Information' } },
@@ -22,13 +22,20 @@ export type DisplayPreference = { order: string[]; hidden: string[]; lines?: Rec
 export function isDisplayFieldHidden(preference: DisplayPreference, field: string) {
  return preference.hidden.includes(field) || Object.entries(preference.lines ?? {}).some(([line, fields]) => fields.includes(field) && preference.hidden.includes(line))
 }
-export type TagAppearance = { shape: TagShape; colors: Partial<Record<TagCategory, string>> }
+export type TagAppearance = { shape: TagShape; colors: Partial<Record<TagCategory, string>>; order?: AllTagCategory[] }
 export type DisplayPreferences = Record<DisplayGroup, DisplayPreference> & { tagAppearance: TagAppearance }
-const defaultHidden: Partial<Record<DisplayGroup, string[]>> = { workTile: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'personalRating', 'collections', 'kudos', ...newWorkTileFields.filter(field => field !== 'allTags')], workInfo: [...newWorkInfoFields], seriesTile: ['category', 'creatorNotes', 'updated', 'begun', 'relationships', 'characters', 'tags', 'warnings', 'personalRating', 'collections', 'kudos'], seriesInfo: ['category', 'libraryCount', 'words', 'relationships', 'characters', 'tags', 'warnings', 'kudos'] }
+const defaultHidden: Partial<Record<DisplayGroup, string[]>> = { workTile: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'personalRating', 'collections', 'kudos', ...newWorkTileFields.filter(field => field !== 'allTags')], workInfo: [...newWorkInfoFields], seriesTile: ['reading', 'notes', 'category', 'creatorNotes', 'updated', 'begun', 'relationships', 'characters', 'tags', 'warnings', 'personalRating', 'collections', 'kudos'], seriesInfo: ['category', 'libraryCount', 'words', 'relationships', 'characters', 'tags', 'warnings', 'kudos'] }
 export const tagColors = {
  relationships: { label: 'Relationships', color: '#6b3f70', example: 'Dick Grayson & Bruce Wayne' }, characters: { label: 'Characters', color: '#355c70', example: 'Bruce Wayne' }, tags: { label: 'Additional Tags', color: '#715443', example: 'Fluff' }, warnings: { label: 'AO3 Warnings', color: '#970000', example: 'No Archive Warnings Apply' }, collections: { label: 'Custom Collections', color: '#4e684c', example: 'Comfort Reads' }, personalTags: { label: 'Personal Tags', color: '#715443', example: 'Read Again' },
 } as const
 export type TagCategory = keyof typeof tagColors
+export const allTagCategories = { tags:'Additional Tags', relationships:'Relationships', characters:'Characters', categories:'Categories', warnings:'AO3 Warnings' } as const
+export type AllTagCategory = keyof typeof allTagCategories
+export const defaultAllTagOrder = Object.keys(allTagCategories) as AllTagCategory[]
+export function allTagOrder(saved?:readonly unknown[]):AllTagCategory[] {
+ return [...new Set([...(Array.isArray(saved)?saved:[]).filter((key):key is AllTagCategory=>typeof key==='string'&&Object.hasOwn(allTagCategories,key)),...defaultAllTagOrder])]
+}
+
 export const tagShapes = { filled: 'Filled Chips', pill: 'Rounded Pill', curved: 'Curved Rectangles', sharp: 'Sharp Rectangles', bullets: 'Text With Bullet Separators', commas: 'Text With Comma Separators' } as const
 export type TagShape = keyof typeof tagShapes
 export const shortDisplayDivider = (key: string) => key.startsWith('divider:short-')
@@ -80,7 +87,7 @@ export function displayFieldLabel(group: DisplayGroup, field: string) {
 
 export function displayPreference(group: DisplayGroup, raw: string, layout: DisplayLayout = 'desktop'): DisplayPreference {
   const fields = Object.keys(displayGroups[group].fields)
-  const leading = group === 'workTile' ? ['favorite', 'rec', 'authors', 'fandoms', 'series', 'rating', 'words', 'allTags'] : []
+  const leading = group === 'workTile' ? ['favorite', 'rec', 'authors', 'fandoms', 'series', 'rating', 'words', 'allTags'] : group === 'seriesTile' ? ['favorite', 'rec', 'authors', 'fandoms', 'reading', 'count', 'words', 'allTags', 'description'] : []
   const keys = [...leading, ...fields.filter(key => !leading.includes(key))]
   let saved: Record<string, { order?: unknown; hidden?: unknown; lines?: unknown }> = {}
   try { saved = JSON.parse(raw) ?? {} } catch { /* Malformed preferences use defaults. */ }
@@ -95,6 +102,7 @@ export function displayPreference(group: DisplayGroup, raw: string, layout: Disp
   if (tileFacts[group] && (!inputLines || typeof inputLines !== 'object' || Array.isArray(inputLines))) {
     const legacy = saved[group === 'workTile' ? 'workTileFacts' : 'seriesTileFacts']
     const convert = (field: string) => group === 'seriesTile' && field === 'works' ? 'count' : field
+    if (!value && !legacy) hidden.push(...defaultHidden[group] ?? [])
     const facts = [...new Set([...strings(legacy?.order).map(convert).filter(key => tileFacts[group]!.includes(key)), ...tileFacts[group]!])]
     inputLines = { 'line:facts': facts }
     order = order.length ? order.map(key => key === 'facts' ? 'line:facts' : key) : keys.map(key => key === tileFacts[group]![0] ? 'line:facts' : key)
@@ -103,7 +111,7 @@ export function displayPreference(group: DisplayGroup, raw: string, layout: Disp
   const assigned = new Set<string>()
   const lines = Object.fromEntries(Object.entries(inputLines && typeof inputLines === 'object' && !Array.isArray(inputLines) ? inputLines : {}).filter(([id]) => displayLine(id)).map(([id, fields]) => [id, strings(fields).filter(key => { if (!keys.includes(key) || assigned.has(key)) return false; assigned.add(key); return true })]))
   // Preserve visibility in existing custom tile arrangements, including grouped tags.
-  if (group === 'workTile' && strings(value?.order).length && !strings(value?.order).includes('allTags') && !assigned.has('allTags')) hidden.push('allTags')
+  if ((group === 'workTile' || group === 'seriesTile') && strings(value?.order).length && !strings(value?.order).includes('allTags') && !assigned.has('allTags')) hidden.push('allTags')
   hidden = [...new Set([...hidden.filter(key => keys.includes(key) || Object.hasOwn(lines, key) || displayDivider(key)), ...(defaultHidden[group] ?? []).filter(key => !strings(value?.order).includes(key) && !assigned.has(key))])]
   return { order: [...new Set([...order, ...Object.keys(lines), ...keys])].filter(key => (keys.includes(key) || Object.hasOwn(lines, key) || displayDivider(key)) && !assigned.has(key)), hidden, lines }
 
@@ -133,11 +141,11 @@ export function tagAppearance(raw: string): TagAppearance {
   const legacy = (Object.keys(displayGroups) as DisplayGroup[]).map(group => saved[group] as { colors?: TagAppearance['colors']; tagShape?: TagShape } | undefined).filter(Boolean)
   const shape = global ? global.shape : legacy.find(value => value?.tagShape && value.tagShape !== 'bullets')?.tagShape
   const colors = global ? global.colors : Object.assign({}, ...legacy.map(value => value?.colors ?? {}).reverse())
-  return { shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
+  return { ...(Array.isArray(global?.order)?{order:allTagOrder(global.order)}:{}), shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
 }
 export function sameTagAppearance(a: TagAppearance | null | undefined, b: TagAppearance | null | undefined) {
  if (!a || !b) return a === b
- return a.shape === b.shape && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
+ return a.shape === b.shape && JSON.stringify(allTagOrder(a.order)) === JSON.stringify(allTagOrder(b.order)) && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
 }
 export function displayPreferences(raw = displaySnapshot(), layout: DisplayLayout = 'desktop'): DisplayPreferences {
   return { ...Object.fromEntries((Object.keys(displayGroups) as DisplayGroup[]).map(group => [group, displayPreference(group, raw, layout)])), tagAppearance: tagAppearance(raw) } as DisplayPreferences

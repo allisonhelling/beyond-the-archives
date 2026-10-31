@@ -8,16 +8,18 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  const newer=Buffer.from(await createZip(files).arrayBuffer())
  const payloads=[original,newer,Buffer.from('invalid EPUB')]
  const receipts=new Map<string,{status:string;message:string}>()
- let credential='',firstRequested=false
+ let credential='',firstRequested=false,repeatDelivery=false
+ const requested:string[]=[]
  let releaseFirst:()=>void=()=>{}
  const firstFile=new Promise<void>(resolve=>{releaseFirst=resolve})
  await context.route('http://127.0.0.1:47821/**',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname
   if(req.method()==='OPTIONS') return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:4174','Access-Control-Allow-Headers':'authorization,x-reader-destination,content-type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'}})
   expect(req.headers().authorization).toBe('Bearer '+credential)
-  if(path==='/inbox')return route.fulfill({json:payloads.map((file,index)=>({id:String(index),hash:createHash('sha256').update(file).digest('hex'),metadata:{title:'Calibre Title',fandoms:['Mapped Fandom'],_filename:`story-${index}.epub`},status:'queued',message:''})).filter(row=>!receipts.has(row.id))})
+  if(path==='/inbox')return route.fulfill({json:[...payloads,...(repeatDelivery?[newer]:[])].map((file,index)=>({id:String(index),hash:createHash('sha256').update(file).digest('hex'),metadata:{_calibre_uuid:'20000000-0000-0000-0000-000000000001',title:index===3?'Updated Calibre Metadata':'Calibre Title',fandoms:['Mapped Fandom'],_filename:`story-${index}.epub`},status:'queued',message:''})).filter(row=>!receipts.has(row.id))})
   if(path.startsWith('/books/')) {
-   if(path==='/books/0'){firstRequested=true;await firstFile}
+   requested.push(path)
+   if(path==='/books/1'){firstRequested=true;await firstFile}
    return route.fulfill({body:payloads[Number(path.split('/').at(-1))],contentType:'application/epub+zip'})
   }
   receipts.set(path.split('/').at(-1)!,req.postDataJSON())
@@ -34,6 +36,15 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  await page.getByRole('textbox',{name:'Personal Notes',exact:true}).fill('Keep this reading history')
  await page.getByRole('button',{name:'Save Personal Notes',exact:true}).click()
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ // An unsent organizer edit must move to the replacement rather than disappear.
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open('bta-reader');request.onsuccess=()=>resolve(request.result)})
+  try{await new Promise<void>((resolve,reject)=>{
+   const tx=db.transaction(['books','pending'],'readwrite'),books=tx.objectStore('books').getAll()
+   books.onsuccess=()=>tx.objectStore('pending').put({id:'pending-note',book:books.result[0].id,work:'8001',account:'organizer-test',base:{id:'entry',version:'v1',status:'reading',progress:1,notes:''},input:{notes:'Keep this reading history'}})
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)
+  })}finally{db.close()}
+ })
  await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
  await expect(page.getByRole('button',{name:'Check for Incoming Books',exact:true})).toHaveCount(0)
  await expect(page.getByRole('button',{name:'Cancel Pending Imports',exact:true})).toHaveCount(0)
@@ -49,6 +60,7 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  releaseFirst()
  await expect.poll(()=>receipts.size).toBe(3)
  expect([...receipts.values()].map(result=>result.status)).toEqual(['cancelled','cancelled','cancelled'])
+ await page.getByRole('tab',{name:/Failed/}).click()
  for(const index of [0,1,2]) {
   await page.locator('.pending-item').filter({hasText:`story-${index}.epub`}).getByRole('button',{name:'Retry Import',exact:true}).click()
   await expect.poll(()=>receipts.get(String(index))?.status).not.toBe('cancelled')
@@ -56,16 +68,37 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  expect(receipts.get('0')?.status).toBe('duplicate')
  expect(receipts.get('1')?.status).toBe('imported')
  expect(receipts.get('2')?.status).toBe('error')
+ const queued=await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open('bta-reader');request.onsuccess=()=>resolve(request.result)})
+  try{return await new Promise<{book:string;input:{notes:string}}>(resolve=>{const request=db.transaction('pending').objectStore('pending').get('pending-note');request.onsuccess=()=>resolve(request.result)})}finally{db.close()}
+ })
+ expect(queued).toMatchObject({book:createHash('sha256').update(newer).digest('hex'),input:{notes:'Keep this reading history'}})
  await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
- await expect(page.locator('.story-card')).toHaveCount(2)
- await expect(page.getByText('Retained version · Organizer links open the active version')).toBeVisible()
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ await expect(page.getByText('Retained version · Organizer links open the active version')).toHaveCount(0)
  await page.locator('.story-card').filter({hasText:'Calibre Title'}).last().getByRole('button',{name:'Manage EPUB',exact:true}).click()
  await expect(page.getByRole('textbox',{name:'Personal Notes',exact:true})).toHaveValue('Keep this reading history')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
- await expect(page.getByText('1 chapters read', {exact:true})).toHaveCount(2)
+ await expect(page.getByText('1 chapters read', {exact:true})).toHaveCount(1)
+ expect(requested).not.toContain('/books/0')
+ repeatDelivery=true
+ await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
+ await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
+ await expect.poll(()=>receipts.get('3')?.status).toBe('duplicate')
+ expect(requested).not.toContain('/books/3')
+ await page.getByRole('tab',{name:/Successful/}).click()
+ await expect(page.getByRole('tabpanel')).toContainText('story-3.epub · duplicate')
+ await expect(page.getByRole('tabpanel')).not.toContainText('story-2.epub')
+ await page.getByRole('tab',{name:/Successful/}).press('ArrowRight')
+ await expect(page.getByRole('tab',{name:/Failed/})).toBeFocused()
+ await expect(page.getByRole('tabpanel')).toContainText('story-2.epub · error')
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ await expect(page.getByRole('button',{name:'Updated Calibre Metadata',exact:true})).toBeVisible()
  await page.reload()
  await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
+ await page.getByRole('tab',{name:/Failed/}).click()
  await expect(page.getByText('story-2.epub · error',{exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Retry Import',exact:true})).toBeVisible()
  await page.getByRole('button',{name:'Revoke Pairing',exact:true}).click()

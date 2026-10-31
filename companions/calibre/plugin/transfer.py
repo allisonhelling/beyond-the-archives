@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import threading
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -101,7 +102,17 @@ class TransferStore:
             raise ValueError('Mapped metadata exceeds 16 KiB')
         job = dict(id=str(uuid.uuid4()), pair=dict(pair), destination=destination(pair, mode),
                    title=title, hash=hashlib.sha256(data).hexdigest(), metadata=metadata,
-                   status='queued', message='Waiting to deliver.', attempts=0)
+                   status='queued', message='Waiting to deliver.', attempts=0, created_at=time.time_ns())
+        # Only the latest snapshot of a book may suppress delivery; reverting metadata must still send.
+        identity = metadata.get('_calibre_uuid')
+        candidates = [previous for previous in self.jobs()
+                      if previous['pair']['id'] == pair['id'] and previous['destination'] == job['destination']
+                      and ((identity and previous['metadata'].get('_calibre_uuid') == identity)
+                           or (not identity and previous['hash'] == job['hash']))]
+        previous = max(candidates, key=lambda item: item.get('created_at', 0), default=None)
+        if (previous and previous['hash'] == job['hash'] and previous['metadata'] == metadata
+                and previous['status'] in ('queued', 'imported', 'duplicate')):
+            return previous
         file = self.root / (job['id'] + '.epub')
         with open(file, 'wb') as stream:
             if os.name != 'nt':

@@ -39,8 +39,9 @@ class Worker(QThread):
                         continue
                     data = self.db.format(book_id, 'EPUB')
                     metadata = {target: self.db.field_for(source, book_id) for target, source in self.mapping.items()}
+                    metadata['_calibre_uuid'] = self.db.field_for('uuid', book_id)
                     job = self.store.enqueue(self.pair, self.mode, title, data, metadata)
-                    self.progress.emit(title + ': Queued for ' + job['destination'] + '.', index + 1, len(self.ids))
+                    self.progress.emit(title + (': Already imported; skipped.' if job['status'] in ('imported', 'duplicate') else ': Queued for ' + job['destination'] + '.'), index + 1, len(self.ids))
                 except Exception as error:
                     self.progress.emit(title + ': Failed to queue: ' + str(error), index + 1, len(self.ids))
             jobs = [job for job in self.store.jobs() if job['status'] not in ('imported', 'duplicate')]

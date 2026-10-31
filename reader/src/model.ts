@@ -1,4 +1,4 @@
-import type { TagAppearance } from '../../src/features/library/display/display-settings'
+import type { DisplayPreference, TagAppearance } from '../../src/features/library/display/display-settings'
 import { caughtUpReadingStatus, type Metadata, type Status } from '../../src/features/library/model'
 export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
@@ -10,7 +10,7 @@ export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[
   if (chapter.kind === 'frontmatter') return null
   return chapter.number ?? (Number(chapter.title.match(/^Chapter\s+(\d+)(?:\b|:)/i)?.[1]) || chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length)
 }
-export type Book = { fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
+export type Book = { calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
 export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
@@ -25,9 +25,9 @@ export function catalogBook(book: BookDetails): CatalogBook {
   void _history; void _notes; void _remote
   return { ...catalog, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.length, wordCount: chapters.reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: completed.length }
 }
-export type Connection = { backend: string; key: string; secret: string; account: string; label: string; name: string }
+export type Connection = { expiresAt?: string; backend: string; key: string; secret: string; account: string; label: string; name: string }
 export type Pending = { id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
-export type Preferences = { content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
+export type Preferences = { tileLayouts?: Partial<Record<'mobile' | 'desktop', DisplayPreference>>; storageColumns?: string[]; storageSort?: { key: string; ascending: boolean }; content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
 export const defaultTagAppearance: TagAppearance = { shape: 'filled', colors: {} }
 export const readingRanges = {
   size: { label: 'Font Size', min: 14, max: 30, step: 0.01, initial: 17.28 },

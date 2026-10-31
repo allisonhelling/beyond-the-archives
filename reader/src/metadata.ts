@@ -3,7 +3,14 @@ import { isCalendarDate } from '../../src/lib/dates'
 import { parseWorkUrl } from '../../src/features/imports/urls'
 import type { ReaderMetadata } from './model'
 
-export const metadataVersion = 2
+/** Present the AO3 publisher consistently, including existing imported snapshots. */
+export function publisherName(value: string | undefined) {
+  return value && /^(?:https?:\/\/)?(?:www\.)?archiveofourown\.org\/?$/i.test(value.trim()) ? 'AO3' : value
+}
+export function seriesNames(metadata:ReaderMetadata):string[] {
+  return [...new Set([...(metadata.series??[]),...(metadata.series_memberships??[]).map(series=>series.name)].map(name=>name.trim()).filter(Boolean))]
+}
+export const metadataVersion = 3
 const unique = (values: string[]) => [...new Set(values.map(value => value.trim()).filter(Boolean))]
 const keyOf = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
 export function metadataDate(value: string): string | undefined {
@@ -135,6 +142,12 @@ export function frontMatterMetadata(doc: Document): { metadata: Partial<ReaderMe
     }
     const storyLink = scope.querySelector('h3 a[href], h1 a[href]')
     if (storyLink) { try { urls.push(parseWorkUrl(storyLink.getAttribute('href') ?? '').normalizedUrl) } catch { /* Other publishers remain standalone. */ } }
+  }
+  // Work summaries belong to the front matter, never chapter summaries or author notes.
+  if (!scope.matches('.fff_titlepage')) {
+    const heading = [...scope.querySelectorAll('h2, h3, p')].find(el => /^Summary:?$/i.test(el.textContent?.trim() ?? ''))
+    const summary = heading?.nextElementSibling
+    if (summary?.matches('blockquote')) Object.assign(metadata, readSummary(summary.innerHTML))
   }
   // AO3 stats group several fields into one definition.
   const stats = [...scope.querySelectorAll('dt')].find(el => /^Stats:?$/i.test(el.textContent?.trim() ?? ''))?.nextElementSibling?.textContent ?? ''

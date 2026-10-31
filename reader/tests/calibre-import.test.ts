@@ -46,3 +46,12 @@ it('requires pending cloud deletion to finish before explicit reimport',async()=
  vi.mocked(loadSetting).mockResolvedValueOnce({value:true})
  await expect(prepareImport(await fixture())).rejects.toThrow('Cloud deletion of this EPUB is pending')
 })
+
+it('matches standalone Calibre updates by stable UUID even when the title changes',async()=>{
+ const next=await importEpub(await fixture()),previous=bookDetails({...next,id:'prior-hash',workId:null,calibreId:'20000000-0000-0000-0000-000000000001'})
+ vi.mocked(listCatalog).mockResolvedValue([catalogBook(previous)])
+ vi.mocked(getBookDetails).mockResolvedValue(previous)
+ const prepared=await prepareImport(await fixture(),undefined,previous.calibreId)
+ expect(prepared.previous?.id).toBe('prior-hash')
+ expect(prepared.next.calibreId).toBe(previous.calibreId)
+})

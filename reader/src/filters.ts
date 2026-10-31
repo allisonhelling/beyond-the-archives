@@ -1,5 +1,6 @@
 import { normalizeSearchText as normalize } from '../../src/lib/search-text'
 import type { Book, CatalogBook } from './model'
+import { publisherName, seriesNames } from './metadata'
 import { statuses } from './model'
 export const unknownValue = '__reader_unknown__'
 export { normalize }
@@ -17,7 +18,7 @@ export const facets = [
   { key: 'fandom', label: 'Fandoms', values: (b: FilterBook) => b.metadata.fandoms },
   { key: 'rating', label: 'Rating', values: (b: FilterBook) => b.metadata.rating ? [b.metadata.rating] : [] },
   { key: 'collection', label: 'Organizer Collection', values: (b: FilterBook) => b.collections },
-  { key: 'publisher', label: 'Publisher', values: (b: FilterBook) => b.metadata.publisher ? [b.metadata.publisher] : [] },
+  { key: 'publisher', label: 'Publisher', values: (b: FilterBook) => b.metadata.publisher ? [publisherName(b.metadata.publisher)!] : [] },
   { key: 'publication', label: 'Publication Status', values: (b: FilterBook) => [publicationLabels[b.metadata.publication_status]] },
   { key: 'category', label: 'Category', values: (b: FilterBook) => b.metadata.categories ?? [] },
   { key: 'language', label: 'Language', values: language },
@@ -25,7 +26,7 @@ export const facets = [
   { key: 'relationship', label: 'Relationships', values: (b: FilterBook) => b.metadata.relationship_tags ?? [] },
   { key: 'character', label: 'Characters', values: (b: FilterBook) => b.metadata.character_tags ?? [] },
   { key: 'freeform', label: 'Freeform Tags', values: (b: FilterBook) => b.metadata.additional_tags ?? [] },
-  { key: 'series', label: 'Series', values: (b: FilterBook) => b.metadata.series ?? [] },
+  { key: 'series', label: 'Series', values: (b: FilterBook) => seriesNames(b.metadata) },
   { key: 'version', label: 'EPUB Version', values: (b: FilterBook) => [b.active ? 'Active Version' : 'Retained Version'] },
   { key: 'fandomCount', label: 'Crossover', values: (b: FilterBook) => b.metadata.fandoms.length ? [b.metadata.fandoms.length > 1 ? 'Multiple Fandoms' : 'One Fandom'] : [] },
 ] as const

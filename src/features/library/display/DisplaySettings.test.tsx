@@ -378,3 +378,16 @@ it.each(['sharp', 'filled'] as const)('colors %s tile tags by category, excludes
  fireEvent.click(within(list as HTMLElement).getByRole('button', { name: 'Show Less' }))
  expect(list.querySelectorAll('.metadata-tag')).toHaveLength(7)
 })
+
+it('aligns default series tiles with work metadata order while preserving custom layouts',()=>{
+ for(const layout of ['mobile','desktop'] as const){
+  const series=displayPreference('seriesTile','{}',layout)
+  expect(series.order.slice(0,7)).toEqual(['favorite','rec','authors','fandoms','line:facts','allTags','description'])
+  expect(series.hidden).toEqual(expect.arrayContaining(['notes','reading','relationships','characters','tags','warnings']))
+  expect(series.hidden).not.toContain('allTags')
+ }
+ const custom=displayPreference('seriesTile',JSON.stringify({seriesTile:{order:['description','notes','fandoms'],hidden:[]}}))
+ expect(custom.order.slice(0,3)).toEqual(['description','notes','fandoms'])
+ expect(custom.hidden).not.toContain('notes')
+ expect(custom.hidden).toContain('allTags')
+})

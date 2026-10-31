@@ -21,6 +21,8 @@ export function ConnectReader() {
     if (tab) tab.opener = null
     setBusy(true); setMessage(''); setHref('')
     try {
+      const association=await supabase.rpc('reader_organizer_connection',{p_action:'enable'})
+      if(association.error)throw association.error
       const { data, error } = await supabase.rpc('manage_userscript_device', { p_action: 'create', p_name: 'My Reader' })
       if (error) throw error
       const code = (data as { code: string }).code

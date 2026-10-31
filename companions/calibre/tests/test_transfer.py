@@ -6,6 +6,7 @@ import threading
 import unittest
 import uuid
 from http.client import HTTPConnection
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
@@ -68,16 +69,17 @@ class TransferTests(unittest.TestCase):
     def test_loopback_requires_origin_credential_and_destination(self):
         destination = pair()
         job = self.store.enqueue(destination, 'Automatic', 'Story', b'epub bytes', {'title':'Mapped'})
-        bridge = transfer.Bridge(self.store, destination)
+        with patch.object(transfer, 'ThreadingHTTPServer', side_effect=lambda _address, handler: ThreadingHTTPServer(('127.0.0.1', 0), handler)):
+            bridge = transfer.Bridge(self.store, destination)
         self.addCleanup(bridge.close)
         def request(path, headers, body=None):
-            connection = HTTPConnection('127.0.0.1', 47821, timeout=3)
+            connection = HTTPConnection('127.0.0.1', bridge.server.server_port, timeout=3)
             connection.request('POST' if body else 'GET', path, body=body, headers=headers)
             response = connection.getresponse()
             status, data = response.status, response.read()
             connection.close()
             return status, data
-        headers = {'Origin':destination['origin'], 'Authorization':'Bearer ' + destination['token'], 'X-Reader-Destination':destination['id']}
+        headers = {'Host':'127.0.0.1:47821', 'Origin':destination['origin'], 'Authorization':'Bearer ' + destination['token'], 'X-Reader-Destination':destination['id']}
         self.assertEqual(request('/inbox', {})[0], 403)
         self.assertEqual(request('/inbox', {**headers, 'Origin':'https://attacker.example'})[0], 403)
         self.assertEqual(request('/inbox', {**headers, 'Host':'attacker.example'})[0], 403)
@@ -87,6 +89,18 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(request('/results/' + job['id'], headers, json.dumps({'status':'duplicate','message':'Existing copy'}))[0], 200)
         self.assertEqual(json.loads(request('/inbox', headers)[1]), [])
         self.assertEqual(self.store.jobs()[0]['status'], 'duplicate')
+
+    def test_skips_completed_and_pending_exact_deliveries_but_sends_metadata_changes(self):
+        target = pair()
+        first = self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', {'title': 'Story'})
+        self.assertEqual(self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', {'title': 'Story'})['id'], first['id'])
+        self.store.acknowledge(first['id'], {'status': 'imported', 'message': 'Saved'})
+        self.assertEqual(self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', {'title': 'Story'})['id'], first['id'])
+        changed = self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', {'title': 'Updated'})
+        self.assertNotEqual(changed['id'], first['id'])
+        reverted = self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', {'title': 'Story'})
+        self.assertNotEqual(reverted['id'], first['id'])
+        self.assertNotEqual(self.store.enqueue(pair(), 'Automatic', 'Story', b'epub bytes', {'title': 'Story'})['id'], first['id'])
 
     def test_rejects_oversize_epubs_and_metadata(self):
         with self.assertRaises(ValueError):

@@ -339,8 +339,8 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .story-metadata-actions { grid-column: 2; grid-row: 4; justify-self: start; margin: 10px 0 0; }
   .story-metadata-label { display: inline; }
   .story-metadata-edit { max-width: 110px; height: 34px; min-height: 34px; padding: 6px 8px; gap: 6px; }
-  .details-updated { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
-  .details-updated > .details-updated-action { grid-column: 1; grid-row: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .details-updated { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .details-updated-action { grid-column: 1 / -1; grid-row: auto; flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .details-updated-action .form-actions { margin: 0; }
   .details-updated-action .button { white-space: nowrap; padding-inline: 10px; }
   .details-story-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; font-size: 14px; }
@@ -592,14 +592,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 
 .within-search-row .dropdown-panel { left: auto; right: 0; width: max(100%, 180px); }
 
-/* Profile access stays available at every screen size. */
-.profile-wrapper { position: relative; }
-.profile-menu { position: absolute; z-index: 8; right: 0; top: calc(100% + 10px); width: 280px; max-width: calc(100vw - 32px); padding: 12px; border: 1px solid #e6c8c1; border-radius: var(--radius-surface); background: var(--color-surface); box-shadow: 0 12px 30px #97000015; }
-.profile-identity { padding: 8px 10px 14px; border-bottom: 1px solid #ecddd8; margin-bottom: 8px; overflow-wrap: anywhere; }
-.profile-identity strong { display: block; font-size: 16px; }
-.profile-identity p { font-size: 13px; color: #756363; margin-top: 5px; }
-.profile-action { display: flex; align-items: center; gap: 10px; padding: 12px 10px; width: 100%; text-align: left; border: 0; border-radius: 5px; background: transparent; color: #970000; font-size: 14px; }
-.profile-action:hover, .profile-action:focus-visible { background: #970000; color: #fff; }
 @media (max-width: 650px) { .header-actions .add-menu { right: -82px; } }
 
 /* The search explanation lives inside the results input. */

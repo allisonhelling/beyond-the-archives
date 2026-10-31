@@ -7,5 +7,5 @@ import { useTagResolutions } from './tags/useTagResolutions'
 export function WorkTileTags({ metadata }: { metadata: Metadata }) {
   const mobile = useLayout(650) === 'mobile'
   const { records } = useTagResolutions(undefined, [], false)
-  return <ExpandableMetadataTags groups={workTagGroups(metadata, undefined, records, 'organizer')} limit={mobile ? 4 : 7} />
+  return <ExpandableMetadataTags groups={workTagGroups(metadata, undefined, records)} limit={mobile ? 4 : 7} />
 }

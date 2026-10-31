@@ -39,3 +39,21 @@ it('shares owner-scoped tag appearance through paired credentials, checks baseli
  await asUser()
  expect((await db.query<{preferences:{tag_appearance:unknown}}>("select (public.export_library_backup()->'tables'->'metadata_preferences'->0) preferences")).rows[0].preferences).toMatchObject({tag_appearance:next})
 })
+
+it('shares category order, rejects invalid orders, detects conflicting reorders, and preserves order for older clients',async()=>{
+ await asUser()
+ const base=(await settings()).tagAppearance
+ const order=['characters','relationships','tags','categories','warnings']
+ const next={shape:'pill',colors:{tags:'#123456'},order}
+ expect(await settings({tagAppearance:next,base})).toEqual({tagAppearance:next})
+ expect(await device(reader,'tag_get')).toEqual({tagAppearance:next})
+ const reordered={...next,order:['tags','characters','relationships','categories','warnings']}
+ expect(await device(reader,'tag_save',{tagAppearance:reordered,base:next})).toEqual({tagAppearance:reordered})
+ await asUser()
+ await expect(settings({tagAppearance:next,base:next})).rejects.toThrow('changed on another device')
+ for(const invalid of [null,{},['tags'],['tags','tags','characters','categories','warnings'],['tags','relationships','characters','categories','unknown']]) {
+  await expect(settings({tagAppearance:{...next,order:invalid},base:reordered})).rejects.toThrow('Invalid tag category order')
+ }
+ const legacy={shape:'sharp',colors:{}}
+ expect(await settings({tagAppearance:legacy,base:reordered})).toEqual({tagAppearance:{...legacy,order:reordered.order}})
+})

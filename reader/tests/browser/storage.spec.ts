@@ -29,9 +29,10 @@ test('reports storage exhaustion without deleting downloads, then removes only t
   await expect(dialog.getByRole('alert')).toContainText('Browser storage is full')
   await expect(dialog.getByRole('button', { name: 'Remove Download', exact: true })).toHaveCount(1)
   await expect(page.locator('.story-card')).toHaveCount(1)
+  await dialog.getByLabel('Select Visible Works', { exact: true }).check()
   page.once('dialog', prompt => void prompt.accept())
   await dialog.getByRole('button', { name: 'Remove Download', exact: true }).click()
-  await expect(dialog.getByRole('button', { name: 'Remove Download', exact: true })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'Remove Download', exact: true })).toBeDisabled()
   const saved = await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
     const result = await new Promise<{ books: { notes: string; hasFile: boolean }[]; files: number }>(resolve => {
@@ -63,6 +64,7 @@ test('uses fresh pages online while retaining the prepared shell offline', async
   await page.reload()
   await expect(page.getByRole('heading', { name: 'The Bookshelf' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Outdated Cached Reader' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await expect(page.getByLabel('Pairing Code', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Backend URL', { exact: true })).toHaveCount(0)

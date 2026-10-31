@@ -457,6 +457,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   const mobile = useLayout(600) === 'mobile'
   const headerDisplay = useDisplayPreference('workHeader'), statsDisplay = useDisplayPreference('workStats')
   const readBesideWayback = mobile && !isDisplayFieldHidden(headerDisplay, 'stats') && !isDisplayFieldHidden(statsDisplay, 'updated')
+  const updatedActions = story && <dd className="details-updated-action">{readBesideWayback && <ReadEpub workId={story.work.ao3_work_id} />}<WaybackLink url={savedWorkUrl(story)} /></dd>
   return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story}>{({ favorite, rec, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
     <div className="page-heading story-details-heading work-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
@@ -473,7 +474,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       words: <> <div><dt>Word Count</dt><dd><strong>{story.metadata.word_count?.toLocaleString() ?? '?'}</strong> words</dd></div> </>,
       chapters: <> <div><dt>Published / Total Chapters</dt><dd><strong>{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'}</strong> chapters</dd></div> </>,
       publication: <> <div><dt>Publication Status</dt><dd><strong>{publicationStatuses[story.metadata.publication_status].label}</strong></dd></div> </>,
-      updated: <> <div className="details-updated"><dt>Date Updated</dt><dd><strong>{ao3Date(story.work.ao3_updated_at)}</strong></dd><dd className="details-updated-action">{readBesideWayback && <ReadEpub workId={story.work.ao3_work_id} />}<WaybackLink url={savedWorkUrl(story)} /></dd></div> </>
+      updated: <> <div className="details-updated"><dt>Date Updated</dt><dd><strong>{ao3Date(story.work.ao3_updated_at)}</strong></dd>{!mobile && updatedActions}</div>{mobile && updatedActions} </>
     }}</DisplayInfo>
         </dl> </>}}</DisplayInfo>}
     </div></div>

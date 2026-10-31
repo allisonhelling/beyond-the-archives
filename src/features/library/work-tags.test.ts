@@ -8,7 +8,7 @@ it('puts additional tags first without reclassifying fallback copies of known ta
  const record = (name: string, status: TagResolution['status'], canonical_name: string | null): TagResolution => ({category:'freeform',name,status,canonical_name,checked_at:'2026-10-30',attempted_at:'2026-10-30'})
  const records = [record('Verified','canonical','Verified'), record('Alias','synonym','Verified'), record('Custom','custom',null)]
  const groups = workTagGroups(metadata, undefined, records)
- expect(groups.map(group => group.label)).toEqual(['Additional Tags','AO3 Warnings','Relationships','Characters','Categories'])
+ expect(groups.map(group => group.label)).toEqual(['Additional Tags','Relationships','Characters','Categories','AO3 Warnings'])
  expect(groups[0].values).toEqual(['Verified','Alias','Custom','Raw'])
  expect(groups.flatMap(group => group.values)).toHaveLength(8)
  expect(workTagGroups(metadata)[0].values).toEqual(['Custom','Verified','Alias','Raw'])
@@ -16,8 +16,7 @@ it('puts additional tags first without reclassifying fallback copies of known ta
  expect(workTagGroups(metadata, value => value !== 'Custom')[0].values).toEqual(['Verified','Alias','Raw'])
 })
 
-it('puts organizer additional tags after characters and warnings last while retaining reader ordering', () => {
+it('shares the additional-tags-first category default across both applications', () => {
  const metadata = {...blankMetadata,relationship_tags:['A/B'],character_tags:['Alice'],additional_tags:['Fluff'],categories:['Gen'],archive_warnings:['Warning'],ao3_tags:['Warning','Alice','Fluff','Unclassified']}
- expect(workTagGroups(metadata,undefined,[],'organizer').flatMap(group=>group.values)).toEqual(['A/B','Alice','Fluff','Unclassified','Gen','Warning'])
- expect(workTagGroups(metadata).flatMap(group=>group.values)).toEqual(['Fluff','Unclassified','Warning','A/B','Alice','Gen'])
+ expect(workTagGroups(metadata).flatMap(group=>group.values)).toEqual(['Fluff','Unclassified','A/B','Alice','Gen','Warning'])
 })

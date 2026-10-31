@@ -14,7 +14,7 @@ function editable(node: ReactNode, group: DisplayGroup, field: string, selected:
     ? cloneElement(element, attributes)
     : <div {...attributes} className={`display-edit-contents${moving ? ' display-drop-shadow' : ''}`}>{element}</div>
 }
-export function DisplayInfo({ group, children, separator, fields, heading }: { group: DisplayGroup; children: Partial<Record<string, ReactNode>>; separator?: ReactNode; fields?: string[]; heading?: ReactNode }) {
+export function DisplayInfo({ group, children, separator, fields, heading, lineClassName = '' }: { group: DisplayGroup; children: Partial<Record<string, ReactNode>>; separator?: ReactNode; fields?: string[]; heading?: ReactNode; lineClassName?: string }) {
   const editor = useContext(DisplayEditorContext)
   const preference = useDisplayPreference(group)
   const drop = editor?.dropPreview?.group === group ? editor.dropPreview : undefined
@@ -36,7 +36,7 @@ export function DisplayInfo({ group, children, separator, fields, heading }: { g
     if (!displayLine(key)) return <Fragment key={key}>{index > 0 && separator}{renderField(key)}</Fragment>
     const fields = (lines[key] ?? []).filter(hasContent)
     if (!fields.length && !editing) return null
-    const content = <div className={`display-grouped-line${group.endsWith('Tile') ? ' story-facts' : ''}`} data-display-line={editing ? key : undefined}>
+    const content = <div className={`display-grouped-line${group.endsWith('Tile') ? ' story-facts' : ''} ${lineClassName}`.trim()} data-display-line={editing ? key : undefined}>
       {editing && <button type="button" className="display-line-handle" aria-label="Select Grouped Line" title="Select Grouped Line"><GripVertical size={12} aria-hidden="true" /></button>}
       {fields.map((field, position) => <Fragment key={field}><div className="display-line-item">{position > 0 && <span className="info-separator"> • </span>}{renderField(field)}</div></Fragment>)}
       {editing && !fields.length && <span className="display-line-placeholder">Grouped Line — drag or click information here</span>}

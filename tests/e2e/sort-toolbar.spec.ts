@@ -1,16 +1,17 @@
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
-test('keeps Sort on the page navigation row with aligned icons and labels across viewport widths', async ({ page }) => {
+test('places Sort beside pagination on desktop and fandoms on phones with aligned icons and labels', async ({ page }) => {
  await fixture(page); await page.goto('/library'); await login(page)
  for (const path of ['/library', '/reading']) {
   await page.goto(path)
   for (const width of [1280, 1100, 900, 768, 650, 390]) {
    await page.setViewportSize({ width, height: 900 })
    const toolbar = page.getByRole('region', { name: path === '/library' ? 'Library Toolbar' : 'Reading Toolbar' })
-   await expect(toolbar.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
+   const mobile = width <= 650
    const navigation = page.locator('.pagination-inline')
-   const sort = navigation.getByRole('button', { name: 'Sort', exact: true })
+   await expect((mobile ? navigation : toolbar).getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
+   const sort = (mobile ? toolbar : navigation).getByRole('button', { name: 'Sort', exact: true })
    await expect(sort).toBeVisible()
    // A resize can reflow and adjust scrolling between separate locator reads.
    await expect(async () => {
@@ -26,9 +27,18 @@ test('keeps Sort on the page navigation row with aligned icons and labels across
      expect(Math.abs(text.y + text.height / 2 - (icon.y + icon.height / 2))).toBeLessThan(1)
     }
    }).toPass({ timeout: 5000 })
-   const pager = (await navigation.locator('.pagination-controls').boundingBox())!, sortBounds = (await sort.boundingBox())!
-   expect(sortBounds.x).toBeGreaterThanOrEqual(pager.x + pager.width)
-   expect(Math.abs(sortBounds.y + sortBounds.height / 2 - pager.y - pager.height / 2)).toBeLessThan(2)
+   await expect(async () => {
+    const sortBounds = (await sort.boundingBox())!
+    if (mobile) {
+     const fandoms = (await toolbar.getByRole('button', { name: 'Select Fandoms', exact: true }).boundingBox())!
+     expect(sortBounds.x + sortBounds.width).toBeLessThanOrEqual(fandoms.x)
+     expect(Math.abs(sortBounds.y - fandoms.y)).toBeLessThan(2)
+    } else {
+     const pager = (await navigation.locator('.pagination-controls').boundingBox())!
+     expect(sortBounds.x).toBeGreaterThanOrEqual(pager.x + pager.width)
+     expect(Math.abs(sortBounds.y + sortBounds.height / 2 - pager.y - pager.height / 2)).toBeLessThan(2)
+    }
+   }).toPass({timeout:5000})
    await sort.click()
    const menu = page.getByRole('listbox', { name: 'Sort', exact: true })
    await expect(menu).toBeVisible()

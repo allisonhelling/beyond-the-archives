@@ -74,3 +74,9 @@
 .display-drop-shadow, .display-edit-contents.display-drop-shadow > * { outline: 2px dashed var(--color-brand); outline-offset: 2px; border-radius: 4px; background: color-mix(in srgb, var(--color-brand) 18%, transparent); box-shadow: 0 4px 8px #0002; opacity: .8; pointer-events: none; }
 .display-edit-contents.display-drop-shadow { display: block; }
 .display-line-item > .display-edit-contents.display-drop-shadow { display: inline; }
+
+.tag-order-list { display: grid; gap: 8px; list-style: none; padding: 0; margin: 12px 0; }
+.tag-order-list > li { display: flex; align-items: center; gap: 12px; }
+.tag-order-list > li > span { flex: 1; min-width: 0; }
+.tag-order-actions { display: flex; gap: 6px; }
+.tag-order-actions .button { display: grid; place-items: center; min-height: 36px; padding: 6px 10px; }

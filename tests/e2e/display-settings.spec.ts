@@ -170,6 +170,7 @@ for (const kind of ['Work', 'Series'] as const) test(`${kind} tiles support grou
   const extra = kind === 'Work' ? 'reading' : 'updated', extraLabel = kind === 'Work' ? 'Reading Status' : 'Date Updated'
   await manage(preview, true)
   await preview.getByRole('button', { name: new RegExp(`^Add ${extraLabel}`) }).click()
+  if (kind === 'Series') await preview.getByRole('button', { name: /^Add Private Notes/ }).click()
   await manage(preview, false)
   await field(preview, group, extra).click()
   await field(preview, group, 'line:facts').click({ position: { x: 3, y: 3 } })
@@ -862,4 +863,25 @@ test('tile previews use their own viewport for collapsed tag counts',async({page
   const frame=preview.locator('iframe').contentFrame()
   await expect(frame.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(mobile?4:7)
  }
+})
+
+
+test('saves All Tags category order and applies it before collapsed tile limits',async({page})=>{
+ const tables=await setup(page)
+ const entry=tables.library_entries.find(entry=>entry.id==='display-entry')!
+ Object.assign(entry.metadata_overrides as object,{relationship_tags:['A/B'],character_tags:['Alice'],additional_tags:['Fluff','Humor'],archive_warnings:['Warning'],categories:['Gen']})
+ const format=page.locator('#display-tag-format'),order=format.locator('.tag-order-list')
+ await expect(order.locator('li').first()).toContainText('Additional Tags')
+ await format.getByRole('button',{name:'Move Characters Up',exact:true}).click()
+ await format.getByRole('button',{name:'Move Characters Up',exact:true}).click()
+ await expect(order.locator('li').first()).toContainText('Characters')
+ await format.locator('.display-save-bar').getByRole('button',{name:'Save',exact:true}).click()
+ await expect.poll(()=>tables.metadata_preferences[0]?.tag_appearance).toMatchObject({order:['characters','tags','relationships','categories','warnings']})
+ await page.goto('/reading')
+ const tags=page.locator('.work-card .expandable-metadata-tags .metadata-tag')
+ await expect(tags.first()).toHaveText('Alice')
+ await expect(tags.nth(1)).toHaveText('Fluff')
+ await expect(tags.nth(2)).toHaveText('Humor')
+ await page.reload()
+ await expect(tags.first()).toHaveText('Alice')
 })

@@ -3,8 +3,8 @@ import { webcrypto } from 'node:crypto'
 import { epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub } from '../src/epub'
 import { emptyFilters, facetOptions, facets, filterErrors, matchesBook, type FacetKey, type Filters } from '../src/filters'
-import { frontMatterMetadata, metadataDate, packageMetadata } from '../src/metadata'
-import type { Book } from '../src/model'
+import { frontMatterMetadata, metadataDate, packageMetadata, publisherName, seriesNames } from '../src/metadata'
+import { blankMetadata, type Book } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 const parse = (text: string) => new DOMParser().parseFromString(text, 'application/xml')
 const titlePage = `<html><body class="fff_titlepage"><h3><a href="https://archiveofourown.org/works/23818510">Trust Me, I'm an Alchemist</a> by metisket</h3><div>
@@ -105,7 +105,7 @@ describe('Offline metadata filters', () => {
 it('combines multi-selections with every other field, exclusions, search and ranges', () => {
   const b = { file: new Blob(['book']), metadata: { title: 'Story', summary: '', authors: ['Author'], fandoms: ['A','B'], rating: 'Teen', publication_status: 'complete', categories: ['Gen'], language: 'en', relationship_tags: ['A/B','C/D'], character_tags: ['A','B'], additional_tags: ['Crossover','Tag, With Comma'], ao3_tags: ['Tag, With Comma'], word_count: 1000, published_chapters: 5, kudos: 5, bookmark_count: 10, comment_count: 2, hits: 50, updated_at: '2020-01-01', publisher: 'archiveofourown.org' }, active: true, collections: ['Favorites'], importedAt: '2026-10-01T00:00:00Z' } as Book
   const filters = emptyFilters()
-  filters.selections = { fandom: ['A','Unrelated'], character: ['A','B'], relationship: ['A/B','C/D'], freeform: ['Crossover','Tag, With Comma'], language: ['English','French'], category: ['Gen'], collection: ['Favorites'], publication: ['Completed'], rating: ['Teen'], author: ['Author'], publisher: ['archiveofourown.org'], version: ['Active Version'] }
+  filters.selections = { fandom: ['A','Unrelated'], character: ['A','B'], relationship: ['A/B','C/D'], freeform: ['Crossover','Tag, With Comma'], language: ['English','French'], category: ['Gen'], collection: ['Favorites'], publication: ['Completed'], rating: ['Teen'], author: ['Author'], publisher: ['AO3'], version: ['Active Version'] }
   filters.ranges = { words: { min: '1000', max: '1000' }, chapters: { min: '5', max: '5' }, kudos: { min: '5', max: '5' }, bookmarks: { min: '10', max: '10' }, comments: { min: '2', max: '2' }, hits: { min: '50', max: '50' }, updated: { min: '2020-01-01', max: '2020-01-01' } }
   expect(matchesBook(b, filters, 'Story')).toBe(true)
   filters.modes.fandom = 'all'
@@ -160,4 +160,39 @@ describe('Summary formatting', () => {
     expect(metadata.summary).toBe('First paragraph.\n\nSecond.\nThird.')
     expect(metadata.summary_html).toContain('<strong>paragraph</strong>')
   })
+})
+
+it.each(['ao3','fanficfare'] as const)('uses the first story summary in %s anthologies, following spine order',async format=>{
+  const files=epubFiles()
+  files[2].content=files[2].content.replace('</metadata>','<dc:description>Anthology overview.</dc:description></metadata>').replace('<manifest>','<manifest><item id="second" href="second.xhtml" media-type="application/xhtml+xml"/>').replace('</spine>','<itemref idref="second"/></spine>')
+  const frontMatter=(id:number,summary:string)=>format==='ao3'
+    ? `<html><body><div id="preface"><p class="message"><a href="https://archiveofourown.org/works/${id}">Story</a></p><dl class="tags"><dt>Fandom:</dt><dd>Fandom</dd></dl><h2>Summary</h2><blockquote>${summary}</blockquote><p>Notes</p><blockquote>Author notes.</blockquote></div></body></html>`
+    : `<html><body class="fff_titlepage"><h3><a href="https://archiveofourown.org/works/${id}">Story</a></h3><b>Summary:</b>${summary}<br/><b>Status:</b>Completed</body></html>`
+  files[3].content=frontMatter(8001,'<p>First <em>story</em>.</p><p>Another paragraph.<script>unsafe()</script></p>')
+  files.push({name:'OEBPS/second.xhtml',content:frontMatter(8002,'Second story summary.')})
+  const buffer=await epubBuffer(files)
+  const book=await importEpub({size:buffer.byteLength,arrayBuffer:async()=>buffer} as File)
+  expect(book.workId).toBeNull()
+  expect(book.metadata.summary).toBe('First story.\n\nAnother paragraph.')
+  expect(book.metadata.summary_html).toContain('<em>story</em>')
+  expect(book.metadata.summary_html).not.toMatch(/Second story|Anthology overview|Chapter summary|Author notes|script|unsafe/)
+  expect(book.metadataVersion).toBe(3)
+  // If the first story has no summary, use the package fallback, never the second story.
+  files[3].content=frontMatter(8001,'')
+  const missing=await epubBuffer(files)
+  const fallback=await importEpub({size:missing.byteLength,arrayBuffer:async()=>missing} as File)
+  expect(fallback.metadata.summary).toBe('Anthology overview.')
+})
+
+it.each(['archiveofourown.org',' www.archiveofourown.org ','https://archiveofourown.org/'])('displays %s as AO3 without rewriting saved metadata', value => {
+ expect(publisherName(value)).toBe('AO3')
+ expect(publisherName('Other Publisher')).toBe('Other Publisher')
+ expect(publisherName('archiveofourown.org.example.com')).toBe('archiveofourown.org.example.com')
+ expect(publisherName(undefined)).toBeUndefined()
+})
+
+it('shares saved series names between tiles and exact-name local filters',()=>{
+ const metadata={...blankMetadata,series:['First Series',' First Series '],series_memberships:[{id:9,name:'Second Series',url:'https://archiveofourown.org/series/9',position:2}]}
+ expect(seriesNames(metadata)).toEqual(['First Series','Second Series'])
+ expect(facets.find(facet=>facet.key==='series')!.values({metadata} as Book)).toEqual(['First Series','Second Series'])
 })

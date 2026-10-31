@@ -1,3 +1,5 @@
+import { sha256 as digest } from '../../src/lib/crypto'
+export { digest }
 import { frontMatterMetadata, mergeMetadata, metadataVersion, packageMetadata } from './metadata'
 import { parseWorkUrl } from '../../src/features/imports/urls'
 import { chapterWordCount } from '../../src/features/library/chapter-word-count'
@@ -7,7 +9,6 @@ export const chapterVersion = 2
 const parse = (text: string) => { if (/<!ENTITY/i.test(text)) throw new Error('Unsupported XML entities.'); const doc = new DOMParser().parseFromString(text.replace(/<!DOCTYPE[^>]*>/gi, ''), 'application/xml'); if (doc.querySelector('parsererror')) throw new Error('Invalid EPUB XML.'); return doc }
 const elements = (doc: Document, name: string) => [...doc.getElementsByTagNameNS('*', name)]
 export function resourcePath(base: string, href: string) { const url = new URL(href, `https://epub.invalid/${base}`); if (url.origin !== 'https://epub.invalid' || url.search) throw new Error('External EPUB resource.'); return decodeURIComponent(url.pathname.slice(1)) }
-export async function digest(buffer: ArrayBuffer) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))].map(n => n.toString(16).padStart(2, '0')).join('') }
 // Allow only prose markup. No imported styles, active content, network resources, or SVG.
 export function sanitize(doc: Document, path: string, resources: Record<string, Blob>) {
   const allowed = new Set('p div span section article h1 h2 h3 h4 h5 h6 blockquote pre code em strong b i u s del ins sub sup br hr ul ol li dl dt dd table thead tbody tr th td caption a img figure figcaption aside'.split(' '))
@@ -38,7 +39,7 @@ export async function importEpub(file: File): Promise<Book> {
   const manifest = new Map(elements(opf, 'item').map(el => [el.getAttribute('id'), { path: resourcePath(packagePath, el.getAttribute('href') ?? ''), type: el.getAttribute('media-type') ?? '', properties: el.getAttribute('properties') ?? '' }]))
   const resources: Record<string, Blob> = {}
   for (const item of manifest.values()) if (/^image\/(png|jpeg|gif|webp|avif)$/.test(item.type)) resources[item.path] = new Blob([await archive.readBytes(item.path)], { type: item.type })
-  let extraMetadata = packageMetadata(opf)
+  let extraMetadata = packageMetadata(opf), firstStorySeen = false
   const chapters: Chapter[] = [], identities = new Set<string>()
   const identify = (value: string) => { try { identities.add(String(parseWorkUrl(value.replace(/^URL:/i, '').trim()).workId)) } catch { /* Non-AO3 publication identifiers do not identify a work. */ } }
   for (const el of [...elements(opf, 'source'), ...elements(opf, 'identifier')]) identify(el.textContent ?? '')
@@ -50,7 +51,10 @@ export async function importEpub(file: File): Promise<Book> {
     if (!body) throw new Error('Missing chapter body.')
     if (body.querySelector('#preface, dl.tags')) for (const a of body.querySelectorAll('.message a[href], a[rel="canonical"]')) identify(a.getAttribute('href') ?? '')
     const frontMatter = frontMatterMetadata(doc)
-    extraMetadata = mergeMetadata(extraMetadata, frontMatter.metadata)
+    const { summary, summary_html, ...fields } = frontMatter.metadata
+    // Merged EPUBs have front matter for each story. Later stories must not replace the first summary.
+    extraMetadata = mergeMetadata(extraMetadata, firstStorySeen ? fields : { ...fields, summary, summary_html })
+    if (frontMatter.urls.length || Object.keys(frontMatter.metadata).length) firstStorySeen = true
     frontMatter.urls.forEach(identify)
     const title = body.querySelector('h2, h1, h3.fff_chapter_title, h3')?.textContent?.trim() || `Section ${chapters.length + 1}`
     const heading = body.querySelector('.chapter h2, h2.title, h2.heading, h1'), chapterLink = heading?.querySelector('a[href]')?.getAttribute('href') ?? ''

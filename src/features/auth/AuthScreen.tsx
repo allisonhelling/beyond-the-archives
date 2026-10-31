@@ -1,3 +1,4 @@
+import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
 import { useActivity } from '../../lib/use-activity'
 import { useState, type FormEvent } from 'react'
 import { ArrowRight, BookOpen, LockKeyhole, ShieldCheck } from 'lucide-react'
@@ -63,6 +64,7 @@ export function AuthScreen() {
           {(error || sessionError) && <p className="error-message" role="alert">{error || sessionError}</p>}
           {message && <p className="success-message" role="status">{message}</p>}
           <button className="button primary" disabled={busy} type="submit">{busy ? 'Please Wait…' : needsPassword ? 'Save Password' : mode === 'reset' ? 'Send Recovery Link' : 'Sign In to Your Library'}<ArrowRight size={17} /></button>
+          {!needsPassword && !sampleMode && mode === 'login' && <button type="button" className="button secondary" disabled={busy} onClick={() => { setBusy(true); setError(null); void connectedLogin(supabase!, readerAppUrl(), true).then(ok => { if (!ok) setMessage('Sign in to your connected reader account first, or use your email and password.') }).catch(error => setError(error instanceof Error ? error.message : 'Connected sign-in failed.')).finally(() => setBusy(false)) }}>Continue From Reader</button>}
           {!needsPassword && <button type="button" className="text-button" disabled={busy} onClick={() => { setMode(mode === 'login' ? 'reset' : 'login'); setError(null); setMessage(null); setPassword('') }}>{mode === 'login' ? 'Forgot Your Password?' : 'Back to Sign In'}</button>}
         </form>}
         <div className="invite-note"><LockKeyhole size={14} /><span>Invitation only. Your library is never public.</span></div>

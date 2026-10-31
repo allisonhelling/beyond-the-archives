@@ -133,7 +133,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
  expect(await authors.evaluate((node,next)=>Boolean(node.compareDocumentPosition(next as Node)&Node.DOCUMENT_POSITION_FOLLOWING),await fandoms.elementHandle())).toBe(true)
  await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(mobile?4:7)
  await card.getByRole('button',{name:/more$/}).click()
- await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveText(['A/B','C/D','Alice','Bob','Fluff','Hurt/Comfort','Slow Burn','Found Family','Gen','Warning'])
+ await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveText(['Fluff','Hurt/Comfort','Slow Burn','Found Family','A/B','C/D','Alice','Bob','Gen','Warning'])
  await card.getByRole('button',{name:'Show Less',exact:true}).click()
  const toolbar=page.locator('.reading-toolbar')
  if(mobile) {

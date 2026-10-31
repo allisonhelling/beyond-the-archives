@@ -1,3 +1,13 @@
 .avatar { width: 31px; height: 31px; border-radius: 50%; display: grid; place-items: center; background: var(--color-surface-secondary); color: var(--color-brand, #970000); font-family: var(--font-serif); font-size: 14px; }
 .profile-trigger.avatar { display: grid; width: 40px; height: 40px; min-height: 40px; padding: 0; border: 1px solid #e6c8c1; cursor: pointer; font-weight: 650; }
 .profile-trigger:hover, .profile-trigger[aria-expanded=true] { background: var(--color-brand, #970000); color: var(--color-surface, #fff); }
+
+/* Profile access stays available at every screen size. */
+.profile-wrapper { position: relative; }
+.profile-menu { position: absolute; z-index: 8; right: 0; top: calc(100% + 10px); width: 280px; max-width: calc(100vw - 32px); padding: 12px; border: 1px solid #e6c8c1; border-radius: var(--radius-surface); background: var(--color-surface); box-shadow: 0 12px 30px #97000015; }
+.profile-identity { padding: 8px 10px 14px; border-bottom: 1px solid var(--color-border, #ecddd8); margin-bottom: 8px; overflow-wrap: anywhere; }
+.profile-identity strong { display: block; font-size: 16px; }
+.profile-identity p { font-size: 13px; color: var(--color-muted, #756363); margin: 5px 0 0; line-height: 1.5; }
+.profile-action { display: flex; align-items: center; gap: 10px; padding: 12px 10px; width: 100%; text-align: left; border: 0; border-radius: 4px; background: transparent; color: var(--color-brand, #970000); font-size: 14px; font-weight: 500; line-height: 21px; }
+.profile-action:hover, .profile-action:focus-visible { background: var(--color-brand, #970000); color: var(--color-surface, #fff); }
+.profile-action > svg { flex-shrink: 0; }

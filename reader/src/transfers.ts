@@ -2,7 +2,7 @@ import { readerCloud, readerCloudConfig, syncCloud } from './cloud'
 import { digest } from './epub'
 import { importedVersion, prepareImport, writeImport } from './import-books'
 import type { ReaderMetadata } from './model'
-import { all, bookStores, loadSetting, readerOwner, setting, transaction } from './storage'
+import { all, bookStores, getBookDetails, putBook, loadSetting, readerOwner, setting, transaction } from './storage'
 
 export type TransferPair = { version: 1; id: string; token: string; device: string; label: string; account: string; cloud: boolean; origin: string; cloud_url?: string; local_url: string; mode: 'Automatic' | 'Cloud Inbox' | 'Local Reader' }
 export type ImportJob = { id: string; hash: string; filename: string; metadata: Record<string, unknown>; status: 'queued' | 'imported' | 'duplicate' | 'error' | 'cancelled'; message: string; hasFile?: boolean }
@@ -42,12 +42,18 @@ export function mappedMetadata(input: Record<string,unknown>): Partial<ReaderMet
   if ('summary' in result) result.summary_html = ''
   return result
 }
-export async function stageTransfer(job: ImportJob, file: Blob) {
-  if (file.size > 52428800 || await digest(await file.arrayBuffer()) !== job.hash) throw new Error('Transferred EPUB size or hash is invalid.')
+function calibreIdentity(metadata: Record<string,unknown>) {
+  const value = metadata._calibre_uuid
+  return typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value.toLowerCase() : undefined
+}
+export async function stageTransfer(job: ImportJob, file?: Blob) {
+  if (!/^[0-9a-f]{64}$/.test(job.hash)) throw new Error('Transferred EPUB hash is invalid.')
+  const existing = await getBookDetails(job.hash)
+  if (!existing?.hasFile && (!file || file.size > 52428800 || await digest(await file.arrayBuffer()) !== job.hash)) throw new Error('Transferred EPUB size or hash is invalid.')
   const current = await loadSetting<ImportJob>(jobKey(job.id))
   if (!current) await transaction(['settings'],tx=>{
     tx.objectStore('settings').put({id:jobKey(job.id),value:{...job,hasFile:true,status:'queued',message:'Waiting to import.'}})
-    tx.objectStore('settings').put({id:fileKey(job.id),value:file})
+    if (!existing?.hasFile) tx.objectStore('settings').put({id:fileKey(job.id),value:file})
   })
 }
 let cancelled = false
@@ -62,15 +68,31 @@ export async function processTransfers() {
     if (job.status !== 'queued' || !job.hasFile) continue
     if (cancelled) { await setting(jobKey(job.id),{...job,status:'cancelled',message:'Cancelled before import. Retry to resume.'}); continue }
     try {
+      const existing = await getBookDetails(job.hash)
+      if (existing?.hasFile) {
+        // Exact downloads need neither another fetch nor another EPUB parse; only mapped metadata changes.
+        await transaction(bookStores,tx=>{
+          const request=tx.objectStore('books').get(job.hash)
+          request.onsuccess=()=>{
+            const current=request.result as typeof existing | undefined
+            if (!current?.hasFile) { tx.abort(); return }
+            putBook(tx,{...current,calibreId:calibreIdentity(job.metadata) ?? current.calibreId,metadata:{...current.metadata,...mappedMetadata(job.metadata)}})
+            tx.objectStore('settings').put({id:jobKey(job.id),value:{...job,hasFile:false,status:'duplicate',message:'Already imported; Calibre metadata updated.'}})
+            tx.objectStore('settings').delete(fileKey(job.id))
+          }
+        })
+        count++
+        continue
+      }
       const file = await loadSetting<Blob>(fileKey(job.id))
       if (!file) throw new Error('The staged original is missing. Send this book again from Calibre.')
-      const {next,duplicate,previous} = await prepareImport(new File([file],job.filename,{type:'application/epub+zip'}))
+      const {next,duplicate,previous} = await prepareImport(new File([file],job.filename,{type:'application/epub+zip'}),undefined,calibreIdentity(job.metadata))
       if (cancelled) { await setting(jobKey(job.id),{...job,status:'cancelled',message:'Cancelled before save. Retry to resume.'}); continue }
       next.metadata = {...next.metadata,...mappedMetadata(job.metadata)}
-      // Retain both versions. The existing mapper preserves notes/history and requests a resume choice when uncertain.
-      const result: ImportJob = {...job,hasFile:false,status:duplicate?.hasFile ? 'duplicate' : 'imported',message:duplicate?.hasFile ? 'Existing copy retained.' : previous && previous.id !== next.id ? 'Imported; previous EPUB retained.' : 'Imported.'}
-      await transaction(bookStores,tx=>{
-        const save = (current = previous) => { writeImport(tx,importedVersion(next,current),current); tx.objectStore('settings').put({id:jobKey(job.id),value:result}); tx.objectStore('settings').delete(fileKey(job.id)) }
+      // Calibre updates replace the prior version using the shared reading-state mapper.
+      const result: ImportJob = {...job,hasFile:false,status:duplicate?.hasFile ? 'duplicate' : 'imported',message:duplicate?.hasFile ? 'Existing copy retained.' : previous && previous.id !== next.id ? 'Updated existing EPUB; reading history preserved.' : 'Imported.'}
+      await transaction([...bookStores,'pending'],tx=>{
+        const save = (current = previous) => { writeImport(tx,importedVersion(next,current),current,'delete'); tx.objectStore('settings').put({id:jobKey(job.id),value:result}); tx.objectStore('settings').delete(fileKey(job.id)) }
         if (previous) { const request=tx.objectStore('books').get(previous.id); request.onsuccess=()=>save(request.result) } else save()
       })
       count++
@@ -104,7 +126,8 @@ async function receive() {
       for (const row of rows) {
         const id=`local:${pair.id}:${row.id}`
         if (!await loadSetting(jobKey(id))) {
-          const file=await (await localRequest(pair,`/books/${row.id}`)).blob()
+          const existing=await getBookDetails(row.hash)
+          const file=existing?.hasFile ? undefined : await (await localRequest(pair,`/books/${row.id}`)).blob()
           await stageTransfer({id,hash:row.hash,filename:typeof row.metadata._filename === 'string' ? row.metadata._filename : `${row.id}.epub`,metadata:row.metadata,status:'queued',message:''},file)
         }
       }
@@ -121,7 +144,8 @@ async function receive() {
       for(const row of cloudRows) {
         const id=`cloud:${row.destination}:${row.id}`
         if(await loadSetting(jobKey(id))) continue
-        const {data,error}=await readerCloud.storage.from('reader-epubs').download(`${readerOwner}/${row.hash}.epub`)
+        const existing=await getBookDetails(row.hash)
+        const {data,error}=existing?.hasFile ? {data:undefined,error:null} : await readerCloud.storage.from('reader-epubs').download(`${readerOwner}/${row.hash}.epub`)
         if(error) throw error
         await stageTransfer({id,hash:row.hash,filename:typeof row.metadata._filename === 'string' ? row.metadata._filename : `${row.id}.epub`,metadata:row.metadata,status:'queued',message:''},data)
       }
@@ -129,7 +153,7 @@ async function receive() {
   }
   const count = await processTransfers()
   // Publish manifests/history before acknowledging cloud delivery, so other devices can discover the book.
-  if (readerOwner && count) await syncCloud()
+  if (readerOwner && count) await syncCloud(true)
   for(const job of await transferJobs()) {
     if(job.status==='queued' || await loadSetting(`calibre-ack:${job.id}`) === job.status) continue
     const [transport,destination,id]=job.id.split(':')

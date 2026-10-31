@@ -1,3 +1,5 @@
+import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
+import { verifyAuthLink } from '../../lib/auth-account'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
@@ -8,8 +10,6 @@ import { brandSlug } from '../../lib/brand'
 
 const sampleAuthKey = `${brandSlug}:sample-auth:v1`
 
-// React StrictMode remounts effects. Consume a one-time email token only once.
-let pendingVerification: { token: string; promise: Promise<{ error: unknown }> } | null = null
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -35,10 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) throw new Error('Authentication is not configured.')
     const { error } = await supabase.auth.signInWithPassword({ email: login.trim(), password })
     if (error) throw error
+    sessionStorage.removeItem('connected-login-signed-out')
   }
   async function signOut() {
     if (sampleMode) { sampleAuthentication(false); return }
     if (!supabase) throw new Error('Authentication is not configured.')
+    sessionStorage.setItem('connected-login-signed-out','1')
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   }
@@ -66,11 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const tokenHash = params.get('token_hash')
         const type = params.get('type')
         if (tokenHash && (type === 'invite' || type === 'recovery')) {
-          if (pendingVerification?.token !== tokenHash) {
-            pendingVerification = { token: tokenHash, promise: client.auth.verifyOtp({ token_hash: tokenHash, type }) }
-          }
-          const { error: verifyError } = await pendingVerification.promise
-          if (verifyError) throw verifyError
+          await verifyAuthLink(client, tokenHash, type)
           if (active) setNeedsPassword(true)
           if (active) window.history.replaceState(null, '', '/auth/callback')
         }
@@ -82,6 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error: sessionError } = result
         if (sessionError) throw sessionError
         if (active && !authEventReceived) setSession(data.session)
+        if (!data.session && !tokenHash && !initialAuthType) {
+          void connectedLogin(client, readerAppUrl()).catch(() => { /* Email/password remains available. */ })
+        }
       } catch {
         if (active) {
           setSession(null)

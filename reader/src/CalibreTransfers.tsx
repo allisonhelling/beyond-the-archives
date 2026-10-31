@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Pagination } from '../../src/features/library/browsing/Pagination'
 import { Dialog } from '../../src/components/Dialog'
 import { loadSetting, readerOwner } from './storage'
 import { cancelTransfers, pairCalibre, receiveTransfers, retryTransfer, revokeCalibre, transferJobs, type ImportJob, type TransferPair } from './transfers'
 export function CalibreTransfers({onClose,onRefresh,onError}:{onClose:()=>void;onRefresh:()=>Promise<unknown>;onError:(error:unknown)=>void}) {
   const [pair,setPair]=useState<TransferPair>(),[jobs,setJobs]=useState<ImportJob[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
-  const [page,setPage]=useState(1)
-  const size=25,pages=Math.max(1,Math.ceil(jobs.length/size)),currentPage=Math.min(page,pages)
+  const [page,setPage]=useState(1),[tab,setTab]=useState('successful'),id=useId()
+  const tabs=[{id:'successful',label:'Successful',statuses:['imported','duplicate']},{id:'failed',label:'Failed',statuses:['error','cancelled']},{id:'pending',label:'Pending',statuses:['queued']}]
+  const selected=tabs.find(item=>item.id===tab)!,visible=jobs.filter(job=>selected.statuses.includes(job.status))
+  const size=25,pages=Math.max(1,Math.ceil(visible.length/size)),currentPage=Math.min(page,pages)
   async function refresh(){setPair(await loadSetting<TransferPair>('calibre-pair'));setJobs(await transferJobs())}
   useEffect(()=>{void refresh().catch(onError);const timer=window.setInterval(()=>void refresh().catch(onError),2000);return()=>window.clearInterval(timer)},[])
   async function run(action:()=>Promise<unknown>){setBusy(true);try{await action();await refresh();await onRefresh()}catch(error){setMessage(String(error));onError(error)}finally{setBusy(false)}}
@@ -21,8 +23,17 @@ export function CalibreTransfers({onClose,onRefresh,onError}:{onClose:()=>void;o
     </>}
     {pair && <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>receiveTransfers())}>Check for Incoming Books</button><button onClick={cancelTransfers}>Cancel Pending Imports</button></div>}
     <p>{jobs.length} transfers · {jobs.filter(job=>job.status==='queued').length} pending · {jobs.filter(job=>job.hasFile && job.status!=='queued').length} needing attention</p>
-    {jobs.length>size && <Pagination inlinePage page={currentPage} pages={pages} total={jobs.length} size={size} onPage={setPage} />}
-    {jobs.slice((currentPage-1)*size,currentPage*size).map(job=><div className="pending-item" key={job.id}><strong>{job.filename} · {job.status}</strong><p>{job.message}</p>{job.hasFile && job.status!=='queued' && <button disabled={busy} onClick={()=>void run(async()=>{await retryTransfer(job.id);await receiveTransfers()})}>Retry Import</button>}</div>)}
+    <div className="dialog-actions" role="tablist" aria-label="Transfer Results" onKeyDown={event=>{
+      const index=tabs.findIndex(item=>item.id===tab)
+      const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:event.key==='ArrowRight'?(index+1)%tabs.length:event.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:null
+      if(next===null)return
+      event.preventDefault();setTab(tabs[next].id);setPage(1);event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+    }}>{tabs.map(item=><button key={item.id} role="tab" id={`${id}-${item.id}`} aria-controls={`${id}-results`} aria-selected={tab===item.id} tabIndex={tab===item.id?0:-1} className={tab===item.id?'primary':undefined} onClick={()=>{setTab(item.id);setPage(1)}}>{item.label} ({jobs.filter(job=>item.statuses.includes(job.status)).length})</button>)}</div>
+    <div role="tabpanel" id={`${id}-results`} aria-labelledby={`${id}-${tab}`} tabIndex={0}>
+      {visible.length>size && <Pagination inlinePage page={currentPage} pages={pages} total={visible.length} size={size} onPage={setPage} />}
+      {visible.slice((currentPage-1)*size,currentPage*size).map(job=><div className="pending-item" key={job.id}><strong>{job.filename} · {job.status}</strong><p>{job.message}</p>{job.hasFile && job.status!=='queued' && <button disabled={busy} onClick={()=>void run(async()=>{await retryTransfer(job.id);await receiveTransfers()})}>Retry Import</button>}</div>)}
+      {!visible.length && <p>No {selected.label.toLowerCase()} transfers.</p>}
+    </div>
     <p role="status">{message}</p>
   </Dialog>
 }

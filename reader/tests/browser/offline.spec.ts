@@ -15,6 +15,7 @@ async function chooseChapter(page: Page, title: string) {
   await page.getByRole('complementary', { name: 'Contents', exact: true }).getByRole('button', { name: title, exact: true }).click()
 }
 async function connectOrganizer(page: Page) {
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await page.getByLabel('Device Name (Optional)', { exact: true }).fill('Test Reader')
   await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
@@ -29,7 +30,11 @@ test('imports, reads, changes layout, and cold-starts offline with saved history
   await expect(page.locator('script')).toHaveCount(1) // Application module only.
   expect(await page.evaluate(() => (window as unknown as { EPUB_SCRIPT_EXECUTED?: boolean }).EPUB_SCRIPT_EXECUTED)).toBeUndefined()
   await page.getByRole('button', { name: 'Dismiss Message' }).click()
-  await chooseChapter(page, 'Chapter 1: Home')
+  await page.getByRole('button',{name:'Contents',exact:true}).click()
+  const toc=page.getByRole('complementary',{name:'Contents',exact:true})
+  await expect(toc.locator('[data-section-kind=chapter] .menu-item').first()).toHaveCSS('padding-inline-start','24px')
+  await expect(toc.locator('[data-section-kind=frontmatter] .menu-item').first()).toHaveCSS('padding-inline-start','8px')
+  await toc.getByRole('button',{name:'Chapter 1: Home',exact:true}).click()
   await page.getByLabel('Book Content').evaluate(el => { el.scrollTop = 700 })
   await page.waitForFunction(async () => { const db = await new Promise<IDBDatabase>(r => { const q = indexedDB.open('bta-reader'); q.onsuccess = () => r(q.result) }); return new Promise<boolean>(r => { const q = db.transaction('books').objectStore('books').getAll(); q.onsuccess = () => r(q.result[0]?.position.fraction > 0) }) })
   await page.getByRole('button', { name: 'Aa · Display' }).click()
@@ -46,6 +51,14 @@ test('imports, reads, changes layout, and cold-starts offline with saved history
   await page.getByRole('button', { name: '← Bookshelf' }).click()
   await expect(page.getByText('1 chapters read')).toBeVisible()
   const shelfCard = page.locator('.story-card').first()
+  for(const width of [390,1280]){
+    await page.setViewportSize({width,height:844})
+    const title=(await shelfCard.locator('h2').boundingBox())!,menu=(await shelfCard.getByLabel('Work Actions',{exact:true}).boundingBox())!
+    expect(Math.abs(title.y-menu.y)).toBeLessThan(5)
+    await expect(shelfCard.locator('.work-fandoms')).toHaveCSS('margin-top','2px')
+    await expect(shelfCard.locator('.work-fandoms')).toHaveCSS('margin-bottom','4px')
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  }
   expect(await shelfCard.locator('.byline').evaluate(node => node.nextElementSibling?.classList.contains('work-fandoms'))).toBe(true)
   await page.getByRole('button', { name: 'Dismiss Message' }).click()
   await page.screenshot({ path: 'test-results/bookshelf.png', fullPage: true })
@@ -483,9 +496,9 @@ test('uses organizer publication symbols and tooltips and separates work facts w
     await expect(card.locator('.work-fandoms')).toHaveCSS('font-size', '13px')
     await expect(card.locator('.metadata-tag').first()).toHaveCSS('font-size', '13px')
     await expect(card.locator('.work-fandoms')).toHaveCSS('font-weight', '650')
-    expect(await page.getByRole('button', { name: 'Reader Account', exact: true }).evaluate(el => el.parentElement?.lastElementChild === el)).toBe(true)
+    expect(await page.getByRole('button', { name: 'Profile Menu', exact: true }).evaluate(el => el.parentElement?.lastElementChild === el)).toBe(true)
     for (const selector of ['.byline', '.work-facts', '.card-progress']) await expect(card.locator(selector)).toHaveCSS('font-size', textSize)
-    expect(await card.locator('.byline').evaluate(el => el.nextElementSibling?.classList.contains('work-facts'))).toBe(true)
+    expect(await card.locator('.byline').evaluate(el => el.nextElementSibling?.classList.contains('work-fandoms'))).toBe(true)
     expect(await card.locator('.work-facts').evaluate(el => el.nextElementSibling?.classList.contains('tags'))).toBe(true)
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
   }
@@ -497,8 +510,7 @@ test('uses organizer publication symbols and tooltips and separates work facts w
   await expect(tags.getByRole('button', { name: 'Completed Works', exact: true })).toBeVisible()
   await card.getByRole('img', { name: 'Complete on AO3' }).focus()
   await expect(page.getByRole('tooltip', { name: 'Complete on AO3', exact: true })).toBeVisible()
-  expect(await card.locator('.work-facts > span').nth(1).evaluate(el => getComputedStyle(el, '::before').content)).toBe('"•"')
-  expect(await card.locator('.work-facts > span').nth(2).evaluate(el => getComputedStyle(el, '::before').content)).toBe('"•"')
+  await expect(card.locator('.work-facts .info-separator')).toHaveText([' • ',' • '])
 })
 
 test('opens details from the work title, places its tooltip below, and navigates from chapter-title dropdowns', async ({ page }) => {
@@ -722,6 +734,7 @@ test('offers all organizer tag styles plus the filled-chip default and persists 
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
   await expect(page.locator('.story-card .metadata-tags')).toHaveAttribute('data-tag-shape', 'filled')
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   const style = page.getByLabel('Tag Style', { exact: true })
   await expect(style.locator('option')).toHaveCount(6)
@@ -744,7 +757,7 @@ test('offers all organizer tag styles plus the filled-chip default and persists 
 })
 
 test('opts into organizer formats, refreshes changes, caches them offline, and restores independent settings on unlink', async ({ page, context }) => {
-  let remote = { shape: 'sharp', colors: { tags: '#123456' } }, tagGets = 0
+  let remote = { shape: 'sharp', colors: { tags: '#123456' }, order:['characters','tags','relationships','categories','warnings'] }, tagGets = 0
   await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
     if (route.request().postDataJSON().p_action === 'tag_get') { tagGets++; await route.fulfill({ json: { tagAppearance: remote } }) }
     else await route.fulfill({ json: { entry: null, collections: [] } })
@@ -753,21 +766,27 @@ test('opts into organizer formats, refreshes changes, caches them offline, and r
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'linked-formats.epub', mimeType: 'application/epub+zip', buffer: await fixture(true) })
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await page.getByLabel('Tag Style', { exact: true }).selectOption('commas')
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await connectOrganizer(page)
   expect(tagGets).toBe(0)
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await page.getByLabel('Sync Tag Format With Organizer').check()
   await expect(page.getByLabel('Tag Style', { exact: true })).toHaveValue('sharp')
   await expect(page.getByLabel('Tag Style', { exact: true })).toBeDisabled()
   await expect(page.locator('.story-card .metadata-tags')).toHaveAttribute('data-tag-shape', 'sharp')
-  remote = { shape: 'pill', colors: { tags: '#654321' } }
+  await expect(page.locator('.tag-order-list li').first()).toContainText('Characters')
+  await expect(page.getByRole('button',{name:'Move Additional Tags Up',exact:true})).toBeDisabled()
+  remote = { shape: 'pill', colors: { tags: '#654321' }, order:['relationships','characters','tags','categories','warnings'] }
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect(page.getByLabel('Tag Style', { exact: true })).toHaveValue('pill')
+  await expect(page.locator('.tag-order-list li').first()).toContainText('Relationships')
   await page.getByLabel('Sync Tag Format With Organizer').uncheck()
   await expect(page.getByLabel('Tag Style', { exact: true })).toHaveValue('commas')
+  await expect(page.locator('.tag-order-list li').first()).toContainText('Additional Tags')
   const before = tagGets
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   expect(tagGets).toBe(before)
@@ -777,6 +796,7 @@ test('opts into organizer formats, refreshes changes, caches them offline, and r
   await context.setOffline(true)
   await page.reload()
   await expect(page.locator('.story-card .metadata-tags')).toHaveAttribute('data-tag-shape', 'pill')
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await page.getByLabel('Sync Tag Format With Organizer').uncheck()
   await expect(page.getByLabel('Tag Style', { exact: true })).toHaveValue('commas')
@@ -845,6 +865,7 @@ test('reports verified local files by stable installation identity and replaces 
   await page.getByLabel('Personal Notes').fill('Retain this note without the EPUB')
   await page.getByRole('button', { name: 'Save Personal Notes' }).click()
   await page.getByRole('button', { name: 'Close Dialog' }).click()
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Reader Account', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Reader Account & Cloud Library' })).toBeVisible()
   await page.getByRole('button', { name: 'Close Dialog' }).click()
@@ -982,6 +1003,7 @@ test('automatically pairs from an organizer link and preserves an existing conne
 test('connects manually with hosted defaults without requesting backend settings', async ({ page }) => {
   await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
   await page.goto('/')
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
   await expect(page.getByLabel('Backend URL')).toHaveCount(0)
   await expect(page.getByLabel('Public API Key')).toHaveCount(0)
@@ -999,7 +1021,9 @@ test('automatically consumes a pairing fragment delivered to an already open rea
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'The Bookshelf' })).toBeVisible()
   await page.evaluate(pairing => { location.hash = new URLSearchParams({ readerPairing: JSON.stringify(pairing) }).toString() }, { ...hostedOrganizer, code: 'a'.repeat(64) })
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Organizer & Sync', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   expect(calls).toContain('claim')
   expect(new URL(page.url()).hash).toBe('')
   await expect(page.getByLabel('Backend URL', { exact: true })).toHaveCount(0)
@@ -1010,6 +1034,7 @@ test('groups organizer actions below the credential and copies its value with te
   await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
   await page.goto('/')
   await connectOrganizer(page)
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Organizer & Sync' }), actions = dialog.locator('.organizer-sync-actions')
   await expect(actions.getByRole('button')).toHaveText(['Sync Now', 'Disconnect Organizer'])
@@ -1039,6 +1064,7 @@ test('keeps automatic successful organizer sync quiet and shows manual reports',
   await connectOrganizer(page)
   await page.clock.runFor(31_000)
   await expect(page.getByRole('status').filter({ hasText: 'Reading updates are synced.' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Checked 0 of 0 linked versions.' })).toBeVisible()
@@ -1050,6 +1076,7 @@ test('saves independent category colors and uses one color only for Filled Chips
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'colors.epub', mimeType: 'application/epub+zip', buffer: await fixture(true) })
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Tag Format', exact: true })
   for (const [label, color] of [['AO3 Warnings', '#112233'], ['Relationships', '#334455'], ['Characters', '#556677'], ['Additional Tags', '#778899']]) {
@@ -1066,12 +1093,14 @@ test('saves independent category colors and uses one color only for Filled Chips
   await expect(tags.locator('.metadata-tag[data-tag-category="relationships"]').first()).toHaveCSS('color', 'rgb(51, 68, 85)')
   await expect(tags.locator('.metadata-tag[data-tag-category="characters"]').first()).toHaveCSS('color', 'rgb(85, 102, 119)')
   await expect(tags.locator('.tag-group-label')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await page.getByLabel('Tag Style', { exact: true }).selectOption('filled')
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.reload()
   await expect(page.locator('.story-card .metadata-tag').first()).toBeVisible()
   for (const chip of await page.locator('.story-card .metadata-tag').all()) await expect(chip).toHaveCSS('color', 'rgb(119, 136, 153)')
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await expect(dialog.getByRole('group', { name: 'Relationships Color', exact: true }).getByRole('button', { name: 'Custom Color', exact: true })).toHaveText('#334455')
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)

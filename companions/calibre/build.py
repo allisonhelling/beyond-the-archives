@@ -6,7 +6,6 @@ root = Path(__file__).resolve().parent
 output = root / 'dist' / 'archives-unfolded-calibre.zip'
 output.parent.mkdir(exist_ok=True)
 with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
-    for source in sorted((root / 'plugin').iterdir()):
-        if source.is_file() and source.suffix in ('.py', '.txt'):
-            archive.write(source, source.name)
+    for name in ('__init__.py', 'ui.py', 'transfer.py', 'plugin-import-name-archives_unfolded.txt'):
+        archive.write(root / 'plugin' / name, name)
 print(output)
