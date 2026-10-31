@@ -4,7 +4,7 @@ An independent, browser-based EPUB reader in the same repository as the organize
 
 ## Run Locally
 
-Requires Node.js 22.12+ and the full repository checkout. From this folder:
+Requires Node.js 22.13+ (22.x) or 24+ and the full repository checkout. From this folder:
 
 ```sh
 npm ci --prefix ..
@@ -62,7 +62,7 @@ When connected, optionally enable **Sync Tag Format With Organizer**. The reader
 
 ## Optional Reader Account
 
-Open **Reader Account** and request an email sign-in link for an invited account. This passwordless flow also restores account access. After signing in, choose **Open This Account’s Library**. The guest library and every account library have separate local books, preferences, history, and organizer connections. **Open Guest Library** returns to guest reading without deleting account downloads. **Sign Out & Open Guest Library** also signs out on this device.
+Open **Reader Account** and request an email sign-in link for an invited account. This passwordless flow also restores account access. Open the sign-in email in the same browser profile that requested it; it should return to that reader’s origin. If a hosted sign-in opens localhost instead, the application owner must correct the [hosted Auth redirect configuration](docs/IMPLEMENTATION.md#reader-cloud-setup), then request a fresh link. After signing in, choose **Open This Account’s Library**. The guest library and every account library have separate local books, preferences, history, and organizer connections. **Open Guest Library** returns to guest reading without deleting account downloads. **Sign Out & Open Guest Library** also signs out on this device.
 
 Choose **Import Guest Library** to explicitly copy guest EPUBs, notes, and history into the account. Existing exact versions are skipped; the original guest library stays intact. Organizer credentials and pairing associations are never copied. New imports in an account upload on the next sync. **Sync Cloud Now** uploads retained original EPUBs and individual changed fields, then refreshes the cloud bookshelf. Select **Download EPUB** for each cloud book you want available offline on this device. Removing a downloaded book keeps its already-synced cloud copy. Open Reader Account using the circular profile button at the far right of the header.
 
@@ -116,4 +116,4 @@ EPUB summaries retain metadata paragraphs, line breaks, and safe emphasis in arc
 
 ## Import From Calibre
 
-Choose **Calibre Transfers** to pair Calibre with this reader library. The plugin offers **Sync Selected Books**, **Sync All Books**, and **Automatic**, **Cloud Inbox**, or **Local Reader** delivery. Automatic follows reader-cloud sign-in at pairing, independently of the organizer: account libraries use cloud delivery, guest libraries use the local bridge, and offline cloud uploads stay queued for the same account. Local delivery requires Calibre and this reader open on the same computer, with browser local-network access allowed. Both paths share EPUB parsing, duplicates, retained versions, and history preservation. Use the [Calibre companion guide](../companions/calibre/README.md) to build/install the ZIP, pair, map metadata, and retry or cancel transfers. Cloud delivery requires the matching backend deployment.
+Choose **Calibre Transfers** to pair Calibre with this reader library. Once paired, **Check for Incoming Books** checks immediately and **Cancel Pending Imports** cancels staged imports; both controls are hidden when unpaired. The plugin offers **Sync Selected Books**, **Sync All Books**, and **Automatic**, **Cloud Inbox**, or **Local Reader** delivery. Automatic follows reader-cloud sign-in at pairing, independently of the organizer: account libraries use cloud delivery, guest libraries use the local bridge, and offline cloud uploads stay queued for the same account. Local delivery requires Calibre and this reader open on the same computer, with browser local-network access allowed. Both paths share EPUB parsing, duplicates, retained versions, and history preservation. Use the [Calibre companion guide](../companions/calibre/README.md) to build/install the ZIP, pair, map metadata, and retry or cancel transfers. Cloud delivery requires the matching backend deployment.

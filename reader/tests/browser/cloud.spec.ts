@@ -157,3 +157,19 @@ test('receives the account cloud inbox without the originating device pairing an
  expect(pairing.cloud).toBe(true);expect(pairing.account).toBe(owner)
  await context.close()
 })
+
+test('requests email sign-in back to the current reader origin',async({page,context})=>{
+ let redirect='',createUser:unknown
+ await context.route(url=>url.pathname==='/auth/v1/otp',async route=>{
+  redirect=new URL(route.request().url()).searchParams.get('redirect_to') ?? ''
+  createUser=route.request().postDataJSON().create_user
+  return route.fulfill({json:{}})
+ })
+ await page.goto('/')
+ await account(page)
+ await page.getByLabel('Email',{exact:true}).fill('reader@example.com')
+ await page.getByRole('button',{name:'Email Sign-In Link',exact:true}).click()
+ await expect(page.getByRole('status').filter({hasText:'Check your email for a sign-in link.'})).toBeVisible()
+ expect(redirect).toBe(new URL(page.url()).origin)
+ expect(createUser).toBe(false)
+})

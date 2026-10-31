@@ -19,7 +19,7 @@ export function CalibreTransfers({onClose,onRefresh,onError}:{onClose:()=>void;o
       <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(JSON.stringify(pair)))}>Copy Pairing Configuration</button><button disabled={busy} onClick={()=>void run(()=>revokeCalibre(pair))}>Revoke Pairing</button></div>
       <p>Choose Automatic, Cloud Inbox, or Local Reader in Calibre before sending. Failures remain assigned to that destination. To change the account or device, revoke and pair again. Stop the local bridge in Calibre after revoking.</p>
     </>}
-    <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>receiveTransfers())}>Receive & Retry Delivery</button><button onClick={cancelTransfers}>Cancel Pending Imports</button></div>
+    {pair && <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>receiveTransfers())}>Check for Incoming Books</button><button onClick={cancelTransfers}>Cancel Pending Imports</button></div>}
     <p>{jobs.length} transfers · {jobs.filter(job=>job.status==='queued').length} pending · {jobs.filter(job=>job.hasFile && job.status!=='queued').length} needing attention</p>
     {jobs.length>size && <Pagination inlinePage page={currentPage} pages={pages} total={jobs.length} size={size} onPage={setPage} />}
     {jobs.slice((currentPage-1)*size,currentPage*size).map(job=><div className="pending-item" key={job.id}><strong>{job.filename} · {job.status}</strong><p>{job.message}</p>{job.hasFile && job.status!=='queued' && <button disabled={busy} onClick={()=>void run(async()=>{await retryTransfer(job.id);await receiveTransfers()})}>Retry Import</button>}</div>)}

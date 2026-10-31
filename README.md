@@ -28,7 +28,7 @@ A shared loading icon and short explanation appear while the app loads data, pro
 
 ## Quick Preview
 
-Requires Node **22.12+** and npm. From `beyond-the-archives/`:
+Requires Node **22.13+ (22.x) or 24+** and npm. From `beyond-the-archives/`:
 
 ```sh
 npm ci
@@ -43,7 +43,7 @@ Both local development modes offer a **Local Preview** toolbar with device prese
 
 ## Run Locally
 
-Run commands from `beyond-the-archives/`. Requires Node **22.12+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
+Run commands from `beyond-the-archives/`. Requires Node **22.13+ (22.x) or 24+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
 
 ### First-Time Setup and Database Upgrades
 

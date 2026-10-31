@@ -7,6 +7,8 @@ import refresh from 'eslint-plugin-react-refresh'
 export default tseslint.config(
   { ignores: ['**/dist/**', 'node_modules', 'playwright-report', 'test-results', 'supabase/functions'] },
   js.configs.recommended,
+  // Preserve the ESLint 9 rule baseline during the security dependency upgrade.
+  { rules: { 'no-unassigned-vars': 'off', 'no-useless-assignment': 'off', 'preserve-caught-error': 'off' } },
   ...tseslint.configs.recommended,
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
   { files: ['companions/chrome/**/*.js'], languageOptions: { globals: { chrome: 'readonly', __EXTENSION_ENVIRONMENTS__: 'readonly', __DEFAULT_ENVIRONMENT__: 'readonly', __APP_ORIGIN__: 'readonly', __SUPABASE_URL__: 'readonly', __SUPABASE_KEY__: 'readonly' } } },

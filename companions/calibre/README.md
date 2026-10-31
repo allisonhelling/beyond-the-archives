@@ -18,7 +18,7 @@ In Calibre, open **Preferences → Plugins → Load Plugin From File**, select `
 2. Choose **Calibre Transfers → Pair Calibre**, name the destination, and **Copy Pairing Configuration**. Keep this configuration private: it contains a delivery credential.
 3. In Calibre’s **archives unfolded** menu, choose **Pair Reader Destination**, paste the configuration, and save. The plugin remembers the library’s account, device, reader origin, and preferred mode. One active pairing is supported per Calibre configuration and reader library.
 4. Choose **Sync Selected Books** or **Sync All Books**. Review the destination name, account, device, and transfer mode before confirming. **Sync All Books** includes the entire current Calibre database, independently of searches or virtual-library filtering.
-5. Keep the reader open to receive and parse files. The reader checks roughly every 15 seconds while visible; **Receive & Retry Delivery** checks immediately. Calibre shows per-book transfer results; choose **Retry Queued Transfers** to refresh cloud import results and retry uploads after reconnecting. Local results update when the reader acknowledges receipt.
+5. Keep the reader open to receive and parse files. The reader checks roughly every 15 seconds while visible; **Check for Incoming Books** checks immediately. This action and **Cancel Pending Imports** appear only while Calibre is paired. Calibre shows per-book transfer results; choose **Retry Queued Transfers** to refresh cloud import results and retry uploads after reconnecting. Local results update when the reader acknowledges receipt.
 
 | Reader Library At Pairing | Automatic Mode |
 | --- | --- |
