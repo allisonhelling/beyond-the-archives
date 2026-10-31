@@ -24,7 +24,6 @@ export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull 
     <p>Guest reading works offline without an account. A reader account adds private EPUB storage and cross-device reading state. Organizer connection is a separate choice.</p>
     <p>{readerOwner ? 'Saved Account Library' : 'Guest Library'} · {session?.user.email ?? 'Signed out'}</p>
     {!session && <form onSubmit={event=>{event.preventDefault();const email=String(new FormData(event.currentTarget).get('email'));void run(async()=>{const {error}=await readerCloud.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin}});if(error)throw error;setMessage('Check your email for a sign-in link. Invited reader accounts only. This also restores access without a password.')})}}><label>Email<input name="email" type="email" autoComplete="email" required /></label><button disabled={busy}>Email Sign-In Link</button></form>}
-    {session && session.user.id !== readerOwner && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();await switchLibrary(session.user.id)})}>Open This Account’s Library</button>}
     {session?.user.id === readerOwner && <>
       <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(sync)}>Sync Cloud Now</button><button disabled={busy} onClick={()=>{if(confirm('Copy guest books, notes, and history into this account? Existing account versions are skipped. The guest library stays on this device.')) void run(async()=>{await importGuestLibrary();await sync()})}}>Import Guest Library</button></div>
       <p>Downloads remain readable offline. Removing a local download retains its cloud copy. Each account and guest library have separate local storage; organizer credentials are never imported.</p>
@@ -32,8 +31,11 @@ export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull 
       {conflicts.map(conflict=><div className="pending-item" key={conflict.edit.id}><strong>Conflicting {conflict.key.split('/').at(-1)?.replace(/^./, character => character.toUpperCase())}</strong><p>Choose a version. History events merge by unique ID. Positions can move backward for rereading.</p><pre>Device: {JSON.stringify(conflict.edit.value,null,2)}</pre><pre>Cloud: {JSON.stringify(conflict.value,null,2)}</pre><div className="dialog-actions"><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,true);await sync()})}>Use This Device</button><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,false);await sync()})}>Use Cloud Version</button></div></div>)}
       {variants.length>0 && <details><summary>Preserved Conflict Versions</summary>{variants.map(edit=><pre key={edit.id}>{edit.key}: {JSON.stringify(edit.value,null,2)}</pre>)}</details>}
     </>}
-    {session && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();const {error}=await readerCloud.auth.signOut({scope:'local'});if(error)throw error;await switchLibrary('')})}>Sign Out & Open Guest Library</button>}
-    {readerOwner && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();await switchLibrary('')})}>Open Guest Library</button>}
+    <div className="dialog-actions">
+      {session && session.user.id !== readerOwner && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();await switchLibrary(session.user.id)})}>Open This Account’s Library</button>}
+      {session && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();const {error}=await readerCloud.auth.signOut({scope:'local'});if(error)throw error;await switchLibrary('')})}>Sign Out & Open Guest Library</button>}
+      {readerOwner && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();await switchLibrary('')})}>Open Guest Library</button>}
+    </div>
     <p role="status">{message}</p>
   </Dialog>
 }

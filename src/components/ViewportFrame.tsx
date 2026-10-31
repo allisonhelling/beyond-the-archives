@@ -1,3 +1,4 @@
+import { LayoutWidthContext } from '../lib/use-layout'
 import { createPortal } from 'react-dom'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { PreviewViewport } from '../features/library/display/display-settings'
@@ -33,6 +34,6 @@ function Frame({ viewport, title, tile, children }: { viewport: PreviewViewport;
  const variables = { '--preview-width': `${viewport.width}px`, '--preview-height': `${tile ? Math.max(viewport.height, bounds.height + bounds.y + 40) : viewport.height}px`, '--preview-scale': scale, '--preview-offset-x': `${-bounds.x}px`, '--preview-offset-y': `${-bounds.y}px`, '--preview-crop-width': `${bounds.width}px`, '--preview-crop-height': `${bounds.height * scale}px` } as CSSProperties
  return <div ref={container} className="viewport-preview" style={variables}>
   <div className="viewport-preview-crop"><iframe ref={frame} title={title} className="viewport-preview-frame" srcDoc="<!doctype html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'></head><body><main class='app-main'></main></body></html>" onLoad={() => { const doc = frame.current?.contentDocument; if (doc) { doc.body.className = 'viewport-preview-document'; setRoot(doc.querySelector('main')) } }} /></div>
-  {root && createPortal(tile ? <div className="story-grid">{children}</div> : children, root)}
+  {root && createPortal(<LayoutWidthContext value={viewport.width}>{tile ? <div className="story-grid">{children}</div> : children}</LayoutWidthContext>, root)}
  </div>
 }

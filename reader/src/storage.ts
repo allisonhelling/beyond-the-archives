@@ -102,6 +102,33 @@ export async function saveBook(book: Book | BookDetails, pending?: Pending, pres
 export async function removeDownload(book: BookDetails) {
   await transaction(bookStores, tx => { putBook(tx, { ...book, hasFile: false }); tx.objectStore('contents').delete(book.id) })
 }
+// Both confirmed local deletion and cloud tombstones erase the same version data.
+export function eraseBook(tx: IDBTransaction, id: string, afterErase?: () => void) {
+  for (const name of ['books', 'catalog', 'contents']) tx.objectStore(name).delete(id)
+  const pending = tx.objectStore('pending').openCursor()
+  pending.onsuccess = () => { const cursor = pending.result; if (!cursor) return; if (cursor.value.book === id) cursor.delete(); cursor.continue() }
+  const settings = tx.objectStore('settings').openCursor()
+  settings.onsuccess = () => {
+    const cursor = settings.result
+    if (!cursor) { afterErase?.(); return }
+    const key = String(cursor.key), value = cursor.value.value
+    if (key === `cloud-file:${id}` || key.startsWith(`cloud-base:${id}/`) || key.startsWith(`cloud-edit:${id}/`) || key.startsWith('cloud-conflict:') && value?.key?.startsWith(`${id}/`) || key === 'cloud-flight' && value?.key?.startsWith(`${id}/`)) cursor.delete()
+    if (key.startsWith('calibre-job:') && value?.hash === id) { tx.objectStore('settings').delete(`calibre-file:${value.id}`); tx.objectStore('settings').delete(`calibre-ack:${value.id}`); cursor.delete() }
+    cursor.continue()
+  }
+}
+export function restoreDeletedVersion(tx: IDBTransaction, id: string) {
+  const tombstone = tx.objectStore('settings').get(`cloud-base:${id}/deleted`)
+  tombstone.onsuccess = () => { if (tombstone.result?.value.value === true) queueCloud(tx, `${id}/deleted`, false) }
+}
+export async function deleteEpub(id: string) {
+  await transaction([...bookStores, 'pending'], tx => {
+    const settings = tx.objectStore('settings'), baseline = settings.get(`cloud-base:${id}/deleted`)
+    baseline.onsuccess = () => eraseBook(tx, id, () => {
+      if (readerOwner) settings.put({id:`cloud-edit:${id}/deleted`,value:{id:crypto.randomUUID(),key:`${id}/deleted`,value:true,base:baseline.result?.value.revision ?? 0} satisfies CloudEdit})
+    })
+  })
+}
 export async function setting(id: string, value: unknown) { await transaction(['settings'], tx => {
   tx.objectStore('settings').put({ id, value })
   if (readerOwner && id === 'preferences') queueCloud(tx, 'preferences', cloudPreferences(value as import('./model').Preferences))

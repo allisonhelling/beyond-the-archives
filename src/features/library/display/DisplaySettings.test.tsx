@@ -163,7 +163,7 @@ it('keeps newly shown optional fields visible when saved inside a grouped line',
 it('moves a multi-selection into a line in display order and deletes containers independently of their information', () => {
   const original = displayPreference('workTile', '{}')
   const grouped = moveDisplaySelection(original, ['fandoms', 'authors'], 'line:facts')
-  expect(grouped.lines?.['line:facts']).toEqual(['series', 'rating', 'words', 'fandoms', 'authors'])
+  expect(grouped.lines?.['line:facts']).toEqual(['series', 'rating', 'words', 'authors', 'fandoms'])
   expect(grouped.order).not.toContain('authors')
   expect(moveDisplaySelection(grouped, ['line:facts', 'authors'], 'words')).toBe(grouped)
   const hidden = deleteDisplaySelection(grouped, ['authors', 'fandoms'])
@@ -232,11 +232,11 @@ it('colors active filter tags by category and updates them when settings are sav
 
 it('shows a drop shadow in the same slot used by the move operation without saving the draft', () => {
  const preferences=displayPreferences()
- const projected=moveDisplaySelection(preferences.workTile,['authors'],'fandoms')
- const view=render(<DisplayEditorContext value={{preferences,groups:['workTile'],selected:null,dropPreview:{group:'workTile',preference:projected,fields:['authors']}}}><div className="display-edit-surface"><DisplayInfo group="workTile">{{authors:<p>Author</p>,fandoms:<p>Fandom</p>,summary:<p>Summary</p>}}</DisplayInfo></div></DisplayEditorContext>)
+ const projected=moveDisplaySelection(preferences.workTile,['fandoms'],'authors')
+ const view=render(<DisplayEditorContext value={{preferences,groups:['workTile'],selected:null,dropPreview:{group:'workTile',preference:projected,fields:['fandoms']}}}><div className="display-edit-surface"><DisplayInfo group="workTile">{{authors:<p>Author</p>,fandoms:<p>Fandom</p>,summary:<p>Summary</p>}}</DisplayInfo></div></DisplayEditorContext>)
  const shadow=view.container.querySelector('.display-drop-shadow')!
- expect(shadow).toHaveTextContent('Author')
- expect(shadow.nextElementSibling).toHaveTextContent('Fandom')
+ expect(shadow).toHaveTextContent('Fandom')
+ expect(shadow.nextElementSibling).toHaveTextContent('Author')
  expect(localStorage.getItem(displaySettingsKey)).toBeNull()
 })
 
@@ -333,12 +333,14 @@ it('saves collection filters directly and requires confirmation for all-category
  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
-it('places default fandoms above the fixed heading and expandable tags below grouped facts', () => {
+it('places default fandoms below the author line and expandable tags below grouped facts', () => {
  const fields = workMetadataFields(exampleWork, 'tile')
- const view = render(<MemoryRouter><DisplayInfo group="workTile" heading={<h2>Work Heading</h2>} beforeHeading={['fandoms']}>{fields}</DisplayInfo></MemoryRouter>)
+ const view = render(<MemoryRouter><DisplayInfo group="workTile" heading={<h2>Work Heading</h2>}>{fields}</DisplayInfo></MemoryRouter>)
  const heading = screen.getByRole('heading', { name: 'Work Heading' })
  const fandoms = screen.getByText(exampleWork.metadata.fandoms.join(' · '))
- expect(fandoms.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+ const authors = view.container.querySelector('.authors')!
+ expect(heading.compareDocumentPosition(authors) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+ expect(authors.compareDocumentPosition(fandoms) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  const tags = view.container.querySelector('.expandable-metadata-tags')!
  expect(view.container.querySelector('.display-grouped-line')!.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  expect(tags.querySelectorAll('.metadata-tag')).toHaveLength(7)

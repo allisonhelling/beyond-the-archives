@@ -83,16 +83,18 @@ test('library and reading actions fit their headers and filters across viewport 
   await expect(async () => {
    const series = (await toolbar.getByRole('button', { name: 'Show Series', exact: true }).boundingBox())!
    const filters = (await toolbar.getByRole('button', { name: 'Filters', exact: true }).boundingBox())!
-   expect(series.y).toBeCloseTo(filters.y, 0)
-   expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
+   if (width > 650) {
+    expect(series.y).toBeCloseTo(filters.y, 0)
+    expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
+   } else expect(series.y + series.height).toBeLessThanOrEqual(filters.y)
    if (width > 1100) {
     const controls = await toolbar.locator(':scope > .custom-dropdown, :scope > .suggestion-search, :scope > .fandom-select, :scope > button').all()
     for (const control of controls) expect((await control.boundingBox())!.y).toBeCloseTo(series.y, 0)
    }
    const status = page.locator('.pagination-inline [role=status]')
    await expect(status).toContainText('1–50 of 113 works')
-   const previous = (await page.locator('.pagination-inline').getByRole('button', { name: 'Prev', exact: true }).boundingBox())!
-   const next = (await page.locator('.pagination-inline').getByRole('button', { name: 'Next', exact: true }).boundingBox())!
+   const previous = (await page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Prev', exact: true }).boundingBox())!
+   const next = (await page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Next', exact: true }).boundingBox())!
    const count = (await status.boundingBox())!
    expect(Math.abs(previous.y + previous.height / 2 - (next.y + next.height / 2))).toBeLessThan(2)
    expect(previous.y + previous.height / 2).toBeGreaterThanOrEqual(count.y)
@@ -109,8 +111,8 @@ test('library and reading actions fit their headers and filters across viewport 
  await page.goto('/reading')
  await expect(page.getByRole('heading', { name: 'Currently Reading', exact: true })).toBeVisible()
  await expect(page.locator('.library-heading-actions').getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
- await expect(page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
- await page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true }).click()
+ await expect(page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+ await page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Sort', exact: true }).click()
  await page.getByRole('option', { name: 'Alphabetical', exact: true }).click()
  await expect(page).toHaveURL(/sort=alpha/)
 })

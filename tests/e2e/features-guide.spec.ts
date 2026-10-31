@@ -120,3 +120,62 @@ test('passive surfaces are square and progress sections are centered and divided
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
  await page.screenshot({ path: test.info().outputPath('progress-layout.png'), fullPage: true })
 })
+
+test('work tiles and phone organizer controls use the requested reading layout',async({page},info)=>{
+ const tables=await fixture(page)
+ tables.works.push({id:'layout-order-work',ao3_work_id:44001,verified_chapters:{},published_chapters:3,is_complete:false})
+ tables.library_entries.push({id:'layout-order-entry',work_id:'layout-order-work',original_url:'https://archiveofourown.org/works/44001',reading_status:'reading',last_read_chapter:1,notes:'',metadata_overrides:{title:'Layout Order Story',authors:['Layout Author'],fandoms:['Layout Fandom'],relationship_tags:['A/B','C/D'],character_tags:['Alice','Bob'],additional_tags:['Fluff','Hurt/Comfort','Slow Burn','Found Family'],categories:['Gen'],archive_warnings:['Warning'],published_chapters:3,total_chapters:3}})
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'layout-reader',name:'My Reader',url:'https://archivesunfolded.vercel.app/',reportedAt:'2026-10-30T00:00:00Z',works:['44001']}],stories:[]}}))
+ await page.goto('/reading');await login(page)
+ const card=page.locator('.work-card'),mobile=info.project.name==='mobile'
+ await expect(card).toHaveCount(1)
+ const authors=card.locator('.authors'),fandoms=card.locator('.work-fandoms')
+ expect(await authors.evaluate((node,next)=>Boolean(node.compareDocumentPosition(next as Node)&Node.DOCUMENT_POSITION_FOLLOWING),await fandoms.elementHandle())).toBe(true)
+ await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(mobile?4:7)
+ await card.getByRole('button',{name:/more$/}).click()
+ await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveText(['A/B','C/D','Alice','Bob','Fluff','Hurt/Comfort','Slow Burn','Found Family','Gen','Warning'])
+ await card.getByRole('button',{name:'Show Less',exact:true}).click()
+ const toolbar=page.locator('.reading-toolbar')
+ if(mobile) {
+  for(const width of [390,320]) {
+   await page.setViewportSize({width,height:844})
+   const [title,refresh,sort,fandom,apply,filters]=await Promise.all([
+    page.getByRole('heading',{name:'Currently Reading',exact:true}),
+    page.getByRole('button',{name:'Mass Refresh All Stories on Page',exact:true}),
+    toolbar.getByRole('button',{name:'Sort',exact:true}),toolbar.getByRole('button',{name:'Select Fandoms',exact:true}),
+    toolbar.getByRole('button',{name:'Apply',exact:true}),toolbar.getByRole('button',{name:'Filters',exact:true}),
+   ].map(async locator=>(await locator.boundingBox())!))
+   expect(refresh.y).toBeLessThan(title.y+title.height)
+   expect(refresh.y+refresh.height).toBeGreaterThan(title.y)
+   expect(refresh.x).toBeGreaterThanOrEqual(title.x+title.width)
+   expect(sort.x+sort.width).toBeLessThanOrEqual(fandom.x)
+   expect(Math.abs(sort.y-fandom.y)).toBeLessThan(2)
+   expect(apply.x+apply.width).toBeLessThanOrEqual(filters.x)
+   expect(Math.abs(apply.y-filters.y)).toBeLessThan(2)
+   await expect(page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})).toHaveCount(0)
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  }
+  await page.setViewportSize({width:390,height:844})
+ } else await expect(page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})).toBeVisible()
+ await page.screenshot({path:test.info().outputPath('tile-controls.png'),fullPage:true})
+ await card.getByRole('link',{name:'Layout Order Story',exact:true}).click()
+ const read=page.getByRole('link',{name:'Read EPUB',exact:true}),wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true})
+ await expect(read).toBeVisible()
+ if(mobile) {
+  for(const width of [390,320]) {
+   await page.setViewportSize({width,height:844})
+   const first=(await read.boundingBox())!,second=(await wayback.boundingBox())!
+   expect(first.x+first.width).toBeLessThanOrEqual(second.x)
+   expect(Math.abs(first.y-second.y)).toBeLessThan(2)
+   await expect(wayback).toHaveCSS('white-space','nowrap')
+   expect(await wayback.evaluate(node=>node.clientHeight<2*parseFloat(getComputedStyle(node).lineHeight)+12)).toBe(true)
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  }
+ } else await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Read EPUB',exact:true})).toBeVisible()
+ await page.screenshot({path:test.info().outputPath('work-info-actions.png'),fullPage:true})
+ if(mobile) for(const display of [{workStats:{hidden:['updated']}},{workHeader:{hidden:['stats']}}]) {
+  await page.evaluate(value=>localStorage.setItem('between-chapters:display:v1',JSON.stringify(value)),display)
+  await page.reload()
+  await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Read EPUB',exact:true})).toBeVisible()
+ }
+})

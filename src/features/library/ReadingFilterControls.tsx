@@ -39,8 +39,8 @@ function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: st
   const label = authorOnly ? 'Search Author' : 'Search Title or Author'
   return <SearchSuggestions label={label} placeholder={label} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
-export function ReadingFilterControls({ stories, filters: appliedFilters, onChange, mode = 'library', orderingControls, availabilityControl, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, worksOnly = false, defaultScope }: {
-  worksOnly?: boolean; defaultScope?: string; stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode; availabilityControl?: ReactNode
+export function ReadingFilterControls({ stories, filters: appliedFilters, onChange, mode = 'library', orderingControls, sortControl, availabilityControl, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, worksOnly = false, defaultScope }: {
+  worksOnly?: boolean; defaultScope?: string; stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode; sortControl?: ReactNode; availabilityControl?: ReactNode
   suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
 }) {
   const [draft, setDraft] = useFilterDraft(appliedFilters, `${mode}:${defaultScope}`)
@@ -95,6 +95,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
     <section data-mode={mode} className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series Toolbar' : mode === 'library' ? 'Library Toolbar' : 'Reading Toolbar'}>
       {orderingControls}
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
+      {sortControl && <div className="toolbar-sort">{sortControl}</div>}
       <FandomSelect label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       {mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
       {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply</button>}

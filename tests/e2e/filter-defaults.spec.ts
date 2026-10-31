@@ -29,7 +29,7 @@ test('personal tag filters and collection/library defaults survive navigation an
  await expect(confirmation).toHaveCount(0)
  await page.goto('/reading')
  await expect(page).toHaveURL(/personalTags=Comfort/)
- await expect(page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})).toBeVisible()
+ await expect(page.locator('.pagination-inline, .reading-toolbar').getByRole('button',{name:'Sort',exact:true})).toBeVisible()
  await expect(page.locator('.library-heading-actions').getByRole('button',{name:'Sort',exact:true})).toHaveCount(0)
  const viewAll = page.getByRole('button',{name:'View All',exact:true})
  await expect(viewAll).toContainText('Non-caught up')

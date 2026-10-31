@@ -80,7 +80,7 @@ export function displayFieldLabel(group: DisplayGroup, field: string) {
 
 export function displayPreference(group: DisplayGroup, raw: string, layout: DisplayLayout = 'desktop'): DisplayPreference {
   const fields = Object.keys(displayGroups[group].fields)
-  const leading = group === 'workTile' ? ['favorite', 'rec', 'fandoms', 'authors', 'series', 'rating', 'words', 'allTags'] : []
+  const leading = group === 'workTile' ? ['favorite', 'rec', 'authors', 'fandoms', 'series', 'rating', 'words', 'allTags'] : []
   const keys = [...leading, ...fields.filter(key => !leading.includes(key))]
   let saved: Record<string, { order?: unknown; hidden?: unknown; lines?: unknown }> = {}
   try { saved = JSON.parse(raw) ?? {} } catch { /* Malformed preferences use defaults. */ }

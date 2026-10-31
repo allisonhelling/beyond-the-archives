@@ -123,10 +123,10 @@ test('actual tile data sections support mouse and touch dragging', async ({ page
   const source = field(work, 'workTile', 'authors'), destination = field(work, 'workTile', 'fandoms')
   await work.locator('iframe').scrollIntoViewIfNeeded()
   await dragInformation(page, source.locator('a').first(), destination, info.project.name === 'mobile')
-  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
+  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
   expect(await stored(page)).toBeNull()
   await applyTileDrafts(page, 'Cancel')
-  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
+  expect(await source.evaluate(node => !!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
 })
 
 for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kind} Info Page with independent Save and Cancel`, async ({ page }) => {
@@ -379,7 +379,7 @@ test('information remains draggable while Hide/Show Information is open', async 
   await authors.scrollIntoViewIfNeeded()
   await dragInformation(page,authors.locator('a').first(),fandoms,info.project.name==='mobile')
   await expect(authors).toBeVisible()
-  expect(await authors.evaluate(node=>!!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
+  expect(await authors.evaluate(node=>!!(node.compareDocumentPosition(node.parentElement!.querySelector('[data-display-field="fandoms"]')!)&Node.DOCUMENT_POSITION_PRECEDING))).toBe(true)
   expect(await stored(page)).toBeNull()
 })
 
@@ -451,10 +451,14 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
  for (const tags of await renderedTagGroups.all()) await expect(tags).toHaveAttribute('data-tag-shape','sharp')
  await expect(page.locator('.work-card .expandable-metadata-tags .tag-group-label')).toHaveCount(0)
  const categorizedChips = page.locator('.work-card .expandable-metadata-tags .metadata-tag')
+ await expect(categorizedChips).toHaveCount(page.viewportSize()!.width <= 650 ? 4 : 5)
+ if (page.viewportSize()!.width <= 650) await page.locator('.work-card .expandable-metadata-tags').getByRole('button',{name:/more$/}).click()
  await expect(categorizedChips).toHaveCount(5)
  for (const chip of await categorizedChips.all()) { await expect(chip).toBeVisible(); await expect(chip).toHaveCSS('border-radius','0px') }
  await expect(categorizedChips.filter({hasText:'Display fandom'})).toHaveCount(0)
  await page.reload()
+ await expect(page.locator('.work-card .expandable-metadata-tags .metadata-tag')).toHaveCount(page.viewportSize()!.width <= 650 ? 4 : 5)
+ if (page.viewportSize()!.width <= 650) await page.locator('.work-card .expandable-metadata-tags').getByRole('button',{name:/more$/}).click()
  await expect(page.locator('.work-card .expandable-metadata-tags .metadata-tag')).toHaveCount(5)
  for (const chip of await page.locator('.work-card .expandable-metadata-tags .metadata-tag').all()) await expect(chip).toBeVisible()
  await expect(page.locator('.work-card .metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
@@ -823,7 +827,7 @@ test('sample tile tooltips extend beyond the crop without moving their anchors',
  for (const kind of ['Work', 'Series']) {
   const desktop = page.getByRole('region', { name: `${info.project.name === 'mobile' ? 'Mobile' : 'Desktop'} ${kind} Tile Layout`, exact: true })
   // Put the Favorite trigger near the crop edge using the supported tile editor.
-  // Default fandoms now precede the heading, so a short tooltip can fit inside.
+  // Hide fandoms to keep the sample content compact while testing its crop edge.
   if (kind === 'Work') {
    const fandoms = field(desktop, 'workTile', 'fandoms')
    await fandoms.click()
@@ -846,5 +850,16 @@ test('sample tile tooltips extend beyond the crop without moving their anchors',
   expect(await tooltip.evaluate((node, y) => node.contains(document.elementFromPoint(node.getBoundingClientRect().x + node.getBoundingClientRect().width / 2, y)), Math.min(crop.y - 1, hint.y + hint.height / 2))).toBe(true)
   await page.mouse.move(0, 0)
   await expect(tooltip).toHaveCount(0)
+ }
+})
+
+test('tile previews use their own viewport for collapsed tag counts',async({page})=>{
+ await setup(page)
+ const previews=page.getByRole('region',{name:/^(Desktop|Mobile) Work Tile Layout$/})
+ await expect(previews).toHaveCount(page.viewportSize()!.width <= 1100 ? 1 : 2)
+ for(const preview of await previews.all()) {
+  const mobile=(await preview.getAttribute('aria-label'))!.startsWith('Mobile')
+  const frame=preview.locator('iframe').contentFrame()
+  await expect(frame.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(mobile?4:7)
  }
 })

@@ -15,7 +15,7 @@ async function signedIn(context:BrowserContext) {
 async function account(page:Page){await page.getByRole('button',{name:'Reader Account',exact:true}).click()}
 test('syncs originals and state without an organizer, downloads on a fresh device, and retains offline account isolation',async({browser})=>{
  test.setTimeout(60000)
- let loseNoteResponse = false
+ let loseNoteResponse = false, failDelete = false
  const values=new Map<string,Value>(),receipts=new Map<string,Value>(),files=new Map<string,Buffer>()
  async function device(){
   const context=await browser.newContext();await signedIn(context)
@@ -25,11 +25,22 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
    if(url.pathname.includes('/rpc/reader_cloud_apply')){
     const input=request.postDataJSON(),before=values.get(input.p_key)
     if(receipts.has(input.p_id))return route.fulfill({json:receipts.get(input.p_id)})
+    const id=input.p_key.split('/')[0],deleted=values.get(`${id}/deleted`)
+    if(deleted?.value===true && !(input.p_key===deleted.key && input.p_value===false && input.p_base===deleted.revision))return route.fulfill({json:deleted})
+    if(input.p_key===`${id}/deleted` && input.p_value===true){
+     for(const [key,row] of values)if(row.key.startsWith(`${id}/`))values.delete(key)
+     for(const [key,row] of receipts)if(row.key.startsWith(`${id}/`))receipts.delete(key)
+    }
     if((before?.revision??0)!==input.p_base && JSON.stringify(before?.value)!==JSON.stringify(input.p_value))return route.fulfill({json:{...before,conflict:true}})
     const next={key:input.p_key,value:input.p_value,revision:(before?.revision??0)+1};values.set(next.key,next);receipts.set(input.p_id,next);if(loseNoteResponse && input.p_key.endsWith('/notes')){loseNoteResponse=false;return route.abort()}return route.fulfill({json:next})
    }
-   if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()].filter(row=>row.key>String(url.searchParams.get('key')??'gt.').slice(3)).sort((a,b)=>a.key.localeCompare(b.key))})
+   if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()].filter(row=>row.key>String(url.searchParams.getAll('key').find(value=>value.startsWith('gt.'))??'gt.').slice(3) && (!url.searchParams.getAll('key').some(value=>value.startsWith('like.')) || row.key.endsWith('/deleted'))).sort((a,b)=>a.key.localeCompare(b.key))})
    if(url.pathname.includes('/storage/v1/object/')){
+    if(request.method()==='DELETE'){
+     if(failDelete){return route.fulfill({status:503,json:{message:'Storage temporarily unavailable'}})}
+     for(const key of request.postDataJSON().prefixes)files.delete(key)
+     return route.fulfill({json:[]})
+    }
     const key=url.pathname.split('reader-epubs/')[1]
     if(request.method()==='POST'){
      const form=await new Response(new Uint8Array(request.postDataBuffer()!),{headers:{'Content-Type':request.headers()['content-type']}}).formData()
@@ -100,7 +111,8 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await expect(other.locator('.story-card')).toHaveCount(0)
  await expect(other.getByRole('heading',{name:'Make Yourself at Home'})).toBeVisible()
  await second.setOffline(false)
- const guestFiles=epubFiles()
+ const guestFiles=epubFiles({source:'https://archiveofourown.org/works/8002'})
+ for(const item of guestFiles)item.content=item.content.replaceAll('Recovered &amp; Remembered','Guest Edition')
  guestFiles[guestFiles.length-1].content=String(guestFiles.at(-1)!.content).replace('</body>','<p>Guest edition extra prose.</p></body>')
  await other.getByLabel('Import EPUB File').setInputFiles({name:'guest.epub',mimeType:'application/epub+zip',buffer:Buffer.from(await createZip(guestFiles).arrayBuffer())})
  await expect(other.getByLabel('Book Content')).toBeVisible()
@@ -115,6 +127,44 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await expect.poll(()=>files.size).toBe(2)
  await other.getByRole('button',{name:'Open Guest Library',exact:true}).click()
  await expect(other.locator('.story-card')).toHaveCount(1)
+ // Account buttons reuse the shared wrapping action row with visible spacing.
+ await account(other)
+ const open=other.getByRole('button',{name:'Open This Account’s Library',exact:true}),signOut=other.getByRole('button',{name:'Sign Out & Open Guest Library',exact:true})
+ for(const width of [390,1000]){
+  await other.setViewportSize({width,height:844})
+  const a=(await open.boundingBox())!,b=(await signOut.boundingBox())!
+  expect(b.y>=a.y+a.height+9 || b.x>=a.x+a.width+9).toBe(true)
+ }
+ await open.click()
+ // Delete offline, retry failed cloud file removal, and purge a stale second device.
+ await second.setOffline(true)
+ const original=other.locator('.story-card').filter({has:other.getByRole('button',{name:'Recovered & Remembered',exact:true})}).first()
+ await original.getByLabel('Work Actions',{exact:true}).click()
+ other.once('dialog',dialog=>void dialog.accept())
+ await other.getByRole('button',{name:'Delete EPUB',exact:true}).click()
+ await expect(other.locator('.story-card')).toHaveCount(1)
+ await other.reload()
+ await expect(other.locator('.story-card')).toHaveCount(1)
+ failDelete=true
+ await second.setOffline(false)
+ await account(other);await other.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
+ await expect(other.getByRole('dialog').getByRole('status').last()).toContainText('Storage temporarily unavailable')
+ failDelete=false
+ await other.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
+ await expect.poll(()=>files.size).toBe(1)
+ await expect.poll(()=>[...values.values()].filter(row=>row.value===true && row.key.endsWith('/deleted')).length).toBe(1)
+ await page.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Sync Cloud Now',exact:true})).toBeEnabled()
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ // An explicit reimport starts fresh, rather than restoring deleted notes/history.
+ await other.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await other.getByLabel('Import EPUB File').setInputFiles({name:'story.epub',mimeType:'application/epub+zip',buffer:file})
+ await expect(other.getByLabel('Book Content')).toBeVisible()
+ await other.getByRole('button',{name:'← Bookshelf'}).click()
+ await account(other);await other.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
+ await expect.poll(()=>files.size).toBe(2)
+ await expect.poll(()=>[...values.values()].find(row=>row.key===`${createHash('sha256').update(file).digest('hex')}/notes`)?.value).toBe('')
  await second.close();await first.close()
 })
 

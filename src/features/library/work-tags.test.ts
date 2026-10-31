@@ -15,3 +15,9 @@ it('puts additional tags first without reclassifying fallback copies of known ta
  expect(metadata.additional_tags).toEqual(['Custom','Verified','Alias'])
  expect(workTagGroups(metadata, value => value !== 'Custom')[0].values).toEqual(['Verified','Alias','Raw'])
 })
+
+it('puts organizer additional tags after characters and warnings last while retaining reader ordering', () => {
+ const metadata = {...blankMetadata,relationship_tags:['A/B'],character_tags:['Alice'],additional_tags:['Fluff'],categories:['Gen'],archive_warnings:['Warning'],ao3_tags:['Warning','Alice','Fluff','Unclassified']}
+ expect(workTagGroups(metadata,undefined,[],'organizer').flatMap(group=>group.values)).toEqual(['A/B','Alice','Fluff','Unclassified','Gen','Warning'])
+ expect(workTagGroups(metadata).flatMap(group=>group.values)).toEqual(['Fluff','Unclassified','Warning','A/B','Alice','Gen'])
+})

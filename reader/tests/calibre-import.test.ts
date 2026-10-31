@@ -4,8 +4,8 @@ import { epubBuffer } from '../../src/test/epub-fixture'
 import { importEpub } from '../src/epub'
 import { bookDetails, catalogBook } from '../src/model'
 import { importedVersion, prepareImport } from '../src/import-books'
-import { getBookDetails, listCatalog } from '../src/storage'
-vi.mock('../src/storage',()=>({getBookDetails:vi.fn(),listCatalog:vi.fn()}))
+import { getBookDetails, listCatalog, loadSetting } from '../src/storage'
+vi.mock('../src/storage',()=>({getBookDetails:vi.fn(),listCatalog:vi.fn(),loadSetting:vi.fn()}))
 beforeAll(()=>{Object.defineProperty(globalThis,'crypto',{value:webcrypto})})
 async function fixture(){const buffer=await epubBuffer();return {size:buffer.byteLength,arrayBuffer:async()=>buffer} as File}
 it('restores an exact removed download with its notes, history, active state, and position',async()=>{
@@ -40,4 +40,9 @@ it('repairs legacy chapter identities when restoring an exact-file download',asy
  expect(restored.completed).toEqual([next.chapters[1].id])
  expect(restored.history[0]).toMatchObject({id:'read',chapter:next.chapters[1].id})
  expect(restored.resumeRequired).toBe(false)
+})
+
+it('requires pending cloud deletion to finish before explicit reimport',async()=>{
+ vi.mocked(loadSetting).mockResolvedValueOnce({value:true})
+ await expect(prepareImport(await fixture())).rejects.toThrow('Cloud deletion of this EPUB is pending')
 })

@@ -4,7 +4,7 @@ import { readPublicConfig } from '../../src/lib/config'
 import { hostedOrganizer } from '../../src/lib/reader-connection'
 import { type CloudEdit, type CloudValue } from './cloud-model'
 import { defaultPreferences, repairChapterState, type BookDetails, type Preferences } from './model'
-import { acceptCloud, all, bookStores, cloudEdits, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, saveBook, transaction } from './storage'
+import { acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
 import { digest, importEpub } from './epub'
 
 export const readerCloudConfig = readPublicConfig(import.meta.env) ?? hostedOrganizer
@@ -55,14 +55,15 @@ export function syncCloud(): Promise<CloudConflict[]> {
 }
 async function performSync(): Promise<CloudConflict[]> {
   await requireOwner()
+  for (const row of await readCloudValues(true)) await applyRemote(row)
   const conflicts: CloudConflict[] = []
   // Persist the precise request before network IO: a lost response retries the same mutation ID.
   let flight = await loadSetting<CloudEdit>('cloud-flight')
   const handled = new Set<string>()
   while (true) {
-    const edit = flight ?? (await cloudEdits()).find(edit => !handled.has(edit.key))
+    const edit = flight ?? (await cloudEdits()).sort((a,b) => Number(b.key.endsWith('/deleted')) - Number(a.key.endsWith('/deleted'))).find(edit => !handled.has(edit.key))
     if (!edit) break
-    if (edit.key !== 'preferences') await upload(edit.key.split('/')[0])
+    if (edit.key !== 'preferences' && !edit.key.endsWith('/deleted')) await upload(edit.key.split('/')[0])
     if (!flight) {
       await transaction(['settings'], tx => tx.objectStore('settings').put({ id:'cloud-flight', value:edit }))
       flight = edit
@@ -73,28 +74,54 @@ async function performSync(): Promise<CloudConflict[]> {
     const result=data as CloudValue & {conflict?:boolean}
     if (result.conflict) {
       conflicts.push({...result,edit})
+    } else if (result.key.endsWith('/deleted') && result.value === true) {
+      // A stale device edit can receive a tombstone instead of its requested field.
+      await applyRemote(result)
+      await acceptCloud(result, edit)
     } else await acceptCloud(result, edit)
     await transaction(['settings'], tx => tx.objectStore('settings').delete('cloud-flight'))
     flight = undefined
   }
-  // Keyset pagination avoids the API's default 1000-row truncation, including history events.
+  const rows = await readCloudValues()
+  rows.sort((a,b) => Number(b.key.endsWith('/deleted')) - Number(a.key.endsWith('/deleted')) || Number(b.key.endsWith('/manifest')) - Number(a.key.endsWith('/manifest')))
+  for (const row of rows) await applyRemote(row)
+  return conflicts
+}
+async function readCloudValues(deletionsOnly = false) {
+  // Keyset pagination avoids truncating state, history, or deletion markers.
   let after = ''
   const rows: CloudValue[] = []
   while (true) {
-    const {data,error} = await readerCloud.from('reader_cloud_values').select('key,value,revision').gt('key',after).order('key').limit(500)
+    let query = readerCloud.from('reader_cloud_values').select('key,value,revision').gt('key',after).order('key').limit(500)
+    if (deletionsOnly) query = query.like('key','%/deleted')
+    const {data,error} = await query
     if (error) throw error
     rows.push(...data as unknown as CloudValue[])
     if (data.length < 500) break
     after = data.at(-1)!.key
   }
-  rows.sort((a,b) => Number(b.key.endsWith('/manifest')) - Number(a.key.endsWith('/manifest')))
-  for (const row of rows) await applyRemote(row)
-  return conflicts
+  return rows
 }
 async function applyRemote(row: CloudValue) {
-  await transaction(['books','catalog','settings'], tx => {
-    const store = tx.objectStore('settings'), baseline = store.get(`cloud-base:${row.key}`), dirty = store.get(`cloud-edit:${row.key}`)
+  if (row.key.endsWith('/deleted') && row.value === true) {
+    const dirty = await loadSetting<CloudEdit>(`cloud-edit:${row.key}`)
+    if (dirty?.value === false) return
+    const baseline = await loadSetting<CloudValue>(`cloud-base:${row.key}`)
+    if (baseline?.revision === row.revision && !dirty && !await getBookDetails(row.key.split('/')[0])) return
+    if (baseline?.revision !== row.revision || dirty) {
+      const removed = await readerCloud.storage.from('reader-epubs').remove([path(row.key.split('/')[0])])
+      if (removed.error) throw removed.error
+    }
+  }
+  await transaction([...bookStores,'pending'], tx => {
+    const store = tx.objectStore('settings'), deletion = row.key !== 'preferences' ? store.get(`cloud-base:${row.key.split('/')[0]}/deleted`) : undefined, deleting = row.key !== 'preferences' ? store.get(`cloud-edit:${row.key.split('/')[0]}/deleted`) : undefined, baseline = store.get(`cloud-base:${row.key}`), dirty = store.get(`cloud-edit:${row.key}`)
     dirty.onsuccess = () => {
+      if (row.key.endsWith('/deleted') && row.value === true) {
+        if (dirty.result?.value.value === false) return
+        eraseBook(tx, row.key.split('/')[0], () => store.put({id:`cloud-base:${row.key}`,value:row}))
+        return
+      }
+      if (!row.key.endsWith('/deleted') && (deletion?.result?.value.value === true || deleting?.result?.value.value === true)) return
       if (dirty.result || baseline.result?.value?.revision === row.revision) return
       store.put({id:`cloud-base:${row.key}`,value:row})
       if (row.key === 'preferences') {
@@ -102,6 +129,7 @@ async function applyRemote(row: CloudValue) {
         prefs.onsuccess = () => store.put({id:'preferences',value:{...defaultPreferences,...row.value as Preferences,tagSyncAccount:prefs.result?.value?.tagSyncAccount}})
         return
       }
+      if (row.key.endsWith('/deleted')) return
       const [id,field] = row.key.split('/'), request = tx.objectStore('books').get(id)
       request.onsuccess = () => {
         const current = request.result as BookDetails | undefined
@@ -167,7 +195,11 @@ export async function importGuestLibrary() {
       const {account:_account,remote:_remote,...local}=details
       void _account;void _remote
       const imported={...local,active:local.active && (!local.workId || !activeWorks.has(local.workId))}
-      await saveBook(content ? {...imported,...content} as Parameters<typeof saveBook>[0] : imported)
+      if ((await loadSetting<CloudEdit>(`cloud-edit:${details.id}/deleted`))?.value === true) throw new Error('Cloud deletion of this EPUB is pending. Sync the account before importing this version again.')
+      await transaction(bookStores,tx => {
+        restoreDeletedVersion(tx, details.id)
+        putBook(tx,content ? {...imported,...content} as Parameters<typeof putBook>[1] : imported)
+      })
       if(imported.active && imported.workId) activeWorks.add(imported.workId)
     }
   } finally {guest.close()}

@@ -669,9 +669,9 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(toolbar.locator('.filter-name')).toHaveCount(0)
   await expect(toolbar.getByLabel('Search Title or Author', { exact: true })).toBeVisible()
   if (info.project.name === 'mobile') {
-    await expect(page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
+    await expect(toolbar.getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
     await expect(toolbar.getByRole('button', { name: 'Group', exact: true })).toBeVisible()
-    await expect(page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
+    await expect(toolbar.getByRole('button',{name:'Sort',exact:true})).toHaveAttribute('title','Sort')
     await expect(toolbar.getByRole('button',{name:'Group',exact:true})).toHaveAttribute('title','Group')
 
     await expect(page.locator('.reading-tiles strong').first()).toHaveCSS('font-size', '13px')
@@ -996,41 +996,36 @@ test('publication tiles exclude waiting and unknown works and update after chang
 })
 
 
-for (const surface of ['library', 'details'] as const) test(`book-spine footer saves reading status with chapter edits on ${surface}`, async ({ page }) => {
+for (const surface of ['library', 'details'] as const) for (const publication of ['complete', 'in_progress', 'abandoned'] as const) test(`book-spine footer saves reading status with chapter edits on ${surface} (${publication})`, async ({ page }) => {
   const tables = await fixture(page)
-  const publications = ['complete', 'in_progress', 'abandoned'] as const
-  for (const [index, publication_status] of publications.entries()) {
-    tables.works.push({ id: `progress-work-${index}`, ao3_work_id: index + 1, verified_chapters: {} })
-    tables.library_entries.push({ id: `progress-entry-${index}`, work_id: `progress-work-${index}`, reading_status: 'paused_reading', last_read_chapter: 1, is_favorite: false, notes: 'Keep this note', original_url: `https://archiveofourown.org/works/${index + 1}`, created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: `Progress ${publication_status}`, publication_status, published_chapters: 3, total_chapters: publication_status === 'in_progress' ? 5 : 3 } })
-  }
+  tables.works.push({ id: 'progress-work', ao3_work_id: 1, verified_chapters: {} })
+  tables.library_entries.push({ id: 'progress-entry', work_id: 'progress-work', reading_status: 'paused_reading', last_read_chapter: 1, is_favorite: false, notes: 'Keep this note', original_url: 'https://archiveofourown.org/works/1', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: `Progress ${publication}`, publication_status: publication, published_chapters: 3, total_chapters: publication === 'in_progress' ? 5 : 3 } })
   await page.goto('/library'); await login(page)
-  for (const [index, publication] of publications.entries()) {
-    await page.goto(surface === 'library' ? '/library' : `/stories/progress-entry-${index}`)
-    const container = surface === 'library' ? page.locator(`[data-story-id="progress-entry-${index}"]`) : page.locator('.story-details-page')
-    const footer = container.locator('.book-spine-footer')
-    const finalStatus = publication === 'in_progress' ? 'waiting_for_updates' : 'finished'
-    // Reverse from a terminal status as well as advance from zero/intermediate progress.
-    for (const [chapter, status] of [[0, 'to_read'], [1, 'reading'], [3, finalStatus], [1, 'reading']] as const) {
-      await footer.locator('.chapter-progress-button').click()
-      const editor = page.getByRole('dialog', { name: 'Edit Chapter Progress' })
-      await editor.getByLabel('Last Fully Read Chapter').fill(String(chapter))
-      await editor.getByRole('button', { name: 'Save Progress', exact: true }).click()
-      await expect(editor).toHaveCount(0)
-      await expect.poll(() => tables.library_entries[index].reading_status).toBe(status)
-      expect(tables.library_entries[index].last_read_chapter).toBe(chapter)
-      await expect(footer.locator('.spine-status')).toHaveAttribute('aria-label', status === 'to_read' ? 'To Read' : status === 'waiting_for_updates' ? 'Waiting for Updates' : status === 'finished' ? 'Finished' : 'Reading')
-    }
-    await footer.getByRole('button', { name: 'Mark as Caught Up', exact: true }).click()
-    await expect.poll(() => tables.library_entries[index].reading_status).toBe(finalStatus)
-    expect(tables.library_entries[index].last_read_chapter).toBe(3)
-    await page.getByRole('region', { name: 'Reading Updates' }).getByRole('button', { name: 'Undo', exact: true }).click()
-    await expect.poll(() => tables.library_entries[index].reading_status).toBe('reading')
-    expect(tables.library_entries[index].last_read_chapter).toBe(1)
-    expect(tables.library_entries[index].notes).toBe('Keep this note')
-    await page.reload()
-    await expect(footer.locator('.spine-status')).toHaveAttribute('aria-label', 'Reading')
-    await expect(footer.locator('.chapter-progress-button')).toHaveText('Ch. 1 / 3')
+  await page.goto(surface === 'library' ? '/library' : '/stories/progress-entry')
+  const container = surface === 'library' ? page.locator(`[data-story-id="progress-entry"]`) : page.locator('.story-details-page')
+  const footer = container.locator('.book-spine-footer')
+  const finalStatus = publication === 'in_progress' ? 'waiting_for_updates' : 'finished'
+  // Reverse from a terminal status as well as advance from zero/intermediate progress.
+  for (const [chapter, status] of [[0, 'to_read'], [1, 'reading'], [3, finalStatus], [1, 'reading']] as const) {
+    await footer.locator('.chapter-progress-button').click()
+    const editor = page.getByRole('dialog', { name: 'Edit Chapter Progress' })
+    await editor.getByLabel('Last Fully Read Chapter').fill(String(chapter))
+    await editor.getByRole('button', { name: 'Save Progress', exact: true }).click()
+    await expect(editor).toHaveCount(0)
+    await expect.poll(() => tables.library_entries[0].reading_status).toBe(status)
+    expect(tables.library_entries[0].last_read_chapter).toBe(chapter)
+    await expect(footer.locator('.spine-status')).toHaveAttribute('aria-label', status === 'to_read' ? 'To Read' : status === 'waiting_for_updates' ? 'Waiting for Updates' : status === 'finished' ? 'Finished' : 'Reading')
   }
+  await footer.getByRole('button', { name: 'Mark as Caught Up', exact: true }).click()
+  await expect.poll(() => tables.library_entries[0].reading_status).toBe(finalStatus)
+  expect(tables.library_entries[0].last_read_chapter).toBe(3)
+  await page.getByRole('region', { name: 'Reading Updates' }).getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect.poll(() => tables.library_entries[0].reading_status).toBe('reading')
+  expect(tables.library_entries[0].last_read_chapter).toBe(1)
+  expect(tables.library_entries[0].notes).toBe('Keep this note')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(footer.locator('.spine-status')).toHaveAttribute('aria-label', 'Reading')
+  await expect(footer.locator('.chapter-progress-button')).toHaveText('Ch. 1 / 3')
 })
 
 test('book-spine footer reflects saved progress and preserves chapter actions', async ({ page }, info) => {
@@ -1158,7 +1153,7 @@ test('random sort reshuffles when selected again and keeps its seed on reload',a
   tables.library_entries.push({id:`random-entry-${i}`,work_id:`random-work-${i}`,original_url:`https://archiveofourown.org/works/${i}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,metadata_overrides:{},created_at:'2026-10-21T00:00:00Z'})
  }
  await page.goto('/library');await login(page)
- const sort=page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})
+ const sort=page.locator('.pagination-inline, .reading-toolbar').getByRole('button',{name:'Sort',exact:true})
  await sort.click();await page.getByRole('option',{name:'Random',exact:true}).click()
  await expect(page.locator('.work-card')).toHaveCount(12)
  await expect(page).toHaveURL(/randomSeed=/)
@@ -1183,7 +1178,7 @@ test('invalid saved display preferences fall back to defaults', async ({ page })
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
   await expect((await ordering(page)).getByRole('button', { name: 'Group', exact: true })).toContainText('None')
   await page.goto('/library')
-  await expect(page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
+  await expect(page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Date Added')
 })
 
@@ -2621,7 +2616,7 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   await page.getByRole('button', { name: 'Clear All Filters', exact: true }).first().click()
   await expect(filter).toContainText('Allowed')
   await expect(page.locator('.story-card')).toHaveCount(6)
-  const sort = page.locator('.pagination-inline').getByRole('button', { name: 'Sort', exact: true })
+  const sort = page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Sort', exact: true })
   await sort.click()
   await page.getByRole('option', { name: 'Alphabetical • Z–A', exact: true }).click()
   const titles = page.locator('.story-card h2 > a')
@@ -3220,29 +3215,30 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
  const summaryHtml = '<p>An <em>italic</em> and <strong>bold</strong> summary.</p><p>Another paragraph with a <a href="/works/123">link</a>.</p>'
  const formattedTags = Array.from({ length: 9 }, (_, index) => `Saved Tag ${index + 1}`)
  tables.works.push({ id: 'formatted-work', ao3_work_id: 123, title: 'Formatted work', summary, automatic_metadata: { summary_html: summaryHtml }, published_chapters: 2, total_chapters: 3, verified_chapters: {} })
- tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: { authors: ['Tile Author'], fandoms: ['Fandom Above Title'], ao3_tags: [...formattedTags, 'Fandom Above Title'], archive_warnings: [formattedTags[0]], relationship_tags: [formattedTags[1]], character_tags: [formattedTags[2]], categories: [formattedTags[3]], additional_tags: formattedTags.slice(4) }, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
+ tables.library_entries.push({ id: 'formatted-entry', work_id: 'formatted-work', reading_status: 'reading', last_read_chapter: 0, personal_rating: 3, is_favorite: false, notes: 'Private note', metadata_overrides: { authors: ['Tile Author'], fandoms: ['Fandom Below Author'], ao3_tags: [...formattedTags, 'Fandom Below Author'], archive_warnings: [formattedTags[0]], relationship_tags: [formattedTags[1]], character_tags: [formattedTags[2]], categories: [formattedTags[3]], additional_tags: formattedTags.slice(4) }, original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z' })
  await page.goto('/library'); await login(page)
  const tile = page.locator('.work-card')
- await expect(tile.getByText('Fandom Above Title', { exact: true })).toBeVisible()
+ await expect(tile.getByText('Fandom Below Author', { exact: true })).toBeVisible()
  await expect(tile.locator('.work-fandoms')).toHaveCSS('font-size', '13px')
  await expect(tile.locator('.work-fandoms')).toHaveCSS('font-weight', '650')
  await expect(tile.locator('.work-fandoms')).toHaveCSS('color', 'rgb(151, 0, 0)')
  await expect(tile.locator('.authors')).toHaveCSS('color', 'rgb(117, 99, 99)')
  await expect(tile.locator('.display-fact-value').first()).toHaveCSS('color', 'rgb(117, 99, 99)')
  await expect(tile.locator('.authors a').first()).toHaveCSS('color', 'rgb(128, 0, 32)')
- const titleBox = (await tile.locator('h2').boundingBox())!, fandomBox = (await tile.getByText('Fandom Above Title', { exact: true }).boundingBox())!
- expect(fandomBox.y + fandomBox.height).toBeLessThanOrEqual(titleBox.y)
+ const authorBox = (await tile.locator('.authors').boundingBox())!, fandomBox = (await tile.getByText('Fandom Below Author', { exact: true }).boundingBox())!
+ expect(fandomBox.y).toBeGreaterThanOrEqual(authorBox.y + authorBox.height)
+ const visibleTagCount = page.viewportSize()!.width <= 650 ? 4 : 7
  const tagList = tile.locator('.expandable-metadata-tags')
- await expect(tagList.locator('.metadata-tag')).toHaveCount(7)
+ await expect(tagList.locator('.metadata-tag')).toHaveCount(visibleTagCount)
  await expect(tagList.locator('.metadata-tag').first()).toHaveCSS('font-size', '13px')
  const factsBox = (await tile.locator('.display-grouped-line').first().boundingBox())!, tagsBox = (await tagList.boundingBox())!
  expect(tagsBox.y).toBeGreaterThanOrEqual(factsBox.y + factsBox.height)
- await tagList.getByRole('button', { name: '+2 more', exact: true }).click()
+ await tagList.getByRole('button', { name: `+${9-visibleTagCount} more`, exact: true }).click()
  await expect(tagList.locator('.metadata-tag')).toHaveCount(9)
- await expect(tagList.locator('.metadata-tag').filter({ hasText: 'Fandom Above Title' })).toHaveCount(0)
+ await expect(tagList.locator('.metadata-tag').filter({ hasText: 'Fandom Below Author' })).toHaveCount(0)
  await expect(tagList.locator('.tag-group-label')).toHaveCount(0)
  await tagList.getByRole('button', { name: 'Show Less', exact: true }).click()
- await expect(tagList.locator('.metadata-tag')).toHaveCount(7)
+ await expect(tagList.locator('.metadata-tag')).toHaveCount(visibleTagCount)
  const originalViewport = page.viewportSize()!
  const desktop = originalViewport.width > 1100
  await expect(tile.locator('.story-summary').first()).toHaveCSS('font-size', desktop ? '15px' : '13px')

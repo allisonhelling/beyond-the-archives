@@ -176,7 +176,7 @@ export function StoryCard({ story: candidate, linkId, readOnly = false }: { stor
   if (story.detailsLoaded === false) return <article className="story-card work-card" aria-busy="true"><p role="status">Loading work details…</p></article>
   const origin = { returnTo: location.pathname + location.search }
   return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story} readOnly={readOnly}>{({ actions, caughtUp, editProgress }) => <>
-    <DisplayInfo group="workTile" beforeHeading={['fandoms']} heading={<div className="story-card-title"><h2 aria-label={story.metadata.title}>{readOnly ? <span id={linkId}>{story.metadata.title}</span> : <Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>}>{{
+    <DisplayInfo group="workTile" heading={<div className="story-card-title"><h2 aria-label={story.metadata.title}>{readOnly ? <span id={linkId}>{story.metadata.title}</span> : <Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h2>{actions}</div>}>{{
       ...workMetadataFields(story, 'tile'),
       personalRating: <div className="tile-personal-rating"><StarRating value={story.personal_rating} /></div>,
       collections: <div className="story-facts"><CustomCollectionNames ids={[...story.collectionIds, ...(story.automaticCollectionIds ?? [])]} /></div>,
@@ -191,7 +191,7 @@ export function StoryCard({ story: candidate, linkId, readOnly = false }: { stor
 const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'],] as const
 export function LibraryPage({ reading = false }: { reading?: boolean }) {
   const { stories } = useLibrary()
-  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={actions => <div className="page-heading library-heading"><div className="library-title-row"><h1>Currently Reading</h1><div className="library-heading-actions">{actions}</div></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
+  if (reading) return <LibraryBoundary><ReadingDashboard stories={stories} renderHeader={actions => <div className="page-heading library-heading"><div className="library-title-row reading-title-row"><h1>Currently Reading</h1><div className="library-heading-actions">{actions}</div></div></div>} renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
   return <LibraryContent />
 }
 export function AuthorPage() {
@@ -454,6 +454,9 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   useEffect(() => { if (!example && id && (!candidateStory || candidateStory.detailsLoaded === false)) void loadDetails([id]).catch(() => {}) }, [example, id, candidateStory, loadDetails])
   const metadataRefresh = useMetadataRefresh(example || story?.detailsLoaded === false ? undefined : story, typeof location.state?.importBatchId === 'string' ? location.state.importBatchId : undefined)
   const metadataRefreshProps = { ...metadataRefresh, unavailable: story?.work.ao3_work_id === null, onRefresh: () => void metadataRefresh.refresh() }
+  const mobile = useLayout(600) === 'mobile'
+  const headerDisplay = useDisplayPreference('workHeader'), statsDisplay = useDisplayPreference('workStats')
+  const readBesideWayback = mobile && !isDisplayFieldHidden(headerDisplay, 'stats') && !isDisplayFieldHidden(statsDisplay, 'updated')
   return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story}>{({ favorite, rec, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
     <div className="page-heading story-details-heading work-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
@@ -462,7 +465,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <h1 aria-label={story.metadata.title}><a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{story.metadata.title}</a><OneShotIndicator story={story} /><WorkStatusBadge story={story} /></h1>
         {editing ? <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> : <DisplayInfo group="workHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={story.metadata} destination="ao3" /></p> }}</DisplayInfo>}
         {!editing && <DisplayInfo group="workHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{story.metadata.fandoms.join(' · ') || 'Fandom unknown'} · {ratingLabel(story.metadata.rating) || 'Rating unknown'}</p> }}</DisplayInfo>}
-        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions"><ReadEpub workId={story.work.ao3_work_id} /><MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
+        {!editing && <><div className="story-title-toggles">{favorite}{rec}</div><div className="story-metadata-actions">{!readBesideWayback && <ReadEpub workId={story.work.ao3_work_id} />}<MetadataRefreshButton {...metadataRefreshProps} variant="button" /><button className="button secondary story-metadata-edit" aria-label="Edit AO3 Metadata" onClick={() => editSection('metadata')}><Pencil size={14} aria-hidden="true" />Edit</button></div></>}
       </div>
       {!editing && <DisplayInfo group="workHeader">{{
         stats: <> <dl className="details-story-stats">
@@ -470,7 +473,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
       words: <> <div><dt>Word Count</dt><dd><strong>{story.metadata.word_count?.toLocaleString() ?? '?'}</strong> words</dd></div> </>,
       chapters: <> <div><dt>Published / Total Chapters</dt><dd><strong>{story.metadata.published_chapters ?? '?'} / {story.metadata.total_chapters ?? '?'}</strong> chapters</dd></div> </>,
       publication: <> <div><dt>Publication Status</dt><dd><strong>{publicationStatuses[story.metadata.publication_status].label}</strong></dd></div> </>,
-      updated: <> <div className="details-updated"><dt>Date Updated</dt><dd><strong>{ao3Date(story.work.ao3_updated_at)}</strong></dd><dd className="details-updated-action"><WaybackLink url={savedWorkUrl(story)} /></dd></div> </>
+      updated: <> <div className="details-updated"><dt>Date Updated</dt><dd><strong>{ao3Date(story.work.ao3_updated_at)}</strong></dd><dd className="details-updated-action">{readBesideWayback && <ReadEpub workId={story.work.ao3_work_id} />}<WaybackLink url={savedWorkUrl(story)} /></dd></div> </>
     }}</DisplayInfo>
         </dl> </>}}</DisplayInfo>}
     </div></div>

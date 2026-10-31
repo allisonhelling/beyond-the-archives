@@ -76,7 +76,14 @@ test('10,000-work library pages incrementally and restores a large page after de
  await expect(page.locator('.work-card')).toHaveCount(1)
  expect(catalogRequests).toBe(0)
  expect(facetRequests).toBe(1)
- await page.reload()
+ // Document load does not mean the authenticated library query has finished.
+ const [reloaded] = await Promise.all([
+  page.waitForResponse(response=>response.url().endsWith('/query_library') && response.request().method()==='POST'),
+  page.reload({waitUntil:'domcontentloaded'}),
+ ])
+ expect(reloaded.ok()).toBe(true)
+ await expect(page.locator('.work-card')).toHaveCount(1)
+ await expect(page.locator('.work-card h2')).toContainText('Story 09999')
  await expect(page.getByRole('combobox', { name: 'Works per Page', exact: true }).first()).toHaveValue('50')
  const report={environment:'local Chromium, mocked transport; 10,000 work catalog',project:info.project.name,firstDisplayMs,largePageMs,largeRenderMs,heap,queries,transfers}
  await mkdir('artifacts/performance',{recursive:true})

@@ -3,7 +3,7 @@ import { normalizeSearchText } from '../../lib/search-text'
 import { prioritizeVerifiedTags, type TagResolution } from './tags/tag-resolution'
 
 /** Keep raw fallback tags without repeating categorized values or fandoms. */
-export function workTagGroups(metadata: Metadata, include: (value: string) => boolean = () => true, records: TagResolution[] = []) {
+export function workTagGroups(metadata: Metadata, include: (value: string) => boolean = () => true, records: TagResolution[] = [], layout: 'reader' | 'organizer' = 'reader') {
   const seen = new Set(metadata.fandoms.map(value => normalizeSearchText(value.trim())))
   const unique = (values: string[]) => values.map(value => value.trim()).filter(value => {
     const key = normalizeSearchText(value)
@@ -19,8 +19,8 @@ export function workTagGroups(metadata: Metadata, include: (value: string) => bo
   ]
   groups[groups.length - 1].values.push(...unique(metadata.ao3_tags))
   const categories = { relationships: 'relationship', characters: 'character', tags: 'freeform', warnings: undefined } as const
-  const additional = groups.pop()!
-  return [additional, ...groups].filter(group => group.values.length).map(group => {
+  const order = layout === 'organizer' ? ['relationships', 'characters', 'tags', null, 'warnings'] : ['tags', 'warnings', 'relationships', 'characters', null]
+  return groups.sort((a,b) => order.indexOf(a.category) - order.indexOf(b.category)).filter(group => group.values.length).map(group => {
     const category = group.category && categories[group.category]
     return { ...group, values: category ? prioritizeVerifiedTags(group.values, records, category) : group.values }
   })

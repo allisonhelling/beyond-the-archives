@@ -1,11 +1,12 @@
 import { importEpub } from './epub'
 import { mergeMetadata, metadataVersion } from './metadata'
 import { repairChapterState, replaceBook, type Book, type BookDetails } from './model'
-import { bookStores, getBookDetails, listCatalog, putBook, transaction } from './storage'
+import { bookStores, getBookDetails, listCatalog, putBook, loadSetting, restoreDeletedVersion, transaction } from './storage'
 
 // Manual imports and both Calibre transports resolve identities in the same place.
 export async function prepareImport(file: File, target?: string) {
   const next = await importEpub(file), saved = await listCatalog()
+  if ((await loadSetting<{value:unknown}>(`cloud-edit:${next.id}/deleted`))?.value === true) throw new Error('Cloud deletion of this EPUB is pending. Sync the account before importing this version again.')
   const duplicate = saved.find(book => book.id === next.id)
   const explicit = saved.find(book => book.id === target)
   if (explicit?.workId && next.workId && explicit.workId !== next.workId) throw new Error('The replacement identifies a different AO3 work. Import it separately.')
@@ -24,6 +25,8 @@ export function writeImport(tx: IDBTransaction, saved: Book, old?: BookDetails, 
     putBook(tx, { ...old, active: false, hasFile: replace ? false : old.hasFile })
     if (replace) tx.objectStore('contents').delete(old.id)
   }
+  // Only an explicit import may restore a deleted version.
+  restoreDeletedVersion(tx, saved.id)
   putBook(tx, saved)
 }
 export async function saveImportedVersion(saved: Book, old?: BookDetails, replace = false) {
