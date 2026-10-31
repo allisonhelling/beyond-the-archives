@@ -4,4 +4,4 @@
 .active-reading-filters .filter-chips { margin: 0; flex: 1; align-items: baseline; }
 .active-reading-filters > .text-button { flex-shrink: 0; border: 0; background: transparent; min-height: 36px; padding: 0; color: var(--color-brand); }
 
-.filter-category-boundary .categorized-tags { color: #000; }
+.filter-chips > .filter-category-boundary .metadata-tag { color: #000; }

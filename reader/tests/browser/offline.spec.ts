@@ -44,7 +44,7 @@ test('imports, reads, changes layout, and cold-starts offline with saved history
   await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
   await expect(page.getByRole('button', { name: '✓ Chapter Read' })).toBeVisible()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
-  await expect(page.getByText('1 sections read')).toBeVisible()
+  await expect(page.getByText('1 chapters read')).toBeVisible()
   await page.getByRole('button', { name: 'Dismiss Message' }).click()
   await page.screenshot({ path: 'test-results/bookshelf.png', fullPage: true })
   await page.close()

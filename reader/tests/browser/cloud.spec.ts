@@ -117,3 +117,43 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await expect(other.locator('.story-card')).toHaveCount(1)
  await second.close();await first.close()
 })
+
+test('receives the account cloud inbox without the originating device pairing and publishes before acknowledgement',async({browser})=>{
+ const context=await browser.newContext();await signedIn(context)
+ const file=Buffer.from(await createZip(epubFiles()).arrayBuffer()),hash=createHash('sha256').update(file).digest('hex')
+ const values=new Map<string,Value>()
+ let result='queued'
+ await context.route(url=>/^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
+  const request=route.request(),url=new URL(request.url())
+  if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
+  if(url.pathname.includes('/rpc/reader_cloud_apply')){
+   const input=request.postDataJSON(),row={key:input.p_key,value:input.p_value,revision:1}
+   values.set(row.key,row);return route.fulfill({json:row})
+  }
+  if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()]})
+  if(url.pathname.includes('/reader_import_inbox')){
+   if(request.method()==='PATCH'){
+    expect(values.has(`${hash}/manifest`)).toBe(true)
+    result=request.postDataJSON().status
+    return route.fulfill({status:204})
+   }
+   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:'40000000-0000-0000-0000-000000000002',hash,metadata:{title:'Cloud Inbox Story'},status:'queued',message:''}] : []})
+  }
+  if(url.pathname.includes('/reader_transfer_destinations'))return route.fulfill({status:201,body:''})
+  if(url.pathname.includes('/storage/v1/object/')){
+   if(request.method()==='POST')return route.fulfill({status:409,json:{statusCode:'409',error:'Duplicate',message:'Already exists'}})
+   return route.fulfill({body:file,contentType:'application/epub+zip'})
+  }
+  return route.fulfill({json:{}})
+ })
+ const page=await context.newPage();await page.goto('/')
+ await expect(page.locator('.story-card')).toHaveCount(1)
+ await expect(page.getByRole('heading',{name:'Cloud Inbox Story'})).toBeVisible()
+ await expect.poll(()=>result).toBe('imported')
+ await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Pair Calibre',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Pair Calibre',exact:true}).click()
+ const pairing=JSON.parse(await page.getByLabel('Calibre Pairing Configuration').inputValue())
+ expect(pairing.cloud).toBe(true);expect(pairing.account).toBe(owner)
+ await context.close()
+})

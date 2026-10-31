@@ -65,3 +65,6 @@ verify_jwt = false # Handler verifies bearer tokens with Auth before cache acces
 
 [functions.wayback-lookup]
 verify_jwt = false # Handler verifies each bearer token with Supabase Auth.
+
+[functions.reader-inbox]
+verify_jwt = false # Handler verifies a revocable, delivery-only reader pairing token.

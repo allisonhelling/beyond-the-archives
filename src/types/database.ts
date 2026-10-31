@@ -936,6 +936,72 @@ export type Database = {
         Relationships: [
         ]
       }
+      reader_import_inbox: {
+        Row: {
+          destination: string
+          id: string
+          user_id: string
+          hash: string
+          metadata: Json
+          status: string
+          message: string
+          created_at: string
+        }
+        Insert: {
+          destination: string
+          id: string
+          user_id: string
+          hash: string
+          metadata?: Json
+          status?: string
+          message?: string
+          created_at?: string
+        }
+        Update: {
+          destination?: string
+          id?: string
+          user_id?: string
+          hash?: string
+          metadata?: Json
+          status?: string
+          message?: string
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'reader_import_inbox_destination_fkey'; columns: ['destination']; isOneToOne: false; referencedRelation: 'reader_transfer_destinations'; referencedColumns: ['id'] },
+        ]
+      }
+      reader_transfer_destinations: {
+        Row: {
+          id: string
+          user_id: string
+          device: string
+          label: string
+          token_hash: string
+          revoked: boolean
+          created_at: string
+        }
+        Insert: {
+          id: string
+          user_id: string
+          device: string
+          label: string
+          token_hash: string
+          revoked?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          device?: string
+          label?: string
+          token_hash?: string
+          revoked?: boolean
+          created_at?: string
+        }
+        Relationships: [
+        ]
+      }
       reading_activity: {
         Row: {
           id: string | null

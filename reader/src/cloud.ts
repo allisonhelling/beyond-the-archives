@@ -7,7 +7,8 @@ import { defaultPreferences, repairChapterState, type BookDetails, type Preferen
 import { acceptCloud, all, bookStores, cloudEdits, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, saveBook, transaction } from './storage'
 import { digest, importEpub } from './epub'
 
-const config = readPublicConfig(import.meta.env) ?? hostedOrganizer
+export const readerCloudConfig = readPublicConfig(import.meta.env) ?? hostedOrganizer
+const config = readerCloudConfig
 export const readerCloud = createClient<Database>(config.url, config.key, {
   auth: { storageKey: 'reader-cloud-auth', flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   global: { fetch: (input, init) => {
