@@ -1,3 +1,4 @@
+import { UsernameSettings } from '../auth/UsernameSettings'
 import { useActivity } from '../../lib/use-activity'
 import { accountSettingsSection } from './settings-sections'
 import { useState } from 'react'
@@ -20,5 +21,5 @@ export function AccountSettings() {
     } catch { setMessage('Could not send a recovery email. Please try again.') }
     finally { setBusy(false) }
   }
-  return <section id={accountSettingsSection.id} tabIndex={-1} className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>{accountSettingsSection.title}</h2></div><dl><div><dt>Signed In As</dt><dd>{session?.user.email}</dd></div><div><dt>Library Visibility</dt><dd>Private · invitation only</dd></div></dl><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send Password Recovery Email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section>
+  return <section id={accountSettingsSection.id} tabIndex={-1} className="settings-card"><div className="section-title"><LockKeyhole size={21} /><h2>{accountSettingsSection.title}</h2></div><dl><div><dt>Signed In As</dt><dd>{session?.user.email}</dd></div><div><dt>Library Visibility</dt><dd>Private · invitation only</dd></div></dl><UsernameSettings key={session?.user.id} client={supabase} disabled={sampleMode || busy} /><button className="button secondary" onClick={() => void reset()} disabled={busy || sampleMode}>{busy ? 'Sending…' : 'Send Password Recovery Email'}</button>{sampleMode && <p className="muted">Account settings are unavailable in the local sample preview.</p>}{message && <p role="status" className="muted">{message}</p>}</section>
 }

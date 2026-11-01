@@ -5,6 +5,22 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      account_usernames: {
+        Row: {
+          user_id: string
+          username: string
+        }
+        Insert: {
+          user_id: string
+          username: string
+        }
+        Update: {
+          user_id?: string
+          username?: string
+        }
+        Relationships: [
+        ]
+      }
       ao3_tag_resolutions: {
         Row: {
           user_id: string
@@ -32,6 +48,31 @@ export type Database = {
           canonical_name?: string | null
           checked_at?: string
           attempted_at?: string
+        }
+        Relationships: [
+        ]
+      }
+      app_login_handoffs: {
+        Row: {
+          code_hash: string
+          challenge: string
+          user_id: string
+          target_origin: string
+          expires_at: string
+        }
+        Insert: {
+          code_hash: string
+          challenge: string
+          user_id: string
+          target_origin: string
+          expires_at?: string
+        }
+        Update: {
+          code_hash?: string
+          challenge?: string
+          user_id?: string
+          target_origin?: string
+          expires_at?: string
         }
         Relationships: [
         ]
@@ -971,6 +1012,43 @@ export type Database = {
           { foreignKeyName: 'reader_import_inbox_destination_fkey'; columns: ['destination']; isOneToOne: false; referencedRelation: 'reader_transfer_destinations'; referencedColumns: ['id'] },
         ]
       }
+      reader_organizer_devices: {
+        Row: {
+          user_id: string
+          installation: string
+          device: string
+        }
+        Insert: {
+          user_id: string
+          installation: string
+          device: string
+        }
+        Update: {
+          user_id?: string
+          installation?: string
+          device?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'reader_organizer_devices_user_id_fkey'; columns: ['user_id']; isOneToOne: false; referencedRelation: 'reader_organizer_links'; referencedColumns: ['user_id'] },
+          { foreignKeyName: 'reader_organizer_devices_device_fkey'; columns: ['device']; isOneToOne: false; referencedRelation: 'userscript_devices'; referencedColumns: ['id'] },
+        ]
+      }
+      reader_organizer_links: {
+        Row: {
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+        ]
+      }
       reader_transfer_destinations: {
         Row: {
           id: string
@@ -1270,6 +1348,7 @@ export type Database = {
     Functions: {
       reader_organizer_connection: { Args: { p_action: string; p_installation?: string; p_secret?: string }; Returns: Json }
       consume_app_login_handoff: { Args: { p_hash: string; p_challenge: string; p_origin: string }; Returns: string | null }
+      manage_account_username: { Args: { p_username?: string }; Returns: string | null }
       reader_has_access: { Args: Record<string, never>; Returns: boolean }
       reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number }; Returns: Json }
       reading_stats_works: { Args: { p_after?: string; p_limit?: number }; Returns: Json }

@@ -140,3 +140,25 @@ test('shares one browser installation across legacy guest and account libraries'
  expect(reports.every(report=>report.installationId===guest)).toBe(true)
  expect(await page.evaluate(()=>localStorage.getItem('bta:reader-installation:v1'))).toBe(guest)
 })
+
+test('lets the signed-in reader create and change a username',async({page,context})=>{
+ await signedIn(context);await backend(context)
+ let username:string|null=null
+ await context.route('**/rest/v1/rpc/manage_account_username',async route=>{
+  const input=route.request().postDataJSON()
+  if(input.p_username==='Taken')return route.fulfill({status:409,json:{code:'23505',message:'duplicate key'}})
+  if(input.p_username)username=input.p_username
+  return route.fulfill({json:username})
+ })
+ await page.goto('/');await account(page)
+ const input=page.getByLabel('Account Username',{exact:true})
+ await expect(input).toBeEnabled();await input.fill('Taken')
+ await page.getByRole('button',{name:'Save Username',exact:true}).click()
+ await expect(page.getByRole('alert')).toHaveText('That username is already taken.')
+ await input.fill('MyReader')
+ await page.getByRole('button',{name:'Save Username',exact:true}).click()
+ await expect(page.getByRole('status').filter({hasText:'Username saved.'})).toBeVisible()
+ expect(username).toBe('MyReader')
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click();await account(page)
+ await expect(input).toHaveValue('MyReader')
+})

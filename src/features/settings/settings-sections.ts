@@ -1,7 +1,7 @@
 export const accountSettingsSection = {
   id: 'settings-account',
   title: 'Account & Security',
-  description: 'Sign-in details and password recovery',
+  description: 'Username, sign-in details, and password recovery',
 }
 
 export const browserBarSettingsSection = {

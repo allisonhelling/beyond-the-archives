@@ -269,3 +269,19 @@ test('login shares the compact form layout and keeps unchecked sessions in the c
  await page.reload()
  await expect(page.getByRole('heading',{name:'Currently Reading',exact:true})).toBeVisible()
 })
+
+test('lets users create their login username in Account settings',async({page})=>{
+ let username:string|null=null
+ await page.route('**/rest/v1/rpc/manage_account_username',async route=>{
+  const input=route.request().postDataJSON()
+  if(input.p_username)username=input.p_username
+  return route.fulfill({json:username})
+ })
+ await page.goto('/');await signIn(page);await page.goto('/settings#settings-account')
+ const input=page.getByLabel('Account Username',{exact:true})
+ await expect(input).toBeEnabled();await input.fill('MyReader')
+ await input.locator('..').locator('..').getByRole('button',{name:'Save Username',exact:true}).click()
+ await expect(page.getByRole('status').filter({hasText:'Username saved.'})).toBeVisible()
+ expect(username).toBe('MyReader')
+ await page.reload();await expect(input).toHaveValue('MyReader')
+})

@@ -1,3 +1,4 @@
+import { UsernameSettings } from '../../src/features/auth/UsernameSettings'
 import { BackToSignIn, SignInFields } from '../../src/features/auth/SignInFields'
 import { remembersSession, rememberSession } from '../../src/lib/auth-session-storage'
 import { connectedLogin, organizerAppUrl } from '../../src/lib/connected-login'
@@ -66,6 +67,7 @@ export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull 
       {!needsPassword&&mode==='reset'&&<BackToSignIn busy={busy} onClick={toggleMode} />}
     </form>}
     {needsPassword && !session && <button disabled={busy} onClick={()=>{setNeedsPassword(false);setMode('reset')}}>Request a New Recovery Link</button>}
+    {session && !needsPassword && <UsernameSettings key={session.user.id} client={readerCloud} disabled={busy} />}
     {session && !needsPassword && <button disabled={busy} onClick={()=>setNeedsPassword(true)}>Set or Change Password</button>}
     {session?.user.id === readerOwner && <>
       <label><input type="checkbox" checked={organizerLinked} disabled={busy} onChange={event=>{const enabled=event.target.checked;void run(async()=>{

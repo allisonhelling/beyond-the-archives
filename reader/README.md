@@ -138,4 +138,4 @@ Calibre imports update the existing book when its metadata or EPUB changes, usin
 
 Reconnecting the same reader and organizer keeps one active connection and preserves queued updates and book links. New pairing codes are checked against the existing credential; a different organizer account cannot replace it silently. Other devices keep their own connections.
 
-Account sign-in accepts your assigned username or email and password. Password recovery requires your email address; Back to Sign In appears below Send Recovery Link. Usernames are assigned by the account operator; email sign-in remains available.
+Account sign-in accepts your username or email and password. Password recovery requires your email address; Back to Sign In appears below Send Recovery Link. Create or change your username in Reader Account or organizer Account & Security settings; email sign-in remains available.
