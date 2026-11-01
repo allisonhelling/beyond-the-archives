@@ -60,10 +60,11 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await other.getByRole('button',{name:'Import Guest Library',exact:true}).click()
  await expect(other.getByRole('button',{name:'Import Guest Library',exact:true})).toBeEnabled()
  await other.getByRole('button',{name:'Sync Cloud Now'}).click()
- await expect(other.getByRole('dialog').getByRole('button',{name:'Download EPUB',exact:true})).toBeVisible()
- await other.getByRole('dialog').getByRole('button',{name:'Download EPUB',exact:true}).click()
  await expect(other.getByRole('dialog').getByRole('button',{name:'Download EPUB',exact:true})).toHaveCount(0)
  await other.getByRole('dialog').getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await other.locator('.story-card').getByRole('button',{name:'Download EPUB',exact:true}).click()
+ await expect(other.getByLabel('Book Content')).toBeVisible()
+ await other.getByRole('button',{name:'← Bookshelf',exact:true}).click()
  await expect(other.locator('.story-card')).toHaveCount(1)
  await other.getByLabel('Work Actions',{exact:true}).click()
  other.once('dialog',dialog=>void dialog.accept())
@@ -232,18 +233,20 @@ test('receives the account cloud inbox without the originating device pairing an
  await context.close()
 })
 
-test('requests email sign-in back to the current reader origin',async({page,context})=>{
- let redirect='',createUser:unknown
- await context.route(url=>url.pathname==='/auth/v1/otp',async route=>{
-  redirect=new URL(route.request().url()).searchParams.get('redirect_to') ?? ''
-  createUser=route.request().postDataJSON().create_user
-  return route.fulfill({json:{}})
- })
+test('offers password sign-in without email sign-in links or a cloud download list',async({page})=>{
  await page.goto('/')
  await account(page)
- await page.getByLabel('Email',{exact:true}).fill('reader@example.com')
- await page.getByRole('button',{name:'Email Sign-In Link',exact:true}).click()
- await expect(page.getByRole('status').filter({hasText:'Check your email for a sign-in link.'})).toBeVisible()
- expect(redirect).toBe(new URL(page.url()).origin)
- expect(createUser).toBe(false)
+ await expect(page.getByRole('button',{name:'Email Sign-In Link',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('button',{name:'Download EPUB',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('textbox',{name:'Username or Email',exact:true})).toHaveAttribute('placeholder','Username or Email')
+ await expect(page.getByLabel('Password',{exact:true})).toHaveAttribute('placeholder','Password')
+ await page.getByRole('textbox',{name:'Username or Email',exact:true}).focus()
+ await expect(page.getByRole('textbox',{name:'Username or Email',exact:true})).toHaveCSS('outline-style','none')
+ await expect(page.getByRole('checkbox',{name:'Remember Me',exact:true})).toBeChecked()
+ await expect(page.getByRole('button',{name:'Forgot Your Password?',exact:true})).toBeVisible()
+ for(const width of [1280,390]){
+  await page.setViewportSize({width,height:844})
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await page.screenshot({path:test.info().outputPath(`reader-login-${width}.png`),fullPage:true})
+ }
 })

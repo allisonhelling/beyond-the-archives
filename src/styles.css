@@ -6,6 +6,7 @@
 @import "./features/library/personal-controls.css";
 @import "./features/library/work-tile.css";
 @import "./features/library/edit-conflicts.css";
+@import "./features/auth/auth-form.css";
 
 
 :root { --story-grid-gap: 22px; --story-grid-columns: 2; }
@@ -342,7 +343,7 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
   .details-updated { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
   .details-updated-action { grid-column: 1 / -1; grid-row: auto; flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .details-updated-action .form-actions { margin: 0; }
-  .details-updated-action .button { white-space: nowrap; padding-inline: 10px; }
+  .details-updated-action .button { white-space: nowrap; padding-inline: 6px; }
   .details-story-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; font-size: 14px; }
   .settings-card.details-progress-panel { padding: 12px; }
   .progress-sections { grid-template-columns: minmax(0, 1fr); gap: 16px; }

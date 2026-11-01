@@ -15,9 +15,9 @@ async function mockAuth(page: Page) {
   })
 }
 async function signIn(page: Page) {
-  await page.getByLabel('Email Address').fill('reader@example.com')
+  await page.getByLabel('Username or Email').fill('reader@example.com')
   await page.getByLabel('Password', { exact: true }).fill('Test-password-123!')
-  await page.getByRole('button', { name: 'Sign In to Your Library' }).click()
+  await page.getByRole('button', { name: 'Sign In', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Currently Reading' })).toBeVisible()
 }
 
@@ -25,9 +25,9 @@ test.beforeEach(async ({ page }) => { await mockAuth(page) })
 
 test('private deep links require sign-in and the form works with a keyboard', async ({ page }) => {
   await page.goto('/library')
-  await expect(page.getByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible()
   await expect(page.getByRole('navigation')).toHaveCount(0)
-  await page.getByLabel('Email Address').fill('reader@example.com')
+  await page.getByLabel('Username or Email').fill('reader@example.com')
   await page.keyboard.press('Tab')
   await expect(page.getByLabel('Password', { exact: true })).toBeFocused()
   await page.keyboard.type('Test-password-123!')
@@ -70,9 +70,9 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => window.innerWidth))
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Log Out', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Welcome Back.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible()
 })
 
 test('Add controls are available and layouts fit the viewport', async ({ page }) => {
@@ -101,6 +101,14 @@ test('Add controls are available and layouts fit the viewport', async ({ page })
 test('recovery form reports delivery without exposing account existence', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Forgot Your Password?' }).click()
+  const recoveryEmail=page.getByLabel('Email Address',{exact:true})
+  await expect(recoveryEmail).toHaveAttribute('type','email')
+  await recoveryEmail.fill('Reader')
+  expect(await recoveryEmail.evaluate((input:HTMLInputElement)=>input.checkValidity())).toBe(false)
+  const send=(await page.getByRole('button',{name:'Send Recovery Link',exact:true}).boundingBox())!
+  const back=page.getByRole('button',{name:'Back to Sign In',exact:true})
+  expect((await back.boundingBox())!.y).toBeGreaterThanOrEqual(send.y+send.height)
+  await expect(back).toHaveCSS('font-size','13px')
   await page.getByLabel('Email Address').fill('reader@example.com')
   await page.getByRole('button', { name: 'Send Recovery Link' }).click()
   await expect(page.getByRole('status')).toContainText('If this address has an account')
@@ -230,11 +238,34 @@ test('series imports require explicit work selection and fit desktop and mobile'
 
 for (const hash of ['#ios-safari-userscript', '#ao3-browser-bar']) test(`Browser bar instructions link ${hash} scrolls directly to its settings section after sign-in`, async ({ page }) => {
   await page.goto(`/settings${hash}`)
-  await page.getByLabel('Email Address').fill('reader@example.com')
+  await page.getByLabel('Username or Email').fill('reader@example.com')
   await page.getByLabel('Password', { exact: true }).fill('Test-password-123!')
-  await page.getByRole('button', { name: 'Sign In to Your Library' }).click()
+  await page.getByRole('button', { name: 'Sign In', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'AO3 Browser Bar', exact: true })).toBeInViewport()
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
   await page.reload()
   await expect(page.getByRole('heading', { name: 'AO3 Browser Bar', exact: true })).toBeInViewport()
+})
+
+test('login shares the compact form layout and keeps unchecked sessions in the current tab',async({page})=>{
+ await page.goto('/')
+ const email=page.getByRole('textbox',{name:'Username or Email',exact:true}),password=page.getByLabel('Password',{exact:true})
+ await expect(email).toHaveAttribute('placeholder','Username or Email')
+ await expect(password).toHaveAttribute('placeholder','Password')
+ await email.focus()
+ await expect(email).toHaveCSS('outline-style','none')
+ const remember=page.getByRole('checkbox',{name:'Remember Me',exact:true})
+ await expect(remember).toBeChecked()
+ const connected=(await page.getByRole('button',{name:'Continue From Reader',exact:true}).boundingBox())!,submit=(await page.getByRole('button',{name:'Sign In',exact:true}).boundingBox())!
+ expect(connected.x+connected.width).toBeLessThanOrEqual(submit.x)
+ expect(Math.abs(connected.y-submit.y)).toBeLessThan(1)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+ await page.screenshot({path:test.info().outputPath('organizer-login.png'),fullPage:true})
+ await remember.uncheck()
+ await signIn(page)
+ const key='sb-ao3-phase1-test-auth-token'
+ expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBeNull()
+ expect(await page.evaluate(key=>Boolean(sessionStorage.getItem(key)),key)).toBe(true)
+ await page.reload()
+ await expect(page.getByRole('heading',{name:'Currently Reading',exact:true})).toBeVisible()
 })

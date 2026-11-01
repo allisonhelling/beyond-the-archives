@@ -166,10 +166,36 @@ export async function acceptCloud(value: CloudValue, edit?: CloudEdit) {
 }
 
 let installation: Promise<string> | undefined
-export function readerInstallationId():Promise<string> {
-  return installation ??= (async()=>{
-    const saved=await loadSetting<string>('installation-id')
-    if(saved)return saved
-    const id=crypto.randomUUID();await setting('installation-id',id);return id
+let installationAliases: string[] = []
+const installationKey = 'bta:reader-installation:v1', aliasesKey = 'bta:reader-installation-aliases:v1'
+const validInstallation = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)
+async function savedInstallation(name: string): Promise<string | undefined> {
+  return new Promise(resolve => {
+    const request = indexedDB.open(name)
+    request.onupgradeneeded = () => { request.transaction!.abort(); resolve(undefined) }
+    request.onerror = request.onblocked = () => resolve(undefined)
+    request.onsuccess = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains('settings')) { db.close(); resolve(undefined); return }
+      const read = db.transaction('settings').objectStore('settings').get('installation-id')
+      read.onsuccess = () => { db.close(); resolve(read.result?.value) }
+      read.onerror = () => { db.close(); resolve(undefined) }
+    }
+  })
+}
+export function readerInstallationId(): Promise<string> {
+  return installation ??= (async () => {
+    const saved = await loadSetting<string>('installation-id')
+    let names = ['bta-reader']
+    try { if (indexedDB.databases) names = (await indexedDB.databases()).flatMap(db => db.name === 'bta-reader' || db.name?.startsWith('bta-reader-account:') ? [db.name] : []) } catch { /* Older browsers can still migrate the guest identity. */ }
+    const known = [saved, ...await Promise.all(names.map(savedInstallation))].filter(validInstallation)
+    let shared: string | null = null, previous: unknown = []
+    try { shared = localStorage.getItem(installationKey); previous = JSON.parse(localStorage.getItem(aliasesKey) ?? '[]') } catch { /* Keep the per-library fallback if browser storage is unavailable. */ }
+    const id = validInstallation(shared) ? shared : known[0] ?? crypto.randomUUID()
+    installationAliases = [...new Set([...known, ...(Array.isArray(previous) ? previous.filter(validInstallation) : [])])].filter(value => value !== id).slice(0, 100)
+    try { localStorage.setItem(installationKey, id); localStorage.setItem(aliasesKey, JSON.stringify(installationAliases)) } catch { /* The existing library setting still preserves this installation. */ }
+    if (saved !== id) await setting('installation-id', id)
+    return id
   })()
 }
+export async function readerInstallationAliases() { await readerInstallationId(); return installationAliases }

@@ -1,0 +1,12 @@
+.account-auth-form { display: grid; gap: 20px; }
+.account-auth-form .account-auth-field { display: block; margin: 0; }
+.account-auth-form .account-auth-input { width: 100%; height: 54px; min-height: 54px; margin: 0; padding: 14px 16px; border: 1px solid var(--color-control-border); border-radius: 0; background: var(--color-surface); color: var(--color-text, #382b2b); font: inherit; }
+.account-auth-form .account-auth-input:focus { outline: none; border-color: var(--color-brand); box-shadow: inset 0 -3px var(--color-brand); }
+.account-auth-options { font-size: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.account-auth-form .account-auth-remember { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.account-auth-form .account-auth-remember input { width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; accent-color: var(--color-brand); }
+.account-auth-help { width: auto; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--color-brand); font: inherit; text-align: start; }
+.account-auth-help:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: 3px; }
+.account-auth-back { justify-self: start; font-size: 13px; }
+.account-auth-actions { display: flex; align-items: stretch; gap: 10px; }
+.account-auth-actions > button { flex: 1; min-width: 0; margin: 0; border-radius: 0; }

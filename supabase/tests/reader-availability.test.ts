@@ -7,9 +7,9 @@ let db: PGlite, secret: string
 const owner='10000000-0000-0000-0000-000000000001', other='10000000-0000-0000-0000-000000000002'
 const installationId='20000000-0000-0000-0000-000000000001'
 async function asUser(id=owner) { await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${id}'`) }
-async function report(works:string[]) {
+async function report(works:string[], input:Record<string,unknown>={}) {
  await db.exec('reset role;reset request.jwt.claim.sub;set role anon')
- return db.query("select public.userscript_library($1,'reader_report',0,$2)",[secret,JSON.stringify({installationId,name:'Laptop Reader',url:'https://reader.example/',works})])
+ return db.query("select public.userscript_library($1,'reader_report',0,$2)",[secret,JSON.stringify({installationId,name:'Laptop Reader',url:'https://reader.example/',works,...input})])
 }
 beforeAll(async()=>{
  db=await createTestDatabase()
@@ -47,4 +47,32 @@ it('filters complete library results and invalidates them when files are removed
  expect(entry.publication.metadata.published_chapters).toBe(10)
  await report([]); await asUser()
  expect(await query()).toMatchObject({total:0,stories:[]})
+})
+
+it('replaces a report after credential rotation without duplicating an installation',async()=>{
+ await report(['8001'])
+ await asUser()
+ const code=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','My Reader') result")).rows[0].result.code
+ await db.exec('reset role;reset request.jwt.claim.sub;set role anon')
+ const secondSecret=(await db.query<{result:{secret:string}}>("select public.userscript_library($1,'claim') result",[code])).rows[0].result.secret
+ await db.query("select public.userscript_library($1,'reader_report',0,$2)",[secondSecret,JSON.stringify({installationId,name:'My Reader',url:'https://reader.example/',works:['8002']})])
+ await asUser()
+ const reports=(await db.query<{installation_id:string;works:string[]}>('select installation_id,works from public.reader_availability where installation_id=$1',[installationId])).rows
+ expect(reports).toEqual([{installation_id:installationId,works:['8002']}])
+})
+it('cleans known same-browser aliases only for the same owner and origin',async()=>{
+ const alias='20000000-0000-0000-0000-000000000002',independent='20000000-0000-0000-0000-000000000003',foreignOrigin='20000000-0000-0000-0000-000000000004'
+ await report(['8001'],{installationId:alias,name:'My Reader'})
+ await report(['8001'],{installationId:independent,name:'My Reader'})
+ await report(['8001'],{installationId:foreignOrigin,name:'My Reader',url:'https://other-reader.example/'})
+ await db.exec('reset role')
+ const foreignDevice=(await db.query<{id:string}>("insert into public.userscript_devices(user_id,name,secret_hash,paired) values($1,'My Reader','other-report-secret',true) returning id",[other])).rows[0].id
+ await db.query("insert into public.reader_availability(device_id,user_id,installation_id,name,url,works) values($1,$2,$3,'My Reader','https://reader.example/','[]')",[foreignDevice,other,alias])
+ await report(['8002'],{previousInstallationIds:[alias,foreignOrigin]})
+ await asUser()
+ const ids=(await db.query<{installation_id:string}>('select installation_id from public.reader_availability')).rows.map(row=>row.installation_id)
+ expect(ids).not.toContain(alias);expect(ids).toContain(independent);expect(ids).toContain(foreignOrigin)
+ await asUser(other)
+ expect((await db.query('select installation_id from public.reader_availability where installation_id=$1',[alias])).rows).toHaveLength(1)
+ await expect(report([],{previousInstallationIds:['invalid']})).rejects.toThrow('Invalid previous reader installations')
 })

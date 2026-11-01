@@ -1,3 +1,4 @@
+import { authSessionStorage } from '../../src/lib/auth-session-storage'
 import { initialAuthIntent } from '../../src/lib/auth-account'
 import type { Database, Json } from '../../src/types/database'
 import { createClient } from '@supabase/supabase-js'
@@ -11,7 +12,7 @@ import { digest, importEpub } from './epub'
 export const readerCloudConfig = readPublicConfig(import.meta.env) ?? hostedOrganizer
 const config = readerCloudConfig
 export const readerCloud = createClient<Database>(config.url, config.key, {
-  auth: { storageKey: 'reader-cloud-auth', flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  auth: { storage: authSessionStorage('reader'), storageKey: 'reader-cloud-auth', flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   global: { fetch: (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
     if (url.pathname.startsWith('/rest/v1/') || url.pathname.startsWith('/storage/v1/')) {

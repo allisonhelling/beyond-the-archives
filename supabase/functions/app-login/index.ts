@@ -8,4 +8,9 @@ Deno.serve(appLoginHandler(admin,origins,async tokenHash=>{
  const {data,error}=await client.auth.verifyOtp({token_hash:tokenHash,type:'email'})
  if(error||!data.session)throw new Error('Sign-in failed')
  return data.session
+},async (email,password)=>{
+ const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})
+ const {data,error}=await client.auth.signInWithPassword({email,password})
+ if(error||!data.session)throw new Error('Sign-in failed')
+ return data.session
 }))

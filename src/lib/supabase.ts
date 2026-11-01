@@ -1,3 +1,4 @@
+import { authSessionStorage } from './auth-session-storage'
 import { initialAuthIntent } from './auth-account'
 import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from './config'
@@ -13,7 +14,7 @@ const config = readPublicConfig({
 export const initialAuthType = initialAuthIntent
 export const supabase = config && !sampleMode ? createClient<Database>(config.url, config.key, {
   global: { fetch: fetchWithLayout },
-  auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  auth: { storage: authSessionStorage('organizer'), flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 }) : null
 
 export const authRedirectUrl = () => `${window.location.origin}/auth/callback`

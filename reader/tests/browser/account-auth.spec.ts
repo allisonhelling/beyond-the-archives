@@ -1,3 +1,4 @@
+import { connectOrganizer } from './library-fixture'
 import { test, expect, type BrowserContext } from '@playwright/test'
 import { account, accountSession, owner, signedIn } from './account-fixture'
 async function backend(context:BrowserContext,linked=false){
@@ -20,16 +21,21 @@ async function backend(context:BrowserContext,linked=false){
  await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Signed Out Organizer</title>'}))
  return devices
 }
-test('signs in with an existing email/password and opens an isolated account library',async({page,context})=>{
+for(const identifier of ['reader@example.com','Reader']) test(`signs in with ${identifier} and opens an isolated account library`,async({page,context})=>{
  await backend(context)
  let credentials:unknown
  await context.route('**/auth/v1/token?grant_type=password',route=>{credentials=route.request().postDataJSON();return route.fulfill({json:accountSession()})})
+ await context.route('**/functions/v1/app-login',route=>{credentials=route.request().postDataJSON();return route.fulfill({json:{access_token:accountSession().access_token,refresh_token:accountSession().refresh_token}})})
  await page.goto('/');await account(page)
- await page.getByLabel('Email',{exact:true}).fill('reader@example.com')
+ await expect(page.getByRole('checkbox',{name:'Remember Me',exact:true})).toBeChecked()
+ await page.getByRole('checkbox',{name:'Remember Me',exact:true}).uncheck()
+ await page.getByLabel('Username or Email',{exact:true}).fill(identifier)
  await page.getByLabel('Password',{exact:true}).fill('ValidPassword123!')
  await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Sign In',exact:true}).click()])
  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('reader-cloud-owner')).catch(()=>null)).toBe(owner)
- expect(credentials).toMatchObject({email:'reader@example.com',password:'ValidPassword123!'})
+ expect(credentials).toMatchObject(identifier.includes('@')?{email:identifier,password:'ValidPassword123!'}:{action:'password',username:identifier,password:'ValidPassword123!'})
+ expect(await page.evaluate(()=>localStorage.getItem('reader-cloud-auth'))).toBeNull()
+ expect(await page.evaluate(()=>Boolean(sessionStorage.getItem('reader-cloud-auth')))).toBe(true)
  await account(page)
  await expect(page.getByText('Saved Account Library',{exact:false})).toContainText('reader@example.com')
  await expect(page.getByRole('button',{name:'Set or Change Password',exact:true})).toBeVisible()
@@ -40,7 +46,15 @@ test('recovers a password back to the reader and saves a new password',async({pa
  await context.route('**/auth/v1/recover*',route=>{redirect=new URL(route.request().url()).searchParams.get('redirect_to')??'';return route.fulfill({json:{}})})
  await page.goto('/');await account(page)
  await page.getByRole('button',{name:'Forgot Your Password?',exact:true}).click()
- await page.getByLabel('Email',{exact:true}).fill('reader@example.com')
+  const recoveryEmail=page.getByLabel('Email Address',{exact:true})
+  await expect(recoveryEmail).toHaveAttribute('type','email')
+  await recoveryEmail.fill('Reader')
+  expect(await recoveryEmail.evaluate((input:HTMLInputElement)=>input.checkValidity())).toBe(false)
+  const send=(await page.getByRole('button',{name:'Send Recovery Link',exact:true}).boundingBox())!
+  const back=page.getByRole('button',{name:'Back to Sign In',exact:true})
+  expect((await back.boundingBox())!.y).toBeGreaterThanOrEqual(send.y+send.height)
+  await expect(back).toHaveCSS('font-size','13px')
+ await page.getByLabel('Email Address',{exact:true}).fill('reader@example.com')
  await page.getByRole('button',{name:'Send Recovery Link',exact:true}).click()
  await expect(page.getByRole('status').filter({hasText:'a recovery link is on its way'})).toBeVisible()
  expect(redirect).toBe(`${new URL(page.url()).origin}/auth/callback`)
@@ -92,4 +106,37 @@ test('offers popup login when the browser cannot use the embedded organizer sess
  await page.goto('/');await account(page)
  await page.getByRole('button',{name:'Continue From Organizer',exact:true}).click()
  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('reader-cloud-owner')).catch(()=>null)).toBe(owner)
+})
+
+test('shares one browser installation across legacy guest and account libraries',async({page,context})=>{
+ const devices=await backend(context,true),reports:{installationId:string;previousInstallationIds:string[]}[]=[]
+ await context.route('**/rest/v1/rpc/userscript_library',async route=>{
+  const input=route.request().postDataJSON()
+  if(input.p_action==='reader_report')reports.push(input.p_input)
+  return route.fulfill({json:{entry:null}})
+ })
+ const guest='50000000-0000-0000-0000-000000000001',accountId='50000000-0000-0000-0000-000000000002'
+ await page.goto('/manifest.webmanifest')
+ await page.evaluate(async({owner,guest,accountId})=>{
+  for(const [name,id] of [['bta-reader',guest],[`bta-reader-account:${owner}`,accountId]])await new Promise<void>((resolve,reject)=>{
+   const request=indexedDB.open(name,1)
+   request.onupgradeneeded=()=>{for(const store of ['books','pending','settings'])request.result.createObjectStore(store,{keyPath:'id'})}
+   request.onerror=()=>reject(request.error)
+   request.onsuccess=()=>{const db=request.result,tx=db.transaction('settings','readwrite');tx.objectStore('settings').put({id:'installation-id',value:id});tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>reject(tx.error)}
+  })
+ },{owner,guest,accountId})
+ await page.goto('/')
+ await connectOrganizer(page)
+ await expect.poll(()=>reports.length).toBeGreaterThan(0)
+ expect(reports[0].installationId).toBe(guest)
+ expect(reports[0].previousInstallationIds).toContain(accountId)
+ await account(page)
+ await page.getByLabel('Username or Email',{exact:true}).fill('reader@example.com')
+ await page.getByLabel('Password',{exact:true}).fill('ValidPassword123!')
+ await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Sign In',exact:true}).click()])
+ await expect.poll(()=>devices.length).toBeGreaterThan(0)
+ expect(devices.every(id=>id===guest)).toBe(true)
+ await expect.poll(()=>reports.length).toBeGreaterThan(1)
+ expect(reports.every(report=>report.installationId===guest)).toBe(true)
+ expect(await page.evaluate(()=>localStorage.getItem('bta:reader-installation:v1'))).toBe(guest)
 })

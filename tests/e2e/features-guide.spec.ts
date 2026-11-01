@@ -159,6 +159,8 @@ test('work tiles and phone organizer controls use the requested reading layout',
  } else await expect(page.locator('.pagination-inline').getByRole('button',{name:'Sort',exact:true})).toBeVisible()
  await page.screenshot({path:test.info().outputPath('tile-controls.png'),fullPage:true})
  await card.getByRole('link',{name:'Layout Order Story',exact:true}).click()
+ // Exercise the fallback font used when Avenir Next and Segoe UI are unavailable.
+ if(mobile) await page.addStyleTag({content:':root { --font-sans: Arial, sans-serif; }'})
  const read=page.getByRole('link',{name:'Read EPUB',exact:true}),wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true})
  await expect(read).toBeVisible()
  if(mobile) {
@@ -180,4 +182,15 @@ test('work tiles and phone organizer controls use the requested reading layout',
   await page.reload()
   await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Read EPUB',exact:true})).toBeVisible()
  }
+})
+
+test('clears a retired reader installation selection after report cleanup',async({page})=>{
+ await fixture(page)
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'current-browser',name:'My Reader',url:'https://archivesunfolded.vercel.app/',reportedAt:'2026-10-31T00:00:00Z',works:[]}],stories:[]}}))
+ await page.goto('/library');await login(page)
+ await page.goto('/offline?reader=retired-library-id')
+ const selection=page.getByRole('combobox',{name:'Reader Installation',exact:true})
+ await expect(selection.locator('option')).toHaveCount(1)
+ await expect(selection).toHaveValue('current-browser')
+ await expect(page).toHaveURL(url=>!url.searchParams.has('reader'))
 })

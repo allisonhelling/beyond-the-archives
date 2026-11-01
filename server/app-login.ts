@@ -1,6 +1,6 @@
 import { sha256 as hash, randomSecret } from '../src/lib/crypto.ts'
 import type { SupabaseClient, Session } from '@supabase/supabase-js'
-export function appLoginHandler(admin: SupabaseClient, origins: string[], verify: (tokenHash: string) => Promise<Session>) {
+export function appLoginHandler(admin: SupabaseClient, origins: string[], verify: (tokenHash: string) => Promise<Session>, signIn?: (email: string, password: string) => Promise<Session>) {
  return async (request: Request) => {
   const origin = request.headers.get('Origin') ?? ''
   const headers = { 'Content-Type':'application/json', 'Cache-Control':'no-store', 'Vary':'Origin', ...(origins.includes(origin) ? { 'Access-Control-Allow-Origin':origin, 'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods':'POST, OPTIONS' } : {}) }
@@ -15,6 +15,16 @@ export function appLoginHandler(admin: SupabaseClient, origins: string[], verify
    let input: Record<string,unknown>
    try { input=JSON.parse(body) } catch { return json({error:'Invalid request'},400) }
    if(!input||typeof input!=='object'||Array.isArray(input))return json({error:'Invalid request'},400)
+   if(input.action==='password') {
+    const invalid=()=>json({error:'Could not sign in. Check your username or email and password, then try again.'},401)
+    if(!signIn||typeof input.username!=='string'||typeof input.password!=='string'||!input.username.trim()||input.username.length>100||!input.password||input.password.length>1024)return invalid()
+    const account=await admin.rpc('account_login_email',{p_username:input.username.trim()})
+    if(account.error||!account.data)return invalid()
+    try {
+     const session=await signIn(account.data,input.password)
+     return json({access_token:session.access_token,refresh_token:session.refresh_token})
+    } catch {return invalid()}
+   }
    if(input.action==='issue') {
     if(typeof input.challenge!=='string'||!/^[a-f0-9]{64}$/.test(input.challenge)||typeof input.target!=='string'||!origins.includes(input.target)||input.target===origin) return json({error:'Invalid handoff target'},400)
     const token=request.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1]

@@ -1,5 +1,5 @@
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
-import { readerInstallationId, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
+import { readerInstallationId, readerInstallationAliases, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
 import { withPublication } from './model'
 import type { Book, BookDetails, Connection, Pending, Remote } from './model'
 export async function rpc(connection: Connection, action: string, work: string, input: Record<string, unknown> = {}): Promise<{entry: Remote | null; collections?: {id: string; name: string}[]; secret?: string; userId?: string; tagAppearance?: TagAppearance | null}> {
@@ -45,17 +45,17 @@ async function performSync(connection: Connection, force: boolean) {
   const checkpoint = await loadSetting<{ after: string; at: number }>(checkpointKey)
   if (!force && checkpoint && Date.now() - checkpoint.at < 60_000) return 'Reading updates are synced. Organizer refresh will continue on a later sync.'
   const waiting = new Set((await all<Pending>('pending')).map(p => p.book))
-  const linked = (await listCatalog()).filter(b => b.account === connection.account && b.workId).sort((a,b) => a.id.localeCompare(b.id))
+  const candidates = (await listCatalog()).filter(b => (!b.account || b.account === connection.account) && b.workId && /^[1-9]\d*$/.test(b.workId) && Number.isSafeInteger(Number(b.workId))).sort((a,b) => a.id.localeCompare(b.id))
   const after = checkpoint?.after ?? ''
-  const remaining = linked.filter(b => b.id > after)
-  const batch = (remaining.length ? remaining : linked).slice(0, 50)
-  let checked = 0
+  const remaining = candidates.filter(b => b.id > after)
+  const batch = (remaining.length ? remaining : candidates).slice(0, 50)
+  let checked = 0, newlyLinked = 0
   for (let offset = 0; offset < batch.length; offset += 4) {
     const group = batch.slice(offset, offset + 4)
     const outcomes = await Promise.allSettled(group.map(async entry => {
       if (waiting.has(entry.id)) return
       const book = await getBookDetails(entry.id)
-      if (!book || book.account !== connection.account || !book.workId) return
+      if (!book || (book.account && book.account !== connection.account) || !book.workId) return
       const result = await rpc(connection, 'get', book.workId)
       if (result.entry) await transaction(['books', 'catalog', 'pending', 'settings'], tx => {
         const queued = tx.objectStore('pending').getAll()
@@ -65,8 +65,11 @@ async function performSync(connection: Connection, force: boolean) {
           request.onsuccess = () => {
             const current = request.result as BookDetails | undefined
             // A local edit/link or another sync may have changed the baseline in flight.
-            if (!current || current.account !== connection.account || current.workId !== book.workId || current.remote?.version !== book.remote?.version) return
-            putBook(tx, { ...withPublication(current, result.entry!), remote: result.entry!, status: result.entry!.status, notes: result.entry!.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
+            if (!current || current.account !== book.account || current.workId !== book.workId || current.remote?.version !== book.remote?.version) return
+            if (!current.account) newlyLinked++
+            // Link existing standalone books without discarding personal edits made before pairing.
+            // Later pulls also preserve fields that differ from the last organizer baseline.
+            putBook(tx, { ...withPublication(current, result.entry!), account: connection.account, remote: result.entry!, status: current.status === (current.remote?.status ?? 'to_read') ? result.entry!.status : current.status, notes: current.notes === (current.remote?.notes ?? '') ? result.entry!.notes : current.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
           }
         }
       })
@@ -77,7 +80,8 @@ async function performSync(connection: Connection, force: boolean) {
     // Advance only after a complete group succeeds; failures retry this group safely.
     await setting(checkpointKey, { after: group.at(-1)!.id, at: Date.now() })
   }
-  return `Reading updates are synced. Checked ${checked} of ${linked.length} linked versions.${linked.length > batch.length ? ' Sync Now checks the next batch.' : ''}`
+  if (newlyLinked) await reportAvailability(connection)
+  return `Reading updates are synced. Checked ${checked} of ${candidates.length} EPUB versions.${candidates.length > batch.length ? ' Sync Now checks the next batch.' : ''}`
 }
 
 // Resolve files from IndexedDB on this installation before reporting availability.
@@ -87,5 +91,5 @@ export async function reportAvailability(connection: Connection) {
   for (const entry of await listCatalog()) {
     if (entry.active && entry.workId && entry.account === connection.account && entry.hasFile && await getBook(entry.id)) works.add(entry.workId)
   }
-  await rpc(connection, 'reader_report', '0', { installationId, name: connection.name, url: new URL('/', location.href).href, works: [...works] })
+  await rpc(connection, 'reader_report', '0', { installationId, previousInstallationIds: await readerInstallationAliases(), name: connection.name, url: new URL('/', location.href).href, works: [...works] })
 }

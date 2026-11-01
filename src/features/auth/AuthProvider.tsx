@@ -1,5 +1,5 @@
 import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
-import { verifyAuthLink } from '../../lib/auth-account'
+import { signInWithLogin, verifyAuthLink } from '../../lib/auth-account'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     if (!supabase) throw new Error('Authentication is not configured.')
-    const { error } = await supabase.auth.signInWithPassword({ email: login.trim(), password })
+    const { error } = await signInWithLogin(supabase, login, password)
     if (error) throw error
     sessionStorage.removeItem('connected-login-signed-out')
   }

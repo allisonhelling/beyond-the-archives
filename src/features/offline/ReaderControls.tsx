@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Dropdown } from '../../components/Dropdown'
 import { ConnectReader } from './ConnectReader'
 import { useSearchParams } from 'react-router-dom'
@@ -8,6 +9,11 @@ export function ReaderControls({ hub = false }: { hub?: boolean }) {
   const [params, setParams] = useSearchParams()
   const selected = params.get('reader') ?? (hub ? snapshot?.readers[0]?.id ?? '' : '')
   const reader = snapshot?.readers.find(reader => reader.id === selected)
+  useEffect(() => {
+    const requested = params.get('reader')
+    if (!snapshot || !requested || snapshot.readers.some(reader => reader.id === requested)) return
+    const next = new URLSearchParams(params); next.delete('reader'); next.set('page', '1'); setParams(next, { replace: true })
+  }, [snapshot, params, setParams])
   const report = reader && <p className="field-help">Last reported by {reader.name}: {new Date(reader.reportedAt).toLocaleString()}. The reader confirms local file availability when opened. This is not verified availability on this device.</p>
   const errorMessage = error && <p role="status">{error}</p>
   function selectReader(value: string) {

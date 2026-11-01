@@ -1,3 +1,4 @@
+import { connectOrganizer } from './library-fixture'
 import { test, expect, type Page } from '@playwright/test'
 import { hostedOrganizer, readerPairingUrl } from '../../../src/lib/reader-connection'
 import { createZip } from '../../../src/lib/zip'
@@ -14,14 +15,7 @@ async function chooseChapter(page: Page, title: string) {
   await page.getByRole('button', { name: 'Contents', exact: true }).click()
   await page.getByRole('complementary', { name: 'Contents', exact: true }).getByRole('button', { name: title, exact: true }).click()
 }
-async function connectOrganizer(page: Page) {
-  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
-  await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
-  await page.getByLabel('Device Name (Optional)', { exact: true }).fill('Test Reader')
-  await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
-  await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-}
+
 test('imports, reads, changes layout, and cold-starts offline with saved history', async ({ page, context }) => {
   await page.goto('/')
   await expect(page.getByText('Reader prepared for offline use', { exact: false })).toBeVisible()
