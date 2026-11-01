@@ -14,8 +14,8 @@ import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing/b
 import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
 import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Bell, RotateCcw, Pause, Bookmark, Clock, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
@@ -47,7 +47,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading, author, localOnly = false }: { localOnly?: boolean; stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode, total?: number) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', resultsActions, showActions = true, renderHeader, filterItems = filterReading, author, localOnly = false }: { localOnly?: boolean; stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; resultsActions?: ReactNode; showActions?: boolean; renderHeader?: (actions: ReactNode, total: number | undefined, selectShelf: (shelf: string) => void) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
   const localResults = sampleMode || localOnly
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
@@ -59,12 +59,15 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   }, [])
   const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
   const [params, setParams] = useSearchParams()
+  const { key: entryKey } = useLocation()
   const selected = author !== undefined ? 'all' : params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')
   const defaultScope = author !== undefined ? `author:${author}` : filterDefaultScope(mode, selected)
   const [summaryState, setSummaryState] = useState({ scope: defaultScope, expanded: false, revision: 0 })
   if (summaryState.scope !== defaultScope) setSummaryState({ scope: defaultScope, expanded: false, revision: summaryState.revision + 1 })
-  const [defaults, setDefaults] = useState(() => ({ scope: defaultScope, filters: readFilterDefaults(defaultScope) }))
-  if (defaults.scope !== defaultScope) setDefaults({ scope: defaultScope, filters: readFilterDefaults(defaultScope) })
+  // Rapid navigation can return to this scope without unmounting the dashboard.
+  // Re-read browser preferences for each history entry; explicit URL values win.
+  const [defaults, setDefaults] = useState(() => ({ scope: defaultScope, entryKey, filters: readFilterDefaults(defaultScope) }))
+  if (defaults.scope !== defaultScope || defaults.entryKey !== entryKey) setDefaults({ scope: defaultScope, entryKey, filters: readFilterDefaults(defaultScope) })
   const decoded = readBrowsing(params, defaults.filters)
   // Retain local selections across detail navigation; a reload creates a new provider.
   const { temporaryPageSizes, revisionError, checkRevision } = useLibrary()
@@ -82,6 +85,16 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     try { window.localStorage.setItem(readingPreferencesKey, JSON.stringify({ sort: next.sort, groupBy: next.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
     setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize))
+  }
+  const selectShelf = useCallback((shelf: string) => {
+    // The URL transition may still be pending after Apply or Clear All Filters.
+    // Shelf navigation must use the same optimistic filters as the controls.
+    const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, shelf), filters), mode === 'reading' ? urlSize : undefined)
+    next.set('shelf', shelf); setParams(next)
+  }, [params, mode, filters, urlSize, setParams])
+  function applyFilters(next: ReadingFilters) {
+    // Ordering belongs to the dashboard controls, not a filter-panel snapshot.
+    setFilters(previous => ({ ...next, sort: previous.sort, groupBy: previous.groupBy, ...(previous.randomSeed && { randomSeed: previous.randomSeed }) }))
   }
   // Normalize before user navigation can race a deferred effect from this route.
   // Local page-size edits stay temporary.
@@ -128,14 +141,14 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const headerActions = <>{showActions && <>{refreshButton}{resultsActions}</>}</>
   return <SeriesSummaryContext value={summaryState}>
     {confirmRefresh && <ConfirmationDialog title="Mass Refresh?" confirmLabel="Mass Refresh" pendingLabel="Refreshing…" onClose={() => setConfirmRefresh(false)} onConfirm={async () => { await metadataRefresh.refresh() }}><p>Refresh AO3 metadata for all works on this page?</p></ConfirmationDialog>}
-    {renderHeader ? renderHeader(headerActions, localResults ? pool.length : remote.facets?.total) : <div className="library-heading-actions">{headerActions}</div>}
+    {renderHeader ? renderHeader(headerActions, localResults ? pool.length : remote.facets?.total, selectShelf) : <div className="library-heading-actions">{headerActions}</div>}
     {metadataRefresh.message && <p role={metadataRefresh.status === 'failed' ? 'alert' : 'status'}>{metadataRefresh.message} <Link className="clickable-text" to="/imports">View Import History</Link></p>}
     {mode === 'reading' && <nav className="reading-tiles" aria-label="Dashboard Sections">{displayedSections.map(([key, title, description, Icon]) => {
       const label = mobile && key === 'waiting' ? 'Waiting' : title
-      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => { const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, key), filters), urlSize); next.set('shelf', key); setParams(next) }}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{localResults ? error ? '—' : filtered.filter(story => inReadingSection(story, key)).length : displayed?.sections[key] ?? '—'}</span></button>
+      return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => selectShelf(key)}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{localResults ? error ? '—' : filtered.filter(story => inReadingSection(story, key)).length : displayed?.sections[key] ?? '—'}</span></button>
     })}</nav>}
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
-    <ReadingFilterControls availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={next => setFilters(() => next)} mode={mode} orderingControls={orderingControls} sortControl={mobile ? sortControl : undefined} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
+    <ReadingFilterControls availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={applyFilters} mode={mode} orderingControls={orderingControls} sortControl={mobile ? sortControl : undefined} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
     {pagination(true)}
     {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retry} retryLabel="Retry Suggestions" />}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}

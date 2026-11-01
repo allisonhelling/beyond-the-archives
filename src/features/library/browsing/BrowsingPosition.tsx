@@ -53,16 +53,21 @@ export function BrowsingPosition() {
     const cancel = (event?: Event) => { stopped = true; cancelAnimationFrame(frame); if (event) { restoring = false; remember() } }
     window.addEventListener('wheel', cancel, { once: true, passive: true })
     window.addEventListener('touchstart', cancel, { once: true, passive: true })
+    // Returning focus must yield as soon as the user starts another action.
+    window.addEventListener('pointerdown', cancel, true)
+    window.addEventListener('keydown', cancel, true)
     // Capture while this page is still present. Reading scrollY during route
     // cleanup can see a position clamped by the shorter destination page.
     window.addEventListener('scroll', remember, { passive: true })
-    window.addEventListener('click', remember, true)
+    window.addEventListener('click', cancel, true)
     window.addEventListener('focusin', remember)
     const cache = positions.current
     return () => {
       cancel(); window.removeEventListener('wheel', cancel); window.removeEventListener('touchstart', cancel)
+      window.removeEventListener('pointerdown', cancel, true)
+      window.removeEventListener('keydown', cancel, true)
       window.removeEventListener('scroll', remember)
-      window.removeEventListener('click', remember, true)
+      window.removeEventListener('click', cancel, true)
       window.removeEventListener('focusin', remember)
       cache.set(path, lastPosition)
       while (cache.size > 40) cache.delete(cache.keys().next().value!)

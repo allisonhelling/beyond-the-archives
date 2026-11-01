@@ -66,3 +66,31 @@ it.each(['/library?shelf=favorites&page=2', '/reading?shelf=view_all', '/authors
  expect(screen.getByRole('link', {name:'Open Work'})).toHaveFocus()
  view.unmount(); router.dispose()
 })
+
+it.each(['pointerdown', 'keydown', 'click'])('stops pending scroll/focus restoration when the user interacts (%s)', async interaction => {
+ const router = createMemoryRouter([{
+  element: <><BrowsingPosition /><Outlet /></>,
+  children: [
+   { path: '/stories/:id', element: <p>Work Details</p> },
+   { path: '*', element: <><p data-results-loading="true">Loading Results</p><Link id="work-link" to="/stories/one">Open Work</Link><button id="story-actions">Story Actions</button></> },
+  ],
+ }], { initialEntries: ['/library'] })
+ const view = render(<RouterProvider router={router} />)
+ flushFrame()
+ Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 })
+ screen.getByRole('link', { name: 'Open Work' }).focus()
+ await act(() => router.navigate('/stories/one'))
+ flushFrame()
+ await act(() => router.navigate(-1))
+ flushFrame()
+ const button = screen.getByRole('button', { name: 'Story Actions' })
+ button.focus()
+ if (interaction === 'pointerdown') fireEvent.pointerDown(button)
+ else if (interaction === 'keydown') fireEvent.keyDown(button, { key: 'Tab' })
+ else fireEvent.click(button)
+ vi.mocked(window.scrollTo).mockClear()
+ flushFrame()
+ expect(button).toHaveFocus()
+ expect(window.scrollTo).not.toHaveBeenCalled()
+ view.unmount(); router.dispose()
+})

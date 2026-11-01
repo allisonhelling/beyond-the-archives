@@ -2216,8 +2216,31 @@ test('Shift-drag selects a range and selected collections move together without 
     await page.keyboard.press('Escape')
     await expect(page.getByRole('tooltip')).toHaveCount(0)
   }
-  await book('Beta').evaluate(element => element.scrollIntoView({ block: 'center' }))
-  const source = (await book('Beta').boundingBox())!, end = (await book('Delta').boundingBox())!
+  async function dragBounds(fromName: string, toName: string) {
+    let bounds!: { start: { x: number; y: number; width: number; height: number }; end: { x: number; y: number; width: number; height: number } }
+    // Layout/scroll restoration can move the shelf after a raw scrollIntoView.
+    // Retry setup only; never replay a drag that may already change selection.
+    await expect(async () => {
+      await book(fromName).evaluate(element => element.scrollIntoView({ block: 'center' }))
+      await book(fromName).scrollIntoViewIfNeeded()
+      await book(toName).scrollIntoViewIfNeeded()
+      const measured = await shelf.evaluate((element, names) => {
+        const buttons = [...element.querySelectorAll<HTMLElement>('.collection-spine')]
+        const read = (name: string) => {
+          const button = buttons.find(item => item.getAttribute('aria-label') === name)!
+          const box = button.getBoundingClientRect()
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+          return { box: box.toJSON(), hit: Boolean(hit && button.contains(hit)) }
+        }
+        return { start: read(names.fromName), end: read(names.toName) }
+      }, { fromName, toName })
+      expect(measured.start.hit).toBe(true)
+      expect(measured.end.hit).toBe(true)
+      bounds = { start: measured.start.box, end: measured.end.box }
+    }).toPass({ timeout: 5000 })
+    return bounds
+  }
+  const { start: source, end } = await dragBounds('Beta', 'Delta')
   await page.keyboard.down('Shift')
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
   await page.mouse.down()
@@ -2233,8 +2256,7 @@ test('Shift-drag selects a range and selected collections move together without 
   if (page.viewportSize()!.width <= 650) await expect(help).toBeHidden()
   else await expect(count.locator('..').getByRole('button', { name: 'Collection Controls', exact: true })).toBeVisible()
   async function shiftDrag(fromName: string, toName: string, expected: number, cancel = false) {
-    await book(fromName).evaluate(element => element.scrollIntoView({ block: 'center' }))
-    const start = (await book(fromName).boundingBox())!, end = (await book(toName).boundingBox())!
+    const { start, end } = await dragBounds(fromName, toName)
     await page.keyboard.down('Shift')
     await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
     await page.mouse.down()
@@ -2251,8 +2273,7 @@ test('Shift-drag selects a range and selected collections move together without 
   await expect(book('Gamma')).toHaveAttribute('aria-pressed', 'false')
   await expect(book('Delta')).toHaveAttribute('aria-pressed', 'true')
   await shiftDrag('Beta', 'Gamma', 3)
-  await book('Beta').evaluate(element => element.scrollIntoView({ block: 'center' }))
-  const from = (await book('Beta').boundingBox())!, to = (await book('Alpha').boundingBox())!
+  const { start: from, end: to } = await dragBounds('Beta', 'Alpha')
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
   await page.mouse.down()
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 })
@@ -2280,8 +2301,7 @@ test('Shift-drag selects a range and selected collections move together without 
   await page.reload()
   await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
   await expect(titles).toHaveText(['Alpha', 'Epsilon', 'Beta', 'Gamma', 'Delta'])
-  await book('Beta').evaluate(element => element.scrollIntoView({ block: 'center' }))
-  const cancelSource = (await book('Beta').boundingBox())!, cancelEnd = (await book('Gamma').boundingBox())!
+  const { start: cancelSource, end: cancelEnd } = await dragBounds('Beta', 'Gamma')
   await page.keyboard.down('Shift')
   await page.mouse.move(cancelSource.x + cancelSource.width / 2, cancelSource.y + cancelSource.height / 2)
   await page.mouse.down()

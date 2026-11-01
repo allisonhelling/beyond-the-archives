@@ -20,8 +20,7 @@ import { CustomCollectionNames } from './collections/CustomCollectionNames'
 import { DisplayInfo } from './display/DisplayInfo'
 import { formatDateTime } from '../../lib/dates'
 import { useStorySnapshot } from './useStorySnapshot'
-import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
-import { readBrowsing, writeBrowsing, browsingReturnTo, collectionSortKey } from './browsing/browsing'
+import { browsingReturnTo, collectionSortKey } from './browsing/browsing'
 import { CompletedImportSeriesNotice } from '../imports/ImportedSeriesNotice'
 import { PersonalNote } from './PersonalNote'
 import { SeriesCard } from './series/SeriesCollection'
@@ -385,7 +384,7 @@ function LibraryContent() {
     })
 
   const hiddenButton = (descriptionId?: string) => <button aria-describedby={descriptionId} type="button" className="button secondary collection-hidden" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>
-  return <><LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={actions => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
+  return <><LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={(actions, _total, selectShelf) => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>Your Library</h1>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection Selection">
       {layout === 'mobile' ? hiddenButton() : <Tooltip description="View Hidden">{hiddenButton}</Tooltip>}
       <button type="button" className="button secondary collection-select" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
@@ -396,7 +395,7 @@ function LibraryContent() {
       <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>
       {actions}
     </div></div></div></div>
-    <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={key => setParams(previous => { const next = writeBrowsing(previous, readFilterDefaults(filterDefaultScope('library', key), readBrowsing(previous).filters), undefined); next.set('shelf', key); return next })} />
+    <CollectionShelf showHidden={viewHidden} onAutomaticEdit={id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={editCollection} onMove={(id, target) => void moveCollection(id, target)} items={shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={selectShelf} />
     {collection && <div className="collection-heading"><h2>{collection.name}</h2>{collection.automatic_rules && <p className="field-help">Automatic collection · Matching works are included as your library changes.</p>}{collection.description && <p className="collection-summary">{collection.description}</p>}{collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}</div>}
     {(navigationError || revisionError) ? <p role="status" className="field-help">Couldn’t update counts. <button className="text-button" onClick={() => void retryCounts()}>Retry Counts</button></p> : navigationLoading && <p role="status" className="field-help">Updating counts…</p>}
     {(error || collectionDeletion.error) && <p role="alert" className="error-message">{error || collectionDeletion.error}</p>}

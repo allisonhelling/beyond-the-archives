@@ -3,7 +3,7 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  checks:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,18 +18,76 @@ jobs:
           deno-version: v2.x
       - run: deno check --config supabase/functions/deno.json supabase/functions/*/index.ts
       - run: npm audit --audit-level=moderate
+  browser:
+    name: Browser Tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e -- --grep-invert @performance
-      - run: npm run perf:browser
-      - run: npm ci --prefix reader
-      - run: npm run build --prefix reader
-      - run: npx playwright test tests/browser/calibre.spec.ts tests/browser/cloud.spec.ts
-        working-directory: reader
+      - run: npm run test:e2e -- --grep-invert @performance --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v7
         if: failure() && hashFiles('test-results/**') != ''
         with:
-          name: browser-failures
+          name: browser-failures-${{ matrix.shard }}
           path: test-results/
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run perf:browser
+      - uses: actions/upload-artifact@v7
+        if: failure() && hashFiles('test-results/**') != ''
+        with:
+          name: performance-failures
+          path: test-results/
+  reader:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            reader/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix reader
+      - run: npm run build --prefix reader
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/browser/calibre.spec.ts tests/browser/cloud.spec.ts
+        working-directory: reader
+      - uses: actions/upload-artifact@v7
+        if: failure() && hashFiles('reader/test-results/**') != ''
+        with:
+          name: reader-browser-failures
+          path: reader/test-results/
+  checks:
+    if: ${{ always() }}
+    needs: [quality, browser, performance, reader]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require All Checks to Pass
+        run: |
+          test "${{ needs.quality.result }}" = success
+          test "${{ needs.browser.result }}" = success
+          test "${{ needs.performance.result }}" = success
+          test "${{ needs.reader.result }}" = success
   supabase:
     runs-on: ubuntu-latest
     steps:

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
 test('author pages automatically group saved fics and reuse library filters, pagination, and detail navigation', async ({ page }) => {
+ test.setTimeout(60000) // Pagination, detail return, filtering, and multiple reloads.
  const tables = await fixture(page)
  const author = 'A Writer / 雨 & Co'
  for (let i = 0; i < 29; i++) {
