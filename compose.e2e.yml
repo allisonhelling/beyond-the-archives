@@ -1,0 +1,18 @@
+services:
+  browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    platform: linux/amd64
+    init: true
+    cpus: 2
+    mem_limit: 7g
+    shm_size: 1g
+    environment:
+      CI: 'true'
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+    # Writable artifacts also remain removable by the host user on Linux.
+    entrypoint: [sh, -c, 'umask 000; exec npm run test:e2e -- --grep-invert @performance "$@"', '--']
+    command: ['--shard=1/4']

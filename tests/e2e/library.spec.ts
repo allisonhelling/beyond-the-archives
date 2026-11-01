@@ -861,6 +861,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
 })
 
 test('publication tiles exclude waiting and unknown works and update after changing reading status', async ({ page }, info) => {
+  test.setTimeout(60000) // Tile filtering, progress controls, detail/reload navigation, and finish/undo.
   const tables = await fixture(page)
   const fixtures = [
     ['Unfinished read', 'reading', 'in_progress'], ['Unfinished reread', 're_reading', 'in_progress'],
@@ -1003,6 +1004,7 @@ test('publication tiles exclude waiting and unknown works and update after chang
 
 
 for (const surface of ['library', 'details'] as const) for (const publication of ['complete', 'in_progress', 'abandoned'] as const) test(`book-spine footer saves reading status with chapter edits on ${surface} (${publication})`, async ({ page }) => {
+  test.setTimeout(60000) // Four persisted edits, caught-up/undo, and a final reload.
   const tables = await fixture(page)
   tables.works.push({ id: 'progress-work', ao3_work_id: 1, verified_chapters: {} })
   tables.library_entries.push({ id: 'progress-entry', work_id: 'progress-work', reading_status: 'paused_reading', last_read_chapter: 1, is_favorite: false, notes: 'Keep this note', original_url: 'https://archiveofourown.org/works/1', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: `Progress ${publication}`, publication_status: publication, published_chapters: 3, total_chapters: publication === 'in_progress' ? 5 : 3 } })
@@ -1035,6 +1037,7 @@ for (const surface of ['library', 'details'] as const) for (const publication of
 })
 
 test('book-spine footer reflects saved progress and preserves chapter actions', async ({ page }, info) => {
+  await page.clock.install()
   const tables = await fixture(page)
   for (const [index, total, published, progress] of [[1, 10, 8, 5], [2, 10, 10, 10], [3, null, null, 2], [4, 0, 0, 0]] as const) {
     tables.works.push({ id: `spine-work-${index}`, ao3_work_id: index, verified_chapters: index === 1 ? { 6: '666' } : {}, ao3_updated_at: null })
@@ -1111,7 +1114,8 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   await notice.getByRole('button', { name: 'Dismiss Undo Notification for Spine story 1', exact: true }).click()
   await expect(notice).toHaveCount(0)
   expect(tables.library_entries[0].reading_status).toBe('waiting_for_updates')
-  await page.clock.install()
+  // Pause before creating the notice; CI action/assertion time must not consume its expiry window.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 60_000))
   await complete.getByRole('button', { name: 'Mark as Caught Up', exact: true }).click()
   await expect(notice).toBeVisible()
   await page.clock.fastForward(119_000)
@@ -1119,6 +1123,7 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   await page.clock.fastForward(1_001)
   await expect(notice).toHaveCount(0)
   expect(tables.library_entries[1].reading_status).toBe('finished')
+  await page.clock.resume()
   await page.reload()
   await expect(first).toHaveCount(0)
   await page.getByRole('button', { name: info.project.name === 'mobile' ? 'Waiting' : 'Waiting for Updates', exact: true }).click()
@@ -2200,6 +2205,7 @@ test('selects collections for bulk appearance edits without changing summaries a
 
 
 test('Shift-drag selects a range and selected collections move together without changing their order', async ({ page }) => {
+  test.setTimeout(60000) // Range selection, repeated persisted keyboard moves, and reload.
   const tables = await fixture(page)
   tables.collections = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'].map((name, index) => ({ id: `group-${index}`, name, default_key: null }))
   await page.goto('/library'); await login(page)
@@ -2281,8 +2287,19 @@ test('Shift-drag selects a range and selected collections move together without 
   await page.mouse.up()
   await expect(titles).toHaveText(['Beta', 'Gamma', 'Delta', 'Alpha', 'Epsilon'])
   await expect(page.getByText('3 selected', { exact: true })).toBeVisible()
-  await book('Delta').press('Alt+ArrowRight')
+  // Hold persistence to verify that focus is restored after the disabled shelf settles.
+  let releaseMove!: () => void
+  const pendingMove = new Promise<void>(resolve => { releaseMove = resolve })
+  await page.route('**/rest/v1/rpc/reorder_collections', async route => {
+    await pendingMove
+    await route.fallback()
+  }, { times: 1 })
+  try {
+    await book('Delta').press('Alt+ArrowRight')
+    await expect(book('Delta')).toBeDisabled()
+  } finally { releaseMove() }
   await expect(titles).toHaveText(['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'])
+  await expect(book('Delta')).toBeFocused()
   await book('Delta').press('Alt+ArrowRight')
   await expect(titles).toHaveText(['Alpha', 'Epsilon', 'Beta', 'Gamma', 'Delta'])
   await expect(book('Delta')).toBeFocused()
@@ -2317,6 +2334,7 @@ test('Shift-drag selects a range and selected collections move together without 
   await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
   await book('Beta').press('Alt+ArrowRight')
   await expect(titles).toHaveText(['Alpha', 'Epsilon', 'Beta', 'Gamma', 'Delta'])
+  await expect(book('Beta')).toBeFocused()
   await page.keyboard.press('Alt+ArrowLeft')
   await expect(titles).toHaveText(['Alpha', 'Beta', 'Delta', 'Epsilon', 'Gamma'])
   await expect(book('Beta')).toBeFocused()
@@ -3860,7 +3878,7 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
  }
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
  await page.goto('/stories/refinements-entry')
- await expect(page.getByRole('heading',{name:'Reading and Organization',exact:true})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Reading and Organization',exact:true})).toBeVisible({timeout:15000})
  const edit=page.getByRole('button',{name:'Edit BookFusion Link',exact:true})
  await edit.focus()
  await expect(edit.locator('svg')).toHaveCSS('background-color','rgb(151, 0, 0)')

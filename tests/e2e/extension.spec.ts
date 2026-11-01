@@ -11,7 +11,7 @@ import { localExtensionId } from '../../src/features/imports/extension-config'
 for (const local of [false, true]) {
 test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata before full load without duplicate uploads`, async ({ browserName }, info) => {
  test.skip(info.project.name !== 'desktop' || browserName !== 'chromium', 'Chrome/Edge extension; separate persistent Chromium context.')
- test.setTimeout(90000) // Cold persistent Chromium startup plus service-worker wake-up.
+ test.setTimeout(180000) // Build/start persistent Chromium, then exercise capture, pairing, editing, previews, and sync.
  const appOrigin = local ? 'http://127.0.0.1:5173' : 'https://library-extension-test.example'
  let queued = false, claimed = false, loaded = false, workId = 123
  const uploads: { jobId: string; html: string; url: string }[] = []

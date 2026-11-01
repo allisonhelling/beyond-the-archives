@@ -18,6 +18,7 @@
     "test:db": "vitest run supabase/tests",
     "test:offline": "npm run build && playwright test --config playwright.offline.config.ts",
     "test:e2e": "playwright test",
+    "test:e2e:ci": "docker compose -f compose.e2e.yml run --build --rm browser",
     "check:security": "node scripts/check-security.mjs",
     "check": "npm run lint && npm run build && npm test && npm run test:integration:config && npm run check:security",
     "db:start": "supabase start",

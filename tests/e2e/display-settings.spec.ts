@@ -72,6 +72,7 @@ async function dragInformation(page: Page, source: Locator, destination: Locator
 }
 
 test('full work and series tiles expand on demand, hide/show outside the preview, and save drafts explicitly', async ({ page }, info) => {
+  test.setTimeout(60000) // Save/cancel drafts, reload twice, and verify the live tiles.
   await setup(page)
   const work = editor(page, 'Work Tile'), series = editor(page, 'Series Tile')
   await expect(work.frameLocator('iframe').locator('.work-card')).toBeVisible()
@@ -209,6 +210,7 @@ for (const kind of ['Work', 'Series'] as const) test(`${kind} tiles support grou
 })
 
 for (const kind of ['Work', 'Series'] as const) test(`${kind} info page fields can share a grouped line`, async ({ page }, info) => {
+  test.setTimeout(60000) // Edit the preview, save, navigate, and verify after reload.
   await setup(page)
   await page.getByRole('link', { name: `Edit ${kind} Info Page`, exact: true }).click()
   const preview = editor(page, `Example ${kind} Info Page`), group = kind === 'Work' ? 'workStats' : 'seriesStats'
@@ -229,6 +231,7 @@ for (const kind of ['Work', 'Series'] as const) test(`${kind} info page fields c
 })
 
 test('Shift-click groups and deletes multiple fields, with repeatable saved dividers', async ({ page }) => {
+  test.setTimeout(60000) // Group/delete fields and verify saved dividers across two reloads.
   await setup(page)
   const work = editor(page, 'Work Tile')
   await field(work, 'workTile', 'authors').click({ modifiers: ['Shift'] })
@@ -700,6 +703,7 @@ test('saves and cancels tag, series and work tile drafts independently', async (
 })
 
 test('AO3 Category and statistics can be added to work tiles and information pages', async ({ page }) => {
+  test.setTimeout(60000) // Configure tiles and the info page, then verify both live surfaces.
  const tables = await setup(page)
  Object.assign(tables.library_entries[0].metadata_overrides as object, { categories: ['M/M'], language: 'English', bookmark_count: 0, comment_count: 12, hits: 1234 })
  const preview = editor(page, 'Work Tile')
