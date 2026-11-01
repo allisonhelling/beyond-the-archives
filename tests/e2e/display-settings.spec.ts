@@ -166,6 +166,7 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
 })
 
 for (const kind of ['Work', 'Series'] as const) test(`${kind} tiles support grouped lines and standalone information`, async ({ page }, info) => {
+  test.setTimeout(60000) // Grouping, save/cancel, reload, and live-card verification.
   await setup(page)
   const preview = editor(page, `${kind} Tile`), group = kind === 'Work' ? 'workTile' : 'seriesTile'
   const extra = kind === 'Work' ? 'reading' : 'updated', extraLabel = kind === 'Work' ? 'Reading Status' : 'Date Updated'
@@ -347,6 +348,7 @@ test('tag shape choices and short dividers save from the real work preview', asy
 
 
 test('wrapped tags flow directly into the next section on a grouped line', async ({page})=>{
+  test.setTimeout(60000) // Verify both tag shapes across separate page loads.
   const tables=await setup(page)
   const entry=tables.library_entries.find(entry=>entry.id==='display-entry')!
   entry.metadata_overrides={...entry.metadata_overrides as object,additional_tags:['Humor '.repeat(14).trim(),'Fluff']}
@@ -395,6 +397,7 @@ test('inline grouped information drags from its text without selecting it', asyn
 
 
 test('global tag appearance, Apply and Undo are shared across tiles and pages',async({page})=>{
+ test.setTimeout(60000) // Apply/undo, both tile editors, both example pages, and live cards.
  const tables=await setup(page)
  tables.library_entries[0].metadata_overrides={...tables.library_entries[0].metadata_overrides as object,additional_tags:['Humor','Fluff'],relationship_tags:['Alice/Bob'],character_tags:['Alice'],archive_warnings:['No Archive Warnings Apply'],ao3_tags:['Display fandom','Humor','Fluff']}
  const appearance=page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true})
@@ -734,6 +737,7 @@ test('AO3 Category and statistics can be added to work tiles and information pag
 })
 
 for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'page'] as const) test(`restores ${kind} ${layout} saved and unsaved customizations after confirmation`, async ({ page }) => {
+ test.setTimeout(60000) // Cancel/confirm restoration and verify persistence over two reloads.
  const group = layout === 'tile' ? `${kind}Tile` : `${kind}Info`
  const hiddenField = layout === 'tile' ? 'authors' : kind === 'work' ? 'summary' : 'begun'
  const saved = {

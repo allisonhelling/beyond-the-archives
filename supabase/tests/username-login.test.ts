@@ -15,14 +15,14 @@ beforeAll(async()=>{
   drop function public.account_login_email(text);
   drop function public.manage_account_username(text);
   drop table public.account_usernames;
-  create role username_migration nologin nosuperuser;
+  create role username_migration nologin nosuperuser bypassrls;
   grant usage, create on schema public to username_migration;
   grant usage on schema auth to username_migration;
   grant select, references on auth.users to username_migration;
   set role username_migration;
  `)
- // Apply both migrations without ownership of Supabase's managed Auth table.
- for(const migration of ['20261031000500_username_login.sql','20261031000600_self_service_usernames.sql']) {
+ // The trusted function owner bypasses RLS, but does not own managed Auth tables.
+ for(const migration of ['20261031000500_username_login.sql','20261031000600_self_service_usernames.sql','20261031000700_force_username_rls.sql']) {
   await db.exec(await readFile(new URL(`../migrations/${migration}`,import.meta.url),'utf8'))
  }
  await db.exec(`reset role;

@@ -70,3 +70,14 @@ it('verifies username passwords without returning the resolved email',async()=>{
  expect(missing.status).toBe(401);expect(incorrect.status).toBe(401)
  expect(await missing.json()).toEqual(await incorrect.json())
 })
+
+it('permits an explicit login without enabling organizer synchronization',async()=>{
+ linked=false
+ const handler=appLoginHandler(admin,[organizer,reader],verify)
+ expect((await handler(request(issue()))).status).toBe(403)
+ const response=await handler(request({...issue(),userRequested:true}))
+ expect(response.status).toBe(200)
+ expect(insert).toHaveBeenCalledWith(expect.objectContaining({user_requested:true,user_id:id}))
+ allowed=false
+ expect((await handler(request({...issue(),userRequested:true}))).status).toBe(403)
+})

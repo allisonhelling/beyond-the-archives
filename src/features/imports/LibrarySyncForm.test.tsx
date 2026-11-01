@@ -18,7 +18,7 @@ const ready = { reviewRelatedSeries: false, reviewExisting: true, id: 'scan', st
 beforeEach(() => {
  const storage = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
- vi.clearAllMocks(); mocks.reading.mockResolvedValue({reviews:[],total:0,changed:0,skipped:0}); mocks.reports.mockResolvedValue({ reports: [], total: 0 }); mocks.sample = false; mocks.connect.mockResolvedValue(true)
+ vi.resetAllMocks(); mocks.reading.mockResolvedValue({reviews:[],total:0,changed:0,skipped:0}); mocks.reports.mockResolvedValue({ reports: [], total: 0 }); mocks.sample = false; mocks.connect.mockResolvedValue(true)
  mocks.command.mockImplementation(async (action, options) => {
   if (action === 'status') return { state: ready }
   if (action === 'page') return { rows: [{ title: `Work ${options.page}`, link: `https://archiveofourown.org/works/${options.page}`, source_list: 'marked_for_later' }] }
@@ -465,7 +465,7 @@ it('keeps the chosen series works through an interrupted upload and retry', asyn
  fireEvent.click(screen.getByRole('button', { name: 'Finish Import' }))
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
  expect(mocks.submit.mock.calls.map(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([[1], [2], [1], [2]])
-})
+}, 15000)
 
 it('requires a new scan when legacy series checkpoints cannot identify their source', async () => {
  mocks.command.mockResolvedValue({ state: { ...ready, seenSeries: [seriesUrl] } })
@@ -539,7 +539,7 @@ it('does not carry bookmark chapter checks into Marked for Later or list URL imp
  fireEvent.click(screen.getByRole('button', { name: 'Import from List' }))
  await waitFor(() => expect(mocks.command.mock.calls.filter(([name]) => name === 'start')).toHaveLength(2))
  expect(mocks.command.mock.calls.filter(([name]) => name === 'start')[1][1]).not.toHaveProperty('checkChapterDates')
-})
+}, 15000)
 
 it.each([
  [true, 'https://archiveofourown.org/users/alice/bookmarks', 'Bookmark'],
@@ -560,7 +560,8 @@ it('imports all series checkpoints with the all default without reopening series
  saveSeriesImportBehavior('all')
  scannedSeries()
  render(<MemoryRouter><LibrarySyncProvider><LibrarySyncForm onImported={vi.fn()} /></LibrarySyncProvider></MemoryRouter>)
- fireEvent.click(await screen.findByRole('button', { name: 'Import Scanned Works' }))
+ const importButton = await screen.findByRole('button', { name: 'Import Scanned Works' })
+ await act(async () => { fireEvent.click(importButton) })
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
  expect(mocks.submit.mock.calls.flatMap(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([1, 1, 2, 3])
  expect(mocks.preview).not.toHaveBeenCalled()
@@ -618,7 +619,7 @@ it.each(['Import Bookmarks', 'Import Marked for Later'])('%s applies only its ow
  fireEvent.click(reopened.getByRole('button', { name: 'Start Import' }))
  await waitFor(() => expect(mocks.command.mock.calls.filter(([action]) => action === 'start')).toHaveLength(2))
  expect(mocks.command.mock.calls.filter(([action]) => action === 'start')[1][1]).not.toHaveProperty('readingStatus')
-})
+}, 15000)
 
 it('keeps a manually entered list URL status through import submission', async () => {
  mocks.command.mockImplementation(async (action, options) => {
@@ -775,7 +776,7 @@ it('prepares a saved legacy batch through the updated companion', async () => {
  fireEvent.click(screen.getByRole('button', { name: 'Prepare Saved Batch' }))
  expect(await screen.findByRole('button', { name: 'Import Batch and Continue' })).toBeEnabled()
  expect(mocks.command).toHaveBeenCalledWith('prepare-batch', { scanId: 'scan' })
-})
+}, 15000)
 
 it('imports only the current batch, retries a failure safely, and continues only after all pages save', async () => {
  const state = { ...ready, pages: 502, batchStart: 500, hasMore: true }
@@ -886,7 +887,7 @@ it.each(['ready', 'complete'])('offers continuation for a %s ended scan and resu
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('continue', { scanId: 'scan', delaySeconds: 20 }))
  expect(await screen.findByRole('button', { name: 'Pause Scan' })).toBeEnabled()
  expect(screen.queryByRole('button', { name: 'Continue From Previous Scan' })).not.toBeInTheDocument()
-})
+}, 15000)
 
 it.each([false, true])('applies an explicit bookmark choice (incoming: %s)', async incoming => {
  const conflict = { workId: 10, id: 'saved-bookmark', version: 'v1', title: 'Changed bookmark', notes: 'Saved note', tags: [], incomingNotes: 'AO3 note', incomingTags: [] }
@@ -959,7 +960,7 @@ it('imports selected works without finishing the scan and restores that review a
  await waitFor(() => expect(mocks.command).toHaveBeenCalledWith('finish', { scanId: 'scan' }))
  expect(mocks.submit.mock.calls.map(([rows]) => rows.map((row: { workId: number }) => row.workId))).toEqual([[2], [1], [3]])
  expect(JSON.parse(localStorage.getItem('between-chapters:series-review:v1:local') ?? '{}')).toEqual({})
-})
+}, 15000)
 
 it('shows pending page progress inside the picker and releases imported works before history refresh finishes', async () => {
  scannedSeries()

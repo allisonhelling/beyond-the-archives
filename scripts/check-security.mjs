@@ -34,7 +34,10 @@ if (!ignored.includes('.env.*') || !ignored.includes('!.env.example')) errors.pu
 const config = await readFile('supabase/config.toml', 'utf8')
 const auth = config.match(/^\[auth\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1] || ''
 const email = config.match(/^\[auth\.email\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1] || ''
-if (!/^enable_signup\s*=\s*false\s*$/m.test(auth) || !/^enable_anonymous_sign_ins\s*=\s*false\s*$/m.test(auth)) errors.push('Private account configuration missing')
-if (!/^enable_signup\s*=\s*true\s*$/m.test(email)) errors.push('Email provider must remain enabled for invited users to sign in')
+const betaHook = config.match(/\[auth\.hook\.before_user_created\]([\s\S]*?)(?=\n\[|$)/)?.[1] || ''
+if (!/^enabled\s*=\s*true\s*$/m.test(betaHook) || !/^uri\s*=\s*"pg-functions:\/\/postgres\/public\/before_user_created"\s*$/m.test(betaHook)) errors.push('Private beta signup hook must remain enabled')
+if (!/^enable_signup\s*=\s*true\s*$/m.test(auth) || !/^enable_anonymous_sign_ins\s*=\s*false\s*$/m.test(auth)) errors.push('Email signup or anonymous-sign-in configuration is incorrect')
+if (!/^enable_confirmations\s*=\s*true\s*$/m.test(email)) errors.push('Signup email confirmation must remain enabled')
+if (!/^enable_signup\s*=\s*true\s*$/m.test(email)) errors.push('Email provider must remain enabled for account creation and sign-in')
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1 }
-else console.log('Security checks passed: frontend boundary, privileged-key build rejection, production secret canary, environment exclusions, invite-only configuration.')
+else console.log('Security checks passed: frontend boundary, privileged-key build rejection, production secret canary, environment exclusions, confirmed email signup and private beta hook configuration.')

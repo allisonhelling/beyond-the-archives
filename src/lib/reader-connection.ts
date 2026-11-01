@@ -7,6 +7,25 @@ export const hostedOrganizer: PublicConfig = {
 }
 export const hostedReaderUrl = 'https://archivesunfolded.vercel.app/'
 export type ReaderPairing = PublicConfig & { code: string }
+const pendingPairingKey = 'reader:pending-pairing'
+function parseReaderPairing(input: unknown): ReaderPairing | undefined {
+  if (!input || typeof input !== 'object') return
+  const value = input as ReaderPairing
+  const config = readPublicConfig({ VITE_SUPABASE_URL: value.url, VITE_SUPABASE_PUBLISHABLE_KEY: value.key })
+  if (config && typeof value.code === 'string' && /^[a-f0-9]{64}$/.test(value.code)) return { ...config, code: value.code }
+}
+export function deferReaderPairing(pairing: ReaderPairing) {
+  sessionStorage.setItem(pendingPairingKey, JSON.stringify({ pairing, expires: Date.now() + 5 * 60_000 }))
+}
+export function clearPendingReaderPairing() { sessionStorage.removeItem(pendingPairingKey) }
+export function consumePendingReaderPairing(): ReaderPairing | undefined {
+  try {
+    const saved = sessionStorage.getItem(pendingPairingKey)
+    clearPendingReaderPairing()
+    const value = JSON.parse(saved ?? 'null')
+    if (typeof value?.expires === 'number' && value.expires > Date.now()) return parseReaderPairing(value.pairing)
+  } catch { /* Missing, expired, or invalid pending links cannot connect an account. */ }
+}
 export function readerBaseUrl(value: string): URL {
   const url = new URL(value)
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('Use an HTTPS reader URL.')
@@ -27,8 +46,6 @@ export function consumeReaderPairing(): ReaderPairing | undefined {
   params.delete('readerPairing')
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${params.size ? `#${params}` : ''}`)
   try {
-    const input = JSON.parse(value) as ReaderPairing
-    const config = readPublicConfig({ VITE_SUPABASE_URL: input.url, VITE_SUPABASE_PUBLISHABLE_KEY: input.key })
-    if (config && typeof input.code === 'string' && /^[a-f0-9]{64}$/.test(input.code)) return { ...config, code: input.code }
+    return parseReaderPairing(JSON.parse(value))
   } catch { /* Invalid links cannot configure or connect an organizer. */ }
 }

@@ -5,24 +5,70 @@ export const organizerAppUrl = () => readerBaseUrl(import.meta.env.VITE_ORGANIZE
 export const readerAppUrl = () => readerBaseUrl(import.meta.env.VITE_READER_URL || hostedReaderUrl).href
 export const isLoginBridge = () => location.pathname==='/auth/bridge'
 
+type BridgeResult = { code?: string; error?: 'signed-out' | 'access-denied' | 'unavailable' }
+const handoffChannel = 'connected-account-login:v1'
+const validSecret = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+async function issueHandoff(client: SupabaseClient, target: string, challenge: string, userRequested: boolean): Promise<BridgeResult> {
+ try {
+  const { data, error } = await client.auth.getSession()
+  if (error) return { error: 'unavailable' }
+  if (!data.session) return { error: 'signed-out' }
+  const result = await client.functions.invoke('app-login', { body: { action: 'issue', target, challenge, ...(userRequested ? { userRequested: true } : {}) } })
+  if (result.error || !validSecret(result.data?.code)) return { error: result.error?.context?.status === 403 ? 'access-denied' : 'unavailable' }
+  return { code: result.data.code }
+ } catch { return { error: 'unavailable' } }
+}
+
+// A tab-only Auth session stays in its original tab. That tab can issue a
+// verifier-bound ticket without copying its Auth tokens to the popup or channel.
+export function serveConnectedLoginInTab(client: SupabaseClient, otherApp: string) {
+ if (typeof BroadcastChannel === 'undefined') return
+ const trusted = new URL(otherApp).origin
+ let channel: BroadcastChannel
+ try { channel = new BroadcastChannel(handoffChannel) } catch { return }
+ let active = true
+ channel.onmessage = async ({ data }) => {
+  if (data?.kind !== 'connected-login-tab-request' || data.target !== trusted || data.userRequested !== true || !validSecret(data.challenge) || !validSecret(data.nonce)) return
+  const result = await issueHandoff(client, trusted, data.challenge, true)
+  if (active && result.error !== 'signed-out') channel.postMessage({ kind: 'connected-login-tab-result', nonce: data.nonce, ...result })
+ }
+ const close = () => { active = false; channel.close() }
+ window.addEventListener('pagehide', close, { once: true })
+ return () => { window.removeEventListener('pagehide', close); close() }
+}
+function handoffFromOpenTab(target: string, challenge: string, nonce: string): Promise<BridgeResult> {
+ if (typeof BroadcastChannel === 'undefined') return Promise.resolve({ error: 'signed-out' })
+ return new Promise(resolve => {
+  let channel: BroadcastChannel
+  try { channel = new BroadcastChannel(handoffChannel) } catch { resolve({ error: 'signed-out' }); return }
+  let failure: BridgeResult = { error: 'signed-out' }
+  const finish = (result: BridgeResult) => { clearTimeout(timer); channel.close(); resolve(result) }
+  const timer = setTimeout(() => finish(failure), 15000)
+  channel.onmessage = ({ data }) => {
+   if (data?.kind !== 'connected-login-tab-result' || data.nonce !== nonce) return
+   if (validSecret(data.code)) finish({ code: data.code })
+   else if (data.error === 'access-denied' || data.error === 'unavailable') failure = { error: data.error }
+  }
+  channel.postMessage({ kind: 'connected-login-tab-request', target, challenge, nonce, userRequested: true })
+ })
+}
+
 // Only the configured other app can ask this isolated page for a handoff.
 export function serveConnectedLogin(client: SupabaseClient, otherApp: string) {
- const trusted=new URL(otherApp).origin, requester=window.opener || (window.parent!==window?window.parent:null)
- if(!requester)return
- let handled=false
- const respond=async(event:MessageEvent)=>{
-  if(handled||event.source!==requester||event.origin!==trusted||event.data?.kind!=='connected-login-request'||!/^[a-f0-9]{64}$/.test(event.data.challenge)||!/^[a-f0-9]{64}$/.test(event.data.nonce))return
-  handled=true
-  try {
-   const {data}=await client.auth.getSession()
-   if(!data.session)throw new Error('No active session')
-   const result=await client.functions.invoke('app-login',{body:{action:'issue',target:trusted,challenge:event.data.challenge}})
-   if(result.error||typeof result.data?.code!=='string')throw new Error('Sign-in unavailable')
-   requester.postMessage({kind:'connected-login-result',nonce:event.data.nonce,code:result.data.code},trusted)
-  } catch {requester.postMessage({kind:'connected-login-result',nonce:event.data.nonce},trusted)}
+ const trusted = new URL(otherApp).origin, requester = window.opener || (window.parent !== window ? window.parent : null)
+ if (!requester) return
+ const userRequested = Boolean(window.opener)
+ let handled = false
+ const respond = async (event: MessageEvent) => {
+  if (handled || event.source !== requester || event.origin !== trusted || event.data?.kind !== 'connected-login-request' || !validSecret(event.data.challenge) || !validSecret(event.data.nonce)) return
+  handled = true
+  let result = await issueHandoff(client, trusted, event.data.challenge, userRequested)
+  if (userRequested && result.error === 'signed-out') result = await handoffFromOpenTab(trusted, event.data.challenge, event.data.nonce)
+  requester.postMessage({ kind: 'connected-login-result', nonce: event.data.nonce, ...result }, trusted)
  }
- window.addEventListener('message',respond)
- requester.postMessage({kind:'connected-login-ready'},trusted)
+ window.addEventListener('message', respond)
+ requester.postMessage({ kind: 'connected-login-ready' }, trusted)
+ return () => window.removeEventListener('message', respond)
 }
 
 let pending: Promise<boolean>|undefined
@@ -47,7 +93,12 @@ export function connectedLogin(client:SupabaseClient,otherApp:string,popup=false
     if(event.data?.kind==='connected-login-ready'){send();return}
     if(exchanged||event.data?.kind!=='connected-login-result'||event.data.nonce!==nonce)return
     exchanged=true
-    if(!/^[a-f0-9]{64}$/.test(event.data.code??'')){cleanup();resolve(false);return}
+    if(!validSecret(event.data.code)){
+     cleanup()
+     if(popup)reject(new Error(event.data.error === 'signed-out' ? 'No active account was found in the other app. Keep its signed-in tab open and try again, or sign in here with your username or email.' : event.data.error === 'access-denied' ? 'This account cannot use connected sign-in. Check its reader access, or sign in here with your username or email.' : 'The other app could not complete sign-in. Try again, or sign in here with your username or email.'))
+     else resolve(false)
+     return
+    }
     try {
      // An explicit sign-in always wins over a delayed automatic handoff.
      if((await client.auth.getSession()).data.session){cleanup();resolve(true);return}

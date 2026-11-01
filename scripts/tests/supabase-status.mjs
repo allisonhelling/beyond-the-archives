@@ -29,11 +29,15 @@ test('reports malformed responses without revealing credentials', () => {
   assert.throws(() => parse(JSON.stringify({ ...legacy, API_URL: 'invalid' })), /invalid API URL/)
   assert.throws(() => parse(JSON.stringify({ API_URL: legacy.API_URL })), /did not report the public and server keys/)
 })
-test('local Auth permits invited email sign-in while globally disabling signup', async () => {
+test('local Auth gates confirmed email signup with the beta hook and disables anonymous accounts', async () => {
   const config = await readFile(new URL('../../supabase/config.toml', import.meta.url), 'utf8')
   const auth = config.match(/^\[auth\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1]
   const email = config.match(/^\[auth\.email\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m)?.[1]
-  assert.match(auth || '', /^enable_signup\s*=\s*false\s*$/m)
+  const hook = config.match(/\[auth\.hook\.before_user_created\]([\s\S]*?)(?=\n\[|$)/)?.[1] || ''
+  assert.match(hook, /^enabled\s*=\s*true\s*$/m)
+  assert.match(hook, /^uri\s*=\s*"pg-functions:\/\/postgres\/public\/before_user_created"\s*$/m)
+  assert.match(auth || '', /^enable_signup\s*=\s*true\s*$/m)
   assert.match(auth || '', /^enable_anonymous_sign_ins\s*=\s*false\s*$/m)
+  assert.match(email || '', /^enable_confirmations\s*=\s*true\s*$/m)
   assert.match(email || '', /^enable_signup\s*=\s*true\s*$/m)
 })

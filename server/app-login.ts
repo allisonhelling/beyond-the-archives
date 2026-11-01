@@ -34,13 +34,14 @@ export function appLoginHandler(admin: SupabaseClient, origins: string[], verify
     const linked=await admin.from('reader_organizer_links').select('user_id').eq('user_id',data.user.id).maybeSingle()
     const access=await admin.from('reader_app_access').select('user_id').eq('user_id',data.user.id).maybeSingle()
     if(linked.error||access.error)throw new Error('Access lookup failed')
-    if(!linked.data||!access.data)return json({error:'Connect the reader and organizer first'},403)
+    if(!access.data)return json({error:'Reader account access required'},403)
+    if(!linked.data&&input.userRequested!==true)return json({error:'Connect the reader and organizer first'},403)
     await admin.from('app_login_handoffs').delete().lte('expires_at',new Date().toISOString())
     const recent=await admin.from('app_login_handoffs').select('code_hash',{count:'exact',head:true}).eq('user_id',data.user.id)
     if(recent.error)throw recent.error
     if((recent.count??0)>=10)return json({error:'Too many sign-in attempts. Try again in one minute.'},429)
     const code=randomSecret()
-    const result=await admin.from('app_login_handoffs').insert({code_hash:await hash(code),challenge:input.challenge,target_origin:input.target,user_id:data.user.id})
+    const result=await admin.from('app_login_handoffs').insert({code_hash:await hash(code),challenge:input.challenge,target_origin:input.target,user_id:data.user.id,...(input.userRequested===true?{user_requested:true}:{})})
     if(result.error)throw result.error
     return json({code})
    }

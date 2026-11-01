@@ -34,25 +34,38 @@ export const readerCloud = createClient<Database>(config.url, config.key, {
 export let readerAuthIntent = initialAuthIntent
 export function clearReaderAuthIntent() {readerAuthIntent=null}
 readerCloud.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')readerAuthIntent='recovery'})
+async function organizerSession(connection: Connection) {
+  const { data, error } = await readerCloud.auth.getSession()
+  if (error) throw error
+  if (!data.session) return null
+  if(connection.backend.replace(/\/$/,'') !== config.url.replace(/\/$/,''))throw new Error('Sign in to the reader account for the connected organizer project.')
+  return data.session
+}
+export async function validateOrganizerConnection(connection: Connection) {
+  if (!readerOwner) throw new Error('Sign in to your reader account to connect an organizer. Guest reading stays local.')
+  const session = await organizerSession(connection)
+  if (session?.user.id !== readerOwner) throw new Error('Sign in to this reader account before connecting its organizer.')
+  const { error } = await readerCloud.rpc('reader_organizer_connection', { p_action: 'validate', p_secret: connection.secret })
+  if (error) throw new Error(error.message)
+}
 export async function rememberOrganizerConnection(connection?: Connection) {
   if (!connection) return
-  if(connection.backend.replace(/\/$/,'') !== config.url.replace(/\/$/,''))throw new Error('Sign in to the reader account for the connected organizer project.')
-  const { data } = await readerCloud.auth.getSession()
-  if (!data.session) return
+  const session = await organizerSession(connection)
+  if (!session) return
   const installation=await readerInstallationId()
   const { error } = await readerCloud.rpc('reader_organizer_connection', { p_action:'enable', p_secret:connection.secret, p_installation:installation })
-  if (error) throw error
-  await transaction(['settings'],tx=>{tx.objectStore('settings').put({id:'organizer-account-link',value:data.session!.user.id});tx.objectStore('settings').delete('organizer-disabled-here')})
+  if (error) throw new Error(error.message)
+  await transaction(['settings'],tx=>{tx.objectStore('settings').put({id:'organizer-account-link',value:session.user.id});tx.objectStore('settings').delete('organizer-disabled-here')})
 }
 export async function restoreOrganizerConnection(existing?: Connection): Promise<Connection | undefined> {
-  if (!readerOwner) return existing
+  if (!readerOwner) return undefined
   const { data } = await readerCloud.auth.getSession()
-  if (data.session?.user.id !== readerOwner) return existing
+  if (data.session?.user.id !== readerOwner) return undefined
   if(await loadSetting<boolean>('organizer-disabled-here'))return existing
   const managed=existing?.account.startsWith('organizer:') || await loadSetting<string>('organizer-account-link')===readerOwner
   if(existing && !managed){await rememberOrganizerConnection(existing);return existing}
   const status=await readerCloud.rpc('reader_organizer_connection',{p_action:'status'})
-  if(status.error)throw status.error
+  if(status.error)throw new Error(status.error.message)
   if (!(status.data as {enabled?:boolean})?.enabled) {
     if(existing && managed) await transaction(['settings'],tx=>tx.objectStore('settings').delete('connection'))
     return undefined
@@ -60,7 +73,7 @@ export async function restoreOrganizerConnection(existing?: Connection): Promise
   if(existing && (!existing.expiresAt || Date.parse(existing.expiresAt)>Date.now()))return existing
   const installation=await readerInstallationId()
   const result=await readerCloud.rpc('reader_organizer_connection',{p_action:'restore',p_installation:installation})
-  if(result.error)throw result.error
+  if(result.error)throw new Error(result.error.message)
   const value=result.data as {secret?:string;userId?:string;expiresAt?:string|null}
   if(!value.secret||value.userId!==readerOwner)throw new Error('Organizer connection could not be restored.')
   const next:Connection={expiresAt:value.expiresAt,backend:config.url.replace(/\/$/,''),key:config.key,secret:value.secret,account:`organizer:${readerOwner}`,name:'My Organizer',label:new URL(config.url).hostname}

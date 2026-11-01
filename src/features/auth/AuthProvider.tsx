@@ -1,5 +1,5 @@
 import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
-import { signInWithLogin, verifyAuthLink } from '../../lib/auth-account'
+import { isAuthLinkType, signInWithLogin, verifyAuthLink } from '../../lib/auth-account'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
@@ -67,9 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const tokenHash = params.get('token_hash')
         const type = params.get('type')
-        if (tokenHash && (type === 'invite' || type === 'recovery')) {
+        if (tokenHash && isAuthLinkType(type)) {
           await verifyAuthLink(client, tokenHash, type)
-          if (active) setNeedsPassword(true)
+          if (active) setNeedsPassword(type !== 'signup')
           if (active) window.history.replaceState(null, '', '/auth/callback')
         }
         let timeout: ReturnType<typeof setTimeout> | undefined

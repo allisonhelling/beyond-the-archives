@@ -1,3 +1,4 @@
+import { organizerAccount, owner } from './account-fixture'
 import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
 import { epubFiles } from '../../../src/test/epub-fixture'
@@ -5,14 +6,15 @@ import type { BookDetails } from '../../src/model'
 import { connectOrganizer } from './library-fixture'
 
 async function savedBooks(page: Page) {
- return page.evaluate(async () => {
-  const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+ return page.evaluate(async dbName => {
+  const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(dbName); request.onsuccess = () => resolve(request.result) })
   try { return await new Promise<BookDetails[]>(resolve => { const request = db.transaction('books').objectStore('books').getAll(); request.onsuccess = () => resolve(request.result) }) }
   finally { db.close() }
- })
+ }, `bta-reader-account:${owner}`)
 }
 
 test('automatically links saved AO3 EPUBs without replacing local edits or other account links', async ({ page, context }) => {
+ await organizerAccount(context)
  const gets: number[] = [], writes: Record<string, unknown>[] = [], reports: string[][] = []
  let missingExists = false
  let remote = { id: 'organizer-8001', version: 'v1', status: 'to_read', progress: 0, notes: 'Organizer note', collections: ['collection-1'] }
@@ -49,8 +51,8 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
  expect(original.history).toHaveLength(1)
  expect((await savedBooks(page)).find(book => book.metadata.title === '8001 Is Only a Title')?.workId).toBeNull()
  // Existing foreign associations and queued edits must never be adopted implicitly.
- await page.evaluate(async () => {
-  const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+ await page.evaluate(async dbName => {
+  const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(dbName); request.onsuccess = () => resolve(request.result) })
   try {
    await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(['books', 'catalog', 'pending'], 'readwrite'), request = tx.objectStore('books').getAll()
@@ -66,7 +68,7 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
     tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
    })
   } finally { db.close() }
- })
+ }, `bta-reader-account:${owner}`)
  await connectOrganizer(page)
  await expect.poll(async () => (await savedBooks(page)).find(book => book.workId === '8001')?.remote?.id).toBe('organizer-8001')
  await expect.poll(() => reports.at(-1)).toEqual(['8001'])

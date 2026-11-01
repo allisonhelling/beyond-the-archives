@@ -22,7 +22,7 @@ const fakeSession = { user: { id: 'account-1', email: 'reader@example.com' }, ac
 const auth = vi.hoisted(() => ({
   session: null as Session | null,
   listener: null as null | ((event: AuthChangeEvent, session: Session | null) => void),
-  getSession: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn(), updateUser: vi.fn(), verifyOtp: vi.fn(), unsubscribe: vi.fn(),
+  getSession: vi.fn(), signUp: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn(), updateUser: vi.fn(), verifyOtp: vi.fn(), unsubscribe: vi.fn(),
 }))
 vi.mock('../lib/supabase', () => ({
   initialAuthType: null,
@@ -33,7 +33,7 @@ vi.mock('../lib/supabase', () => ({
     name === 'library_sync_report_history' ? { reports: [], total: 0 } : [], error: null }), auth: {
     getSession: auth.getSession,
     onAuthStateChange: (cb: typeof auth.listener) => { auth.listener = cb; return { data: { subscription: { unsubscribe: auth.unsubscribe } } } },
-    signInWithPassword: auth.signInWithPassword, signOut: auth.signOut,
+    signUp: auth.signUp, signInWithPassword: auth.signInWithPassword, signOut: auth.signOut,
     resetPasswordForEmail: auth.resetPasswordForEmail, updateUser: auth.updateUser, verifyOtp: auth.verifyOtp,
   } },
 }))
@@ -46,6 +46,7 @@ beforeEach(() => {
   auth.session = null
   auth.listener = null
   auth.getSession.mockImplementation(async () => ({ data: { session: auth.session }, error: null }))
+  auth.signUp.mockResolvedValue({ data: { session: null, user: { id: 'new-account' } }, error: null })
   auth.signInWithPassword.mockResolvedValue({ error: null })
   auth.signOut.mockImplementation(async () => { auth.listener?.('SIGNED_OUT', null); return { error: null } })
   auth.resetPasswordForEmail.mockResolvedValue({ error: null })
@@ -284,4 +285,26 @@ it('offers retained access after an expired online session', async () => {
   await userEvent.click(await screen.findByRole('link', { name: 'Open Retained Offline Hub' }))
   expect(await screen.findByRole('heading', { name: 'Offline' })).toBeVisible()
   expect(screen.getByText(/Account operations require an online sign-in/)).toBeVisible()
+})
+
+it('creates an email/password/username account and waits for confirmation',async()=>{
+ const user=userEvent.setup();render(<App />)
+ await user.click(await screen.findByRole('button',{name:'Create Account'}))
+ expect(screen.getByRole('heading',{name:'Create Account'})).toBeVisible()
+ await user.type(screen.getByLabelText('Email Address'),'new@example.com')
+ await user.type(screen.getByLabelText('Username',{exact:true}),'NewReader')
+ await user.type(screen.getByLabelText('Password'),'StrongPassword123!')
+ await user.click(screen.getByRole('button',{name:'Create Account'}))
+ expect(auth.signUp).toHaveBeenCalledWith({email:'new@example.com',password:'StrongPassword123!',options:{data:{username:'NewReader'},emailRedirectTo:'http://localhost:3000/auth/callback'}})
+ expect(await screen.findByRole('status')).toHaveTextContent('Check your email to confirm')
+ expect(screen.getByLabelText('Password')).toHaveValue('')
+ expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+})
+it('verifies signup confirmation without asking for a replacement password',async()=>{
+ window.history.replaceState(null,'','/auth/callback?token_hash=signup-token&type=signup')
+ auth.verifyOtp.mockImplementation(async()=>{auth.listener?.('SIGNED_IN',fakeSession);return {error:null}})
+ render(<App />)
+ expect(await screen.findByRole('heading',{name:'Currently Reading'})).toBeVisible()
+ expect(auth.verifyOtp).toHaveBeenCalledWith({token_hash:'signup-token',type:'signup'})
+ expect(screen.queryByLabelText('New Password')).not.toBeInTheDocument()
 })

@@ -1,5 +1,7 @@
 # Beyond the Archives — Phase 1 Report
 
+This is a historical Phase 1 record. For current setup and account creation, use [Run Locally](../README.md#run-locally) and [Supabase setup](IMPLEMENTATION.md#set-up-supabase); the invitation-only instructions below describe the original phase.
+
 Phase 1 of the supplied **AO3 Implementation Plan** and **AO3 Project Specification**, presented as **Beyond the Archives**. React, TypeScript, Vite, Tailwind CSS, and Supabase PostgreSQL. Hosting is prepared for Vercel, as specified in the PDF.
 
 The code foundation is implemented; a hosted Supabase project and production deployment have **not** been provisioned. Phase 2 has not started. Navigation destinations deliberately show planned features rather than story-management controls.

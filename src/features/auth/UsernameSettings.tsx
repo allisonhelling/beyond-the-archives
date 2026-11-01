@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ChangeEventHandler } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../../types/database'
+import { accountUsernamePattern } from '../../lib/auth-account'
+
+export function AccountUsernameField({ value, onChange, disabled, auth = false }: { value?: string; onChange?: ChangeEventHandler<HTMLInputElement>; disabled: boolean; auth?: boolean }) {
+ const label = auth ? 'Username' : 'Account Username'
+ return <label className={auth ? 'account-auth-field' : undefined}>{!auth && label}<input className={auth ? 'account-auth-input' : undefined} aria-label={label} placeholder={auth ? label : undefined} name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={value} onChange={onChange} required minLength={3} maxLength={30} pattern={accountUsernamePattern} disabled={disabled} /></label>
+}
 
 export function UsernameSettings({ client, disabled = false }: { client: SupabaseClient<Database> | null; disabled?: boolean }) {
  const [username, setUsername] = useState(''), [busy, setBusy] = useState(false)
@@ -34,7 +40,7 @@ export function UsernameSettings({ client, disabled = false }: { client: Supabas
    finally { setBusy(false) }
   })()
  }}>
-  <label>Account Username<input name="username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required minLength={3} maxLength={30} pattern="[A-Za-z0-9_]{3,30}" disabled={disabled || busy || loading} /></label>
+  <AccountUsernameField value={username} onChange={event => setUsername(event.target.value)} disabled={disabled || busy || loading} />
   <p className="field-help">Choose 3–30 letters, numbers, or underscores. Usernames ignore case. Your email also works for sign-in.</p>
   <div className="form-actions"><button className="button primary" disabled={disabled || busy || loading}>{busy ? 'Saving…' : 'Save Username'}</button></div>
   {error && <p className="error-message" role="alert">{error}</p>}

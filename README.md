@@ -2,7 +2,7 @@
 
 **A PRIVATE AO3 ORGANIZER**
 
-A private application for organizing AO3 works and series, tracking reading progress, and keeping your own notes, ratings, tags, and collections. Use an invited account with Supabase, or try the local sample library without signing in.
+A private application for organizing AO3 works and series, tracking reading progress, and keeping your own notes, ratings, tags, and collections. Create a shared organizer/reader account with Supabase, or try the local sample library without signing in.
 
 Hover or focus an information icon for help. Help boxes expand to fit their text. Click an icon to keep its help box open; click again or press Escape to close it.
 
@@ -72,7 +72,7 @@ EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:5173
 
 Without valid public configuration, the app shows a setup screen. Server secret/service-role keys belong only in server configuration, never in `VITE_` variables. Restart Vite after changing `.env.local`.
 
-Open local Studio at `http://127.0.0.1:54323` to invite a development user. Invitation and recovery emails appear at `http://127.0.0.1:54324`. Follow the invitation to set a password; public registration is disabled. The [Supabase setup guide](docs/IMPLEMENTATION.md#set-up-supabase) covers Auth configuration and operator invitations.
+Have the project owner approve your email for the private beta, then choose **Create Account** in either app with your email, password, and username. Confirmation, invitation, and recovery emails appear at `http://127.0.0.1:54324`; local Studio is at `http://127.0.0.1:54323`. Confirm your email before signing in. The [Supabase setup guide](docs/IMPLEMENTATION.md#set-up-supabase) covers Auth configuration, [beta approvals](docs/IMPLEMENTATION.md#private-beta-signup), and operator invitations.
 
 ### Start Each Local Session
 
@@ -157,7 +157,7 @@ This deletes local library entries and test accounts and reapplies migrations. U
 
 ### Sign In and Find Settings
 
-Use the invitation link to set your password, then sign in. There is no public registration. Open the profile-icon menu for **Settings**, account details, password recovery, and **Log Out**.
+Use your approved private-beta email with **Create Account**, a password, and a unique username, then confirm your email. Or choose **Continue From Reader** to use an existing reader account. In the reader, **Continue From Organizer** uses an existing organizer account. Both apps share one account per email in the same backend project, with separate sessions and library data; continuing does not copy or merge libraries. Open the profile-icon menu for **Settings**, account details, password recovery, and **Log Out**.
 
 ### Add and Recover Works
 
@@ -272,7 +272,7 @@ The reader’s **Profile Menu** shares the organizer’s formatting and shows ic
 
 The reader’s [Calibre companion](companions/calibre/README.md) sends selected or all existing EPUBs through a paired cloud inbox or local reader bridge. Automatic delivery follows the reader’s cloud account independently of organizer connection, and offline cloud uploads stay queued for that account. Both paths share the reader’s duplicate/version/history behavior. The companion guide covers ZIP installation, pairing, metadata mapping, and local reception requirements.
 
-The reader accepts the same invited account email/password as the organizer, supports password recovery and Remember Me session choice, and can restore an enabled organizer connection on other signed-in devices. Connected apps can continue sign-in from each other, with a popup fallback for browser privacy restrictions. The shared sign-in forms accept Username or Email with a password, Remember Me, and Forgot Your Password. Create or change your username in Settings → Account & Security or Reader Account; email sign-in remains available. Recovery requires an email address, with Back to Sign In below Send Recovery Link; Continue From Reader sits to the left of the organizer sign-in button. See [reader account setup](reader/docs/IMPLEMENTATION.md#connected-accounts-and-login-handoffs). Saved series names on reader work tiles open the matching saved works through the existing Series filter; remove its chip to return to the shelf.
+The reader accepts the same account username or email/password as the organizer, supports password recovery and Remember Me session choice, and can restore an enabled organizer connection on other signed-in devices. Connected apps can continue sign-in from each other, with a popup fallback for browser privacy restrictions. Continue From Organizer/Reader works independently of organizer synchronization. If Remember Me is unchecked, keep the signed-in source app tab open while continuing. The shared sign-in forms accept Username or Email with a password, Remember Me, and Forgot Your Password. Create or change your username in Settings → Account & Security or Reader Account; email sign-in remains available. An organizer connects only to its matching reader account; that account can use multiple devices. Guest reading stays local and requires sign-in before organizer connection or sync. Recovery requires an email address, with Back to Sign In below Send Recovery Link; Continue From Reader sits to the left of the organizer sign-in button. See [reader account setup](reader/docs/IMPLEMENTATION.md#connected-accounts-and-login-handoffs). Saved series names on reader work tiles open the matching saved works through the existing Series filter; remove its chip to return to the shelf.
 
 Both apps offer **Tag Format → All Tags Order** with up/down buttons for category ordering. Additional Tags is first by default. Save organizer changes with **Save**; reader changes save immediately and can follow the linked organizer.
 

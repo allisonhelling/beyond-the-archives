@@ -91,3 +91,32 @@ it('replaces only the old credential registered to the same reader installation'
  expect(await live(first.secret!)).toBe(0);expect(await live(replacement)).toBe(1);expect(await live(independent.secret!)).toBe(1)
  await asUser()
 })
+
+it('redeems explicit handoffs without an organizer association while keeping automatic login gated',async()=>{
+ await db.exec('reset role')
+ await db.query('delete from public.reader_organizer_links where user_id=$1',[other])
+ const code='e'.repeat(64),challenge='f'.repeat(64),origin='https://reader.example'
+ await db.query('insert into public.app_login_handoffs(code_hash,challenge,user_id,target_origin,user_requested) values($1,$2,$3,$4,true)',[code,challenge,other,origin])
+ await db.exec('set role service_role')
+ const consume=async(proof=challenge,target=origin)=>(await db.query<{id:string|null}>('select public.consume_app_login_handoff($1,$2,$3) id',[code,proof,target])).rows[0].id
+ expect(await consume('a'.repeat(64))).toBeNull();expect(await consume(challenge,'https://attacker.example')).toBeNull()
+ expect(await consume()).toBe(other);expect(await consume()).toBeNull()
+ await db.query('insert into public.app_login_handoffs(code_hash,challenge,user_id,target_origin) values($1,$2,$3,$4)',[code,challenge,other,origin])
+ expect(await consume()).toBeNull()
+ await db.exec('reset role')
+ expect((await db.query('select * from public.reader_organizer_links where user_id=$1',[other])).rows).toEqual([])
+ await asUser()
+})
+
+it('validates the matching reader account before consuming a pairing code',async()=>{
+ await asUser(other)
+ const code=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Account Validation') result")).rows[0].result.code
+ expect(await connection('validate',null,code)).toEqual({userId:other})
+ await asUser();await expect(connection('validate',null,code)).rejects.toThrow('matching reader account')
+ await expect(connection('validate',null,'invalid')).rejects.toThrow('matching reader account')
+ await db.exec('reset role')
+ expect((await db.query("select paired from public.userscript_devices where secret_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",[code])).rows).toEqual([{paired:false}])
+ await db.query("update public.userscript_devices set expires_at=now()-interval '1 second' where secret_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",[code])
+ await asUser(other);await expect(connection('validate',null,code)).rejects.toThrow('matching reader account')
+ await asUser()
+})

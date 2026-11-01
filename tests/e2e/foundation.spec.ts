@@ -2,7 +2,7 @@ import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page } from '@playwright/test'
 
 const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
-const token = () => `${btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${btoa(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }))}.test-signature`
+const token = () => `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.test-signature`
 
 async function mockAuth(page: Page) {
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', route => { const name=new URL(route.request().url()).pathname.split('/').pop()!; return route.fulfill({json:libraryQueryFixture(name,route.request().method()==='POST'?route.request().postDataJSON():{}, {})??[]}) })
@@ -284,4 +284,34 @@ test('lets users create their login username in Account settings',async({page})=
  await expect(page.getByRole('status').filter({hasText:'Username saved.'})).toBeVisible()
  expect(username).toBe('MyReader')
  await page.reload();await expect(input).toHaveValue('MyReader')
+})
+
+test('creates a shared account or continues with an existing reader account',async({page})=>{
+ let input:unknown,redirect=''
+ await page.route('**/auth/v1/signup*',route=>{input=route.request().postDataJSON();redirect=new URL(route.request().url()).searchParams.get('redirect_to')??'';return route.fulfill({json:{user:{...user,id:'new-account',identities:[{id:'new-identity'}]},session:null}})})
+ await page.goto('/')
+ await page.getByRole('button',{name:'Create Account',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Continue From Reader',exact:true})).toBeVisible()
+ await page.getByLabel('Email Address',{exact:true}).fill('new@example.com')
+ await page.getByLabel('Username',{exact:true}).fill('NewReader')
+ await page.getByLabel('Password',{exact:true}).fill('StrongPassword123!')
+ await page.getByRole('button',{name:'Create Account',exact:true}).click()
+ await expect(page.getByRole('status')).toContainText('Check your email to confirm')
+ expect(input).toMatchObject({email:'new@example.com',password:'StrongPassword123!',data:{username:'NewReader'}})
+ expect(redirect).toBe(`${new URL(page.url()).origin}/auth/callback`)
+ await expect(page.getByLabel('Password',{exact:true})).toHaveValue('')
+ await page.getByRole('button',{name:'Back to Sign In',exact:true}).click()
+ await expect(page.getByRole('heading',{name:'Sign In',exact:true})).toBeVisible()
+})
+
+test('reuses a reader account from organizer Create Account without signing up again',async({page,context})=>{
+ let signups=0
+ await page.route('**/auth/v1/signup*',route=>{signups++;return route.fulfill({status:400,json:{message:'Should reuse existing account'}})})
+ await context.route('**/auth/bridge',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>const target=opener;if(target){addEventListener('message',event=>{if(event.source===target&&event.data.kind==='connected-login-request')target.postMessage({kind:'connected-login-result',nonce:event.data.nonce,code:'${'b'.repeat(64)}'},event.origin)});target.postMessage({kind:'connected-login-ready'},'http://127.0.0.1:4173')}</script>`}))
+ await page.route('**/functions/v1/app-login',route=>route.fulfill({json:{access_token:token(),refresh_token:'reader-account-refresh'}}))
+ await page.goto('/')
+ await page.getByRole('button',{name:'Create Account',exact:true}).click()
+ await page.getByRole('button',{name:'Continue From Reader',exact:true}).click()
+ await expect(page.getByRole('heading',{name:'Currently Reading',exact:true})).toBeVisible()
+ expect(signups).toBe(0)
 })

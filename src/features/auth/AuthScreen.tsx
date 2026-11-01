@@ -1,4 +1,5 @@
-import { BackToSignIn, SignInFields } from './SignInFields'
+import { AccountModeSwitch, SignInFields, type AccountMode } from './SignInFields'
+import { accountConfirmationMessage, createAccount } from '../../lib/auth-account'
 import { remembersSession, rememberSession } from '../../lib/auth-session-storage'
 import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
 import { useActivity } from '../../lib/use-activity'
@@ -12,9 +13,9 @@ import { brandName } from '../../lib/brand'
 
 export function AuthScreen() {
   const { error: sessionError, needsPassword, passwordSaved, signIn } = useAuth()
-  const [mode, setMode] = useState<'login' | 'reset'>('login')
+  const [mode, setMode] = useState<AccountMode>('login')
   const [email, setEmail] = useState(sampleMode ? 'Sample' : '')
-  const [password, setPassword] = useState('')
+  const [password, setPassword] = useState(''), [username, setUsername] = useState('')
   const [remember, setRemember] = useState(() => remembersSession('organizer'))
   const [busy, setBusy] = useState(false)
   useActivity(Boolean(busy), 'Signing in or updating your account…')
@@ -22,8 +23,9 @@ export function AuthScreen() {
   const [message, setMessage] = useState<string | null>(null)
   const configured = sampleMode || Boolean(supabase)
 
-  function toggleMode() {
-    setMode(mode === 'login' ? 'reset' : 'login'); setError(null); setMessage(null); setPassword('')
+  function changeMode(next: AccountMode) {
+    setMode(next); setError(null); setMessage(null); setPassword('')
+    if (next !== 'login' && !email.includes('@')) setEmail('')
   }
 
   async function submit(event: FormEvent) {
@@ -31,7 +33,10 @@ export function AuthScreen() {
     if (!configured || busy) return
     setBusy(true); setError(null); setMessage(null)
     try {
-      if (sampleMode && mode === 'reset') {
+      if (mode === 'signup' && !needsPassword) {
+        if (sampleMode) setMessage('Account creation is unavailable in the sample preview. Sign in with Sample and password 123.')
+        else if (supabase) { await createAccount(supabase, email, password, username, authRedirectUrl()); setPassword(''); setMessage(accountConfirmationMessage) }
+      } else if (sampleMode && mode === 'reset') {
         setMessage('Sample preview: no recovery email is sent. Sign in with Sample and password 123.')
       } else if (needsPassword && supabase) {
         const { error } = await supabase.auth.updateUser({ password })
@@ -44,8 +49,8 @@ export function AuthScreen() {
       } else {
         await signIn(email, password)
       }
-    } catch {
-      setError(sampleMode ? 'Could not sign in. Use Sample and password 123.' : needsPassword ? 'Could not save your password. Use at least 12 characters with upper and lower case letters, a number, and a symbol. Your link may have expired.' : mode === 'reset' ? 'Could not send a recovery link. Please try again shortly.' : 'Could not sign in. Check your username or email and password, then try again.')
+    } catch (failure) {
+      setError(mode === 'signup' && failure instanceof Error ? failure.message : sampleMode ? 'Could not sign in. Use Sample and password 123.' : needsPassword ? 'Could not save your password. Use at least 12 characters with upper and lower case letters, a number, and a symbol. Your link may have expired.' : mode === 'reset' ? 'Could not send a recovery link. Please try again shortly.' : 'Could not sign in. Check your username or email and password, then try again.')
     } finally { setBusy(false) }
   }
 
@@ -71,20 +76,20 @@ export function AuthScreen() {
       <section className="auth-card" aria-labelledby="auth-title">
         <div className="small-icon"><LockKeyhole size={20} /></div>
         <span className="eyebrow">YOUR PERSONAL READING SPACE</span>
-        <h2 id="auth-title">{!configured ? 'Your Library Starts Here.' : needsPassword ? 'Make Yourself at Home.' : mode === 'reset' ? 'Find Your Way Back.' : 'Sign In'}</h2>
-        <p className="muted">{!configured ? 'The foundation is ready. Connect your private Supabase project to open your library.' : needsPassword ? 'Set a strong password to secure your private account.' : mode === 'reset' ? 'Enter your account email and we’ll send a recovery link.' : 'Sign in to pick up where you left off.'}</p>
-        {!configured ? <div className="setup-panel"><span className="status-pill">SETUP NEEDED</span><ol><li>Create your Supabase project and apply the migrations.</li><li>Add the public project URL and publishable key to your environment.</li><li>Invite your account, then restart the app.</li></ol><p>Step-by-step instructions are in the project README.</p></div> : <form className="account-auth-form" onSubmit={submit}>
+        <h2 id="auth-title">{!configured ? 'Your Library Starts Here.' : needsPassword ? 'Make Yourself at Home.' : mode === 'reset' ? 'Find Your Way Back.' : mode === 'signup' ? 'Create Account' : 'Sign In'}</h2>
+        <p className="muted">{!configured ? 'The foundation is ready. Connect your private Supabase project to open your library.' : needsPassword ? 'Set a strong password to secure your private account.' : mode === 'reset' ? 'Enter your account email and we’ll send a recovery link.' : mode === 'signup' ? 'Create one account for both apps, or continue with your existing reader account.' : 'Sign in to pick up where you left off.'}</p>
+        {!configured ? <div className="setup-panel"><span className="status-pill">SETUP NEEDED</span><ol><li>Create your Supabase project and apply the migrations.</li><li>Add the public project URL and publishable key to your environment.</li><li>Enable email signup, then restart the app.</li></ol><p>Step-by-step instructions are in the project README.</p></div> : <form className="account-auth-form" onSubmit={submit}>
           {sampleMode && <p className="field-help">Sample login: <strong>Sample</strong> · Password: <strong>123</strong>. Your sample library stays in this browser.</p>}
-          <SignInFields mode={needsPassword ? 'password' : mode} busy={busy} email={email} password={password} onEmailChange={event=>setEmail(event.target.value)} onPasswordChange={event=>setPassword(event.target.value)} remember={remember} onRememberChange={value=>{setRemember(value);rememberSession('organizer',value)}} onToggleMode={toggleMode} />
+          <SignInFields mode={needsPassword ? 'password' : mode} busy={busy} email={email} password={password} username={username} onUsernameChange={event=>setUsername(event.target.value)} onEmailChange={event=>setEmail(event.target.value)} onPasswordChange={event=>setPassword(event.target.value)} remember={remember} onRememberChange={value=>{setRemember(value);rememberSession('organizer',value)}} onToggleMode={()=>changeMode('reset')} />
           {(error || sessionError) && <p className="error-message" role="alert">{error || sessionError}</p>}
           {message && <p className="success-message" role="status">{message}</p>}
           <div className="account-auth-actions">
-          {!needsPassword && mode === 'login' && <button type="button" className="button secondary" disabled={busy} onClick={() => void continueFromReader()}>Continue From Reader</button>}
-          <button className="button primary" disabled={busy} type="submit">{busy ? 'Please Wait…' : needsPassword ? 'Save Password' : mode === 'reset' ? 'Send Recovery Link' : 'Sign In'}<ArrowRight size={17} /></button>
+          {!needsPassword && mode !== 'reset' && <button type="button" className="button secondary" disabled={busy} onClick={() => void continueFromReader()}>Continue From Reader</button>}
+          <button className="button primary" disabled={busy} type="submit">{busy ? 'Please Wait…' : needsPassword ? 'Save Password' : mode === 'reset' ? 'Send Recovery Link' : mode === 'signup' ? 'Create Account' : 'Sign In'}<ArrowRight size={17} /></button>
           </div>
-          {!needsPassword && mode === 'reset' && <BackToSignIn busy={busy} onClick={toggleMode} />}
+          {!needsPassword && <AccountModeSwitch mode={mode} busy={busy} onChange={changeMode} />}
         </form>}
-        <div className="invite-note"><LockKeyhole size={14} /><span>Invitation only. Your library is never public.</span></div>
+        <div className="invite-note"><LockKeyhole size={14} /><span>One account for both apps. Your library is never public.</span></div>
       </section>
     </main>
     <footer className="public-footer"><span>{brandName}</span><span>An independent reading companion. Not affiliated with AO3.</span></footer>

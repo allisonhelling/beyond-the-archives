@@ -66,7 +66,8 @@ test('uses fresh pages online while retaining the prepared shell offline', async
   await expect(page.getByRole('heading', { name: 'Outdated Cached Reader' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
-  await expect(page.getByLabel('Pairing Code', { exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog',{name:'Reader Account & Cloud Library'})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Create Account',exact:true})).toBeVisible()
   await expect(page.getByLabel('Backend URL', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Public API Key', { exact: true })).toHaveCount(0)
   await page.evaluate(async () => {

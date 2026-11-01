@@ -1,3 +1,4 @@
+import { organizerAccount, owner } from './account-fixture'
 import { test, expect, type Page } from '@playwright/test'
 import { blankMetadata } from '../../../src/features/library/model'
 import { chapterVersion } from '../../src/epub'
@@ -7,10 +8,10 @@ import { metadataVersion } from '../../src/metadata'
 async function seedLegacy(page: Page, count: number, connected = false) {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'The Bookshelf' })).toBeVisible()
-  await page.evaluate(async ({ metadata, version, chapterVersion, count, connected }) => {
-    await new Promise<void>((resolve, reject) => { const request = indexedDB.deleteDatabase('bta-reader'); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error) })
+  await page.evaluate(async ({ metadata, version, chapterVersion, count, connected, dbName }) => {
+    await new Promise<void>((resolve, reject) => { const request = indexedDB.deleteDatabase(dbName); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error) })
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('bta-reader', 1)
+      const request = indexedDB.open(dbName, 1)
       request.onupgradeneeded = () => { for (const name of ['books', 'pending', 'settings']) request.result.createObjectStore(name, { keyPath: 'id' }) }
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error)
     })
@@ -18,6 +19,8 @@ async function seedLegacy(page: Page, count: number, connected = false) {
       const tx = db.transaction(['books', 'pending', 'settings'], 'readwrite')
       for (let index = 0; index < count; index++) {
         const id = String(index).padStart(6, '0'), chapter = `chapter:${id}`
+        // Cloud originals are already present; measure organizer pulls alone.
+        if(connected)tx.objectStore('settings').put({id:`cloud-file:${id}`,value:true})
         tx.objectStore('books').put({ id, workId: String(index + 1), active: true,
           metadata: { ...metadata, title: `Story ${id}`, authors: ['Test Author'], fandoms: ['Test Fandom'] }, metadataVersion: version, chapterVersion,
           chapters: [{ id: chapter, ao3Id: String(index + 100), number: 1, title: 'Chapter One', html: `<p>Story ${id} prose.</p>`, words: 3, path: 'chapter.xhtml' }],
@@ -30,11 +33,11 @@ async function seedLegacy(page: Page, count: number, connected = false) {
       }
       if (!connected) tx.objectStore('pending').put({ id: 'legacy-pending', book: '000000', work: '1', account: 'legacy-account', base: { id: 'legacy-entry', version: 'v1', status: 'to_read', progress: 0, notes: '' }, input: { notes: 'Queued note' } })
       tx.objectStore('settings').put({ id: 'preferences', value: { content: 'chapter', layout: 'scroll', size: 20, width: 760, dark: false } })
-      if (connected) tx.objectStore('settings').put({ id: 'connection', value: { backend: 'https://organizer.test', key: 'public', secret: 'paired-secret', account: 'test-account', name: 'Test Reader', label: 'Test Account' } })
+      if (connected) tx.objectStore('settings').put({ id: 'connection', value: { backend: 'https://pnrdztfydurupcqwumvr.supabase.co', key: 'public', secret: 'paired-secret', account: 'test-account', name: 'Test Reader', label: 'Test Account' } })
       tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
     })
     db.close()
-  }, { metadata: blankMetadata, version: metadataVersion, chapterVersion, count, connected })
+  }, { metadata: blankMetadata, version: metadataVersion, chapterVersion, count, connected, dbName: connected ? `bta-reader-account:${owner}` : 'bta-reader' })
   await page.addInitScript(() => {
     const counts: Record<string, number> = {}
     Object.assign(window, { readerStorageCalls: counts })
@@ -133,9 +136,10 @@ test('shows browser storage usage and persistence status, including unavailable 
 })
 
 test('rotates bounded sync batches, limits concurrency, and throttles automatic pulls', async ({ page, context }) => {
+  await organizerAccount(context)
   const requested: string[] = []
   let inFlight = 0, maximum = 0
-  await context.route('https://organizer.test/rest/v1/rpc/userscript_library', async route => {
+  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
     const request = route.request().postDataJSON()
     if (request.p_action === 'reader_report') { await route.fulfill({ json: {} }); return }
     requested.push(String(request.p_work)); inFlight++; maximum = Math.max(maximum, inFlight)
@@ -144,10 +148,10 @@ test('rotates bounded sync batches, limits concurrency, and throttles automatic 
     inFlight--
   })
   async function checkpointAfter() {
-    return page.evaluate(async () => {
-      const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+    return page.evaluate(async dbName => {
+      const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(dbName); request.onsuccess = () => resolve(request.result) })
       const value = await new Promise<{value: {after: string}} | undefined>(resolve => { const request = db.transaction('settings').objectStore('settings').get('sync-checkpoint:test-account'); request.onsuccess = () => resolve(request.result) }); db.close(); return value?.value.after
-    })
+    }, `bta-reader-account:${owner}`)
   }
   await seedLegacy(page, 125, true)
   await expect.poll(checkpointAfter).toBe('000049')

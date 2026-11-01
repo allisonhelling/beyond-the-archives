@@ -1,4 +1,3 @@
-import { connectOrganizer } from './library-fixture'
 import { test, expect, type BrowserContext } from '@playwright/test'
 import { account, accountSession, owner, signedIn } from './account-fixture'
 async function backend(context:BrowserContext,linked=false){
@@ -96,7 +95,7 @@ test('automatically opens the reader account through an origin-bound organizer h
  await expect(page.locator('iframe[title="Connected Account Sign-In"]')).toHaveCount(0)
 })
 
-test('offers popup login when the browser cannot use the embedded organizer session',async({page,context})=>{
+for(const mode of ['login','signup']) test(`offers popup login from ${mode} when the browser cannot use the embedded organizer session`,async({page,context})=>{
  await backend(context,true)
  await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>{
   const popup=route.request().frame().parentFrame()===null
@@ -104,6 +103,7 @@ test('offers popup login when the browser cannot use the embedded organizer sess
  })
  await context.route('**/functions/v1/app-login',route=>route.fulfill({json:{access_token:accountSession().access_token,refresh_token:'popup-refresh'}}))
  await page.goto('/');await account(page)
+ if(mode==='signup')await page.getByRole('button',{name:'Create Account',exact:true}).click()
  await page.getByRole('button',{name:'Continue From Organizer',exact:true}).click()
  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('reader-cloud-owner')).catch(()=>null)).toBe(owner)
 })
@@ -126,17 +126,16 @@ test('shares one browser installation across legacy guest and account libraries'
   })
  },{owner,guest,accountId})
  await page.goto('/')
- await connectOrganizer(page)
- await expect.poll(()=>reports.length).toBeGreaterThan(0)
- expect(reports[0].installationId).toBe(guest)
- expect(reports[0].previousInstallationIds).toContain(accountId)
+ await expect(page.getByRole('heading',{name:'The Bookshelf',exact:true})).toBeVisible()
+ expect(reports).toHaveLength(0)
  await account(page)
  await page.getByLabel('Username or Email',{exact:true}).fill('reader@example.com')
  await page.getByLabel('Password',{exact:true}).fill('ValidPassword123!')
  await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Sign In',exact:true}).click()])
  await expect.poll(()=>devices.length).toBeGreaterThan(0)
  expect(devices.every(id=>id===guest)).toBe(true)
- await expect.poll(()=>reports.length).toBeGreaterThan(1)
+ await expect.poll(()=>reports.length).toBeGreaterThan(0)
+ expect(reports[0].previousInstallationIds).toContain(accountId)
  expect(reports.every(report=>report.installationId===guest)).toBe(true)
  expect(await page.evaluate(()=>localStorage.getItem('bta:reader-installation:v1'))).toBe(guest)
 })
@@ -161,4 +160,121 @@ test('lets the signed-in reader create and change a username',async({page,contex
  expect(username).toBe('MyReader')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click();await account(page)
  await expect(input).toHaveValue('MyReader')
+})
+
+test('shows a useful failure when the organizer cannot issue a login ticket',async({page,context})=>{
+ await backend(context,true)
+ await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>const target=opener;addEventListener('message',event=>{if(event.source===target&&event.data.kind==='connected-login-request')target.postMessage({kind:'connected-login-result',nonce:event.data.nonce,error:'unavailable'},event.origin)});if(target)target.postMessage({kind:'connected-login-ready'},'http://127.0.0.1:4174');</script>`}))
+ await page.goto('/');await account(page)
+ await page.getByRole('button',{name:'Continue From Organizer',exact:true}).click()
+ await expect(page.getByRole('status').filter({hasText:'The other app could not complete sign-in.'})).toBeVisible()
+ await expect(page.getByRole('button',{name:'Continue From Organizer',exact:true})).toBeEnabled()
+})
+
+test('creates a reader account with email, password, and username without opening guest files',async({page,context})=>{
+ await backend(context)
+ let input:unknown,redirect=''
+ await context.route('**/auth/v1/signup*',route=>{input=route.request().postDataJSON();redirect=new URL(route.request().url()).searchParams.get('redirect_to')??'';return route.fulfill({json:{user:{...accountSession().user,identities:[{id:'new-identity'}]},session:null}})})
+ await page.goto('/');await account(page)
+ await page.getByRole('button',{name:'Create Account',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Continue From Organizer',exact:true})).toBeVisible()
+ await page.getByLabel('Email Address',{exact:true}).fill('new@example.com')
+ await page.getByLabel('Username',{exact:true}).fill('NewReader')
+ await page.getByLabel('Password',{exact:true}).fill('StrongPassword123!')
+ await page.getByRole('button',{name:'Create Account',exact:true}).click()
+ await expect(page.getByRole('status').filter({hasText:'Check your email to confirm'})).toBeVisible()
+ expect(input).toMatchObject({email:'new@example.com',password:'StrongPassword123!',data:{username:'NewReader'}})
+ expect(redirect).toBe(`${new URL(page.url()).origin}/auth/callback`)
+ expect(await page.evaluate(()=>localStorage.getItem('reader-cloud-owner'))).toBeNull()
+ await expect(page.getByLabel('Password',{exact:true})).toHaveValue('')
+})
+
+test('confirms signup and opens the account library without replacing the chosen password',async({page,context})=>{
+ await backend(context)
+ let verification:unknown
+ await context.route('**/auth/v1/verify',route=>{verification=route.request().postDataJSON();return route.fulfill({json:accountSession()})})
+ await page.goto('/auth/callback?token_hash=signup-confirmation&type=signup')
+ await expect.poll(()=>page.evaluate(()=>localStorage.getItem('reader-cloud-owner')).catch(()=>null)).toBe(owner)
+ expect(verification).toMatchObject({token_hash:'signup-confirmation',type:'signup'})
+ await account(page)
+ await expect(page.getByLabel('New Password',{exact:true})).toHaveCount(0)
+ await expect(page.getByText('Saved Account Library',{exact:false})).toContainText('reader@example.com')
+})
+
+test('rejects a different organizer account before claiming a code or saving a connection',async({page,context})=>{
+ await signedIn(context);await backend(context)
+ let claims=0
+ await context.route('**/rest/v1/rpc/reader_organizer_connection',route=>{
+  const input=route.request().postDataJSON()
+  if(input.p_action==='validate')return route.fulfill({status:403,json:{code:'42501',message:'This organizer can connect only to its matching reader account. Sign in with the same account in both apps.'}})
+  return route.fulfill({json:{enabled:false}})
+ })
+ await context.route('**/rest/v1/rpc/userscript_library',route=>{claims++;return route.fulfill({json:{entry:null}})})
+ await page.goto('/')
+ await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
+ await page.getByRole('button',{name:'Connect Organizer',exact:true}).click()
+ await page.getByLabel('Pairing Code',{exact:true}).fill('a'.repeat(64))
+ await page.getByRole('dialog').getByRole('button',{name:'Connect Organizer',exact:true}).click()
+ await expect(page.getByRole('status').filter({hasText:'matching reader account'})).toBeVisible()
+ expect(claims).toBe(0)
+ const saved=await page.evaluate(async owner=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open(`bta-reader-account:${owner}`);request.onsuccess=()=>resolve(request.result)})
+  try{return await new Promise(resolve=>{const request=db.transaction('settings').objectStore('settings').get('connection');request.onsuccess=()=>resolve(request.result??null)})}finally{db.close()}
+ },owner)
+ expect(saved).toBeNull()
+})
+
+test('keeps guest reading local and defers an organizer pairing until the matching account signs in',async({page,context})=>{
+ await backend(context)
+ let claims=0
+ await context.route('**/rest/v1/rpc/userscript_library',route=>{
+  const input=route.request().postDataJSON()
+  if(input.p_action==='claim'){claims++;return route.fulfill({json:{secret:'b'.repeat(64),userId:owner}})}
+  return route.fulfill({json:{entry:null}})
+ })
+ await page.goto('/')
+ await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
+ await page.getByRole('button',{name:'Connect Organizer',exact:true}).click()
+ await expect(page.getByRole('dialog',{name:'Reader Account & Cloud Library'})).toBeVisible()
+ await expect(page.getByLabel('Pairing Code',{exact:true})).toHaveCount(0)
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await page.evaluate(pairing=>{location.hash=new URLSearchParams({readerPairing:JSON.stringify(pairing)}).toString()}, {url:'https://pnrdztfydurupcqwumvr.supabase.co',key:'sb_publishable_test_only',code:'a'.repeat(64)})
+ await expect(page.getByRole('dialog',{name:'Reader Account & Cloud Library'})).toBeVisible()
+ await expect.poll(()=>page.evaluate(()=>Boolean(sessionStorage.getItem('reader:pending-pairing')))).toBe(true)
+ expect(claims).toBe(0)
+ expect(new URL(page.url()).hash).toBe('')
+ await page.getByLabel('Username or Email',{exact:true}).fill('reader@example.com')
+ await page.getByLabel('Password',{exact:true}).fill('ValidPassword123!')
+ await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Sign In',exact:true}).click()])
+ await expect.poll(()=>claims).toBe(1)
+ expect(await page.evaluate(()=>localStorage.getItem('reader-cloud-owner'))).toBe(owner)
+ expect(await page.evaluate(()=>sessionStorage.getItem('reader:pending-pairing'))).toBeNull()
+})
+
+test('preserves guest books and old queued edits without contacting the organizer',async({page,context})=>{
+ const {importBook}=await import('./library-fixture')
+ await backend(context)
+ let organizerCalls=0
+ await context.route('**/rest/v1/rpc/userscript_library',route=>{organizerCalls++;return route.fulfill({json:{entry:null}})})
+ await page.goto('/');await importBook(page,'Local Guest Story')
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open('bta-reader');request.onsuccess=()=>resolve(request.result)})
+  await new Promise<void>(resolve=>{
+   const tx=db.transaction(['settings','pending'],'readwrite')
+   tx.objectStore('settings').put({id:'connection',value:{backend:'https://pnrdztfydurupcqwumvr.supabase.co',key:'sb_publishable_test_only',secret:'a'.repeat(64),account:'legacy-organizer',name:'Legacy Reader',label:'Organizer'}})
+   tx.objectStore('pending').put({id:'old-guest-edit',book:'local-book',account:'legacy-organizer',work:'8001',input:{notes:'Keep my guest note'},base:{}})
+   tx.oncomplete=()=>{db.close();resolve()}
+  })
+ })
+ await page.reload();await expect(page.getByRole('button',{name:'Local Guest Story',exact:true})).toBeVisible()
+ await expect(page.locator('.reader-account-state')).toHaveText('Guest · Local Only')
+ expect(organizerCalls).toBe(0)
+ const retained=await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open('bta-reader');request.onsuccess=()=>resolve(request.result)})
+  try{return await new Promise(resolve=>{const request=db.transaction('pending').objectStore('pending').get('old-guest-edit');request.onsuccess=()=>resolve(request.result?.input.notes)})}finally{db.close()}
+ })
+ expect(retained).toBe('Keep my guest note')
+ await context.setOffline(true)
+ await page.getByRole('button',{name:'Local Guest Story',exact:true}).click()
+ await expect(page.getByLabel('Book Content')).toBeVisible()
 })

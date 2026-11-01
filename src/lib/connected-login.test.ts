@@ -43,3 +43,21 @@ it('does not automatically sign back in after explicit sign-out, or accept a bri
  window.dispatchEvent(new MessageEvent('message',{origin,source:window,data:{kind:'connected-login-request',challenge:'a'.repeat(64),nonce:'b'.repeat(64)}}))
  expect(invoke).not.toHaveBeenCalled()
 })
+
+it.each([
+ ['signed-out','Keep its signed-in tab open'],
+ ['access-denied','Check its reader access'],
+ ['unavailable','The other app could not complete sign-in'],
+])('reports %s popup failures instead of silently closing',async(error,message)=>{
+ const tab={close:vi.fn(),postMessage:vi.fn(),location:{replace:vi.fn()}} as unknown as Window
+ vi.spyOn(window,'open').mockReturnValue(tab)
+ vi.mocked(tab.location.replace).mockImplementation(()=>{
+  window.dispatchEvent(new MessageEvent('message',{origin,source:tab,data:{kind:'connected-login-ready'}}))
+ })
+ vi.mocked(tab.postMessage).mockImplementation(data=>{
+  const request=data as {nonce:string}
+  queueMicrotask(()=>window.dispatchEvent(new MessageEvent('message',{origin,source:tab,data:{kind:'connected-login-result',nonce:request.nonce,error}})))
+ })
+ await expect(connectedLogin(client,origin,true)).rejects.toThrow(message)
+ expect(tab.close).toHaveBeenCalled();expect(setSession).not.toHaveBeenCalled()
+})

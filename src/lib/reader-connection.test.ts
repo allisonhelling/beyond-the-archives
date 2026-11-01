@@ -24,3 +24,15 @@ it('permits HTTPS and local reader origins while rejecting unsafe destinations',
   expect(readerBaseUrl('http://127.0.0.1:5174').origin).toBe('http://127.0.0.1:5174')
   for (const url of ['javascript:alert(1)', 'http://reader.example', 'https://user:pass@reader.example']) expect(() => readerBaseUrl(url)).toThrow()
 })
+
+it('keeps a pairing link in this tab through sign-in and expires it after five minutes',async()=>{
+ const {deferReaderPairing,consumePendingReaderPairing}=await import('./reader-connection')
+ deferReaderPairing(pairing)
+ expect(consumePendingReaderPairing()).toEqual(pairing)
+ expect(consumePendingReaderPairing()).toBeUndefined()
+ deferReaderPairing(pairing)
+ const stored=JSON.parse(sessionStorage.getItem('reader:pending-pairing')!)
+ sessionStorage.setItem('reader:pending-pairing',JSON.stringify({...stored,expires:Date.now()-1}))
+ expect(consumePendingReaderPairing()).toBeUndefined()
+ expect(sessionStorage.getItem('reader:pending-pairing')).toBeNull()
+})

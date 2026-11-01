@@ -25,6 +25,12 @@ const admin = createClient(url, secretKey, options)
 const anonymous = createClient(url, publicKey, options)
 const tables = ['works', 'library_entries', 'authors', 'work_authors', 'fandoms', 'work_fandoms', 'tags', 'work_tags', 'collections', 'collection_works', 'personal_tags', 'library_entry_tags']
 const users = []
+const approvedEmails = []
+async function approveEmail(email) {
+  const result = await admin.from('beta_signup_allowlist').insert({ email })
+  assert.equal(result.error, null)
+  approvedEmails.push(email)
+}
 const cleanup = { works: [], authors: [], fandoms: [], tags: [] }
 let passed = 0
 let stage = 'initializing local test fixtures'
@@ -39,6 +45,7 @@ try {
     stage = `creating local test account ${index}`
     const email = `phase1-${randomUUID()}@example.test`
     const password = `Test-${randomUUID()}!Aa1`
+    await approveEmail(email)
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true })
     assert.ok(!created.error, `Could not create test account (Auth status ${created.error?.status ?? 'unknown'}, code ${created.error?.code ?? 'unknown'})`)
     const userId = created.data.user.id
@@ -221,12 +228,28 @@ try {
     assert.ok(!refreshed.error)
     assert.equal((await list(alice)).length,3)
   })
-  await check('public registration is disabled', async () => {
-    const signup = await anonymous.auth.signUp({ email: `blocked-${randomUUID()}@example.test`, password: `Test-${randomUUID()}!Aa1` })
-    // Track an unexpected account so a failed security assertion still cleans it up.
+  await check('unapproved direct API signup is rejected by the beta hook', async () => {
+    const email = `denied-${randomUUID()}@example.com`
+    const signup = await anonymous.auth.signUp({ email, password: `Test-${randomUUID()}!Aa1` })
     if (signup.data.user) users.push({ id: signup.data.user.id, client: anonymous })
-    assert.ok(signup.error, 'Public registration unexpectedly succeeded')
-    assert.equal(signup.error.code, 'signup_disabled', 'Registration must be rejected by the signup policy, not a disabled provider or invalid input')
+    assert.equal(signup.error?.message, 'Private beta: this email address has not been approved for account creation.')
+    assert.equal(signup.data.user, null)
+    assert.equal(signup.data.session, null)
+  })
+  await check('approved email signup reserves a username and requires confirmation', async () => {
+    const username = `New_${randomUUID().replaceAll('-', '').slice(0, 20)}`
+    const email = `signup-${randomUUID()}@example.com`
+    await approveEmail(email)
+    const signup = await anonymous.auth.signUp({ email, password: `Test-${randomUUID()}!Aa1`, options: { data: { username } } })
+    if (signup.data.user) users.push({ id: signup.data.user.id, client: anonymous })
+    assert.equal(signup.error, null)
+    assert.ok(signup.data.user)
+    assert.equal(signup.data.session, null, 'Public registration must require email confirmation')
+    const confirmed = await admin.auth.admin.updateUserById(signup.data.user.id, { email_confirm: true })
+    assert.equal(confirmed.error, null)
+    const resolved = await admin.rpc('account_login_email', { p_username: username.toLowerCase() })
+    assert.equal(resolved.error, null)
+    assert.equal(resolved.data, signup.data.user.email)
   })
   console.log(`${passed} live Supabase integration checks passed.`)
 } catch (error) {
@@ -247,5 +270,6 @@ try {
   for (const [table, ids] of Object.entries(cleanup)) {
     if (ids.length && (await admin.from(table).delete().in('id', ids)).error) cleanupFailed = true
   }
+  if (approvedEmails.length && (await admin.from('beta_signup_allowlist').delete().in('email', approvedEmails)).error) cleanupFailed = true
   if (cleanupFailed) { console.error('Test cleanup incomplete. Reset the local development database.'); process.exitCode = 1 }
 }

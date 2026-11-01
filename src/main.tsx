@@ -1,4 +1,4 @@
-import { isLoginBridge, readerAppUrl, serveConnectedLogin } from './lib/connected-login'
+import { isLoginBridge, readerAppUrl, serveConnectedLogin, serveConnectedLoginInTab } from './lib/connected-login'
 import { supabase } from './lib/supabase'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -13,6 +13,8 @@ const root = createRoot(document.getElementById('root')!)
 const localPreview = import.meta.env.DEV
   && isLocalApp()
   && window.self === window.top
+
+if (!isLoginBridge() && supabase) serveConnectedLoginInTab(supabase, readerAppUrl())
 
 if (isLoginBridge()) {
   if (supabase) serveConnectedLogin(supabase, readerAppUrl())

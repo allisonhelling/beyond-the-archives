@@ -1,3 +1,4 @@
+import { organizerAccount, owner } from './account-fixture'
 import { connectOrganizer } from './library-fixture'
 import { test, expect, type Page } from '@playwright/test'
 import { hostedOrganizer, readerPairingUrl } from '../../../src/lib/reader-connection'
@@ -80,6 +81,7 @@ test('missing work deep links resolve locally without authentication', async ({ 
   await expect(page.getByRole('heading', { name: 'The Bookshelf' })).toBeVisible()
 })
 test('persists offline reading updates and retries them once without duplicating read events', async ({ page, context }) => {
+  await organizerAccount(context)
   let remote = { id: 'entry-1', version: 'v1', status: 'to_read', progress: 0, notes: '', collections: [], tags: [] }
   let reads = 0
   const requests: Record<string, unknown>[] = []
@@ -770,6 +772,7 @@ test('offers all organizer tag styles plus the filled-chip default and persists 
 })
 
 test('opts into organizer formats, refreshes changes, caches them offline, and restores independent settings on unlink', async ({ page, context }) => {
+  await organizerAccount(context)
   let remote = { shape: 'sharp', colors: { tags: '#123456' }, order:['characters','tags','relationships','categories','warnings'] }, tagGets = 0
   await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
     if (route.request().postDataJSON().p_action === 'tag_get') { tagGets++; await route.fulfill({ json: { tagAppearance: remote } }) }
@@ -859,6 +862,7 @@ test('waits for Apply with the panel hidden and preserves results for invalid dr
   await expect(page.locator('.story-card')).toHaveCount(0)
 })
 test('reports verified local files by stable installation identity and replaces reports after removal', async ({ page, context }) => {
+  await organizerAccount(context)
   await page.setViewportSize({ width: 390, height: 844 })
   const reports: { installationId: string; name: string; works: string[] }[] = []
   await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
@@ -982,7 +986,8 @@ test('repairs a previously saved duplicate chapter ID and retains history offlin
 })
 
 
-test('automatically pairs from an organizer link and preserves an existing connection', async ({ page }) => {
+test('automatically pairs from an organizer link and preserves an existing connection', async ({ page, context }) => {
+  await organizerAccount(context)
   const requests: { p_action: string; p_input: { name?: string; existingSecret?: string } }[] = []
   let paired = false
   await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
@@ -1002,10 +1007,10 @@ test('automatically pairs from an organizer link and preserves an existing conne
   expect(new URL(page.url()).hash).toBe('')
   await expect(dialog).toHaveCount(0)
   await expect.poll(() => requests.some(request => request.p_action === 'reader_report' && request.p_input.name === 'My Reader')).toBe(true)
-  const readConnection = () => page.evaluate(async () => {
-    const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })
+  const readConnection = () => page.evaluate(async dbName => {
+    const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(dbName); request.onsuccess = () => resolve(request.result) })
     return new Promise<unknown>(resolve => { const request = db.transaction('settings').objectStore('settings').get('connection'); request.onsuccess = () => { db.close(); resolve(request.result) } })
-  })
+  }, `bta-reader-account:${owner}`)
   const existing = await readConnection()
   await page.goto(readerPairingUrl('http://127.0.0.1:4174/', { ...hostedOrganizer, code:'c'.repeat(64) }))
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -1017,7 +1022,8 @@ test('automatically pairs from an organizer link and preserves an existing conne
   expect(await readConnection()).toEqual(existing)
 })
 
-test('connects manually with hosted defaults without requesting backend settings', async ({ page }) => {
+test('connects manually with hosted defaults without requesting backend settings', async ({ page, context }) => {
+  await organizerAccount(context)
   await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
   await page.goto('/')
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
@@ -1029,6 +1035,7 @@ test('connects manually with hosted defaults without requesting backend settings
   await expect(page.getByRole('dialog')).toHaveCount(0)
 })
 test('automatically consumes a pairing fragment delivered to an already open reader', async ({ page, context }) => {
+  await organizerAccount(context)
   const calls: string[] = []
   await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
     const input = route.request().postDataJSON()
@@ -1047,6 +1054,7 @@ test('automatically consumes a pairing fragment delivered to an already open rea
   await expect(page.getByLabel('Public API Key', { exact: true })).toHaveCount(0)
 })
 test('groups organizer actions below the credential and copies its value with temporary feedback', async ({ page, context }) => {
+  await organizerAccount(context)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
   await page.goto('/')
@@ -1075,6 +1083,7 @@ test('groups organizer actions below the credential and copies its value with te
 })
 
 test('keeps automatic successful organizer sync quiet and shows manual reports', async ({ page, context }) => {
+  await organizerAccount(context)
   await page.clock.install()
   await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', route => route.fulfill({ json: { entry: null, collections: [] } }))
   await page.goto('/')
@@ -1084,7 +1093,7 @@ test('keeps automatic successful organizer sync quiet and shows manual reports',
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Checked 0 of 0 linked versions.' })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Checked 0 of 0 EPUB versions.' })).toBeVisible()
 })
 
 test('saves independent category colors and uses one color only for Filled Chips', async ({ page }) => {

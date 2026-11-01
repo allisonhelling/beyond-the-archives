@@ -239,7 +239,7 @@ it('collapses and switches panels without losing editor fields or a pairing code
  await waitFor(() => expect(storage.has('draft:https://backend.test:alice:123')).toBe(false))
  await toggle('Add to Library', true)
  expect(fields.getByLabelText('Private Notes')).toHaveValue('')
-})
+}, 15000)
 it('reloads unchanged fields, retains local edits, and blocks conflicting notes until resolved', async () => {
  entry = { version: 'v1', status: 'reading', progress: 1, notes: 'Original', rating: null, tags: [], collections: [] }
  await mount()

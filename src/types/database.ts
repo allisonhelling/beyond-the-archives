@@ -59,6 +59,7 @@ export type Database = {
           user_id: string
           target_origin: string
           expires_at: string
+          user_requested: boolean
         }
         Insert: {
           code_hash: string
@@ -66,6 +67,7 @@ export type Database = {
           user_id: string
           target_origin: string
           expires_at?: string
+          user_requested?: boolean
         }
         Update: {
           code_hash?: string
@@ -73,6 +75,7 @@ export type Database = {
           user_id?: string
           target_origin?: string
           expires_at?: string
+          user_requested?: boolean
         }
         Relationships: [
         ]
@@ -144,6 +147,22 @@ export type Database = {
           attempted_at?: string | null
           lease_token?: string | null
           lease_until?: string | null
+        }
+        Relationships: [
+        ]
+      }
+      beta_signup_allowlist: {
+        Row: {
+          email: string
+          created_at: string
+        }
+        Insert: {
+          email: string
+          created_at?: string
+        }
+        Update: {
+          email?: string
+          created_at?: string
         }
         Relationships: [
         ]
