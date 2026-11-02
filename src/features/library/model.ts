@@ -122,3 +122,9 @@ export function bookmarkRec(entry: Pick<Entry, 'source_bookmark'>): boolean | nu
  const status = (source.status ?? '').split(/\s+/)
  return status.includes('rec') ? true : status.includes('public') && !status.some(value => ['private', 'hidden'].includes(value)) ? false : null
 }
+
+export function savedWorkIdentity(book: { workId: string | null; metadata: Metadata }): string | null {
+ if (book.workId && /^[1-9]\d*$/.test(book.workId) && Number.isSafeInteger(Number(book.workId))) return book.workId
+ if (book.metadata.manual_url) try { return String(parseWorkUrl(book.metadata.manual_url).workId) } catch { /* Unidentified and merged EPUBs stay unlinked. */ }
+ return null
+}

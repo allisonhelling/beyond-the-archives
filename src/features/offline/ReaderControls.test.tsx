@@ -1,12 +1,12 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { ReaderReport } from './storage'
-const mocks=vi.hoisted(()=>({readers:[] as ReaderReport[],connected:undefined as boolean|undefined}))
-vi.mock('./OfflineProvider',()=>({useOffline:()=>({snapshot:{readers:mocks.readers,connected:mocks.connected}})}))
+import type { CloudReaderBook, ReaderReport } from './storage'
+const mocks=vi.hoisted(()=>({readers:[] as ReaderReport[],connected:undefined as boolean|undefined,cloudBooks:[] as CloudReaderBook[],disconnect:vi.fn()}))
+vi.mock('./OfflineProvider',()=>({useOffline:()=>({snapshot:{readers:mocks.readers,connected:mocks.connected,cloudBooks:mocks.cloudBooks},disconnect:mocks.disconnect})}))
 vi.mock('./ConnectReader',()=>({ConnectReader:()=> <button>Connect Reader</button>}))
 import { ReadEpub, ReaderControls } from './ReaderControls'
-beforeEach(()=>{mocks.readers=[];mocks.connected=undefined})
+beforeEach(()=>{mocks.readers=[];mocks.connected=undefined;mocks.cloudBooks=[];mocks.disconnect.mockReset().mockResolvedValue(undefined)})
 const report=(id:string,works:string[]):ReaderReport=>({id,name:id,url:`https://${id}.example/`,works,reportedAt:'2026-11-01T00:00:00Z'})
 it.each([[],[report('empty',[])],[report('other',['456'])]].map(readers=>[readers]))('hides Read EPUB when no reader reports this work',readers=>{
  mocks.readers=readers
@@ -26,11 +26,36 @@ it('hides connection and installation controls when the reader account is connec
  expect(screen.getByRole('heading',{name:'Connected Reader'})).toBeVisible()
  expect(screen.queryByRole('button',{name:'Connect Reader'})).not.toBeInTheDocument()
  expect(screen.queryByRole('combobox',{name:'Reader Installation'})).not.toBeInTheDocument()
- expect(screen.getByText(/No downloaded EPUBs have been reported yet/)).toBeVisible()
+ expect(screen.getByText(/No downloaded or cloud-saved EPUBs are available yet/)).toBeVisible()
 })
 it('offers Connect Reader only when the account has no reader connection',()=>{
  mocks.connected=false
  render(<MemoryRouter><ReaderControls hub /></MemoryRouter>)
  expect(screen.getByRole('button',{name:'Connect Reader'})).toBeVisible()
  expect(screen.queryByRole('combobox',{name:'Reader Installation'})).not.toBeInTheDocument()
+})
+
+it('opens cloud-only works in the reader without calling them downloaded', () => {
+ mocks.connected=true
+ mocks.cloudBooks=[{id:'cloud-book',workId:'123',metadata:{} as CloudReaderBook['metadata'],status:'to_read',notes:'',completedCount:0}]
+ render(<MemoryRouter><ReadEpub workId={123} /><ReaderControls hub /></MemoryRouter>)
+ expect(screen.getByRole('link',{name:'Open in Reader'})).toHaveAttribute('href',expect.stringContaining('?work=123'))
+ expect(screen.queryByRole('link',{name:'Read EPUB'})).not.toBeInTheDocument()
+ expect(screen.getByText(/1 work saved in the reader cloud/)).toBeVisible()
+})
+it('disconnects the account instead of only clearing the retained hub', async () => {
+ mocks.connected=true
+ render(<MemoryRouter><ReaderControls hub /></MemoryRouter>)
+ expect(screen.queryByRole('button',{name:'Clear Retained Hub'})).not.toBeInTheDocument()
+ fireEvent.click(screen.getByRole('button',{name:'Disconnect Reader'}))
+ await waitFor(()=>expect(mocks.disconnect).toHaveBeenCalledOnce())
+ expect(await screen.findByText('Reader disconnected. Books and reading data are preserved.')).toBeVisible()
+})
+
+it('opens an unidentified cloud EPUB by its saved book identity', () => {
+ const id='b'.repeat(64)
+ mocks.connected=true
+ mocks.cloudBooks=[{id,workId:null,metadata:{} as CloudReaderBook['metadata'],status:'to_read',notes:'',completedCount:0}]
+ render(<MemoryRouter><ReadEpub workId={null} bookId={id} /></MemoryRouter>)
+ expect(screen.getByRole('link',{name:'Open in Reader'})).toHaveAttribute('href',expect.stringContaining(`?book=${id}`))
 })

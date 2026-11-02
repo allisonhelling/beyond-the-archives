@@ -1,3 +1,4 @@
+import { blankMetadata } from '../../src/features/library/model'
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
@@ -127,6 +128,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
  tables.works.push({id:'layout-order-work',ao3_work_id:44001,verified_chapters:{},published_chapters:3,is_complete:false})
  tables.library_entries.push({id:'layout-order-entry',work_id:'layout-order-work',original_url:'https://archiveofourown.org/works/44001',reading_status:'reading',last_read_chapter:1,notes:'',metadata_overrides:{title:'Layout Order Story',authors:['Layout Author'],fandoms:['Layout Fandom'],relationship_tags:['A/B','C/D'],character_tags:['Alice','Bob'],additional_tags:['Fluff','Hurt/Comfort','Slow Burn','Found Family'],categories:['Gen'],archive_warnings:['Warning'],published_chapters:3,total_chapters:3}})
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'layout-reader',name:'My Reader',url:'https://archivesunfolded.vercel.app/',reportedAt:'2026-10-30T00:00:00Z',works:['44001']}],stories:[]}}))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>route.fulfill({json:{enabled:true}}))
  await page.goto('/reading');await login(page)
  const card=page.locator('.work-card'),mobile=info.project.name==='mobile'
  await expect(card).toHaveCount(1)
@@ -188,6 +190,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
 test('clears a retired reader installation selection after report cleanup',async({page})=>{
  await fixture(page)
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'current-browser',name:'My Reader',url:'https://archivesunfolded.vercel.app/',reportedAt:'2026-10-31T00:00:00Z',works:[]}],stories:[]}}))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>route.fulfill({json:{enabled:true}}))
  await page.goto('/library');await login(page)
  await page.goto('/offline?reader=retired-library-id')
  await expect(page.getByRole('combobox',{name:'Reader Installation',exact:true})).toHaveCount(0)
@@ -200,6 +203,7 @@ test('exports one work in either format and shows Read EPUB only beside Wayback 
  const tables=await fixture(page)
  let available=false
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'export-reader',name:'My Reader',url:'https://reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]},{id:'second-reader',name:'Second Reader',url:'https://second-reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]}],stories:[]}}))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>route.fulfill({json:{enabled:true}}))
  tables.works.push({id:'export-work',ao3_work_id:99001,verified_chapters:{}})
  tables.library_entries.push({id:'export-entry',work_id:'export-work',original_url:'https://archiveofourown.org/works/99001',reading_status:'reading',last_read_chapter:1,notes:'Saved private note',created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z',metadata_overrides:{title:'Export Example',authors:['Writer'],publication_status:'in_progress',published_chapters:3,total_chapters:5}})
  await page.goto('/library');await login(page)
@@ -272,10 +276,36 @@ test('offline lists downloaded works across installations of the linked reader a
  tables.works.push({id:'offline-work',ao3_work_id:77111,verified_chapters:{}})
  tables.library_entries.push({id:'offline-entry',work_id:'offline-work',reading_status:'reading',last_read_chapter:0,notes:'',created_at:'2026-11-01T00:00:00Z',metadata_overrides:{title:'Downloaded On Another Installation',authors:['Writer']}})
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'empty-first',name:'Empty Installation',url:'https://reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:[]},{id:'downloaded',name:'Downloaded Installation',url:'https://reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:['77111']}],stories:[{id:'offline-entry',metadata:{title:'Downloaded On Another Installation',authors:['Writer'],fandoms:[],ao3_tags:[],summary:'',rating:'',publication_status:'unknown',published_chapters:null,total_chapters:null,word_count:null},work:{ao3_work_id:77111,verified_chapters:{}},collectionIds:[],personalTags:[],reading_status:'reading',last_read_chapter:0,notes:'',created_at:'2026-11-01T00:00:00Z',original_url:'https://archiveofourown.org/works/77111'}]}}))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>route.fulfill({json:{enabled:true}}))
  await page.goto('/library');await login(page)
  await page.goto('/offline')
  await expect(page.getByRole('heading',{name:'Downloaded On Another Installation',exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Connect Reader',exact:true})).toHaveCount(0)
  await expect(page.getByRole('combobox',{name:'Reader Installation',exact:true})).toHaveCount(0)
  await expect(page.getByRole('link',{name:'Read EPUB',exact:true})).toHaveAttribute('href','https://reader.example/?work=77111')
+})
+
+test('offline shows cloud-only reader works and disconnects without deleting books',async({page})=>{
+ await fixture(page)
+ let connected=true
+ const cloudBook={id:'a'.repeat(64),workId:null,metadata:{...blankMetadata,title:'Cloud-Only Reader Story',authors:['Cloud Writer']},status:'to_read',notes:'Saved in the reader',completedCount:0}
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[],stories:[],cloudBooks:connected?[cloudBook]:[]}}))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>{
+  if(route.request().postDataJSON().p_action==='disable')connected=false
+  return route.fulfill({json:{enabled:connected}})
+ })
+ await page.goto('/library');await login(page);await page.goto('/offline')
+ await expect(page.getByRole('heading',{name:'Cloud-Only Reader Story',exact:true})).toBeVisible()
+ await expect(page.getByRole('link',{name:'Open in Reader',exact:true})).toHaveAttribute('href',new RegExp(`\\?book=${cloudBook.id}$`))
+ await expect(page.getByRole('link',{name:'Read EPUB',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('button',{name:'Clear Retained Hub',exact:true})).toHaveCount(0)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+ await page.getByRole('button',{name:'Disconnect Reader',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Connect Reader',exact:true})).toBeVisible()
+ await expect(page.locator('.story-card')).toHaveCount(0)
+ expect(connected).toBe(false)
+ expect(cloudBook.metadata.title).toBe('Cloud-Only Reader Story')
+ await page.reload()
+ await expect(page.getByRole('button',{name:'Connect Reader',exact:true})).toBeVisible()
+ await expect(page.locator('.story-card')).toHaveCount(0)
 })

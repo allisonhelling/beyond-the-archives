@@ -204,3 +204,34 @@ it('preserves saved AO3 series positions from EPUB front matter',()=>{
   {id:100,name:'Second Series',url:'https://archiveofourown.org/series/100',position:4},
  ])
 })
+
+const plainTitlePage = `<html><head><title>Title page</title></head><body>
+<h3><a href="https://archiveofourown.org/works/50225803">Coil</a> by Allegory_for_Hatred</h3>
+<p>Fandoms: 文豪ストレイドッグス | Bungou Stray Dogs, Harry Potter - J. K. Rowling</p>
+<p>Status: Completed</p><p>Published: 2023-09-21</p><p>Updated: 2024-06-05</p>
+<p>Chapters: 33/33</p><p>Words: 312047</p><p>Additional tags: Crossover, Found Family</p>
+<p>Categories: Gen</p><p>Rating: Not Rated</p>
+<p>Series: <a href="https://archiveofourown.org/series/3733633">Magic and Mystery</a> 2</p>
+<div>Summary: <p>A first summary paragraph.</p><p>A second summary paragraph.</p></div>
+</body></html>`
+it('extracts plain paragraph title pages such as Coil without inventing absent statistics', () => {
+ const result=frontMatterMetadata(parse(plainTitlePage),'OEBPS/titlepage.html')
+ expect(result.urls).toEqual(['https://archiveofourown.org/works/50225803'])
+ expect(result.metadata).toMatchObject({fandoms:['文豪ストレイドッグス | Bungou Stray Dogs','Harry Potter - J. K. Rowling'],rating:'Not Rated',publication_status:'complete',published_chapters:33,total_chapters:33,word_count:312047,published_at:'2023-09-21',updated_at:'2024-06-05',publisher:'AO3',categories:['Gen'],additional_tags:['Crossover','Found Family'],series:['Magic and Mystery'],series_memberships:[{id:3733633,position:2}]})
+ expect(result.metadata.summary_html).toContain('<p>A first summary paragraph.</p>')
+ for(const field of ['kudos','bookmark_count','comment_count','hits'] as const) expect(result.metadata[field]).toBeUndefined()
+ expect(frontMatterMetadata(parse('<html><body><p>Words: 999999</p><p>Status: Completed</p></body></html>'),'OEBPS/chapter1.html').metadata).toEqual({})
+})
+it('imports Coil-style source identity and metadata through the complete EPUB path', async () => {
+ const files=epubFiles({source:'urn:uuid:standalone-package',preface:false})
+ const opf=files.find(file=>file.name.endsWith('.opf'))!
+ opf.content=opf.content.replaceAll('preface.xhtml','titlepage.html').replace('Recovered &amp; Remembered','Coil').replace('Recovered Author','Allegory_for_Hatred')
+ const title=files.find(file=>file.name.endsWith('preface.xhtml'))!
+ title.name='OEBPS/titlepage.html';title.content=plainTitlePage
+ const buffer=await epubBuffer(files)
+ const book=await importEpub({size:buffer.byteLength,arrayBuffer:async()=>buffer} as File)
+ expect(book.workId).toBe('50225803')
+ expect(book.metadata).toMatchObject({title:'Coil',authors:['Allegory_for_Hatred'],word_count:312047,publication_status:'complete',fandoms:['文豪ストレイドッグス | Bungou Stray Dogs','Harry Potter - J. K. Rowling']})
+ expect(book.chapters[0].kind).toBe('frontmatter')
+ expect(book.metadataVersion).toBe(metadataVersion)
+})

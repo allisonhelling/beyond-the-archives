@@ -141,6 +141,7 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .dialog-actions, .tile-settings-dialog .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .dialog-actions { margin-top: 20px; }
 .organizer-sync-actions { padding-top: 12px; }
+.transfer-results-tabs { padding-bottom: 16px; }
 .copy-field { display: grid; gap: 8px; }
 .copy-field-control { display: flex; align-items: stretch; min-width: 0; }
 .copy-field-control > input { flex: 1; border-inline-end: 0; border-start-end-radius: 0; border-end-end-radius: 0; }

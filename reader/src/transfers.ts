@@ -91,6 +91,7 @@ export async function processTransfers() {
       next.metadata = {...next.metadata,...mappedMetadata(job.metadata)}
       // Calibre updates replace the prior version using the shared reading-state mapper.
       const result: ImportJob = {...job,hasFile:false,status:duplicate?.hasFile ? 'duplicate' : 'imported',message:duplicate?.hasFile ? 'Existing copy retained.' : previous && previous.id !== next.id ? 'Updated existing EPUB; reading history preserved.' : 'Imported.'}
+      if (next.unavailableImages) result.message += ` ${next.unavailableImages} unavailable image${next.unavailableImages === 1 ? '' : 's'} replaced with placeholders.`
       await transaction([...bookStores,'pending'],tx=>{
         const save = (current = previous) => { writeImport(tx,importedVersion(next,current),current,'delete'); tx.objectStore('settings').put({id:jobKey(job.id),value:result}); tx.objectStore('settings').delete(fileKey(job.id)) }
         if (previous) { const request=tx.objectStore('books').get(previous.id); request.onsuccess=()=>save(request.result) } else save()

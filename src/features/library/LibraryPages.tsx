@@ -172,7 +172,7 @@ function BookSpineFooter({ story, editProgress, caughtUp }: { story: Story; edit
     </div>
   </footer>
 }
-export function StoryCard({ story: candidate, linkId, readOnly = false }: { story: Story; linkId?: string; readOnly?: boolean }) {
+export function StoryCard({ story: candidate, linkId, readOnly = false, readerBookId }: { story: Story; linkId?: string; readOnly?: boolean; readerBookId?: string }) {
   const location = useLocation()
   const story = useStorySnapshot(candidate)!
   if (story.detailsLoaded === false) return <article className="story-card work-card" aria-busy="true"><p role="status">Loading work details…</p></article>
@@ -187,7 +187,7 @@ export function StoryCard({ story: candidate, linkId, readOnly = false }: { stor
       saved: <p className="story-facts">Saved: {formatDateTime(story.created_at)}</p>,
       progress: <> {readOnly ? <p>{statuses[story.reading_status]} · Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</p> : <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} />} </>
     }}</DisplayInfo>
-    {readOnly && <ReadEpub workId={story.work.ao3_work_id} />}
+    {readOnly && <ReadEpub workId={story.work.ao3_work_id} bookId={readerBookId} />}
   </>}</StoryControls></article>
 }
 const shelves = [['all', 'All Works'], ['currently_reading', 'Currently Reading'], ['paused_reading', 'Paused Reading'], ['to_read', 'To Read'], ['finished', 'Finished'], ['did_not_finish', 'Did Not Finish'], ['series', 'Series'],['recs', 'Recs'], ['favorites', 'Favorites'],] as const

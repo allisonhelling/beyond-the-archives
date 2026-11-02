@@ -16,6 +16,15 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 MAX_EPUB = 50 * 1024 * 1024
 MODES = ('Automatic', 'Cloud Inbox', 'Local Reader')
 METADATA_FIELDS = ('title', 'authors', 'publisher', 'language', 'language_code', 'rating', 'summary', 'fandoms', 'additional_tags', 'series')
+RESULT_GROUPS = ('Successful', 'Failed', 'Pending', 'Skipped')
+
+
+def result_group(status):
+    if status in ('imported', 'duplicate'):
+        return 'Successful'
+    if status in ('error', 'cancelled'):
+        return 'Failed'
+    return 'Skipped' if status == 'skipped' else 'Pending'
 
 
 def validate_pair(value):

@@ -102,6 +102,26 @@ class TransferTests(unittest.TestCase):
         self.assertNotEqual(reverted['id'], first['id'])
         self.assertNotEqual(self.store.enqueue(pair(), 'Automatic', 'Story', b'epub bytes', {'title': 'Story'})['id'], first['id'])
 
+    def test_unchanged_calibre_book_keeps_receipt_and_queue_size(self):
+        target = pair(True)
+        metadata = {'_calibre_uuid': str(uuid.uuid4())}
+        first = self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', metadata)
+        self.store.acknowledge(first['id'], {'status': 'imported', 'message': 'Saved'})
+        repeated = self.store.enqueue(target, 'Automatic', 'Story', b'epub bytes', metadata)
+        self.assertEqual(repeated['id'], first['id'])
+        self.assertEqual(len(self.store.jobs()), 1)
+        self.assertFalse((self.store.root / (first['id'] + '.epub')).exists())
+        changed = self.store.enqueue(target, 'Automatic', 'Story', b'updated epub bytes', metadata)
+        self.assertNotEqual(changed['id'], first['id'])
+
+    def test_result_groups_separate_reader_failures_from_successful_deliveries(self):
+        for status in ('imported', 'duplicate'):
+            self.assertEqual(transfer.result_group(status), 'Successful')
+        for status in ('error', 'cancelled'):
+            self.assertEqual(transfer.result_group(status), 'Failed')
+        self.assertEqual(transfer.result_group('queued'), 'Pending')
+        self.assertEqual(transfer.result_group('skipped'), 'Skipped')
+
     def test_rejects_oversize_epubs_and_metadata(self):
         with self.assertRaises(ValueError):
             self.store.enqueue(pair(), 'Automatic', 'Story', b'', {})

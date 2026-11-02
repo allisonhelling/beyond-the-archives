@@ -5,6 +5,8 @@ import { chapterNotesFiles } from '../../../src/test/epub-fixture'
 test('local Calibre deliveries share duplicates, versions, mapping, and durable per-book results',async({page,context})=>{
  const files=chapterNotesFiles(),original=Buffer.from(await createZip(files).arrayBuffer())
  files[2].content=files[2].content.replace('</metadata>','<meta name="revision" content="2"/></metadata>')
+ const chapter=files.find(file=>file.name.endsWith('/chapter.xhtml'))!
+ chapter.content=chapter.content.replace('</body>','<img src="failedtoload https://images.invalid/art.png" alt="Unavailable art"/></body>')
  const newer=Buffer.from(await createZip(files).arrayBuffer())
  const payloads=[original,newer,Buffer.from('invalid EPUB')]
  const receipts=new Map<string,{status:string;message:string}>()
@@ -51,7 +53,13 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  await page.getByRole('button',{name:'Pair Calibre',exact:true}).click()
  await expect(page.getByRole('button',{name:'Check for Incoming Books',exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Cancel Pending Imports',exact:true})).toBeVisible()
+ await expect(page.getByLabel('Calibre Pairing Configuration')).toBeHidden()
+ await expect(page.getByRole('button',{name:'Copy Pairing Configuration',exact:true})).toBeHidden()
+ await page.locator('summary').filter({hasText:/^Pairing Configuration$/}).click()
+ await expect(page.getByLabel('Calibre Pairing Configuration')).toBeVisible()
  const config=JSON.parse(await page.getByLabel('Calibre Pairing Configuration').inputValue())
+ await page.locator('summary').filter({hasText:/^Pairing Configuration$/}).press('Enter')
+ await expect(page.getByLabel('Calibre Pairing Configuration')).toBeHidden()
  expect(config.account).toBe('');expect(config.cloud).toBe(false)
  credential=config.token
  await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
@@ -67,6 +75,7 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  }
  expect(receipts.get('0')?.status).toBe('duplicate')
  expect(receipts.get('1')?.status).toBe('imported')
+ expect(receipts.get('1')?.message).toContain('1 unavailable image replaced with placeholders')
  expect(receipts.get('2')?.status).toBe('error')
  const queued=await page.evaluate(async()=>{
   const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open('bta-reader');request.onsuccess=()=>resolve(request.result)})
@@ -90,6 +99,13 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  await page.getByRole('tab',{name:/Successful/}).click()
  await expect(page.getByRole('tabpanel')).toContainText('story-3.epub · duplicate')
  await expect(page.getByRole('tabpanel')).not.toContainText('story-2.epub')
+ const tabs=page.getByRole('tablist',{name:'Transfer Results'}),panel=page.getByRole('tabpanel')
+ for(const width of [1280,390]) {
+  await page.setViewportSize({width,height:900})
+  const buttons=await tabs.getByRole('tab').evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().bottom))
+  const bounds=(await panel.boundingBox())!
+  expect(bounds.y-Math.max(...buttons)).toBeGreaterThanOrEqual(16)
+ }
  await page.getByRole('tab',{name:/Successful/}).press('ArrowRight')
  await expect(page.getByRole('tab',{name:/Failed/})).toBeFocused()
  await expect(page.getByRole('tabpanel')).toContainText('story-2.epub · error')
@@ -101,6 +117,8 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  await page.getByRole('tab',{name:/Failed/}).click()
  await expect(page.getByText('story-2.epub · error',{exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Retry Import',exact:true})).toBeVisible()
+ await expect(page.getByLabel('Calibre Pairing Configuration')).toBeHidden()
+ await page.locator('summary').filter({hasText:/^Pairing Configuration$/}).click()
  await page.getByRole('button',{name:'Revoke Pairing',exact:true}).click()
  await expect(page.getByRole('button',{name:'Pair Calibre',exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Check for Incoming Books',exact:true})).toHaveCount(0)

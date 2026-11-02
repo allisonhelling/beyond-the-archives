@@ -13,7 +13,7 @@ async function report(works:string[], input:Record<string,unknown>={}) {
 }
 beforeAll(async()=>{
  db=await createTestDatabase()
- await db.exec(`insert into auth.users values('${owner}'),('${other}')`)
+ await db.exec(`insert into auth.users values('${owner}'),('${other}');insert into public.reader_app_access values('${owner}')`)
  await asUser()
  const code=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Reader') result")).rows[0].result.code
  await db.exec('reset role;reset request.jwt.claim.sub;set role anon')
@@ -26,7 +26,7 @@ it('retains named, timestamped reports per installation and scopes snapshots to 
  expect(snapshot.readers[0]).toMatchObject({id:installationId,name:'Laptop Reader',works:['8001']})
  expect(Date.parse(snapshot.readers[0].reportedAt)).toBeGreaterThan(0)
  await asUser(other)
- expect((await db.query<{result:unknown}>('select public.reader_offline_snapshot() result')).rows[0].result).toEqual({readers:[],stories:[]})
+ expect((await db.query<{result:unknown}>('select public.reader_offline_snapshot() result')).rows[0].result).toEqual({readers:[],stories:[],cloudBooks:[]})
  await report([]); await asUser()
  expect((await db.query<{works:string[]}>('select works from public.reader_availability')).rows[0].works).toEqual([])
  await expect(report(['not-a-work'])).rejects.toThrow('Invalid reader report')
@@ -75,4 +75,35 @@ it('cleans known same-browser aliases only for the same owner and origin',async(
  await asUser(other)
  expect((await db.query('select installation_id from public.reader_availability where installation_id=$1',[alias])).rows).toHaveLength(1)
  await expect(report([],{previousInstallationIds:['invalid']})).rejects.toThrow('Invalid previous reader installations')
+})
+
+it('includes active cloud originals with no installation report and excludes deleted, inactive, unuploaded and other-account works', async () => {
+ await db.exec('reset role')
+ await db.query('insert into public.reader_organizer_links(user_id) values($1) on conflict do nothing',[owner])
+ for (const [hash, workId, user] of [['a','8002',owner],['b','8003',owner],['c','8004',owner],['d','8005',other],['e','8006',owner],['f',null,owner]] as const) {
+  await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3)',[user,`${hash.repeat(64)}/manifest`,JSON.stringify({id:hash.repeat(64),workId,active:true,metadata:{title:`Cloud ${workId}`}})])
+  if(hash!=='e') await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${user}/${hash.repeat(64)}.epub`])
+ }
+ await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3),($1,$4,$5)',[owner,`${'b'.repeat(64)}/deleted`,'true',`${'c'.repeat(64)}/active`,'false'])
+ await asUser()
+ const snapshot=(await db.query<{result:{cloudBooks:{workId:string|null}[];stories:{work:{ao3_work_id:number}}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result
+ expect(snapshot.cloudBooks.map(book=>book.workId)).toEqual(['8002',null])
+ expect(snapshot.stories.some(story=>story.work.ao3_work_id===8002)).toBe(true)
+})
+it('disconnects registered and reporting readers, preserves cloud data and other companions, and prevents reconnect through revoked secrets', async () => {
+ await report(['8001']);await asUser()
+ const unrelated=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Browser Companion') result")).rows[0].result.code
+ const registered=(await db.query<{result:{secret:string}}>("select public.reader_organizer_connection('restore',$1) result",[installationId])).rows[0].result.secret
+ await db.exec('reset role')
+ await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3)',[owner,`${'a'.repeat(64)}/notes`,JSON.stringify('Keep my notes')])
+ await asUser()
+ await db.query("select public.reader_organizer_connection('disable')")
+ expect((await db.query<{result:{enabled:boolean}}>("select public.reader_organizer_connection('status') result")).rows[0].result.enabled).toBe(false)
+ expect((await db.query<{result:{readers:unknown[];cloudBooks:unknown[];stories:unknown[]}}>('select public.reader_offline_snapshot() result')).rows[0].result).toEqual({readers:[],cloudBooks:[],stories:[]})
+ await db.exec('reset role')
+ expect((await db.query('select value from public.reader_cloud_values where user_id=$1 and key=$2',[owner,`${'a'.repeat(64)}/notes`])).rows).toEqual([{value:'Keep my notes'}])
+ expect((await db.query('select id from public.library_entries where user_id=$1',[owner])).rows.length).toBeGreaterThan(0)
+ expect((await db.query("select * from public.userscript_devices where secret_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",[unrelated])).rows).toHaveLength(1)
+ await expect(report(['8001'])).rejects.toThrow()
+ await asUser();await expect(db.query("select public.reader_organizer_connection('validate',null,$1)",[registered])).rejects.toThrow()
 })

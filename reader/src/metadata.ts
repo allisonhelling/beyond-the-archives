@@ -10,7 +10,7 @@ export function publisherName(value: string | undefined) {
 export function seriesNames(metadata:ReaderMetadata):string[] {
   return [...new Set([...(metadata.series??[]),...(metadata.series_memberships??[]).map(series=>series.name)].map(name=>name.trim()).filter(Boolean))]
 }
-export const metadataVersion = 4
+export const metadataVersion = 5
 const unique = (values: string[]) => [...new Set(values.map(value => value.trim()).filter(Boolean))]
 const keyOf = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
 export function metadataDate(value: string): string | undefined {
@@ -107,9 +107,10 @@ export function packageMetadata(opf: Document): Partial<ReaderMetadata> {
   }
   return finish(metadata)
 }
-export function frontMatterMetadata(doc: Document): { metadata: Partial<ReaderMetadata>; urls: string[] } {
+export function frontMatterMetadata(doc: Document, path = ''): { metadata: Partial<ReaderMetadata>; urls: string[] } {
   const metadata: Partial<ReaderMetadata> = {}, urls: string[] = []
-  const scope = doc.querySelector('.fff_titlepage, #preface') ?? (doc.querySelector('dl.tags') ? doc.querySelector('body') : null)
+  const plainTitlePage = /(?:^|\/)title[_-]?page\.(?:xhtml|html)$/i.test(path) || /^title\s*page$/i.test(doc.querySelector('head title')?.textContent?.trim() ?? '')
+  const scope = doc.querySelector('.fff_titlepage, #preface') ?? (doc.querySelector('dl.tags') || plainTitlePage ? doc.querySelector('body') : null)
   if (!scope) return { metadata, urls }
   const read = (label: string, fragment: Element) => {
     const links = [...fragment.querySelectorAll('a')].map(el => el.textContent?.trim() ?? '').filter(Boolean)
@@ -128,7 +129,7 @@ export function frontMatterMetadata(doc: Document): { metadata: Partial<ReaderMe
             prefix = (node.textContent ?? '') + prefix
           }
           const position = prefix.match(/Part\s+(\d+)\s+of\s*$/i)
-          memberships.push({ id: series.seriesId, name: link.textContent?.trim() ?? '', url: series.normalizedUrl, position: position ? count(position[1]) ?? null : null })
+          memberships.push({ id: series.seriesId, name: link.textContent?.trim() ?? '', url: series.normalizedUrl, position: position ? count(position[1]) ?? null : count(link.nextSibling?.textContent?.trim() ?? '') ?? null })
         } catch { /* Other series URLs retain their names without inventing positions. */ }
       }
       if (memberships.length) metadata.series_memberships = memberships
@@ -137,9 +138,19 @@ export function frontMatterMetadata(doc: Document): { metadata: Partial<ReaderMe
       try { urls.push(parseWorkUrl(value.replace(/^URL:/i, '').trim()).normalizedUrl) } catch { /* Never infer identity from title or a numeric Story ID. */ }
     }
   }
+  // Some AO3 conversions use plain Label: Value paragraphs instead of definition lists.
+  // Restrict these to a declared title page so chapter prose cannot become metadata.
+  if (plainTitlePage) for (const element of scope.children) {
+    if (!['p', 'div'].includes(element.localName) || element.firstChild?.nodeType !== 3) continue
+    const label = element.firstChild.textContent?.match(/^\s*([A-Za-z][A-Za-z ]{0,40}):\s*/)
+    if (!label) continue
+    const fragment = element.cloneNode(true) as Element
+    fragment.firstChild!.textContent = (fragment.firstChild!.textContent ?? '').slice(label[0].length)
+    read(label[1], fragment)
+  }
   for (const term of scope.querySelectorAll('dt')) if (term.nextElementSibling?.localName === 'dd') read(term.textContent ?? '', term.nextElementSibling)
   // FanFicFare supports both a table title page and repeated bold-label/br entries.
-  if (scope.matches('.fff_titlepage')) {
+  if (scope.matches('.fff_titlepage') || plainTitlePage) {
     for (const label of scope.querySelectorAll('b, strong')) {
       if (!/:\s*$/.test(label.textContent ?? '')) continue
       const cell = label.closest('td'), row = cell?.parentElement
@@ -157,7 +168,7 @@ export function frontMatterMetadata(doc: Document): { metadata: Partial<ReaderMe
       read(label.textContent ?? '', fragment)
     }
     const storyLink = scope.querySelector('h3 a[href], h1 a[href]')
-    if (storyLink) { try { urls.push(parseWorkUrl(storyLink.getAttribute('href') ?? '').normalizedUrl) } catch { /* Other publishers remain standalone. */ } }
+    if (storyLink) { try { urls.push(parseWorkUrl(storyLink.getAttribute('href') ?? '').normalizedUrl); metadata.publisher ??= 'AO3' } catch { /* Other publishers remain standalone. */ } }
   }
   // Work summaries belong to the front matter, never chapter summaries or author notes.
   if (!scope.matches('.fff_titlepage')) {
@@ -179,8 +190,4 @@ export function mergeMetadata<T extends Partial<ReaderMetadata>>(base: T, extra:
   return { ...base, ...fields }
 }
 
-export function savedWorkIdentity(book: { workId: string | null; metadata: ReaderMetadata }): string | null {
- if (book.workId && /^[1-9]\d*$/.test(book.workId) && Number.isSafeInteger(Number(book.workId))) return book.workId
- if (book.metadata.manual_url) try { return String(parseWorkUrl(book.metadata.manual_url).workId) } catch { /* Unidentified and merged EPUBs stay unlinked. */ }
- return null
-}
+export { savedWorkIdentity } from '../../src/features/library/model'
