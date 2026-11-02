@@ -3,7 +3,7 @@ import { importBook } from './library-fixture'
 test('storage table searches, sorts, reorders columns, opens details, and removes selected downloads',async({page})=>{
  await page.goto('/')
  for(const title of ['Zebra','Alpha','Middle'])await importBook(page,title)
- await page.getByRole('button',{name:'Manage Storage',exact:true}).click()
+ await page.getByRole('button',{name:'Storage',exact:true}).click()
  const dialog=page.getByRole('dialog',{name:'Manage Local Storage',exact:true}),table=dialog.getByRole('table',{name:'Library Storage'})
  expect((await dialog.boundingBox())!.width).toBe(page.viewportSize()!.width)
  expect((await dialog.boundingBox())!.height).toBe(page.viewportSize()!.height)
@@ -42,7 +42,7 @@ test('storage table searches, sorts, reorders columns, opens details, and remove
  await expect(dialog.getByRole('button',{name:'Remove Download',exact:true})).toBeDisabled()
  await dialog.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await page.reload()
- await page.getByRole('button',{name:'Manage Storage',exact:true}).click()
+ await page.getByRole('button',{name:'Storage',exact:true}).click()
  expect(await dialog.getByRole('columnheader').allTextContents()).toEqual(names)
  await expect(table.getByRole('columnheader',{name:'Sort By Title'})).toHaveAttribute('aria-sort','descending')
  await page.setViewportSize({width:390,height:844})
@@ -99,7 +99,7 @@ test('profile menu keeps reader settings accessible on desktop and mobile', asyn
   await expect(menu).toHaveCSS('width','280px')
   await expect(menu).toHaveCSS('padding','12px')
   await expect(menu.locator('.profile-identity')).toContainText('Guest Library')
-  for (const name of ['Reader Account','Connect Organizer','Tag Format','Customize Tiles']) {
+  for (const name of ['Reader Account','Organizer & Sync','Tag Format','Customize Tiles']) {
    const option=menu.getByRole('button',{name,exact:true})
    await expect(option).toBeVisible()
    await expect(option.locator('svg[aria-hidden="true"]')).toHaveAttribute('width','17')
@@ -110,7 +110,7 @@ test('profile menu keeps reader settings accessible on desktop and mobile', asyn
   await expect(trigger).toBeFocused()
   await expect(trigger).toHaveAttribute('aria-expanded','false')
   await trigger.click()
-  await page.getByRole('heading',{name:'The Bookshelf',exact:true}).click()
+  await page.mouse.click(4, (page.viewportSize()?.height ?? 900) - 4)
   await expect(trigger).toHaveAttribute('aria-expanded','false')
   await trigger.click()
   await page.getByRole('button',{name:'Tag Format',exact:true}).click()

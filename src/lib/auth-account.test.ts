@@ -23,7 +23,7 @@ it('creates one shared account with username metadata and a confirmation redirec
  const client={auth:{signUp}} as unknown as SupabaseClient
  expect(await createAccount(client,' new@example.com ','StrongPassword123!',' NewReader ','https://reader.example/auth/callback')).toBeNull()
  expect(signUp).toHaveBeenCalledWith({email:'new@example.com',password:'StrongPassword123!',options:{data:{username:'NewReader'},emailRedirectTo:'https://reader.example/auth/callback'}})
- await expect(createAccount(client,'new@example.com','weak','NewReader','https://reader.example')).rejects.toThrow('12 characters')
+ await expect(createAccount(client,'new@example.com','weak','NewReader','https://reader.example')).rejects.toThrow('6 characters')
  await expect(createAccount(client,'new@example.com','StrongPassword123!','invalid name','https://reader.example')).rejects.toThrow('3–30')
  expect(signUp).toHaveBeenCalledTimes(1)
  signUp.mockResolvedValue({data:{session:null},error:{code:'unexpected_failure',message:'private table details'}})
@@ -35,4 +35,11 @@ it('shows the beta rejection returned by Auth without exposing other backend err
  const message = 'Private beta: this email address has not been approved for account creation.'
  const client = { auth: { signUp: vi.fn().mockResolvedValue({ data: { session: null }, error: { message } }) } } as unknown as SupabaseClient
  await expect(createAccount(client, 'unlisted@example.com', 'StrongPassword123!', 'NewReader', 'https://reader.example')).rejects.toThrow(message)
+})
+
+it('requires matching password confirmation',async()=>{
+ const {confirmPassword}=await import('./auth-account')
+ const fields=new FormData();fields.set('password','shorter');fields.set('confirmPassword','different')
+ expect(()=>confirmPassword(fields)).toThrow('Passwords do not match.')
+ fields.set('confirmPassword','shorter');expect(()=>confirmPassword(fields)).not.toThrow()
 })

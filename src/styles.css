@@ -4,6 +4,7 @@
 @import "./components/tooltip.css";
 @import "./components/profile.css";
 @import "./features/library/personal-controls.css";
+@import "./features/library/chapter-progress.css";
 @import "./features/library/work-tile.css";
 @import "./features/library/edit-conflicts.css";
 @import "./features/auth/auth-form.css";
@@ -106,8 +107,8 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .form-actions { padding-top: 12px; }
 .library-toolbar { margin: 24px 0; align-items: end; }
 .library-toolbar label { flex: 1; min-width: 180px; }
-.collection-name-field input, .collection-name-field textarea, .collection-custom-color input[type=text], .library-toolbar input, .library-toolbar select, .story-form input:not([type=checkbox]), .story-form select, .story-form textarea, .status-select select, .progress-popover input { width: 100%; border: 1px solid #dfcbc5; border-radius: 7px; padding: 10px 12px; color: #382b2b; background: var(--color-surface); font: inherit; }
-.collection-name-field, .library-toolbar label, .story-form label, .progress-popover label, .status-select, .browsing-settings > label { display: grid; gap: 7px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); }
+.collection-name-field input, .collection-name-field textarea, .collection-custom-color input[type=text], .library-toolbar input, .library-toolbar select, .story-form input:not([type=checkbox]), .story-form select, .story-form textarea, .status-select select { width: 100%; border: 1px solid #dfcbc5; border-radius: 7px; padding: 10px 12px; color: #382b2b; background: var(--color-surface); font: inherit; }
+.collection-name-field, .library-toolbar label, .story-form label, .status-select, .browsing-settings > label { display: grid; gap: 7px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); }
 .filter-input.select-fit, .story-form select.select-fit { width: max-content; max-width: 100%; }
 .library-heading > div { width: 100%; min-width: 0; }
 .library-heading-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; grid-column: 3; grid-row: 1; justify-self: end; }
@@ -653,8 +654,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 :is(.clickable-text, .text-button:not([aria-expanded], .inline-edit, .inline-edit-icon, .series-summary-controls *), .clear-rating, .foundation-banner > a):is(:hover, :focus-visible):not(:disabled) { color: var(--color-brand-hover); text-decoration: underline; text-underline-offset: 3px; }
 .metadata-link:hover, .chapter-text-link:hover { color: #970000; }
 .chapter-text-link { display: inline-block; margin-top: 14px; font-weight: 600; }
-.chapter-progress-button { padding: 6px 0; min-height: 44px; border: 0; background: transparent; color: #382b2b; font: inherit; text-decoration: underline dotted; text-underline-offset: 4px; }
-.chapter-progress-button:hover, .chapter-progress-button:focus-visible { color: #800020; text-decoration-style: solid; }
 .caught-up-action { background: transparent; border-color: transparent; color: #800020; white-space: nowrap; }
 .caught-up-action:hover:not(:disabled), .caught-up-action:focus-visible { background: var(--color-surface-secondary); border-color: #dfcbc5; }
 .story-actions .read-chapter-button { border-radius: 0; flex: 1 1 130px; }
@@ -686,14 +685,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .filter-default-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-left: auto; justify-content: flex-end; }
 
 /* Chapter progress opens beneath its trigger, like the other menus. */
-.progress-editor { position: relative; min-width: 0; }
-.progress-popover { position: absolute; z-index: 7; top: 100%; left: 0; width: min(200px, calc(100vw - 64px)); max-width: none; margin-top: 6px; padding: 10px; border: 1px solid #dfcbc5; border-radius: var(--radius-surface); color: #382b2b; background: var(--color-surface); box-shadow: 0 6px 16px #97000015; font-size: max(var(--work-tile-min-font-size, 0px), 11px); }
-.progress-popover h2 { font-size: max(var(--work-tile-min-font-size, 0px), 14px); margin-bottom: 8px; }
-.progress-popover label { font-size: max(var(--work-tile-min-font-size, 0px), 11px); gap: 4px; margin-bottom: 8px; }
-.progress-popover input { height: 30px; padding: 5px 7px; margin-top: 0; font-size: max(var(--work-tile-min-font-size, 0px), 12px); border-radius: 4px; }
-.progress-popover p, .progress-popover .error-message { font-size: max(var(--work-tile-min-font-size, 0px), 11px); line-height: 1.4; }
-.progress-popover .form-actions { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.progress-popover .button { width: 100%; min-height: 28px; padding: 5px 4px; font-size: max(var(--work-tile-min-font-size, 0px), 11px); border-radius: 4px; gap: 4px; }
 @media (max-width: 1000px) {
   .reading-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reading-toolbar > .button { grid-column: 1 / -1; grid-row: auto; justify-self: end; }

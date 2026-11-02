@@ -33,8 +33,8 @@ additional_redirect_urls = ["http://127.0.0.1:5173/auth/callback", "http://127.0
 jwt_expiry = 3600
 enable_signup = true
 enable_anonymous_sign_ins = false
-minimum_password_length = 12
-password_requirements = "lower_upper_letters_digits_symbols"
+minimum_password_length = 6
+password_requirements = ""
 
 [auth.hook.before_user_created]
 enabled = true
@@ -44,8 +44,11 @@ uri = "pg-functions://postgres/public/before_user_created"
 # Approved beta addresses use email/password signup with email confirmation.
 enable_signup = true
 enable_confirmations = true
-double_confirm_changes = true
+double_confirm_changes = false
 secure_password_change = true
+
+[auth.email.notification.email_changed]
+enabled = true
 
 [functions.account-status]
 # Handler verifies every bearer token with Supabase Auth; supports modern signing keys.

@@ -96,7 +96,7 @@ it('keeps the bottom page-size control mounted while replacement results load', 
  const bottom = screen.getAllByRole('navigation', { name: 'Result Pages' }).at(-1)!
  const size = within(bottom).getByRole('combobox', { name: 'Works per Page' })
  size.focus()
- vi.mocked(useLibraryResults).mockReturnValue({ loading: true, previousResult: result, retry })
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: true, previousResult: result, range: { start: 1, end: 25 }, retry })
  fireEvent.change(size, { target: { value: '50' } })
  view.rerender(dashboard())
  expect(screen.getAllByRole('navigation', { name: 'Result Pages' })).toHaveLength(2)
@@ -104,6 +104,7 @@ it('keeps the bottom page-size control mounted while replacement results load', 
  expect(size).toHaveFocus()
  expect(size).toHaveValue('50')
  expect(within(bottom).getByRole('status')).toHaveTextContent('Updating…')
+ expect(within(bottom).getByRole('status')).toHaveTextContent('1–25 of 60')
  vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result: { ...result, pages: 2 }, retry })
  view.rerender(dashboard())
  expect(size).toHaveValue('50')

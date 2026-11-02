@@ -1,10 +1,11 @@
 import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page } from '@playwright/test'
 
-const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
+const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', email_confirmed_at: '2026-10-14T12:00:00Z', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
 const token = () => `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.test-signature`
 
 async function mockAuth(page: Page) {
+  await page.route('**/auth/bridge', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Signed Out Reader</title>' }))
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', route => { const name=new URL(route.request().url()).pathname.split('/').pop()!; return route.fulfill({json:libraryQueryFixture(name,route.request().method()==='POST'?route.request().postDataJSON():{}, {})??[]}) })
   await page.route('https://ao3-phase1-test.supabase.co/auth/v1/**', async route => {
     const path = new URL(route.request().url()).pathname
@@ -279,7 +280,10 @@ test('lets users create their login username in Account settings',async({page})=
  })
  await page.goto('/');await signIn(page);await page.goto('/settings#settings-account')
  const input=page.getByLabel('Account Username',{exact:true})
- await expect(input).toBeEnabled();await input.fill('MyReader')
+ await expect(input).toBeEnabled()
+ await expect(input).toHaveAttribute('readonly')
+ await input.locator('..').locator('..').getByRole('button',{name:'Edit',exact:true}).click()
+ await input.fill('MyReader')
  await input.locator('..').locator('..').getByRole('button',{name:'Save Username',exact:true}).click()
  await expect(page.getByRole('status').filter({hasText:'Username saved.'})).toBeVisible()
  expect(username).toBe('MyReader')
@@ -295,6 +299,7 @@ test('creates a shared account or continues with an existing reader account',asy
  await page.getByLabel('Email Address',{exact:true}).fill('new@example.com')
  await page.getByLabel('Username',{exact:true}).fill('NewReader')
  await page.getByLabel('Password',{exact:true}).fill('StrongPassword123!')
+ await page.getByLabel('Confirm Password',{exact:true}).fill('StrongPassword123!')
  await page.getByRole('button',{name:'Create Account',exact:true}).click()
  await expect(page.getByRole('status')).toContainText('Check your email to confirm')
  expect(input).toMatchObject({email:'new@example.com',password:'StrongPassword123!',data:{username:'NewReader'}})

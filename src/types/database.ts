@@ -1367,6 +1367,7 @@ export type Database = {
     Functions: {
       reader_organizer_connection: { Args: { p_action: string; p_installation?: string; p_secret?: string }; Returns: Json }
       consume_app_login_handoff: { Args: { p_hash: string; p_challenge: string; p_origin: string }; Returns: string | null }
+      account_has_password: { Args: Record<PropertyKey, never>; Returns: boolean }
       manage_account_username: { Args: { p_username?: string }; Returns: string | null }
       reader_has_access: { Args: Record<string, never>; Returns: boolean }
       reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number }; Returns: Json }

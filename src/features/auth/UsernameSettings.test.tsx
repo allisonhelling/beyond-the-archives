@@ -11,6 +11,8 @@ it('loads and saves the signed-in user’s username and reports conflicts',async
  render(<UsernameSettings client={client} />)
  const input=screen.getByLabelText('Account Username'),user=userEvent.setup()
  await waitFor(()=>expect(input).toBeEnabled())
+ expect(input).toHaveAttribute('readonly')
+ await user.click(screen.getByRole('button',{name:'Edit'}))
  await user.type(input,'Reader')
  rpc.mockResolvedValueOnce({data:null,error:{code:'23505',message:'private database details'}})
  await user.click(screen.getByRole('button',{name:'Save Username'}))

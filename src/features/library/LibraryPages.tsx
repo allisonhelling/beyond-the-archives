@@ -1,3 +1,4 @@
+import { ChapterProgress } from './ChapterProgress'
 import { ExportWorkMetadata } from './ExportWorkMetadata'
 import { BulletSeparated } from './BulletSeparated'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -34,11 +35,11 @@ import { readingStatusIcons, collectionOrderOptions, orderCollections, moveColle
 import { SeriesNames } from './series/SeriesNames'
 import { MetadataControls, MetadataRefreshButton } from '../imports/MetadataControls'
 import { useMetadataRefresh } from '../imports/useMetadataRefresh'
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, BookOpen, BookX, Check, FileText, FolderPlus, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useLibrary } from './LibraryProvider'
-import { active, ao3Date, ratingLabel, chapterUrl, readChapter, readingUrl, parseLines, savedWorkUrl, statuses, progressReadingStatus, type Collection, type Status, type Story } from './model'
+import { active, ao3Date, ratingLabel, chapterUrl, readChapter, readingUrl, parseLines, savedWorkUrl, statuses, type Collection, type Status, type Story } from './model'
 import { reorderCollections, saveStory, updateEntry } from './repository'
 import { useDismissible } from '../../components/useDismissible'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -69,7 +70,7 @@ export function LibraryBoundary({ children }: { children: ReactNode }) {
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; rec: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode; collectionsField: ReactNode }
 function StoryControls({ story, children, readOnly = false }: { readOnly?: boolean; story: Story; children: (controls: CardControls) => ReactNode }) {
   const { refreshStory, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
-  const [error, setError] = useState(''), [busy, setBusy] = useState(false), [progress, setProgress] = useState(String(story.last_read_chapter))
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   useActivity(Boolean(busy), 'Updating your library…')
   const [conflict, setConflict] = useState<EditConflict | null>(null)
   const blocked = readOnly || busy || Boolean(conflict)
@@ -78,12 +79,8 @@ function StoryControls({ story, children, readOnly = false }: { readOnly?: boole
     if (error instanceof EditConflict) setConflict(error)
     else setError(error instanceof Error ? error.message : fallback)
   }
-  const [progressOpen, setProgressOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [collectionOpen, setCollectionOpen] = useState(false)
-  const progressId = useId()
-  const progressTrigger = useRef<HTMLButtonElement>(null)
-  const progressRef = useDismissible<HTMLDivElement>(progressOpen, () => { setProgressOpen(false); setError('') })
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useDismissible<HTMLDetailsElement>(menuOpen, () => setMenuOpen(false))
   async function change(changes: Parameters<typeof updateEntry>[1], base = editSnapshot(story)) {
@@ -106,11 +103,7 @@ function StoryControls({ story, children, readOnly = false }: { readOnly?: boole
   }
   async function remove() { await removeStory(story); navigate(location.pathname.startsWith('/stories/') ? browsingReturnTo(location.state?.returnTo) : location.pathname + location.search, { replace: !location.pathname.startsWith('/stories/') }) }
   function closeRemoval() { setRemoveOpen(false); menuRef.current?.querySelector('summary')?.focus() }
-  function closeProgress() { setProgressOpen(false); setError(''); progressTrigger.current?.focus() }
-  const editProgress = <div className="progress-editor" ref={progressRef} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeProgress() } }}>
-    <button ref={progressTrigger} className="chapter-progress-button" title="Edit Chapter Progress" aria-label={`Chapter ${story.last_read_chapter} of ${story.metadata.published_chapters ?? '?'} — Edit Progress`} aria-haspopup="dialog" aria-expanded={progressOpen} aria-controls={progressOpen ? progressId : undefined} disabled={blocked} onClick={() => { editBase.current = editSnapshot(story); setProgress(String(story.last_read_chapter)); setError(''); setProgressOpen(!progressOpen) }}><strong>Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</strong></button>
-    {progressOpen && <div id={progressId} role="dialog" aria-modal="false" className="progress-popover" aria-label="Edit Chapter Progress"><form onSubmit={event => { event.preventDefault(); try { if (!progress.trim()) throw new Error('Enter chapters read.'); const reading_status = progressReadingStatus(Number(progress), story.metadata); void change({ last_read_chapter: Number(progress), reading_status }, editBase.current).then(saved => { if (saved) closeProgress() }) } catch (e) { setError((e as Error).message) } }}><h2>Edit Chapter Progress</h2><label>Last Fully Read Chapter<input type="number" autoFocus required min="0" step="1" value={progress} onChange={e => setProgress(e.target.value)} /></label><p>of {story.metadata.total_chapters ?? '?'} · {story.metadata.published_chapters ?? '?'} published</p>{error && <p role="alert" className="error-message">{error}</p>}<div className="form-actions"><button className="button primary" disabled={blocked}>Save Progress</button><button className="button secondary" disabled={blocked} type="button" onClick={closeProgress}>Cancel</button></div></form></div>}
-  </div>
+  const editProgress = <ChapterProgress progress={story.last_read_chapter} metadata={story.metadata} disabled={blocked} onOpen={() => { editBase.current = editSnapshot(story) }} onSave={(progress, reading_status) => change({ last_read_chapter: progress, reading_status }, editBase.current)} />
   const tilePreference = useDisplayPreference('workTile')
   const finished = story.reading_status === 'finished'
   const caughtUpDescription = finished ? 'Begin Re-Reading' : story.metadata.published_chapters === null ? 'Enter published chapter count in details first' : 'Mark all chapters as read'
@@ -142,10 +135,10 @@ function StoryControls({ story, children, readOnly = false }: { readOnly?: boole
       const base = { ...editSnapshot(story), collections: baseline }
       await saveStory({ id: story.id, base, url: savedWorkUrl(story), metadata: story.metadata, metadataChanges: {}, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections, tags: story.personalTags })
     }} />, rating: <StarRating headingClassName="details-control-heading" value={story.personal_rating} disabled={blocked} onEdit={() => { editBase.current = editSnapshot(story) }} onSave={value => change({ personal_rating: value }, editBase.current)} /> })}
-    {conflict && <EditConflictReview key={JSON.stringify(conflict.review)} conflict={conflict} onError={failed} onSaved={async () => { setConflict(null); closeProgress(); await refreshStory(story.id) }} onCancel={() => setConflict(null)} />}
+    {conflict && <EditConflictReview key={JSON.stringify(conflict.review)} conflict={conflict} onError={failed} onSaved={async () => { setConflict(null); await refreshStory(story.id) }} onCancel={() => setConflict(null)} />}
     {collectionOpen && <CollectionMembershipDialog story={story} onClose={() => { setCollectionOpen(false); menuRef.current?.querySelector('summary')?.focus() }} />}
     {removeOpen && <ConfirmationDialog title="Remove from Library?" confirmLabel="Remove from Library" onConfirm={remove} onClose={closeRemoval}><p>Remove “{story.metadata.title}” from your library?</p><p>You can undo this for two minutes.</p></ConfirmationDialog>}
-    {!progressOpen && error && <p className="error-message" role="alert">{error}</p>}
+    {error && <p className="error-message" role="alert">{error}</p>}
   </>
 }
 function BookSpineFooter({ story, editProgress, caughtUp, readAction }: { story: Story; editProgress: ReactNode; caughtUp: ReactNode; readAction?: ReactNode }) {

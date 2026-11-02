@@ -1,14 +1,15 @@
-import { useEffect, useState, type ChangeEventHandler } from 'react'
+import { useEffect, useState, type ReactNode, type ChangeEventHandler } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../../types/database'
 import { accountUsernamePattern } from '../../lib/auth-account'
 
-export function AccountUsernameField({ value, onChange, disabled, auth = false }: { value?: string; onChange?: ChangeEventHandler<HTMLInputElement>; disabled: boolean; auth?: boolean }) {
+export function AccountUsernameField({ value, onChange, disabled, readOnly = false, auth = false }: { value?: string; onChange?: ChangeEventHandler<HTMLInputElement>; disabled: boolean; readOnly?: boolean; auth?: boolean }) {
  const label = auth ? 'Username' : 'Account Username'
- return <label className={auth ? 'account-auth-field' : undefined}>{!auth && label}<input className={auth ? 'account-auth-input' : undefined} aria-label={label} placeholder={auth ? label : undefined} name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={value} onChange={onChange} required minLength={3} maxLength={30} pattern={accountUsernamePattern} disabled={disabled} /></label>
+ return <label className={auth ? 'account-auth-field' : undefined}>{!auth && label}<input className={auth ? 'account-auth-input' : undefined} aria-label={label} placeholder={auth ? label : undefined} name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={value} onChange={onChange} readOnly={readOnly} required minLength={3} maxLength={30} pattern={accountUsernamePattern} disabled={disabled} /></label>
 }
 
-export function UsernameSettings({ client, disabled = false }: { client: SupabaseClient<Database> | null; disabled?: boolean }) {
+export function UsernameSettings({ client, disabled = false, actions }: { actions?: ReactNode; client: SupabaseClient<Database> | null; disabled?: boolean }) {
+ const [editing, setEditing] = useState(false)
  const [username, setUsername] = useState(''), [busy, setBusy] = useState(false)
  const [loading, setLoading] = useState(true), [error, setError] = useState(''), [message, setMessage] = useState('')
  useEffect(() => {
@@ -35,14 +36,14 @@ export function UsernameSettings({ client, disabled = false }: { client: Supabas
      setError(result.error.code === '23505' ? 'That username is already taken.' : result.error.code === '22023' ? 'Use 3–30 letters, numbers, or underscores.' : 'Could not save your username. Please try again.')
      return
     }
-    setUsername(result.data ?? ''); setMessage('Username saved. You can use it to sign in to either app.')
+    setUsername(result.data ?? ''); setEditing(false); setMessage('Username saved. You can use it to sign in to either app.')
    } catch { setError('Could not save your username. Please try again.') }
    finally { setBusy(false) }
   })()
  }}>
-  <AccountUsernameField value={username} onChange={event => setUsername(event.target.value)} disabled={disabled || busy || loading} />
+  <AccountUsernameField readOnly={!editing} value={username} onChange={event => setUsername(event.target.value)} disabled={disabled || busy || loading} />
   <p className="field-help">Choose 3–30 letters, numbers, or underscores. Usernames ignore case. Your email also works for sign-in.</p>
-  <div className="form-actions"><button className="button primary" disabled={disabled || busy || loading}>{busy ? 'Saving…' : 'Save Username'}</button></div>
+  <div className="form-actions"><button type="button" className="button secondary" disabled={disabled || busy || loading} onClick={() => setEditing(true)}>Edit</button><button className="button primary" disabled={disabled || busy || loading || !editing}>{busy ? 'Saving…' : 'Save Username'}</button>{actions}</div>
   {error && <p className="error-message" role="alert">{error}</p>}
   {message && <p role="status">{message}</p>}
  </form>

@@ -1,5 +1,5 @@
 import { AccountModeSwitch, SignInFields, type AccountMode } from './SignInFields'
-import { accountConfirmationMessage, createAccount } from '../../lib/auth-account'
+import { accountConfirmationMessage, confirmPassword, createAccount } from '../../lib/auth-account'
 import { remembersSession, rememberSession } from '../../lib/auth-session-storage'
 import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
 import { useActivity } from '../../lib/use-activity'
@@ -28,14 +28,16 @@ export function AuthScreen() {
     if (next !== 'login' && !email.includes('@')) setEmail('')
   }
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     if (!configured || busy) return
     setBusy(true); setError(null); setMessage(null)
     try {
+      if (needsPassword || mode === 'signup') confirmPassword(new FormData(form))
       if (mode === 'signup' && !needsPassword) {
         if (sampleMode) setMessage('Account creation is unavailable in the sample preview. Sign in with Sample and password 123.')
-        else if (supabase) { await createAccount(supabase, email, password, username, authRedirectUrl()); setPassword(''); setMessage(accountConfirmationMessage) }
+        else if (supabase) { await createAccount(supabase, email, password, username, authRedirectUrl()); setPassword(''); const confirmation = form.elements.namedItem('confirmPassword'); if (confirmation instanceof HTMLInputElement) confirmation.value = ''; setMessage(accountConfirmationMessage) }
       } else if (sampleMode && mode === 'reset') {
         setMessage('Sample preview: no recovery email is sent. Sign in with Sample and password 123.')
       } else if (needsPassword && supabase) {
@@ -50,7 +52,7 @@ export function AuthScreen() {
         await signIn(email, password)
       }
     } catch (failure) {
-      setError(mode === 'signup' && failure instanceof Error ? failure.message : sampleMode ? 'Could not sign in. Use Sample and password 123.' : needsPassword ? 'Could not save your password. Use at least 12 characters with upper and lower case letters, a number, and a symbol. Your link may have expired.' : mode === 'reset' ? 'Could not send a recovery link. Please try again shortly.' : 'Could not sign in. Check your username or email and password, then try again.')
+      setError((mode === 'signup' || needsPassword) && failure instanceof Error ? failure.message : sampleMode ? 'Could not sign in. Use Sample and password 123.' : needsPassword ? 'Could not save your password. Use at least 6 characters. Your link may have expired.' : mode === 'reset' ? 'Could not send a recovery link. Please try again shortly.' : 'Could not sign in. Check your username or email and password, then try again.')
     } finally { setBusy(false) }
   }
 

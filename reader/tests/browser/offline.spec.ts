@@ -1,7 +1,7 @@
-import { organizerAccount, owner } from './account-fixture'
+import { organizerAccount, owner, testOrganizer as hostedOrganizer } from './account-fixture'
 import { connectOrganizer } from './library-fixture'
 import { test, expect, type Page } from '@playwright/test'
-import { hostedOrganizer, readerPairingUrl } from '../../../src/lib/reader-connection'
+import { readerPairingUrl } from '../../../src/lib/reader-connection'
 import { createZip } from '../../../src/lib/zip'
 import { chapterNotesFiles, epubFiles } from '../../../src/test/epub-fixture'
 async function fixture(rich = false) {
@@ -40,11 +40,11 @@ test('imports, reads, changes layout, and cold-starts offline with saved history
   await page.getByRole('combobox', { name: 'Content Shown' }).selectOption('entire')
   await page.getByRole('combobox', { name: 'Reading Layout' }).selectOption('scroll')
   await page.getByLabel('Dark Mode', { exact: true }).check()
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toHaveText('1 / 1 chapter')
-  await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
-  await expect(page.getByRole('button', { name: '✓ Chapter Read' })).toBeVisible()
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 0 / 3')
+  await page.getByRole('button', { name: 'Mark As Read', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeDisabled()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
-  await expect(page.getByText('1 chapter read / 3 chapters')).toBeVisible()
+  await expect(page.getByRole('button',{name:'Chapter 1 of 3 — Edit Progress',exact:true})).toBeVisible()
   const shelfCard = page.locator('.story-card').first()
   for(const width of [390,1280]){
     await page.setViewportSize({width,height:844})
@@ -85,7 +85,7 @@ test('persists offline reading updates and retries them once without duplicating
   let remote = { id: 'entry-1', version: 'v1', status: 'to_read', progress: 0, notes: '', collections: [], tags: [] }
   let reads = 0
   const requests: Record<string, unknown>[] = []
-  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
+  await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
     const request = route.request().postDataJSON()
     if (request.p_action === 'progress' || request.p_action === 'save') {
       requests.push(request.p_input)
@@ -101,8 +101,8 @@ test('persists offline reading updates and retries them once without duplicating
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await chooseChapter(page, 'Chapter 1: Home')
   await context.setOffline(true)
-  await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
-  await expect(page.getByRole('button', { name: '✓ Chapter Read' })).toBeVisible()
+  await page.getByRole('button', { name: 'Mark As Read', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeDisabled()
   await page.reload()
   await expect(page.getByText('1 pending reading updates')).toBeVisible()
   expect(reads).toBe(0)
@@ -286,18 +286,18 @@ test('reuses chapter navigation at both ends without repeating the imported head
   const top = page.getByRole('navigation', { name: 'Top Chapter Navigation', exact: true }), bottom = page.getByRole('navigation', { name: 'Bottom Chapter Navigation', exact: true })
   await expect(top.getByRole('button', { name: 'Previous Chapter', exact: false })).toBeDisabled()
   await top.getByRole('button', { name: 'Next Chapter', exact: false }).click()
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toHaveText('1 / 1 chapter')
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 0 / 3')
   await expect(page.getByRole('heading', { name: 'Chapter 1: Home', exact: true })).toHaveCount(1)
   await expect(page.locator('.section-label')).toHaveCount(0)
   await expect(top.getByRole('button', { name: 'Next Chapter', exact: false })).toBeDisabled()
   await bottom.getByRole('button', { name: 'Previous Chapter', exact: false }).click()
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toHaveText('0 / 1 chapter')
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 0 / 3')
   await page.getByRole('button', { name: 'Aa · Display' }).click()
   await page.getByRole('combobox', { name: 'Content Shown' }).selectOption('entire')
   await expect(top).toHaveCount(2)
   await expect(bottom).toHaveCount(2)
   await top.first().getByRole('button', { name: 'Next Chapter', exact: false }).click()
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toHaveText('1 / 1 chapter')
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 0 / 3')
 })
 
 test('turns pages from the keyboard without content focus and preserves form keyboard behavior', async ({ page }) => {
@@ -360,7 +360,7 @@ test('turns pages from the keyboard without content focus and preserves form key
   await page.getByRole('combobox', { name: 'Reading Layout' }).selectOption('scroll')
   await page.getByRole('button', { name: 'Aa · Display' }).click()
   await page.keyboard.press('ArrowLeft')
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toHaveText('1 / 1 chapter')
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 0 / 3')
   await viewport.hover()
   await page.mouse.wheel(0, 200)
   await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBeGreaterThan(0)
@@ -471,7 +471,7 @@ test('centers chapter titles and keeps chapter progress in the top bar', async (
   await expect(page.locator('.prose').getByRole('heading', { name: 'Chapter 1: Home', exact: true })).toHaveCount(1)
   const navBounds = (await top.boundingBox())!, titleBounds = (await title.boundingBox())!
   expect(Math.abs(titleBounds.x + titleBounds.width / 2 - navBounds.x - navBounds.width / 2)).toBeLessThan(1)
-  await expect(page.getByRole('button', { name: 'Mark Through Ch 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeVisible()
   await expect(page.locator('.chapter-toolbar')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Show Chapter Bar', exact: true })).toHaveCount(0)
   await expect(top).toBeVisible()
@@ -481,7 +481,7 @@ test('centers chapter titles and keeps chapter progress in the top bar', async (
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await expect(page.locator('.chapter-toolbar')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Show Chapter Bar', exact: true })).toHaveCount(0)
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toBeVisible()
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
   await expect(page.getByRole('img', { name: 'Complete on AO3', exact: true })).toBeVisible()
@@ -616,7 +616,7 @@ test('resumes the exact scroll and page position across closing, reload, and dis
   await page.reload()
   await page.getByRole('button', { name: 'Continue Reading', exact: false }).click()
   await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBe(1137)
-  await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
+  await page.getByRole('button', { name: 'Mark As Read', exact: true }).click()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
   await page.getByRole('button', { name: 'Continue Reading', exact: false }).click()
   await expect.poll(() => viewport.evaluate(el => el.scrollTop)).toBe(1137)
@@ -649,10 +649,9 @@ test('labels the viewed chapter and marks it and all earlier chapters read, unde
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'read-through.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await createZip(files).arrayBuffer()) })
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await chooseChapter(page, 'Chapter 2: Away')
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toContainText('2 / 3 chapters')
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toContainText('Ch. 0 / 3')
   const toolbar = page.locator('.reader-toolbar')
-  await expect(toolbar.getByRole('button', { name: 'Mark Chapter Read', exact: true })).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: 'Mark Through Ch 2', exact: true })).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Mark As Read', exact: true })).toBeVisible()
   expect(await toolbar.getByRole('button', { name: '← Bookshelf' }).evaluate(el => el.nextElementSibling?.textContent)).toBe('Contents')
   const contents = page.getByRole('complementary', { name: 'Contents', exact: true })
   for (const width of [1280, 390]) {
@@ -665,13 +664,13 @@ test('labels the viewed chapter and marks it and all earlier chapters read, unde
     const panelBounds = (await contents.boundingBox())!
     expect(panelBounds.x).toBeCloseTo(contentBounds!.x, 0)
     await expect(contents.getByRole('heading', { name: 'Contents', exact: true })).toHaveCSS('font-size', '20px')
-    await expect(page.locator('.reader-toolbar').getByLabel('Chapter Progress', { exact: true })).toBeVisible()
+    await expect(page.locator('.reader-toolbar .chapter-progress-button')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Show Chapter Bar', exact: true })).toHaveCount(0)
     expect(panelBounds.y).toBeCloseTo(contentBounds!.y, 0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
     await page.screenshot({ path: `test-results/contents-panel-${width}.png` })
     await page.keyboard.press('ArrowRight')
-    await expect(page.getByLabel('Chapter Progress', { exact: true })).toContainText('2 / 3 chapters')
+    await expect(page.locator('.reader-toolbar .chapter-progress-button')).toContainText('Ch. 0 / 3')
     await page.keyboard.press('Escape')
     await expect(contents).toHaveCount(0)
     await expect(toolbar.getByRole('button', { name: 'Contents', exact: true })).toBeFocused()
@@ -685,33 +684,32 @@ test('labels the viewed chapter and marks it and all earlier chapters read, unde
   await toolbar.getByRole('button', { name: 'Contents', exact: true }).click()
   await contents.getByRole('button', { name: 'Chapter 3: Return', exact: true }).click()
   await expect(contents).toHaveCount(0)
-  await expect(page.getByLabel('Chapter Progress', { exact: true })).toContainText('3 / 3 chapters')
+  await expect(page.locator('.reader-toolbar .chapter-progress-button')).toContainText('Ch. 0 / 3')
   for (const layout of ['scroll', 'pages']) {
     await page.getByRole('button', { name: 'Aa · Display' }).click()
     await page.getByRole('combobox', { name: 'Reading Layout' }).selectOption(layout)
     await page.getByRole('button', { name: 'Aa · Display' }).click()
     await page.keyboard.press('ArrowLeft')
-    await expect(page.getByLabel('Chapter Progress', { exact: true })).toContainText('2 / 3 chapters')
+    await expect(page.locator('.reader-toolbar .chapter-progress-button')).toContainText('Ch. 0 / 3')
     await page.keyboard.press('ArrowRight')
-    await expect(page.getByLabel('Chapter Progress', { exact: true })).toContainText('3 / 3 chapters')
+    await expect(page.locator('.reader-toolbar .chapter-progress-button')).toContainText('Ch. 0 / 3')
   }
   await page.keyboard.press('ArrowLeft')
   await page.getByRole('button', { name: 'Aa · Display' }).click()
   await page.getByRole('combobox', { name: 'Reading Layout' }).selectOption('scroll')
   await page.getByRole('button', { name: 'Aa · Display' }).click()
-  await expect(toolbar.getByRole('button', { name: 'Mark Through Ch 2', exact: true })).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Mark As Read', exact: true })).toBeVisible()
   const top = page.getByRole('navigation', { name: 'Top Chapter Navigation', exact: true })
   await expect(top.locator('.chapter-number')).toHaveText('Chapter 2: ')
   await expect(top.locator('.chapter-name')).toHaveText('Away')
   expect(await top.locator('.chapter-number').evaluate(el => getComputedStyle(el).textDecorationLine)).toBe('none')
   expect(await top.locator('.chapter-name').evaluate(el => getComputedStyle(el).textDecorationLine)).toContain('underline')
-  await page.getByRole('button', { name: 'Mark Through Ch 2', exact: true }).click()
-  await expect(page.getByRole('button', { name: '✓ Chapter Read' })).toBeVisible()
+  await page.getByRole('button', { name: 'Mark As Read', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeDisabled()
   await chooseChapter(page, 'Chapter 1: Home')
-  await expect(page.getByRole('button', { name: '✓ Chapter Read' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeDisabled()
   await chooseChapter(page, 'Chapter 3: Return')
-  await expect(page.getByRole('button', { name: 'Mark Chapter Read', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Mark Through Ch 3', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeVisible()
 })
 
 test('shows removable applied filters below the box and keeps them visible when filters are hidden', async ({ page }) => {
@@ -774,7 +772,7 @@ test('offers all organizer tag styles plus the filled-chip default and persists 
 test('opts into organizer formats, refreshes changes, caches them offline, and restores independent settings on unlink', async ({ page, context }) => {
   await organizerAccount(context)
   let remote = { shape: 'sharp', colors: { tags: '#123456' }, order:['characters','tags','relationships','categories','warnings'] }, tagGets = 0
-  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
+  await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
     if (route.request().postDataJSON().p_action === 'tag_get') { tagGets++; await route.fulfill({ json: { tagAppearance: remote } }) }
     else await route.fulfill({ json: { entry: null, collections: [] } })
   })
@@ -865,7 +863,7 @@ test('reports verified local files by stable installation identity and replaces 
   await organizerAccount(context)
   await page.setViewportSize({ width: 390, height: 844 })
   const reports: { installationId: string; name: string; works: string[] }[] = []
-  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
+  await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, async route => {
     const request = route.request().postDataJSON()
     if (request.p_action === 'reader_report') reports.push(request.p_input)
     await route.fulfill({ json: { entry: { id: 'entry', version: 'v1', status: 'reading', progress: 0, notes: '' }, collections: [] } })
@@ -933,7 +931,7 @@ test('navigates repeated author notes and identical prose as separate chapters',
   await expect(top.getByRole('button', { name: 'Choose Chapter', exact: true })).toHaveText('Chapter 2')
   await expect(page.getByLabel('Book Content')).toContainText('Repeated chapter prose.')
   await expect(page.getByLabel('Book Content')).toContainText('The same opening author note.')
-  await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
+  await page.getByRole('button', { name: 'Mark As Read', exact: true }).click()
   await page.getByRole('button', { name: '← Bookshelf' }).click()
   await context.setOffline(true)
   await page.reload()
@@ -1027,7 +1025,9 @@ test('connects manually with hosted defaults without requesting backend settings
   await page.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
   await page.goto('/')
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
-  await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
+  await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
+  await page.getByText('Advanced Troubleshooting', {exact:true}).click()
+  await page.getByRole('button', {name:'Enter Legacy Pairing Code',exact:true}).click()
   await expect(page.getByLabel('Backend URL')).toHaveCount(0)
   await expect(page.getByLabel('Public API Key')).toHaveCount(0)
   await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
@@ -1053,7 +1053,7 @@ test('automatically consumes a pairing fragment delivered to an already open rea
   await expect(page.getByLabel('Backend URL', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Public API Key', { exact: true })).toHaveCount(0)
 })
-test('groups organizer actions below the credential and copies its value with temporary feedback', async ({ page, context }) => {
+test('keeps one sync action and hides credential copying and disconnect in advanced troubleshooting', async ({ page, context }) => {
   await organizerAccount(context)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null } }))
@@ -1062,9 +1062,11 @@ test('groups organizer actions below the credential and copies its value with te
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Organizer & Sync' }), actions = dialog.locator('.organizer-sync-actions')
-  await expect(actions.getByRole('button')).toHaveText(['Sync Now', 'Disconnect Organizer'])
+  await expect(actions.getByRole('button')).toHaveText(['Sync Now'])
+  await expect(dialog.getByRole('button',{name:'Disconnect Organizer',exact:true})).toBeHidden()
+  await expect(dialog.getByLabel('Paired Reader Secret',{exact:true})).toBeHidden()
   await expect(actions).toHaveCSS('padding-top', '12px')
-  await dialog.getByText('Reader Connection Credential', { exact: true }).click()
+  await dialog.getByText('Advanced Troubleshooting', { exact: true }).click()
   const field = dialog.getByLabel('Paired Reader Secret', { exact: true }), copy = dialog.getByRole('button', { name: 'Copy Paired Reader Secret', exact: true })
   await expect(field).toHaveAttribute('type', 'password')
   await expect(dialog.getByRole('button', { name: 'Copy Paired Secret', exact: true })).toHaveCount(0)
@@ -1076,16 +1078,14 @@ test('groups organizer actions below the credential and copies its value with te
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await field.inputValue())
   await expect(dialog.getByRole('tooltip')).toHaveText('Copy Paired Reader Secret', { timeout: 4000 })
   await page.setViewportSize({ width: 390, height: 844 })
-  const mobile = await Promise.all([actions.getByRole('button').first().boundingBox(), actions.getByRole('button').last().boundingBox()])
-  expect(mobile[0]!.x).toBeLessThan(mobile[1]!.x)
-  expect(Math.abs(mobile[0]!.y - mobile[1]!.y)).toBeLessThan(1)
+  await expect(actions.getByRole('button',{name:'Sync Now',exact:true})).toBeVisible()
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 })
 
 test('keeps automatic successful organizer sync quiet and shows manual reports', async ({ page, context }) => {
   await organizerAccount(context)
   await page.clock.install()
-  await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', route => route.fulfill({ json: { entry: null, collections: [] } }))
+  await context.route(`${hostedOrganizer.url}/rest/v1/rpc/userscript_library`, route => route.fulfill({ json: { entry: null, collections: [] } }))
   await page.goto('/')
   await connectOrganizer(page)
   await page.clock.runFor(31_000)

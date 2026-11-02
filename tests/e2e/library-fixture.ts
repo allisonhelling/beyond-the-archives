@@ -7,7 +7,8 @@ import { libraryQueryFixture } from './library-query-fixture'
 // Browser contract fixtures persist independently of the page and Auth session.
 // Real PostgreSQL/RLS coverage is in supabase/tests and the local integration runner.
 export async function fixture(page: Page) {
-  const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
+  await page.route('**/auth/bridge', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Signed Out Reader</title>' }))
+  const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', email_confirmed_at: '2026-10-14T12:00:00Z', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
   const token = `${btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${btoa(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }))}.test`
   await page.route('https://ao3-phase1-test.supabase.co/auth/v1/**', route => {
     const path = new URL(route.request().url()).pathname
@@ -20,6 +21,7 @@ export async function fixture(page: Page) {
   await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop()!, body = request.postDataJSON() as Row | null
     const now = new Date().toISOString()
+    if (table === 'reader_organizer_connection') return route.fulfill({ json: { enabled: true, userId: user.id } })
     if (table === 'dnf_cleanup') return route.fulfill({ json: { settings: { enabled: false, hours: 168, protect_favorites: true, protect_personal: true, protect_collections: true }, eligible: 0, protected: 0, waiting: 0, removed: 0 } })
     if (table === 'tag_appearance_settings') {
       let settings = tables.metadata_preferences.find(row => row.user_id === user.id)

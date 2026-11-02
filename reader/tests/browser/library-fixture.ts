@@ -12,7 +12,9 @@ export async function importBook(page:Page,title:string,series?:string,author='R
 
 export async function connectOrganizer(page: Page) {
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
-  await page.getByRole('button', { name: 'Connect Organizer', exact: true }).click()
+  await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
+  await page.getByText('Advanced Troubleshooting', {exact:true}).click()
+  await page.getByRole('button', {name:'Enter Legacy Pairing Code',exact:true}).click()
   await page.getByLabel('Device Name (Optional)', { exact: true }).fill('Test Reader')
   await page.getByLabel('Pairing Code', { exact: true }).fill('a'.repeat(64))
   await page.getByRole('dialog').getByRole('button', { name: 'Connect Organizer', exact: true }).click()

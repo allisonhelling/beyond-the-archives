@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
 import { epubFiles } from '../../../src/test/epub-fixture'
-import { account, owner, signedIn } from './account-fixture'
+import { account, accountSession, owner, signedIn } from './account-fixture'
 type Value={key:string;value:unknown;revision:number}
-test('syncs originals and state without an organizer, downloads on a fresh device, and retains offline account isolation',async({browser})=>{
+test('syncs originals and state while organizer setup is unavailable, downloads on a fresh device, and retains offline account isolation',async({browser})=>{
  test.setTimeout(60000)
  let loseNoteResponse = false, failDelete = false
  const values=new Map<string,Value>(),receipts=new Map<string,Value>(),files=new Map<string,Buffer>()
@@ -12,6 +12,8 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
   const context=await browser.newContext();await signedIn(context)
   await context.route(url => /^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
    const request=route.request(),url=new URL(request.url())
+   if(url.pathname==='/auth/v1/user')return route.fulfill({json:accountSession().user})
+   if(url.pathname==='/rest/v1/rpc/reader_organizer_connection')return route.fulfill({status:503,json:{message:'Organizer setup temporarily unavailable'}})
    if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
    if(url.pathname.includes('/rpc/reader_cloud_apply')){
     const input=request.postDataJSON(),before=values.get(input.p_key)
@@ -51,7 +53,7 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await page.getByLabel('Import EPUB File').setInputFiles({name:'story.epub',mimeType:'application/epub+zip',buffer:file})
  await expect(page.getByLabel('Book Content')).toBeVisible()
  await page.getByRole('button',{name:'← Bookshelf'}).click();await account(page)
- await page.getByRole('button',{name:'Sync Cloud Now'}).click()
+ await page.getByRole('button',{name:'Sync Now'}).click()
  await expect.poll(()=>files.size).toBe(1)
  await expect.poll(()=>[...values.keys()].some(key=>key.endsWith('/manifest'))).toBe(true)
  expect([...values.keys()].some(key=>key.includes('organizer'))).toBe(false)
@@ -61,7 +63,7 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Import Guest Library',exact:true}).click()
  await expect(other.getByRole('button',{name:'Import Guest Library',exact:true})).toBeEnabled()
- await other.getByRole('button',{name:'Sync Cloud Now'}).click()
+ await other.getByRole('button',{name:'Sync Now'}).click()
  await expect(other.getByRole('dialog').getByRole('button',{name:'Download EPUB',exact:true})).toHaveCount(0)
  await other.getByRole('dialog').getByRole('button',{name:'Close Dialog',exact:true}).click()
  await other.locator('.story-card').getByRole('button',{name:'Download EPUB',exact:true}).click()
@@ -84,7 +86,7 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Remove Download',exact:true}).click()
  await expect(other.locator('.story-card .availability')).toHaveText('Available In Cloud')
- await other.getByRole('button',{name:'Manage Storage',exact:true}).click()
+ await other.getByRole('button',{name:'Storage',exact:true}).click()
  const storage=other.getByRole('dialog',{name:'Manage Local Storage',exact:true})
  await expect(storage.locator('td[data-column=library]')).toHaveText('In Cloud')
  await storage.getByLabel('Select Visible Works',{exact:true}).check()
@@ -105,18 +107,18 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  }
  await notes(page,'First device note');await notes(other,'Second device note')
  loseNoteResponse=true
- await account(page);await page.getByRole('button',{name:'Sync Cloud Now'}).click()
- await expect(page.getByRole('dialog').getByRole('status').last()).not.toBeEmpty()
- await expect(page.getByRole('button',{name:'Sync Cloud Now'})).toBeEnabled()
- await page.getByRole('button',{name:'Sync Cloud Now'}).click()
- await expect(page.getByRole('button',{name:'Sync Cloud Now'})).toBeEnabled()
+ await account(page);await page.getByRole('button',{name:'Sync Now'}).click()
+ await expect(page.locator('.toast[role="status"]')).not.toBeEmpty()
+ await expect(page.getByRole('button',{name:'Sync Now'})).toBeEnabled()
+ await page.getByRole('button',{name:'Sync Now'}).click()
+ await expect(page.getByRole('button',{name:'Sync Now'})).toBeEnabled()
  expect([...values.values()].find(row=>row.key.endsWith('/notes'))).toMatchObject({value:'First device note',revision:2})
- await account(other);await other.getByRole('button',{name:'Sync Cloud Now'}).click()
- await expect(other.getByText('Conflicting Notes',{exact:true})).toBeVisible()
+ await account(other);await other.getByRole('button',{name:'Sync Now'}).click()
+ await expect(other.getByText('Conflicting Personal Notes',{exact:true})).toBeVisible()
  await other.getByRole('button',{name:'Use Cloud Version',exact:true}).click()
- await expect(other.getByText('Conflicting Notes',{exact:true})).toHaveCount(0)
+ await expect(other.getByText('Conflicting Personal Notes',{exact:true})).toHaveCount(0)
  await other.getByText('Preserved Conflict Versions',{exact:true}).click()
- await expect(other.getByRole('dialog').locator('pre')).toContainText('Second device note')
+ await expect(other.getByRole('dialog')).toContainText('Second device note')
  await other.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await second.setOffline(true);await other.getByRole('button',{name:/Start Reading|Continue Reading/}).click();await expect(other.getByLabel('Book Content')).toBeVisible()
  await other.getByRole('button',{name:'← Bookshelf'}).click();await account(other)
@@ -160,14 +162,14 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await expect(other.locator('.story-card')).toHaveCount(1)
  failDelete=true
  await second.setOffline(false)
- await account(other);await other.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
- await expect(other.getByRole('dialog').getByRole('status').last()).toContainText('Storage temporarily unavailable')
+ await account(other);await other.getByRole('button',{name:'Sync Now',exact:true}).click()
+ await expect(other.locator('.toast[role="status"]')).toContainText('Storage temporarily unavailable')
  failDelete=false
- await other.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
+ await other.getByRole('button',{name:'Sync Now',exact:true}).click()
  await expect.poll(()=>files.size).toBe(1)
  await expect.poll(()=>[...values.values()].filter(row=>row.value===true && row.key.endsWith('/deleted')).length).toBe(1)
- await page.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
- await expect(page.getByRole('button',{name:'Sync Cloud Now',exact:true})).toBeEnabled()
+ await page.getByRole('button',{name:'Sync Now',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Sync Now',exact:true})).toBeEnabled()
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(1)
  // An explicit reimport starts fresh, rather than restoring deleted notes/history.
@@ -175,7 +177,7 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await other.getByLabel('Import EPUB File').setInputFiles({name:'story.epub',mimeType:'application/epub+zip',buffer:file})
  await expect(other.getByLabel('Book Content')).toBeVisible()
  await other.getByRole('button',{name:'← Bookshelf'}).click()
- await account(other);await other.getByRole('button',{name:'Sync Cloud Now',exact:true}).click()
+ await account(other);await other.getByRole('button',{name:'Sync Now',exact:true}).click()
  await expect.poll(()=>files.size).toBe(2)
  await expect.poll(()=>[...values.values()].find(row=>row.key===`${createHash('sha256').update(file).digest('hex')}/notes`)?.value).toBe('')
  await second.close();await first.close()
@@ -237,7 +239,7 @@ for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and
  await page.getByRole('button',{name:'Save Personal Notes',exact:true}).click()
  await expect(page.getByRole('button',{name:'Close Dialog',exact:true})).toBeEnabled()
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
- await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
+ await page.getByRole('button',{name:'Calibre',exact:true}).click()
  await expect(page.getByRole('button',{name:'Pair Calibre',exact:true})).toBeVisible()
  await page.getByRole('button',{name:'Pair Calibre',exact:true}).click()
  const pairing=JSON.parse(await page.getByLabel('Calibre Pairing Configuration').inputValue())
@@ -259,7 +261,7 @@ for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and
  await page.getByRole('button',{name:'Manage EPUB',exact:true}).click()
  await expect(page.getByRole('textbox',{name:'Personal Notes',exact:true})).toHaveValue('Keep cloud reading data')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
- await page.getByRole('button',{name:'Manage Storage',exact:true}).click()
+ await page.getByRole('button',{name:'Storage',exact:true}).click()
  const storage=page.getByRole('dialog',{name:'Manage Local Storage',exact:true})
  await expect(storage.locator('td[data-column=library]')).toHaveText(cloudOnly?'In Cloud':'Downloaded')
  await storage.getByLabel('Select Visible Works',{exact:true}).check()

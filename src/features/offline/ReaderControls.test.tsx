@@ -5,7 +5,7 @@ import type { CloudReaderBook, ReaderReport } from './storage'
 import { blankMetadata } from '../library/model'
 const mocks=vi.hoisted(()=>({readers:[] as ReaderReport[],connected:undefined as boolean|undefined,cloudBooks:[] as CloudReaderBook[],disconnect:vi.fn()}))
 vi.mock('./OfflineProvider',()=>({useOffline:()=>({snapshot:{readers:mocks.readers,connected:mocks.connected,cloudBooks:mocks.cloudBooks},disconnect:mocks.disconnect})}))
-vi.mock('./ConnectReader',()=>({ConnectReader:()=> <button>Connect Reader</button>}))
+vi.mock('./ConnectReader',()=>({ConnectReader:()=> <button>Open Reader</button>}))
 import { ReadEpub, ReaderControls } from './ReaderControls'
 beforeEach(()=>{mocks.readers=[];mocks.connected=undefined;mocks.cloudBooks=[];mocks.disconnect.mockReset().mockResolvedValue(undefined)})
 const report=(id:string,works:string[]):ReaderReport=>({id,name:id,url:`https://${id}.example/`,works,reportedAt:'2026-11-01T00:00:00Z'})
@@ -26,14 +26,14 @@ it('hides connection and installation controls when the reader account is connec
  mocks.connected=true
  render(<MemoryRouter><ReaderControls hub /></MemoryRouter>)
  expect(screen.getByRole('heading',{name:'Connected Reader'})).toBeVisible()
- expect(screen.queryByRole('button',{name:'Connect Reader'})).not.toBeInTheDocument()
+ expect(screen.queryByRole('button',{name:'Open Reader'})).not.toBeInTheDocument()
  expect(screen.queryByRole('combobox',{name:'Reader Installation'})).not.toBeInTheDocument()
  expect(screen.getByText(/No downloaded or cloud-saved EPUBs are available yet/)).toBeVisible()
 })
-it('offers Connect Reader only when the account has no reader connection',()=>{
+it('offers Open Reader only when the account has no reader connection',()=>{
  mocks.connected=false
  render(<MemoryRouter><ReaderControls hub /></MemoryRouter>)
- expect(screen.getByRole('button',{name:'Connect Reader'})).toBeVisible()
+ expect(screen.getByRole('button',{name:'Open Reader'})).toBeVisible()
  expect(screen.queryByRole('combobox',{name:'Reader Installation'})).not.toBeInTheDocument()
 })
 

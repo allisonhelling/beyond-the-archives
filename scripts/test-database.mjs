@@ -19,7 +19,7 @@ export async function createTestDatabase() {
     create role service_role nologin bypassrls;
     create role supabase_auth_admin nologin;
     create schema auth;
-    create table auth.users (id uuid primary key, invited_at timestamptz, email_confirmed_at timestamptz, is_anonymous boolean default false, email text, raw_app_meta_data jsonb, raw_user_meta_data jsonb);
+    create table auth.users (id uuid primary key, invited_at timestamptz, email_confirmed_at timestamptz, is_anonymous boolean default false, email text, encrypted_password text, raw_app_meta_data jsonb, raw_user_meta_data jsonb);
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema public, auth to anon, authenticated, service_role;

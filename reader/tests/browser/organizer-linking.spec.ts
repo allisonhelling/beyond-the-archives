@@ -18,7 +18,7 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
  const gets: number[] = [], writes: Record<string, unknown>[] = [], reports: string[][] = []
  let missingExists = false
  let remote = { id: 'organizer-8001', version: 'v1', status: 'to_read', progress: 0, notes: 'Organizer note', collections: ['collection-1'] }
- await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library', async route => {
+ await context.route('**/rest/v1/rpc/userscript_library', async route => {
   const request = route.request().postDataJSON()
   if (request.p_action === 'reader_report') { reports.push(request.p_input.works); await route.fulfill({ json: {} }); return }
   if (request.p_action === 'get') gets.push(request.p_work)
@@ -36,7 +36,7 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
   if (title === 'Read Before Pairing') {
    await page.getByRole('button', { name: 'Contents', exact: true }).click()
    await page.getByRole('complementary').getByRole('navigation', { name: 'Contents', exact: true }).getByRole('button').last().click()
-   await page.getByRole('button', { name: 'Mark Chapter Read', exact: true }).click()
+   await page.getByRole('button', { name: 'Mark As Read', exact: true }).click()
    // Unmapped chapter completion opens the existing Manage EPUB dialog.
    await expect(page.getByRole('dialog', { name: 'Manage EPUB', exact: true })).toBeVisible()
    await page.getByRole('textbox', { name: 'Personal Notes', exact: true }).fill('Keep my local note')
@@ -105,12 +105,12 @@ test('pulls AO3 chapter progress into the downloaded EPUB and opens the requeste
  await organizerAccount(context)
  let remote={id:'organizer-8001',version:'v1',status:'to_read',progress:0,notes:''}
  const writes:Record<string,unknown>[]=[],cloudFields=new Map<string,unknown>()
- await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/reader_cloud_apply',async route=>{
+ await context.route('**/rest/v1/rpc/reader_cloud_apply',async route=>{
   const input=route.request().postDataJSON()
   cloudFields.set(input.p_key,input.p_value)
   return route.fulfill({json:{key:input.p_key,value:input.p_value,revision:input.p_base+1}})
  })
- await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library',async route=>{
+ await context.route('**/rest/v1/rpc/userscript_library',async route=>{
   const request=route.request().postDataJSON()
   if(request.p_action==='reader_report')return route.fulfill({json:{}})
   if(request.p_action!=='get'){writes.push(request.p_input);remote={...remote,...request.p_input,version:'reader-save'}}
@@ -136,9 +136,9 @@ test('pulls AO3 chapter progress into the downloaded EPUB and opens the requeste
  expect(writes).toHaveLength(0)
  await page.goto('/?work=8001&chapter=3')
  await expect(page.getByLabel('Book Content')).toBeVisible()
- await expect(page.getByLabel('Chapter Progress')).toHaveText('3 / 3 chapters')
- await expect(page.getByRole('button',{name:'Mark Chapter Read',exact:true})).toBeEnabled()
- await page.getByRole('button',{name:'Mark Chapter Read',exact:true}).click()
+ await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 2 / 3')
+ await expect(page.getByRole('button',{name:'Mark As Read',exact:true})).toBeEnabled()
+ await page.getByRole('button',{name:'Mark As Read',exact:true}).click()
  await expect.poll(()=>writes.length).toBe(1)
  expect(writes[0]).toMatchObject({progress:3,status:'finished'})
  remote={...remote,version:'ao3-reread',status:'re_reading',progress:0}

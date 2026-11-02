@@ -60,7 +60,7 @@ export function BrowserBarSettings() {
   </form>
   {message && <p role="status" className="muted">{message}</p>}
   </fieldset>
-  <fieldset className="settings-subsection"><legend><h3>EPUB Reader</h3></legend><p>Connect archives unfolded to this organizer. Confirm the connection in the reader; EPUB files stay on that device.</p><ConnectReader /></fieldset>
+  <fieldset className="settings-subsection"><legend><h3>EPUB Reader</h3></legend><p>Open archives unfolded with your shared account. Organizer sync is enabled automatically after sign-in; choose which EPUBs to download in the reader.</p><ConnectReader /></fieldset>
   <fieldset className="settings-subsection" aria-labelledby="browser-bar-devices-title"><legend><h3 id="browser-bar-devices-title">Connected Devices</h3></legend>
   <ul>{devices.map(device => <li key={device.id}>{device.name} · {device.paired ? 'Connected' : 'Awaiting pairing'} · {device.expires_at ? `expires ${formatDate(device.expires_at)}` : 'Until disconnected'} <button className="button secondary compact" disabled={busy} onClick={() => void manage('revoke', device.id)}>Disconnect {device.name}</button></li>)}</ul>
   <p className="muted">Disconnect here to revoke access even if the device is lost. Signing out of the website leaves paired devices connected until you disconnect them here or on AO3. New codes replace previous unused codes.</p>

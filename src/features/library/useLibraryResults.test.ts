@@ -130,3 +130,24 @@ it.each(['library', 'reading'] as const)('clears tiles when switching %s collect
  await waitFor(() => expect(view.result.current.error).toBe('Unavailable'))
  expect(view.result.current.previousResult).toBeUndefined()
 })
+
+it('keeps retained ranges tied to their original page size through delayed pagination', async () => {
+ const first = { ...result, total: 60, page: 1, pages: 3 }
+ let finishSize!: (value: typeof first) => void, finishNext!: (value: typeof first) => void
+ mocks.fetchPage.mockResolvedValueOnce(first)
+  .mockImplementationOnce(() => new Promise(resolve => { finishSize = resolve }))
+  .mockImplementationOnce(() => new Promise(resolve => { finishNext = resolve }))
+ const view = renderHook(({ page, size }) => useLibraryResults(query, page, size, true), { initialProps: { page: 1, size: 25 } })
+ await waitFor(() => expect(view.result.current.result).toEqual(first))
+ expect(view.result.current.range).toEqual({ start: 1, end: 25 })
+ view.rerender({ page: 1, size: 50 })
+ expect(view.result.current.loading).toBe(true)
+ expect(view.result.current.range).toEqual({ start: 1, end: 25 })
+ view.rerender({ page: 2, size: 50 })
+ await act(async () => { finishSize({ ...first, pages: 2 }) })
+ expect(view.result.current.loading).toBe(true)
+ expect(view.result.current.range).toEqual({ start: 1, end: 25 })
+ await act(async () => { finishNext({ ...first, page: 2, pages: 2 }) })
+ expect(view.result.current.range).toEqual({ start: 51, end: 60 })
+ expect(view.result.current.loading).toBe(false)
+})

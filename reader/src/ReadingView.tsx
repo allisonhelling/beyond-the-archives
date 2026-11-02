@@ -1,10 +1,11 @@
+import { ChapterProgress } from '../../src/features/library/ChapterProgress'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { PublicationStatusIndicator } from '../../src/features/library/PublicationStatusIndicator'
 import { Dropdown } from '../../src/components/Dropdown'
 import { useDismissible } from '../../src/components/useDismissible'
 import { List, X, ChevronRight } from 'lucide-react'
 import { capturePosition, restorePosition } from './reading-position'
-import { chapterNumber, readingRanges, type Book, type Chapter, type Preferences, type ReadingPosition } from './model'
+import { readerProgress, chapterNumber, readingRanges, type Book, type Chapter, type Preferences, type ReadingPosition } from './model'
 
 function titleText(label: string) {
   const parts = label.match(/^((?:Chapter\s+)?\d+\s*[:.–—-]\s*)(.+)$/i)
@@ -16,7 +17,7 @@ function ChapterTitle({ chapters, index, onGo, heading = false }: { chapters: Ch
 function ChapterNavigation({ chapters, index, onGo, position }: { chapters: Chapter[]; index: number; onGo: (chapter: Chapter) => void; position: 'top' | 'bottom' }) {
   return <nav className="chapter-navigation" data-position={position} aria-label={`${position === 'top' ? 'Top' : 'Bottom'} Chapter Navigation`}><button disabled={index === 0} onClick={() => onGo(chapters[index - 1])}>← Previous Chapter</button><ChapterTitle chapters={chapters} index={index} onGo={onGo} heading={position === 'top'} /><button disabled={index === chapters.length - 1} onClick={() => onGo(chapters[index + 1])}>Next Chapter →</button></nav>
 }
-export function ReadingView({ book, preferences, onPreferences, onPosition, onRead, onClose, onViewDetails }: { book: Book; preferences: Preferences; onPreferences: (p: Preferences) => void; onPosition: (position: ReadingPosition) => void; onRead: (chapter: Chapter, through: boolean) => void; onClose: () => void; onViewDetails: () => void }) {
+export function ReadingView({ book, preferences, onPreferences, onPosition, onRead, onClose, onViewDetails, onProgress }: { onProgress: (progress: number) => Promise<void>; book: Book; preferences: Preferences; onPreferences: (p: Preferences) => void; onPosition: (position: ReadingPosition) => void; onRead: (chapter: Chapter, through: boolean) => void; onClose: () => void; onViewDetails: () => void }) {
   const [chapterId, setChapterId] = useState(book.position.chapter), [settings, setSettings] = useState(false), [contents, setContents] = useState(false), [rendered, setRendered] = useState<Record<string,string>>({})
   const displayId = useId()
   const contentsTrigger = useRef<HTMLButtonElement>(null)
@@ -28,7 +29,6 @@ export function ReadingView({ book, preferences, onPreferences, onPosition, onRe
   const current = book.chapters.find(c => c.id === chapterId) ?? book.chapters[0], index = book.chapters.indexOf(current)
   const pages = preferences.layout === 'pages'
   const proseChapters = book.chapters.filter(chapter => chapter.kind !== 'frontmatter')
-  const chapterCount = book.chapters.slice(0, index + 1).filter(chapter => chapter.kind !== 'frontmatter').length
   useEffect(() => {
     const urls = Object.fromEntries(Object.entries(book.resources).map(([key, blob]) => [key, URL.createObjectURL(blob)]))
     const html = Object.fromEntries(book.chapters.map(chapter => {
@@ -146,7 +146,7 @@ export function ReadingView({ book, preferences, onPreferences, onPosition, onRe
   }, [pages])
   const chapters = preferences.content === 'entire' ? book.chapters : [current]
   return <div className="reading-screen">
-    <header className="reader-toolbar"><button onClick={() => { remember(true); onClose() }}>← Bookshelf</button><button ref={contentsTrigger} className="contents-trigger" onClick={() => setContents(!contents)} aria-expanded={contents} aria-controls={contents ? `${displayId}-contents` : undefined}><List size={18} aria-hidden="true" />Contents</button><div className="reading-title"><strong><button className="title-button reading-work-name" onClick={onViewDetails} title="View Details">{book.metadata.title}</button><PublicationStatusIndicator portal placement="bottom" status={book.metadata.publication_status} /></strong><small>{book.metadata.authors.join(', ')}</small></div><span className="reader-chapter-count" aria-label="Chapter Progress">{chapterCount} / {proseChapters.length} {proseChapters.length===1?'chapter':'chapters'}</span><button disabled={current.kind === 'frontmatter' || book.completed.includes(current.id)} onClick={() => onRead(current, false)}>{current.kind === 'frontmatter' ? 'Front Matter' : book.completed.includes(current.id) ? '✓ Chapter Read' : 'Mark Chapter Read'}</button><button disabled={current.kind === 'frontmatter'} onClick={() => onRead(current, true)}>Mark Through Ch {chapterNumber(current, book.chapters) ?? '—'}</button><button onClick={() => setSettings(!settings)} aria-expanded={settings}>Aa · Display</button></header>
+    <header className="reader-toolbar"><button onClick={() => { remember(true); onClose() }}>← Bookshelf</button><button ref={contentsTrigger} className="contents-trigger" onClick={() => setContents(!contents)} aria-expanded={contents} aria-controls={contents ? `${displayId}-contents` : undefined}><List size={18} aria-hidden="true" />Contents</button><div className="reading-title"><strong><button className="title-button reading-work-name" onClick={onViewDetails} title="View Details">{book.metadata.title}</button><PublicationStatusIndicator portal placement="bottom" status={book.metadata.publication_status} /></strong><small>{book.metadata.authors.join(', ')}</small></div><ChapterProgress progress={readerProgress(book)} metadata={{ ...book.metadata, published_chapters: book.metadata.published_chapters ?? proseChapters.length }} onSave={onProgress} /><button title={`Mark As Read Through Chapter ${chapterNumber(current, book.chapters) ?? '—'}`} disabled={current.kind === 'frontmatter' || proseChapters.slice(0, proseChapters.indexOf(current) + 1).every(chapter => book.completed.includes(chapter.id))} onClick={() => onRead(current, true)}>{current.kind === 'frontmatter' ? 'Front Matter' : 'Mark As Read'}</button><button onClick={() => setSettings(!settings)} aria-expanded={settings}>Aa · Display</button></header>
 
 
     {settings && <div className="display-panel"><label>Content Shown<select value={preferences.content} onChange={e => onPreferences({ ...preferences, content: e.target.value as Preferences['content'] })}><option value="chapter">One Chapter</option><option value="entire">Entire Work</option></select></label><label>Reading Layout<select value={preferences.layout} onChange={e => onPreferences({ ...preferences, layout: e.target.value as Preferences['layout'] })}><option value="scroll">Continuous Scroll</option><option value="pages">Paginated</option></select></label>{(['size', 'width'] as const).map(key => { const range = readingRanges[key], id = `${displayId}-${key}`; return <label className="reading-range" key={key} htmlFor={id}><span>{range.label}<output htmlFor={id} aria-label={`${range.label} Value`}>{preferences[key]} px</output></span><input id={id} aria-label={range.label} aria-valuetext={`${preferences[key]} pixels`} type="range" min={range.min} max={range.max} step={range.step} value={preferences[key]} onChange={e => onPreferences({ ...preferences, [key]: Number(e.target.value) })} /></label> })}<label><input type="checkbox" checked={preferences.dark} onChange={e => onPreferences({ ...preferences, dark: e.target.checked })} /> Dark Mode</label></div>}

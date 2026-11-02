@@ -3,7 +3,7 @@ import { initialAuthIntent } from '../../src/lib/auth-account'
 import type { Database, Json } from '../../src/types/database'
 import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from '../../src/lib/config'
-import { hostedOrganizer } from '../../src/lib/reader-connection'
+import { enableOrganizerSync, hostedOrganizer } from '../../src/lib/reader-connection'
 import { type CloudEdit, type CloudValue } from './cloud-model'
 import { defaultPreferences, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
 import { readerInstallationId, acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
@@ -25,7 +25,8 @@ export const readerCloud = createClient<Database>(config.url, config.key, {
         try {adopting=JSON.parse(init.body).p_action==='enable'} catch { /* Invalid bodies still fail closed. */ }
       }
       // Adoption can run before switching out of a guest library; the RPC verifies the paired owner.
-      if (!adopting && (!readerOwner || subject !== readerOwner)) return Promise.reject(new Error('Reader account changed. Reopen the matching account library before syncing.'))
+      const accountSetting = ['/rest/v1/rpc/account_has_password', '/rest/v1/rpc/manage_account_username'].includes(url.pathname)
+      if (!adopting && !accountSetting && (!readerOwner || subject !== readerOwner)) return Promise.reject(new Error('Reader account changed. Reopen the matching account library before syncing.'))
     }
     const signal = AbortSignal.timeout(120000)
     return fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, signal]) : signal })
@@ -61,22 +62,25 @@ export async function restoreOrganizerConnection(existing?: Connection): Promise
   if (!readerOwner) return undefined
   const { data } = await readerCloud.auth.getSession()
   if (data.session?.user.id !== readerOwner) return undefined
-  if(await loadSetting<boolean>('organizer-disabled-here'))return existing
+  if(await loadSetting<boolean>('organizer-disabled-here'))return undefined
   const managed=existing?.account.startsWith('organizer:') || await loadSetting<string>('organizer-account-link')===readerOwner
   if(existing && !managed){await rememberOrganizerConnection(existing);return existing}
   const status=await readerCloud.rpc('reader_organizer_connection',{p_action:'status'})
   if(status.error)throw new Error(status.error.message)
   if (!(status.data as {enabled?:boolean})?.enabled) {
-    if(existing && managed) await transaction(['settings'],tx=>tx.objectStore('settings').delete('connection'))
-    return undefined
+    await enableOrganizerSync(readerCloud)
   }
-  if(existing && (!existing.expiresAt || Date.parse(existing.expiresAt)>Date.now()))return existing
+  if(existing && (!existing.expiresAt || Date.parse(existing.expiresAt)>Date.now())) {
+    const checked = await readerCloud.rpc('reader_organizer_connection', {p_action:'validate',p_secret:existing.secret})
+    if (!checked.error) return existing
+    if (checked.error.code !== '42501') throw new Error(checked.error.message)
+  }
   const installation=await readerInstallationId()
   const result=await readerCloud.rpc('reader_organizer_connection',{p_action:'restore',p_installation:installation})
   if(result.error)throw new Error(result.error.message)
   const value=result.data as {secret?:string;userId?:string;expiresAt?:string|null}
   if(!value.secret||value.userId!==readerOwner)throw new Error('Organizer connection could not be restored.')
-  const next:Connection={expiresAt:value.expiresAt,backend:config.url.replace(/\/$/,''),key:config.key,secret:value.secret,account:`organizer:${readerOwner}`,name:'My Organizer',label:new URL(config.url).hostname}
+  const next:Connection={expiresAt:value.expiresAt,backend:config.url.replace(/\/$/,''),key:config.key,secret:value.secret,account:existing?.account ?? `organizer:${readerOwner}`,name:'My Organizer',label:new URL(config.url).hostname}
   await transaction(['settings'],tx=>tx.objectStore('settings').put({id:'connection',value:next}))
   return next
 }

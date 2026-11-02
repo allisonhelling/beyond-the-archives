@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { readPublicConfig, type PublicConfig } from './config'
 
 // Public browser configuration; account access still requires a private device credential.
@@ -48,4 +49,13 @@ export function consumeReaderPairing(): ReaderPairing | undefined {
   try {
     return parseReaderPairing(JSON.parse(value))
   } catch { /* Invalid links cannot configure or connect an organizer. */ }
+}
+
+// Both apps establish the same account association; only the reader registers a device.
+export async function enableOrganizerSync(client: SupabaseClient) {
+  const { data, error } = await client.auth.getUser()
+  if (error) throw error
+  if (!data.user?.email_confirmed_at || data.user.is_anonymous) throw new Error('Confirm your email before enabling organizer sync.')
+  const result = await client.rpc('reader_organizer_connection', { p_action: 'enable' })
+  if (result.error) throw new Error(result.error.message)
 }

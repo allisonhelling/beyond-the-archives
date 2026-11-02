@@ -1,3 +1,4 @@
+import { enableOrganizerSync } from '../../lib/reader-connection'
 import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
 import { isAuthLinkType, signInWithLogin, verifyAuthLink } from '../../lib/auth-account'
 import { useActivity } from '../../lib/use-activity'
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const type = params.get('type')
         if (tokenHash && isAuthLinkType(type)) {
           await verifyAuthLink(client, tokenHash, type)
-          if (active) setNeedsPassword(type !== 'signup')
+          if (active) setNeedsPassword(type === 'invite' || type === 'recovery')
           if (active) window.history.replaceState(null, '', '/auth/callback')
         }
         let timeout: ReturnType<typeof setTimeout> | undefined
@@ -96,6 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void initialize()
     return () => { active = false; subscription.unsubscribe() }
   }, [])
+
+  useEffect(() => {
+    if (!supabase || sampleMode || !session || needsPassword) return
+    let active = true
+    const enable = () => {
+      if (navigator.onLine) void enableOrganizerSync(supabase!).then(() => { if (active) setError(null) }).catch(() => {
+        if (active) setError('Signed in. Organizer sync could not be enabled. Check your connection and reader access, then reopen the app.')
+      })
+    }
+    enable()
+    window.addEventListener('online', enable)
+    return () => { active = false; window.removeEventListener('online', enable) }
+  }, [session, needsPassword])
 
   return <AuthContext value={{ authenticated: sampleMode ? sampleSignedIn : Boolean(session), signIn, signOut, session, loading, error, needsPassword, passwordSaved: () => setNeedsPassword(false) }}>{children}</AuthContext>
 }

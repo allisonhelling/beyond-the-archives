@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useLibrary } from './LibraryProvider'
 import { libraryFacetScope, type LibraryFacets, type LibraryQuery, type LibraryResults } from './repository'
 
-export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void } {
+export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { range?: { start: number; end: number }; loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void } {
   const { hasCachedPage, fetchPage, fetchFacets, revision, tagRevision, collections } = useLibrary()
-  const [state, setState] = useState<{ key: string; scopeKey?: string; result?: LibraryResults; error?: string }>({ key: '' })
+  const [state, setState] = useState<{ key: string; scopeKey?: string; size?: number; result?: LibraryResults; error?: string }>({ key: '' })
   const [facetState, setFacets] = useState<{ key: string; scopeKey?: string; result?: LibraryFacets; error?: string }>({ key: '' })
   const [attempt, setAttempt] = useState(0)
   const automatic = collections?.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules))
@@ -30,7 +30,7 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
     // Debouncing avoids a database scan for every character of a search.
     const load = () => {
       void fetchPage(query, page, size, controller.signal).then(result => {
-        if (!controller.signal.aborted) setState({ key, scopeKey: resultScopeKey, result })
+        if (!controller.signal.aborted) setState({ key, scopeKey: resultScopeKey, size, result })
       }).catch(error => {
         if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setState(current => ({ ...current, key, error: error instanceof Error ? error.message : 'Could not load results.' }))
       })
@@ -55,5 +55,8 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
   const current = state.key === key
   useActivity(enabled && (!current || facetState.key !== facetKey), !current ? 'Loading library results…' : 'Loading filter suggestions…')
   const results = current && !state.error ? { result: state.result, loading: false, retry } : { loading: enabled && !current, error: current ? state.error : undefined, previousResult: state.scopeKey === resultScopeKey ? state.result : undefined, retry }
-  return { ...results, facets: currentFacets?.result ?? (facetState.scopeKey === scopeKey ? facetState.result : undefined), facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
+  // Retained cards and their range belong to the same completed request. A new
+  // page size must not relabel old rows before its replacement arrives.
+  const range = state.result && state.size && state.scopeKey === resultScopeKey ? { start: (state.result.page - 1) * state.size + 1, end: Math.min(state.result.page * state.size, state.result.total) } : undefined
+  return { ...results, range, facets: currentFacets?.result ?? (facetState.scopeKey === scopeKey ? facetState.result : undefined), facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
 }

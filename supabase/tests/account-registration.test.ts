@@ -26,3 +26,15 @@ it('rolls back a signup with a duplicate or invalid username without changing an
  await db.query('update auth.users set raw_user_meta_data=$1 where id=$2',[JSON.stringify({username:'Hijacked'}),owner])
  expect((await db.query('select username from public.account_usernames where user_id=$1',[owner])).rows).toEqual([{username:'NewReader'}])
 })
+it('exposes only the signed-in account’s password presence without exposing a hash',async()=>{
+ const passwordless='70000000-0000-0000-0000-000000000003'
+ await db.exec(`reset role; update auth.users set encrypted_password='private-hash' where id='${owner}'; insert into auth.users(id,email) values('${passwordless}','passwordless@example.com')`)
+ await db.exec(`set role authenticated;set request.jwt.claim.sub='${owner}'`)
+ expect((await db.query('select public.account_has_password() value')).rows).toEqual([{value:true}])
+ await db.exec(`set request.jwt.claim.sub='${passwordless}'`)
+ expect((await db.query('select public.account_has_password() value')).rows).toEqual([{value:false}])
+ await expect(db.query('select encrypted_password from auth.users')).rejects.toThrow('permission denied')
+ await db.exec('reset role;set role anon')
+ await expect(db.query('select public.account_has_password()')).rejects.toThrow('permission denied')
+ await db.exec('reset role')
+})

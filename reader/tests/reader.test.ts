@@ -170,3 +170,28 @@ it('recovers an explicit saved AO3 source without guessing identity from title o
  // Repair old linked books whose baseline arrived without completed-chapter projection.
  expect(withOrganizerProgress({...b,completed:[]},b.remote).completed).toEqual(['ao3:1'])
 })
+
+describe('readable cloud conflicts',()=>{
+ it('describes progress, positions, and history without exposing internal chapter keys',async()=>{
+  const {describeCloudValue,cloudFieldLabel}=await import('../src/cloud-model')
+  const {bookDetails}=await import('../src/model')
+  const saved=bookDetails(await book()),chapter=saved.chapters.at(-1)!
+  expect(cloudFieldLabel(`${saved.id}/position`)).toBe('Reading Position')
+  expect(describeCloudValue(`${saved.id}/position`,{chapter:chapter.id,fraction:.5},saved)).toBe(`${chapter.title} · 50% through the section.`)
+  expect(describeCloudValue(`${saved.id}/progress`,3,saved)).toBe('3 chapters read.')
+  expect(describeCloudValue(`${saved.id}/status`,'re_reading',saved)).toBe('Re-Reading')
+  expect(describeCloudValue(`${saved.id}/history:private-key`,{chapter:chapter.id,reread:true,words:5},saved)).toBe(`Reread ${chapter.title} · 5 words.`)
+ })
+ it('retains explicit progress beyond available EPUB chapters through catalog and cloud fields',async()=>{
+  const {readerProgress,catalogBook,bookDetails}=await import('../src/model')
+  const {cloudBookFields}=await import('../src/cloud-model')
+  const saved={...bookDetails(await book()),progress:3,completed:[]}
+  expect(readerProgress(saved)).toBe(3)
+  expect(catalogBook(saved).completedCount).toBe(3)
+  expect(cloudBookFields(saved).progress).toBe(3)
+  expect(cloudBookFields(saved).manifest).not.toHaveProperty('progress')
+  const remote={id:'entry',version:'next',progress:0,status:'re_reading' as const,notes:''}
+  const prior={...saved,remote:{...remote,progress:3,status:'finished' as const}}
+  expect(readerProgress(withOrganizerProgress(prior,remote))).toBe(0)
+ })
+})

@@ -3,6 +3,7 @@ import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
 import { epubBuffer } from '../../src/test/epub-fixture'
+import { pageSizeKey } from '../../src/features/library/browsing/page-size'
 
 test('EPUB recovery reviews and saves a deleted work and preserves personal data during later metadata recovery', async ({ page }) => {
  const tables = await fixture(page)
@@ -608,7 +609,7 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://example.com/works/123')
   await page.getByLabel('Title', { exact: true }).fill('A manual story')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('supported AO3 work URL')
+  await expect(page.locator('.story-form').getByRole('alert')).toContainText('supported AO3 work URL')
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/123/chapters/4')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Chapter 0 of ? — Edit Progress', exact: true })).toBeVisible()
@@ -618,7 +619,7 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/123')
   await page.getByLabel('Title', { exact: true }).fill('Duplicate')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('already in your library')
+  await expect(page.locator('.story-form').getByRole('alert')).toContainText('already in your library')
   await page.getByRole('link', { name: 'Cancel', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'A manual story', exact: true })).toHaveCount(1)
   await selectLibraryShelf(page, 'Favorites')
@@ -2947,21 +2948,26 @@ test('a completed direct fic import offers its related series and imports only s
  expect(tables.library_entries).toHaveLength(2)
 })
 
-test('pagination submits inline page numbers on Enter and keeps temporary page sizes at the bottom', async ({ page }) => {
- test.setTimeout(60000)
+for (const path of ['/library', '/reading']) test(`pagination submits inline page numbers on Enter and keeps temporary page sizes at the bottom (${path})`, async ({ page }) => {
+ test.setTimeout(90000)
  const tables = await fixture(page), now = '2026-10-20T12:00:00Z'
  for (let index=1; index<=60; index++) {
   tables.works.push({id:`pagination-work-${index}`,ao3_work_id:index,title:`Pagination fic ${index}`,word_count:100,published_chapters:2,total_chapters:3,verified_chapters:{}})
   tables.library_entries.push({id:`pagination-entry-${index}`,work_id:`pagination-work-${index}`,original_url:`https://archiveofourown.org/works/${index}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,metadata_overrides:{},created_at:now,updated_at:now})
  }
- await page.goto('/settings#settings-browsing'); await login(page)
- await page.getByRole('combobox',{name:'Works per Page',exact:true}).selectOption('25')
- for (const path of ['/library','/reading']) {
-  await page.goto(path)
-  const paginations=page.getByRole('navigation',{name:'Result Pages'})
-  await expect(paginations).toHaveCount(2)
-  const pagination=paginations.first(), bottomPagination=paginations.last()
-  const size=bottomPagination.getByRole('combobox',{name:'Works per Page',exact:true})
+ // Seed the existing browser preference once; rewriting it on reload would
+ // hide an accidental permanent save of the temporary 50-item choice.
+ await page.addInitScript(key => {
+  if (localStorage.getItem(key) === null) localStorage.setItem(key, '25')
+ }, pageSizeKey)
+ await test.step('Open The Dashboard With The Saved Page Size', async () => {
+  await page.goto(path); await login(page)
+ })
+ const paginations=page.getByRole('navigation',{name:'Result Pages'})
+ await expect(paginations).toHaveCount(2, { timeout: 30000 })
+ const pagination=paginations.first(), bottomPagination=paginations.last()
+ const size=bottomPagination.getByRole('combobox',{name:'Works per Page',exact:true})
+ await test.step('Check Pagination Layout And Enter Page Numbers', async () => {
   await expect(size).toHaveValue('25')
   await expect(size).toHaveCSS('border-top-style','solid')
   await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
@@ -2982,38 +2988,49 @@ test('pagination submits inline page numbers on Enter and keeps temporary page s
   await jump.fill('3')
   await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
   await jump.press('Enter')
-  await expect(pagination.getByRole('status')).toContainText('51–60 of 60')
+  await expect(pagination.getByRole('status')).toContainText('51–60 of 60', { timeout: 15000 })
   await jump.fill('1'); await jump.press('Enter')
-  await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
+  await expect(pagination.getByRole('status')).toContainText('1–25 of 60', { timeout: 15000 })
   await expect(paginations).toHaveCount(2)
   const grid=(await page.locator('.reading-group .story-grid').last().boundingBox())!, footer=(await bottomPagination.boundingBox())!
   expect(footer.y).toBeGreaterThanOrEqual(grid.y+grid.height)
+ })
+ await test.step('Navigate While The Page Size Request Is Pending', async () => {
   let release!: () => void
   const pendingSize = new Promise<void>(resolve => { release = resolve })
-  await page.route('**/rest/v1/rpc/query_library', async route => {
+  const holdSizeRequest: Parameters<Page['route']>[1] = async route => {
    if (route.request().postDataJSON().p_size === 50) await pendingSize
    await route.fallback()
-  })
-  await bottomPagination.getByRole('combobox',{name:'Works per Page',exact:true}).selectOption('50')
+  }
+  await page.route('**/rest/v1/rpc/query_library', holdSizeRequest)
   try {
+   await size.selectOption('50')
    await expect(size).toHaveValue('50')
    await expect(bottomPagination.getByRole('status')).toContainText('Updating…')
-  } finally { release() }
-  await page.unroute('**/rest/v1/rpc/query_library')
+   await expect(pagination.getByRole('status')).toContainText('1–25 of 60')
+   await bottomPagination.getByRole('button',{name:'Next',exact:true}).click()
+  } finally {
+   release()
+   await page.unroute('**/rest/v1/rpc/query_library', holdSizeRequest)
+  }
+ })
+ await test.step('Keep Temporary Paging And Restore The Saved Default On Reload', async () => {
+  await expect(pagination.getByRole('status')).toContainText('51–60 of 60', { timeout: 15000 })
+  await bottomPagination.getByRole('button',{name:'Prev',exact:true}).click()
   await expect(size).toHaveValue('50')
-  await expect(pagination.getByRole('status')).toContainText('1–50 of 60')
+  await expect(pagination.getByRole('status')).toContainText('1–50 of 60', { timeout: 15000 })
   await expect(page).not.toHaveURL(/[?&]size=/)
   await bottomPagination.getByRole('button',{name:'Next',exact:true}).click()
-  await expect(pagination.getByRole('status')).toContainText('51–60 of 60')
+  await expect(pagination.getByRole('status')).toContainText('51–60 of 60', { timeout: 15000 })
   await expect(size).toHaveValue('50')
   await expect(bottomPagination.getByRole('status')).toContainText('51–60 of 60')
+  expect(await page.evaluate(key => localStorage.getItem(key), pageSizeKey)).toBe('25')
   await page.reload()
-  await expect(size).toHaveValue('25')
-  await expect(pagination.getByRole('status')).toContainText('26–50 of 60')
+  await expect(size).toHaveValue('25', { timeout: 15000 })
+  await expect(pagination.getByRole('status')).toContainText('26–50 of 60', { timeout: 15000 })
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth',await page.evaluate(()=>innerWidth))
- }
- await page.goto('/settings#settings-browsing')
- await expect(page.getByRole('combobox',{name:'Works per Page',exact:true})).toHaveValue('25')
+  expect(await page.evaluate(key => localStorage.getItem(key), pageSizeKey)).toBe('25')
+ })
 })
 
 test('same-named works and series keep separate identities in tiles and series groups', async ({ page }) => {

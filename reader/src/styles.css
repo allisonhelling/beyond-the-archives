@@ -1,3 +1,4 @@
+@import "../../src/features/library/chapter-progress.css";
 @import "../../src/theme-tokens.css";
 @import "../../src/features/library/display/display.css";
 @import "../../src/features/library/summaries/summary.css";
@@ -138,7 +139,7 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .confirmation-heading h2 { margin: 0; }
 .confirmation-dialog form:not(.account-auth-form) { display: grid; gap: 15px; margin: 22px 0; }
 .confirmation-dialog p { font-size: 13px; }
-.dialog-actions, .tile-settings-dialog .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.dialog-actions, .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .dialog-actions { margin-top: 20px; }
 .organizer-sync-actions { padding-top: 12px; }
 .transfer-results-tabs { padding-bottom: 16px; }

@@ -73,7 +73,7 @@ test('shows recorded stats, navigates periods, applies profile controls, and sav
  const invalidDate = page.getByLabel('Exact Month and Year', { exact: false })
  await invalidDate.fill('13/2026')
  await invalidDate.press('Enter')
- await expect(page.getByRole('alert')).toContainText('Enter a valid mm/yyyy')
+ await expect(page.locator('#stats-period-error')).toContainText('Enter a valid mm/yyyy')
  await page.keyboard.press('Escape')
  await expect(dateButton).toBeFocused()
  const metric = (name: string) => page.locator('.stats-metric').filter({ has: page.getByRole('heading', { name, exact: true }) }).locator('strong')

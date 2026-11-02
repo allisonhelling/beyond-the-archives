@@ -19,20 +19,20 @@ vi.mock('../features/library/repository', async importOriginal => ({
   queryLibrary: async () => ({ stories: [], series: [], total: 0, page: 1, pages: 1, fandoms: [], sections: {} }),
 }))
 
-const fakeSession = { user: { id: 'account-1', email: 'reader@example.com' }, access_token: 'session-token' } as Session
+const fakeSession = { user: { id: 'account-1', email: 'reader@example.com', email_confirmed_at: '2026-01-01' }, access_token: 'session-token' } as Session
 const auth = vi.hoisted(() => ({
   session: null as Session | null,
   listener: null as null | ((event: AuthChangeEvent, session: Session | null) => void),
-  getSession: vi.fn(), signUp: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn(), updateUser: vi.fn(), verifyOtp: vi.fn(), unsubscribe: vi.fn(),
+  getUser: vi.fn(), enableOrganizer: vi.fn(), getSession: vi.fn(), signUp: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), resetPasswordForEmail: vi.fn(), updateUser: vi.fn(), verifyOtp: vi.fn(), unsubscribe: vi.fn(),
 }))
 vi.mock('../lib/supabase', () => ({
   initialAuthType: null,
   authRedirectUrl: () => 'http://localhost:3000/auth/callback',
-  supabase: { rpc: async (name: string) => ({ data:
+  supabase: { rpc: async (name: string, args?: {p_action?:string}) => { if (name === 'reader_organizer_connection' && args?.p_action === 'enable') auth.enableOrganizer(); return ({ data:
     name === 'review_import_reading' ? { reviews: [], total: 0, changed: 0, skipped: 0 } :
     name === 'paged_import_history' ? { batches: [], items: [], jobs: [] } :
-    name === 'library_sync_report_history' ? { reports: [], total: 0 } : [], error: null }), auth: {
-    getSession: auth.getSession,
+    name === 'library_sync_report_history' ? { reports: [], total: 0 } : [], error: null }) }, auth: {
+    getSession: auth.getSession, getUser: auth.getUser,
     onAuthStateChange: (cb: typeof auth.listener) => { auth.listener = cb; return { data: { subscription: { unsubscribe: auth.unsubscribe } } } },
     signUp: auth.signUp, signInWithPassword: auth.signInWithPassword, signOut: auth.signOut,
     resetPasswordForEmail: auth.resetPasswordForEmail, updateUser: auth.updateUser, verifyOtp: auth.verifyOtp,
@@ -46,6 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   auth.session = null
   auth.listener = null
+  auth.getUser.mockImplementation(async () => ({ data: {user: auth.session?.user ?? null}, error: null }))
   auth.getSession.mockImplementation(async () => ({ data: { session: auth.session }, error: null }))
   auth.signUp.mockResolvedValue({ data: { session: null, user: { id: 'new-account' } }, error: null })
   auth.signInWithPassword.mockResolvedValue({ error: null })
@@ -224,6 +225,7 @@ describe('private app access and navigation', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('If this address has an account')
     act(() => auth.listener?.('PASSWORD_RECOVERY', fakeSession))
     await user.type(screen.getByLabelText(/New Password/), 'New-password-123!')
+    await user.type(screen.getByLabelText('Confirm Password'), 'New-password-123!')
     await user.click(screen.getByRole('button', { name: 'Save Password' }))
     expect(auth.updateUser).toHaveBeenCalledWith({ password: 'New-password-123!' })
     expect(await screen.findByRole('heading', { name: 'Currently Reading' })).toBeVisible()
@@ -309,6 +311,7 @@ it('creates an email/password/username account and waits for confirmation',async
  await user.type(screen.getByLabelText('Email Address'),'new@example.com')
  await user.type(screen.getByLabelText('Username',{exact:true}),'NewReader')
  await user.type(screen.getByLabelText('Password'),'StrongPassword123!')
+ await user.type(screen.getByLabelText('Confirm Password'),'StrongPassword123!')
  await user.click(screen.getByRole('button',{name:'Create Account'}))
  expect(auth.signUp).toHaveBeenCalledWith({email:'new@example.com',password:'StrongPassword123!',options:{data:{username:'NewReader'},emailRedirectTo:'http://localhost:3000/auth/callback'}})
  expect(await screen.findByRole('status')).toHaveTextContent('Check your email to confirm')
@@ -322,4 +325,10 @@ it('verifies signup confirmation without asking for a replacement password',asyn
  expect(await screen.findByRole('heading',{name:'Currently Reading'})).toBeVisible()
  expect(auth.verifyOtp).toHaveBeenCalledWith({token_hash:'signup-token',type:'signup'})
  expect(screen.queryByLabelText('New Password')).not.toBeInTheDocument()
+})
+
+it('automatically enables organizer association after opening a confirmed account', async () => {
+  auth.session = fakeSession
+  render(<App />)
+  await waitFor(() => expect(auth.enableOrganizer).toHaveBeenCalled())
 })
