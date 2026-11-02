@@ -2,7 +2,7 @@ import { savedWorkIdentity } from './metadata'
 import { importEpub } from './epub'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
 import { readerInstallationId, readerInstallationAliases, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
-import { withPublication } from './model'
+import { withPublication, withOrganizerProgress } from './model'
 import type { Book, BookDetails, Connection, Pending, Remote } from './model'
 export async function rpc(connection: Connection, action: string, work: string, input: Record<string, unknown> = {}): Promise<{entry: Remote | null; collections?: {id: string; name: string}[]; secret?: string; userId?: string; tagAppearance?: TagAppearance | null}> {
   const url = new URL(connection.backend)
@@ -86,7 +86,7 @@ async function performSync(connection: Connection, force: boolean) {
             if (!current || current.account !== saved.account || current.workId !== saved.workId || current.remote?.version !== saved.remote?.version) return
             // Link existing standalone books without discarding personal edits made before pairing.
             // Later pulls also preserve fields that differ from the last organizer baseline.
-            putBook(tx, { ...withPublication(current, result.entry!), account: connection.account, remote: result.entry!, status: current.status === (current.remote?.status ?? 'to_read') ? result.entry!.status : current.status, notes: current.notes === (current.remote?.notes ?? '') ? result.entry!.notes : current.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
+            putBook(tx, { ...withOrganizerProgress(current, result.entry!), account: connection.account, remote: result.entry!, status: current.status === (current.remote?.status ?? 'to_read') ? result.entry!.status : current.status, notes: current.notes === (current.remote?.notes ?? '') ? result.entry!.notes : current.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
           }
         }
       })

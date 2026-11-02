@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import { chapterNotesFiles, epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub, sanitize } from '../src/epub'
-import { completionStatus, replaceBook, withPublication, repairChapterState } from '../src/model'
+import { withOrganizerProgress, completionStatus, replaceBook, withPublication, repairChapterState } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 async function book() { const buffer = await epubBuffer(); return importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File) }
 describe('EPUB import and rendering', () => {
@@ -70,6 +70,10 @@ describe('Reading progress and versions', () => {
     expect(completionStatus(b)).toBe('finished')
     b.metadata.publication_status = 'in_progress'
     expect(completionStatus(b)).toBe('waiting_for_updates')
+    b.metadata.publication_status = 'deleted'
+    expect(completionStatus(b)).toBe('finished')
+    b.metadata.published_chapters = 2
+    expect(completionStatus(b)).toBe('reading')
     b.metadata.publication_status = 'unknown'; b.status = 'paused_reading'
     expect(completionStatus(b)).toBe('paused_reading')
   })
@@ -134,4 +138,35 @@ it('recovers an explicit saved AO3 source without guessing identity from title o
  const b=await book()
  expect(savedWorkIdentity({...b,workId:null,metadata:{...b.metadata,manual_url:'https://archiveofourown.org/works/8001'}})).toBe('8001')
  expect(savedWorkIdentity({...b,workId:null,metadata:{...b.metadata,title:'AO3 work 8001',manual_url:'https://unrelated.example/works/8001'}})).toBeNull()
+})
+
+ it('uses Calibre Work Link for shared reader and organizer identity without overriding an established work',async()=>{
+ const b=await book(),metadata={...b.metadata,manual_url:'https://unrelated.example/story',calibre_work_link:'https://archiveofourown.org/collections/test/works/8001/chapters/12?view_adult=true'}
+ expect(savedWorkIdentity({...b,workId:null,metadata})).toBe('8001')
+ expect(savedWorkIdentity({...b,workId:'9009',metadata})).toBe('9009')
+ expect(savedWorkIdentity({...b,workId:null,metadata:{...metadata,calibre_work_link:'https://unrelated.example/works/8001'}})).toBeNull()
+})
+
+ it('projects organizer advances, corrections, and rereads onto verified chapters without duplicating history', async () => {
+ const b=await book()
+ b.chapters=[1,2,3].map(number=>({...b.chapters[1],id:`ao3:${number}`,ao3Id:String(100+number),number}))
+ b.chapters.push({...b.chapters[1],id:'unmapped',number:null,ao3Id:null})
+ b.completed=['ao3:1','ao3:3','unmapped']
+ b.history=[{id:'local-read',chapter:'ao3:1',at:'2026-11-02',words:4,reread:false}]
+ b.remote={id:'organizer',version:'v1',status:'reading',progress:1,notes:''}
+ const remote={...b.remote,version:'v2',progress:2}
+ const advanced=withOrganizerProgress(b,remote)
+ expect(advanced.completed).toEqual(['ao3:1','unmapped','ao3:2'])
+ expect(advanced.history).toEqual(b.history)
+ expect(advanced.position).toEqual(b.position)
+ const corrected=withOrganizerProgress({...advanced,remote}, {...remote,progress:1})
+ expect(corrected.completed).toEqual(['ao3:1','unmapped'])
+ const reread=withOrganizerProgress({...advanced,remote}, {...remote,progress:0,status:'re_reading'})
+ expect(reread.completed).toEqual(['unmapped'])
+ expect(reread.history).toEqual(b.history)
+ // First association preserves standalone completions; invalid values never change them.
+ expect(withOrganizerProgress({...b,remote:undefined},remote).completed).toEqual(['ao3:1','ao3:3','unmapped','ao3:2'])
+ expect(withOrganizerProgress(b,{...remote,progress:-1}).completed).toEqual(b.completed)
+ // Repair old linked books whose baseline arrived without completed-chapter projection.
+ expect(withOrganizerProgress({...b,completed:[]},b.remote).completed).toEqual(['ao3:1'])
 })

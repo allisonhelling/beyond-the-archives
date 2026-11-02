@@ -35,7 +35,7 @@ export function initialProgress(url: string, verifiedChapters: Record<string, st
 }
 /** Status after reading all currently published chapters, shared by the app and companions. */
 export function caughtUpReadingStatus(status: Status, metadata: Pick<Metadata, 'publication_status'>): Status {
-  return metadata.publication_status === 'complete' ? 'finished' : metadata.publication_status === 'in_progress' ? 'waiting_for_updates' : status
+  return ['complete', 'deleted'].includes(metadata.publication_status) ? 'finished' : metadata.publication_status === 'in_progress' ? 'waiting_for_updates' : status
 }
 export function abandonedReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
   return metadata.publication_status === 'abandoned' && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters ? 'finished' : status
@@ -123,8 +123,10 @@ export function bookmarkRec(entry: Pick<Entry, 'source_bookmark'>): boolean | nu
  return status.includes('rec') ? true : status.includes('public') && !status.some(value => ['private', 'hidden'].includes(value)) ? false : null
 }
 
-export function savedWorkIdentity(book: { workId: string | null; metadata: Metadata }): string | null {
+export function savedWorkIdentity(book: { workId: string | null; metadata: Metadata & { calibre_work_link?: string } }): string | null {
  if (book.workId && /^[1-9]\d*$/.test(book.workId) && Number.isSafeInteger(Number(book.workId))) return book.workId
- if (book.metadata.manual_url) try { return String(parseWorkUrl(book.metadata.manual_url).workId) } catch { /* Unidentified and merged EPUBs stay unlinked. */ }
+ for (const link of [book.metadata.calibre_work_link, book.metadata.manual_url]) {
+  if (link) try { return String(parseWorkUrl(link).workId) } catch { /* Unidentified and merged EPUBs stay unlinked. */ }
+ }
  return null
 }

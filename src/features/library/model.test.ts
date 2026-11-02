@@ -14,7 +14,7 @@ describe('manual AO3 identity and progress', () => {
     ['in_progress', 0, 'to_read'], ['in_progress', 1, 'reading'], ['in_progress', 3, 'waiting_for_updates'],
     ['abandoned', 0, 'to_read'], ['abandoned', 1, 'reading'], ['abandoned', 3, 'finished'],
     ['unknown', 0, 'to_read'], ['unknown', 1, 'reading'], ['unknown', 3, 'reading'],
-    ['deleted', 0, 'to_read'], ['deleted', 1, 'reading'], ['deleted', 3, 'reading'],
+    ['deleted', 0, 'to_read'], ['deleted', 1, 'reading'], ['deleted', 3, 'finished'],
   ] as const)('maps footer progress to status for %s at chapter %s', (publication_status, progress, expected) => {
     expect(progressReadingStatus(progress, { ...blankMetadata, publication_status, published_chapters: 3 })).toBe(expected)
   })

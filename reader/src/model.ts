@@ -2,7 +2,7 @@ import type { DisplayPreference, TagAppearance } from '../../src/features/librar
 import { caughtUpReadingStatus, type Metadata, type Status } from '../../src/features/library/model'
 export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
-export type ReaderMetadata = Metadata & { ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
+export type ReaderMetadata = Metadata & { calibre_work_link?: string; ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
 export type Chapter = { kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
 export type Remote = { publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
 export type ReadingPosition = { chapter: string; fraction: number; textOffset?: number; textTop?: number; viewport?: { layout: Preferences['layout']; content: Preferences['content']; size: number; width: number; widthPx: number; heightPx: number; scrollHeight: number; scrollWidth: number; scrollTop: number; scrollLeft: number } }
@@ -45,7 +45,7 @@ export function hasVerifiedMapping(chapter: ChapterSummary, chapters: ChapterSum
 }
 export function completionStatus(book: BookDetails | Book): Status {
   const published = book.metadata.published_chapters
-  if (!published || !['complete', 'in_progress'].includes(book.metadata.publication_status)) return book.status
+  if (!published || !['complete', 'in_progress', 'deleted'].includes(book.metadata.publication_status)) return book.status
   const mapped = new Map(book.chapters.filter(chapter => hasVerifiedMapping(chapter, book.chapters)).map(chapter => [chapter.number, chapter]))
   for (let n = 1; n <= published; n++) {
     const chapter = mapped.get(n)
@@ -53,7 +53,7 @@ export function completionStatus(book: BookDetails | Book): Status {
   }
   return caughtUpReadingStatus(book.status, book.metadata)
 }
-export function replaceBook(previous: BookDetails | Book, next: Book): Book {
+export function replaceBook<T extends BookDetails | Book>(previous: BookDetails | Book, next: T): T {
   const old = previous.chapters.find(c => c.id === previous.position.chapter)
   const mapped = old && mapChapter(old, next.chapters)
   // Re-importing an older EPUB must not discard a newer organizer observation.
@@ -68,6 +68,21 @@ export function withPublication<T extends BookDetails | Book>(book: T, remote?: 
   const publication = remote?.publication
   if (!publication || Date.parse(publication.at) < Date.parse(book.metadataAt)) return book
   return { ...book, metadata: { ...book.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters }, metadataAt: publication.at }
+}
+
+/** Mirror checked organizer progress without manufacturing local reading-history events. */
+export function withOrganizerProgress<T extends BookDetails | Book>(book: T, remote: Remote): T {
+  const next = withPublication(book, remote)
+  if (!Number.isSafeInteger(remote.progress) || remote.progress < 0) return next
+  const completed = new Set(book.completed)
+  const changed = book.remote && (book.remote.progress !== remote.progress || remote.status === 're_reading' && book.remote.status !== 're_reading')
+  for (const chapter of book.chapters) {
+    if (!hasVerifiedMapping(chapter, book.chapters)) continue
+    if (chapter.number! <= remote.progress) completed.add(chapter.id)
+    // A first association keeps standalone reads; later organizer corrections and rereads are authoritative.
+    else if (changed) completed.delete(chapter.id)
+  }
+  return { ...next, completed: [...completed] }
 }
 
 /** An unchanged file's resource paths can repair old section IDs without guessing. */

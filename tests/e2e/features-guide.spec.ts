@@ -41,15 +41,15 @@ test('applied filter separators follow category colors and selected chips omit b
  await expect(chips).not.toContainText('•')
 })
 
-test('BookFusion uses a pencil and plain note actions underline on hover', async ({ page }) => {
+test('work reader shortcuts replace the BookFusion section and plain note actions underline on hover', async ({ page }) => {
  const tables = await fixture(page)
  tables.works.push({ id: 'hover-work', ao3_work_id: 12001, verified_chapters: {} })
  tables.library_entries.push({ id: 'hover-entry', work_id: 'hover-work', original_url: 'https://archiveofourown.org/works/12001', reading_status: 'to_read', last_read_chapter: 0, notes: '', metadata_overrides: { title: 'Hover States', authors: ['Author'], published_chapters: 1, total_chapters: 1, publication_status: 'complete' } })
  await page.goto('/stories/hover-entry'); await login(page)
- const edit = page.getByRole('button', { name: 'Edit BookFusion Link', exact: true })
- await expect(edit).toBeVisible()
- await expect(edit).toHaveText('')
- await expect(edit.locator('svg')).toHaveCount(1)
+ const unfolded = page.getByRole('link', { name: 'Unfolded', exact: true })
+ await expect(unfolded).toHaveCount(0)
+ await expect(page.getByRole('link', { name: 'Bookfusion', exact: true })).toHaveCount(0)
+ await expect(page.getByRole('button', { name: 'Edit BookFusion Link', exact: true })).toHaveCount(0)
  await page.getByRole('button', { name: 'Add a Note', exact: true }).click()
  const cancel = page.locator('.note-panel').getByRole('button', { name: 'Cancel', exact: true })
  await cancel.hover()
@@ -164,7 +164,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
  await card.getByRole('link',{name:'Layout Order Story',exact:true}).click()
  // Exercise the fallback font used when Avenir Next and Segoe UI are unavailable.
  if(mobile) await page.addStyleTag({content:':root { --font-sans: Arial, sans-serif; }'})
- const read=page.getByRole('link',{name:'Read EPUB',exact:true}),wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true})
+ const read=page.getByRole('link',{name:'Unfolded',exact:true}),wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true})
  await expect(read).toBeVisible()
  if(mobile) {
   for(const width of [390,320]) {
@@ -178,12 +178,12 @@ test('work tiles and phone organizer controls use the requested reading layout',
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
    }).toPass({ timeout: 5000 })
   }
- } else await expect(page.locator('.details-updated-action').getByRole('link',{name:'Read EPUB',exact:true})).toBeVisible()
+ } else await expect(page.locator('.details-updated-action').getByRole('link',{name:'Unfolded',exact:true})).toBeVisible()
  await page.screenshot({path:test.info().outputPath('work-info-actions.png'),fullPage:true})
  if(mobile) for(const display of [{workStats:{hidden:['updated']}},{workHeader:{hidden:['stats']}}]) {
   await page.evaluate(value=>localStorage.setItem('between-chapters:display:v1',JSON.stringify(value)),display)
   await page.reload()
-  await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Read EPUB',exact:true})).toBeVisible()
+  await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Unfolded',exact:true})).toBeVisible()
  }
 })
 
@@ -199,7 +199,7 @@ test('clears a retired reader installation selection after report cleanup',async
  await expect(page).toHaveURL(url=>!url.searchParams.has('reader'))
 })
 
-test('exports one work in either format and shows Read EPUB only beside Wayback for an available work', async ({page},info)=>{
+test('exports one work in either format and shows Unfolded beside Wayback only for a connected EPUB', async ({page},info)=>{
  const tables=await fixture(page)
  let available=false
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'export-reader',name:'My Reader',url:'https://reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]},{id:'second-reader',name:'Second Reader',url:'https://second-reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]}],stories:[]}}))
@@ -233,7 +233,7 @@ test('exports one work in either format and shows Read EPUB only beside Wayback 
  await page.keyboard.press('Escape')
  await card.getByRole('link',{name:'Export Example',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Export Example',exact:true})).toBeVisible()
- await expect(page.getByRole('link',{name:'Read EPUB',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('link',{name:'Unfolded',exact:true})).toHaveCount(0)
  const headerExport=page.locator('.story-metadata-actions').getByRole('button',{name:'Export Work Metadata',exact:true})
  const refresh=page.locator('.story-metadata-actions').getByRole('button',{name:'Retry / Update Metadata',exact:true})
  expect((await headerExport.boundingBox())!.x).toBeGreaterThan((await refresh.boundingBox())!.x)
@@ -247,7 +247,7 @@ test('exports one work in either format and shows Read EPUB only beside Wayback 
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
  available=true
  await page.reload()
- const wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Read EPUB',exact:true})
+ const wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
  await expect(wayback).toHaveText('Wayback')
  await expect(read).toHaveAttribute('href','https://reader.example/?work=99001')
  expect((await read.boundingBox())!.x).toBeGreaterThan((await wayback.boundingBox())!.x)
@@ -282,7 +282,7 @@ test('offline lists downloaded works across installations of the linked reader a
  await expect(page.getByRole('heading',{name:'Downloaded On Another Installation',exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Connect Reader',exact:true})).toHaveCount(0)
  await expect(page.getByRole('combobox',{name:'Reader Installation',exact:true})).toHaveCount(0)
- await expect(page.getByRole('link',{name:'Read EPUB',exact:true})).toHaveAttribute('href','https://reader.example/?work=77111')
+ await expect(page.getByRole('link',{name:'Read Chapter 1 in EPUB',exact:true})).toHaveAttribute('href','https://reader.example/?work=77111&chapter=1')
 })
 
 test('offline shows cloud-only reader works and disconnects without deleting books',async({page})=>{
@@ -296,7 +296,7 @@ test('offline shows cloud-only reader works and disconnects without deleting boo
  })
  await page.goto('/library');await login(page);await page.goto('/offline')
  await expect(page.getByRole('heading',{name:'Cloud-Only Reader Story',exact:true})).toBeVisible()
- await expect(page.getByRole('link',{name:'Open in Reader',exact:true})).toHaveAttribute('href',new RegExp(`\\?book=${cloudBook.id}$`))
+ await expect(page.getByRole('link',{name:'Read Chapter 1 in EPUB',exact:true})).toHaveAttribute('href',new RegExp(`\\?book=${cloudBook.id}&chapter=1$`))
  await expect(page.getByRole('link',{name:'Read EPUB',exact:true})).toHaveCount(0)
  await expect(page.getByRole('button',{name:'Clear Retained Hub',exact:true})).toHaveCount(0)
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
@@ -308,4 +308,34 @@ test('offline shows cloud-only reader works and disconnects without deleting boo
  await page.reload()
  await expect(page.getByRole('button',{name:'Connect Reader',exact:true})).toBeVisible()
  await expect(page.locator('.story-card')).toHaveCount(0)
+})
+
+test('offline footers show organizer progress and refresh AO3 reading changes',async({page})=>{
+ await page.clock.install()
+ const tables=await fixture(page)
+ const work={id:'progress-offline-work',ao3_work_id:88001,verified_chapters:{1:'88011',2:'88012',3:'88013'}}
+ const entry={id:'progress-offline-entry',work_id:work.id,reading_status:'reading',last_read_chapter:1,notes:'Keep notes',created_at:'2026-11-02T00:00:00Z',original_url:'https://archiveofourown.org/works/88001',metadata_overrides:{title:'Connected Progress',publication_status:'complete',published_chapters:3,total_chapters:3}}
+ tables.works.push(work);tables.library_entries.push(entry)
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'connected',name:'Reader',url:'https://reader.example/',reportedAt:'2026-11-02T00:00:00Z',works:['88001']}],stories:[{...entry,work,metadata:{...blankMetadata,...entry.metadata_overrides},collectionIds:[],personalTags:[]}]}}))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>route.fulfill({json:{enabled:true}}))
+ await page.goto('/library');await login(page)
+ await expect(page.locator('.book-spine-footer .chapter-progress-button')).toHaveText('Ch. 1 / 3')
+ await page.getByRole('link',{name:'Offline',exact:true}).click()
+ const footer=page.locator('.book-spine-footer')
+ await expect(footer.locator('.chapter-progress-button')).toHaveText('Ch. 1 / 3')
+ await expect(footer.getByRole('progressbar',{name:'Chapters Read'})).toHaveAttribute('aria-valuenow','1')
+ await expect(footer.getByRole('img',{name:'Reading',exact:true})).toBeVisible()
+ await expect(footer.getByRole('link',{name:'Read Chapter 2 in EPUB'})).toHaveAttribute('href','https://reader.example/?work=88001&chapter=2')
+ await expect(footer.getByRole('button',{name:'Mark as Caught Up'})).toBeDisabled()
+ // The AO3 companion saves into this same organizer row while the hub is open.
+ entry.last_read_chapter=2
+ await page.clock.runFor(30001)
+ await expect(footer.locator('.chapter-progress-button')).toHaveText('Ch. 2 / 3')
+ await expect(footer.getByRole('link',{name:'Read Chapter 3 in EPUB'})).toHaveAttribute('href','https://reader.example/?work=88001&chapter=3')
+ entry.last_read_chapter=3;entry.reading_status='finished'
+ await page.getByRole('button',{name:'Refresh Reader Reports',exact:true}).click()
+ await expect(footer.getByRole('img',{name:'Finished',exact:true})).toBeVisible()
+ await expect(footer.getByRole('link',{name:'Read Chapter 1 in EPUB'})).toHaveAttribute('href','https://reader.example/?work=88001&chapter=1')
+ await page.getByRole('link',{name:'Library',exact:true}).click()
+ await expect(page.locator('.book-spine-footer .chapter-progress-button')).toHaveText('Ch. 3 / 3')
 })

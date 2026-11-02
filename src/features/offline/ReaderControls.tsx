@@ -1,6 +1,8 @@
 import { savedWorkIdentity } from '../library/model'
 import { useEffect, useState } from 'react'
 import { Dropdown } from '../../components/Dropdown'
+import { BookOpen } from 'lucide-react'
+import { Tooltip } from '../../components/Tooltip'
 import { ConnectReader } from './ConnectReader'
 import { useSearchParams } from 'react-router-dom'
 import { useOffline } from './OfflineProvider'
@@ -36,16 +38,21 @@ export function ReaderControls({ hub = false }: { hub?: boolean }) {
     {errorMessage}{message && <p role="status">{message}</p>}{hub && <div className="form-actions"><button className="button secondary" disabled={!navigator.onLine || disconnecting} onClick={() => void refresh()}>Refresh Reader Reports</button>{connected && <button className="button secondary" disabled={!navigator.onLine || disconnecting} onClick={() => { setMessage(''); void disconnect().then(() => setMessage('Reader disconnected. Books and reading data are preserved.')).catch(() => {}) }}>{disconnecting ? 'Disconnecting Reader…' : 'Disconnect Reader'}</button>}</div>}
   </section>
 }
-export function ReadEpub({ workId, bookId }: { workId: number | null; bookId?: string }) {
+export function ReadEpub({ workId, bookId, variant = 'default', chapter }: { workId: number | null; bookId?: string; variant?: 'default' | 'details' | 'spine'; chapter?: number }) {
   const { snapshot } = useOffline()
   const [readerId, setReaderId] = useSearchParams()
-  const reports = (snapshot?.readers ?? []).filter(reader => workId !== null && reader.works.includes(String(workId)))
+  const reports = (snapshot?.connected === false ? [] : snapshot?.readers ?? []).filter(reader => workId !== null && reader.works.includes(String(workId)))
   const reader = reports.find(reader => reader.id === readerId.get('reader')) ?? reports[0]
   if (!workId && !bookId) return null
   const cloud = snapshot?.connected !== false ? snapshot?.cloudBooks?.find(book => bookId ? book.id === bookId : savedWorkIdentity(book) === String(workId)) : undefined
   if (!reader && !cloud) return null
   let href: string
   const targetWork = workId ?? (cloud ? savedWorkIdentity(cloud) : null)
-  try { href = readerWorkUrl(reader?.url ?? (snapshot?.readers[0]?.url || import.meta.env.VITE_READER_URL || hostedReaderUrl), targetWork ?? cloud!.id, targetWork ? 'work' : 'book') } catch { return <p className="field-help">Reconnect this reader to update its URL.</p> }
-  return <div className="form-actions reader-work-actions"><a className="button secondary" href={href}>{reader ? 'Read EPUB' : 'Open in Reader'}</a>{reports.length > 1 && <label>Open in Reader<select value={reader?.id ?? ''} onChange={event => { const next = new URLSearchParams(readerId); next.set('reader', event.target.value); setReaderId(next, { replace: true }) }}>{reports.map(reader => <option key={reader.id} value={reader.id}>{reader.name}</option>)}</select></label>}</div>
+  try { href = readerWorkUrl(reader?.url ?? (snapshot?.readers[0]?.url || import.meta.env.VITE_READER_URL || hostedReaderUrl), targetWork ?? cloud!.id, targetWork ? 'work' : 'book', chapter) } catch { return <p className="field-help">Reconnect this reader to update its URL.</p> }
+  if (variant === 'spine') {
+    const label = `Read Chapter ${chapter ?? 1} in EPUB`
+    return <Tooltip description={label}>{id => <a className="spine-action" href={href} target="_blank" rel="noopener noreferrer" aria-label={label} aria-describedby={id}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
+  }
+  const link = (descriptionId?: string) => <a className="button secondary" href={href} aria-describedby={descriptionId}>{variant === 'details' ? <><span aria-hidden="true">▤</span>Unfolded</> : reader ? 'Read EPUB' : 'Open in Reader'}</a>
+  return <div className="form-actions reader-work-actions">{variant === 'details' ? <Tooltip description="Open in archives unfolded EPUB reader">{id => link(id)}</Tooltip> : link()}{reports.length > 1 && <label>Open in Reader<select value={reader?.id ?? ''} onChange={event => { const next = new URLSearchParams(readerId); next.set('reader', event.target.value); setReaderId(next, { replace: true }) }}>{reports.map(reader => <option key={reader.id} value={reader.id}>{reader.name}</option>)}</select></label>}</div>
 }

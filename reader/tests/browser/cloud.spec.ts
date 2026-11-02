@@ -181,18 +181,22 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await second.close();await first.close()
 })
 
-test('receives the account cloud inbox without the originating device pairing and publishes before acknowledgement',async({browser})=>{
+for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and publishes before acknowledgement (${cloudOnly ? 'cloud only' : 'downloaded'})`,async({browser})=>{
  const context=await browser.newContext();await signedIn(context)
  let file=Buffer.from(await createZip(epubFiles()).arrayBuffer()),hash=createHash('sha256').update(file).digest('hex')
  const originalHash=hash
  let delivery=0,downloads=0
  const values=new Map<string,Value>()
- let result='queued'
+ let result='queued',failPublication=cloudOnly,publicationFailed=false
  await context.route(url=>/^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
   const request=route.request(),url=new URL(request.url())
   if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
   if(url.pathname.includes('/rpc/reader_cloud_apply')){
    const input=request.postDataJSON(),row={key:input.p_key,value:input.p_value,revision:1}
+   if(failPublication && input.p_key.endsWith('/manifest')) {
+    failPublication=false;publicationFailed=true
+    return route.fulfill({status:503,json:{message:'Temporary sync failure'}})
+   }
    if(input.p_key.endsWith('/deleted') && input.p_value===true)for(const key of values.keys())if(key.startsWith(input.p_key.split('/')[0]+'/'))values.delete(key)
    values.set(row.key,row);return route.fulfill({json:row})
   }
@@ -203,7 +207,7 @@ test('receives the account cloud inbox without the originating device pairing an
     result=request.postDataJSON().status
     return route.fulfill({status:204})
    }
-   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:`40000000-0000-0000-0000-${String(delivery+2).padStart(12,'0')}`,hash,metadata:{title:delivery===2?'Updated Cloud Story':'Cloud Inbox Story',_calibre_uuid:'20000000-0000-0000-0000-000000000001'},status:'queued',message:''}] : []})
+   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:`40000000-0000-0000-0000-${String(delivery+2).padStart(12,'0')}`,hash,metadata:{title:delivery===2?'Updated Cloud Story':'Cloud Inbox Story',_calibre_uuid:'20000000-0000-0000-0000-000000000001',_reader_download:delivery===1?false:!cloudOnly,calibre_work_link:'https://archiveofourown.org/works/8001'},status:'queued',message:''}] : []})
   }
   if(url.pathname.includes('/reader_transfer_destinations'))return route.fulfill({status:201,body:''})
   if(url.pathname.includes('/storage/v1/object/')){
@@ -215,6 +219,16 @@ test('receives the account cloud inbox without the originating device pairing an
   return route.fulfill({json:{}})
  })
  const page=await context.newPage();await page.goto('/')
+ if(cloudOnly) {
+  await expect.poll(()=>publicationFailed).toBe(true)
+  expect(result).toBe('queued')
+  const retained=await page.evaluate(async owner=>{
+   const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open(`bta-reader-account:${owner}`);request.onsuccess=()=>resolve(request.result)})
+   try{return await new Promise<boolean>(resolve=>{const request=db.transaction('books').objectStore('books').getAll();request.onsuccess=()=>resolve(request.result[0]?.hasFile)})}finally{db.close()}
+  },owner)
+  expect(retained).toBe(true)
+  await page.reload()
+ }
  await expect(page.locator('.story-card')).toHaveCount(1)
  await expect(page.getByRole('heading',{name:'Cloud Inbox Story'})).toBeVisible()
  await expect.poll(()=>result).toBe('imported')
@@ -230,20 +244,34 @@ test('receives the account cloud inbox without the originating device pairing an
  expect(pairing.cloud).toBe(true);expect(pairing.account).toBe(owner)
  delivery=1;result='queued'
  await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
- await expect.poll(()=>result).toBe('duplicate')
- expect(downloads).toBe(1)
+ await expect.poll(()=>result).toBe(cloudOnly?'imported':'duplicate')
+ expect(downloads).toBe(cloudOnly?2:1)
  const changed=epubFiles();changed[2].content=changed[2].content.replace('</metadata>','<meta name="revision" content="2"/></metadata>')
  file=Buffer.from(await createZip(changed).arrayBuffer());hash=createHash('sha256').update(file).digest('hex');delivery=2;result='queued'
  await page.getByRole('button',{name:'Check for Incoming Books',exact:true}).click()
  await expect.poll(()=>result).toBe('imported')
  await expect.poll(()=>values.get(`${originalHash}/deleted`)?.value).toBe(true)
  expect(values.has(`${originalHash}/manifest`)).toBe(false)
- expect(downloads).toBe(2)
+ expect(downloads).toBe(cloudOnly?3:2)
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(1)
  await expect(page.getByRole('button',{name:'Updated Cloud Story',exact:true})).toBeVisible()
  await page.getByRole('button',{name:'Manage EPUB',exact:true}).click()
  await expect(page.getByRole('textbox',{name:'Personal Notes',exact:true})).toHaveValue('Keep cloud reading data')
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await page.getByRole('button',{name:'Manage Storage',exact:true}).click()
+ const storage=page.getByRole('dialog',{name:'Manage Local Storage',exact:true})
+ await expect(storage.locator('td[data-column=library]')).toHaveText(cloudOnly?'In Cloud':'Downloaded')
+ await storage.getByLabel('Select Visible Works',{exact:true}).check()
+ const deletion=storage.getByRole('button',{name:'Delete from Cloud',exact:true})
+ await expect(deletion).toBeEnabled()
+ page.once('dialog',dialog=>dialog.dismiss())
+ await deletion.click()
+ await expect(storage.locator('tbody tr')).toHaveCount(1)
+ page.once('dialog',dialog=>dialog.accept())
+ await deletion.click()
+ await expect(storage.locator('tbody tr')).toHaveCount(0)
+ await expect.poll(()=>values.get(`${hash}/deleted`)?.value).toBe(true)
  await context.close()
 })
 

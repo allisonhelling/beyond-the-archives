@@ -4,10 +4,10 @@
 
 1. Upload/import the EPUB into your BookFusion account, directly or through BookFusion’s Calibre plugin.
 2. Copy its BookFusion HTTPS reader or content link.
-3. Open the organizer’s work information page, choose **Edit** beside **BookFusion Link**, and paste the URL into **BookFusion Link**.
+3. Open the organizer’s work information page, choose **Edit AO3 Metadata**, and paste the URL into **BookFusion Link**.
 4. Choose **Book · Latest Position** for a book-level destination without a query or fragment. Choose **Bookmark · Fixed Location** to retain a specific destination and its location parameters. Save the story.
 
-The overlapping-books symbol appears to the right of the caught-up button in the shared bookspine footer, with **Open in BookFusion** hover text. It opens a new tab. BookFusion controls resuming your position; the organizer does not synchronize BookFusion progress. Bookmark destinations are preserved rather than converted to book links. Clearing the field removes the shortcut. Links are private to your organizer account and included in existing metadata exports and full backups.
+On work info pages, **Bookfusion** with the overlapping-books symbol appears to the right of **Unfolded**, after **Wayback**, with “Open in Bookfusion” hover/focus text. It appears only for a valid saved link; the separate BookFusion Link metadata display is removed. **Unfolded** uses the reader’s ▤ symbol with “Open in archives unfolded EPUB reader” hover/focus text and opens the work in the configured reader; it appears only for a matching downloaded or cloud-saved EPUB in the connected reader. The overlapping-books symbol also remains to the right of the caught-up button in the shared bookspine footer, with **Open in BookFusion** hover text. It opens a new tab. BookFusion controls resuming your position; the organizer does not synchronize BookFusion progress. Bookmark destinations are preserved rather than converted to book links. Clearing the field removes the shortcut. Links are private to your organizer account and included in existing metadata exports and full backups.
 
 ## Export and Review Calibre Associations
 

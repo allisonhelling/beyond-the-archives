@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/auth-context'
 import { useActivity } from '../../lib/use-activity'
@@ -25,7 +25,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     window.addEventListener(offlineCleared, clear)
     return () => window.removeEventListener(offlineCleared, clear)
   }, [])
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (!supabase || !authenticated || !userId || !navigator.onLine) return
     const requestGeneration = generation.current
     try {
@@ -44,7 +44,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       next.connected = typeof enabled === 'boolean' ? enabled : Boolean(next.readers.length || next.cloudBooks?.length)
       saveOfflineSnapshot(next); setSnapshot(next); setError('')
     } catch { if (identity.current === userId && generation.current === requestGeneration) setError('Could not update reader reports or retain them locally. Showing the last saved report, if available.') }
-  }
+  }, [authenticated, userId])
   async function disconnect() {
     setDisconnecting(true); setError(''); generation.current++
     try {

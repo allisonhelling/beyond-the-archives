@@ -1,9 +1,9 @@
 import { beforeAll, expect, it, vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
-import { epubBuffer } from '../../src/test/epub-fixture'
+import { epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub } from '../src/epub'
 import { bookDetails, catalogBook } from '../src/model'
-import { importedVersion, prepareImport } from '../src/import-books'
+import { importedVersion, prepareImport, prepareImportVersion } from '../src/import-books'
 import { getBookDetails, listCatalog, loadSetting } from '../src/storage'
 vi.mock('../src/storage',()=>({getBookDetails:vi.fn(),listCatalog:vi.fn(),loadSetting:vi.fn()}))
 beforeAll(()=>{Object.defineProperty(globalThis,'crypto',{value:webcrypto})})
@@ -60,4 +60,53 @@ it('recovers the source ID when restoring an exact hash or replacing a previousl
  const next=await importEpub(await fixture()),previous=bookDetails({...next,workId:null,notes:'Keep my notes'})
  expect(importedVersion(next,previous)).toMatchObject({workId:'8001',notes:'Keep my notes'})
  expect(importedVersion({...next,id:'updated-hash'},previous)).toMatchObject({workId:'8001',notes:'Keep my notes'})
+})
+
+async function unidentifiedFixture(){const buffer=await epubBuffer(epubFiles({source:'urn:isbn:standalone',preface:false}));return {size:buffer.byteLength,arrayBuffer:async()=>buffer} as File}
+it('uses Calibre Work Link to replace a matching work without relying on EPUB identity or Calibre UUID',async()=>{
+ const file=await unidentifiedFixture(),next=await importEpub(file)
+ const previous=bookDetails({...next,id:'saved-work',workId:'8001',notes:'Keep my notes',calibreId:'old-calibre-id'})
+ const unrelated=bookDetails({...next,id:'unrelated-work',workId:'9009',calibreId:'incoming-calibre-id'})
+ vi.mocked(listCatalog).mockResolvedValue([catalogBook(unrelated),catalogBook(previous)])
+ vi.mocked(getBookDetails).mockImplementation(async id=>id===previous.id?previous:unrelated)
+ const prepared=await prepareImport(file,undefined,'incoming-calibre-id','https://archiveofourown.org/works/8001/chapters/12?view_adult=true')
+ expect(prepared.previous?.id).toBe('saved-work')
+ expect(prepared.next).toMatchObject({workId:'8001',calibreId:'incoming-calibre-id',metadata:{calibre_work_link:'https://archiveofourown.org/works/8001'}})
+ expect(importedVersion(prepared.next,prepared.previous).notes).toBe('Keep my notes')
+ expect(unrelated.workId).toBe('9009')
+})
+it('matches standalone books by their saved Calibre Work Link',async()=>{
+ const file=await unidentifiedFixture(),next=await importEpub(file),link='https://fiction.example/story?id=123'
+ const previous=bookDetails({...next,id:'prior-version',metadata:{...next.metadata,calibre_work_link:link},notes:'Private reading note'})
+ vi.mocked(listCatalog).mockResolvedValue([catalogBook(previous)])
+ vi.mocked(getBookDetails).mockResolvedValue(previous)
+ const prepared=await prepareImport(file,undefined,undefined,link)
+ expect(prepared.previous?.id).toBe('prior-version')
+ expect(prepared.next.metadata.calibre_work_link).toBe(link)
+ expect(prepared.next.workId).toBeNull()
+})
+it('applies the same work-link matching to an existing exact-file download',async()=>{
+ const next=bookDetails(await importEpub(await fixture()))
+ const active={...next,id:'active-version',notes:'Active reading notes',active:true}
+ vi.mocked(listCatalog).mockResolvedValue([catalogBook({...next,active:false}),catalogBook(active)])
+ vi.mocked(getBookDetails).mockResolvedValue(active)
+ const prepared=await prepareImportVersion(next,undefined,'new-calibre-id','https://archiveofourown.org/works/8001')
+ expect(prepared.previous?.id).toBe(active.id)
+ expect(prepared.linked).toBe(true)
+ expect(importedVersion(prepared.next,prepared.previous)).toMatchObject({notes:active.notes,calibreId:'new-calibre-id'})
+})
+it('keeps the UUID fallback for blank links and rejects invalid or conflicting links',async()=>{
+ const next=await importEpub(await fixture()),previous=bookDetails({...next,id:'uuid-match',workId:null,calibreId:'same-uuid'})
+ vi.mocked(listCatalog).mockResolvedValue([catalogBook(previous)])
+ vi.mocked(getBookDetails).mockResolvedValue(previous)
+ expect((await prepareImport(await fixture(),undefined,'same-uuid','  ')).previous?.id).toBe('uuid-match')
+ for(const link of ['not a URL','javascript:alert(1)','https://user:password@example.com/work']) await expect(prepareImport(await fixture(),undefined,undefined,link)).rejects.toThrow('Calibre Work Link must')
+ await expect(prepareImport(await fixture(),undefined,undefined,'https://archiveofourown.org/works/9009')).rejects.toThrow('different AO3 work from this EPUB')
+})
+
+it('rejects a saved link whose AO3 identity conflicts with the incoming EPUB',async()=>{
+ const next=await importEpub(await fixture()),link='https://fiction.example/story'
+ const previous=bookDetails({...next,id:'other-work',workId:'9009',metadata:{...next.metadata,calibre_work_link:link}})
+ vi.mocked(listCatalog).mockResolvedValue([catalogBook(previous)])
+ await expect(prepareImport(await fixture(),undefined,undefined,link)).rejects.toThrow('saved EPUB for a different AO3 work')
 })

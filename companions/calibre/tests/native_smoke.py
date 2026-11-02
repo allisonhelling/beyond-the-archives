@@ -12,6 +12,7 @@ app = QApplication([])
 with tempfile.TemporaryDirectory(prefix='archives-native-') as directory:
     database = db(str(Path(directory) / 'library'))
     api = database.new_api
+    api.create_custom_column('work_link', 'Calibre Work Link', 'composite', False, display={'composite_template': "program: 'https://archiveofourown.org/works/8001'"})
     fixture = Path(__file__).resolve().parents[3] / 'reader/tests/fixtures/epubs/reverse bird psychology - Bee_4.epub'
     ids, duplicates = api.add_books([(Metadata('Native Test', ['Test Author']), {'EPUB': str(fixture)})])
     pair = dict(version=1,id=str(uuid.uuid4()),device=str(uuid.uuid4()),token='ab'*32,cloud=False,account='',mode='Automatic',label='Smoke',origin='http://127.0.0.1:4174',local_url='http://127.0.0.1:47821')
@@ -38,6 +39,7 @@ with tempfile.TemporaryDirectory(prefix='archives-native-') as directory:
     results = run(list(ids))
     assert len(store.jobs()) == 2
     selected = next(job for job in store.jobs() if job['id'] != unrelated['id'])
+    assert selected['metadata']['calibre_work_link'] == 'https://archiveofourown.org/works/8001'
     assert delivered == [selected['id']], delivered
     assert [row[0] for row in results] == [selected['id']]
     store.acknowledge(selected['id'], {'status': 'imported', 'message': 'Saved'})
@@ -50,5 +52,5 @@ with tempfile.TemporaryDirectory(prefix='archives-native-') as directory:
     assert not delivered, delivered
     run(None)
     assert delivered == [unrelated['id']], delivered
-    print('Native Calibre selection scope, unchanged-book skipping, result signals, and explicit queue retry passed')
+    print('Native Calibre calculated work-link extraction, selection scope, duplicate skipping, and explicit retry passed')
     database.close()

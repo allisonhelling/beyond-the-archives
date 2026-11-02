@@ -312,11 +312,10 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const ficSection = page.getByRole('region', { name: 'Story Information', exact: true })
   const ficBounds = await ficSection.boundingBox()
   const firstField = ficSection.locator('dt').first()
-  await expect(firstField).toContainText('BookFusion Link')
-  const bookfusionBounds = await firstField.boundingBox()
-  const summaryBounds = await ficSection.getByText('Summary', { exact: true }).boundingBox()
-  expect(bookfusionBounds!.y - ficBounds!.y).toBeLessThan(32)
-  expect(summaryBounds!.y).toBeGreaterThan(bookfusionBounds!.y)
+  await expect(firstField).toHaveText('Summary')
+  await expect(ficSection.locator('dt').filter({ hasText: 'BookFusion Link' })).toHaveCount(0)
+  const summaryBounds = await firstField.boundingBox()
+  expect(summaryBounds!.y - ficBounds!.y).toBeLessThan(32)
   const metadataEdit = await page.locator('.story-metadata-actions').getByRole('button', { name: 'Edit AO3 Metadata', exact: true }).boundingBox()
   const titleRefresh = await page.locator('.story-metadata-actions').getByRole('button', { name: 'Retry / Update Metadata', exact: true }).boundingBox()
   await expect(page.locator('.story-metadata-actions').getByRole('button', { name: 'Retry / Update Metadata', exact: true })).toHaveText('Metadata')
@@ -371,7 +370,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(recBounds.x).toBeGreaterThanOrEqual(favoriteBounds!.x + favoriteBounds!.width)
   expect(recBounds.x + recBounds.width).toBeLessThanOrEqual(metadataActions!.x)
   expect(favoriteBounds!.x).toBeLessThan(titleRefresh!.x)
-  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['BookFusion Link', 'Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', /^Chapter Reading History/, 'Last Edited', 'Other Metadata'])
+  await expect(ficSection.locator(':scope > .details-fic-fields > div > dt')).toHaveText(['Summary', 'Relationships', 'Characters', 'Additional Tags', 'All Tags', /^Personal Tags/i, 'Saved', /^Chapter Reading History/, 'Last Edited', 'Other Metadata'])
   await expect(ficSection.locator('.metadata-list > div').filter({ has: page.getByText('Additional Tags', { exact: true }) }).locator('.metadata-tag')).toHaveText(['Slow Burn'])
   await expect(page.locator('.details-story-stats')).toContainText('6 / ?')
   const headerSection = page.locator('.story-details-heading')
@@ -1009,11 +1008,11 @@ test('publication tiles exclude waiting and unknown works and update after chang
 })
 
 
-for (const surface of ['library', 'details'] as const) for (const publication of ['complete', 'in_progress', 'abandoned'] as const) test(`book-spine footer saves reading status with chapter edits on ${surface} (${publication})`, async ({ page }) => {
+for (const surface of ['library', 'details'] as const) for (const publication of ['complete', 'in_progress', 'abandoned', 'deleted'] as const) test(`book-spine footer saves reading status with chapter edits on ${surface} (${publication})`, async ({ page }) => {
   test.setTimeout(60000) // Four persisted edits, caught-up/undo, and a final reload.
   const tables = await fixture(page)
   tables.works.push({ id: 'progress-work', ao3_work_id: 1, verified_chapters: {} })
-  tables.library_entries.push({ id: 'progress-entry', work_id: 'progress-work', reading_status: 'paused_reading', last_read_chapter: 1, is_favorite: false, notes: 'Keep this note', original_url: 'https://archiveofourown.org/works/1', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: `Progress ${publication}`, publication_status: publication, published_chapters: 3, total_chapters: publication === 'in_progress' ? 5 : 3 } })
+  tables.library_entries.push({ id: 'progress-entry', work_id: 'progress-work', work_status: publication === 'deleted' ? 'deleted' : 'available', reading_status: 'paused_reading', last_read_chapter: 1, is_favorite: false, notes: 'Keep this note', original_url: 'https://archiveofourown.org/works/1', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: `Progress ${publication}`, publication_status: publication, published_chapters: 3, total_chapters: ['in_progress','deleted'].includes(publication) ? 5 : 3 } })
   await page.goto('/library'); await login(page)
   await page.goto(surface === 'library' ? '/library' : '/stories/progress-entry')
   const container = surface === 'library' ? page.locator(`[data-story-id="progress-entry"]`) : page.locator('.story-details-page')
@@ -1084,7 +1083,7 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
     await button.focus()
     const tooltip = first.getByRole('tooltip')
     await expect(tooltip).toBeVisible()
-    await expect(tooltip).toHaveText(/^(Read chapter 6|Mark all chapters as read)$/)
+    await expect(tooltip).toHaveText(/^(Read Chapter 6|Mark all chapters as read)$/)
     const tooltipBounds = await tooltip.boundingBox()
     expect(tooltipBounds!.x).toBeGreaterThanOrEqual(0)
     expect(tooltipBounds!.x + tooltipBounds!.width).toBeLessThanOrEqual(await page.evaluate(() => innerWidth))
@@ -1093,7 +1092,7 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   }
   if (info.project.name === 'desktop') {
     await first.locator('.spine-action').first().hover()
-    await expect(first.getByRole('tooltip')).toHaveText('Read chapter 6')
+    await expect(first.getByRole('tooltip')).toHaveText('Read Chapter 6')
     await page.mouse.move(0, 0)
     await expect(first.getByRole('tooltip')).toHaveCount(0)
   }
@@ -2579,12 +2578,20 @@ test('collection editors hide custom collections and View Hidden restores them i
   const editor = page.getByRole('dialog', { name: 'Edit Collection', exact: true })
   const hideButton = editor.getByRole('button', { name: 'Hide Collection', exact: true })
   await expect(hideButton.locator('.lucide-eye')).toBeVisible()
-  const visibilityBounds = (await hideButton.boundingBox())!, titleBounds = (await editor.getByRole('heading', { name: 'Edit Collection', exact: true }).boundingBox())!
-  expect(visibilityBounds.x).toBeGreaterThanOrEqual(titleBounds.x + titleBounds.width)
-  expect(Math.abs(visibilityBounds.y + visibilityBounds.height / 2 - titleBounds.y - titleBounds.height / 2)).toBeLessThan(2)
+  // Read both boxes in one layout pass; initial focus can recenter a tall dialog.
+  await expect(async () => {
+    const alignment = await hideButton.evaluate(button => {
+      const action = button.getBoundingClientRect()
+      const title = button.closest('.dialog-title')!.querySelector('h2')!.getBoundingClientRect()
+      return { gap: action.left - title.right, centerOffset: Math.abs(action.y + action.height / 2 - title.y - title.height / 2) }
+    })
+    expect(alignment.gap).toBeGreaterThanOrEqual(0)
+    expect(alignment.centerOffset).toBeLessThan(2)
+  }).toPass({ timeout: 5000 })
   if (info.project.name === 'desktop') {
     await hideButton.hover()
     await expect(editor.getByRole('tooltip', { name: 'Hide Collection', exact: true })).toBeVisible()
+    const visibilityBounds = (await hideButton.boundingBox())!
     const tooltipBounds = (await editor.getByRole('tooltip', { name: 'Hide Collection', exact: true }).boundingBox())!
     expect(tooltipBounds.y).toBeGreaterThanOrEqual(visibilityBounds.y + visibilityBounds.height)
   }
@@ -3907,9 +3914,9 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
  await page.goto('/stories/refinements-entry')
  await expect(page.getByRole('heading',{name:'Reading and Organization',exact:true})).toBeVisible({timeout:15000})
- const edit=page.getByRole('button',{name:'Edit BookFusion Link',exact:true})
- await edit.focus()
- await expect(edit.locator('svg')).toHaveCSS('background-color','rgb(151, 0, 0)')
+ await expect(page.getByRole('link',{name:'Unfolded',exact:true})).toHaveCount(0)
+ await page.getByRole('link',{name:'View in Wayback Machine',exact:true}).focus()
+ await expect(page.getByRole('tooltip',{name:'View in Wayback Machine',exact:true})).toBeVisible()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })
 

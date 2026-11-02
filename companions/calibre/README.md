@@ -44,13 +44,17 @@ The shared reader queue verifies file size/hash and uses the existing EPUB parse
 
 ## Optional Metadata Mapping
 
+**Import Storage** in the export confirmation offers **Download Imports** (default) and **Cloud Only**. Cloud Only requires a paired reader account; guests always download. This choice is saved with each queued delivery, including retries. The reader temporarily processes the original, publishes the cloud book and reading state, then removes the new local download. Existing downloads are kept. Cloud-only books can be downloaded later from their tiles or Manage Local Storage. Rebuild/reinstall the plugin ZIP and restart Calibre to use the updated export controls.
+
+**Calibre Work Link** is read automatically from the calculated/text column `#work_link` in plugin 1.3.0. No mapping is required. To use a different source, add `"calibre_work_link":"#your_column"` to the mapping. The reader displays the saved value as Calibre Work Link in View Details. Recognized AO3 links also connect matching organizer tiles to their reader works through the shared identity resolver. A valid link selects the matching active EPUB for automatic replacement, even when the incoming EPUB lacks an AO3 identity or uses a different Calibre UUID. AO3 chapter/collection links normalize to their work URL; other HTTP(S) work links match their saved URL. Notes, history, mapped reading position and pending organizer updates are preserved. Blank links use the existing UUID/embedded-identity fallback. Invalid links or conflicts with an identified AO3 work remain failed transfers for review.
+
 In **Pair Reader Destination**, the optional JSON maps reader metadata fields to Calibre lookup names:
 
 ```json
 {"title":"title","authors":"authors","publisher":"publisher","fandoms":"#fandoms","additional_tags":"tags"}
 ```
 
-Supported reader fields: `title`, `authors`, `publisher`, `language`, `language_code`, `rating`, `summary`, `fandoms`, `additional_tags`, and `series`. Use text fields for scalar values and Calibre multi-value fields for lists. Calibre’s scalar `series` column needs a multi-value custom source to map directly to the reader’s `series` list. Unsupported values are ignored by the reader; unmapped fields come from the EPUB. Summary mappings are plain text. Mapping cannot overwrite book identity, notes, progress, or history. Metadata is limited to 16 KiB per transfer; EPUBs are limited to 50 MiB.
+Supported reader fields: `title`, `authors`, `publisher`, `language`, `language_code`, `rating`, `summary`, `fandoms`, `additional_tags`, and `series`. Use text fields for scalar values and Calibre multi-value fields for lists. Calibre’s scalar `series` column needs a multi-value custom source to map directly to the reader’s `series` list. Unsupported values are ignored by the reader; unmapped fields come from the EPUB. Summary mappings are plain text. Other metadata mappings cannot overwrite book identity, notes, progress, or history. Metadata is limited to 16 KiB per transfer; EPUBs are limited to 50 MiB.
 
 ## Revoke Pairing
 
@@ -71,4 +75,4 @@ For a native worker smoke check after installing into an isolated Calibre config
 
 The CI matrix runs the Python transport tests and packaging on Windows, macOS, and Linux. Native Calibre/Qt installation and browser loopback permissions still require platform checks: install the ZIP, pair guest and account libraries, send selected/all books, cancel during upload, restart offline, retry without a destination change, and verify duplicates/new versions/history in the reader. CI transport checks do not establish native GUI compatibility. Cloud operation requires the migration and edge function described in the [reader implementation guide](../../reader/docs/IMPLEMENTATION.md#calibre-transfers).
 
-Rebuild and reinstall the plugin ZIP after updating to 1.2.0, then restart Calibre. Older installed versions do not gain duplicate checks or the selected-only queue behavior from a reader update. Version 1.2.0 includes stable Calibre book identity, selection-scoped retries, and grouped results. An initial delivery from an older plugin may need one metadata update to associate its stable Calibre UUID with an already-imported file.
+Rebuild and reinstall the plugin ZIP after updating to 1.3.0, then restart Calibre and load the updated reader build. Older installed versions do not gain duplicate checks or the selected-only queue behavior from a reader update. Version 1.3.0 includes automatic Calibre Work Link transfer along with stable Calibre book identity, selection-scoped retries, and grouped results. An initial delivery from an older plugin may need one metadata update to associate its stable Calibre UUID with an already-imported file.

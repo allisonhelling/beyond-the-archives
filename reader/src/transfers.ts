@@ -1,11 +1,11 @@
 import { readerCloud, readerCloudConfig, syncCloud } from './cloud'
 import { digest } from './epub'
-import { importedVersion, prepareImport, writeImport } from './import-books'
+import { importedVersion, prepareImport, prepareImportVersion, writeImport } from './import-books'
 import type { ReaderMetadata } from './model'
-import { all, bookStores, getBookDetails, putBook, loadSetting, readerOwner, setting, transaction } from './storage'
+import { all, bookStores, getBookDetails, loadSetting, readerOwner, removeDownload, setting, transaction } from './storage'
 
 export type TransferPair = { version: 1; id: string; token: string; device: string; label: string; account: string; cloud: boolean; origin: string; cloud_url?: string; local_url: string; mode: 'Automatic' | 'Cloud Inbox' | 'Local Reader' }
-export type ImportJob = { id: string; hash: string; filename: string; metadata: Record<string, unknown>; status: 'queued' | 'imported' | 'duplicate' | 'error' | 'cancelled'; message: string; hasFile?: boolean }
+export type ImportJob = { id: string; hash: string; filename: string; metadata: Record<string, unknown>; status: 'queued' | 'imported' | 'duplicate' | 'error' | 'cancelled'; message: string; hasFile?: boolean; releaseDownload?: boolean }
 type InboxRow = { destination: string; id: string; hash: string; metadata: Record<string, unknown>; status: ImportJob['status']; message: string }
 const jobKey = (id: string) => `calibre-job:${id}`
 const fileKey = (id: string) => `calibre-file:${id}`
@@ -68,33 +68,36 @@ export async function processTransfers() {
     if (job.status !== 'queued' || !job.hasFile) continue
     if (cancelled) { await setting(jobKey(job.id),{...job,status:'cancelled',message:'Cancelled before import. Retry to resume.'}); continue }
     try {
+      if (job.metadata._reader_download !== undefined && typeof job.metadata._reader_download !== 'boolean') throw new Error('Invalid import storage choice.')
+      if (job.metadata._reader_download === false && !readerOwner) throw new Error('Cloud Only imports require a reader account.')
       const existing = await getBookDetails(job.hash)
-      if (existing?.hasFile) {
-        // Exact downloads need neither another fetch nor another EPUB parse; only mapped metadata changes.
-        await transaction(bookStores,tx=>{
-          const request=tx.objectStore('books').get(job.hash)
-          request.onsuccess=()=>{
-            const current=request.result as typeof existing | undefined
-            if (!current?.hasFile) { tx.abort(); return }
-            putBook(tx,{...current,calibreId:calibreIdentity(job.metadata) ?? current.calibreId,metadata:{...current.metadata,...mappedMetadata(job.metadata)}})
-            tx.objectStore('settings').put({id:jobKey(job.id),value:{...job,hasFile:false,status:'duplicate',message:'Already imported; Calibre metadata updated.'}})
-            tx.objectStore('settings').delete(fileKey(job.id))
-          }
-        })
-        count++
-        continue
+      const calibreId = calibreIdentity(job.metadata)
+      let prepared
+      if (existing?.hasFile) prepared = await prepareImportVersion(existing, undefined, calibreId, job.metadata.calibre_work_link)
+      else {
+        const file = await loadSetting<Blob>(fileKey(job.id))
+        if (!file) throw new Error('The staged original is missing. Send this book again from Calibre.')
+        prepared = await prepareImport(new File([file],job.filename,{type:'application/epub+zip'}),undefined,calibreId,job.metadata.calibre_work_link)
       }
-      const file = await loadSetting<Blob>(fileKey(job.id))
-      if (!file) throw new Error('The staged original is missing. Send this book again from Calibre.')
-      const {next,duplicate,previous} = await prepareImport(new File([file],job.filename,{type:'application/epub+zip'}),undefined,calibreIdentity(job.metadata))
+      const {next,duplicate,previous,linked} = prepared
       if (cancelled) { await setting(jobKey(job.id),{...job,status:'cancelled',message:'Cancelled before save. Retry to resume.'}); continue }
-      next.metadata = {...next.metadata,...mappedMetadata(job.metadata)}
+      const metadata = { ...mappedMetadata(job.metadata), ...(linked && { calibre_work_link: next.metadata.calibre_work_link }) }
+      next.metadata = {...next.metadata,...metadata}
       // Calibre updates replace the prior version using the shared reading-state mapper.
-      const result: ImportJob = {...job,hasFile:false,status:duplicate?.hasFile ? 'duplicate' : 'imported',message:duplicate?.hasFile ? 'Existing copy retained.' : previous && previous.id !== next.id ? 'Updated existing EPUB; reading history preserved.' : 'Imported.'}
+      const result: ImportJob = {...job,hasFile:false,releaseDownload:job.metadata._reader_download === false && !duplicate?.hasFile,status:duplicate?.hasFile ? 'duplicate' : 'imported',message:previous && previous.id !== next.id ? 'Updated existing EPUB; reading history preserved.' : duplicate?.hasFile ? 'Existing copy retained; Calibre metadata updated.' : 'Imported.'}
       if (next.unavailableImages) result.message += ` ${next.unavailableImages} unavailable image${next.unavailableImages === 1 ? '' : 's'} replaced with placeholders.`
       await transaction([...bookStores,'pending'],tx=>{
-        const save = (current = previous) => { writeImport(tx,importedVersion(next,current),current,'delete'); tx.objectStore('settings').put({id:jobKey(job.id),value:result}); tx.objectStore('settings').delete(fileKey(job.id)) }
-        if (previous) { const request=tx.objectStore('books').get(previous.id); request.onsuccess=()=>save(request.result) } else save()
+        const save = (current = previous) => {
+          const incoming = existing?.hasFile && current?.id === next.id ? {...next,metadata:{...current.metadata,...metadata}} : next
+          const saved = importedVersion(incoming,current); writeImport(tx, linked ? {...saved,active:true} : saved,current,'delete'); tx.objectStore('settings').put({id:jobKey(job.id),value:result}); tx.objectStore('settings').delete(fileKey(job.id)) }
+        const apply = () => {
+          if (previous) { const request=tx.objectStore('books').get(previous.id); request.onsuccess=()=>save(request.result) } else save()
+        }
+        if (existing?.hasFile) {
+          // A download removed while identity resolution was pending must not be resurrected without its file.
+          const request=tx.objectStore('books').get(next.id)
+          request.onsuccess=()=>{if(!request.result?.hasFile)tx.abort();else apply()}
+        } else apply()
       })
       count++
     } catch(error) {
@@ -154,7 +157,18 @@ async function receive() {
   }
   const count = await processTransfers()
   // Publish manifests/history before acknowledging cloud delivery, so other devices can discover the book.
-  if (readerOwner && count) await syncCloud(true)
+  const releases = (await transferJobs()).filter(job => job.releaseDownload && ['imported','duplicate'].includes(job.status))
+  if (readerOwner && (count || releases.length)) {
+    const conflicts = await syncCloud(true)
+    if (conflicts.length && releases.length) throw new Error('Resolve cloud sync conflicts before finishing Cloud Only imports. Downloads are retained until then.')
+    for (const job of releases) {
+      // Keep the temporary original until its manifest and reading state are published.
+      if (!await loadSetting(`cloud-file:${job.hash}`)) throw new Error('Cloud upload is incomplete. The temporary download is retained for retry.')
+      const book = await getBookDetails(job.hash)
+      if (book?.hasFile) await removeDownload(book)
+      await setting(jobKey(job.id), {...job,releaseDownload:false,message:job.message + ' Saved in cloud; download available on request.'})
+    }
+  }
   for(const job of await transferJobs()) {
     if(job.status==='queued' || await loadSetting(`calibre-ack:${job.id}`) === job.status) continue
     const [transport,destination,id]=job.id.split(':')
@@ -170,5 +184,5 @@ async function receive() {
   }
   // Results stay saved even if acknowledgement delivery fails.
   if(errors.length && !count) throw errors[0]
-  return count
+  return count || releases.length
 }

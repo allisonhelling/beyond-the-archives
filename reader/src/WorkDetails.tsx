@@ -22,6 +22,7 @@ export function WorkDetails({ book, onClose, appearance }: { book: BookDetails; 
     ...dateFields.map(field => ({ label: field.label, value: field.value(book) })),
     { label: 'Metadata Snapshot Saved', value: book.metadataAt },
     { label: 'Source Work Link', value: metadata.manual_url },
+    { label: 'Calibre Work Link', value: metadata.calibre_work_link },
     { label: 'Author Links', value: Object.entries(metadata.author_links ?? {}).map(([name, url]) => `${name}: ${url}`) },
     { label: 'Series Memberships', value: metadata.series_memberships?.map(series => `${series.name}${series.position === null ? '' : ` · Part ${series.position}`} · ${series.url}`) },
     { label: 'AO3 Collections', value: metadata.ao3_collections },

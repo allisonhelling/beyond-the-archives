@@ -1093,7 +1093,7 @@ test('keeps automatic successful organizer sync quiet and shows manual reports',
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Organizer & Sync', exact: true }).click()
   await page.getByRole('button', { name: 'Sync Now', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Checked 0 of 0 EPUB versions.' })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Checked 0 identified EPUB versions; 0 versions linked.' })).toBeVisible()
 })
 
 test('saves independent category colors and uses one color only for Filled Chips', async ({ page }) => {

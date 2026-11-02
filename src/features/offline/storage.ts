@@ -14,9 +14,10 @@ export function readOfflineSnapshot(): OfflineSnapshot | undefined {
 }
 export function saveOfflineSnapshot(snapshot: OfflineSnapshot) { localStorage.setItem(key, JSON.stringify(snapshot)) }
 export function clearOfflineSnapshot() { localStorage.removeItem(key); window.dispatchEvent(new Event(offlineCleared)) }
-export function readerWorkUrl(readerUrl: string, work: string | number, parameter: 'work' | 'book' = 'work'): string {
+export function readerWorkUrl(readerUrl: string, work: string | number, parameter: 'work' | 'book' = 'work', chapter?: number): string {
   const url = readerBaseUrl(readerUrl)
   url.searchParams.set(parameter, String(work))
+  if (chapter !== undefined && Number.isSafeInteger(chapter) && chapter > 0) url.searchParams.set('chapter', String(chapter))
   return url.href
 }
 

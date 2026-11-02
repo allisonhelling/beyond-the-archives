@@ -164,7 +164,6 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .story-card h2 a:hover, .story-card h2 a:focus-visible { color: #800020; }
 .story-card-title { display: flex; align-items: flex-start; gap: 7px; }
 .story-card-title h2 { min-width: 0; }
-.work-status-badge { display: inline-block; margin-inline-start: 8px; padding: 2px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-surface); font-family: var(--font-sans); font-size: max(var(--work-tile-min-font-size, 0px), 13px); color: var(--color-brand); vertical-align: middle; }
 .story-card-title h2 > .action-tooltip { vertical-align: middle; }
 .story-summary { font-size: var(--minimum-text-size); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
 .story-facts { font-size: max(var(--work-tile-min-font-size, 0px), 14px); margin-bottom: 10px; }

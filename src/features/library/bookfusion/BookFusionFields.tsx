@@ -9,8 +9,8 @@ export function BookFusionFields({ value, onChange }: { value: BookFusionLink | 
   </div>
 }
 
-export function BookFusionButton({ value, label = false }: { value: BookFusionLink | null | undefined; label?: boolean }) {
+export function BookFusionButton({ value, variant = 'spine' }: { value: BookFusionLink | null | undefined; variant?: 'spine' | 'details' }) {
   const link = safeBookFusionLink(value)
   if (!link) return null
-  return <Tooltip description={link.kind === 'bookmark' ? 'Open in BookFusion · fixed bookmark location' : 'Open in BookFusion'}>{descriptionId => <a className={label ? 'clickable-text' : 'spine-action'} href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Open in BookFusion" aria-describedby={descriptionId}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h7a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4Z" /><path d="M9 4v12a4 4 0 0 0 4 4h7V8a4 4 0 0 0-4-4H9Z" /></svg>{label && ' Open in BookFusion'}</a>}</Tooltip>
+  return <Tooltip description={variant === 'details' ? 'Open in Bookfusion' : link.kind === 'bookmark' ? 'Open in BookFusion · fixed bookmark location' : 'Open in BookFusion'}>{descriptionId => <a className={variant === 'details' ? 'button secondary' : 'spine-action'} href={link.url} target="_blank" rel="noopener noreferrer" aria-label={variant === 'details' ? 'Bookfusion' : 'Open in BookFusion'} aria-describedby={descriptionId}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h7a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4Z" /><path d="M9 4v12a4 4 0 0 0 4 4h7V8a4 4 0 0 0-4-4H9Z" /></svg>{variant === 'details' && 'Bookfusion'}</a>}</Tooltip>
 }

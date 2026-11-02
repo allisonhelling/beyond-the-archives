@@ -15,7 +15,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 MAX_EPUB = 50 * 1024 * 1024
 MODES = ('Automatic', 'Cloud Inbox', 'Local Reader')
-METADATA_FIELDS = ('title', 'authors', 'publisher', 'language', 'language_code', 'rating', 'summary', 'fandoms', 'additional_tags', 'series')
+METADATA_FIELDS = ('title', 'authors', 'publisher', 'language', 'language_code', 'rating', 'summary', 'fandoms', 'additional_tags', 'series', 'calibre_work_link')
 RESULT_GROUPS = ('Successful', 'Failed', 'Pending', 'Skipped')
 
 
@@ -25,6 +25,14 @@ def result_group(status):
     if status in ('error', 'cancelled'):
         return 'Failed'
     return 'Skipped' if status == 'skipped' else 'Pending'
+
+
+def book_metadata(db, book_id, mapping):
+    metadata = {target: db.field_for(source, book_id) for target, source in mapping.items()}
+    if 'calibre_work_link' not in metadata and '#work_link' in db.field_metadata:
+        metadata['calibre_work_link'] = db.field_for('#work_link', book_id)
+    metadata['_calibre_uuid'] = db.field_for('uuid', book_id)
+    return metadata
 
 
 def validate_pair(value):
@@ -106,6 +114,8 @@ class TransferStore:
     def enqueue(self, pair, mode, title, data, metadata):
         if not data or len(data) > MAX_EPUB:
             raise ValueError('EPUB must be between 1 byte and 50 MiB')
+        if metadata.get('_reader_download') is False and not pair['cloud']:
+            raise ValueError('Cloud Only requires a paired reader account')
         metadata = {**metadata, '_filename': title[:200] + '.epub'}
         if len(json.dumps(metadata, ensure_ascii=False).encode('utf-8')) > 16384:
             raise ValueError('Mapped metadata exceeds 16 KiB')

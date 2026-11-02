@@ -9,6 +9,7 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('transfer', Path(__file__).parents[1] / 'plugin' / 'transfer.py')
 transfer = importlib.util.module_from_spec(spec)
@@ -27,6 +28,26 @@ class TransferTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.store = transfer.TransferStore(self.temp.name)
+
+    def test_reads_work_link_automatically_and_preserves_explicit_mapping_overrides(self):
+        fields = {'uuid': str(uuid.uuid4()), '#work_link': 'https://archiveofourown.org/works/8001', '#other_link': 'https://archiveofourown.org/works/8002'}
+        db = SimpleNamespace(field_metadata={'#work_link': {}, '#other_link': {}}, field_for=lambda field, _book: fields[field])
+        self.assertEqual(transfer.book_metadata(db, 1, {})['calibre_work_link'], fields['#work_link'])
+        self.assertEqual(transfer.book_metadata(db, 1, {'calibre_work_link': '#other_link'})['calibre_work_link'], fields['#other_link'])
+        db.field_metadata = {}
+        self.assertNotIn('calibre_work_link', transfer.book_metadata(db, 1, {}))
+        self.assertEqual(transfer.book_metadata(db, 1, {})['_calibre_uuid'], fields['uuid'])
+
+    def test_cloud_only_choice_is_pinned_and_changes_create_a_new_delivery(self):
+        destination = pair(True)
+        metadata = {'_calibre_uuid': str(uuid.uuid4()), '_reader_download': False}
+        job = self.store.enqueue(destination, 'Automatic', 'Cloud Only', b'epub', metadata)
+        self.assertFalse(transfer.TransferStore(self.temp.name).jobs()[0]['metadata']['_reader_download'])
+        self.assertEqual(self.store.enqueue(destination, 'Automatic', 'Cloud Only', b'epub', metadata)['id'], job['id'])
+        downloaded = self.store.enqueue(destination, 'Automatic', 'Cloud Only', b'epub', {**metadata, '_reader_download': True})
+        self.assertNotEqual(downloaded['id'], job['id'])
+        with self.assertRaisesRegex(ValueError, 'requires a paired reader account'):
+            self.store.enqueue(pair(), 'Automatic', 'Guest', b'epub', metadata)
 
     def test_default_tracks_reader_account_and_explicit_mode(self):
         self.assertEqual(transfer.destination(pair(), 'Automatic'), 'Local Reader')

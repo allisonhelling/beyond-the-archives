@@ -9,11 +9,12 @@ from qt.core import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel,
                      QMenu, QPlainTextEdit, QProgressBar, QPushButton, QThread,
                      QTabWidget, QVBoxLayout, pyqtSignal)
 from calibre_plugins.archives_unfolded.transfer import (
-    Bridge, METADATA_FIELDS, MODES, RESULT_GROUPS, TransferStore, destination, result_group, validate_pair)
+    Bridge, METADATA_FIELDS, MODES, RESULT_GROUPS, TransferStore, book_metadata, destination, result_group, validate_pair)
 
 prefs = JSONConfig('plugins/archives_unfolded')
 prefs.defaults['pair'] = None
 prefs.defaults['mapping'] = {}
+prefs.defaults['download'] = True
 
 
 class Worker(QThread):
@@ -21,10 +22,11 @@ class Worker(QThread):
     failed = pyqtSignal(str)
     result = pyqtSignal(str, str, str)
 
-    def __init__(self, store, db, ids, pair, mode, mapping, parent):
+    def __init__(self, store, db, ids, pair, mode, mapping, parent, download=True):
         super().__init__(parent)
         self.store, self.db, self.ids = store, db, ids
         self.pair, self.mode, self.mapping = pair, mode, mapping
+        self.download = download
         self.cancel = threading.Event()
 
     def run(self):
@@ -41,8 +43,8 @@ class Worker(QThread):
                         self.progress.emit(title + ': Skipped (no EPUB format).', index + 1, len(self.ids))
                         continue
                     data = self.db.format(book_id, 'EPUB')
-                    metadata = {target: self.db.field_for(source, book_id) for target, source in self.mapping.items()}
-                    metadata['_calibre_uuid'] = self.db.field_for('uuid', book_id)
+                    metadata = book_metadata(self.db, book_id, self.mapping)
+                    metadata['_reader_download'] = self.download
                     job = self.store.enqueue(self.pair, self.mode, title, data, metadata)
                     selected_jobs[job['id']] = job
                     self.progress.emit(title + (': Already imported; skipped.' if job['status'] in ('imported', 'duplicate') else ': Queued for ' + job['destination'] + '.'), index + 1, len(self.ids))
@@ -108,7 +110,8 @@ class ArchivesUnfoldedAction(InterfaceAction):
         layout.addWidget(pair_input)
         layout.addWidget(QLabel('Optional Metadata Mapping (reader field → Calibre field, including #custom columns):\n' + ', '.join(METADATA_FIELDS)))
         mapping_input = QPlainTextEdit(json.dumps(prefs['mapping'], ensure_ascii=False))
-        mapping_input.setPlaceholderText('{"title":"title","authors":"authors","fandoms":"#fandoms"}')
+        mapping_input.setPlaceholderText('{"title":"title","authors":"authors","fandoms":"#fandoms","calibre_work_link":"#work_link"}')
+        layout.addWidget(QLabel('Calibre Work Link automatically uses #work_link when present. Map calibre_work_link to override its source.'))
         layout.addWidget(mapping_input)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         layout.addWidget(buttons)
@@ -149,6 +152,12 @@ class ArchivesUnfoldedAction(InterfaceAction):
         mode.setCurrentText(pair['mode'])
         form = QFormLayout()
         form.addRow('Transfer Mode', mode)
+        storage = QComboBox()
+        storage.addItems(['Download Imports', 'Cloud Only'])
+        storage.setCurrentIndex(0 if prefs['download'] or not pair['cloud'] else 1)
+        storage.setEnabled(pair['cloud'] and ids is not None)
+        form.addRow('Import Storage', storage)
+        form.addRow(QLabel('Cloud Only keeps new imports in the account cloud after processing. Existing downloads are kept.\nGuest libraries require downloads. Retries keep the original storage choice.'))
         layout.addLayout(form)
         summary = QLabel()
         layout.addWidget(summary)
@@ -181,6 +190,7 @@ class ArchivesUnfoldedAction(InterfaceAction):
             return
         pair['mode'] = mode.currentText()
         prefs['pair'] = pair
+        prefs['download'] = storage.currentIndex() == 0
         self.start_bridge()
         progress = QDialog(self.gui)
         progress.setWindowTitle('Calibre Transfer Results')
@@ -210,7 +220,7 @@ class ArchivesUnfoldedAction(InterfaceAction):
                 tabs.setCurrentWidget(views['Failed'])
         cancel = QPushButton('Cancel Transfer')
         progress_layout.addWidget(cancel)
-        self.worker = Worker(self.store, db, ids, pair, pair['mode'], prefs['mapping'], progress)
+        self.worker = Worker(self.store, db, ids, pair, pair['mode'], prefs['mapping'], progress, download=storage.currentIndex() == 0)
 
         def update(text, current, total):
             status.setText(text)

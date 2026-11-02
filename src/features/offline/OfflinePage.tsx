@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { offlineStories } from './storage'
 import { Link } from 'react-router-dom'
 import { Brand } from '../../components/Brand'
@@ -7,7 +8,13 @@ import { ReadingDashboard } from '../library/ReadingDashboard'
 import { useOffline } from './OfflineProvider'
 import { ReaderControls } from './ReaderControls'
 export function OfflinePage({ standalone = false }: { standalone?: boolean }) {
-  const { snapshot } = useOffline()
+  const { snapshot, refresh } = useOffline()
+  useEffect(() => {
+    const update = () => { if (!document.hidden) void refresh() }
+    update()
+    const timer = window.setInterval(update, 30000)
+    return () => window.clearInterval(timer)
+  }, [refresh])
   const stories = offlineStories(snapshot)
   const content = <><div className="page-heading"><h1>Offline</h1><p>Browse downloaded and cloud-saved works in your reader. Cloud-only EPUBs require an internet connection to download; the reader checks local availability when opened.</p></div><ReaderControls hub />
     {!snapshot && <p>No retained library is available. Initial setup requires connectivity: sign in online, connect the reader, sync its reports, and load this organizer.</p>}

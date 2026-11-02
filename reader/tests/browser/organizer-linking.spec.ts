@@ -1,7 +1,7 @@
 import { organizerAccount, owner } from './account-fixture'
 import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
-import { epubFiles } from '../../../src/test/epub-fixture'
+import { chapterNotesFiles, epubFiles } from '../../../src/test/epub-fixture'
 import type { BookDetails } from '../../src/model'
 import { connectOrganizer } from './library-fixture'
 
@@ -57,6 +57,9 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
    await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(['books', 'catalog', 'pending'], 'readwrite'), request = tx.objectStore('books').getAll()
     request.onsuccess = () => {
+     const linked = (request.result as BookDetails[]).find(book => book.workId === '8001')!
+     // Recover the same Calibre identity for older cloud manifests on organizer sync.
+     tx.objectStore('books').put({...linked,workId:null,metadata:{...linked.metadata,manual_url:undefined,calibre_work_link:'https://archiveofourown.org/works/8001/chapters/12'}})
      const source = (request.result as BookDetails[]).find(book => book.workId === '8002')!
      for (const [id, workId, account] of [['foreign', '8003', 'another-account'], ['waiting', '8004', undefined]]) {
       const book = { ...source, id, workId, account, hasFile: false }
@@ -96,4 +99,53 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
  await page.getByRole('button', { name: 'Save Personal Notes', exact: true }).click()
  await expect.poll(() => writes.length).toBe(1)
  expect(writes[0]).toMatchObject({ notes: 'A linked edit', version: 'v1', base: { notes: 'Organizer note' } })
+})
+
+test('pulls AO3 chapter progress into the downloaded EPUB and opens the requested EPUB chapter',async({page,context})=>{
+ await organizerAccount(context)
+ let remote={id:'organizer-8001',version:'v1',status:'to_read',progress:0,notes:''}
+ const writes:Record<string,unknown>[]=[],cloudFields=new Map<string,unknown>()
+ await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/reader_cloud_apply',async route=>{
+  const input=route.request().postDataJSON()
+  cloudFields.set(input.p_key,input.p_value)
+  return route.fulfill({json:{key:input.p_key,value:input.p_value,revision:input.p_base+1}})
+ })
+ await context.route('https://pnrdztfydurupcqwumvr.supabase.co/rest/v1/rpc/userscript_library',async route=>{
+  const request=route.request().postDataJSON()
+  if(request.p_action==='reader_report')return route.fulfill({json:{}})
+  if(request.p_action!=='get'){writes.push(request.p_input);remote={...remote,...request.p_input,version:'reader-save'}}
+  return route.fulfill({json:{entry:request.p_work===8001?remote:null}})
+ })
+ const files=chapterNotesFiles().map(file=>({...file,content:file.content.replace(/<h2 class="title">Chapter ([123])<\/h2>/g,(_match,n)=>`<h2 class="title"><a href="https://archiveofourown.org/works/8001/chapters/${100+Number(n)}">Chapter ${n}: Connected</a></h2>`)}))
+ await page.goto('/')
+ await page.getByLabel('Import EPUB File').setInputFiles({name:'mapped.epub',mimeType:'application/epub+zip',buffer:Buffer.from(await createZip(files).arrayBuffer())})
+ await expect(page.getByLabel('Book Content')).toBeVisible()
+ await page.getByRole('button',{name:'← Bookshelf',exact:true}).click()
+ await connectOrganizer(page)
+ await expect.poll(async()=>(await savedBooks(page))[0]?.remote?.id).toBe(remote.id)
+ const initial=(await savedBooks(page))[0]
+ expect(initial.chapters.filter(chapter=>chapter.ao3Id).map(chapter=>chapter.number)).toEqual([1,2,3])
+ // The AO3 companion updates the same organizer entry; a foreground refresh bypasses the catalog cooldown.
+ remote={...remote,version:'ao3-chapter-read',status:'reading',progress:2}
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+ await expect.poll(async()=>(await savedBooks(page))[0]?.completed.length).toBe(2)
+ let synced=(await savedBooks(page))[0]
+ expect(synced.status).toBe('reading')
+ expect(synced.history).toEqual(initial.history)
+ await expect.poll(()=>cloudFields.get(`${initial.id}/completed`)).toHaveLength(2)
+ expect(writes).toHaveLength(0)
+ await page.goto('/?work=8001&chapter=3')
+ await expect(page.getByLabel('Book Content')).toBeVisible()
+ await expect(page.getByLabel('Chapter Progress')).toHaveText('3 / 3 chapters')
+ await expect(page.getByRole('button',{name:'Mark Chapter Read',exact:true})).toBeEnabled()
+ await page.getByRole('button',{name:'Mark Chapter Read',exact:true}).click()
+ await expect.poll(()=>writes.length).toBe(1)
+ expect(writes[0]).toMatchObject({progress:3,status:'finished'})
+ remote={...remote,version:'ao3-reread',status:'re_reading',progress:0}
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+ await expect.poll(async()=>(await savedBooks(page))[0]?.completed.length).toBe(0)
+ synced=(await savedBooks(page))[0]
+ expect(synced.status).toBe('re_reading')
+ expect(synced.history).toHaveLength(1)
+ await expect.poll(()=>cloudFields.get(`${initial.id}/completed`)).toEqual([])
 })

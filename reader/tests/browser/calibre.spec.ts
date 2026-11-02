@@ -7,6 +7,8 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  files[2].content=files[2].content.replace('</metadata>','<meta name="revision" content="2"/></metadata>')
  const chapter=files.find(file=>file.name.endsWith('/chapter.xhtml'))!
  chapter.content=chapter.content.replace('</body>','<img src="failedtoload https://images.invalid/art.png" alt="Unavailable art"/></body>')
+ // The replacement has no usable embedded AO3 identity; the Calibre column supplies it.
+ for(const file of files) file.content=file.content.replaceAll('https://archiveofourown.org/works/8001','https://fiction.invalid/story')
  const newer=Buffer.from(await createZip(files).arrayBuffer())
  const payloads=[original,newer,Buffer.from('invalid EPUB')]
  const receipts=new Map<string,{status:string;message:string}>()
@@ -18,7 +20,7 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
   const req=route.request(),path=new URL(req.url()).pathname
   if(req.method()==='OPTIONS') return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:4174','Access-Control-Allow-Headers':'authorization,x-reader-destination,content-type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'}})
   expect(req.headers().authorization).toBe('Bearer '+credential)
-  if(path==='/inbox')return route.fulfill({json:[...payloads,...(repeatDelivery?[newer]:[])].map((file,index)=>({id:String(index),hash:createHash('sha256').update(file).digest('hex'),metadata:{_calibre_uuid:'20000000-0000-0000-0000-000000000001',title:index===3?'Updated Calibre Metadata':'Calibre Title',fandoms:['Mapped Fandom'],_filename:`story-${index}.epub`},status:'queued',message:''})).filter(row=>!receipts.has(row.id))})
+  if(path==='/inbox')return route.fulfill({json:[...payloads,...(repeatDelivery?[newer]:[])].map((file,index)=>({id:String(index),hash:createHash('sha256').update(file).digest('hex'),metadata:{_calibre_uuid:index===0?'20000000-0000-0000-0000-000000000001':'20000000-0000-0000-0000-000000000002',calibre_work_link:'https://archiveofourown.org/works/8001/chapters/12',title:index===3?'Updated Calibre Metadata':'Calibre Title',fandoms:['Mapped Fandom'],_filename:`story-${index}.epub`},status:'queued',message:''})).filter(row=>!receipts.has(row.id))})
   if(path.startsWith('/books/')) {
    requested.push(path)
    if(path==='/books/1'){firstRequested=true;await firstFile}
@@ -112,6 +114,11 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(1)
  await expect(page.getByRole('button',{name:'Updated Calibre Metadata',exact:true})).toBeVisible()
+ await page.getByLabel('Work Actions',{exact:true}).click()
+ await page.getByRole('button',{name:'View Details',exact:true}).click()
+ const details=page.getByRole('dialog',{name:'View Details',exact:true})
+ await expect(details.locator('dt').filter({hasText:/^Calibre Work Link$/}).locator('..').locator('dd')).toHaveText('https://archiveofourown.org/works/8001')
+ await details.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await page.reload()
  await page.getByRole('button',{name:'Calibre Transfers',exact:true}).click()
  await page.getByRole('tab',{name:/Failed/}).click()

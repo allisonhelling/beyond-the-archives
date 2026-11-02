@@ -268,6 +268,7 @@ test('Shift-click groups and deletes multiple fields, with repeatable saved divi
 })
 
 test('new tile metadata and category colors preview immediately and apply only after Save', async ({ page }) => {
+  test.setTimeout(60000) // Edit both tile previews and colors, then verify discard/save across two reloads.
   await setup(page)
   for (const kind of ['Work', 'Series']) {
     const preview = editor(page, `${kind} Tile`), group = `${kind.toLowerCase()}Tile`
