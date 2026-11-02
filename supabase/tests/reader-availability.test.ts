@@ -85,7 +85,7 @@ it('includes active cloud originals with no installation report and excludes del
   if(hash!=='e') await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${user}/${hash.repeat(64)}.epub`])
  }
  await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3),($1,$4,$5)',[owner,`${'b'.repeat(64)}/deleted`,'true',`${'c'.repeat(64)}/active`,'false'])
- await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3)',[owner,`${'a'.repeat(64)}/progress`,'3'])
+ await db.query('update public.reader_cloud_values set value=$3 where user_id=$1 and key=$2',[owner,`${'a'.repeat(64)}/progress`,'3'])
  await asUser()
  const snapshot=(await db.query<{result:{cloudBooks:{workId:string|null;completedCount:number}[];stories:{work:{ao3_work_id:number}}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result
  expect(snapshot.cloudBooks.map(book=>book.workId)).toEqual(['8002',null])

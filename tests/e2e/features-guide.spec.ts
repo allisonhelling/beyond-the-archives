@@ -164,7 +164,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
  await card.getByRole('link',{name:'Layout Order Story',exact:true}).click()
  // Exercise the fallback font used when Avenir Next and Segoe UI are unavailable.
  if(mobile) await page.addStyleTag({content:':root { --font-sans: Arial, sans-serif; }'})
- const read=page.getByRole('link',{name:'Unfolded',exact:true}),wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true})
+ const read=page.getByRole('link',{name:'Unfolded',exact:true}),wayback=page.getByRole('link',{name:'Open in Wayback Machine',exact:true})
  await expect(read).toBeVisible()
  if(mobile) {
   for(const width of [390,320]) {
@@ -208,6 +208,7 @@ test('exports one work in either format and shows Unfolded beside Wayback only f
  tables.library_entries.push({id:'export-entry',work_id:'export-work',original_url:'https://archiveofourown.org/works/99001',reading_status:'reading',last_read_chapter:1,notes:'Saved private note',created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z',metadata_overrides:{title:'Export Example',authors:['Writer'],publication_status:'in_progress',published_chapters:3,total_chapters:5}})
  await page.goto('/library');await login(page)
  const card=page.locator('[data-story-id="export-entry"]')
+ await expect(card.locator('.story-menu .menu-surface')).toHaveCount(0)
  await card.getByLabel('Story Actions for Export Example',{exact:true}).click()
  const exportButton=card.getByRole('button',{name:'Export Work Metadata',exact:true})
  let downloads=0
@@ -247,7 +248,7 @@ test('exports one work in either format and shows Unfolded beside Wayback only f
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
  available=true
  await page.reload()
- const wayback=page.getByRole('link',{name:'View in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
+ const wayback=page.getByRole('link',{name:'Open in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
  await expect(wayback).toHaveText('Wayback')
  await expect(read).toHaveAttribute('href','https://reader.example/?work=99001')
  expect((await read.boundingBox())!.x).toBeGreaterThan((await wayback.boundingBox())!.x)

@@ -79,3 +79,75 @@ it('erases cloud reading data and receipts, blocks stale-device resurrection, an
  await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[name])
  expect(await apply(`${book}/manifest`,{title:'Fresh import'})).toMatchObject({revision:1})
 })
+
+it('shares markings and reading state with the organizer and every EPUB version, including deliberate corrections',async()=>{
+ await db.exec('reset role')
+ await db.query('insert into public.reader_organizer_links(user_id) values($1) on conflict do nothing',[owner])
+ await db.exec("insert into public.works(ao3_work_id,title,published_chapters,is_complete) values(99801,'Shared Work',10,true)")
+ const first='1'.repeat(64),second='2'.repeat(64)
+ await asUser()
+ await apply(`${first}/manifest`,{workId:'99801',metadata:{title:'Shared Work'}})
+ await apply(`${first}/progress`,7)
+ await apply(`${first}/status`,'reading')
+ await apply(`${first}/favorite`,true)
+ await apply(`${first}/rec`,true)
+ await db.exec('reset role')
+ const entry=(await db.query<{id:string}>("insert into public.library_entries(user_id,work_id,original_url) select $1,id,'https://archiveofourown.org/works/99801' from public.works where ao3_work_id=99801 returning id",[owner])).rows[0].id
+ expect((await db.query('select last_read_chapter,reading_status,is_favorite,is_rec from public.library_entries where id=$1',[entry])).rows[0]).toEqual({last_read_chapter:7,reading_status:'reading',is_favorite:true,is_rec:true})
+ await asUser()
+ await apply(`${second}/manifest`,{workId:'99801',metadata:{title:'Older EPUB'}})
+ expect(await apply(`${second}/progress`,0)).toMatchObject({value:7})
+ expect(await apply(`${second}/status`,'to_read')).toMatchObject({value:'reading'})
+ expect(await apply(`${second}/favorite`,false)).toMatchObject({value:true})
+ // Organizer corrections must reach both versions and permit unmarking.
+ await db.exec('reset role')
+ await db.query("update public.library_entries set last_read_chapter=1,reading_status='re_reading',is_favorite=false,is_rec=false where id=$1",[entry])
+ const values=(await db.query<{key:string;value:unknown}>("select key,value from public.reader_cloud_values where key like $1 or key like $2",[`${first}/%`,`${second}/%`])).rows
+ for(const hash of [first,second]) {
+  expect(values).toContainEqual({key:`${hash}/progress`,value:1})
+  expect(values).toContainEqual({key:`${hash}/status`,value:'re_reading'})
+  expect(values).toContainEqual({key:`${hash}/favorite`,value:false})
+  expect(values).toContainEqual({key:`${hash}/rec`,value:false})
+ }
+ await asUser()
+ const revision=(await db.query<{revision:number}>('select revision from public.reader_cloud_values where key=$1',[`${first}/progress`])).rows[0].revision
+ await apply(`${first}/progress`,0,revision)
+ await db.exec('reset role')
+ expect((await db.query('select last_read_chapter from public.library_entries where id=$1',[entry])).rows[0]).toEqual({last_read_chapter:0})
+ await asUser(other)
+ expect((await db.query('select * from public.reader_cloud_values where key=$1',[`${first}/favorite`])).rows).toEqual([])
+ await asUser()
+})
+
+it('reconciles pre-connection reads and keeps their maximum through a multi-statement initial import',async()=>{
+ const account='30000000-0000-0000-0000-000000000001',hash='3'.repeat(64)
+ await db.exec('reset role')
+ await db.query('insert into auth.users(id,email_confirmed_at) values($1,now())',[account])
+ await asUser(account)
+ await apply(`${hash}/manifest`,{workId:'99802',metadata:{title:'Before Pairing'}})
+ await apply(`${hash}/completed`,['one','two','three','four'])
+ await apply(`${hash}/status`,'finished')
+ await db.exec('reset role')
+ await db.query('delete from public.reader_cloud_values where user_id=$1 and key=$2',[account,`${hash}/progress`])
+ await db.query('insert into public.reader_organizer_links(user_id) values($1)',[account])
+ await db.exec("insert into public.works(ao3_work_id,title) values(99802,'First Import')")
+ await db.exec('begin')
+ const entry=(await db.query<{id:string}>("insert into public.library_entries(user_id,work_id,original_url) select $1,id,'https://archiveofourown.org/works/99802' from public.works where ao3_work_id=99802 returning id",[account])).rows[0].id
+ await db.query("update public.library_entries set last_read_chapter=0,reading_status='to_read' where id=$1",[entry])
+ expect((await db.query('select last_read_chapter,reading_status from public.library_entries where id=$1',[entry])).rows[0]).toEqual({last_read_chapter:4,reading_status:'finished'})
+ await db.exec('commit')
+ // A later user request remains free to correct the imported state.
+ await db.query("update public.library_entries set last_read_chapter=0,reading_status='re_reading' where id=$1",[entry])
+ expect((await db.query('select last_read_chapter,reading_status from public.library_entries where id=$1',[entry])).rows[0]).toEqual({last_read_chapter:0,reading_status:'re_reading'})
+ await asUser()
+})
+
+it('preserves verified shared progress when importing an older metadata snapshot',async()=>{
+ const hash='4'.repeat(64)
+ await asUser()
+ await apply(`${hash}/manifest`,{workId:'99803',metadata:{title:'Newer EPUB',published_chapters:10}})
+ await apply(`${hash}/progress`,8)
+ await apply(`${hash}/status`,'reading')
+ const saved=(await db.query<{id:string}>("select public.save_library_story('https://archiveofourown.org/works/99803',$1,'to_read',0,'',null,false,'{}','{}') id",[JSON.stringify({title:'Older EPUB',published_chapters:3,total_chapters:3})])).rows[0].id
+ expect((await db.query('select last_read_chapter,reading_status from public.library_entries where id=$1',[saved])).rows[0]).toEqual({last_read_chapter:8,reading_status:'reading'})
+})

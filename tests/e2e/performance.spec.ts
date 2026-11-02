@@ -28,6 +28,8 @@ test('10,000-work library pages incrementally and restores a large page after de
  const firstDisplayMs=Date.now()-started
  expect(queries).toEqual([{page:1,size:50}])
  expect(catalogRequests).toBe(0)
+ // Closed menus must not add action controls to every initial card.
+ await expect(page.locator('.work-card .story-menu .menu-surface')).toHaveCount(0)
  expect(queries.every(q=>q.size<=250)).toBe(true)
  await expect(page.getByRole('navigation',{name:'Result Pages'}).first()).toContainText('1–50 of 10000')
  const largeStart=Date.now()

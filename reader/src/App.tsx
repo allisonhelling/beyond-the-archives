@@ -295,6 +295,14 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     setPending(await all<Pending>('pending'))
     if (event) void sync()
   }
+  async function updateMarking(id: string, field: 'favorite' | 'rec', value: boolean) {
+    await attempt(async () => {
+      const book = await getBookDetails(id)
+      if (!book) return
+      await commit({ ...book, [field]: value })
+      void sync()
+    })
+  }
   async function queueUpdate(book: Book | BookDetails, input: Record<string, unknown>) {
     const event = pendingUpdate(book, connection, input)
     if (event) {
@@ -357,7 +365,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     if (old) old = await getBookDetails(old.id) ?? old
     let saved = importedVersion(next, old)
     if (!old && connection && next.workId && navigator.onLine) {
-      try { const result = await rpc(connection, 'get', next.workId); if (result.entry) saved = { ...withOrganizerProgress(saved, result.entry), account: connection.account, remote: result.entry, notes: result.entry.notes, status: result.entry.status, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) } } catch { /* Import remains fully independent of the organizer. */ }
+      try { const result = await rpc(connection, 'get', next.workId); if (result.entry) saved = { ...withOrganizerProgress(saved, result.entry), account: connection.account, remote: result.entry, notes: result.entry.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) } } catch { /* Import remains fully independent of the organizer. */ }
     }
     if (!replace) saved.resumeRequired = old ? saved.resumeRequired : false
     await saveImportedVersion(saved, old, replace)
@@ -429,7 +437,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       if ((await all<Pending>('pending')).some(p => p.book === book.id)) throw new Error('Resolve this book’s pending sync changes before changing its connection.')
       const result = await rpc(connection, 'get', id)
       if (!result.entry) throw new Error('Save this work in the organizer first. The reader does not create organizer entries automatically.')
-      await commit({ ...withOrganizerProgress(book, result.entry), workId: id, account: connection.account, remote: result.entry, notes: result.entry.notes, status: result.entry.status, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
+      await commit({ ...withOrganizerProgress(book, result.entry), workId: id, account: connection.account, remote: result.entry, notes: result.entry.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
       void sync()
       setMessage('Work linked. Existing local history is retained; earlier standalone reads are not uploaded retroactively.')
     })
@@ -460,7 +468,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       {missingWork && <div className="notice">{handoffBook ? <>{handoffBook.hasFile ? 'This work is downloaded in this reader.' : readerOwner ? 'This work is saved in your reader cloud. Download it while online to read it offline.' : 'Import this EPUB again to read it.'}<button disabled={busy || !online && !handoffBook.hasFile && Boolean(readerOwner)} onClick={() => readBook(handoffBook)}>{handoffBook.hasFile ? 'Read EPUB' : readerOwner ? 'Download and Read' : 'Import EPUB'}</button></> : <>{/^\d+$/.test(missingWork) ? `AO3 work ${missingWork}` : 'This EPUB'} is not available in this reader installation. Import its EPUB to open it. No server lookup is required.</>}</div>}
       <BookshelfFilters books={books} filters={draftFilters.filters} onChange={filters => setDraftFilters({ ...draftFilters, filters })} query={draftFilters.query} onQuery={setQuery} appliedFilters={filters} appliedQuery={query} onApply={next => { setDraftFilters(next); setAppliedFilters(next) }} onRefresh={() => void attempt(() => refreshMetadata())} busy={busy} appearance={tagSettings.appearance} />
       <div className="results-toolbar"><span>{results.length} {results.length === 1 ? 'story' : 'stories'} on your shelf</span>{results.length > 0 && <Pagination inlinePage page={currentPage} pages={pages} total={results.length} size={shelfPageSize} onPage={setPage} />}<label>Sort By<select value={sort} onChange={e => setSort(e.target.value)}><option value="recent">Recently Imported</option><option value="title">Title</option>{numericFields.map(field => <option key={field.key} value={field.key}>{field.label} · Most First</option>)}{dateFields.filter(field => field.key !== 'imported').map(field => <option key={field.key} value={field.key}>{field.label} · Newest First</option>)}</select></label></div>
-      {results.length ? <div className="story-grid">{visible.map(book => <ReaderTile key={book.id} organizerAccount={connection?.account} book={book} onProgress={progress => updateProgress(book.id, progress)} preferences={preferences} appearance={tagSettings.appearance} busy={busy} onRead={() => readBook(book)} onManage={()=>{setManaged(book.id);setModal('manage')}} onDetails={()=>viewDetails(book.id)} onRemove={()=>void removeLocalDownload(book)} onDelete={()=>void deleteVersion(book)} onSearch={setQuery} onSeries={name=>viewFacet('series',name)} onAuthor={name=>viewFacet('author',name)} />)}</div> : <div className="empty-state"><div className="book-mark">▤</div><h2>{books.length ? 'No Matching Stories' : 'Make Yourself at Home'}</h2><p>{books.length ? 'Try another search or adjust your filters.' : 'Import an EPUB to begin your offline bookshelf. Your books and your place stay on this device.'}</p>{!books.length && <button className="primary" disabled={busy} onClick={() => picker.current?.click()}>Import Your First EPUB</button>}</div>}
+      {results.length ? <div className="story-grid">{visible.map(book => <ReaderTile key={book.id} organizerAccount={connection?.account} book={book} onMarking={(field, value) => updateMarking(book.id, field, value)} onProgress={progress => updateProgress(book.id, progress)} preferences={preferences} appearance={tagSettings.appearance} busy={busy} onRead={() => readBook(book)} onManage={()=>{setManaged(book.id);setModal('manage')}} onDetails={()=>viewDetails(book.id)} onRemove={()=>void removeLocalDownload(book)} onDelete={()=>void deleteVersion(book)} onSearch={query => { const next = { ...appliedFilters, query }; setDraftFilters(next); setAppliedFilters(next) }} onSeries={name=>viewFacet('series',name)} onAuthor={name=>viewFacet('author',name)} />)}</div> : <div className="empty-state"><div className="book-mark">▤</div><h2>{books.length ? 'No Matching Stories' : 'Make Yourself at Home'}</h2><p>{books.length ? 'Try another search or adjust your filters.' : 'Import an EPUB to begin your offline bookshelf. Your books and your place stay on this device.'}</p>{!books.length && <button className="primary" disabled={busy} onClick={() => picker.current?.click()}>Import Your First EPUB</button>}</div>}
       <footer className="app-footer"><span>Every story, a place to return to.</span><span>Metadata search · Local EPUB storage · Independent reader</span></footer></main>
     </>}
     <input hidden ref={picker} aria-label="Import EPUB File" type="file" accept=".epub,application/epub+zip" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = '' }} />

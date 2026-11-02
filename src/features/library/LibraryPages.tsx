@@ -68,7 +68,8 @@ export function LibraryBoundary({ children }: { children: ReactNode }) {
   return children
 }
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; rec: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode; collectionsField: ReactNode }
-function StoryControls({ story, children, readOnly = false }: { readOnly?: boolean; story: Story; children: (controls: CardControls) => ReactNode }) {
+type MarkingHandler = (field: 'favorite' | 'rec', value: boolean) => Promise<void>
+function StoryControls({ story, children, readOnly = false, onMarking, details = false }: { details?: boolean; onMarking?: MarkingHandler; readOnly?: boolean; story: Story; children: (controls: CardControls) => ReactNode }) {
   const { refreshStory, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   useActivity(Boolean(busy), 'Updating your library…')
@@ -82,6 +83,8 @@ function StoryControls({ story, children, readOnly = false }: { readOnly?: boole
   const [removeOpen, setRemoveOpen] = useState(false)
   const [collectionOpen, setCollectionOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Populate menus on first use, then retain nested export dialogs when dismissed.
+  const [menuLoaded, setMenuLoaded] = useState(false)
   const menuRef = useDismissible<HTMLDetailsElement>(menuOpen, () => setMenuOpen(false))
   async function change(changes: Parameters<typeof updateEntry>[1], base = editSnapshot(story)) {
     setError(''); setBusy(true)
@@ -109,32 +112,38 @@ function StoryControls({ story, children, readOnly = false }: { readOnly?: boole
   const caughtUpDescription = finished ? 'Begin Re-Reading' : story.metadata.published_chapters === null ? 'Enter published chapter count in details first' : 'Mark all chapters as read'
   const CaughtUpIcon = finished ? RotateCcw : Check
   const caughtUp = <Tooltip description={caughtUpDescription}>{descriptionId => <button className="spine-action caught-up-action" aria-label={finished ? 'Begin Re-Reading' : 'Mark as Caught Up'} aria-describedby={descriptionId} disabled={blocked || !finished && story.metadata.published_chapters === null} onClick={() => finished ? void change({ reading_status: 're_reading', last_read_chapter: 0 }) : void markRead()}><CaughtUpIcon size={14} aria-hidden="true" /></button>}</Tooltip>
-  const favorite = <FavoriteButton selected={story.is_favorite} disabled={blocked} onChange={selected => void change({ is_favorite: selected })} />
-  const rec = <BookmarkRec story={story} disabled={blocked} onChange={selected => void change({ is_rec: selected })} />
+  async function mark(field: 'favorite' | 'rec', value: boolean) {
+    if (!onMarking) { await change(field === 'favorite' ? { is_favorite: value } : { is_rec: value }); return }
+    setBusy(true); setError('')
+    try { await onMarking(field, value) } catch (error) { failed(error) } finally { setBusy(false) }
+  }
+  const favorite = <FavoriteButton selected={story.is_favorite} disabled={busy || Boolean(conflict) || (readOnly && !onMarking)} onChange={selected => void mark('favorite', selected)} />
+  const rec = <BookmarkRec story={story} disabled={busy || Boolean(conflict) || (readOnly && !onMarking)} onChange={selected => void mark('rec', selected)} />
   const StatusIcon = readingStatusIcons[story.reading_status]
-  const readingStatus = <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading Status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => e.target.value === 'finished' ? void finishStory() : void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label>
+  const readingStatus = details ? <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading Status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => e.target.value === 'finished' ? void finishStory() : void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label> : null
+  const hiddenMarkings = (['favorite', 'rec'] as const).filter(kind => isDisplayFieldHidden(tilePreference, kind))
   const actions = <div className="story-quick-actions"><DisplayInfo group="workTile" fields={['favorite', 'rec']}>{{ favorite, rec }}</DisplayInfo>
-    <details className="story-menu" ref={menuRef} open={menuOpen} onToggle={event => setMenuOpen(event.currentTarget.open)}>
+    {(!readOnly || hiddenMarkings.length > 0) && <details className="story-menu" ref={menuRef} open={menuOpen} onToggle={event => { const open = event.currentTarget.open; if (open) setMenuLoaded(true); setMenuOpen(open) }}>
       <summary aria-label={`Story Actions for ${story.metadata.title}`}><MoreHorizontal size={22} /></summary>
-      <div className="menu-surface">
-        {(['favorite', 'rec'] as const).filter(kind => isDisplayFieldHidden(tilePreference, kind)).map(kind => <PersonalToggleButton key={kind} kind={kind} menu selected={kind === 'favorite' ? story.is_favorite : story.is_rec} disabled={blocked} onChange={selected => void change(kind === 'favorite' ? { is_favorite: selected } : { is_rec: selected })} />)}
-        <ExportWorkMetadata story={story} menu disabled={blocked} />
+      {menuLoaded && <div className="menu-surface">
+        {hiddenMarkings.map(kind => <PersonalToggleButton key={kind} kind={kind} menu selected={kind === 'favorite' ? story.is_favorite : story.is_rec} disabled={busy || Boolean(conflict) || (readOnly && !onMarking)} onChange={selected => void mark(kind, selected)} />)}
+        {!readOnly && <><ExportWorkMetadata story={story} menu disabled={blocked} />
         <WaybackLink url={savedWorkUrl(story)} menu />
         <Link className="menu-item" to={`/stories/${story.id}`} state={location.pathname.startsWith('/stories/') ? location.state : { returnTo: location.pathname + location.search }}><FileText size={16} aria-hidden="true" />View/Edit Details</Link>
         {story.reading_status !== 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'paused_reading' })}><readingStatusIcons.paused_reading size={16} aria-hidden="true" />Mark as Paused Reading</button>}
         {story.reading_status === 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: resumeReadingStatus(story) })}><readingStatusIcons.reading size={16} aria-hidden="true" />Resume Reading</button>}
         <button className="menu-item" disabled={blocked} onClick={() => void finishStory()}><Check size={16} aria-hidden="true" />Mark as Finished</button>
-        <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setCollectionOpen(true) }}><FolderPlus size={16} aria-hidden="true" />Add to Collection</button>
         <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'did_not_finish' })}><BookX size={16} aria-hidden="true" />Mark as DNF</button>
+        <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setCollectionOpen(true) }}><FolderPlus size={16} aria-hidden="true" />Add to Collection</button>
         <hr className="menu-divider" />
-        <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setRemoveOpen(true) }}><Trash2 size={16} aria-hidden="true" />Remove from Library</button>
-      </div>
-    </details></div>
-  if (readOnly) return children({ actions: null, favorite: null, rec: null, readingStatus: null, caughtUp, editProgress: <button className="chapter-progress-button" disabled>Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</button>, collectionsField: null, rating: <StarRating value={story.personal_rating} /> })
-  return <>{children({ actions, favorite, rec, readingStatus, caughtUp, editProgress, collectionsField: <EditCollectionsButton onRefresh={() => refreshStory(story.id)} variant="field" disabled={blocked} automaticIds={story.automaticCollectionIds} selectedIds={story.collectionIds} description={`Choose collections for “${story.metadata.title}”.`} onSave={async (collections, baseline) => {
+        <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setRemoveOpen(true) }}><Trash2 size={16} aria-hidden="true" />Remove from Library</button></>}
+      </div>}
+    </details>}</div>
+  if (readOnly) return <>{children({ actions, favorite, rec, readingStatus: null, caughtUp, editProgress: <button className="chapter-progress-button" disabled>Ch. {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'}</button>, collectionsField: null, rating: <StarRating value={story.personal_rating} /> })}{error && <p role="alert" className="error-message">{error}</p>}</>
+  return <>{children({ actions, favorite, rec, readingStatus, caughtUp, editProgress, collectionsField: details ? <EditCollectionsButton onRefresh={() => refreshStory(story.id)} variant="field" disabled={blocked} automaticIds={story.automaticCollectionIds} selectedIds={story.collectionIds} description={`Choose collections for “${story.metadata.title}”.`} onSave={async (collections, baseline) => {
       const base = { ...editSnapshot(story), collections: baseline }
       await saveStory({ id: story.id, base, url: savedWorkUrl(story), metadata: story.metadata, metadataChanges: {}, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections, tags: story.personalTags })
-    }} />, rating: <StarRating headingClassName="details-control-heading" value={story.personal_rating} disabled={blocked} onEdit={() => { editBase.current = editSnapshot(story) }} onSave={value => change({ personal_rating: value }, editBase.current)} /> })}
+    }} /> : null, rating: details ? <StarRating headingClassName="details-control-heading" value={story.personal_rating} disabled={blocked} onEdit={() => { editBase.current = editSnapshot(story) }} onSave={value => change({ personal_rating: value }, editBase.current)} /> : null })}
     {conflict && <EditConflictReview key={JSON.stringify(conflict.review)} conflict={conflict} onError={failed} onSaved={async () => { setConflict(null); await refreshStory(story.id) }} onCancel={() => setConflict(null)} />}
     {collectionOpen && <CollectionMembershipDialog story={story} onClose={() => { setCollectionOpen(false); menuRef.current?.querySelector('summary')?.focus() }} />}
     {removeOpen && <ConfirmationDialog title="Remove from Library?" confirmLabel="Remove from Library" onConfirm={remove} onClose={closeRemoval}><p>Remove “{story.metadata.title}” from your library?</p><p>You can undo this for two minutes.</p></ConfirmationDialog>}
@@ -164,19 +173,21 @@ function BookSpineFooter({ story, editProgress, caughtUp, readAction }: { story:
     </div>
   </footer>
 }
-export function StoryCard({ story: candidate, linkId, readOnly = false, readerBookId }: { story: Story; linkId?: string; readOnly?: boolean; readerBookId?: string }) {
+export function StoryCard({ story: candidate, linkId, readOnly = false, readerBookId, onMarking }: { onMarking?: MarkingHandler; story: Story; linkId?: string; readOnly?: boolean; readerBookId?: string }) {
   const location = useLocation()
+  const tilePreference = useDisplayPreference('workTile')
   const story = useStorySnapshot(candidate)!
+  const metadataFields = useMemo(() => story.detailsLoaded === false ? {} : workMetadataFields(story, 'tile', tilePreference), [story, tilePreference])
   if (story.detailsLoaded === false) return <article className="story-card work-card" aria-busy="true"><p role="status">Loading work details…</p></article>
   const origin = { returnTo: location.pathname + location.search }
-  return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story} readOnly={readOnly}>{({ actions, caughtUp, editProgress }) => <>
+  return <article className="story-card work-card" data-story-id={story.id}><StoryControls story={story} readOnly={readOnly} onMarking={onMarking}>{({ actions, caughtUp, editProgress }) => <>
     <DisplayInfo group="workTile" heading={<div className="story-card-title"><h2 aria-label={story.metadata.title}>{readOnly ? <span id={linkId}>{story.metadata.title}</span> : <Link id={linkId ?? `work-link-${story.id}`} to={`/stories/${story.id}`} state={origin}>{story.metadata.title}</Link>}{'\u00a0'}<PublicationStatusIndicator status={story.metadata.publication_status} /><OneShotIndicator story={story} /></h2>{actions}</div>}>{{
-      ...workMetadataFields(story, 'tile'),
+      ...metadataFields,
       personalRating: <div className="tile-personal-rating"><StarRating value={story.personal_rating} /></div>,
       collections: <div className="story-facts"><CustomCollectionNames ids={[...story.collectionIds, ...(story.automaticCollectionIds ?? [])]} /></div>,
       notes: <p className="story-summary">{story.notes || 'No private notes saved.'}</p>,
       reading: <p className="story-facts">{statuses[story.reading_status]}</p>,
-      saved: <p className="story-facts">Saved: {formatDateTime(story.created_at)}</p>,
+      saved: !isDisplayFieldHidden(tilePreference, 'saved') && <p className="story-facts">Saved: {formatDateTime(story.created_at)}</p>,
       progress: <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} readAction={readOnly ? <ReadEpub workId={story.work.ao3_work_id} bookId={readerBookId} variant="spine" chapter={readChapter(story)} /> : undefined} />
     }}</DisplayInfo>
   </>}</StoryControls></article>
@@ -452,7 +463,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
   const showUpdatedActions = !isDisplayFieldHidden(headerDisplay, 'stats') && !isDisplayFieldHidden(statsDisplay, 'updated')
   const readerActions = story && <><WaybackLink url={savedWorkUrl(story)} /><ReadEpub workId={story.work.ao3_work_id} variant="details" /><BookFusionButton value={story.metadata.bookfusion_link} variant="details" /></>
   const updatedActions = story && <dd className="details-updated-action">{readerActions}</dd>
-  return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story}>{({ favorite, rec, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
+  return <LibraryBoundary>{story?.detailsLoaded === false ? <p role="status">Loading work details…</p> : story ? <StoryControls story={story} details>{({ favorite, rec, readingStatus, caughtUp, editProgress, rating, collectionsField }) => <div className="story-details-page">
     <div className="page-heading story-details-heading work-details-heading"><div>
       <Link className="story-return-link clickable-text" to={returnTo} aria-label={`Back to ${returnLabel}`}><ArrowLeft size={16} aria-hidden="true" />{returnLabel}</Link>
       <DisplayInfo group="workHeader" fields={['series']}>{{ series: story.metadata.series?.length ? <p className="story-series-eyebrow"><SeriesNames metadata={story.metadata} /></p> : null }}</DisplayInfo>

@@ -4,13 +4,13 @@ export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
 export type ReaderMetadata = Metadata & { calibre_work_link?: string; ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
 export type Chapter = { kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
-export type Remote = { publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
+export type Remote = { favorite?: boolean; rec?: boolean; publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
 export type ReadingPosition = { chapter: string; fraction: number; textOffset?: number; textTop?: number; viewport?: { layout: Preferences['layout']; content: Preferences['content']; size: number; width: number; widthPx: number; heightPx: number; scrollHeight: number; scrollWidth: number; scrollTop: number; scrollLeft: number } }
 export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
   if (chapter.kind === 'frontmatter') return null
   return chapter.number ?? (Number(chapter.title.match(/^Chapter\s+(\d+)(?:\b|:)/i)?.[1]) || chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length)
 }
-export type Book = { progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
+export type Book = { favorite?: boolean; rec?: boolean; progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
 export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
@@ -64,7 +64,7 @@ export function replaceBook<T extends BookDetails | Book>(previous: BookDetails 
   const publication = previous.remote?.publication
   const retainPublication = publication && (next.metadata.published_chapters ?? 0) <= (publication.metadata.published_chapters ?? 0)
   const metadata = retainPublication ? { ...next.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters } : next.metadata
-  return { ...next, metadata, metadataAt: retainPublication ? publication.at : next.metadataAt, workId: previous.workId ?? next.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, status: previous.status, progress: previous.progress, history: previous.history,
+  return { ...next, metadata, metadataAt: retainPublication ? publication.at : next.metadataAt, workId: previous.workId ?? next.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, favorite: previous.favorite, rec: previous.rec, status: previous.status, progress: previous.progress, history: previous.history,
     completed: previous.completed.filter(id => next.chapters.some(c => c.id === id)), position: mapped ? { ...previous.position, chapter: mapped.id } : next.position, resumeRequired: !mapped }
 }
 
@@ -74,19 +74,29 @@ export function withPublication<T extends BookDetails | Book>(book: T, remote?: 
   return { ...book, metadata: { ...book.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters }, metadataAt: publication.at }
 }
 
+/** Project synced numeric progress onto verified chapters without inventing history. */
+export function withReadingProgress<T extends BookDetails | Book>(book: T, progress: number, replace = true): T {
+  if (!Number.isSafeInteger(progress) || progress < 0) return book
+  const completed = new Set(book.completed)
+  for (const chapter of book.chapters) {
+    if (!hasVerifiedMapping(chapter, book.chapters)) continue
+    if (chapter.number! <= progress) completed.add(chapter.id)
+    else if (replace) completed.delete(chapter.id)
+  }
+  return { ...book, completed: [...completed], progress: replace ? progress : Math.max(readerProgress(book), progress) }
+}
+
 /** Mirror checked organizer progress without manufacturing local reading-history events. */
 export function withOrganizerProgress<T extends BookDetails | Book>(book: T, remote: Remote): T {
   const next = withPublication(book, remote)
   if (!Number.isSafeInteger(remote.progress) || remote.progress < 0) return next
-  const completed = new Set(book.completed)
+  // A first association keeps standalone reads; later corrections are authoritative.
   const changed = book.remote && (book.remote.progress !== remote.progress || remote.status === 're_reading' && book.remote.status !== 're_reading')
-  for (const chapter of book.chapters) {
-    if (!hasVerifiedMapping(chapter, book.chapters)) continue
-    if (chapter.number! <= remote.progress) completed.add(chapter.id)
-    // A first association keeps standalone reads; later organizer corrections and rereads are authoritative.
-    else if (changed) completed.delete(chapter.id)
-  }
-  return { ...next, completed: [...completed], progress: changed ? remote.progress : Math.max(readerProgress(book), remote.progress) }
+  const projected = withReadingProgress(next, remote.progress, Boolean(changed))
+  const linked = Boolean(book.remote)
+  const rank: Record<Status, number> = { to_read: 0, reading: 1, paused_reading: 3, did_not_finish: 4, waiting_for_updates: 5, finished: 6, re_reading: 2 }
+  const status = linked ? book.status === book.remote!.status ? remote.status : book.status : rank[remote.status] >= rank[book.status] ? remote.status : book.status
+  return { ...projected, status, favorite: !linked ? Boolean(book.favorite || remote.favorite) : Boolean(book.favorite) === Boolean(book.remote?.favorite) ? Boolean(remote.favorite) : book.favorite, rec: !linked ? Boolean(book.rec || remote.rec) : Boolean(book.rec) === Boolean(book.remote?.rec) ? Boolean(remote.rec) : book.rec }
 }
 
 /** An unchanged file's resource paths can repair old section IDs without guessing. */

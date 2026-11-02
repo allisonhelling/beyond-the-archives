@@ -86,7 +86,7 @@ async function performSync(connection: Connection, force: boolean) {
             if (!current || current.account !== saved.account || current.workId !== saved.workId || current.remote?.version !== saved.remote?.version) return
             // Link existing standalone books without discarding personal edits made before pairing.
             // Later pulls also preserve fields that differ from the last organizer baseline.
-            putBook(tx, { ...withOrganizerProgress(current, result.entry!), account: connection.account, remote: result.entry!, status: current.status === (current.remote?.status ?? 'to_read') ? result.entry!.status : current.status, notes: current.notes === (current.remote?.notes ?? '') ? result.entry!.notes : current.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
+            putBook(tx, { ...withOrganizerProgress(current, result.entry!), account: connection.account, remote: result.entry!, notes: current.notes === (current.remote?.notes ?? '') ? result.entry!.notes : current.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
           }
         }
       })

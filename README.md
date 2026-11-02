@@ -41,7 +41,7 @@ Open the URL printed by Vite. Sample mode needs no Docker, Supabase, or account.
 
 Adding the app to your Home Screen uses the name **Beyond the Archives**. Mobile text fields use at least 16px text to avoid focus zoom, and the bottom navigation includes safe-area spacing.
 
-Both local development modes offer a **Local Preview** toolbar with device presets and custom dimensions. Save edits before first entering mobile preview, which reloads the app in an embedded viewport. Keep `VITE_SAMPLE_DATA` out of `.env.local` for normal authenticated development.
+Both local development modes offer a **Local Preview** toolbar with device presets and custom dimensions. The default mobile preset is **iPhone 16**. Preview size controls support inches and millimeters using standard CSS units; presets keep their CSS viewport dimensions. Save edits before first entering mobile preview, which reloads the app in an embedded viewport. Keep `VITE_SAMPLE_DATA` out of `.env.local` for normal authenticated development.
 
 ## Run Browser Tests Like GitHub
 
@@ -179,7 +179,7 @@ Use your approved private-beta email with **Create Account**, a password, and a 
 
 Choose **Add → Add Story**. Paste a work or chapter URL, choose **Enter Manually**, or use **Import from EPUB**. For an archived work, select **Import Source → Import from Wayback Machine** and paste a fixed Wayback Machine capture of an AO3 work, such as `https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/17199254?view_full_work=true`, into the **Wayback Machine Link** field. Pasting a snapshot into the regular link field also selects Wayback automatically; bulk URL import still accepts snapshot links. The importer reads that snapshot’s metadata, keeps the archived reading link, and automatically marks the fic **Deleted**. Captures must contain accessible AO3 metadata; wildcard/history pages and archived series/list scans are unsupported. Manual entry needs an AO3 work URL and title; unknown chapter totals can stay blank. An EPUB can recover title, authors, summary, tags, and other available metadata from a downloaded file. Review the fields before saving. The file stays on your device; chapter text is not saved. EPUB files are limited to 50 MB. For deleted works, retain the original work URL and choose **Deleted** as the publication status.
 
-For a saved AO3 work, choose **Wayback** (the archive building symbol) from its story actions menu or details page. Its hover text is **View in Wayback Machine**. A new tab checks recent captures and opens the newest page it can verify, including adult-content warning pages. Login-only captures are skipped. If no recent page can be verified or the archive is unavailable, use **Browse Snapshot Calendar** or **Try Again**. The lookup does not change the saved story, and a working capture does not guarantee every chapter was archived.
+For a saved AO3 work, choose **Wayback** (the archive building symbol) from its story actions menu or details page. Its hover text is **Open in Wayback Machine**. A new tab checks recent captures and opens the newest page it can verify, including adult-content warning pages. Login-only captures are skipped. If no recent page can be verified or the archive is unavailable, use **Browse Snapshot Calendar** or **Try Again**. The lookup does not change the saved story, and a working capture does not guarantee every chapter was archived.
 
 The **Read Chapter** action returns to chapter 1 for Finished works, without resetting chapters read, notes, or reading history. Other reading statuses continue from the next unread chapter. If chapter 1 has no verified link, the action opens the work’s base AO3 page; saved Wayback destinations stay unchanged.
 
@@ -297,3 +297,5 @@ The reader accepts the same account username or email/password as the organizer,
 Both apps offer **Tag Format → All Tags Order** with up/down buttons for category ordering. Additional Tags is first by default. Save organizer changes with **Save**; reader changes save immediately and can follow the linked organizer.
 
 Reader visits reuse the existing installation credential after ownership validation. Other devices register independently. Legacy pairing links remain supported for troubleshooting and cannot silently replace another account’s connection.
+
+EPUB tiles in the reader and organizer Offline hub support Favorite and Recommended markings. Connected accounts synchronize these markings and reading progress; first imports retain the furthest saved progress/status. Offline changes wait for reconnection. Click a work tag or fandom to apply a search, or press Enter after typing a filter search.

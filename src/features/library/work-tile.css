@@ -2,5 +2,7 @@
 .work-card :is(.authors, .display-fact-value, .display-grouped-line) { color: var(--color-muted); }
 .story-card :is(.metadata-tags, .expandable-metadata-tags) { --personal-control-font-size: var(--work-tile-label-size); font-size: var(--work-tile-label-size); }
 
-:is(.series-link, .author-link) { text-decoration: none; text-underline-offset: .15em; }
-:is(.series-link, .author-link):is(:hover, :focus-visible) { text-decoration: underline; }
+:is(.series-link, .author-link, .metadata-link) { text-decoration: none; text-underline-offset: .15em; }
+:is(.series-link, .author-link, .metadata-link):is(:hover, :focus-visible) { text-decoration: underline; }
+
+.metadata-link { background: transparent; border: 0; padding: 0; min-height: 0; font: inherit; letter-spacing: inherit; color: inherit; text-align: left; }

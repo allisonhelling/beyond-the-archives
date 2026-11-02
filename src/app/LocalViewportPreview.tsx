@@ -1,7 +1,7 @@
 import { usePreviewViewports } from '../features/library/display/useDisplayPreference'
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { ViewportSizeFields } from '../features/library/display/ViewportSettings'
-import { savePreviewViewports } from '../features/library/display/display-settings'
+import { savePreviewViewports, viewportLength } from '../features/library/display/display-settings'
 import './local-viewport-preview.css'
 
 export function LocalViewportPreview({ children }: { children: ReactNode }) {
@@ -20,7 +20,7 @@ export function LocalViewportPreview({ children }: { children: ReactNode }) {
       <strong>Local Preview</strong>
       <div role="group" aria-label="Viewport">
         <button className={`button ${view === 'mobile' ? 'secondary' : 'primary'} compact`} aria-pressed={view !== 'mobile'} onClick={() => setView(view === 'browser' ? 'browser' : 'desktop')}>Desktop</button>
-        <button className={`button ${view === 'mobile' ? 'primary' : 'secondary'} compact`} aria-pressed={view === 'mobile'} onClick={previewMobile}>Mobile · {sizes.mobile.width}px</button>
+        <button className={`button ${view === 'mobile' ? 'primary' : 'secondary'} compact`} aria-pressed={view === 'mobile'} onClick={previewMobile}>Mobile · {viewportLength(sizes.mobile.width, 'in')} in / {viewportLength(sizes.mobile.width, 'mm')} mm</button>
       </div>
       <details><summary>Preview Size</summary><form className="story-form local-viewport-options" onSubmit={event => { event.preventDefault(); try { savePreviewViewports({ ...sizes, mobile: mobileSize }); setError('') } catch (failure) { setError((failure as Error).message) } }}><ViewportSizeFields value={mobileSize} onChange={setMobileSize} label="Mobile Preview Size" /><button className="button secondary">Apply Preview Size</button>{error && <p role="alert">{error}</p>}</form></details>
       <span className="muted">Entering mobile preview reloads the page. Save edits first.</span>

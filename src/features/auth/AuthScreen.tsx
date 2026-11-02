@@ -91,7 +91,6 @@ export function AuthScreen() {
           </div>
           {!needsPassword && <AccountModeSwitch mode={mode} busy={busy} onChange={changeMode} />}
         </form>}
-        <div className="invite-note"><LockKeyhole size={14} /><span>One account for both apps. Your library is never public.</span></div>
       </section>
     </main>
     <footer className="public-footer"><span>{brandName}</span><span>An independent reading companion. Not affiliated with AO3.</span></footer>

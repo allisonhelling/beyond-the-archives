@@ -1,0 +1,4 @@
+.icon-button { display: grid; place-items: center; border: 0; background: transparent; width: 40px; height: 44px; color: #846060; border-radius: 5px; }.icon-button:hover:not(.favorite) { background: var(--color-surface-secondary); }
+.bookmark-rec.selected, .favorite.selected { color: var(--color-brand); }
+.favorite:is(:hover, :focus-visible):not(:disabled) > svg, .bookmark-rec:is(:hover, :focus-visible):not(:disabled) > svg, .personal-toggle:is(:hover, :focus-visible):not(:disabled) > svg { fill: currentColor; }
+.favorite.selected:is(:hover, :focus-visible):not(:disabled) > svg, .bookmark-rec.selected:is(:hover, :focus-visible):not(:disabled) > svg, .personal-toggle.selected:is(:hover, :focus-visible):not(:disabled) > svg { fill: none; }

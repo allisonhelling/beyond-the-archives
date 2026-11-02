@@ -35,9 +35,10 @@ test('screen presets and custom sizes apply to tile, info-page and local develop
  await fixture(page)
  await page.goto('/settings#settings-display'); await login(page)
  const size = page.getByRole('group', { name: 'Mobile Preview', exact: true })
- await size.getByRole('combobox', { name: 'Device', exact: true }).selectOption('iphone-14-pro')
- await size.getByRole('spinbutton', { name: 'Width (px)', exact: true }).fill('410')
- await size.getByRole('spinbutton', { name: 'Height (px)', exact: true }).fill('900')
+ await expect(size.getByRole('combobox', { name: 'Device', exact: true })).toHaveValue('iphone-16')
+ await size.getByRole('combobox', { name: 'Units', exact: true }).selectOption('mm')
+ await size.getByRole('spinbutton', { name: 'Width (mm)', exact: true }).fill('108.48')
+ await size.getByRole('spinbutton', { name: 'Height (mm)', exact: true }).fill('238.13')
  await page.getByRole('button', { name: 'Save Preview Sizes', exact: true }).click()
  await page.getByRole('button', { name: 'Edit Work Tiles', exact: true }).click()
  const mobile = page.getByRole('region', { name: 'Mobile Work Tile Layout', exact: true }).frameLocator('iframe')
@@ -57,10 +58,11 @@ test('screen presets and custom sizes apply to tile, info-page and local develop
  await page.getByRole('button', { name: 'Desktop View', exact: true }).isVisible().then(async visible => { if (visible) { await page.getByRole('button', { name: 'Desktop View', exact: true }).click(); await expect.poll(() => page.locator('.display-example-page > div:not([hidden]) iframe').contentFrame().locator('body').evaluate(node => node.ownerDocument.defaultView!.innerWidth)).toBe(1440) } })
  const toolbar = page.getByRole('complementary', { name: 'Local Viewport Preview', exact: true })
  await toolbar.getByText('Preview Size', { exact: true }).click()
- await toolbar.getByRole('spinbutton', { name: 'Width (px)', exact: true }).fill('430')
+ await toolbar.getByRole('combobox', { name: 'Units', exact: true }).selectOption('mm')
+ await toolbar.getByRole('spinbutton', { name: 'Width (mm)', exact: true }).fill('113.77')
  await toolbar.getByRole('button', { name: 'Apply Preview Size', exact: true }).click()
- await expect(toolbar.getByRole('button', { name: 'Mobile · 430px', exact: true })).toBeVisible()
- await toolbar.getByRole('button', { name: 'Mobile · 430px', exact: true }).click()
+ await expect(toolbar.getByRole('button', { name: 'Mobile · 4.479 in / 113.77 mm', exact: true })).toBeVisible()
+ await toolbar.getByRole('button', { name: 'Mobile · 4.479 in / 113.77 mm', exact: true }).click()
  await expect.poll(() => page.frameLocator('iframe[title="Local App Viewport"]').locator('body').evaluate(node => node.ownerDocument.defaultView!.innerWidth)).toBe(430)
 })
 
@@ -88,7 +90,13 @@ test('library and reading actions fit their headers and filters across viewport 
    if (width > 650) {
     expect(series.y).toBeCloseTo(filters.y, 0)
     expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
-   } else expect(series.y + series.height).toBeLessThanOrEqual(filters.y)
+   } else {
+    const apply = (await toolbar.getByRole('button', { name: 'Apply', exact: true }).boundingBox())!
+    expect(series.y).toBeCloseTo(apply.y, 0)
+    expect(series.y).toBeCloseTo(filters.y, 0)
+    expect(series.x + series.width).toBeLessThanOrEqual(apply.x)
+    expect(apply.x + apply.width).toBeLessThanOrEqual(filters.x)
+   }
    if (width > 1100) {
     const controls = await toolbar.locator(':scope > .custom-dropdown, :scope > .suggestion-search, :scope > .fandom-select, :scope > button').all()
     for (const control of controls) expect((await control.boundingBox())!.y).toBeCloseTo(series.y, 0)

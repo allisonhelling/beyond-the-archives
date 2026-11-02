@@ -1,6 +1,6 @@
 import { cloudBookFields, cloudPreferences, equal, type CloudEdit, type CloudValue } from './cloud-model'
 import { chapterVersion, importEpub } from './epub'
-import { repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
+import { withReadingProgress, repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
 
 export const readerOwner = localStorage.getItem('reader-cloud-owner') || ''
 export const bookStores = ['books', 'catalog', 'contents', 'settings']
@@ -152,13 +152,24 @@ export async function cloudEdits() {
   return (await all<{ id: string; value: CloudEdit }>('settings', 'cloud-edit:')).filter(row => row.id.startsWith('cloud-edit:')).map(row => row.value)
 }
 export async function acceptCloud(value: CloudValue, edit?: CloudEdit) {
-  await transaction(['settings'], tx => {
+  await transaction(bookStores, tx => {
     const store = tx.objectStore('settings')
     store.put({ id: `cloud-base:${value.key}`, value })
     if (edit) {
       const request = store.get(`cloud-edit:${value.key}`)
       request.onsuccess = () => {
-        if (request.result?.value.id === edit.id) store.delete(`cloud-edit:${value.key}`)
+        if (request.result?.value.id === edit.id) {
+          store.delete(`cloud-edit:${value.key}`)
+          if (!equal(edit.value, value.value) && /\/(favorite|rec|progress|status)$/.test(value.key)) {
+            const [id, field] = value.key.split('/')
+            const book = tx.objectStore('books').get(id)
+            book.onsuccess = () => {
+              if (!book.result) return
+              const next = { ...book.result, [field]: value.value }
+              putBook(tx, field === 'progress' && typeof value.value === 'number' ? withReadingProgress(next,value.value) : next, true)
+            }
+          }
+        }
         else if (request.result) store.put({ ...request.result, value: { ...request.result.value, base: value.revision } })
       }
     }

@@ -53,6 +53,7 @@ export function subscribeDisplay(listener: () => void) {
 export const viewportPresets = {
  'iphone-se': { label: 'iPhone SE', width: 320, height: 568 },
  'iphone-13': { label: 'iPhone 13 / 14', width: 390, height: 844 },
+ 'iphone-16': { label: 'iPhone 16', width: 393, height: 852 },
  'iphone-14-pro': { label: 'iPhone 14 Pro', width: 393, height: 852 },
  'pixel-7': { label: 'Pixel 7', width: 412, height: 915 },
  tablet: { label: 'Tablet', width: 768, height: 1024 },
@@ -60,20 +61,35 @@ export const viewportPresets = {
  desktop: { label: 'Desktop', width: 1440, height: 900 },
 } as const
 export type PreviewViewport = { width: number; height: number }
+export const viewportUnits = {
+ in: { label: 'Inches (in)', pixels: 96, decimals: 3 },
+ mm: { label: 'Millimeters (mm)', pixels: 96 / 25.4, decimals: 2 },
+} as const
+export type ViewportUnit = keyof typeof viewportUnits
+export const viewportRanges = { width: { min: 280, max: 3840 }, height: { min: 320, max: 3840 } } as const
+export function viewportLength(pixels: number, unit: ViewportUnit): number {
+ return Number((pixels / viewportUnits[unit].pixels).toFixed(viewportUnits[unit].decimals))
+}
+export function viewportPixels(length: number, unit: ViewportUnit): number {
+ return Math.round(length * viewportUnits[unit].pixels)
+}
+export function formatViewportSize(size: PreviewViewport, unit: ViewportUnit): string {
+ return `${viewportLength(size.width, unit)} × ${viewportLength(size.height, unit)} ${unit}`
+}
 export function previewViewports(raw = displaySnapshot()): Record<DisplayLayout, PreviewViewport> {
  let saved: { previewViewports?: Partial<Record<DisplayLayout, PreviewViewport>> } = {}
  try { saved = JSON.parse(raw) ?? {} } catch { /* Use standard viewport sizes. */ }
  return Object.fromEntries((['mobile', 'desktop'] as const).map(layout => {
   const value = saved.previewViewports?.[layout]
-  const size = value && validViewport(value) ? value : viewportPresets[layout === 'mobile' ? 'iphone-13' : 'desktop']
+  const size = value && validViewport(value) ? value : viewportPresets[layout === 'mobile' ? 'iphone-16' : 'desktop']
   return [layout, { width: size.width, height: size.height }]
  })) as Record<DisplayLayout, PreviewViewport>
 }
 export function validViewport(value: PreviewViewport) {
- return Number.isInteger(value.width) && value.width >= 280 && value.width <= 3840 && Number.isInteger(value.height) && value.height >= 320 && value.height <= 3840
+ return (['width', 'height'] as const).every(axis => Number.isInteger(value[axis]) && value[axis] >= viewportRanges[axis].min && value[axis] <= viewportRanges[axis].max)
 }
 export function savePreviewViewports(viewports: Record<DisplayLayout, PreviewViewport>) {
- if (!Object.values(viewports).every(validViewport)) throw new Error('Enter whole widths from 280 to 3,840 and heights from 320 to 3,840 pixels.')
+ if (!Object.values(viewports).every(validViewport)) throw new Error('Enter a preview size within the width and height limits.')
  let saved: Record<string, unknown> = {}
  try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
  writeDisplay({ ...saved, previewViewports: viewports })

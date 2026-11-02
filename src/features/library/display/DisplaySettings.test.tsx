@@ -1,3 +1,5 @@
+import { ViewportSettings } from './ViewportSettings'
+import { viewportLength, viewportPixels } from './display-settings'
 import { OtherWorkMetadata } from './OtherWorkMetadata'
 import { MemoryRouter } from 'react-router-dom'
 import { exampleWork } from './display-examples'
@@ -40,7 +42,7 @@ it('retains shared tag colors and viewport sizes while independently saving layo
  saveDisplay(mobile, 'mobile')
  expect(previewViewports()).toEqual(sizes)
  expect(displayPreferences().tagAppearance.shape).toBe('sharp')
- expect(() => savePreviewViewports({ ...sizes, mobile: { width: 100, height: 900 } })).toThrow('Enter whole widths')
+ expect(() => savePreviewViewports({ ...sizes, mobile: { width: 100, height: 900 } })).toThrow('Enter a preview size within the width and height limits.')
  expect(previewViewports()).toEqual(sizes)
 })
 it('switches mounted tiles to the saved profile when the browser crosses the mobile breakpoint', () => {
@@ -391,4 +393,41 @@ it('aligns default series tiles with work metadata order while preserving custom
  expect(custom.order.slice(0,3)).toEqual(['description','notes','fandoms'])
  expect(custom.hidden).not.toContain('notes')
  expect(custom.hidden).toContain('allTags')
+})
+
+it('defaults to the iPhone 16 CSS viewport and preserves saved custom dimensions', () => {
+ expect(previewViewports('{}').mobile).toEqual({ width: 393, height: 852 })
+ expect(previewViewports(JSON.stringify({ previewViewports: { mobile: { width: 430, height: 900 } } })).mobile).toEqual({ width: 430, height: 900 })
+ for (const unit of ['in', 'mm'] as const) for (const pixels of [280, 320, 393, 410, 852, 900, 1440, 3840]) {
+  expect(viewportPixels(viewportLength(pixels, unit), unit)).toBe(pixels)
+ }
+})
+it('edits preview sizes in inches and millimeters while saving exact CSS viewport dimensions', () => {
+ render(<ViewportSettings />)
+ const mobile = within(screen.getByRole('group', { name: 'Mobile Preview' }))
+ expect(mobile.getByLabelText('Device')).toHaveValue('iphone-16')
+ fireEvent.change(mobile.getByLabelText('Device'), { target: { value: 'iphone-14-pro' } })
+ expect(mobile.getByLabelText('Device')).toHaveValue('iphone-14-pro')
+ fireEvent.change(mobile.getByLabelText('Units'), { target: { value: 'mm' } })
+ fireEvent.change(mobile.getByLabelText('Width (mm)'), { target: { value: '108.48' } })
+ fireEvent.change(mobile.getByLabelText('Height (mm)'), { target: { value: '238.13' } })
+ expect(mobile.getByLabelText('Width (mm)')).toHaveValue(108.48)
+ expect(mobile.getByLabelText('Device')).toHaveValue('custom')
+ fireEvent.change(mobile.getByLabelText('Units'), { target: { value: 'in' } })
+ expect(mobile.getByLabelText('Width (in)')).toHaveValue(4.271)
+ fireEvent.click(screen.getByRole('button', { name: 'Save Preview Sizes' }))
+ expect(previewViewports().mobile).toEqual({ width: 410, height: 900 })
+})
+
+it('defers hidden metadata reads until the field is shown', () => {
+ const updated = vi.fn(() => exampleWork.work.ao3_updated_at)
+ const story = { ...exampleWork, work: { ...exampleWork.work, get ao3_updated_at() { return updated() } } }
+ const preference = displayPreference('workTile', '{}')
+ const hidden = workMetadataFields(story, 'tile', preference)
+ expect(hidden.updated).toBeUndefined()
+ expect(updated).not.toHaveBeenCalled()
+ const visible = workMetadataFields(story, 'tile', { ...preference, hidden: preference.hidden.filter(field => field !== 'updated') })
+ render(visible.updated)
+ expect(updated).toHaveBeenCalledOnce()
+ expect(screen.getByText(/Updated:.*2017/)).toBeVisible()
 })

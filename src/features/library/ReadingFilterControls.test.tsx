@@ -75,3 +75,12 @@ it('keeps newer input when a previous Apply finishes after another edit', () => 
  fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
  expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ query: '' }))
 })
+
+it('applies the pending search when Enter is pressed', () => {
+ const onChange = vi.fn()
+ render(<ReadingFilterControls stories={[]} filters={defaultReadingFilters} onChange={onChange} />)
+ const input = screen.getByLabelText('Search Title or Author')
+ fireEvent.change(input, { target: { value: 'Found Family' } })
+ fireEvent.keyDown(input, { key: 'Enter' })
+ expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ query: 'Found Family' }))
+})

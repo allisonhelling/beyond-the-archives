@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import { chapterNotesFiles, epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub, sanitize } from '../src/epub'
-import { withOrganizerProgress, completionStatus, replaceBook, withPublication, repairChapterState } from '../src/model'
+import { withReadingProgress, withOrganizerProgress, completionStatus, replaceBook, withPublication, repairChapterState } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 async function book() { const buffer = await epubBuffer(); return importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File) }
 describe('EPUB import and rendering', () => {
@@ -194,4 +194,25 @@ describe('readable cloud conflicts',()=>{
   const prior={...saved,remote:{...remote,progress:3,status:'finished' as const}}
   expect(readerProgress(withOrganizerProgress(prior,remote))).toBe(0)
  })
+})
+
+it('merges first-association status and markings and later mirrors explicit organizer removals',async()=>{
+ const b=await book()
+ const remote={id:'linked',version:'1',status:'finished' as const,progress:3,notes:'',favorite:true,rec:true}
+ const first=withOrganizerProgress({...b,status:'reading',remote:undefined},remote)
+ expect(first).toMatchObject({status:'finished',favorite:true,rec:true})
+ const later=withOrganizerProgress({...first,remote},{...remote,version:'2',status:'re_reading',progress:0,favorite:false,rec:false})
+ expect(later).toMatchObject({status:'re_reading',progress:0,favorite:false,rec:false})
+ const local=withOrganizerProgress({...first,remote, favorite:false},{...remote,version:'3'})
+ expect(local.favorite).toBe(false)
+})
+
+it('projects a cloud correction before an organizer association without adding read events',async()=>{
+ const b=await book()
+ b.chapters=[1,2,3].map(number=>({...b.chapters[1],id:`ao3:${number}`,ao3Id:String(100+number),number}))
+ b.completed=b.chapters.map(chapter=>chapter.id)
+ const corrected=withReadingProgress({...b,remote:undefined},1)
+ expect(corrected.completed).toEqual(['ao3:1'])
+ expect(corrected.history).toEqual(b.history)
+ expect(corrected.position).toEqual(b.position)
 })

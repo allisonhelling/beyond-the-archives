@@ -1,9 +1,11 @@
+import type { EditValues } from '../library/edit-merge'
 import { readerBaseUrl } from '../../lib/reader-connection'
 import { blankMetadata, statuses, savedWorkIdentity, type Metadata, type Status, type Story } from '../library/model'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
-export type CloudReaderBook = { id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
-export type OfflineSnapshot = { cloudBooks?: CloudReaderBook[]; connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
+export type CloudReaderBook = { favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
+export type OfflineMarking = { id: string; book?: string; entry?: string; base?: EditValues; field: 'favorite' | 'rec'; value: boolean }
+export type OfflineSnapshot = { pendingMarkings?: OfflineMarking[]; cloudBooks?: CloudReaderBook[]; connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
 const key = 'bta:offline-hub:v1'
 export const offlineCleared = 'bta:offline-cleared'
 export function readOfflineSnapshot(): OfflineSnapshot | undefined {
@@ -38,7 +40,7 @@ export function offlineStories(snapshot?: OfflineSnapshot): Story[] {
     stories.push({
       id, user_id: snapshot.userId, work_id: id, original_url: url, detailsLoaded: true,
       metadata, collectionIds: [], personalTags: [], reading_status: book.status in statuses ? book.status : 'to_read',
-      last_read_chapter: book.completedCount, notes: book.notes, personal_rating: null, is_favorite: false, is_rec: false,
+      last_read_chapter: book.completedCount, notes: book.notes, personal_rating: null, is_favorite: Boolean(book.favorite), is_rec: Boolean(book.rec),
       metadata_overrides: {}, extension_metadata: {}, extension_chapters: {}, started_at: null, finished_at: null,
       last_update_notification_at: null, update_dismissed_at: null, created_at: created, updated_at: updated,
       work: { id, ao3_work_id: workId ? Number(workId) : null, canonical_url: url, canonical_verified_at: null,

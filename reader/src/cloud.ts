@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from '../../src/lib/config'
 import { enableOrganizerSync, hostedOrganizer } from '../../src/lib/reader-connection'
 import { type CloudEdit, type CloudValue } from './cloud-model'
-import { defaultPreferences, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
+import { defaultPreferences, withReadingProgress, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
 import { readerInstallationId, acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
 import { digest, importEpub } from './epub'
 
@@ -200,7 +200,7 @@ async function applyRemote(row: CloudValue) {
           putBook(tx, current ? {...current,...manifest,id,workId:current.workId ?? manifest.workId ?? null} : {...manifest,id,hasFile:false,position:{chapter:manifest.chapters[0]?.id ?? '',fraction:0},history:[],completed:[],notes:'',status:'to_read',active:true}, true)
         } else if (current) {
           const next = field.startsWith('history:') ? {...current,history:[...current.history.filter(event => event.id !== field.slice(8)),row.value as BookDetails['history'][number]]} : {...current,[field]:row.value}
-          putBook(tx,next,true)
+          putBook(tx,field === 'progress' && typeof row.value === 'number' ? withReadingProgress(next,row.value) : next,true)
         }
       }
     }
