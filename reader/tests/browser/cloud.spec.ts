@@ -55,6 +55,8 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await expect.poll(()=>files.size).toBe(1)
  await expect.poll(()=>[...values.keys()].some(key=>key.endsWith('/manifest'))).toBe(true)
  expect([...values.keys()].some(key=>key.includes('organizer'))).toBe(false)
+ const manifest=[...values.values()].find(row=>row.key.endsWith('/manifest'))!
+ manifest.value={...manifest.value as object,workId:null};manifest.revision++
  const second=await device(),other=await second.newPage();await other.goto('/');await expect(other.getByText('Reader prepared for offline use',{exact:false})).toBeVisible();await account(other)
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Import Guest Library',exact:true}).click()
@@ -64,6 +66,8 @@ test('syncs originals and state without an organizer, downloads on a fresh devic
  await other.getByRole('dialog').getByRole('button',{name:'Close Dialog',exact:true}).click()
  await other.locator('.story-card').getByRole('button',{name:'Download EPUB',exact:true}).click()
  await expect(other.getByLabel('Book Content')).toBeVisible()
+ const recovered=await other.evaluate(async()=>{const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open(`bta-reader-account:${localStorage.getItem('reader-cloud-owner')}`);request.onsuccess=()=>resolve(request.result)});try{return await new Promise<string|null>(resolve=>{const request=db.transaction('books').objectStore('books').getAll();request.onsuccess=()=>resolve(request.result[0]?.workId??null)})}finally{db.close()}})
+ expect(recovered).toBe('8001')
  await other.getByRole('button',{name:'← Bookshelf',exact:true}).click()
  await expect(other.locator('.story-card')).toHaveCount(1)
  await other.getByLabel('Work Actions',{exact:true}).click()

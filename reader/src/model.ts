@@ -14,7 +14,7 @@ export type Book = { calibreId?: string; fileBytes?: number; id: string; workId:
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
 export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
-export type CatalogBook = Omit<BookDetails, 'chapters' | 'history' | 'completed' | 'notes' | 'remote' | 'position'> & { position: Pick<ReadingPosition, 'chapter' | 'fraction'>; chapterCount: number; wordCount: number; completedCount: number }
+export type CatalogBook = { organizerEntryId?: string } & Omit<BookDetails, 'chapters' | 'history' | 'completed' | 'notes' | 'remote' | 'position'> & { position: Pick<ReadingPosition, 'chapter' | 'fraction'>; chapterCount: number; wordCount: number; completedCount: number }
 export function bookDetails(book: Book): BookDetails {
   const { file, resources: _resources, chapters, ...details } = book
   void _resources
@@ -23,7 +23,7 @@ export function bookDetails(book: Book): BookDetails {
 export function catalogBook(book: BookDetails): CatalogBook {
   const { chapters, history: _history, completed, notes: _notes, remote: _remote, position, ...catalog } = book
   void _history; void _notes; void _remote
-  return { ...catalog, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.length, wordCount: chapters.reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: completed.length }
+  return { ...catalog, organizerEntryId: book.remote?.id, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.length, wordCount: chapters.reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: completed.length }
 }
 export type Connection = { expiresAt?: string | null; backend: string; key: string; secret: string; account: string; label: string; name: string }
 export type Pending = { id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
@@ -60,7 +60,7 @@ export function replaceBook(previous: BookDetails | Book, next: Book): Book {
   const publication = previous.remote?.publication
   const retainPublication = publication && (next.metadata.published_chapters ?? 0) <= (publication.metadata.published_chapters ?? 0)
   const metadata = retainPublication ? { ...next.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters } : next.metadata
-  return { ...next, metadata, metadataAt: retainPublication ? publication.at : next.metadataAt, workId: previous.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, status: previous.status, history: previous.history,
+  return { ...next, metadata, metadataAt: retainPublication ? publication.at : next.metadataAt, workId: previous.workId ?? next.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, status: previous.status, history: previous.history,
     completed: previous.completed.filter(id => next.chapters.some(c => c.id === id)), position: mapped ? { ...previous.position, chapter: mapped.id } : next.position, resumeRequired: !mapped }
 }
 

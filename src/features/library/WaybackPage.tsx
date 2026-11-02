@@ -1,3 +1,5 @@
+import { Landmark } from 'lucide-react'
+import { Tooltip } from '../../components/Tooltip'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -6,7 +8,7 @@ import { parseWorkUrl } from '../imports/urls'
 
 export function WaybackLink({ url, menu = false }: { url: string; menu?: boolean }) {
  try { parseWorkUrl(url) } catch { return null }
- return <Link className={menu ? 'menu-item' : 'button secondary'} to={`/wayback?${new URLSearchParams({ url })}`} target="_blank" rel="noreferrer">View in Wayback Machine</Link>
+ return <Tooltip description="View in Wayback Machine">{descriptionId => <Link className={menu ? 'menu-item' : 'button secondary'} aria-label="View in Wayback Machine" aria-describedby={descriptionId} to={`/wayback?${new URLSearchParams({ url })}`} target="_blank" rel="noreferrer"><Landmark size={16} aria-hidden="true" />Wayback</Link>}</Tooltip>
 }
 export function WaybackPage() {
  const [params] = useSearchParams(), input = params.get('url') ?? ''

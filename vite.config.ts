@@ -1,3 +1,4 @@
+import { sampleData } from './scripts/sample-data'
 import { offlineShell } from './scripts/offline-shell'
 
 import { configDefaults, defineConfig } from 'vitest/config'
@@ -9,10 +10,11 @@ import { validateBrowserEnv } from './scripts/build-env'
 import { brandName, brandTagline } from './src/lib/brand'
 
 export default defineConfig(({ mode }) => {
-  validateBrowserEnv(loadEnv(mode, process.cwd(), 'VITE_'))
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  validateBrowserEnv(env)
   const manifest = JSON.stringify({ name: brandName, short_name: brandName, start_url: '/', display: 'standalone', background_color: '#faf8f4', theme_color: '#faf8f4' })
   return {
-    plugins: [react(), tailwindcss(), svgr(), offlineShell('organizer', ['/manifest.webmanifest']), {
+    plugins: [sampleData(env.VITE_SAMPLE_DATA === 'true'), react(), tailwindcss(), svgr(), offlineShell('organizer', ['/manifest.webmanifest']), {
       name: 'site-branding',
       configureServer(server) {
         server.middlewares.use('/manifest.webmanifest', (_request, response) => {

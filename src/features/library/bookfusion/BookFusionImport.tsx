@@ -43,7 +43,7 @@ export function BookFusionImport() {
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not refresh the library.') }
     finally { setSelected([]); setBusy(false) }
   }
-  return <section className="settings-card story-form" aria-label="BookFusion Mapping Import"><h2>Link Books from Calibre</h2>
+  return <section className="settings-card story-form" aria-label="BookFusion Mapping Import"><h2>Link Books from Calibre (Bookfusion)</h2>
     <p>Synchronize EPUBs with BookFusion’s Calibre plugin, then use the export helper to create a mapping CSV. Exact AO3 work IDs match saved works. Titles and authors are for review only. Supply copied book-level URLs where needed; upload identifiers are retained in the report for reference.</p>
     <FilePicker label="BookFusion Mapping CSV" accept=".csv,text/csv" disabled={busy} onChange={files => void preview(files[0])} />
     {!!rows.length && <><p>Review associations before saving. Existing links require explicit selection. Missing matches and duplicate work IDs need manual review. Successful rows stay saved if another row fails.</p>

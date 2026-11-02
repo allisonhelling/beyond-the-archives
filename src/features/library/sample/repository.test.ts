@@ -3,7 +3,7 @@ import { automaticCollectionRules } from '../collections/automatic-collections'
 import { defaultReadingFilters } from '../reading-search'
 import { orderCollections, moveCollectionIds } from '../collections/collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { importSampleWorks, addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
+import { importSampleWorks, addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
 import { librarySeries, seriesReadingStatus } from '../series/series'
 import defaultState from './default-state.json'
 import { parseWorkUrl, validateProgress } from '../model'
@@ -22,6 +22,25 @@ beforeEach(async () => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
+it('captures current library edits, deletions, collections and series into the project default', async () => {
+ const library = await loadSampleLibrary()
+ await updateSampleEntry(library.stories[0].id, { notes: 'Captured note' })
+ await deleteSampleStory(library.stories.at(-1)!.id)
+ const fetch = vi.fn().mockResolvedValue({ ok: true })
+ vi.stubGlobal('fetch', fetch)
+ await updateSampleLibrary()
+ const [url, options] = fetch.mock.calls[0]
+ expect(url).toBe('/__sample-data')
+ expect(options.method).toBe('POST')
+ const saved = JSON.parse(options.body)
+ expect(saved).toMatchObject({ completeSnapshot: true, sampleVersion: 10, collections: [], series: library.series })
+ expect(saved.stories).toHaveLength(library.stories.length - 1)
+ expect(saved.stories[0].notes).toBe('Captured note')
+ expect((await loadSampleLibrary()).stories[0].notes).toBe('Captured note')
+ fetch.mockResolvedValue({ ok: false })
+ await expect(updateSampleLibrary()).rejects.toThrow('Could not save sample data into the project')
+})
+
 it('loads the bundled default in a fresh browser without an existing sample library', async () => {
  window.localStorage.clear()
  const library = await loadSampleLibrary()
@@ -35,6 +54,22 @@ it('loads the bundled default in a fresh browser without an existing sample libr
  expect((await loadSampleLibrary()).stories[0].notes).toBe('A new reader’s edit')
  resetSampleLibrary()
  expect(await loadSampleLibrary()).toEqual(library)
+})
+
+it('uses a captured complete snapshot exactly, including removed sample collections', async () => {
+ const original = structuredClone(defaultState)
+ const captured = defaultState as unknown as { completeSnapshot?: boolean; stories: unknown[]; collections: unknown[]; series: unknown[] }
+ try {
+  captured.completeSnapshot = true
+  captured.stories = []
+  captured.collections = []
+  captured.series = []
+  resetSampleLibrary()
+  expect(await loadSampleLibrary()).toMatchObject({ stories: [], collections: [], series: [] })
+ } finally {
+  Object.assign(defaultState, original)
+  delete captured.completeSnapshot
+ }
 })
 
 it('seeds separate spine design collections and preserves edits and deletions on reload', async () => {

@@ -13,10 +13,20 @@ export function importProgressKnown(work: CsvWork) {
  return Boolean(work.importReadingStatusOrigin !== 'default' && work.importReadingStatus === 'to_read' || state.status === 'finished' && work.metadata.published_chapters !== undefined
   || state.status === 'reading' && work.bookmarkDate && work.metadata.chapter_dates?.['1'])
 }
-export async function reviewImportReading(ids: string[] = [], action: 'list' | 'accept' | 'keep' = 'list', page = 1): Promise<ReadingReviews> {
- if (sampleMode) return (await import('../library/sample/repository')).reviewSampleImportReading(ids, action, page)
+export async function reviewImportReading(ids: string[] = [], action: 'list' | 'accept' | 'keep' = 'list', page = 1, scope?: string[]): Promise<ReadingReviews> {
+ if (sampleMode) return (await import('../library/sample/repository')).reviewSampleImportReading(ids, action, page, scope)
  if (!supabase) throw new Error('Connect your library to review reading corrections.')
- const { data, error } = await supabase.rpc('review_import_reading', { p_ids: ids, p_action: action, p_page: page })
+ const { data, error } = await supabase.rpc('review_import_reading', { p_ids: ids, p_action: action, p_page: page, ...(scope && { p_scope: scope }) })
  if (error) throw new Error('Could not review reading corrections. Check your connection and apply the latest migrations, then retry.')
  return data as unknown as ReadingReviews
+}
+
+export function readCsvReviewScope(owner: string): string[] {
+ try {
+  const value: unknown = JSON.parse(localStorage.getItem(`between-chapters:csv-reading-review:v1:${owner}`) ?? '[]')
+  return Array.isArray(value) && value.every(id => typeof id === 'string') ? value : []
+ } catch { return [] }
+}
+export function saveCsvReviewScope(owner: string, ids: string[]) {
+ try { localStorage.setItem(`between-chapters:csv-reading-review:v1:${owner}`, JSON.stringify(ids)) } catch { /* The current import can still be reviewed in memory. */ }
 }

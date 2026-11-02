@@ -1,3 +1,4 @@
+import { savedWorkIdentity } from '../src/metadata'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import { chapterNotesFiles, epubBuffer, epubFiles } from '../../src/test/epub-fixture'
@@ -100,4 +101,10 @@ it('repairs old section identities by file path while preserving history and fla
   expect(clear.resumeRequired).toBe(false)
   expect(clear.position).toEqual({ chapter: second.id, fraction: .5 })
   expect(clear.completed).toEqual([second.id])
+})
+
+it('recovers an explicit saved AO3 source without guessing identity from title or prose',async()=>{
+ const b=await book()
+ expect(savedWorkIdentity({...b,workId:null,metadata:{...b.metadata,manual_url:'https://archiveofourown.org/works/8001'}})).toBe('8001')
+ expect(savedWorkIdentity({...b,workId:null,metadata:{...b.metadata,title:'AO3 work 8001',manual_url:'https://unrelated.example/works/8001'}})).toBeNull()
 })

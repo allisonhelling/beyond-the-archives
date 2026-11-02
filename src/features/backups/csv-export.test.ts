@@ -1,3 +1,4 @@
+import { exportWork } from '../library/work-export'
 import { Blob as NodeBlob } from 'node:buffer'
 import { crc32 } from 'node:zlib'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -118,4 +119,25 @@ it('packages UTF-8 CSVs with valid ZIP checksums, directory entries, and offsets
   expect(bytes.readUInt16LE(offset + 10)).toBe(files.length)
   expect(bytes.readUInt32LE(offset + 12)).toBe(offset - directoryStart)
   expect(bytes.readUInt32LE(offset + 16)).toBe(directoryStart)
+})
+
+it.each(['json','csv'] as const)('exports one saved work as %s without loading the complete library', async format => {
+ vi.stubGlobal('Blob', NodeBlob)
+ const library=fixture(),story={...library.stories[0],detailsLoaded:true}
+ exportWork(story,format,library.collections)
+ expect(mocks.loadLibrary).not.toHaveBeenCalled()
+ const [blob,filename]=mocks.downloadFile.mock.calls[0] as [Blob,string]
+ expect(filename).toBe(`beyond-the-archives-work-123.${format}`)
+ const text=await blob.text()
+ if(format==='json') {
+  const value=JSON.parse(text)
+  expect(value.work).toMatchObject({id:story.id,metadata:story.metadata,notes:story.notes})
+  expect(value.work).not.toHaveProperty('detailsLoaded')
+ } else {
+  const exported=rows(text)
+  expect(exported).toHaveLength(1)
+  expect(exported[0].title).toBe(`'${story.metadata.title}`)
+  expect(exported[0].notes).toBe(story.notes)
+  expect(JSON.parse(exported[0].collection_names)).toContain('Custom, "shelf"')
+ }
 })

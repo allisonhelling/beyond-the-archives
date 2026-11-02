@@ -70,7 +70,7 @@ export async function getBook(id: string): Promise<Book | undefined> {
       // A concurrent read/removal may already have repaired or removed the file.
       if (!saved?.hasFile || !body?.file || body.chapterVersion === chapterVersion) return
       const current = { ...saved, ...body }
-      putBook(tx, { ...current, ...repairChapterState(current, imported.chapters), chapters: imported.chapters, resources: imported.resources, chapterVersion })
+      putBook(tx, { ...current, workId: current.workId ?? imported.workId, ...repairChapterState(current, imported.chapters), chapters: imported.chapters, resources: imported.resources, chapterVersion })
     }
   })
   return getBook(id)

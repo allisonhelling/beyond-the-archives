@@ -24,12 +24,17 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   async function refresh() {
     if (!supabase || !authenticated || !userId || !navigator.onLine) return
     try {
-      const { data, error } = await supabase.rpc('reader_offline_snapshot').abortSignal(AbortSignal.timeout(20000))
+      const [{ data, error }, association] = await Promise.all([
+        supabase.rpc('reader_offline_snapshot').abortSignal(AbortSignal.timeout(20000)),
+        supabase.rpc('reader_organizer_connection', { p_action: 'status' }).abortSignal(AbortSignal.timeout(20000)),
+      ])
       if (error) throw error
       const next = { ...(data as unknown as Omit<OfflineSnapshot, 'userId' | 'savedAt'>), userId, savedAt: new Date().toISOString() }
       if (identity.current !== userId) return
       // Do not expose one account's local snapshot to another signed-in account.
       if (!next.readers || !next.stories) throw new Error('Invalid availability report.')
+      const enabled = (association.data as { enabled?: boolean } | null)?.enabled
+      next.connected = typeof enabled === 'boolean' ? enabled : Boolean(next.readers.length)
       saveOfflineSnapshot(next); setSnapshot(next); setError('')
     } catch { setError('Could not update reader reports or retain them locally. Showing the last saved report, if available.') }
   }

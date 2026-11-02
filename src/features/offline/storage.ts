@@ -2,7 +2,7 @@ import { readerBaseUrl } from '../../lib/reader-connection'
 import type { Story } from '../library/model'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
-export type OfflineSnapshot = { userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
+export type OfflineSnapshot = { connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
 const key = 'bta:offline-hub:v1'
 export const offlineCleared = 'bta:offline-cleared'
 export function readOfflineSnapshot(): OfflineSnapshot | undefined {

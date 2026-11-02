@@ -159,3 +159,18 @@ it('distinguishes the initial To Read default from an explicit personal status s
  await sync([row({workId:8002,url:'https://archiveofourown.org/works/8002'})])
  expect((await review()).total).toBe(0)
 })
+
+it('scopes reading-review counts, rows, and changes to the relevant import IDs', async()=>{
+ await sync([row({workId:8101,url:'https://archiveofourown.org/works/8101',importReadingStatus:'to_read',importReadingStatusOrigin:'default'}),row({workId:8102,url:'https://archiveofourown.org/works/8102',importReadingStatus:'to_read',importReadingStatusOrigin:'default'})])
+ await sync([row({workId:8101,url:'https://archiveofourown.org/works/8101'}),row({workId:8102,url:'https://archiveofourown.org/works/8102'})])
+ const all=await review();expect(all.total).toBe(2)
+ const [first,other]=all.reviews
+ const scoped=async(ids:string[],action:string,scope:string[]) => (await db.query<{result:ReadingReviews}>('select public.review_import_reading($1,$2,1,$3) result',[ids,action,scope])).rows[0].result
+ const own=await scoped([],'list',[first.id])
+ expect(own.total).toBe(1);expect(own.reviews.map(review=>review.id)).toEqual([first.id])
+ expect((await scoped([],'list',[])).total).toBe(0)
+ expect((await scoped([other.id],'accept',[first.id])).changed).toBe(0)
+ expect((await review()).total).toBe(2)
+ expect((await scoped([first.id],'keep',[first.id])).total).toBe(0)
+ expect((await review()).reviews.map(review=>review.id)).toEqual([other.id])
+})

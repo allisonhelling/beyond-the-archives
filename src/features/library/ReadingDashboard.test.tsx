@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { Router, type Navigator } from 'react-router-dom'
 import { ReadingDashboard } from './ReadingDashboard'
+import { useLibraryResults } from './useLibraryResults'
 import { defaultReadingFilters } from './reading-search'
 import { writeBrowsing, readingPreferencesKey } from './browsing/browsing'
 import { saveFilterDefaults } from './browsing/filter-defaults'
 
 vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ temporaryPageSizes: new Map(), checkRevision: vi.fn() }) }))
-vi.mock('./useLibraryResults', () => ({ useLibraryResults: () => ({ loading: false }) }))
+vi.mock('./useLibraryResults', () => ({ useLibraryResults: vi.fn(() => ({ loading: false })) }))
 vi.mock('../imports/usePageMetadataRefresh', () => ({ usePageMetadataRefresh: () => ({ unavailable: true }) }))
 vi.mock('./ReadingFilterControls', () => ({
  ReadingFilterControls: ({ onChange, orderingControls }: { onChange: (filters: typeof defaultReadingFilters) => void; orderingControls?: ReactNode }) =>
@@ -16,6 +17,7 @@ vi.mock('./ReadingFilterControls', () => ({
 }))
 
 beforeEach(() => {
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: false, retry: vi.fn() })
  const values = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) })
 })
@@ -80,4 +82,40 @@ it.each([
  view.rerender(page(search, 'returned'))
  expect(screen.getByRole('button', { name: 'Group' })).toHaveTextContent(expected)
  expect(JSON.parse(localStorage.getItem(readingPreferencesKey)!)).toMatchObject({ groupBy: 'author' })
+})
+
+it('keeps the bottom page-size control mounted while replacement results load', () => {
+ const result = { stories: [], series: [], total: 60, page: 1, pages: 3, sections: {}, fandoms: [] }
+ const retry = vi.fn()
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result, retry })
+ const navigator: Navigator = { createHref: () => '', go: vi.fn(), push: vi.fn(), replace: vi.fn() }
+ const dashboard = () => <Router location={{ pathname: '/library', search: '?shelf=all', key: 'initial' }} navigator={navigator}>
+  <ReadingDashboard stories={[]} mode="library" showActions={false} renderStory={() => null} />
+ </Router>
+ const view = render(dashboard())
+ const bottom = screen.getAllByRole('navigation', { name: 'Result Pages' }).at(-1)!
+ const size = within(bottom).getByRole('combobox', { name: 'Works per Page' })
+ size.focus()
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: true, previousResult: result, retry })
+ fireEvent.change(size, { target: { value: '50' } })
+ view.rerender(dashboard())
+ expect(screen.getAllByRole('navigation', { name: 'Result Pages' })).toHaveLength(2)
+ expect(within(bottom).getByRole('combobox', { name: 'Works per Page' })).toBe(size)
+ expect(size).toHaveFocus()
+ expect(size).toHaveValue('50')
+ expect(within(bottom).getByRole('status')).toHaveTextContent('Updating…')
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result: { ...result, pages: 2 }, retry })
+ view.rerender(dashboard())
+ expect(size).toHaveValue('50')
+ expect(within(bottom).getByRole('status')).toHaveTextContent('1–50 of 60')
+ expect(within(bottom).getByRole('status')).not.toHaveTextContent('Updating…')
+})
+
+it('keeps the destination shelf when filters are cleared before shelf navigation commits', () => {
+ const navigated = pendingNavigation()
+ fireEvent.click(screen.getByRole('button', { name: 'Finished Shelf' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Clear Filters' }))
+ expect(navigated().get('shelf')).toBe('finished')
+ expect(navigated().get('query')).toBe('')
+ expect(navigated().get('favorites')).toBe('false')
 })

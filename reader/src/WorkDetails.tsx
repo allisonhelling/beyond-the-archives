@@ -38,7 +38,7 @@ export function WorkDetails({ book, onClose, appearance }: { book: BookDetails; 
       { label: 'Saved Position', value: chapter ? `${chapter.title} · ${Math.round(book.position.fraction * 100)}% through section` : undefined },
       { label: 'Personal Notes', value: book.notes },
       { label: 'Organizer Collections', value: book.collections.join(' · ') },
-      { label: 'Organizer Link', value: book.remote ? 'Linked' : 'Not Linked' },
+      { label: 'Organizer Link', value: book.remote && book.account && book.workId ? 'Linked' : 'Not Linked' },
       { label: 'EPUB Version', value: book.active ? 'Active Version' : 'Retained Version' },
       { label: 'Download', value: book.hasFile ? 'Available Here' : 'Removed From This Device' },
     ].map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{savedValue(value)}</dd></div>)}</dl>

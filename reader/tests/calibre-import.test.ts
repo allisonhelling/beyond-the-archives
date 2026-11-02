@@ -55,3 +55,9 @@ it('matches standalone Calibre updates by stable UUID even when the title change
  expect(prepared.previous?.id).toBe('prior-hash')
  expect(prepared.next.calibreId).toBe(previous.calibreId)
 })
+
+it('recovers the source ID when restoring an exact hash or replacing a previously unidentified version',async()=>{
+ const next=await importEpub(await fixture()),previous=bookDetails({...next,workId:null,notes:'Keep my notes'})
+ expect(importedVersion(next,previous)).toMatchObject({workId:'8001',notes:'Keep my notes'})
+ expect(importedVersion({...next,id:'updated-hash'},previous)).toMatchObject({workId:'8001',notes:'Keep my notes'})
+})

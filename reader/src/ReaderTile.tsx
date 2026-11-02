@@ -1,3 +1,4 @@
+import { organizerAppUrl } from '../../src/lib/connected-login'
 import { useContext } from 'react'
 import { SeriesNames } from '../../src/features/library/series/SeriesNames'
 import { AuthorNames } from '../../src/features/library/AuthorNames'
@@ -16,7 +17,7 @@ import { statuses, type CatalogBook, type Preferences } from './model'
 import { WorkMenu } from './WorkMenu'
 import { WorkTags } from './WorkTags'
 const CloudOutline = createLucideIcon('CloudOutline', [['path', { d: 'M6 18h12a4 4 0 0 0 1-7.87A5.5 5.5 0 0 0 8.5 8.1 2.75 2.75 0 0 0 4.5 10.2 4.05 4.05 0 0 0 6 18Z', key: 'outline' }]])
-export function ReaderTile({book,preferences,appearance,busy=false,onRead,onManage,onDetails,onRemove,onDelete,onSearch,onSeries,onAuthor}: {
+export function ReaderTile({book,preferences,appearance,busy=false,onRead,onManage,onDetails,onRemove,onDelete,onSearch,onSeries,onAuthor,organizerAccount}: { organizerAccount?: string;
  book:CatalogBook;preferences:Preferences;appearance:TagAppearance;busy?:boolean;onRead:()=>void;onManage:()=>void;onDetails:()=>void;onRemove:()=>void;onDelete:()=>void;onSearch:(query:string)=>void;onSeries?:(name:string)=>void;onAuthor?:(name:string)=>void
 }) {
  const editor=useContext(DisplayEditorContext),layout=useLayout(),metadata=book.metadata,series=seriesNames(metadata)
@@ -24,7 +25,7 @@ export function ReaderTile({book,preferences,appearance,busy=false,onRead,onMana
  const chapterCount=metadata.published_chapters??book.chapterCount
  const count=(value:number|null|undefined,label:string)=><span>{value?.toLocaleString()??'Unknown'} {label}</span>
  return <DisplayEditorContext value={editor??{preferences:readerTilePreferences(preferences,layout,appearance),groups:[],selected:null}}><article className="story-card">
-  <div className="card-top"><h2><button className="title-button" onClick={book.hasFile?onRead:onDetails}>{metadata.title}</button>{'\u00a0'}<PublicationStatusIndicator portal status={metadata.publication_status} /></h2><div className="card-top-actions"><WorkMenu onDelete={onDelete} onViewDetails={onDetails} onRemoveDownload={book.hasFile?onRemove:undefined} /></div></div>
+  <div className="card-top"><h2><button className="title-button" onClick={book.hasFile?onRead:onDetails}>{metadata.title}</button>{'\u00a0'}<PublicationStatusIndicator portal status={metadata.publication_status} /></h2><div className="card-top-actions"><WorkMenu organizerHref={organizerAccount && book.account === organizerAccount && book.organizerEntryId ? new URL(`/stories/${encodeURIComponent(book.organizerEntryId)}`, organizerAppUrl()).href : undefined} onDelete={onDelete} onViewDetails={onDetails} onRemoveDownload={book.hasFile?onRemove:undefined} /></div></div>
   <DisplayInfo group="workTile" lineClassName="work-facts">{{
    authors:<p className="byline">by {metadata.authors.length?<AuthorNames metadata={metadata} onSelect={name=>onAuthor?.(name)} />:'Unknown Author'}</p>,
    fandoms:<p className="work-fandoms">{metadata.fandoms.length?<BulletSeparated values={metadata.fandoms} />:'INDEPENDENT EPUB'}</p>,

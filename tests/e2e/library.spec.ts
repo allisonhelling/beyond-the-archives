@@ -63,6 +63,7 @@ test('saved library sync reports retain totals and open skipped entries and inco
   checkChapterDates: true, chapterDatesChecked: 201, chapterDatesUnavailable: 2, skippedEntries: [skipped], chapterDateIssues: [dates],
  } }] } }))
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  await page.getByRole('button', { name: 'View Saved Sync Reports', exact: true }).click()
  await expect(page.getByText(/117 Bookmark pages saved · 117 total pages saved · 2037 works collected/)).toBeVisible()
  await page.getByRole('button', { name: '4 Unsupported Entries Skipped', exact: true }).click()
@@ -322,8 +323,11 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   if (info.project.name === 'mobile') expect(titleRefresh!.height).toBe(34)
   else expect(titleRefresh!.height).toBeGreaterThanOrEqual(44)
   await expect(page.locator('.story-metadata-label')).toBeVisible({ visible: info.project.name === 'mobile' })
-  expect(metadataEdit!.x - titleRefresh!.x - titleRefresh!.width).toBeLessThan(16)
-  expect(metadataEdit!.x).toBeGreaterThan(titleRefresh!.x + titleRefresh!.width)
+  const metadataExport = await page.locator('.story-metadata-actions').getByRole('button', { name: 'Export Work Metadata', exact: true }).boundingBox()
+  for (const [left, right] of [[titleRefresh!, metadataExport!], [metadataExport!, metadataEdit!]]) {
+    expect(right.x - left.x - left.width).toBeLessThan(16)
+    expect(right.x).toBeGreaterThan(left.x + left.width)
+  }
   for (const property of ['height', 'padding', 'border', 'borderRadius', 'backgroundColor'] as const) {
     const editButton = page.getByRole('button', { name: 'Edit AO3 Metadata', exact: true })
     const refreshButton = page.locator('.story-metadata-actions').getByRole('button', { name: 'Retry / Update Metadata', exact: true })
@@ -786,6 +790,8 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(cards.getByRole('heading', { name: 'Beta voyage' })).toBeVisible()
   await page.getByRole('button', { name: 'View All', exact: true }).click()
   await clear()
+  await expect(page).toHaveURL(url => url.searchParams.get('shelf') === 'view_all')
+  await expect(page.getByRole('button', { name: 'View All', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await panel.getByLabel('Relationships', { exact: true }).click()
   await expect(page.getByRole('region', { name: 'Relationships Suggestions' }).locator('strong')).toHaveCount(0)
   for (const name of ['Dean Winchester', 'Slow Burn', 'Action/Adventure']) await expect(page.getByRole('region', { name: 'Relationships Suggestions' }).getByRole('button', { name, exact: true })).toHaveCount(0)
@@ -2975,7 +2981,18 @@ test('pagination submits inline page numbers on Enter and keeps temporary page s
   await expect(paginations).toHaveCount(2)
   const grid=(await page.locator('.reading-group .story-grid').last().boundingBox())!, footer=(await bottomPagination.boundingBox())!
   expect(footer.y).toBeGreaterThanOrEqual(grid.y+grid.height)
+  let release!: () => void
+  const pendingSize = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/rest/v1/rpc/query_library', async route => {
+   if (route.request().postDataJSON().p_size === 50) await pendingSize
+   await route.fallback()
+  })
   await bottomPagination.getByRole('combobox',{name:'Works per Page',exact:true}).selectOption('50')
+  try {
+   await expect(size).toHaveValue('50')
+   await expect(bottomPagination.getByRole('status')).toContainText('Updating…')
+  } finally { release() }
+  await page.unroute('**/rest/v1/rpc/query_library')
   await expect(size).toHaveValue('50')
   await expect(pagination.getByRole('status')).toContainText('1–50 of 60')
   await expect(page).not.toHaveURL(/[?&]size=/)
@@ -3174,6 +3191,7 @@ test('hidden tile icons become menu actions and paused reading stays available',
 test('mass import shares scan options and keeps the wider form within the viewport', async ({ page }, info) => {
   await fixture(page)
   await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
   const options = page.getByRole('group', { name: 'Scan Options', exact: true })
   await expect(options).toBeVisible()
   await expect(options).toHaveCSS('padding-top', '12px')
@@ -3193,6 +3211,7 @@ test('mass import shares scan options and keeps the wider form within the viewpo
     expect(review.x).toBeGreaterThan(series.x + series.width)
     expect(Math.abs(review.y - series.y)).toBeLessThan(2)
   }
+  await page.getByRole('tab',{name:'Work or Series Links',exact:true}).click()
   const linkForm = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Import Work or Series Links', exact: true }) })
   const linkSeries = linkForm.getByRole('checkbox', { name: 'Automatically Save All Series Works for This Import Only' })
   await expect(linkSeries).toBeVisible()
@@ -3202,6 +3221,7 @@ test('mass import shares scan options and keeps the wider form within the viewpo
     expect((await linkSeries.boundingBox())!.x).toBeGreaterThan(status.x + status.width)
     expect(status.width).toBeLessThan(250)
   }
+  await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
   await page.getByRole('button', { name: 'Import Bookmarks', exact: true }).click()
   const bookmarkDialog = page.getByRole('dialog', { name: 'Import Bookmarks', exact: true })
   const chapterOption = bookmarkDialog.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })
@@ -3221,8 +3241,10 @@ test('mass import shares scan options and keeps the wider form within the viewpo
   await expect(bookmarkDialog.getByText('Earlier or same-day bookmarks are marked Currently Reading; chapter progress stays unconfirmed unless you enable the chapter-date check. Missing dates also mark bookmarks as Currently Reading with unconfirmed progress.')).toBeVisible()
   await expect(bookmarkDialog.getByRole('checkbox', { name: 'Save My AO3 Username for Future Imports', exact: true })).toBeVisible()
   await bookmarkDialog.getByRole('button', { name: 'Close Dialog' }).click()
+  await page.getByRole('tab',{name:'CSV (Bookmarks or Marked for Later)',exact:true}).click()
   const csvSection = page.getByRole('region', { name: 'Import from CSV (Bookmarks or Marked for Later)', exact: true })
   await expect(csvSection.getByRole('checkbox', { name: 'Check Chapter Publication Dates', exact: true })).not.toBeChecked()
+  await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
   await expect(options.getByRole('combobox', { name: 'Scan Mode', exact: true })).toHaveValue('full')
   const bookmarks = page.getByRole('button', { name: 'Import Bookmarks', exact: true })
   const url = page.getByLabel('AO3 List URL', { exact: true })
@@ -3507,6 +3529,7 @@ test('username import popups share optional reading-status controls independentl
  await fixture(page)
  await page.addInitScript(() => localStorage.setItem('between-chapters:ao3-username:10000000-0000-0000-0000-000000000001', 'SavedReader'))
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  const listStatus = page.getByRole('combobox', { name: 'Reading Status for AO3 list URL', exact: true })
  await listStatus.selectOption('finished')
  for (const title of ['Import Bookmarks', 'Import Marked for Later']) {
@@ -3552,6 +3575,7 @@ test('username import popups share optional reading-status controls independentl
 test('Dynamic Bookmarks is available only for library list sync and reveals optional chapter-date checks', async ({ page }) => {
  await fixture(page)
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  const sync = page.getByRole('region', { name: 'AO3 Library Sync', exact: true })
  const status = sync.getByRole('combobox', { name: 'Reading Status for AO3 list URL', exact: true })
  await expect(page.getByRole('option', { name: 'Dynamic (Bookmarks)', exact: true })).toHaveCount(1)
@@ -3642,6 +3666,7 @@ test('End Scan review survives reload and imports selected works before finishin
   } } } })
  }, { preview })
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  const end = page.getByRole('button', { name: 'End Scan', exact: true })
  await expect(end).toBeVisible()
  if (info.project.name === 'desktop') {
@@ -3695,6 +3720,7 @@ test('bookmark scans show explicitly bookmarked series before series containing 
   } } } })
  }, { previews })
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  await page.getByRole('button', { name: 'Import Scanned Works', exact: true }).click()
  const dialog = page.getByRole('dialog', { name: 'Choose Works From Series', exact: true })
  await expect(dialog.getByRole('heading', { name: 'Bookmarked Series', exact: true })).toBeVisible()
@@ -3752,6 +3778,7 @@ test('bookmark conflicts offer explicit choices in a spaced responsive grid with
  })
  await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({ json: { reports: [], total: 0 } }))
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  await page.getByRole('button', { name: 'Import Scanned Works', exact: true }).click()
  const summary = page.getByText('2 Bookmark Conflicts — Review Personal Data', { exact: true })
  await summary.click()
@@ -3812,6 +3839,7 @@ test('separates the skipped-entry introduction from the first work with a divide
  const report = { id: 'skip-report', completed_at: '2026-10-27T12:00:00Z', report: { id: 'skip-scan', status: 'complete', pages: 1, count: 1, skipped: 1, error: '', url: 'https://archiveofourown.org/users/reader/bookmarks', skippedEntries: [{ title: 'Skipped Work', url: 'https://archiveofourown.org/works/123', sourceUrl: 'https://archiveofourown.org/users/reader/bookmarks', reason: 'Unavailable listing' }] } }
  await page.route('**/rest/v1/rpc/library_sync_report_history', route => route.fulfill({ json: { reports: [report], total: 1 } }))
  await page.goto('/imports'); await login(page)
+ await page.getByRole('tab',{name:'AO3 Library Sync',exact:true}).click()
  await page.getByRole('button', { name: 'View Saved Sync Reports' }).click()
  await page.getByRole('button', { name: '1 Unsupported Entries Skipped' }).click()
  const dialog = page.getByRole('dialog', { name: 'Skipped AO3 Entries' })

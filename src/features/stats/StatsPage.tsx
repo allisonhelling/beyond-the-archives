@@ -1,3 +1,4 @@
+import { TabList } from '../../components/TabList'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -97,14 +98,7 @@ export function StatsPage() {
   <PeriodControls period={period} onChange={setPeriod} />
   {loading ? <p role="status">Loading Reading Stats…</p> : error ? <RetryError message={error} onRetry={() => { setLoading(true); setRetry(value => value + 1) }} /> : <>
    <p className="muted">{period.mode === 'all_time' ? 'All metrics include all recorded dates in your local time zone.' : `All metrics follow ${periodLabel(period)} in your local time zone. Comparisons and trends end with this period.`}</p>
-   <div className="stats-controls stats-tabs" role="tablist" aria-label="Reading Statistics Sections" onKeyDown={event => {
-    const index = statsSections.findIndex(section => section.id === activeSection)
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? statsSections.length - 1 : event.key === 'ArrowRight' ? (index + 1) % statsSections.length : event.key === 'ArrowLeft' ? (index - 1 + statsSections.length) % statsSections.length : null
-    if (next === null) return
-    event.preventDefault()
-    setActiveSection(statsSections[next].id)
-    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
-   }}>{statsSections.map(section => <button key={section.id} type="button" role="tab" id={`stats-tab-${section.id}`} aria-controls={`stats-panel-${section.id}`} aria-selected={activeSection === section.id} tabIndex={activeSection === section.id ? 0 : -1} className={`button ${activeSection === section.id ? 'primary' : 'secondary'}`} onClick={() => setActiveSection(section.id)}>{section.label}</button>)}</div>
+   <TabList tabs={statsSections} active={activeSection} onChange={setActiveSection} label="Reading Statistics Sections" prefix="stats" className="stats-controls" />
    {selected.length === 0 && <section className="settings-card" role="status"><h2>No Chapter Activity Yet</h2><p>There are no dated chapter completions in this period. Mark chapters read with the AO3 companion to start tracking words and habits, or choose another period. Status activity can still appear below.</p><Link className="text-button" to="/settings#ios-safari-userscript">Set Up the AO3 Browser Bar</Link></section>}
    {activeSection === 'volume' && <div {...panelProps('volume')} className="stats-volume-panel"><section aria-labelledby="volume-heading"><h2 id="volume-heading">Volume & Progress</h2><div className="stats-metrics">{[
     ['Total Words Read', number(volume.words), 'Unique words + re-read words'], ['Unique Words Read', number(volume.unique), 'First recorded read of each chapter'], ['Re-Read Words', number(volume.reread), 'Words consumed again'], ['Estimated Reading Time', `${Math.floor(minutes / 60)}h ${minutes % 60}m`, `At ${speed} words per minute`], ['Fics Read', number(volume.works), 'Distinct fics with chapter activity'], ['Re-Read Passes', number(rereadRanking.reduce((sum, row) => sum + row.value, 0)), 'Recorded repeat passes, including partial reads'], ['Chapters Marked Read', number(volume.chapters), `${volume.unknown} with unknown word counts`],

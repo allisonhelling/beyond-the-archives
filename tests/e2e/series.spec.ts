@@ -252,7 +252,7 @@ test('series import defaults persist while each import can choose a temporary ov
  await expect(page.getByRole('status').filter({ hasText: 'Series import default saved.' })).toBeVisible()
  await page.goto('/imports')
  const overrides = page.getByRole('checkbox', { name: 'Choose Series Works for This Import Only' })
- await expect(overrides).toHaveCount(3)
+ await expect(overrides).toHaveCount(1)
  await expect(overrides.last()).not.toBeChecked()
  await overrides.last().check()
  await page.getByRole('textbox', { name: 'AO3 URLs' }).fill('https://archiveofourown.org/series/77')

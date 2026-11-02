@@ -219,6 +219,7 @@ it('applies the chosen reading status to a batch of direct work links',async()=>
 it('offers local extension listing imports in sample mode without querying account import history',async()=>{
  mocks.sample=true
  show()
+ fireEvent.click(screen.getByRole('tab',{name:'AO3 Library Sync'}))
  expect(screen.getByRole('heading',{name:'AO3 Library Sync'})).toBeVisible()
  expect(screen.queryByText(/Persistent imports require/)).not.toBeInTheDocument()
  expect(screen.getByLabelText('AO3 List URL')).toBeEnabled()
@@ -236,6 +237,7 @@ it('restores the same pasted work and series form in sample mode and saves witho
  await waitFor(()=>expect(mocks.refresh).toHaveBeenCalled())
  expect(mocks.history).not.toHaveBeenCalled()
  expect(screen.getByRole('heading', { name: 'Previous Batches' })).toBeVisible()
+ fireEvent.click(screen.getByRole('tab',{name:'CSV (Bookmarks or Marked for Later)'}))
  expect(screen.getByRole('heading', { name: 'Import from CSV (Bookmarks or Marked for Later)' })).toBeVisible()
  expect(screen.getByText('CSV imports are available in the connected library. Local sample mode does not save CSV import batches.')).toBeVisible()
  expect(screen.getByText('Batch history is available in the connected library. Local sample imports do not create account batches.')).toBeVisible()
@@ -269,4 +271,16 @@ it.each([false,true])('keeps sample pasted-work related-series discovery optiona
  if(optedIn)expect(await screen.findByRole('dialog',{name:'Related Series'})).toBeVisible()
  else expect(screen.queryByRole('dialog',{name:'Related Series'})).not.toBeInTheDocument()
  expect(mocks.history).not.toHaveBeenCalled()
+})
+
+it('keeps drafts across import tabs and places the shared history last in every panel', async () => {
+ show()
+ fireEvent.change(screen.getByLabelText('AO3 URLs'),{target:{value:'https://archiveofourown.org/works/123'}})
+ for (const name of ['AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
+  fireEvent.click(screen.getByRole('tab',{name}))
+  const panel=screen.getByRole('tabpanel',{name})
+  expect(within(panel).getByRole('heading',{name:'Previous Batches'})).toBeVisible()
+  expect(panel.lastElementChild).toContainElement(within(panel).getByRole('heading',{name:'Previous Batches'}))
+ }
+ expect(screen.getByLabelText('AO3 URLs')).toHaveValue('https://archiveofourown.org/works/123')
 })

@@ -5,8 +5,6 @@
 .stats-page h3 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
 .stats-page section > .muted { margin: 10px 0; }
 .stats-volume-panel:not([hidden]) { display: grid; gap: 24px; }
-.stats-tabs { padding: 8px; border-bottom: 1px solid var(--color-border); }
-.stats-tabs .button { flex: 0 0 auto; white-space: nowrap; }
 .stats-period { display: grid; gap: 16px; }
 .stats-period-navigation, .stats-today { display: inline-flex; align-items: center; }
 .stats-today { gap: 8px; }

@@ -178,3 +178,9 @@ export function mergeMetadata<T extends Partial<ReaderMetadata>>(base: T, extra:
   }))
   return { ...base, ...fields }
 }
+
+export function savedWorkIdentity(book: { workId: string | null; metadata: ReaderMetadata }): string | null {
+ if (book.workId && /^[1-9]\d*$/.test(book.workId) && Number.isSafeInteger(Number(book.workId))) return book.workId
+ if (book.metadata.manual_url) try { return String(parseWorkUrl(book.metadata.manual_url).workId) } catch { /* Unidentified and merged EPUBs stay unlinked. */ }
+ return null
+}

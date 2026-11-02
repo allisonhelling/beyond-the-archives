@@ -45,7 +45,7 @@ const spineSamples = [
   { name: 'Library Deco', spineDesign: 'library-deco', color: '#243c5e', introducedIn: 9 },
   { name: 'Cascading Star Trails', spineDesign: 'star-trails-cascading', color: '#54254b', introducedIn: 9 },
 ] satisfies { name: string; spineDesign: SpineDesign; color: string; introducedIn: number }[]
-type Library = { stories: Story[]; collections: (Collection & { spineDesign?: SpineDesign })[]; series?: SeriesRecord[]; sampleVersion?: number }
+type Library = { completeSnapshot?: boolean; stories: Story[]; collections: (Collection & { spineDesign?: SpineDesign })[]; series?: SeriesRecord[]; sampleVersion?: number }
 
 function makeWork(id: number | null): Work {
   return {
@@ -127,11 +127,12 @@ function orderSampleCollections(collections: Library['collections']) {
     .map((collection, sort_position) => ({ ...collection, sort_position }))
 }
 
-// Store only changes to the original fixtures so captured defaults reuse work metadata.
+// Legacy defaults store changes to the original fixtures; new captures are complete snapshots.
 // Keep originalSamples separate for legacy upgrades, which must preserve historical seeds.
 function seedLibrary(): Library {
-  const original = originalSamples()
   const saved = structuredClone(defaultState)
+  if ('completeSnapshot' in saved && saved.completeSnapshot === true) return saved as unknown as Library
+  const original = originalSamples()
   const collections = [...saved.collections] as Library['collections']
   for (const collection of original.collections) {
     if (collections.some(saved => saved.id === collection.id || saved.name === collection.name)) continue
@@ -229,6 +230,14 @@ function find(data: Library, id: string) {
 }
 
 export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, stories: applyAutomaticCollections(data.stories, data.collections), series: data.series ?? [] } }
+export async function updateSampleLibrary() {
+  const data = read()
+  const response = await fetch('/__sample-data', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...data, series: data.series ?? [], sampleVersion, completeSnapshot: true }),
+  })
+  if (!response.ok) throw new Error('Could not save sample data into the project. Check that the local sample server is running and the project folder is writable.')
+}
 export function resetSampleLibrary() { window.localStorage.removeItem(storageKey); window.localStorage.removeItem(collectionSortKey) }
 
 export async function saveSampleStory(input: StoryInput, verifiedChapters?: Record<string, string>, automaticMetadata?: AutomaticMetadata, bookmark?: CsvWork) {
@@ -517,9 +526,9 @@ export async function finishSampleSeries(seriesId: number) {
  return series.savedStories.length
 }
 
-export async function reviewSampleImportReading(ids: string[], action: 'list' | 'accept' | 'keep', page: number): Promise<ReadingReviews> {
+export async function reviewSampleImportReading(ids: string[], action: 'list' | 'accept' | 'keep', page: number, scope?: string[]): Promise<ReadingReviews> {
  const data = read(); let changed = 0, skipped = 0
- if (action !== 'list') for (const story of data.stories.filter(story => ids.includes(story.id))) {
+ if (action !== 'list') for (const story of data.stories.filter(story => ids.includes(story.id) && (!scope || scope.includes(story.id)))) {
   const provenance = (story.reading_provenance ?? {}) as ReadingProvenance, review = provenance.review
   if (!review || JSON.stringify(readingSnapshot(story)) !== JSON.stringify(review.saved)) { skipped++; continue }
   if (action === 'keep') { const next = { ...provenance, dismissed: review }; delete next.review; story.reading_provenance = next as unknown as Json }
@@ -535,7 +544,7 @@ export async function reviewSampleImportReading(ids: string[], action: 'list' | 
  write(data)
  const reviews = data.stories.flatMap(story => {
   const review = (story.reading_provenance as ReadingProvenance)?.review
-  return review ? [{ ...review, id: story.id, title: story.metadata.title }] : []
+  return review && (!scope || scope.includes(story.id)) ? [{ ...review, id: story.id, title: story.metadata.title }] : []
  }).sort((a,b) => a.id.localeCompare(b.id))
  return { reviews: reviews.slice((page-1)*50,page*50), total: reviews.length, changed, skipped }
 }

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Brand } from '../../components/Brand'
 import { RetainedLibraryProvider } from '../library/LibraryProvider'
 import { StoryCard } from '../library/LibraryPages'
@@ -7,9 +7,7 @@ import { useOffline } from './OfflineProvider'
 import { ReaderControls } from './ReaderControls'
 export function OfflinePage({ standalone = false }: { standalone?: boolean }) {
   const { snapshot } = useOffline()
-  const [params] = useSearchParams()
-  const reader = snapshot?.readers.find(reader => reader.id === params.get('reader')) ?? (!params.has('reader') ? snapshot?.readers[0] : undefined)
-  const works = new Set(reader?.works ?? [])
+  const works = new Set(snapshot?.readers.flatMap(reader => reader.works) ?? [])
   const stories = snapshot?.stories.filter(story => works.has(String(story.work.ao3_work_id))) ?? []
   const content = <><div className="page-heading"><h1>Offline</h1><p>A convenient entrance to your offline library. The reader confirms availability and opens the EPUB.</p></div><ReaderControls hub />
     {!snapshot && <p>No retained library is available. Initial setup requires connectivity: sign in online, connect the reader, sync its reports, and load this organizer.</p>}

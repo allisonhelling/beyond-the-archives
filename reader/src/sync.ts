@@ -1,3 +1,5 @@
+import { savedWorkIdentity } from './metadata'
+import { importEpub } from './epub'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
 import { readerInstallationId, readerInstallationAliases, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
 import { withPublication } from './model'
@@ -40,33 +42,48 @@ async function performSync(connection: Connection, force: boolean) {
       return `Sync needs attention: ${message} Your local changes are retained.`
     }
   }
-  // Check a bounded, rotating catalog slice; never load EPUB contents during sync.
+  // Background refreshes rotate through a bounded slice; manual sync checks the full catalog.
+  // Only unidentified local downloads are reparsed. Cloud originals remain explicit downloads.
   const checkpointKey = `sync-checkpoint:${connection.account}`
   const checkpoint = await loadSetting<{ after: string; at: number }>(checkpointKey)
   if (!force && checkpoint && Date.now() - checkpoint.at < 60_000) return 'Reading updates are synced. Organizer refresh will continue on a later sync.'
   const waiting = new Set((await all<Pending>('pending')).map(p => p.book))
-  const candidates = (await listCatalog()).filter(b => (!b.account || b.account === connection.account) && b.workId && /^[1-9]\d*$/.test(b.workId) && Number.isSafeInteger(Number(b.workId))).sort((a,b) => a.id.localeCompare(b.id))
+  const catalog = await listCatalog()
+  const candidates = catalog.filter(b => !b.account || b.account === connection.account).sort((a,b) => a.id.localeCompare(b.id))
   const after = checkpoint?.after ?? ''
   const remaining = candidates.filter(b => b.id > after)
-  const batch = (remaining.length ? remaining : candidates).slice(0, 50)
-  let checked = 0, newlyLinked = 0
+  const batch = force ? candidates : (remaining.length ? remaining : candidates).slice(0, 50)
+  let checked = 0, unidentified = 0, waitingCount = 0, unreadable = 0
   for (let offset = 0; offset < batch.length; offset += 4) {
     const group = batch.slice(offset, offset + 4)
     const outcomes = await Promise.allSettled(group.map(async entry => {
-      if (waiting.has(entry.id)) return
-      const book = await getBookDetails(entry.id)
-      if (!book || (book.account && book.account !== connection.account) || !book.workId) return
+      if (waiting.has(entry.id)) { waitingCount++; return }
+      let book = await getBookDetails(entry.id)
+      if (!book || (book.account && book.account !== connection.account)) return
+      let identity = savedWorkIdentity(book)
+      if (!identity && book.hasFile) {
+        const original = await getBook(book.id)
+        if (original?.file) try { identity = (await importEpub(original.file as File)).workId } catch { unreadable++ }
+      }
+      if (!identity) { unidentified++; return }
+      if (book.workId !== identity) {
+        const recovered = identity
+        await mutateBook(book.id, current => ({ ...current, workId: savedWorkIdentity(current) ?? recovered }))
+        book = await getBookDetails(book.id)
+        if (!book) return
+      }
+      if (!book.workId || book.account && book.account !== connection.account) return
+      const saved = book
       const result = await rpc(connection, 'get', book.workId)
       if (result.entry) await transaction(['books', 'catalog', 'pending', 'settings'], tx => {
         const queued = tx.objectStore('pending').getAll()
         queued.onsuccess = () => {
-          if (queued.result.some((p: Pending) => p.book === book.id)) return
-          const request = tx.objectStore('books').get(book.id)
+          if (queued.result.some((p: Pending) => p.book === saved.id)) return
+          const request = tx.objectStore('books').get(saved.id)
           request.onsuccess = () => {
             const current = request.result as BookDetails | undefined
             // A local edit/link or another sync may have changed the baseline in flight.
-            if (!current || current.account !== book.account || current.workId !== book.workId || current.remote?.version !== book.remote?.version) return
-            if (!current.account) newlyLinked++
+            if (!current || current.account !== saved.account || current.workId !== saved.workId || current.remote?.version !== saved.remote?.version) return
             // Link existing standalone books without discarding personal edits made before pairing.
             // Later pulls also preserve fields that differ from the last organizer baseline.
             putBook(tx, { ...withPublication(current, result.entry!), account: connection.account, remote: result.entry!, status: current.status === (current.remote?.status ?? 'to_read') ? result.entry!.status : current.status, notes: current.notes === (current.remote?.notes ?? '') ? result.entry!.notes : current.notes, collections: (result.collections ?? []).filter(c => result.entry!.collections?.includes(c.id)).map(c => c.name) })
@@ -80,8 +97,9 @@ async function performSync(connection: Connection, force: boolean) {
     // Advance only after a complete group succeeds; failures retry this group safely.
     await setting(checkpointKey, { after: group.at(-1)!.id, at: Date.now() })
   }
-  if (newlyLinked) await reportAvailability(connection)
-  return `Reading updates are synced. Checked ${checked} of ${candidates.length} EPUB versions.${candidates.length > batch.length ? ' Sync Now checks the next batch.' : ''}`
+  const available = await reportAvailability(connection)
+  const linked = (await listCatalog()).filter(book => book.account === connection.account && book.workId && book.organizerEntryId).length
+  return `Reading updates are synced. Catalog: ${catalog.length} EPUB versions. Checked ${checked} identified EPUB versions; ${linked} versions linked. ${unidentified} checked version${unidentified === 1 ? ' needs' : 's need'} an AO3 work link.${waitingCount ? ` ${waitingCount} versions have pending reading changes.` : ''}${unreadable ? ` ${unreadable} downloaded EPUBs could not be read for identity recovery.` : ''}${catalog.length > candidates.length ? ` ${catalog.length - candidates.length} versions belong to another organizer connection and were left unchanged.` : ''} ${available} downloaded works reported for Offline.${!force && candidates.length > batch.length ? ' More catalog versions will be checked on a later sync; Sync Now checks the full catalog.' : ''} Cloud-only EPUBs are not downloaded by sync.`
 }
 
 // Resolve files from IndexedDB on this installation before reporting availability.
@@ -92,4 +110,5 @@ export async function reportAvailability(connection: Connection) {
     if (entry.active && entry.workId && entry.account === connection.account && entry.hasFile && await getBook(entry.id)) works.add(entry.workId)
   }
   await rpc(connection, 'reader_report', '0', { installationId, previousInstallationIds: await readerInstallationAliases(), name: connection.name, url: new URL('/', location.href).href, works: [...works] })
+  return works.size
 }

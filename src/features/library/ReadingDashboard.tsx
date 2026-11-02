@@ -74,6 +74,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
   const [temporarySize, setTemporarySize] = useState(() => pageSize(params.get('size')) === undefined ? temporaryPageSizes.get(mode) : undefined)
   const [draft, setDraft] = useState<{ source: string; filters: ReadingFilters } | null>(null)
   const currentUrl = params.toString()
+  const [pendingShelf, setPendingShelf] = useState<{ source: string; shelf: string } | null>(null)
+  if (pendingShelf && pendingShelf.source !== currentUrl) setPendingShelf(null)
   const currentFilters = draft?.source === currentUrl ? draft.filters : decoded.filters
   const filters = useMemo(() => author !== undefined ? { ...currentFilters, showSeries: false } : currentFilters, [currentFilters, author])
   const page = draft?.source === currentUrl ? 1 : decoded.page, size = temporarySize ?? decoded.size
@@ -84,14 +86,18 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     // Save the user's ordering before navigation can unmount this dashboard.
     try { window.localStorage.setItem(readingPreferencesKey, JSON.stringify({ sort: next.sort, groupBy: next.groupBy })) }
     catch { /* The current selections still work when browser storage is unavailable. */ }
-    setDraft({ source: currentUrl, filters: next }); setParams(writeBrowsing(params, next, urlSize))
+    const nextParams = writeBrowsing(params, next, urlSize)
+    // A shelf click may still be waiting for Router when Apply or Clear runs.
+    if (pendingShelf?.source === currentUrl) nextParams.set('shelf', pendingShelf.shelf)
+    setDraft({ source: currentUrl, filters: next }); setParams(nextParams)
   }
   const selectShelf = useCallback((shelf: string) => {
     // The URL transition may still be pending after Apply or Clear All Filters.
     // Shelf navigation must use the same optimistic filters as the controls.
     const next = writeBrowsing(params, readFilterDefaults(filterDefaultScope(mode, shelf), filters), mode === 'reading' ? urlSize : undefined)
+    setPendingShelf({ source: currentUrl, shelf })
     next.set('shelf', shelf); setParams(next)
-  }, [params, mode, filters, urlSize, setParams])
+  }, [params, currentUrl, mode, filters, urlSize, setParams])
   function applyFilters(next: ReadingFilters) {
     // Ordering belongs to the dashboard controls, not a filter-panel snapshot.
     setFilters(previous => ({ ...next, sort: previous.sort, groupBy: previous.groupBy, ...(previous.randomSeed && { randomSeed: previous.randomSeed }) }))
@@ -154,6 +160,6 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', resul
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <RetryError message={error} onRetry={remote.error ? remote.retry : undefined} />}
     {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
-    {!error && !remote.loading && pagination()}
+    {!error && (!remote.loading || Boolean(displayed)) && pagination()}
   </SeriesSummaryContext>
 }

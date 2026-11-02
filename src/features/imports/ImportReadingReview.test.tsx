@@ -17,7 +17,7 @@ it('shows unknown progress without claiming a confirmed zero and changes nothing
  fireEvent.click(screen.getByRole('checkbox',{name:'Select Correction for Work a'}))
  rpc.mockResolvedValue({reviews:[review('b')],total:1,changed:1,skipped:0})
  fireEvent.click(screen.getByRole('button',{name:'Accept Selected Corrections'}))
- await waitFor(()=>expect(rpc).toHaveBeenLastCalledWith(['a'],'accept',1))
+ await waitFor(()=>expect(rpc).toHaveBeenLastCalledWith(['a'],'accept',1,undefined))
  await waitFor(()=>expect(changed).toHaveBeenCalledTimes(1))
  expect(screen.getByText('1 corrections accepted.')).toBeVisible()
 })
@@ -28,7 +28,7 @@ it('keeps all selected histories and surfaces review failures without claiming s
  rpc.mockRejectedValue(new Error('Connection failed'))
  fireEvent.click(screen.getByRole('button',{name:'Keep Selected Reading History'}))
  expect(await screen.findByRole('alert')).toHaveTextContent('Connection failed')
- expect(rpc).toHaveBeenLastCalledWith(['a','b'],'keep',1)
+ expect(rpc).toHaveBeenLastCalledWith(['a','b'],'keep',1,undefined)
  expect(screen.getByRole('table')).toBeVisible()
 })
 it('toggles the review panel and refreshes pending corrections when reopened',async()=>{
@@ -68,4 +68,15 @@ it('hides both import entry points when the last corrections are resolved',async
  await waitFor(()=>expect(screen.queryByRole('button',{name:'Review Reading Corrections'})).not.toBeInTheDocument())
  expect(screen.queryByRole('table')).not.toBeInTheDocument()
  expect(screen.getByRole('status')).toHaveTextContent('2 corrections accepted.')
+})
+
+it('passes the same import scope to counts, pagination, and correction actions', async () => {
+ const scope = ['a']
+ rpc.mockResolvedValue({reviews:[review('a')],total:1,changed:0,skipped:0})
+ render(<MemoryRouter><ImportReadingReview scopeIds={scope} onChanged={async()=>{}} /></MemoryRouter>)
+ fireEvent.click(await screen.findByRole('button',{name:'Review Reading Corrections'}))
+ expect(await screen.findByRole('table')).toBeVisible()
+ expect(rpc).toHaveBeenLastCalledWith([], 'list', 1, scope)
+ fireEvent.click(screen.getByRole('button',{name:'Keep Reading History'}))
+ await waitFor(()=>expect(rpc).toHaveBeenLastCalledWith(['a'],'keep',1,scope))
 })

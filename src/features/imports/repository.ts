@@ -135,7 +135,7 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
   throw importError('Could not confirm the CSV import', error)
  }
  void connectExtension().catch(() => {})
- return data as unknown as { batch: string | null; imported: number; kept: number; metadataRepaired: number; seriesRepaired: number; readingCorrections: number }
+ return data as unknown as { batch: string | null; imported: number; kept: number; metadataRepaired: number; seriesRepaired: number; readingCorrections: number; repairWorkIds?: Record<'metadata' | 'series' | 'reading', string[]> }
 }
 
 export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string; reviewExisting?: boolean; readingStatusOrigin?: 'default' | 'manual' }, approved?: import('./ao3-csv').CsvConflict) {

@@ -20,7 +20,7 @@ export function importedVersion(next: Book, previous?: BookDetails) {
   if (!previous) return next
   if (previous.id !== next.id) return replaceBook(previous, next)
   const repaired = previous.chapterVersion !== next.chapterVersion ? repairChapterState(previous,next.chapters) : {}
-  return { ...next, ...previous, ...repaired, metadata: mergeMetadata(previous.metadata, next.metadata), metadataVersion, chapters: next.chapters, chapterVersion: next.chapterVersion }
+  return { ...next, ...previous, ...repaired, workId: previous.workId ?? next.workId, metadata: mergeMetadata(previous.metadata, next.metadata), metadataVersion, chapters: next.chapters, chapterVersion: next.chapterVersion }
 }
 export function writeImport(tx: IDBTransaction, saved: Book, old?: BookDetails, replace: boolean | 'delete' = false) {
   // A restored hash is the same book, not a second version to deactivate.

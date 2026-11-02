@@ -10,6 +10,8 @@ beforeEach(() => mocks.invoke.mockReset())
 it('offers a new-tab action only for supported AO3 work identities', () => {
  render(<MemoryRouter><WaybackLink url={base} menu /><WaybackLink url="https://evil.test/works/123" /></MemoryRouter>)
  const link = screen.getByRole('link', { name: 'View in Wayback Machine' })
+ expect(link).toHaveTextContent('Wayback')
+ expect(link.querySelector('svg')).toBeInTheDocument()
  expect(link).toHaveAttribute('target', '_blank')
  expect(link).toHaveAttribute('rel', 'noreferrer')
  expect(link.getAttribute('href')).toContain('/wayback?url=')

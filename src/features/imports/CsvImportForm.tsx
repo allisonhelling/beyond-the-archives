@@ -1,5 +1,7 @@
 import { useActivity } from '../../lib/use-activity'
 import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
+import { readCsvReviewScope, saveCsvReviewScope } from './import-reading-review'
+import { useLibrary } from '../library/LibraryProvider'
 import { ImportReadingReview } from './ImportReadingReview'
 import { sampleMode } from '../../lib/sample-mode'
 import { SeriesImportOptions } from './SeriesImportOptions'
@@ -17,6 +19,8 @@ import { SeriesImportReview, type SeriesWorkSelection } from './SeriesImportRevi
 type Prepared = { works: CsvWork[]; conflicts: CsvConflict[] }
 export function CsvImportForm({ onImported }: { onImported: (batch: string | null) => Promise<void> }) {
  const seriesBehavior = useSeriesImportBehavior()
+ const { userId = 'local' } = useLibrary()
+ const [reviewIds, setReviewIds] = useState(() => readCsvReviewScope(userId))
  const [relatedImport, setRelatedImport] = useState<{ batchId?: string; workIds: number[]; behavior: typeof seriesBehavior.behavior; reviewedSeriesIds: number[] }>()
  const reviewedSeriesIds = useRef<number[]>([])
  const [checkChapterDates, setCheckChapterDates] = useState(false)
@@ -65,6 +69,8 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   pending.current = true; setBusy(true); setError('')
   try {
    const result = await submitCsvImport(prepared.works, prepared.conflicts, choices, checkChapterDates)
+   const correctionIds = result.repairWorkIds?.reading ?? prepared.conflicts.map(work => work.id)
+   setReviewIds(correctionIds); saveCsvReviewScope(userId, correctionIds)
    setRelatedImport(seriesBehavior.reviewRelatedSeries ? {batchId: result.batch ?? undefined, workIds: prepared.works.flatMap(work => work.workId === null ? [] : [work.workId]), behavior: seriesBehavior.behavior, reviewedSeriesIds: reviewedSeriesIds.current} : undefined)
    setPrepared(undefined); seriesBehavior.reset(); setMessage(`Updated AO3 information for ${result.metadataRepaired ?? 0} works, including series information for ${result.seriesRepaired ?? 0} works. Found ${result.readingCorrections ?? 0} possible reading-status corrections. Imported ${result.imported} works. Kept ${result.kept} existing works. Non-empty AO3 metadata was refreshed for existing works. Metadata${checkChapterDates ? ' and chapter dates' : ''} for new or overwritten works continue processing in import history.`)
    await onImported(result.batch)
@@ -86,7 +92,7 @@ export function CsvImportForm({ onImported }: { onImported: (batch: string | nul
   {error && !seriesSources && <p className="error-message" role="alert">{error}</p>}
   {seriesSources && <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={seriesSources.map(row => row.url).join('\n')} savedIds={new Set()} busy={busy} showReadingStatus={false} confirmLabel="Review CSV Conflicts" onConfirm={(_works, _status, _seriesIds, selections) => void reviewSeries(selections)} onCancel={() => { setSeriesSources(undefined); setError('') }} />}
   {relatedImport && <CompletedImportSeriesNotice key={relatedImport.batchId ?? relatedImport.workIds.join(',')} workIds={relatedImport.workIds} reviewedSeriesIds={relatedImport.reviewedSeriesIds} reviewRelatedSeries batchId={relatedImport.batchId} initialBehavior={relatedImport.behavior} />}
-  <ImportReadingReview onChanged={() => onImported(null)} refreshKey={message} />
+  <ImportReadingReview key={reviewIds.join(',')} scopeIds={reviewIds} onChanged={() => onImported(null)} refreshKey={message} />
   {prepared && <>
    <p>{prepared.works.length} unique works · {conflicts.length} bookmark conflicts · {laterSkipped} existing Marked for Later works will keep personal data.</p>
    {conflicts.length > 0 && <>

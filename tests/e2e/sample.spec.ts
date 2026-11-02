@@ -428,6 +428,29 @@ test('automatic collections match saved filters, new works and rule edits with a
  await expect(page.locator('.work-card')).toHaveCount(1)
 })
 
+test('Update Sample Data captures library edits and keeps the preview open', async ({ page }) => {
+ await page.goto('/library')
+ await page.evaluate(async () => {
+  const { loadSampleLibrary, updateSampleEntry } = await import(/* @vite-ignore */ '/src/features/library/sample/repository.ts')
+  const library = await loadSampleLibrary()
+  await updateSampleEntry(library.stories[0].id, { notes: 'Save this as the sample default' })
+ })
+ // Keep browser tests from changing the checkout's real default fixture.
+ await page.route('**/__sample-data', async route => {
+  const captured = route.request().postDataJSON()
+  expect(captured.completeSnapshot).toBe(true)
+  expect(captured.stories[0].notes).toBe('Save this as the sample default')
+  expect(captured.collections).toHaveLength(24)
+  expect(captured.series).toHaveLength(4)
+  await route.fulfill({ json: { saved: true } })
+ })
+ await page.getByRole('button', { name: 'Update Sample Data', exact: true }).click()
+ await expect(page.getByText('Current library saved as the project’s default sample data.', { exact: true })).toBeVisible()
+ await expect(page).toHaveURL(/\/library(?:\?|$)/)
+ await expect(page.getByRole('button', { name: 'Reset Sample Data', exact: true })).toBeEnabled()
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 test('Reset Sample Data restores the captured library after local changes', async ({ page }) => {
  await page.goto('/library')
  const baseline = await page.evaluate(async () => {

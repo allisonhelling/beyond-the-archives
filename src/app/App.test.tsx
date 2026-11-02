@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { StrictMode } from 'react'
 import App from './App'
+import * as sampleRepository from '../features/library/sample/repository'
 
 const preview = vi.hoisted(() => ({ sample: false }))
 vi.mock('../lib/sample-mode', () => ({ get sampleMode() { return preview.sample } }))
@@ -56,6 +57,20 @@ beforeEach(() => {
 })
 
 describe('private app access and navigation', () => {
+  it('saves the sample default from the banner and reports success and failure', async () => {
+    preview.sample = true
+    const save = vi.spyOn(sampleRepository, 'updateSampleLibrary').mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Update Sample Data' }))
+    expect(await screen.findByText('Current library saved as the project’s default sample data.')).toBeVisible()
+    expect(save).toHaveBeenCalledOnce()
+    save.mockRejectedValue(new Error('Could not save sample data into the project.'))
+    await user.click(screen.getByRole('button', { name: 'Update Sample Data' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save sample data into the project')
+    expect(screen.queryByText('Current library saved as the project’s default sample data.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reset Sample Data' })).toBeEnabled()
+  })
   it('uses the shared login page for sample logout, recovery preview, and local sign-in', async () => {
     preview.sample = true
     const user = userEvent.setup()

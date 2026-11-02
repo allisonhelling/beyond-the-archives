@@ -1,3 +1,4 @@
+import { blankMetadata } from '../../src/model'
 import { test, expect, type BrowserContext } from '@playwright/test'
 import { account, accountSession, owner, signedIn } from './account-fixture'
 async function backend(context:BrowserContext,linked=false){
@@ -277,4 +278,36 @@ test('preserves guest books and old queued edits without contacting the organize
  await context.setOffline(true)
  await page.getByRole('button',{name:'Local Guest Story',exact:true}).click()
  await expect(page.getByLabel('Book Content')).toBeVisible()
+})
+
+test('manual Sync Now links the full cloud catalog and distinguishes cloud-only EPUBs from offline downloads',async({page,context})=>{
+ await signedIn(context);await backend(context,true)
+ const stamp='2026-11-01T00:00:00Z'
+ const values=Array.from({length:62},(_,index)=>({key:`version-${String(index).padStart(3,'0')}/manifest`,revision:1,value:{id:`version-${String(index).padStart(3,'0')}`,workId:index===61?null:String(8001+index),active:true,metadata:{...blankMetadata,title:`Cloud Work ${index}`,authors:['Writer']},chapters:[],importedAt:stamp,metadataAt:stamp,position:{chapter:'',fraction:0},history:[],completed:[],notes:'',status:'to_read',collections:[]}}))
+ const checks=new Set<number>(),reports:string[][]=[]
+ await context.route('**/rest/v1/reader_cloud_values*',route=>route.fulfill({json:new URL(route.request().url()).searchParams.has('like')?[]:values}))
+ await context.route('**/rest/v1/rpc/userscript_library',route=>{
+  const input=route.request().postDataJSON()
+  if(input.p_action==='reader_report'){reports.push(input.p_input.works);return route.fulfill({json:{entry:null}})}
+  if(input.p_action==='get'){checks.add(input.p_work);return route.fulfill({json:{entry:{id:`entry-${input.p_work}`,version:'v1',status:'to_read',progress:0,notes:''},collections:[]}})}
+  return route.fulfill({json:{entry:null}})
+ })
+ await page.goto('/')
+ await expect(page.locator('.story-card')).toHaveCount(24)
+ await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
+ await page.getByRole('button',{name:'Organizer & Sync',exact:true}).click()
+ await page.getByRole('button',{name:'Sync Now',exact:true}).click()
+ await expect(page.getByText(/Catalog: 62 EPUB versions/)).toBeVisible()
+ await expect(page.getByText(/1 checked version needs an AO3 work link/)).toBeVisible()
+ await expect(page.getByText(/0 downloaded works reported for Offline/)).toBeVisible()
+ expect(checks.size).toBe(61)
+ expect(reports.at(-1)).toEqual([])
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ const card=page.locator('.story-card').filter({has:page.getByRole('button',{name:'Cloud Work 0',exact:true})})
+ await card.getByLabel('Work Actions',{exact:true}).click()
+ await expect(card.getByRole('link',{name:'View in Organizer',exact:true})).toHaveAttribute('href','https://beyondthearchives.vercel.app/stories/entry-8001')
+ await expect(card.getByRole('link',{name:'View in Organizer',exact:true})).toHaveAttribute('target','_blank')
+ await page.keyboard.press('Escape')
+ await card.getByRole('button',{name:'Manage EPUB',exact:true}).click()
+ await expect(page.getByLabel('Link to Organizer Work',{exact:true})).toHaveValue('https://archiveofourown.org/works/8001')
 })

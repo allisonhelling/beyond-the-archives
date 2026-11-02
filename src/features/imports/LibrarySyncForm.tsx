@@ -267,7 +267,7 @@ export function LibrarySyncForm({ onImported }: { onImported: (batch: string | n
   {state?.error && <p role="alert" className="error-message">{state.error}</p>}
   </>}
   {state?.status === 'ready' && state.importToCollection && state.collection && <label>New Collection Name<input value={collectionName ?? state.collection.name} disabled={busy || Boolean(state.collectionId) || createdCollection?.scanId === state.id} onChange={event => setCollectionName(event.target.value)} /></label>}
-  <ImportReadingReview onChanged={() => onImported(null)} refreshKey={JSON.stringify([state?.id, state?.status, state?.repairPages])} actions={<>
+  <ImportReadingReview key={JSON.stringify([state?.id, state?.repairPages])} scopeIds={[...new Set(Object.values(state?.repairPages ?? {}).flatMap(page => page.ids?.reading ?? []))]} onChanged={() => onImported(null)} refreshKey={JSON.stringify([state?.id, state?.status, state?.repairPages])} actions={<>
    {state && ['ready', 'complete'].includes(state.status) && state.endedEarly && state.canContinue && <button className="button secondary" disabled={busy} onClick={() => void action('continue')}>Continue From Previous Scan</button>}
    {state?.status === 'running' && <button className="button secondary" disabled={busy} onClick={() => void action('pause')}>Pause Scan</button>}
    {state?.status === 'paused' && isLibrarySyncSafetyLimit(state) && <button className="button primary" disabled={busy || state.batchVersion !== 1} onClick={() => void action('prepare-batch')}>Prepare Saved Batch</button>}

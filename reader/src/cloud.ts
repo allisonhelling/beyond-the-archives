@@ -193,7 +193,7 @@ async function applyRemote(row: CloudValue) {
         const current = request.result as BookDetails | undefined
         if (field === 'manifest') {
           const manifest = row.value as Omit<BookDetails,'hasFile'>
-          putBook(tx, current ? {...current,...manifest,id} : {...manifest,id,hasFile:false,position:{chapter:manifest.chapters[0]?.id ?? '',fraction:0},history:[],completed:[],notes:'',status:'to_read',active:true}, true)
+          putBook(tx, current ? {...current,...manifest,id,workId:current.workId ?? manifest.workId ?? null} : {...manifest,id,hasFile:false,position:{chapter:manifest.chapters[0]?.id ?? '',fraction:0},history:[],completed:[],notes:'',status:'to_read',active:true}, true)
         } else if (current) {
           const next = field.startsWith('history:') ? {...current,history:[...current.history.filter(event => event.id !== field.slice(8)),row.value as BookDetails['history'][number]]} : {...current,[field]:row.value}
           putBook(tx,next,true)
@@ -235,7 +235,8 @@ export async function downloadCloud(id: string) {
       const current=request.result as BookDetails | undefined
       if(!current) return
       const repaired=current.chapterVersion !== imported.chapterVersion
-      putBook(tx,{...imported,...current,...(repaired ? repairChapterState(current,imported.chapters) : {}),file:data,resources:imported.resources,chapters:imported.chapters,chapterVersion:imported.chapterVersion},!repaired)
+      const workId=current.workId ?? imported.workId, identified=workId !== current.workId
+      putBook(tx,{...imported,...current,workId,...(repaired ? repairChapterState(current,imported.chapters) : {}),file:data,resources:imported.resources,chapters:imported.chapters,chapterVersion:imported.chapterVersion},!repaired && !identified)
     }
     tx.objectStore('settings').put({id:`cloud-file:${id}`,value:true})
   })

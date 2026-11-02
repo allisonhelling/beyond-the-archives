@@ -87,18 +87,28 @@ function AuthGate() {
 }
 
 function SamplePreview() {
-  const [busy, setBusy] = useState(false)
-  useActivity(busy, 'Resetting sample data…')
+  const [busy, setBusy] = useState<'reset' | 'update' | null>(null)
+  useActivity(Boolean(busy), busy === 'update' ? 'Updating sample data…' : 'Resetting sample data…')
+  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  async function update() {
+    setBusy('update'); setError(''); setMessage('')
+    try {
+      const { updateSampleLibrary } = await import('../features/library/sample/repository')
+      await updateSampleLibrary()
+      setMessage('Current library saved as the project’s default sample data.')
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not update sample data.') }
+    finally { setBusy(null) }
+  }
   async function reset() {
-    setBusy(true)
+    setBusy('reset'); setError(''); setMessage('')
     try {
       const { resetSampleLibrary } = await import('../features/library/sample/repository')
       resetSampleLibrary()
       window.location.assign('/reading')
-    } catch { setError('Could not reset the sample library. Check browser storage permissions.'); setBusy(false) }
+    } catch { setError('Could not reset the sample library. Check browser storage permissions.'); setBusy(null) }
   }
-  return <aside className="sample-preview" aria-label="Local Sample Preview"><span><strong>Sample Library</strong> · Changes stay in this browser. Reading progress is for preview.</span><button className="button secondary compact" disabled={busy} onClick={() => void reset()}>{busy ? 'Resetting…' : 'Reset Sample Data'}</button>{error && <p role="alert">{error}</p>}</aside>
+  return <aside className="sample-preview" aria-label="Local Sample Preview"><span><strong>Sample Library</strong> · Edits stay in this browser until you update the project’s sample data. Reading progress is for preview.</span><button className="button secondary compact" disabled={Boolean(busy)} onClick={() => void update()}>{busy === 'update' ? 'Updating…' : 'Update Sample Data'}</button><button className="button secondary compact" disabled={Boolean(busy)} onClick={() => void reset()}>{busy === 'reset' ? 'Resetting…' : 'Reset Sample Data'}</button>{message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}</aside>
 }
 
 export default function App() {
