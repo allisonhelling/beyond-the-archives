@@ -1,4 +1,4 @@
-import { isOneShot, type Story } from '../model'
+import { isOneShot, isCrossover, type Story } from '../model'
 import { compileSearch, searchText, defaultReadingFilters, filterReading, normalize, type ReadingFilters } from '../reading-search'
 import { seriesReadingStatus, seriesWorkMetadata, type LibrarySeries } from './series'
 
@@ -26,10 +26,11 @@ export function filterLibraryItems(pool: Story[], filters: ReadingFilters, serie
   const query = normalize(filters.query.trim())
   if (query && !normalize([item.title, ...(item.creators ?? []), ...sources.flatMap(source => [source.title, ...source.authors])].join('\n')).includes(query)) return false
   if (filters.rating.length && !sources.some(source => filters.rating.includes(source.rating))) return false
+  if (filters.crossovers && filters.crossovers !== 'allowed' && !sources.some(source => isCrossover(source) === (filters.crossovers === 'only'))) return false
   if (filters.oneShot !== 'allowed' && !sources.some(source => isOneShot(source) === (filters.oneShot === 'only'))) return false
   const withinText = searchText(story, filters.scope) + (filters.scope === 'any' ? '\n' + item.works.map(work => [work.title, work.url, work.rating, work.chapters, work.updated].join('\n')).join('\n') : '')
   if (!compileSearch(filters.within)(withinText)) return false
-  return filterReading([story], { ...filters, query: '', rating: [], oneShot: 'allowed', within: '', excludeLaterSeries: false }).length > 0
+  return filterReading([story], { ...filters, query: '', rating: [], oneShot: 'allowed', crossovers: 'allowed', within: '', excludeLaterSeries: false }).length > 0
  })
  return filterReading([...works, ...matches], { ...defaultReadingFilters, sort: filters.sort, randomSeed: filters.randomSeed })
 }

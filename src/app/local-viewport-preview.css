@@ -1,10 +1,26 @@
-.local-viewport-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); background: var(--color-paper); }
+.local-viewport-toolbar { font: 500 16px/1.5 var(--font-sans); color: var(--color-text, #382b2b); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); background: var(--color-paper); }
 .local-viewport-toolbar > div { display: flex; gap: 8px; }
-.local-viewport-toolbar > strong { font-size: var(--minimum-text-size); }
-.local-viewport-stage { display: flex; justify-content: center; align-items: start; flex: 1; min-height: 0; overflow: auto; background: var(--color-border); }
+.local-viewport-toolbar > strong { font-size: 13px; font-weight: 700; }
+.local-viewport-toolbar > .muted { font-size: 14px; line-height: 1.8; color: var(--color-muted); }
+.local-viewport-toolbar > [role=group] > .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 7px 14px; border: 1px solid transparent; border-radius: var(--radius-control); font: 550 13px/1.5 var(--font-sans); transition: background .15s; }
+.local-viewport-toolbar > [role=group] > .primary { color: #fff; background: var(--color-brand); }
+.local-viewport-toolbar > [role=group] > .primary:hover { background: var(--color-brand-hover); }
+.local-viewport-toolbar > [role=group] > .secondary { color: var(--color-brand); background: var(--color-surface); border-color: var(--color-control-border); }
+.local-viewport-toolbar > [role=group] > .secondary:is(:hover, :focus-visible) { background: var(--color-brand-soft); }
+.local-viewport-stage { display: flex; justify-content: center; align-items: start; flex: 1; min-height: 0; overflow: hidden; background: var(--color-border); }
 .local-viewport-frame { display: block; width: 100%; height: 100%; border: 0; background: var(--color-paper); }
-.local-viewport-stage[data-view='mobile'] .local-viewport-frame { width: var(--local-preview-width); height: var(--local-preview-height); flex: 0 0 var(--local-preview-width); }
+.local-viewport-stage[data-view='mobile'] .local-viewport-frame { width: var(--local-preview-width); height: min(var(--local-preview-height), 100%); flex: 0 0 var(--local-preview-width); }
 .local-viewport-toolbar details { position: relative; }
-.local-viewport-options { position: absolute; top: 100%; left: 0; z-index: 50; width: min(340px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-surface); background: var(--color-paper); }
+.local-viewport-options { font-family: var(--font-sans); color: var(--color-text, #382b2b); position: absolute; top: 100%; left: 0; z-index: 50; width: min(340px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-surface); background: var(--color-paper); }
+/* Share organizer appearance while each app retains its form spacing. */
+.local-viewport-options fieldset { background: var(--color-surface); border: 1px solid var(--color-fieldset-border); }
+.local-viewport-options legend { font-family: var(--font-serif); font-size: 16px; font-weight: 600; line-height: 1.5; }
+.local-viewport-options label { font-family: var(--font-sans); font-size: 14px; font-weight: 550; line-height: 1.5; }
+.local-viewport-options :is(input, select) { font-family: inherit; font-size: 14px; font-weight: 550; color: inherit; background: var(--color-surface); border-color: var(--color-control-border); border-radius: var(--radius-form-field); }
+.local-viewport-options input { line-height: 1.5; }
+.local-viewport-options select { line-height: normal; }
+.local-viewport-options .field-help { margin: var(--local-preview-help-margin, 8px 0 0); color: var(--color-muted); font-size: 13px; font-weight: 500; line-height: 1.6; }
+.local-viewport-options .button { font-family: var(--font-sans); font-size: 13px; font-weight: 550; line-height: 1.5; color: var(--color-brand); background: var(--color-surface); border-color: var(--color-control-border); }
+.local-viewport-options .button:is(:hover, :focus-visible) { background: var(--color-brand-soft); }
 /* Constrain only the preview host; the app inside the frame keeps its own scroll. */
-#root:has(> .local-viewport-stage) { display: flex; flex-direction: column; height: 100dvh; }
+#root:has(> .local-viewport-stage) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }

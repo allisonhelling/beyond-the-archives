@@ -3,10 +3,10 @@ import { applyAutomaticCollections, automaticCollectionRules, type AutomaticColl
 import type { Json } from '../../types/database'
 import { parseSearch, filterReading } from './reading-search'
 import type { SeriesRecord } from './series/series'
-import { conflictFromError, storyEdits, type EditValues } from './edit-merge'
+import { conflictFromError, editSnapshot, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
-import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork } from './model'
+import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork, savedWorkUrl } from './model'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collections/collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
@@ -89,6 +89,15 @@ export async function saveStory(input: StoryInput) {
     failure(error); return data!
   }
   return save(edits, input.base ?? null)
+}
+
+export async function saveStoryCollections(story: Story, collections: string[], baseline: string[]) {
+  if (story.detailsLoaded === false) {
+    const [details] = await loadStories([story.id])
+    if (!details) throw new Error('This story is no longer in your library.')
+    story = details
+  }
+  return saveStory({ id: story.id, base: { ...editSnapshot(story), collections: baseline }, url: savedWorkUrl(story), metadata: story.metadata, metadataChanges: {}, status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, personalRating: story.personal_rating, favorite: story.is_favorite, collections, tags: story.personalTags })
 }
 
 export async function addStoriesToCollections(storyIds: string[], collectionIds: string[]) {

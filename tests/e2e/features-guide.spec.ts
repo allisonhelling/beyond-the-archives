@@ -146,7 +146,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
     page.getByRole('heading',{name:'Currently Reading',exact:true}),
     page.getByRole('button',{name:'Mass Refresh All Stories on Page',exact:true}),
     toolbar.getByRole('button',{name:'Sort',exact:true}),toolbar.getByRole('button',{name:'Select Fandoms',exact:true}),
-    toolbar.getByRole('button',{name:'Apply',exact:true}),toolbar.getByRole('button',{name:'Filters',exact:true}),
+    toolbar.getByRole('button',{name:'Apply Filters',exact:true}),toolbar.getByRole('button',{name:'Filters',exact:true}),
    ].map(async locator=>(await locator.boundingBox())!))
    expect(refresh.y).toBeLessThan(title.y+title.height)
    expect(refresh.y+refresh.height).toBeGreaterThan(title.y)

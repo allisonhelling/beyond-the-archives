@@ -36,12 +36,13 @@ try {
     Functions: {
       reader_organizer_connection: { Args: { p_action: string; p_installation?: string; p_secret?: string }; Returns: Json }
       consume_app_login_handoff: { Args: { p_hash: string; p_challenge: string; p_origin: string }; Returns: string | null }
+      account_has_password: { Args: Record<PropertyKey, never>; Returns: boolean }
       manage_account_username: { Args: { p_username?: string }; Returns: string | null }
       reader_has_access: { Args: Record<string, never>; Returns: boolean }
       reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number }; Returns: Json }
       reading_stats_works: { Args: { p_after?: string; p_limit?: number }; Returns: Json }
       reader_offline_snapshot: { Args: Record<string, never>; Returns: Json }
-      review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number }; Returns: Json }
+      review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number; p_scope?: string[] }; Returns: Json }
       mark_work_deleted: { Args: { p_entry: string; p_job: string }; Returns: undefined }
       claim_backup_save: { Args: { p_user: string; p_create: boolean }; Returns: Json }
       release_backup_save: { Args: { p_user: string; p_token: string }; Returns: undefined }

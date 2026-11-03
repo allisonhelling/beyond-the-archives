@@ -1,6 +1,7 @@
 import { normalizeSearchText as normalize } from '../../src/lib/search-text'
 import type { Book, CatalogBook } from './model'
 import { publisherName, seriesNames } from './metadata'
+import { isCrossover } from '../../src/features/library/model'
 import { statuses } from './model'
 export const unknownValue = '__reader_unknown__'
 export { normalize }
@@ -11,7 +12,7 @@ function language(book: FilterBook) {
   if (!saved) return []
   try { return [/^[a-z]{2,3}(?:-[a-z0-9]+)*$/i.test(saved) ? languageNames.of(saved) ?? saved : saved] } catch { return [saved] }
 }
-const publicationLabels = { complete: 'Completed', in_progress: 'In Progress', abandoned: 'Abandoned', deleted: 'Deleted', unknown: 'Unknown' }
+const publicationLabels = { complete: 'Completed', in_progress: 'In Progress', hiatus: 'On Hiatus', abandoned: 'Abandoned', deleted: 'Deleted', unknown: 'Unknown' }
 export const facets = [
   { key: 'status', label: 'Reading Status', values: (b: FilterBook) => [statuses[b.status]] },
   { key: 'author', label: 'Author', values: (b: FilterBook) => b.metadata.authors },
@@ -28,7 +29,7 @@ export const facets = [
   { key: 'freeform', label: 'Freeform Tags', values: (b: FilterBook) => b.metadata.additional_tags ?? [] },
   { key: 'series', label: 'Series', values: (b: FilterBook) => seriesNames(b.metadata) },
   { key: 'version', label: 'EPUB Version', values: (b: FilterBook) => [b.active ? 'Active Version' : 'Retained Version'] },
-  { key: 'fandomCount', label: 'Crossover', values: (b: FilterBook) => b.metadata.fandoms.length ? [b.metadata.fandoms.length > 1 ? 'Multiple Fandoms' : 'One Fandom'] : [] },
+  { key: 'fandomCount', label: 'Crossover', values: (b: FilterBook) => b.metadata.fandoms.length ? [isCrossover(b.metadata) ? 'Multiple Fandoms' : 'One Fandom'] : [] },
 ] as const
 export const numericFields = [
   { key: 'words', label: 'Words', value: (b: FilterBook) => b.metadata.word_count },

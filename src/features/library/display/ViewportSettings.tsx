@@ -11,14 +11,18 @@ function ViewportLengthField({ axis, pixels, unit, onChange }: { axis: 'width' |
   setDraft({ pixels: next, text }); onChange(next)
  }} /></label>
 }
-export function ViewportSizeFields({ value, onChange, label }: { value: PreviewViewport; onChange: (value: PreviewViewport) => void; label: string }) {
- const [choice, setChoice] = useState<string>(), [unit, setUnit] = useState<ViewportUnit>('in')
+export function ViewportSizeFields({ value, onChange, label, unit: selectedUnit, onUnitChange, unitsAfterDimensions = false }: { value: PreviewViewport; onChange: (value: PreviewViewport) => void; label: string; unit?: ViewportUnit; onUnitChange?: (unit: ViewportUnit) => void; unitsAfterDimensions?: boolean }) {
+ const [choice, setChoice] = useState<string>(), [localUnit, setLocalUnit] = useState<ViewportUnit>('in')
+ const unit = selectedUnit ?? localUnit
+ const setUnit = (next: ViewportUnit) => { if (onUnitChange) onUnitChange(next); else setLocalUnit(next) }
  const chosen = choice && choice !== 'custom' ? viewportPresets[choice as keyof typeof viewportPresets] : undefined
  const preset = choice === 'custom' ? 'custom' : chosen?.width === value.width && chosen?.height === value.height ? choice : Object.entries(viewportPresets).find(([, size]) => size.width === value.width && size.height === value.height)?.[0] ?? 'custom'
+ const unitsControl = <label className="viewport-unit-field">Units<select value={unit} onChange={event => setUnit(event.target.value as ViewportUnit)}>{Object.entries(viewportUnits).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
  return <fieldset className="viewport-size-fields"><legend>{label}</legend>
   <label>Device<select value={preset} onChange={event => { setChoice(event.target.value); const next = viewportPresets[event.target.value as keyof typeof viewportPresets]; if (next) onChange({ width: next.width, height: next.height }) }}><option value="custom">Custom Size</option>{Object.entries(viewportPresets).map(([key, size]) => <option key={key} value={key}>{size.label} · {formatViewportSize(size, unit)}</option>)}</select></label>
-  <label>Units<select value={unit} onChange={event => setUnit(event.target.value as ViewportUnit)}>{Object.entries(viewportUnits).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
+  {!unitsAfterDimensions && unitsControl}
   <div className="form-grid form-grid-two-columns">{(['width', 'height'] as const).map(axis => <ViewportLengthField key={`${axis}:${unit}`} axis={axis} pixels={value[axis]} unit={unit} onChange={pixels => { setChoice('custom'); onChange({ ...value, [axis]: pixels }) }} />)}</div>
+  {unitsAfterDimensions && unitsControl}
   <p className="field-help">{formatViewportSize(value, unit === 'in' ? 'mm' : 'in')}</p>
  </fieldset>
 }

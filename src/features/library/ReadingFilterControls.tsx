@@ -12,7 +12,7 @@ import { useDismissible } from '../../components/useDismissible'
 import { DateFilterField } from './DateFilterField'
 import { SearchSuggestions } from './SearchSuggestions'
 import { ratingLabel, ratings, tagNames, type Story } from './model'
-import { filterPublicationLabel, readingFilterTags } from './reading-filter-labels'
+import { filterPublicationLabel, readingFilterTags, removeReadingFilter } from './reading-filter-labels'
 import { publicationStatuses } from './publication-status'
 import { defaultReadingFilters, filterReading, normalize, type ReadingFilters } from './reading-search'
 
@@ -27,7 +27,7 @@ function FandomSelect({ options, selected, onChange, label = 'Select Fandoms' }:
     {open && <div id={id} className="fandom-panel menu-surface" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
       <input aria-label="Search Fandoms" type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Fandoms" />
       {/* Keep label presses from focusing the page and dismissing the menu before checkbox activation. */}
-      <div className="fandom-options">{options.filter(f => normalize(f.name).includes(normalize(query))).map(f => <label key={f.name} className="check-label" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }} htmlFor={`${id}-${encodeURIComponent(f.name)}`}><input id={`${id}-${encodeURIComponent(f.name)}`} type="checkbox" checked={selected.includes(f.name)} onChange={e => onChange(e.target.checked ? [...selected, f.name] : selected.filter(name => name !== f.name))} /><span>{f.name}</span><span className="fandom-count">{f.count}</span></label>)}</div>
+      <div className="fandom-options">{options.filter(f => normalize(f.name).includes(normalize(query))).map(f => <label key={f.name} className="check-label" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }} htmlFor={`${id}-${encodeURIComponent(f.name)}`}><input id={`${id}-${encodeURIComponent(f.name)}`} type="checkbox" checked={selected.includes(f.name)} onChange={e => onChange(e.target.checked ? [...selected, f.name] : selected.filter(name => name !== f.name))} /><span className="fandom-option-label"><span>{f.name}</span>{' '}<span className="fandom-count">({f.count})</span></span></label>)}</div>
       {!options.some(f => normalize(f.name).includes(normalize(query))) && <p>No matching fandoms.</p>}
     </div>}
   </div>
@@ -85,7 +85,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
   const publicationLabel = (value: keyof typeof publicationStatuses) => filterPublicationLabel(value, mode === 'series')
   const activeFilters = readingFilterTags(appliedFilters, { authorOnly: automaticCollection, series: mode === 'series', seriesVisibility: mode === 'library' && !worksOnly })
   const personalTagsControl = <SearchSuggestions label="Personal Tags" placeholder="Search personal tags" value={filters.personalTags ?? ''} onChange={value => change('personalTags', value)} groups={[{ label: 'Personal Tags', values: suggestions?.personalTags ?? localPersonalTags }]} multiple chips keepOpen hideHeadings />
-  const oneShotControl = <Dropdown fitContent label="One-Shot" value={filters.oneShot} onChange={value => change('oneShot', value as ReadingFilters['oneShot'])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />
+  const workTypeControls = ([['oneShot', 'One-Shot'], ['crossovers', 'Crossovers']] as const).map(([key, label]) => <Dropdown key={key} fitContent label={label} value={filters[key] ?? 'allowed'} onChange={value => change(key, value as ReadingFilters[typeof key])} options={[{ value: 'allowed', label: 'Allowed' }, { value: 'only', label: 'Only' }, { value: 'exclude', label: 'Exclude' }]} closeOnSelect />)
   const filterToggle = !alwaysExpanded && <button type="button" className={`button filter-toggle ${expanded ? 'primary' : 'secondary'}`} aria-expanded={expanded} aria-controls={filterId} onClick={() => setExpanded(!expanded)}><SlidersHorizontal size={17} /><span className="filter-toggle-label"><span>{expanded ? 'Hide' : 'Filters'}</span></span></button>
   const publicationControl = <Dropdown fitContent label={mode !== 'reading' ? 'Publication Status' : 'Work Status'} multiple value={filters.publication} onChange={value => change('publication', value as ReadingFilters['publication'])} options={Object.entries(publicationStatuses).filter(([value]) => mode !== 'series' || ['complete', 'in_progress', 'unknown'].includes(value)).map(([value]) => ({ value, label: publicationLabel(value as keyof typeof publicationStatuses) }))} />
   const membershipToggles = <>
@@ -102,7 +102,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
       {sortControl && <div className="toolbar-sort">{sortControl}</div>}
       <FandomSelect label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
       {mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
-      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply</button>}
+      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply Filters</button>}
       {filterToggle}
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series Filters' : mode === 'library' ? 'Library Filters' : 'Reading Filters'}><div className="filter-grid">
@@ -116,7 +116,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
       {!automaticCollection && personalTagsControl}
       <Dropdown fitContent label="Content Rating" multiple value={filters.rating} onChange={value => change('rating', value)} options={ratings.map(rating => ({ value: rating, label: ratingLabel(rating) }))} />
       <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
-      {mobile ? <div className="filter-publication-controls">{oneShotControl}{publicationControl}</div> : oneShotControl}
+      {mobile ? <div className="filter-publication-controls">{workTypeControls}{publicationControl}</div> : workTypeControls}
       {availabilityControl}
       {!automaticCollection && membershipToggles}
       </div>
@@ -131,6 +131,6 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
     </div></div><div className="form-actions"><div className="filter-default-actions"><button type="button" className="button secondary" disabled={automaticCollection && !defaultScope} title={automaticCollection && !defaultScope ? 'Save the Collection First' : undefined} onClick={() => { try { saveDefault() } catch { setDefaultMessage('Could not save defaults. Check browser storage and retry.') } }}>Save as {defaultLabel} Default</button><button type="button" className="button secondary" onClick={() => setConfirmLibraryDefault(true)}>Save as Library Default</button></div><div className="filter-reset-actions"><button type="button" className="button secondary" onClick={clearFilters}>Clear All Filters</button>{filterToggle}</div></div>{defaultMessage && <p role="status">{defaultMessage}</p>}</section>}
     {draftError && <p role="alert">{draftError}</p>}
     {confirmLibraryDefault && <ConfirmationDialog title="Save as Library Default?" confirmLabel="Save as Library Default" pendingLabel="Saving…" onClose={() => setConfirmLibraryDefault(false)} onConfirm={async () => saveDefault(true)}><p>The current filters will become the default for all collections and categories, replacing any collection defaults saved on this browser.</p></ConfirmationDialog>}
-    {activeFilters.length > 0 && <ActiveFilters onClear={clearFilters}>{activeFilters.map(({ label, category }, index) => <Fragment key={label}>{index > 0 && <span aria-hidden="true" className={`info-separator${category && category === activeFilters[index - 1].category ? ' filter-category-separator' : ' filter-category-boundary'}`} data-tag-category={category}><MetadataTags values={['•']} category={category ?? null} shape="bullets" /></span>}<MetadataTags values={[label]} category={category ?? null} /></Fragment>)}</ActiveFilters>}
+    {activeFilters.length > 0 && <ActiveFilters onClear={clearFilters}>{activeFilters.map((tag, index) => <Fragment key={tag.label}>{index > 0 && <span aria-hidden="true" className={`info-separator${tag.category && tag.category === activeFilters[index - 1].category ? ' filter-category-separator' : ' filter-category-boundary'}`} data-tag-category={tag.category}><MetadataTags values={['•']} category={tag.category ?? null} shape="bullets" /></span>}<MetadataTags values={[tag.label]} category={tag.category ?? null} removeLabel={label => `Remove Filter ${label}`} onRemove={() => { const next = removeReadingFilter(appliedFilters, tag); setDraft(next); onChange(next) }} /></Fragment>)}</ActiveFilters>}
   </>
 }

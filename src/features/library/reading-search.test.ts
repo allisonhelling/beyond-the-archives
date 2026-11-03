@@ -216,3 +216,15 @@ it('searches personal tags separately from AO3 tags and combines selected terms'
  expect(filterReading([comfort, ao3Only], { ...defaultReadingFilters, personalTags: 'CAFE, revisit' })).toEqual([comfort])
  expect(filterReading([comfort], { ...defaultReadingFilters, personalTags: 'missing' })).toEqual([])
 })
+
+it('filters crossovers independently of one-shots and sorts known word counts before unknowns', () => {
+ const entries = [
+  story('Long crossover', { metadata: { ...blankMetadata, fandoms: ['A', 'B'], word_count: 1000 } }),
+  story('Short single', { metadata: { ...blankMetadata, fandoms: ['A', ' a ', ''], word_count: 100 } }),
+  story('Unknown', { metadata: { ...blankMetadata, fandoms: [], word_count: null } }),
+ ]
+ expect(filterReading(entries, { ...defaultReadingFilters, crossovers: 'only' })).toEqual([entries[0]])
+ expect(filterReading(entries, { ...defaultReadingFilters, crossovers: 'exclude' })).toEqual([entries[1], entries[2]])
+ expect(filterReading(entries, { ...defaultReadingFilters, sort: 'words' })).toEqual(entries)
+ expect(filterReading(entries, { ...defaultReadingFilters, sort: 'words_reverse' })).toEqual([entries[1], entries[0], entries[2]])
+})

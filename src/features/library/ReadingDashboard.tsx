@@ -28,6 +28,7 @@ const sortOptions: { value: SortOrder; label: string }[] = [
   { value: 'added', label: 'Date Added' }, { value: 'added_reverse', label: 'Date Added • Oldest First' },
   { value: 'updated', label: 'Last Updated' }, { value: 'updated_reverse', label: 'Last Updated • Oldest First' },
   { value: 'ready', label: 'Most Chapters Ready' }, { value: 'ready_reverse', label: 'Fewest Chapters Ready' },
+  { value: 'words', label: 'Word Count' }, { value: 'words_reverse', label: 'Word Count • Shortest First' },
   { value: 'random', label: 'Random' },
   { value: 'alpha', label: 'Alphabetical' }, { value: 'alpha_reverse', label: 'Alphabetical • Z–A' },
 ]

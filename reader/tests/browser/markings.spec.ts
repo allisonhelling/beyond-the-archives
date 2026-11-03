@@ -7,7 +7,7 @@ for (const width of [390,1280]) test(`keeps personal markings offline and applie
  await page.goto('/')
  await page.getByLabel('Import EPUB File').setInputFiles({name:'markings.epub',mimeType:'application/epub+zip',buffer:Buffer.from(await createZip(epubFiles()).arrayBuffer())})
  await expect(page.getByLabel('Book Content')).toBeVisible()
- await page.getByRole('button',{name:'← Bookshelf',exact:true}).click()
+ await page.getByRole('button',{name:'Bookshelf',exact:true}).click()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
  await page.context().setOffline(true)
  await page.getByRole('button',{name:'Mark Favorite',exact:true}).click()

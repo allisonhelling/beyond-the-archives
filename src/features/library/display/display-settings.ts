@@ -62,8 +62,8 @@ export const viewportPresets = {
 } as const
 export type PreviewViewport = { width: number; height: number }
 export const viewportUnits = {
- in: { label: 'Inches (in)', pixels: 96, decimals: 3 },
- mm: { label: 'Millimeters (mm)', pixels: 96 / 25.4, decimals: 2 },
+ in: { label: 'Inches', pixels: 96, decimals: 3 },
+ mm: { label: 'Millimeters', pixels: 96 / 25.4, decimals: 2 },
 } as const
 export type ViewportUnit = keyof typeof viewportUnits
 export const viewportRanges = { width: { min: 280, max: 3840 }, height: { min: 320, max: 3840 } } as const

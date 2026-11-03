@@ -8,7 +8,7 @@ type Row = Record<string, unknown>
 
 // Transport fixtures reuse the client reference semantics. Actual SQL parity and
 // RLS are independently checked in supabase/tests/library-query.test.ts.
-export function libraryQueryFixture(name: string, body: Row, tables: Record<string, Row[]>) {
+export function libraryQueryFixture(name: string, body: Row, tables: Record<string, Row[]>): unknown {
  if (name==='review_import_reading') return {reviews:[],total:0,changed:0,skipped:0}
  if (name==='library_revision') return 0
  if (name==='library_navigation_snapshot') return {revision:0,counts:libraryQueryFixture('library_navigation',body,tables)}
@@ -26,7 +26,7 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
  const records = rows('library_series').map(record=>({...record,collectionIds:rows('collection_series').filter(link=>link.library_series_id===record.id).map(link=>link.collection_id)})) as SeriesRecord[]
  if (name==='reading_stats_works') {
   const active = new Set(stories.map(story=>story.id))
-  return [...stories.map(story=>({id:story.id,key:story.work.ao3_work_id?`ao3:${story.work.ao3_work_id}`:story.original_url||story.id,created_at:story.created_at,reading_status:story.reading_status,reading_history:story.reading_history,personal_rating:story.personal_rating,metadata:story.metadata,archived:false})),...rows('reading_records').filter(record=>!active.has(String(record.id))).map(record=>({...record,key:record.ao3_work_id?`ao3:${record.ao3_work_id}`:record.original_url||record.id,personal_rating:null,archived:true}))].filter(work=>!body.p_after||String(work.id)>String(body.p_after)).sort((a,b)=>String(a.id).localeCompare(String(b.id))).slice(0,Number(body.p_limit??500))
+  return [...stories.map(story=>({id:story.id,key:story.work.ao3_work_id?`ao3:${story.work.ao3_work_id}`:story.original_url||story.id,created_at:story.created_at,reading_status:story.reading_status,reading_history:story.reading_history,personal_rating:story.personal_rating,metadata:story.metadata,archived:false})),...rows('reading_records').filter(record=>!active.has(String(record.id))).map(record=>({...record,id:String(record.id),key:record.ao3_work_id?`ao3:${record.ao3_work_id}`:record.original_url||record.id,personal_rating:null,archived:true}))].filter(work=>!body.p_after||String(work.id)>String(body.p_after)).sort((a,b)=>String(a.id).localeCompare(String(b.id))).slice(0,Number(body.p_limit??500))
  }
  if (name==='library_catalog') return {stories:stories.map(story=>({id:story.id,work_id:story.work_id,created_at:story.created_at,updated_at:story.updated_at,last_read_chapter:story.last_read_chapter,work:{id:story.work.id,ao3_work_id:story.work.ao3_work_id},source_bookmark:{rec:story.source_bookmark && (story.source_bookmark as Row).rec},reading_status:story.reading_status,is_favorite:story.is_favorite,is_rec:story.is_rec,collectionIds:story.collectionIds,automaticCollectionIds:story.automaticCollectionIds,metadata:{title:story.metadata.title,authors:story.metadata.authors,fandoms:story.metadata.fandoms,publication_status:story.metadata.publication_status,series:story.metadata.series,series_memberships:story.metadata.series_memberships}})),collections:rows('collections'),series:records}
  if (name==='library_story_details') return stories.filter(story=>(body.p_ids as string[]).includes(story.id))

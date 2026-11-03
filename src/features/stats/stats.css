@@ -6,6 +6,10 @@
 .stats-page section > .muted { margin: 10px 0; }
 .stats-volume-panel:not([hidden]) { display: grid; gap: 24px; }
 .stats-period { display: grid; gap: 16px; }
+.stats-controls.stats-period-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.stats-period-controls > .stats-today { justify-self: end; }
+.stats-period-navigation { --period-action-width: 40px; padding-inline-start: var(--period-action-width); }
+.stats-period-navigation .icon-button { width: var(--period-action-width); }
 .stats-period-navigation, .stats-today { display: inline-flex; align-items: center; }
 .stats-today { gap: 8px; }
 .stats-period-label { padding-inline: 4px; font-weight: 600; font-size: inherit; white-space: nowrap; }
@@ -60,5 +64,7 @@
  .stats-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
  .stats-grid { grid-template-columns: minmax(0, 1fr); }
  .stats-controls { gap: 8px; }
+ .stats-controls.stats-period-controls { grid-template-columns: 1fr 1fr; }
+ .stats-period-navigation { --period-action-width: 28px; grid-column: 1 / -1; grid-row: 2; justify-self: center; }
  .stats-calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

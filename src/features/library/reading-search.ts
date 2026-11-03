@@ -2,26 +2,26 @@ import { normalizeTag as normalize, tagMatches, type TagAliases } from './tags/t
 import { datePlaceholder } from '../../lib/dates'
 import { inSeries, seriesMemberships } from './series/series'
 import { publicationStatuses } from './publication-status'
-import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
+import { active, isCalendarDate, isOneShot, isCrossover, statuses, tagNames, type Story } from './model'
 
-type BaseSortOrder = 'updated' | 'added' | 'ready' | 'alpha'
+type BaseSortOrder = 'updated' | 'added' | 'ready' | 'words' | 'alpha'
 export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
 export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   tagAliases?: TagAliases;
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
-  oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string; personalTags?: string;
+  crossovers?: 'allowed' | 'only' | 'exclude'; oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string; personalTags?: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy; randomSeed?: string;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  query: '', fandoms: [], publication: [], oneShot: 'allowed', inSeries: false, showSeries: false, excludeLaterSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
+  query: '', fandoms: [], publication: [], crossovers: 'allowed', oneShot: 'allowed', inSeries: false, showSeries: false, excludeLaterSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
   relationship: '', characters: '', tags: '', personalTags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
 export function hasReadingFilters(filters: ReadingFilters) {
-  return (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope', 'showSeries'].includes(key) && JSON.stringify(filters[key]) !== JSON.stringify(defaultReadingFilters[key]))
+  return (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope', 'showSeries'].includes(key) && JSON.stringify(filters[key] ?? defaultReadingFilters[key]) !== JSON.stringify(defaultReadingFilters[key]))
 }
 export { normalizeTag as normalize } from './tags/tag-resolution'
 
@@ -130,6 +130,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (!filters.fandoms.length || s.metadata.fandoms.some(f => filters.fandoms.includes(f))) &&
       (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
+      (!filters.crossovers || filters.crossovers === 'allowed' || isCrossover(s.metadata) === (filters.crossovers === 'only')) &&
       (!filters.inSeries || inSeries(s)) &&
       (!filters.excludeLaterSeries || !inSeries(s) || seriesMemberships(s).some(series => series.position === 1)) &&
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&
@@ -152,6 +153,10 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       const added = (story: Story) => { const timestamp = Date.parse(story.created_at); return Number.isFinite(timestamp) ? timestamp : -Infinity }
       const missing = Number(!Number.isFinite(added(a))) - Number(!Number.isFinite(added(b)))
       return missing || direction * (added(b) - added(a)) || alpha
+    }
+    if (order === 'words') {
+      const missing = Number(a.metadata.word_count === null) - Number(b.metadata.word_count === null)
+      return missing || direction * ((b.metadata.word_count ?? 0) - (a.metadata.word_count ?? 0)) || alpha
     }
     if (order === 'ready') {
       const ready = (s: Story) => s.metadata.published_chapters === null ? -1 : Math.max(0, s.metadata.published_chapters - s.last_read_chapter)

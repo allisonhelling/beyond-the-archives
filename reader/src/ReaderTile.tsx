@@ -2,7 +2,7 @@ import { isDisplayFieldHidden } from '../../src/features/library/display/display
 import { PersonalToggleButton } from '../../src/features/library/FavoriteButton'
 import { ChapterProgress } from '../../src/features/library/ChapterProgress'
 import { organizerAppUrl } from '../../src/lib/connected-login'
-import { useContext } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { SeriesNames } from '../../src/features/library/series/SeriesNames'
 import { AuthorNames } from '../../src/features/library/AuthorNames'
 import { BulletSeparated } from '../../src/features/library/BulletSeparated'
@@ -20,7 +20,7 @@ import { statuses, type CatalogBook, type Preferences } from './model'
 import { WorkMenu } from './WorkMenu'
 import { WorkTags } from './WorkTags'
 const CloudOutline = createLucideIcon('CloudOutline', [['path', { d: 'M6 18h12a4 4 0 0 0 1-7.87A5.5 5.5 0 0 0 8.5 8.1 2.75 2.75 0 0 0 4.5 10.2 4.05 4.05 0 0 0 6 18Z', key: 'outline' }]])
-export function ReaderTile({book,preferences,appearance,busy=false,onRead,onManage,onDetails,onRemove,onDelete,onSearch,onSeries,onAuthor,onProgress,onMarking,organizerAccount}: { onMarking: (field: 'favorite' | 'rec', value: boolean) => Promise<void>; onProgress: (progress: number) => Promise<void>; organizerAccount?: string;
+export function ReaderTile({collectionAction,book,preferences,appearance,busy=false,onRead,onManage,onDetails,onRemove,onDelete,onSearch,onSeries,onAuthor,onProgress,onMarking,organizerAccount}: { collectionAction?: ReactNode; onMarking: (field: 'favorite' | 'rec', value: boolean) => Promise<void>; onProgress: (progress: number) => Promise<void>; organizerAccount?: string;
  book:CatalogBook;preferences:Preferences;appearance:TagAppearance;busy?:boolean;onRead:()=>void;onManage:()=>void;onDetails:()=>void;onRemove:()=>void;onDelete:()=>void;onSearch:(query:string)=>void;onSeries?:(name:string)=>void;onAuthor?:(name:string)=>void
 }) {
  const editor=useContext(DisplayEditorContext),layout=useLayout(),metadata=book.metadata,series=seriesNames(metadata)
@@ -40,8 +40,8 @@ export function ReaderTile({book,preferences,appearance,busy=false,onRead,onMana
    relationships:tags(metadata.relationship_tags,'relationships'),characters:tags(metadata.character_tags,'characters'),tags:tags(metadata.additional_tags),warnings:tags(metadata.archive_warnings,'warnings'),category:tags(metadata.categories),collections:tags(book.collections,'collections'),
    kudos:count(metadata.kudos,'kudos'),bookmarks:count(metadata.bookmark_count,'bookmarks'),comments:count(metadata.comment_count,'comments'),hits:count(metadata.hits,'hits'),
    reading:<span>{statuses[book.status]}</span>,saved:<span>Imported {new Date(book.importedAt).toLocaleDateString()}</span>,updated:<span>Updated {metadata.updated_at||'Unknown'}</span>,published:<span>Published {metadata.published_at||'Unknown'}</span>,language:<span>{metadata.language??metadata.language_code??'Unknown Language'}</span>,publication:<span>{metadata.publication_status}</span>,workId:<span>{book.workId||'No AO3 Work ID'}</span>,source:<p>{metadata.manual_url||'No Source Link'}</p>,
-   progress:<div className="card-progress"><span>{statuses[book.status]}</span><ChapterProgress progress={book.completedCount} metadata={{ ...metadata, published_chapters: chapterCount }} disabled={busy} onSave={onProgress} /><span className="availability">{book.hasFile?<CircleArrowDown size={14} aria-hidden="true" />:<CloudOutline size={16} strokeWidth={1.5} aria-hidden="true" />}{book.hasFile?'Downloaded':'Available In Cloud'}</span></div>,
+   progress:<div className="card-progress"><span>{statuses[book.status]}</span><ChapterProgress label="Chapter" status={book.status} progress={book.completedCount} metadata={{ ...metadata, published_chapters: chapterCount }} disabled={busy} onSave={onProgress} /><span className="availability">{book.hasFile?<CircleArrowDown size={14} aria-hidden="true" />:<CloudOutline size={16} strokeWidth={1.5} aria-hidden="true" />}{book.hasFile?'Downloaded':'Available In Cloud'}</span></div>,
   }}</DisplayInfo>
-  <div className="card-actions"><button className="primary" disabled={busy} onClick={onRead}>{book.hasFile?`${book.position.fraction||book.completedCount?'Continue Reading':'Start Reading'} →`:'Download EPUB'}</button><button onClick={onManage}>Manage EPUB</button></div>{!book.active&&<small>Retained version · Organizer links open the active version</small>}
+  <div className="card-actions"><button className="primary" disabled={busy} onClick={onRead}>{book.hasFile?`${book.position.fraction||book.completedCount?'Continue Reading':'Start Reading'} →`:'Download EPUB'}</button><button onClick={onManage}>Manage EPUB</button>{collectionAction}</div>{!book.active&&<small>Retained version · Organizer links open the active version</small>}
  </article></DisplayEditorContext>
 }

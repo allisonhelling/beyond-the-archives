@@ -766,3 +766,47 @@ it('requires two distinct owned works for inferred series across pages, facets a
   expect(await navigation()).toBe(before)
  } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })
+
+it('matches crossover and word-count filters in work and series queries, including cached sorts', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const ids=(await documents()).slice(0,3).map(story=>story.id)
+  for (const [index,id] of ids.entries()) await db.query('update public.library_entries set metadata_overrides=metadata_overrides||$2::jsonb where id=$1',[id,JSON.stringify({fandoms:index===0?['One','Two']:['One'],word_count:index===2?null:100*(index+1)})])
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  for (const crossovers of ['allowed','only','exclude'] as const) for (const sort of ['words','words_reverse'] as const) {
+   const filters={...defaultReadingFilters,crossovers,sort}
+   const expected=filterReading(await documents(),filters)
+   const result=await query(filters)
+   expect(result.total).toBe(expected.length)
+   expect(result.stories.map(story=>story.id)).toEqual(expected.slice(0,25).map(story=>story.id))
+   const series=await query(filters,1,25,'series')
+   for(const story of series.stories) expect(story.id).toMatch(/^series:/)
+  }
+  await db.query('insert into public.collections(name,automatic_rules) values($1,$2)',['Crossovers',JSON.stringify({filters:{...defaultReadingFilters,crossovers:'only'},terms:[]})])
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+it('accepts hiatus overrides and moves caught-up ongoing reads to waiting, retaining partial rereads', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const id=(await documents())[0].id
+  await db.query("update public.library_entries set metadata_overrides=metadata_overrides||'{\"publication_status\":\"hiatus\",\"published_chapters\":6}',reading_status='re_reading',last_read_chapter=2 where id=$1",[id])
+  expect((await db.query<{reading_status:string}>('select reading_status from public.library_entries where id=$1',[id])).rows[0].reading_status).toBe('re_reading')
+  await db.query('update public.library_entries set last_read_chapter=6 where id=$1',[id])
+  expect((await db.query<{reading_status:string}>('select reading_status from public.library_entries where id=$1',[id])).rows[0].reading_status).toBe('waiting_for_updates')
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('reuses normalized installment titles when searching the series collection again', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const ids=(await documents()).slice(0,2).map(story=>story.id)
+  for(const id of ids) await db.query('update public.library_entries set metadata_overrides=metadata_overrides||$2::jsonb where id=$1',[id,JSON.stringify({title:'A very long installment title '.repeat(40),series_memberships:[{id:987654,name:'Cached Search Series',url:'https://archiveofourown.org/series/987654',position:1}]})])
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  expect((await query({query:'long installment'},1,25,'series')).total).toBeGreaterThan(0)
+  await db.exec('reset role')
+  const fn=(await db.query<{definition:string;source:string}>("select pg_get_functiondef(oid) definition,prosrc source from pg_proc where oid='public.library_normalize(text)'::regprocedure")).rows[0]
+  await db.exec(fn.definition.replace(fn.source,fn.source.replace(/\bbegin\b/i,"begin if length(p_text)>500 then raise exception 'Series titles normalized again'; end if;")))
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  expect((await query({query:'installment',sort:'words_reverse'},1,25,'series')).total).toBeGreaterThan(0)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})

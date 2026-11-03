@@ -166,13 +166,15 @@ it.each(['ao3','fanficfare'] as const)('uses the first story summary in %s antho
   const files=epubFiles()
   files[2].content=files[2].content.replace('</metadata>','<dc:description>Anthology overview.</dc:description></metadata>').replace('<manifest>','<manifest><item id="second" href="second.xhtml" media-type="application/xhtml+xml"/>').replace('</spine>','<itemref idref="second"/></spine>')
   const frontMatter=(id:number,summary:string)=>format==='ao3'
-    ? `<html><body><div id="preface"><p class="message"><a href="https://archiveofourown.org/works/${id}">Story</a></p><dl class="tags"><dt>Fandom:</dt><dd>Fandom</dd></dl><h2>Summary</h2><blockquote>${summary}</blockquote><p>Notes</p><blockquote>Author notes.</blockquote></div></body></html>`
-    : `<html><body class="fff_titlepage"><h3><a href="https://archiveofourown.org/works/${id}">Story</a></h3><b>Summary:</b>${summary}<br/><b>Status:</b>Completed</body></html>`
+    ? `<html><body><div id="preface"><p class="message"><a href="https://archiveofourown.org/works/${id}">Story</a></p><h2 class="title">Story ${id}</h2><dl class="tags"><dt>Fandom:</dt><dd>Fandom</dd></dl><h2>Summary</h2><blockquote>${summary}</blockquote><p>Notes</p><blockquote>Author notes.</blockquote></div></body></html>`
+    : `<html><body class="fff_titlepage"><h3><a href="https://archiveofourown.org/works/${id}">Story ${id}</a></h3><b>Summary:</b>${summary}<br/><b>Status:</b>Completed</body></html>`
   files[3].content=frontMatter(8001,'<p>First <em>story</em>.</p><p>Another paragraph.<script>unsafe()</script></p>')
   files.push({name:'OEBPS/second.xhtml',content:frontMatter(8002,'Second story summary.')})
   const buffer=await epubBuffer(files)
   const book=await importEpub({size:buffer.byteLength,arrayBuffer:async()=>buffer} as File)
   expect(book.workId).toBeNull()
+  expect(book.chapters.map(chapter => chapter.workTitle)).toEqual(['Story 8001', 'Story 8001', 'Story 8002'])
+  expect(book.chapters.filter(chapter => chapter.workStart).map(chapter => chapter.workTitle)).toEqual(['Story 8001', 'Story 8002'])
   expect(book.metadata.summary).toBe('First story.\n\nAnother paragraph.')
   expect(book.metadata.summary_html).toContain('<em>story</em>')
   expect(book.metadata.summary_html).not.toMatch(/Second story|Anthology overview|Chapter summary|Author notes|script|unsafe/)

@@ -582,6 +582,7 @@ export type Database = {
           reading_sections: string[] | null
           series_story: Json | null
           catalog_story: Json | null
+          sort_words: number | null
         }
         Insert: {
           id: string
@@ -601,6 +602,7 @@ export type Database = {
           reading_sections?: string[] | null
           series_story?: Json | null
           catalog_story?: Json | null
+          sort_words?: number | null
         }
         Update: {
           id?: string
@@ -620,6 +622,7 @@ export type Database = {
           reading_sections?: string[] | null
           series_story?: Json | null
           catalog_story?: Json | null
+          sort_words?: number | null
         }
         Relationships: [
           { foreignKeyName: 'library_search_documents_id_fkey'; columns: ['id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },

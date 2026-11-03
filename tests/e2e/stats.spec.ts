@@ -14,6 +14,9 @@ test('shows recorded stats, navigates periods, applies profile controls, and sav
  await page.goto('/stats')
  await login(page)
  await expect(page.getByRole('heading', { name: 'Reading Stats', exact: true })).toBeVisible()
+ const period = (await page.getByRole('region', { name: 'Statistics Period' }).boundingBox())!
+ const month = (await page.locator('.stats-period-label').boundingBox())!
+ expect(Math.abs(month.x + month.width / 2 - (period.x + period.width / 2))).toBeLessThan(2)
  await expect(page.getByText('Your reading, in perspective.', { exact: true })).toHaveCount(0)
  const tabs = page.getByRole('tablist', { name: 'Reading Statistics Sections' })
  await expect(tabs.getByRole('tab')).toHaveText(['Volume & Progress', 'Your Reading Profile', 'Favorites & Familiar Worlds', 'Reading Habits', 'Trends Over Time'])

@@ -1,0 +1,18 @@
+
+.story-menu { position: relative; align-self: center; }
+.story-menu summary { cursor: pointer; list-style: none; padding: 8px; }
+.story-menu > div { position: fixed; left: var(--work-menu-left); top: var(--work-menu-top); z-index: 11; width: min(230px, calc(100vw - 16px)); max-height: var(--work-menu-max-height); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--color-surface); border: 1px solid #dfcbc5; border-radius: var(--radius-surface); box-shadow: 0 8px 25px #0002; display: grid; gap: 8px; }
+.story-menu button, .story-menu a { background: transparent; text-align: left; border: 0; padding: 7px; cursor: pointer; font: inherit; color: #970000; }
+.story-menu small { padding: 0 7px; color: #756363; }
+.story-quick-actions .icon-button, .story-quick-actions .story-menu summary { padding: 5px; }
+.story-quick-actions .story-menu summary { display: grid; place-items: center; min-height: 30px; }
+
+/* Shared menu template: add menu-surface to any popup menu container. */
+.menu-surface { --menu-hover-background: #970000; --menu-hover-color: #fff; }
+.menu-surface :is(button, a, .check-label) { border-radius: 4px; }
+.menu-surface .menu-divider { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid #dfcbc5; }
+.menu-surface .menu-item { display: flex; align-items: center; gap: 8px; }
+.menu-surface .menu-item > svg { flex-shrink: 0; }
+.menu-surface .menu-item:disabled { color: #8b8280; opacity: 1; cursor: not-allowed; }
+.menu-surface :is(button:not(:disabled), a):is(:hover, :focus-visible) { background: var(--menu-hover-background); color: var(--menu-hover-color); }
+.menu-surface :is(button:not(:disabled), a):is(:hover, :focus-visible) :is(small, .fandom-count) { color: inherit; }

@@ -10,7 +10,7 @@ test('reports storage exhaustion without deleting downloads, then removes only t
   await page.goto('/')
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'saved.epub', mimeType: 'application/epub+zip', buffer: await fixture() })
   await expect(page.getByLabel('Book Content')).toBeVisible()
-  await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.getByRole('button', { name: 'Bookshelf' }).click()
   await page.getByRole('button', { name: 'Manage EPUB', exact: true }).click()
   await page.getByLabel('Personal Notes', { exact: true }).fill('Keep my notes')
   await page.getByRole('button', { name: 'Save Personal Notes', exact: true }).click()
@@ -47,7 +47,7 @@ test('reports storage exhaustion without deleting downloads, then removes only t
   // The failed import stays available to retry after freeing space.
   await page.getByRole('button', { name: 'Keep Both Versions' }).click()
   await expect(page.getByLabel('Book Content')).toBeVisible()
-  await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.getByRole('button', { name: 'Bookshelf' }).click()
   await expect(page.locator('.story-card')).toHaveCount(2)
   await expect(page.locator('.story-card .availability').filter({ hasText: 'Available In Cloud' })).toHaveCount(1)
 })

@@ -1,3 +1,4 @@
+import { useWorkMenuPosition } from '../../../components/useWorkMenuPosition'
 import { useActivity } from '../../../lib/use-activity'
 import { isDisplayFieldHidden } from '../display/display-settings'
 import { useState, type ReactNode } from 'react'
@@ -22,6 +23,7 @@ export function SeriesControls({ series, children }: { series: LibrarySeries; ch
  useActivity(Boolean(busy), 'Updating your series…')
  const [conflict, setConflict] = useState<EditConflict | null>(null)
  const menu = useDismissible<HTMLDetailsElement>(menuOpen, () => setMenuOpen(false))
+ useWorkMenuPosition(menu, menuOpen)
  const tilePreference = useDisplayPreference('seriesTile')
  const snapshot = () => ({ rec: series.record?.is_rec ?? false, favorite: series.record?.is_favorite ?? false, collections: series.record?.collectionIds ?? [] })
  async function ensureSaved() { if (!series.record) await ensureSeries(series) }

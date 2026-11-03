@@ -32,7 +32,7 @@ function PeriodControls({ period, onChange }: { period: Period; onChange: (perio
  function select(next: Period) { onChange(next); setDraft(null); setError('') }
  function openPicker() { setPickerYear(period.year); setDraft(null); setError(''); setPicker(true) }
  return <section className="stats-period settings-card" aria-label="Statistics Period">
-  <div className="stats-controls"><label>View <select className="filter-input select-fit" value={period.mode} onChange={event => select({ ...period, mode: event.target.value as Period['mode'] })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="all_time">All Time</option></select></label>
+  <div className="stats-controls stats-period-controls"><label>View <select className="filter-input select-fit" value={period.mode} onChange={event => select({ ...period, mode: event.target.value as Period['mode'] })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="all_time">All Time</option></select></label>
    {period.mode !== 'all_time' && <div className="stats-period-navigation">
     <button className="icon-button" aria-label="Previous Period" disabled={period.year === 1 && (period.mode === 'yearly' || period.month === 0)} onClick={() => select(shiftPeriod(period, -1))}><ChevronLeft aria-hidden="true" /></button>
     <button className="text-button stats-period-label" aria-haspopup="dialog" aria-expanded={picker} onClick={openPicker}>{periodLabel(period)}</button>

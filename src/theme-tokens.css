@@ -17,15 +17,18 @@
 
 /* Shared palette and typography for the organizer and independent reader. */
 :root {
+  --minimum-text-size: 13px;
   --font-archive-serif: 'Serif Numerals', Georgia, 'Times New Roman', serif;
   --radius-surface: 0px;
   --radius-compact-control: 4px;
   --radius-control: 6px;
+  --radius-form-field: 7px;
   --radius-filter-panel: var(--radius-surface);
   --radius-work-card: var(--radius-surface);
   --work-tile-label-size: 13px;
   --bullet-divider-spacing: 4px;
   --color-control-border: #dfcbc5;
+  --color-fieldset-border: #e8d8d3;
   --color-filter-border: #e6c8c1;
   --color-paper: #F7F0E3;
   --color-surface: #fcf7ec;

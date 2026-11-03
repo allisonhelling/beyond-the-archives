@@ -61,9 +61,12 @@ test('screen presets and custom sizes apply to tile, info-page and local develop
  await toolbar.getByRole('combobox', { name: 'Units', exact: true }).selectOption('mm')
  await toolbar.getByRole('spinbutton', { name: 'Width (mm)', exact: true }).fill('113.77')
  await toolbar.getByRole('button', { name: 'Apply Preview Size', exact: true }).click()
- await expect(toolbar.getByRole('button', { name: 'Mobile · 4.479 in / 113.77 mm', exact: true })).toBeVisible()
- await toolbar.getByRole('button', { name: 'Mobile · 4.479 in / 113.77 mm', exact: true }).click()
+ await expect(toolbar.getByRole('button', { name: 'Mobile · 113.77 mm', exact: true })).toBeVisible()
+ await toolbar.getByRole('button', { name: 'Mobile · 113.77 mm', exact: true }).click()
  await expect.poll(() => page.frameLocator('iframe[title="Local App Viewport"]').locator('body').evaluate(node => node.ownerDocument.defaultView!.innerWidth)).toBe(430)
+ const preview = (await page.locator('iframe[title="Local App Viewport"]').boundingBox())!
+ expect(preview.y + preview.height).toBeLessThanOrEqual(page.viewportSize()!.height)
+ expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true)
 })
 
 test('library and reading actions fit their headers and filters across viewport sizes', async ({ page }) => {
@@ -91,7 +94,7 @@ test('library and reading actions fit their headers and filters across viewport 
     expect(series.y).toBeCloseTo(filters.y, 0)
     expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
    } else {
-    const apply = (await toolbar.getByRole('button', { name: 'Apply', exact: true }).boundingBox())!
+    const apply = (await toolbar.getByRole('button', { name: 'Apply Filters', exact: true }).boundingBox())!
     expect(series.y).toBeCloseTo(apply.y, 0)
     expect(series.y).toBeCloseTo(filters.y, 0)
     expect(series.x + series.width).toBeLessThanOrEqual(apply.x)
@@ -180,4 +183,26 @@ test('mobile collection holds, filter defaults, inputs and work controls fit', a
    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
  }
+})
+
+test('work action menus scroll within a short viewport without overlapping navigation', async ({ page }) => {
+ const tables = await fixture(page)
+ tables.works.push({ id: 'menu-work', ao3_work_id: 8001, verified_chapters: {} })
+ tables.library_entries.push({ id: 'menu-entry', work_id: 'menu-work', original_url: 'https://archiveofourown.org/works/8001', reading_status: 'to_read', last_read_chapter: 0, notes: '', is_favorite: false, metadata_overrides: { title: 'Menu Boundaries', authors: ['Author'] }, created_at: '2026-11-01T00:00:00Z' })
+ await page.setViewportSize({ width: page.viewportSize()!.width, height: 360 })
+ await page.goto('/library'); await login(page)
+ const trigger = page.getByLabel('Story Actions for Menu Boundaries', { exact: true })
+ await trigger.scrollIntoViewIfNeeded()
+ await trigger.click()
+ const panel = page.locator('.story-menu[open] > .menu-surface')
+ const bounds = (await panel.boundingBox())!
+ const navigation = await page.getByRole('navigation', { name: 'Mobile Navigation', exact: true }).isVisible() ? await page.getByRole('navigation', { name: 'Mobile Navigation', exact: true }).boundingBox() : null
+ expect(bounds.y).toBeGreaterThanOrEqual(8)
+ expect(bounds.y + bounds.height).toBeLessThanOrEqual(navigation?.y ?? 360)
+ expect(await panel.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+ await panel.getByRole('button', { name: 'Remove from Library', exact: true }).click()
+ const confirmation = page.getByRole('dialog', { name: 'Remove from Library?', exact: true })
+ await expect(confirmation).toBeVisible()
+ await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+ await expect(confirmation).toHaveCount(0)
 })

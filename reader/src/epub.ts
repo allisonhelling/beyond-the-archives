@@ -5,7 +5,7 @@ import { parseWorkUrl } from '../../src/features/imports/urls'
 import { chapterWordCount } from '../../src/features/library/chapter-word-count'
 import { openZip, zipMaxBytes } from '../../src/lib/zip'
 import { blankMetadata, type Book, type Chapter } from './model'
-export const chapterVersion = 2
+export const chapterVersion = 3
 const parse = (text: string) => { if (/<!ENTITY/i.test(text)) throw new Error('Unsupported XML entities.'); const doc = new DOMParser().parseFromString(text.replace(/<!DOCTYPE[^>]*>/gi, ''), 'application/xml'); if (doc.querySelector('parsererror')) throw new Error('Invalid EPUB XML.'); return doc }
 const elements = (doc: Document, name: string) => [...doc.getElementsByTagNameNS('*', name)]
 export function resourcePath(base: string, href: string) { const url = new URL(href, `https://epub.invalid/${base}`); if (url.origin !== 'https://epub.invalid' || url.search) throw new Error('External EPUB resource.'); return decodeURIComponent(url.pathname.slice(1)) }
@@ -54,10 +54,26 @@ export async function importEpub(file: File): Promise<Book> {
     try { manifest.set(el.getAttribute('id'), { path: resourcePath(packagePath, el.getAttribute('href') ?? ''), type, properties: el.getAttribute('properties') ?? '' }) }
     catch (error) { if (!type.startsWith('image/')) throw error }
   }
+  const navigation = new Map<string, { title: string; workTitle?: string }>()
+  for (const item of manifest.values()) {
+    if (item.type !== 'application/x-dtbncx+xml' && !item.properties.split(/\s+/).includes('nav')) continue
+    const nav = parse(await archive.readText(item.path))
+    const ncx = item.type === 'application/x-dtbncx+xml'
+    for (const node of ncx ? elements(nav, 'navPoint') : [...nav.querySelectorAll('nav li')]) {
+      const link = ncx ? [...node.children].find(content => content.localName === 'content') : node.querySelector(':scope > a')
+      const href = link?.getAttribute(ncx ? 'src' : 'href')
+      const title = (ncx ? node.querySelector('navLabel') : link)?.textContent?.trim()
+      if (!href || !title) continue
+      const parent = node.parentElement?.closest(ncx ? 'navPoint' : 'li')
+      const group = parent ?? (node.querySelector(ncx ? 'navPoint' : 'ol') ? node : null)
+      const workTitle = (ncx ? group?.querySelector('navLabel') : group?.querySelector(':scope > a, :scope > span'))?.textContent?.trim()
+      try { navigation.set(resourcePath(item.path, href.split('#')[0]), { title, workTitle }) } catch { /* Ignore external navigation. */ }
+    }
+  }
   const resources: Record<string, Blob> = {}
   for (const item of manifest.values()) if (/^image\/(png|jpeg|gif|webp|avif)$/.test(item.type) && archive.names.includes(item.path)) resources[item.path] = new Blob([await archive.readBytes(item.path)], { type: item.type })
   let extraMetadata = packageMetadata(opf), firstStorySeen = false
-  let unavailableImages = 0
+  let unavailableImages = 0, workTitle: string | undefined
   const chapters: Chapter[] = [], identities = new Set<string>()
   const identify = (value: string) => { try { identities.add(String(parseWorkUrl(value.replace(/^URL:/i, '').trim()).workId)) } catch { /* Non-AO3 publication identifiers do not identify a work. */ } }
   for (const el of [...elements(opf, 'source'), ...elements(opf, 'identifier')]) identify(el.textContent ?? '')
@@ -69,19 +85,23 @@ export async function importEpub(file: File): Promise<Book> {
     if (!body) throw new Error('Missing chapter body.')
     if (body.querySelector('#preface, dl.tags')) for (const a of body.querySelectorAll('.message a[href], a[rel="canonical"]')) identify(a.getAttribute('href') ?? '')
     const frontMatter = frontMatterMetadata(doc, item.path)
+    const workHeading = body.querySelector('#preface h1, #preface h2.title, .fff_titlepage h3, .fff_titlepage h1')
+    const storyTitle = frontMatter.metadata.title ?? (workHeading?.querySelector('a') ?? workHeading)?.textContent?.trim() ?? navigation.get(item.path)?.workTitle
+    const workStart = Boolean(storyTitle && (workHeading || storyTitle !== workTitle))
+    if (workStart) workTitle = storyTitle
     const { summary, summary_html, ...fields } = frontMatter.metadata
     // Merged EPUBs have front matter for each story. Later stories must not replace the first summary.
     extraMetadata = mergeMetadata(extraMetadata, firstStorySeen ? fields : { ...fields, summary, summary_html })
     if (frontMatter.urls.length || Object.keys(frontMatter.metadata).length) firstStorySeen = true
     frontMatter.urls.forEach(identify)
-    const title = body.querySelector('h2, h1, h3.fff_chapter_title, h3')?.textContent?.trim() || `Section ${chapters.length + 1}`
+    const title = body.querySelector('h2, h1, h3.fff_chapter_title, h3')?.textContent?.trim() || navigation.get(item.path)?.title || `Section ${chapters.length + 1}`
     const heading = body.querySelector('.chapter h2, h2.title, h2.heading, h1'), chapterLink = heading?.querySelector('a[href]')?.getAttribute('href') ?? ''
     const match = chapterLink.match(/archiveofourown\.org\/works\/([1-9]\d*)\/chapters\/([1-9]\d*)/)
     const number = heading?.textContent?.match(/^\s*(?:Chapter\s+)?(\d+)[.:\s–-]/i)
     const prose = [...body.querySelectorAll('.userstuff')].find(node => !node.closest('.notes, .summary, #notes')) ?? body
     const text = prose.textContent?.replace(/\s+/g, ' ').trim() ?? ''
     const ao3Id = match && identities.size === 1 && identities.has(match[1]) ? match[2] : null
-    chapters.push({ kind: body.matches('.fff_titlepage, .fff_tocpage, .fff_logpage, .fff_coverpage') || /(?:^|\/)(?:titlepage|cover)\.(?:xhtml|html)$/i.test(item.path) || /^Notes:?$/i.test(title) || body.querySelector('#preface, dl.tags') && !body.querySelector('.userstuff') ? 'frontmatter' : 'chapter', id: ao3Id ? `ao3:${ao3Id}` : `text:${await digest(new TextEncoder().encode(text).buffer)}`, ao3Id, number: match && number ? Number(number[1]) : null, title, html: sanitize(doc, item.path, resources, () => { unavailableImages++ }), words: chapterWordCount(prose), path: item.path })
+    chapters.push({ workTitle, workStart, kind: body.matches('.fff_titlepage, .fff_tocpage, .fff_logpage, .fff_coverpage') || /(?:^|\/)(?:titlepage|cover)\.(?:xhtml|html)$/i.test(item.path) || /^Notes:?$/i.test(title) || body.querySelector('#preface, dl.tags') && !body.querySelector('.userstuff') ? 'frontmatter' : 'chapter', id: ao3Id ? `ao3:${ao3Id}` : `text:${await digest(new TextEncoder().encode(text).buffer)}`, ao3Id, number: match && number ? Number(number[1]) : null, title, html: sanitize(doc, item.path, resources, () => { unavailableImages++ }), words: chapterWordCount(prose), path: item.path })
   }
   // Equal prose or repeated source links must still address separate spine sections.
   const counts = new Map<string, number>()

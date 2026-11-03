@@ -1,10 +1,11 @@
+import { normalizeSearchText } from '../../lib/search-text'
 import { parseWorkUrl, waybackSnapshot } from '../imports/urls'
 import type { Database, Json } from '../../types/database'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-Reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
 export function ratingLabel(rating: string): string { return /^teen and up audiences$/i.test(rating) ? 'Teen and Up' : rating }
-export type Metadata = { bookfusion_link?: { url: string; kind: 'book' | 'bookmark' } | null; language?: string; kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { bookfusion_link?: { url: string; kind: 'book' | 'bookmark' } | null; language?: string; kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'hiatus' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 type EntryRow = Database['public']['Tables']['library_entries']['Row']
 export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance'>>
 export type Work = Database['public']['Tables']['works']['Row']
@@ -33,19 +34,30 @@ export function initialProgress(url: string, verifiedChapters: Record<string, st
   const verified = Number.isInteger(position) && position > 0
   return { status: (verified && position > 1 ? 'reading' : 'to_read') as Status, lastRead: verified ? position - 1 : 0, chapterVerified: verified }
 }
+export function isCrossover(metadata: Pick<Metadata, 'fandoms'>): boolean {
+  return new Set(metadata.fandoms.map(value => normalizeSearchText(value.trim())).filter(Boolean)).size > 1
+}
+
 /** Status after reading all currently published chapters, shared by the app and companions. */
 export function caughtUpReadingStatus(status: Status, metadata: Pick<Metadata, 'publication_status'>): Status {
-  return ['complete', 'deleted'].includes(metadata.publication_status) ? 'finished' : metadata.publication_status === 'in_progress' ? 'waiting_for_updates' : status
+  return ['complete', 'deleted'].includes(metadata.publication_status) ? 'finished' : ['in_progress', 'hiatus'].includes(metadata.publication_status) ? 'waiting_for_updates' : status
 }
 export function abandonedReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
   return metadata.publication_status === 'abandoned' && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters ? 'finished' : status
 }
+/** Normalize caught-up active reads without changing paused or manually finished works. */
+export function normalizeReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
+  if (['reading', 're_reading'].includes(status) && ['in_progress', 'hiatus'].includes(metadata.publication_status)
+    && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters) return 'waiting_for_updates'
+  return abandonedReadingStatus(status, progress, metadata)
+}
 /** Explicit footer progress edits update both reading fields in one checked save. */
-export function progressReadingStatus(progress: number, metadata: Metadata): Status {
+export function progressReadingStatus(progress: number, metadata: Metadata, currentStatus?: Status): Status {
   validateProgress(progress, metadata)
-  if (progress === 0) return 'to_read'
+  if (progress === 0) return currentStatus === 're_reading' ? 're_reading' : 'to_read'
   const published = metadata.published_chapters ?? (metadata.publication_status === 'complete' ? metadata.total_chapters : null)
-  const status = published !== null && progress >= published ? caughtUpReadingStatus('reading', metadata) : 'reading'
+  const reading = currentStatus === 're_reading' ? 're_reading' : 'reading'
+  const status = published !== null && progress >= published ? caughtUpReadingStatus(reading, metadata) : reading
   return abandonedReadingStatus(status, progress, metadata)
 }
 export function nextUnread(lastRead: number) { return lastRead + 1 }

@@ -1,0 +1,75 @@
+import { expect, test } from '@playwright/test'
+import { epubFiles } from '../../../src/test/epub-fixture'
+import { createZip } from '../../../src/lib/zip'
+
+for (const width of [390, 1280]) test(`customizes reading and scrubs chapter progress without marking it read at ${width}px`, async ({ page }) => {
+ await page.setViewportSize({ width, height: 844 })
+ const files=epubFiles()
+ files[files.length-1].content=`<html><body><h2>Chapter 1: Home</h2>${'<p>A long chapter with enough text to turn pages and restore the reading position.</p>'.repeat(160)}</body></html>`
+ await page.goto('/')
+ await page.getByLabel('Import EPUB File').setInputFiles({name:'display.epub',mimeType:'application/epub+zip',buffer:Buffer.from(await createZip(files).arrayBuffer())})
+ await expect(page.getByLabel('Book Content')).toBeVisible()
+ await page.getByRole('button',{name:'Contents',exact:true}).click()
+ const contents=page.getByRole('complementary',{name:'Contents',exact:true})
+ await expect(contents.getByRole('button',{name:'Title Page',exact:true})).toBeVisible()
+ await contents.getByRole('button',{name:'1. Home',exact:true}).click()
+ const viewportHeight = await page.getByLabel('Book Content').evaluate(element => element.clientHeight)
+ await page.getByRole('button',{name:'Display',exact:true}).click()
+ expect(await page.getByLabel('Book Content').evaluate(element => element.clientHeight)).toBe(viewportHeight)
+ const panel = await page.getByRole('region', { name: 'Reading Display' }).boundingBox()
+ expect(Math.round(panel!.x + panel!.width)).toBe(width)
+ await page.getByRole('combobox',{name:'Reading Font',exact:true}).selectOption('sans')
+ await page.getByRole('button',{name:'Sepia Colors',exact:true}).click()
+ await page.getByRole('button',{name:'Increase Line Spacing',exact:true}).click()
+ await expect(page.locator('.prose')).toHaveCSS('line-height','34.56px')
+ if (width === 390) {
+  const font = (await page.locator('.display-type-controls').boundingBox())!
+  const colors = (await page.getByRole('group', { name: 'Reading Color Presets' }).boundingBox())!
+  const spacing = (await page.getByRole('group', { name: 'Line Spacing', exact: true }).boundingBox())!
+  const layout = (await page.locator('.display-layout-row').boundingBox())!
+  expect(colors.y).toBeGreaterThanOrEqual(font.y + font.height)
+  expect(spacing.y).toBeCloseTo(colors.y, 0)
+  expect(layout.y).toBeGreaterThanOrEqual(colors.y + colors.height)
+  await expect(page.getByRole('combobox', { name: 'Content Shown' }).locator('..')).toHaveCSS('flex-direction', 'row')
+ }
+ await page.screenshot({path:`test-results/reading-general-${width}.png`})
+ await page.getByRole('tab',{name:'Advanced',exact:true}).click()
+ await expect(page.locator('.display-panel datalist')).toHaveCount(0)
+ await expect(page.locator('.range-dots i')).toHaveCount(16)
+ await page.getByRole('slider',{name:'Font Size',exact:true}).fill('4')
+ await expect(page.getByLabel('Font Size Value',{exact:true})).toHaveText('20 px')
+ await page.getByLabel('Text Color',{exact:true}).fill('#123456')
+ await expect(page.locator('.prose')).toHaveCSS('color','rgb(18, 52, 86)')
+ await page.getByRole('button',{name:'Display',exact:true}).click()
+ const slider=page.getByRole('slider',{name:'Position Within Chapter',exact:true})
+ await slider.fill('500')
+ await expect.poll(()=>page.getByLabel('Book Content').evaluate(element=>element.scrollTop)).toBeGreaterThan(100)
+ await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Chapter 0 / 3')
+ const beforeDisplayChange = await page.getByLabel('Book Content').evaluate(element => element.scrollTop)
+ await page.getByRole('button',{name:'Display',exact:true}).click()
+ await page.getByRole('button',{name:'Increase Line Spacing',exact:true}).click()
+ await page.getByRole('button',{name:'Display',exact:true}).click()
+ await expect.poll(()=>page.getByLabel('Book Content').evaluate(element=>element.scrollTop)).toBeGreaterThan(beforeDisplayChange)
+ if(width===390){
+  const viewport=page.getByLabel('Book Content')
+  const original=await viewport.evaluate(element=>element.scrollTop)
+  await viewport.click({position:{x:180,y:220}})
+  await expect(page.locator('.reader-toolbar')).toBeHidden()
+  await expect(page.locator('.reading-footer')).toBeHidden()
+  await viewport.click({position:{x:180,y:220}})
+  await expect(page.locator('.reader-toolbar')).toBeVisible()
+  expect(await viewport.evaluate(element=>element.scrollTop)).toBe(original)
+  await page.getByRole('button',{name:'Go to Chapter Start',exact:true}).click({force:true})
+  await expect.poll(()=>viewport.evaluate(element=>element.scrollTop)).toBeLessThan(100)
+ }
+ await page.getByRole('button',{name:'Bookshelf',exact:true}).click()
+ await page.reload()
+ await page.getByRole('button',{name:/Continue Reading|Start Reading/}).click()
+ await expect(page.locator('.prose')).toHaveCSS('color','rgb(18, 52, 86)')
+ await page.getByRole('button',{name:'Display',exact:true}).click()
+ await page.getByRole('switch',{name:'Scrolling View',exact:true}).uncheck()
+ await page.getByRole('button',{name:'Display',exact:true}).click()
+ await page.getByRole('slider',{name:'Position Within Chapter',exact:true}).fill('500')
+ await expect.poll(()=>page.getByLabel('Book Content').evaluate(element=>element.scrollLeft)).toBeGreaterThan(0)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false)
+})

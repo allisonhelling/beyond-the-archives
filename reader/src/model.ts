@@ -3,12 +3,19 @@ import { caughtUpReadingStatus, type Metadata, type Status } from '../../src/fea
 export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
 export type ReaderMetadata = Metadata & { calibre_work_link?: string; ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
-export type Chapter = { kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
+export type Chapter = { workTitle?: string; workStart?: boolean; kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
 export type Remote = { favorite?: boolean; rec?: boolean; publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
-export type ReadingPosition = { chapter: string; fraction: number; textOffset?: number; textTop?: number; viewport?: { layout: Preferences['layout']; content: Preferences['content']; size: number; width: number; widthPx: number; heightPx: number; scrollHeight: number; scrollWidth: number; scrollTop: number; scrollLeft: number } }
+export type ReadingPosition = { chapter: string; fraction: number; textOffset?: number; textTop?: number; viewport?: { font?: string; lineHeight?: number; layout: Preferences['layout']; content: Preferences['content']; size: number; width: number; widthPx: number; heightPx: number; scrollHeight: number; scrollWidth: number; scrollTop: number; scrollLeft: number } }
 export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
   if (chapter.kind === 'frontmatter') return null
   return chapter.number ?? (Number(chapter.title.match(/^Chapter\s+(\d+)(?:\b|:)/i)?.[1]) || chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length)
+}
+export function readerChapterLabel(chapter: ChapterSummary, chapters: ChapterSummary[]): string {
+  if (chapter.kind === 'frontmatter') return /^Notes:?$/i.test(chapter.title) ? 'Author Notes' : 'Title Page'
+  const workStart = chapters.slice(0, chapters.indexOf(chapter) + 1).reduce((start, item, index) => item.workStart ? index : start, 0)
+  const number = chapterNumber(chapter, chapters.slice(workStart))
+  const title = chapter.title.replace(/^(?:Chapter\s+)?\d+\s*[:.–—-]\s*/i, '')
+  return `${number}. ${title}`
 }
 export type Book = { favorite?: boolean; rec?: boolean; progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
@@ -31,7 +38,7 @@ export function catalogBook(book: BookDetails): CatalogBook {
 }
 export type Connection = { expiresAt?: string | null; backend: string; key: string; secret: string; account: string; label: string; name: string }
 export type Pending = { id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
-export type Preferences = { tileLayouts?: Partial<Record<'mobile' | 'desktop', DisplayPreference>>; storageColumns?: string[]; storageSort?: { key: string; ascending: boolean }; content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
+export type Preferences = { font?: 'default' | 'georgia' | 'palatino' | 'sans' | 'mono'; theme?: 'system' | 'light' | 'night' | 'sepia' | 'charcoal' | 'gray'; lineHeight?: number; brightness?: number; textColor?: string; linkColor?: string; backgroundColor?: string; tileLayouts?: Partial<Record<'mobile' | 'desktop', DisplayPreference>>; storageColumns?: string[]; storageSort?: { key: string; ascending: boolean }; content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
 export const defaultTagAppearance: TagAppearance = { shape: 'filled', colors: {} }
 export const readingRanges = {
   size: { label: 'Font Size', min: 14, max: 30, step: 0.01, initial: 17.28 },
@@ -49,13 +56,13 @@ export function hasVerifiedMapping(chapter: ChapterSummary, chapters: ChapterSum
 }
 export function completionStatus(book: BookDetails | Book): Status {
   const published = book.metadata.published_chapters
-  if (!published || !['complete', 'in_progress', 'deleted'].includes(book.metadata.publication_status)) return book.status
+  if (!published || !['complete', 'in_progress', 'hiatus', 'abandoned', 'deleted'].includes(book.metadata.publication_status)) return book.status
   const mapped = new Map(book.chapters.filter(chapter => hasVerifiedMapping(chapter, book.chapters)).map(chapter => [chapter.number, chapter]))
   for (let n = 1; n <= published; n++) {
     const chapter = mapped.get(n)
     if (!chapter || !book.completed.includes(chapter.id)) return book.status === 'to_read' ? 'reading' : book.status
   }
-  return caughtUpReadingStatus(book.status, book.metadata)
+  return book.metadata.publication_status === 'abandoned' ? 'finished' : caughtUpReadingStatus(book.status, book.metadata)
 }
 export function replaceBook<T extends BookDetails | Book>(previous: BookDetails | Book, next: T): T {
   const old = previous.chapters.find(c => c.id === previous.position.chapter)

@@ -25,7 +25,7 @@ test('shows series on tiles and opens every saved work in the clicked series',as
   await expect(page.getByRole('button',{name:'Unrelated Story',exact:true})).toHaveCount(0)
   await page.getByRole('button',{name:'First Adventure',exact:true}).click()
   await expect(page.getByLabel('Book Content')).toBeVisible()
-  await page.getByRole('button',{name:'← Bookshelf',exact:true}).click()
+  await page.getByRole('button',{name:'Bookshelf',exact:true}).click()
   await expect(page.locator('.story-card')).toHaveCount(2)
   await page.getByRole('button',{name:'Remove Filter Series: Shared Adventures',exact:true}).click()
   await expect(page.locator('.story-card')).toHaveCount(3)

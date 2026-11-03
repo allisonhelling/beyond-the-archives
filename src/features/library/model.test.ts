@@ -127,3 +127,11 @@ it('opens finished works at chapter one without resetting saved progress',async(
  expect(chapterUrl(archived)).toBeNull()
  expect(readingUrl(archived)).toBe(archived.original_url)
 })
+
+it('retains rereading during progress corrections until the publication is caught up', () => {
+ const metadata = { ...blankMetadata, published_chapters: 3, total_chapters: 3, publication_status: 'complete' as const }
+ expect(progressReadingStatus(0, metadata, 're_reading')).toBe('re_reading')
+ expect(progressReadingStatus(2, metadata, 're_reading')).toBe('re_reading')
+ expect(progressReadingStatus(3, metadata, 're_reading')).toBe('finished')
+ for (const publication_status of ['in_progress', 'hiatus'] as const) expect(progressReadingStatus(3, { ...metadata, publication_status }, 're_reading')).toBe('waiting_for_updates')
+})

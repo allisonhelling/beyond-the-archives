@@ -21,9 +21,10 @@ export function readBrowsing(params: URLSearchParams, defaults = defaultReadingF
   }
   const randomSeed = params.get('randomSeed')
   if (randomSeed !== null) filters.randomSeed = randomSeed
-  if (!['random','added','added_reverse','updated','updated_reverse','ready','ready_reverse','alpha','alpha_reverse'].includes(filters.sort)) filters.sort = defaults.sort
+  if (!['words','words_reverse','random','added','added_reverse','updated','updated_reverse','ready','ready_reverse','alpha','alpha_reverse'].includes(filters.sort)) filters.sort = defaults.sort
   if (!['none','fandom','author','series'].includes(filters.groupBy)) filters.groupBy = defaults.groupBy
   if (!['allowed','only','exclude'].includes(filters.oneShot)) filters.oneShot = 'allowed'
+  if (!['allowed','only','exclude'].includes(filters.crossovers ?? 'allowed')) filters.crossovers = 'allowed'
   if (!['any','summary','notes'].includes(filters.scope)) filters.scope = 'any'
   const requested = Number(params.get('page'))
   return { filters, page: Number.isSafeInteger(requested) && requested > 0 && requested <= 2147483647 ? requested : 1, size: pageSize(params.get('size')) ?? savedPageSize() }

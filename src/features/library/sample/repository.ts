@@ -15,7 +15,7 @@ import seriesSnapshots from './series.json'
 import { collectionSortKey } from '../browsing/browsing'
 import { waybackSnapshot } from '../../imports/urls'
 import type { SpineDesign } from '../collections/SpineDetails'
-import { abandonedReadingStatus, blankMetadata, bookmarkRec, deletedWorkTitle, sourceBookmark, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
+import { normalizeReadingStatus, blankMetadata, bookmarkRec, deletedWorkTitle, sourceBookmark, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
@@ -262,7 +262,7 @@ export async function saveSampleStory(input: StoryInput, verifiedChapters?: Reco
     id: input.id ?? crypto.randomUUID(), user_id: userId, work_id: work.id,
     original_url: existing?.original_url ?? input.url, work, work_status: waybackSnapshot(input.url) ? 'deleted' : existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
     source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), ...csvBookmark(bookmark) } : existing?.source_bookmark ?? {},
-    reading_status: abandonedReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
+    reading_status: normalizeReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, is_rec: input.rec ?? existing?.is_rec ?? (bookmark?.bookmarkRec === true), personal_rating: input.personalRating,
     metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: automaticMetadata ? {} : existing && input.metadataChanges ? { ...(existing.metadata_overrides as object), ...input.metadataChanges } : input.metadata, extension_metadata: automaticMetadata ? { ...nonemptyMetadata(automaticMetadata), publication_status: input.metadata.publication_status } as Json : existing?.extension_metadata ?? {}, extension_chapters: existing?.extension_chapters ?? {},
     reading_provenance: existing?.reading_provenance ?? {},
@@ -404,7 +404,7 @@ export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>
   const previous = { ...story }
   if (changes.reading_status !== undefined || changes.last_read_chapter !== undefined) story.reading_provenance = { source: 'manual', progressKnown: true }
   Object.assign(story, changes, { updated_at: new Date().toISOString() })
-  story.reading_status = abandonedReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
+  story.reading_status = normalizeReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
   recordReadingTransition(story, previous, story.updated_at)
   write(data)
 }

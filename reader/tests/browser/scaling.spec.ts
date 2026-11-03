@@ -84,7 +84,7 @@ test('migrates 10,000 books, pages/searches the catalog, and loads only the open
   await expect(page.getByRole('button', { name: 'Mark As Read', exact: true })).toBeDisabled()
   // Unknown publication metadata opens the existing explicit status-choice dialog.
   await page.getByRole('button', { name: 'Close Dialog' }).click()
-  await page.getByRole('button', { name: '← Bookshelf' }).click()
+  await page.getByRole('button', { name: 'Bookshelf' }).click()
   await expect(page.getByRole('button',{name:'Chapter 1 of 1 — Edit Progress',exact:true})).toBeVisible()
   expect((await calls(page))['contents.get']).toBe(1)
   expect((await calls(page))['contents.put']).toBe(writes)

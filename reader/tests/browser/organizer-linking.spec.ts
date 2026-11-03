@@ -43,7 +43,7 @@ test('automatically links saved AO3 EPUBs without replacing local edits or other
    await page.getByRole('button', { name: 'Save Personal Notes', exact: true }).click()
    await page.getByRole('button', { name: 'Close Dialog', exact: true }).click()
   }
-  await page.getByRole('button', { name: '← Bookshelf', exact: true }).click()
+  await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'The Bookshelf', exact: true })).toBeVisible()
  }
  const card = page.locator('.story-card').filter({ has: page.getByRole('button', { name: 'Read Before Pairing', exact: true }) })
@@ -120,7 +120,7 @@ test('pulls AO3 chapter progress into the downloaded EPUB and opens the requeste
  await page.goto('/')
  await page.getByLabel('Import EPUB File').setInputFiles({name:'mapped.epub',mimeType:'application/epub+zip',buffer:Buffer.from(await createZip(files).arrayBuffer())})
  await expect(page.getByLabel('Book Content')).toBeVisible()
- await page.getByRole('button',{name:'← Bookshelf',exact:true}).click()
+ await page.getByRole('button',{name:'Bookshelf',exact:true}).click()
  await connectOrganizer(page)
  await expect.poll(async()=>(await savedBooks(page))[0]?.remote?.id).toBe(remote.id)
  const initial=(await savedBooks(page))[0]
