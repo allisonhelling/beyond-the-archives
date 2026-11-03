@@ -997,14 +997,21 @@ test('publication tiles exclude waiting and unknown works and update after chang
   const longCard = page.locator('.story-card').filter({ has: page.getByRole('heading', { name: longTitle, exact: true }) })
   const heading = longCard.getByRole('heading', { name: longTitle, exact: true })
   await expect(heading).toBeVisible()
-  const titleBox = await heading.boundingBox()
-  const lineHeight = await heading.evaluate(element => parseFloat(getComputedStyle(element).lineHeight))
-  expect(titleBox!.height).toBeGreaterThan(lineHeight * 1.5)
-  for (const control of [longCard.getByRole('button', { name: 'Mark Favorite', exact: true }), longCard.getByLabel(`Story Actions for ${longTitle}`, { exact: true })]) {
-    const box = await control.boundingBox()
-    expect(Math.abs(box!.y + box!.height / 2 - (titleBox!.y + lineHeight / 2))).toBeLessThan(5)
-    expect(box!.x).toBeGreaterThanOrEqual(titleBox!.x + titleBox!.width)
-  }
+  // Read all geometry in one browser task so scroll restoration cannot move the
+  // viewport between the title and control measurements. Retry while layout settles.
+  await expect(async () => {
+    const { titleBox, lineHeight, controls } = await heading.evaluate(element => ({
+      titleBox: element.getBoundingClientRect().toJSON(),
+      lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+      controls: Array.from(element.closest('.story-card-title')!.querySelectorAll('.favorite, .story-menu > summary'), control => control.getBoundingClientRect().toJSON()),
+    }))
+    expect(titleBox.height).toBeGreaterThan(lineHeight * 1.5)
+    expect(controls).toHaveLength(2)
+    for (const box of controls) {
+      expect(Math.abs(box.y + box.height / 2 - (titleBox.y + lineHeight / 2))).toBeLessThan(5)
+      expect(box.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width)
+    }
+  }).toPass({ timeout: 5000 })
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
 })
 
