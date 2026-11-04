@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { fixture } from '../../../tests/e2e/library-transport-fixture'
 import { organizerAccount, testOrganizer, owner } from './account-fixture'
+import { libraryQueryFixture } from '../../../tests/e2e/library-query-fixture'
+import type { Story } from '../../../src/features/library/model'
 import { importBook } from './library-fixture'
 
 for (const width of [390, 1280]) test(`shares organizer collection creation, editing and memberships at ${width}px`, async ({ page, context }) => {
@@ -14,9 +16,51 @@ for (const width of [390, 1280]) test(`shares organizer collection creation, edi
   const input = route.request().postDataJSON()
   await route.fulfill({ json: input.p_action === 'get' ? { entry: { id: 'entry-8001', version: 'v1', status: 'to_read', progress: 0, notes: '', collections: tables.collection_works.filter(link => link.library_entry_id === 'entry-8001').map(link => link.collection_id) }, collections: tables.collections } : {} })
  })
+ tables.collections.push({ id: 'empty-collection', name: 'Empty Collection', default_key: null })
+ tables.works.push({ id: 'online-only', ao3_work_id: 8002, verified_chapters: {} })
+ tables.library_entries.push({ ...tables.library_entries[0], id: 'online-only-entry', work_id: 'online-only' })
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot', route => {
+  const stories = libraryQueryFixture('library_story_details', { p_ids: ['entry-8001'] }, tables) as Story[]
+  return route.fulfill({ json: { readers: [], stories, collections: tables.collections, cloudBooks: ['a', 'b'].map(id => ({ id: id.repeat(64), workId: '8001', metadata: stories[0].metadata, status: 'to_read', notes: '', completedCount: 0 })) } })
+ })
  await page.goto('/')
  await importBook(page, 'Shared Story', undefined, 'Author', 'https://archiveofourown.org/works/8001')
+ const heading = page.locator('.page-heading.library-heading')
+ await expect(heading).toHaveCSS('margin-bottom', width < 650 ? '25px' : '31px')
+ await expect(heading.getByRole('heading', { name: 'Collections', exact: true })).toHaveCSS('font-size', width < 650 ? '32px' : '39px')
+ await expect(heading.getByRole('heading', { name: 'Collections', exact: true })).toHaveCSS('font-weight', '400')
+ const edit = heading.getByRole('button', { name: 'Edit Collections', exact: true })
+ await expect(async () => {
+  const headerBox = (await heading.boundingBox())!, buttonBox = (await edit.boundingBox())!
+  expect(Math.abs(headerBox.x + headerBox.width - buttonBox.x - buttonBox.width)).toBeLessThan(1)
+ }).toPass()
  const shelves = page.getByRole('navigation', { name: 'Library Shelves' })
+ const compactTitle = shelves.locator('.collection-spine-mini .collection-spine-title')
+ await expect(compactTitle).toHaveText('New Collection')
+ expect(await compactTitle.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true)
+ const spine = shelves.getByRole('button', { name: 'All Works', exact: true })
+ const title = spine.locator('.collection-spine-title')
+ await expect(spine.locator('.collection-spine-count')).toHaveText('1')
+ await heading.getByRole('button', { name: 'Hide Empty', exact: true }).click()
+ await expect(shelves.getByRole('button', { name: 'Empty Collection', exact: true })).toHaveCount(0)
+ await heading.getByRole('button', { name: 'Hide Empty', exact: true }).click()
+ await expect(title).toHaveCSS('font-size', width < 650 ? '12px' : '13px')
+ await expect(title).toHaveCSS('font-weight', '400')
+ await expect(title).toHaveCSS('line-height', width < 650 ? '14.4px' : '15.6px')
+ const textColor = await title.evaluate(element => getComputedStyle(element).color)
+ await spine.hover()
+ await expect(title).toHaveCSS('color', textColor)
+ await edit.click()
+ await expect(async () => {
+  const controls = await Promise.all(['Hidden', 'Select Collections', 'Collection Controls', 'Done Editing'].map(name => heading.getByRole('button', { name, exact: true }).boundingBox()))
+  for (let i = 1; i < controls.length; i++) {
+   const left = controls[i - 1]!, right = controls[i]!
+   expect(Math.abs(left.y + left.height / 2 - right.y - right.height / 2)).toBeLessThan(1)
+   expect(right.x - left.x - left.width).toBeGreaterThanOrEqual(0)
+   expect(right.x - left.x - left.width).toBeLessThanOrEqual(width < 650 ? 4 : 12)
+  }
+ }).toPass()
+ await heading.getByRole('button', { name: 'Done Editing', exact: true }).click()
  await shelves.getByRole('button', { name: 'New Collection', exact: true }).last().click()
  const dialog = page.getByRole('dialog', { name: 'New Collection', exact: true })
  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Shared Collection')
@@ -31,6 +75,12 @@ for (const width of [390, 1280]) test(`shares organizer collection creation, edi
  await expect(membership).toHaveCount(0)
  expect(tables.collection_works).toHaveLength(1)
  await shelves.getByRole('button', { name: 'Shared Collection', exact: true }).click()
+ const collectionTitle = page.locator('.collection-title-row')
+ const addStory = collectionTitle.getByRole('button', { name: 'Add Story', exact: true })
+ await expect(addStory).toBeVisible()
+ const nameBox = (await collectionTitle.getByRole('heading', { name: 'Shared Collection', exact: true }).boundingBox())!, addBox = (await addStory.boundingBox())!
+ expect(addBox.x).toBeGreaterThan(nameBox.x + nameBox.width)
+ expect(Math.abs(addBox.y + addBox.height / 2 - nameBox.y - nameBox.height / 2)).toBeLessThan(1)
  await expect(card).toBeVisible()
  await card.getByRole('button', { name: 'Add to Collection', exact: true }).click()
  await membership.getByRole('checkbox', { name: 'Shared Collection', exact: true }).uncheck()

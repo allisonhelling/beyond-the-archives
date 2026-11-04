@@ -33,13 +33,13 @@ function PeriodControls({ period, onChange }: { period: Period; onChange: (perio
  function openPicker() { setPickerYear(period.year); setDraft(null); setError(''); setPicker(true) }
  return <section className="stats-period settings-card" aria-label="Statistics Period">
   <div className="stats-controls stats-period-controls"><label>View <select className="filter-input select-fit" value={period.mode} onChange={event => select({ ...period, mode: event.target.value as Period['mode'] })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="all_time">All Time</option></select></label>
-   {period.mode !== 'all_time' && <div className="stats-period-navigation">
+   {period.mode !== 'all_time' && <div className="stats-period-actions"><div className="stats-period-navigation">
     <button className="icon-button" aria-label="Previous Period" disabled={period.year === 1 && (period.mode === 'yearly' || period.month === 0)} onClick={() => select(shiftPeriod(period, -1))}><ChevronLeft aria-hidden="true" /></button>
     <button className="text-button stats-period-label" aria-haspopup="dialog" aria-expanded={picker} onClick={openPicker}>{periodLabel(period)}</button>
     <button className="icon-button" aria-label="Choose Period" title="Choose Period" aria-haspopup="dialog" aria-expanded={picker} onClick={openPicker}><CalendarDays size={18} aria-hidden="true" /></button>
     <button className="icon-button" aria-label="Next Period" disabled={period.year === 9999 && (period.mode === 'yearly' || period.month === 11)} onClick={() => select(shiftPeriod(period, 1))}><ChevronRight aria-hidden="true" /></button>
-   </div>}
-   {period.mode !== 'all_time' && <button className="text-button stats-today" title={`Go to current ${period.mode === 'yearly' ? 'year' : 'month'}`} onClick={() => { const now = new Date(); select({ mode: period.mode, year: now.getFullYear(), month: now.getMonth() }) }}><CalendarCheck size={18} aria-hidden="true" />Today</button>}
+   </div>
+   <button className="text-button stats-today" title={`Go to current ${period.mode === 'yearly' ? 'year' : 'month'}`} onClick={() => { const now = new Date(); select({ mode: period.mode, year: now.getFullYear(), month: now.getMonth() }) }}><CalendarCheck size={18} aria-hidden="true" />Today</button></div>}
   </div>
   {picker && <Dialog title={period.mode === 'yearly' ? 'Choose a Year' : 'Choose a Month'} className="stats-period-dialog" initialFocusRef={input} onClose={() => setPicker(false)}>
    <form className="stats-controls" onSubmit={event => {

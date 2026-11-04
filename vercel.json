@@ -67,6 +67,13 @@
           "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors https://archivesunfolded.vercel.app; base-uri 'self'; form-action 'none'; object-src 'none'"
         }
       ]
+    },
+    {
+      "source": "/auth/connected",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "Referrer-Policy", "value": "no-referrer" }
+      ]
     }
   ]
 }

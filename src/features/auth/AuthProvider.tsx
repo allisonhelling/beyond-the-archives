@@ -1,5 +1,7 @@
 import { enableOrganizerSync } from '../../lib/reader-connection'
 import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
+import { completeConnectedLoginRedirect, isConnectedLoginCallback } from '../../lib/connected-login-redirect'
+import { Navigate, useLocation } from 'react-router-dom'
 import { isAuthLinkType, signInWithLogin, verifyAuthLink } from '../../lib/auth-account'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -13,6 +15,10 @@ const sampleAuthKey = `${brandSlug}:sample-auth:v1`
 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [redirected] = useState(isConnectedLoginCallback)
+  const [restoreTo, setRestoreTo] = useState<string | null>(null)
+  const routeLocation = useLocation()
+  const currentPath = routeLocation.pathname + routeLocation.search + routeLocation.hash
   const [session, setSession] = useState<Session | null>(null)
   const [sampleSignedIn, setSampleSignedIn] = useState(() => {
     if (!sampleMode) return false
@@ -62,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     async function initialize() {
       try {
+        await completeConnectedLoginRedirect(client)
         const params = new URLSearchParams(window.location.search)
         if (params.has('error') || new URLSearchParams(window.location.hash.slice(1)).has('error')) {
           throw new Error('This sign-in link is invalid or expired. Request a new link.')
@@ -81,22 +88,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error: sessionError } = result
         if (sessionError) throw sessionError
         if (active && !authEventReceived) setSession(data.session)
-        if (!data.session && !tokenHash && !initialAuthType) {
+        if (!data.session && !tokenHash && !initialAuthType && !redirected) {
           void connectedLogin(client, readerAppUrl()).catch(() => { /* Email/password remains available. */ })
         }
-      } catch {
+      } catch (failure) {
         if (active) {
           setSession(null)
-          setError('Unable to verify your session. Sign in again or request a new invitation or recovery link.')
+          setError(redirected && failure instanceof Error ? failure.message : 'Unable to verify your session. Sign in again or request a new invitation or recovery link.')
         }
       } finally {
+        if (active && redirected) setRestoreTo(window.location.pathname + window.location.search + window.location.hash)
         initialized = true
         if (active) setLoading(false)
       }
     }
     void initialize()
     return () => { active = false; subscription.unsubscribe() }
-  }, [])
+  }, [redirected])
 
   useEffect(() => {
     if (!supabase || sampleMode || !session || needsPassword) return
@@ -111,5 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { active = false; window.removeEventListener('online', enable) }
   }, [session, needsPassword])
 
-  return <AuthContext value={{ authenticated: sampleMode ? sampleSignedIn : Boolean(session), signIn, signOut, session, loading, error, needsPassword, passwordSaved: () => setNeedsPassword(false) }}>{children}</AuthContext>
+  // Finish this one restoration before mounting routes, then permit ordinary navigation.
+  if (restoreTo === currentPath) setRestoreTo(null)
+  return <AuthContext value={{ authenticated: sampleMode ? sampleSignedIn : Boolean(session), signIn, signOut, session, loading, error, needsPassword, passwordSaved: () => setNeedsPassword(false) }}>{restoreTo && restoreTo !== currentPath ? <Navigate to={restoreTo} replace /> : children}</AuthContext>
 }

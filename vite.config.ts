@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
       maxWorkers: 2,
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
-      exclude: [...configDefaults.exclude, 'tests/e2e/**', 'tests/offline/**', 'reader/tests/browser/**'],
+      exclude: [...configDefaults.exclude, 'tests/e2e/**', 'tests/connected-login/**', 'tests/offline/**', 'reader/tests/browser/**'],
       restoreMocks: true,
     },
   }

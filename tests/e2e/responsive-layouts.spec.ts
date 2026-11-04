@@ -95,9 +95,9 @@ test('library and reading actions fit their headers and filters across viewport 
     expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
    } else {
     const apply = (await toolbar.getByRole('button', { name: 'Apply Filters', exact: true }).boundingBox())!
-    expect(series.y).toBeCloseTo(apply.y, 0)
-    expect(series.y).toBeCloseTo(filters.y, 0)
-    expect(series.x + series.width).toBeLessThanOrEqual(apply.x)
+    expect(series.y + series.height).toBeLessThanOrEqual(apply.y)
+    expect(apply.y).toBeCloseTo(filters.y, 0)
+    expect(await toolbar.getByRole('button', { name: 'Show Series', exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     expect(apply.x + apply.width).toBeLessThanOrEqual(filters.x)
    }
    if (width > 1100) {
@@ -161,12 +161,23 @@ test('mobile collection holds, filter defaults, inputs and work controls fit', a
  await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
  const done = (await page.getByRole('button', { name: 'Done Editing', exact: true }).boundingBox())!
  const select = (await page.getByRole('button', { name: 'Select Collections', exact: true }).boundingBox())!
- expect(select.x).toBeGreaterThan(done.x)
+ expect(select.x + select.width).toBeLessThan(done.x)
  expect(select.y).toBeCloseTo(done.y, 0)
  await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
  await page.getByRole('button', { name: 'Filters', exact: true }).click()
  const defaults = page.locator('.filter-default-actions button')
  expect((await defaults.nth(0).boundingBox())!.y).toBeCloseTo((await defaults.nth(1).boundingBox())!.y, 0)
+ for (const button of await defaults.all()) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48)
+ const footerBox = (await page.locator('.reading-filters > .form-actions').boundingBox())!, resetBox = (await page.locator('.filter-reset-actions').boundingBox())!
+ expect(Math.abs(footerBox.x + footerBox.width - resetBox.x - resetBox.width)).toBeLessThan(1)
+ await page.goto('/stats')
+ await page.setViewportSize({ width: 320, height: 900 })
+ await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeVisible()
+ const navigation = (await page.locator('.stats-period-navigation').boundingBox())!, today = (await page.getByRole('button', { name: 'Today', exact: true }).boundingBox())!
+ expect(today.x).toBeGreaterThanOrEqual(navigation.x + navigation.width)
+ expect(Math.abs(today.y + today.height / 2 - navigation.y - navigation.height / 2)).toBeLessThan(1)
+ await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 320)
+ await page.setViewportSize({ width: 375, height: 900 })
  await page.goto('/stories/mobile-entry')
  const rating = page.locator('.details-reading-controls .rating-heading')
  const collection = page.locator('.details-collections')

@@ -40,6 +40,7 @@ for (const width of [390, 1280]) test(`edits progress, marks through chapters, a
  await page.getByRole('button',{name:'Bookshelf',exact:true}).click()
  await page.getByRole('button',{name:'Manage EPUB',exact:true}).click()
  await page.getByRole('button',{name:'Begin Re-Reading',exact:true}).click()
+ await expect(page.getByRole('combobox', { name: 'Reading Status', exact: true })).toHaveValue('re_reading')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await expect(page.locator('.card-progress')).toContainText('Re-Reading')
  for (const progress of ['1', '0']) {

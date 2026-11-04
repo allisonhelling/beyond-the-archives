@@ -16,7 +16,7 @@ test('work actions open the newest checked Wayback result in a new tab and detai
  await page.goto('/library'); await login(page)
  await page.getByLabel('Story Actions for Archived Story').click()
  const popupPromise = page.waitForEvent('popup')
- await page.getByRole('link', { name: 'Open in Wayback Machine', exact: true }).click()
+ await page.getByRole('link', { name: 'Open in Wayback', exact: true }).click()
  const popup = await popupPromise
  await expect(popup).toHaveURL(snapshot)
  await expect(popup.getByRole('heading', { name: 'Archived Adult Warning' })).toBeVisible()

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
-test('tag and fandom clicks apply filters immediately and the mobile series action shares the Apply row',async({page},testInfo)=>{
+test('tag and fandom clicks apply filters immediately and the mobile series action has its own row',async({page},testInfo)=>{
  const tables=await fixture(page)
  for(const [id,title,fandom,tags] of [['tagged','Tagged Story','Shared Fandom',['Found Family']],['other','Other Story','Other Fandom',['Adventure']]] as const){
   tables.works.push({id:`${id}-work`,ao3_work_id:id==='tagged'?99201:99202,verified_chapters:{}})
@@ -13,11 +13,14 @@ test('tag and fandom clicks apply filters immediately and the mobile series acti
   // Read both rectangles in one browser turn so scroll restoration cannot
   // move the document between measurements while the library finishes loading.
   await expect(async()=>{
-   const bounds=await toolbar.locator(':scope > .series-toggle, :scope > .apply-filters').evaluateAll(buttons=>buttons.map(button=>{const box=button.getBoundingClientRect();return {x:box.x,y:box.y,width:box.width}}))
+   const bounds=await toolbar.locator(':scope > .series-toggle, :scope > .apply-filters').evaluateAll(buttons=>buttons.map(button=>{const box=button.getBoundingClientRect();return {x:box.x,y:box.y,width:box.width,height:box.height}}))
    expect(bounds).toHaveLength(2)
    const [s,a]=bounds
-   expect(Math.abs(a.y-s.y)).toBeLessThan(2)
-   expect(s.x+s.width).toBeLessThanOrEqual(a.x)
+   expect(s.y+s.height).toBeLessThanOrEqual(a.y)
+   expect(s.x).toBeLessThan(a.x)
+   const series=toolbar.locator(':scope > .series-toggle')
+   await expect(series).toHaveCSS('white-space','nowrap')
+   expect(await series.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true)
   }).toPass({timeout:5000})
  }
  await page.locator('[data-story-id="tagged-entry"]').getByRole('button',{name:'Found Family',exact:true}).click()

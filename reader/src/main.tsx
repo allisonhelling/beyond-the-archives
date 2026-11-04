@@ -4,9 +4,11 @@ import { consumePendingReaderPairing, consumeReaderPairing } from '../../src/lib
 import { isLocalApp } from '../../src/lib/local-app'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { ReaderAuthorization } from './ReaderAuthorization'
 import './styles.css'
 const initialPairing = consumeReaderPairing() ?? consumePendingReaderPairing()
 if (isLoginBridge()) serveConnectedLogin(readerCloud, organizerAppUrl())
+else if (location.pathname === '/auth/authorize') createRoot(document.getElementById('root')!).render(<ReaderAuthorization />)
 else {
  serveConnectedLoginInTab(readerCloud, organizerAppUrl())
  const root = createRoot(document.getElementById('root')!)

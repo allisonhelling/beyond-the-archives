@@ -64,7 +64,7 @@ export function LibraryBoundary({ children }: { children: ReactNode }) {
 type CardControls = { rating: ReactNode; actions: ReactNode; favorite: ReactNode; rec: ReactNode; readingStatus: ReactNode; caughtUp: ReactNode; editProgress: ReactNode; collectionsField: ReactNode }
 type MarkingHandler = (field: 'favorite' | 'rec', value: boolean) => Promise<void>
 function StoryControls({ story, children, readOnly = false, onMarking, details = false }: { details?: boolean; onMarking?: MarkingHandler; readOnly?: boolean; story: Story; children: (controls: CardControls) => ReactNode }) {
-  const { refreshStory, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
+  const { collections, refreshStory, markAllRead, markFinished, removeStory } = useLibrary(), navigate = useNavigate(), location = useLocation()
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   useActivity(Boolean(busy), 'Updating your library…')
   const [conflict, setConflict] = useState<EditConflict | null>(null)
@@ -73,6 +73,15 @@ function StoryControls({ story, children, readOnly = false, onMarking, details =
   function failed(error: unknown, fallback = 'Could not save changes.') {
     if (error instanceof EditConflict) setConflict(error)
     else setError(error instanceof Error ? error.message : fallback)
+  }
+  const [shelfParams] = useSearchParams()
+  const collection = collections.find(item => item.id === shelfParams.get('shelf') && !item.default_key && !item.automatic_rules && story.collectionIds.includes(item.id))
+  async function removeFromCollection() {
+    setBusy(true); setError('')
+    try {
+      await saveStoryCollections(story, story.collectionIds.filter(id => id !== collection?.id), story.collectionIds)
+      await refreshStory(story.id); setMenuOpen(false)
+    } catch (error) { failed(error, 'Could not remove the story from this collection.') } finally { setBusy(false) }
   }
   const [removeOpen, setRemoveOpen] = useState(false)
   const [collectionOpen, setCollectionOpen] = useState(false)
@@ -122,7 +131,7 @@ function StoryControls({ story, children, readOnly = false, onMarking, details =
   const favorite = <FavoriteButton selected={story.is_favorite} disabled={busy || Boolean(conflict) || (readOnly && !onMarking)} onChange={selected => void mark('favorite', selected)} />
   const rec = <BookmarkRec story={story} disabled={busy || Boolean(conflict) || (readOnly && !onMarking)} onChange={selected => void mark('rec', selected)} />
   const StatusIcon = readingStatusIcons[story.reading_status]
-  const readingStatus = details ? <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading Status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => e.target.value === 'finished' ? void finishStory() : void change({ reading_status: e.target.value as Status })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label> : null
+  const readingStatus = details ? <label className="status-select"><span className="details-control-heading">Reading Status</span><span className="reading-status-value"><StatusIcon size={18} aria-hidden="true" /><select aria-label={`Reading Status for ${story.metadata.title}`} disabled={blocked} value={story.reading_status} onChange={e => e.target.value === 'finished' ? void finishStory() : void change({ reading_status: e.target.value as Status, ...(e.target.value === 're_reading' && { last_read_chapter: 0 }) })}>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></span></label> : null
   const hiddenMarkings = (['favorite', 'rec'] as const).filter(kind => isDisplayFieldHidden(tilePreference, kind))
   const actions = <div className="story-quick-actions"><DisplayInfo group="workTile" fields={['favorite', 'rec']}>{{ favorite, rec }}</DisplayInfo>
     {(!readOnly || hiddenMarkings.length > 0) && <details className="story-menu" ref={menuRef} open={menuOpen} onToggle={event => { const open = event.currentTarget.open; if (open) setMenuLoaded(true); setMenuOpen(open) }}>
@@ -132,11 +141,12 @@ function StoryControls({ story, children, readOnly = false, onMarking, details =
         {!readOnly && <>{(['hiatus', 'abandoned'] as const).map(publication_status => <button key={publication_status} type="button" disabled={blocked} onClick={() => void changePublication(publication_status)}>Change Status to {publication_status === 'hiatus' ? 'On Hiatus' : 'Abandoned'}</button>)}<ExportWorkMetadata story={story} menu disabled={blocked} />
         <WaybackLink url={savedWorkUrl(story)} menu />
         <Link className="menu-item" to={`/stories/${story.id}`} state={location.pathname.startsWith('/stories/') ? location.state : { returnTo: location.pathname + location.search }}><FileText size={16} aria-hidden="true" />View/Edit Details</Link>
-        {story.reading_status !== 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'paused_reading' })}><readingStatusIcons.paused_reading size={16} aria-hidden="true" />Mark as Paused Reading</button>}
+        {['reading', 're_reading'].includes(story.reading_status) && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'paused_reading' })}><readingStatusIcons.paused_reading size={16} aria-hidden="true" />Mark as Paused Reading</button>}
         {story.reading_status === 'paused_reading' && <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: resumeReadingStatus(story) })}><readingStatusIcons.reading size={16} aria-hidden="true" />Resume Reading</button>}
-        <button className="menu-item" disabled={blocked} onClick={() => void finishStory()}><Check size={16} aria-hidden="true" />Mark as Finished</button>
+        {['reading', 're_reading'].includes(story.reading_status) && <button className="menu-item" disabled={blocked} onClick={() => void finishStory()}><Check size={16} aria-hidden="true" />Mark as Finished</button>}
         <button className="menu-item" disabled={blocked} onClick={() => void change({ reading_status: 'did_not_finish' })}><BookX size={16} aria-hidden="true" />Mark as DNF</button>
         <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setCollectionOpen(true) }}><FolderPlus size={16} aria-hidden="true" />Add to Collection</button>
+        {collection && <button className="menu-item" disabled={blocked} onClick={() => void removeFromCollection()}><FolderPlus size={16} aria-hidden="true" />Remove from Collection</button>}
         <hr className="menu-divider" />
         <button className="menu-item" disabled={blocked} onClick={() => { setMenuOpen(false); setRemoveOpen(true) }}><Trash2 size={16} aria-hidden="true" />Remove from Library</button></>}
       </div>}
@@ -204,9 +214,9 @@ export function AuthorPage() {
     renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
 }
 function LibraryContent() {
-  return <CollectionBrowser>{({ selected, editingCollections, renderHeader, resultsActions, shelfStories, shelfSeries }) => {
+  return <CollectionBrowser>{({ selected, editingCollections, renderHeader, shelfStories, shelfSeries }) => {
     const seriesById = new Map(shelfSeries.map(series => [seriesItemId(series), series]))
-    return <LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={renderHeader} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} resultsActions={resultsActions} /></LibraryBoundary>
+    return <LibraryBoundary><ReadingDashboard showActions={!editingCollections} renderHeader={renderHeader} mode={selected === 'series' ? 'series' : 'library'} stories={shelfStories} filterItems={(pool, filters) => filterLibraryItems(pool, { ...filters, showSeries: selected === 'series' || filters.showSeries }, shelfSeries)} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
   }}</CollectionBrowser>
 }
 export function AddStoryPage() {

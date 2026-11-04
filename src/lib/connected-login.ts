@@ -5,15 +5,16 @@ export const organizerAppUrl = () => readerBaseUrl(import.meta.env.VITE_ORGANIZE
 export const readerAppUrl = () => readerBaseUrl(import.meta.env.VITE_READER_URL || hostedReaderUrl).href
 export const isLoginBridge = () => location.pathname==='/auth/bridge'
 
-type BridgeResult = { code?: string; error?: 'signed-out' | 'access-denied' | 'unavailable' }
+type BridgeResult = { code?: string; error?: 'signed-out' | 'access-denied' | 'unavailable' | 'account-changed' }
 const handoffChannel = 'connected-account-login:v1'
 const validSecret = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
-async function issueHandoff(client: SupabaseClient, target: string, challenge: string, userRequested: boolean): Promise<BridgeResult> {
+export async function issueHandoff(client: SupabaseClient, target: string, challenge: string, userRequested: boolean, expectedUserId?: string): Promise<BridgeResult> {
  try {
   const { data, error } = await client.auth.getSession()
   if (error) return { error: 'unavailable' }
   if (!data.session) return { error: 'signed-out' }
-  const result = await client.functions.invoke('app-login', { body: { action: 'issue', target, challenge, ...(userRequested ? { userRequested: true } : {}) } })
+  if (expectedUserId && data.session.user.id !== expectedUserId) return { error: 'account-changed' }
+  const result = await client.functions.invoke('app-login', { body: { action: 'issue', target, challenge, ...(userRequested ? { userRequested: true } : {}) }, ...(expectedUserId ? { headers: { Authorization: `Bearer ${data.session.access_token}` } } : {}) })
   if (result.error || !validSecret(result.data?.code)) return { error: result.error?.context?.status === 403 ? 'access-denied' : 'unavailable' }
   return { code: result.data.code }
  } catch { return { error: 'unavailable' } }

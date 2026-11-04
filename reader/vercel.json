@@ -58,6 +58,13 @@
           "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors https://beyondthearchives.vercel.app; base-uri 'self'; form-action 'none'; object-src 'none'"
         }
       ]
+    },
+    {
+      "source": "/auth/authorize",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "Referrer-Policy", "value": "no-referrer" }
+      ]
     }
   ]
 }

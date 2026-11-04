@@ -7,7 +7,8 @@
 .stats-volume-panel:not([hidden]) { display: grid; gap: 24px; }
 .stats-period { display: grid; gap: 16px; }
 .stats-controls.stats-period-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-.stats-period-controls > .stats-today { justify-self: end; }
+.stats-period-actions { display: contents; }
+.stats-period-actions > .stats-today { justify-self: start; }
 .stats-period-navigation { --period-action-width: 40px; padding-inline-start: var(--period-action-width); }
 .stats-period-navigation .icon-button { width: var(--period-action-width); }
 .stats-period-navigation, .stats-today { display: inline-flex; align-items: center; }
@@ -65,6 +66,13 @@
  .stats-grid { grid-template-columns: minmax(0, 1fr); }
  .stats-controls { gap: 8px; }
  .stats-controls.stats-period-controls { grid-template-columns: 1fr 1fr; }
- .stats-period-navigation { --period-action-width: 28px; grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+ .stats-period-actions { display: flex; align-items: center; grid-column: 1 / -1; grid-row: 2; gap: 4px; justify-self: center; min-width: 0; }
+ .stats-period-navigation { --period-action-width: 24px; padding-inline-start: 0; }
+ .stats-today { gap: 4px; padding-inline: 4px; }
  .stats-calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 360px) {
+ .stats-period-actions { font-size: 12px; }
+ .stats-today svg { display: none; }
 }

@@ -26,7 +26,7 @@ it('retains named, timestamped reports per installation and scopes snapshots to 
  expect(snapshot.readers[0]).toMatchObject({id:installationId,name:'Laptop Reader',works:['8001']})
  expect(Date.parse(snapshot.readers[0].reportedAt)).toBeGreaterThan(0)
  await asUser(other)
- expect((await db.query<{result:unknown}>('select public.reader_offline_snapshot() result')).rows[0].result).toEqual({readers:[],stories:[],cloudBooks:[]})
+ expect((await db.query<{result:unknown}>('select public.reader_offline_snapshot() result')).rows[0].result).toMatchObject({readers:[],stories:[],cloudBooks:[]})
  await report([]); await asUser()
  expect((await db.query<{works:string[]}>('select works from public.reader_availability')).rows[0].works).toEqual([])
  await expect(report(['not-a-work'])).rejects.toThrow('Invalid reader report')
@@ -101,11 +101,23 @@ it('disconnects registered and reporting readers, preserves cloud data and other
  await asUser()
  await db.query("select public.reader_organizer_connection('disable')")
  expect((await db.query<{result:{enabled:boolean}}>("select public.reader_organizer_connection('status') result")).rows[0].result.enabled).toBe(false)
- expect((await db.query<{result:{readers:unknown[];cloudBooks:unknown[];stories:unknown[]}}>('select public.reader_offline_snapshot() result')).rows[0].result).toEqual({readers:[],cloudBooks:[],stories:[]})
+ expect((await db.query<{result:{readers:unknown[];cloudBooks:unknown[];stories:unknown[]}}>('select public.reader_offline_snapshot() result')).rows[0].result).toMatchObject({readers:[],cloudBooks:[],stories:[]})
  await db.exec('reset role')
  expect((await db.query('select value from public.reader_cloud_values where user_id=$1 and key=$2',[owner,`${'a'.repeat(64)}/notes`])).rows).toEqual([{value:'Keep my notes'}])
  expect((await db.query('select id from public.library_entries where user_id=$1',[owner])).rows.length).toBeGreaterThan(0)
  expect((await db.query("select * from public.userscript_devices where secret_hash=encode(sha256(convert_to($1,'UTF8')),'hex')",[unrelated])).rows).toHaveLength(1)
  await expect(report(['8001'])).rejects.toThrow()
  await asUser();await expect(db.query("select public.reader_organizer_connection('validate',null,$1)",[registered])).rejects.toThrow()
+})
+
+it('retains collection definitions only for the snapshot owner', async () => {
+ await db.exec('reset role')
+ await db.query('insert into public.collections(user_id,name,color,symbol) values($1,$2,$3,$4),($5,$6,$3,$4)', [owner,'Owner EPUB Shelf','#123456','moon',other,'Other Private Shelf'])
+ for (const [id, ownName, foreignName] of [[owner,'Owner EPUB Shelf','Other Private Shelf'],[other,'Other Private Shelf','Owner EPUB Shelf']]) {
+  await asUser(id)
+  const snapshot = (await db.query<{result:{collections:{name:string;user_id:string}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result
+  expect(snapshot.collections.some(collection => collection.name === ownName)).toBe(true)
+  expect(snapshot.collections.some(collection => collection.name === foreignName)).toBe(false)
+  expect(snapshot.collections.every(collection => collection.user_id === id)).toBe(true)
+ }
 })

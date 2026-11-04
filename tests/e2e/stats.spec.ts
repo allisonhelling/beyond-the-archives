@@ -15,7 +15,11 @@ test('shows recorded stats, navigates periods, applies profile controls, and sav
  await login(page)
  await expect(page.getByRole('heading', { name: 'Reading Stats', exact: true })).toBeVisible()
  const period = (await page.getByRole('region', { name: 'Statistics Period' }).boundingBox())!
- const month = (await page.locator('.stats-period-label').boundingBox())!
+ const month = (await page.locator(testInfo.project.name === 'mobile' ? '.stats-period-actions' : '.stats-period-label').boundingBox())!
+ const navigation = (await page.locator('.stats-period-navigation').boundingBox())!, today = (await page.getByRole('button', { name: 'Today', exact: true }).boundingBox())!
+ expect(today.x).toBeGreaterThanOrEqual(navigation.x + navigation.width)
+ expect(today.x - navigation.x - navigation.width).toBeLessThanOrEqual(12)
+ expect(Math.abs(today.y + today.height / 2 - navigation.y - navigation.height / 2)).toBeLessThan(1)
  expect(Math.abs(month.x + month.width / 2 - (period.x + period.width / 2))).toBeLessThan(2)
  await expect(page.getByText('Your reading, in perspective.', { exact: true })).toHaveCount(0)
  const tabs = page.getByRole('tablist', { name: 'Reading Statistics Sections' })

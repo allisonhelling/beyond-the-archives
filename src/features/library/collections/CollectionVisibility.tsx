@@ -5,7 +5,7 @@ import { Tooltip } from '../../../components/Tooltip'
 export function CollectionVisibilityButton({ hidden = false, onClick, disabled = false }: { hidden?: boolean; onClick: () => void; disabled?: boolean }) {
   const Icon = hidden ? EyeOff : Eye
   const label = hidden ? 'Show Collection' : 'Hide Collection'
-  return <Tooltip description={label} placement="bottom">{descriptionId => <button type="button" className="button secondary" aria-label={label} aria-describedby={descriptionId} disabled={disabled} onClick={onClick}><Icon size={18} aria-hidden="true" /></button>}</Tooltip>
+  return <Tooltip description={label} placement="bottom">{descriptionId => <button type="button" className="button secondary collection-visibility-button" aria-label={label} aria-describedby={descriptionId} disabled={disabled} onClick={onClick}><Icon size={18} aria-hidden="true" /></button>}</Tooltip>
 }
 
 export function CollectionVisibilityDialog({ collection, onConfirm, onClose }: {

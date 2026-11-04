@@ -5,4 +5,4 @@
 :is(.series-link, .author-link, .metadata-link) { text-decoration: none; text-underline-offset: .15em; }
 :is(.series-link, .author-link, .metadata-link):is(:hover, :focus-visible) { text-decoration: underline; }
 
-.metadata-link { background: transparent; border: 0; padding: 0; min-height: 0; font: inherit; letter-spacing: inherit; color: inherit; text-align: left; }
+.metadata-link { display: inline; white-space: normal; background: transparent; border: 0; padding: 0; min-height: 0; font: inherit; letter-spacing: inherit; color: inherit; text-align: left; }

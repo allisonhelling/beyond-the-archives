@@ -1,7 +1,8 @@
 import { AccountModeSwitch, SignInFields, type AccountMode } from './SignInFields'
 import { accountConfirmationMessage, confirmPassword, createAccount } from '../../lib/auth-account'
 import { remembersSession, rememberSession } from '../../lib/auth-session-storage'
-import { connectedLogin, readerAppUrl } from '../../lib/connected-login'
+import { readerAppUrl } from '../../lib/connected-login'
+import { connectedLoginRedirect } from '../../lib/connected-login-redirect'
 import { useActivity } from '../../lib/use-activity'
 import { useState, type FormEvent } from 'react'
 import { ArrowRight, BookOpen, LockKeyhole, ShieldCheck } from 'lucide-react'
@@ -60,7 +61,7 @@ export function AuthScreen() {
     setBusy(true); setError(null); setMessage(null)
     try {
       if (sampleMode) await signIn('Sample', '123')
-      else if (!await connectedLogin(supabase!, readerAppUrl(), true)) setMessage('Sign in to your connected reader account first, or use your email and password.')
+      else await connectedLoginRedirect(readerAppUrl())
     } catch (error) { setError(error instanceof Error ? error.message : 'Connected sign-in failed.') }
     finally { setBusy(false) }
   }

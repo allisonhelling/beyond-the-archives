@@ -417,7 +417,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(summarySize).toBe(info.project.name === 'mobile' ? '12px' : metadataFontSize)
   const progressHeadingSize = await readingSection.getByRole('heading', { name: 'Reading and Organization' }).evaluate(el => getComputedStyle(el).fontSize)
   expect(await page.locator('.note-heading > span').first().evaluate(el => getComputedStyle(el).fontSize)).toBe(progressHeadingSize)
-  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await expect(page.locator('.metadata-list > div').filter({ has: page.getByText('Characters', { exact: true }) }).locator('dd')).toHaveText('A')
   await page.locator('.spine-progress').click({ position: { x: 150, y: 30 } })
   await page.getByLabel('Last Fully Read Chapter').fill('4'); await page.getByRole('button', { name: 'Save' }).click()
@@ -429,6 +429,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click(); await page.getByRole('button', { name: 'Log Out', exact: true }).click(); await login(page)
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   await page.getByLabel('Reading Status for A private story').selectOption('re_reading')
+  await expect(page.getByRole('button', { name: 'Chapter 0 of 6 — Edit Progress', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Edit Notes, rating & collections', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'The fic', exact: true })).toHaveCount(0)
   await expect(page.locator('.story-details-heading').getByRole('link', { name: 'Read on AO3', exact: true })).toHaveCount(0)
@@ -481,7 +482,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   const noteSave = await page.getByRole('button', { name: 'Save', exact: true }).boundingBox()
   const noteCancel = await page.getByRole('button', { name: 'Cancel', exact: true }).boundingBox()
   expect(Math.abs(noteSave!.y - noteCancel!.y)).toBeLessThan(2)
-  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('textbox', { name: 'Private Notes', exact: true }).fill('Remember this moment.')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Private Notes', exact: true })).toHaveCount(0)
@@ -557,7 +558,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await page.getByRole('dialog', { name: 'Delete Collection?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'My corrected title' })).toBeVisible()
   await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
-  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByLabel('Story Actions for My corrected title').click()
   const actionMenu = (await page.locator('.story-menu[open] > .menu-surface').boundingBox())!
   const navigation = info.project.name === 'mobile' ? await page.getByRole('navigation', { name: 'Mobile Navigation', exact: true }).boundingBox() : null
@@ -588,7 +589,8 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   await expect(page.getByText('Remember this moment.', { exact: true })).toBeVisible()
   await expect(page.locator('.details-fic-fields .metadata-tag').filter({ hasText: /^(Comfort|Revisit)$/ })).toHaveCount(2)
   await expect(page.getByRole('region', { name: 'Collections', exact: true }).locator('.collection-name-list li').filter({ hasText: /^(Long fics|Created while adding)$/ })).toHaveCount(2)
-  await expect(page.getByRole('button', { name: 'Chapter 6 of 6 — Edit Progress', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Reading Status for My corrected title', { exact: true })).toHaveValue('re_reading')
+  await expect(page.getByRole('button', { name: 'Chapter 0 of 6 — Edit Progress', exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Back to Library', exact: true }).click()
   await page.getByLabel('Story Actions for My corrected title').click()
   await expect(page.locator('.story-menu .menu-divider')).toBeVisible()
@@ -977,22 +979,30 @@ test('publication tiles exclude waiting and unknown works and update after chang
   const moved = tables.library_entries.find(entry => entry.id === 'entry-0')!
   const previousStatus = moved.reading_status
   await page.getByLabel('Story Actions for Unfinished read', { exact: true }).click()
-  const finish = page.getByRole('button', { name: 'Mark as Finished', exact: true })
-  await finish.hover()
-  await expect(finish).toHaveCSS('background-color', 'rgb(151, 0, 0)')
-  await expect(finish).toHaveCSS('color', 'rgb(255, 255, 255)')
-  await finish.click()
-  await expect(page.locator('.story-card')).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Mark as Finished', exact: true })).toHaveCount(0)
+  const detailsAction = page.getByRole('link', { name: 'View/Edit Details', exact: true })
+  await detailsAction.hover()
+  await expect(detailsAction).toHaveCSS('background-color', 'rgb(151, 0, 0)')
+  await expect(detailsAction).toHaveCSS('color', 'rgb(255, 255, 255)')
+  const finishFromDetails = async (returnToList = true) => {
+    await detailsAction.click()
+    await page.getByRole('combobox', { name: 'Reading Status for Unfinished read', exact: true }).selectOption('finished')
+    await expect(page.getByRole('combobox', { name: 'Reading Status for Unfinished read', exact: true })).toHaveValue('finished')
+    if (returnToList) await page.locator('.story-return-link').click()
+  }
+  await finishFromDetails(false)
   expect(moved.reading_status).toBe('finished')
   expect(moved.last_read_chapter).toBe(5)
   const finishNotice = page.getByRole('region', { name: 'Reading Updates' })
   await expect(finishNotice).toContainText('All chapters marked as read.')
   await finishNotice.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Reading Status for Unfinished read', exact: true })).toHaveValue(previousStatus)
+  await page.locator('.story-return-link').click()
   await expect(page.locator('.story-card')).toHaveCount(3)
   expect(moved.reading_status).toBe(previousStatus)
   expect(moved.last_read_chapter).toBe(0)
   await page.getByLabel('Story Actions for Unfinished read', { exact: true }).click()
-  await finish.click()
+  await finishFromDetails()
   await expect(page.locator('.story-card')).toHaveCount(2)
   await page.goto('/library?shelf=finished')
   await expect(page.getByRole('heading', { name: 'Unfinished read', exact: true })).toBeVisible()
@@ -1499,7 +1509,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
   const creation = shelf.getByRole('button', { name: 'New Collection', exact: true }).last()
   await expect(rows).toHaveCount(1)
   await expect(creation).toBeVisible()
-  if (mobile()) await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollLeft = 0)
+  await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollLeft = 0)
   await expect(rows.last().locator('.collection-spine').last()).toHaveText('New Collection')
   await expect(page.getByRole('main').getByRole('link', { name: 'Import History from AO3', exact: true })).toHaveCount(0)
   const heading = page.getByRole('heading', { name: 'Your Library', exact: true })
@@ -1510,42 +1520,32 @@ test('collection bookspines expand into shelves and keep creation last at every 
       await expect(spine).toHaveCSS('width', '72px')
     }
   }
-  if (!mobile()) expect((await firstSpine.boundingBox())!.x).toBe((await heading.boundingBox())!.x)
+  expect((await shelf.locator('.collection-shelf-bookend').boundingBox())!.x).toBe((await heading.boundingBox())!.x)
   async function checkShelfEdges() {
     const board = await rows.first().evaluate(row => {
       const styles = getComputedStyle(row, '::after'), bounds = row.getBoundingClientRect()
       return { left: bounds.left + parseFloat(styles.left), right: bounds.right - parseFloat(styles.right), radius: styles.borderRadius }
     })
     const filters = (await page.getByRole('region', { name: 'Library Toolbar', exact: true }).boundingBox())!
-    expect(filters.x - board.left).toBeCloseTo(mobile() ? 0 : 8, 1)
+    expect(filters.x - board.left).toBeCloseTo(0, 1)
     const rowBounds = (await rows.first().boundingBox())!
-    expect(board.right - rowBounds.x - rowBounds.width).toBeCloseTo(mobile() ? 0 : 8, 1)
+    expect(board.right - rowBounds.x - rowBounds.width).toBeCloseTo(0, 1)
     expect(board.radius).toBe('0px')
   }
   await checkShelfEdges()
-  if (page.viewportSize()!.width > 650) {
-    const previousCapacity = await shelf.evaluate(element => {
-      const styles = getComputedStyle(element), rows = element.querySelector('.collection-shelf-rows')!
-      const gap = parseFloat(getComputedStyle(rows).getPropertyValue('--collection-spine-gap'))
-      const available = element.parentElement!.clientWidth - parseFloat(styles.getPropertyValue('--collection-shelf-toggle-width')) - parseFloat(styles.getPropertyValue('--collection-shelf-toggle-gap'))
-      return Math.floor((available + gap) / (parseFloat(styles.getPropertyValue('--collection-spine-width')) + gap))
-    })
-    await expect(rows.first().locator('.collection-spine')).toHaveCount(previousCapacity + 1)
-  }
+  await expect(shelf.locator('.collection-spine:not(.collection-spine-mini)')).toHaveCount(34)
+  expect(await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
   const bookend = rows.first().getByRole('button', { name: 'Show All Collections', exact: true })
   await expect(bookend).toHaveText('SEE ALL')
   async function checkBookendPosition() {
     await expect(rows.first().locator('.collection-shelf-toggle')).toHaveCount(1)
     await expect(shelf.locator('.collection-shelf-toggle')).toHaveCount(1)
-    const lastBook = (await rows.first().locator('.collection-spine').last().boundingBox())!
     const firstBook = (await firstSpine.boundingBox())!
     const end = (await shelf.locator('.collection-shelf-toggle').boundingBox())!
-    const slot = mobile() ? (await shelf.locator('.collection-shelf-bookend').boundingBox())! : end
-    if (mobile()) expect(firstBook.x - slot.x - slot.width).toBeCloseTo(8, 1)
-    else expect(end.x - lastBook.x - lastBook.width).toBeCloseTo(8, 1)
+    const slot = (await shelf.locator('.collection-shelf-bookend').boundingBox())!
+    expect(firstBook.x - slot.x - slot.width).toBeCloseTo(8, 1)
     const row = (await rows.first().boundingBox())!
-    if (mobile()) expect(slot.x).toBeCloseTo(row.x, 1)
-    else expect(end.x + end.width).toBeCloseTo(row.x + row.width, 1)
+    expect(slot.x).toBeCloseTo(row.x, 1)
     expect(end.y + end.height).toBeCloseTo(row.y + row.height - 12, 1)
   }
   await checkBookendPosition()
@@ -1590,12 +1590,12 @@ test('collection bookspines expand into shelves and keep creation last at every 
   await page.setViewportSize({ width: 320, height: 800 })
   await expect(rows).toHaveCount(1)
   await expect(creation).toBeVisible()
-  if (mobile()) await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollLeft = 0)
+  await shelf.locator('.collection-shelf-rows').evaluate(element => element.scrollLeft = 0)
   await expect(rows.last().locator('.collection-spine').last()).toHaveText('New Collection')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   await checkShelfEdges()
   await checkBookendPosition()
-  if (!mobile()) expect((await firstSpine.boundingBox())!.x).toBe((await heading.boundingBox())!.x)
+  expect((await shelf.locator('.collection-shelf-bookend').boundingBox())!.x).toBe((await heading.boundingBox())!.x)
   await creation.click()
   await completeCollectionDialog(page, 'Created from spine')
   await expect.poll(() => tables.collections.some(collection => collection.name === 'Created from spine')).toBe(true)
@@ -1608,7 +1608,7 @@ test('collection bookspines expand into shelves and keep creation last at every 
   for (const row of await rows.all()) expect((await row.boundingBox())!.width).toBe(fullWidth)
   tables.collections = []
   await page.reload()
-  await expect(shelf.locator('.collection-spine')).toHaveCount(10)
+  await expect(shelf.locator('.collection-spine')).toHaveCount(11)
   await expect(shelf.locator('.collection-shelf-toggle')).toBeVisible()
   await expect(shelf.locator('.collection-shelf-toggle')).toHaveAttribute('aria-hidden', 'true')
   await expect(shelf.locator('.collection-shelf-toggle text')).toHaveCount(0)
@@ -1616,7 +1616,9 @@ test('collection bookspines expand into shelves and keep creation last at every 
   await expect.poll(async () => (await rows.first().boundingBox())!.width).toBe(fullWidth)
   const end = (await shelf.locator('.collection-shelf-toggle').boundingBox())!
   const row = (await rows.first().boundingBox())!
-  expect(end.x + end.width).toBeCloseTo(row.x + row.width, 1)
+  const slot = (await shelf.locator('.collection-shelf-bookend').boundingBox())!
+  expect(slot.x).toBeCloseTo(row.x, 1)
+  expect(end.x + end.width / 2).toBeCloseTo(slot.x + slot.width / 2, 1)
 })
 
 
@@ -2168,12 +2170,14 @@ test('selects collections for bulk appearance edits without changing summaries a
         await page.setViewportSize({ width, height: 844 })
         await expect(async () => {
           for (const [left, right] of [
-            [page.getByRole('button', { name: 'Done Editing', exact: true }), page.getByRole('button', { name: 'Hidden', exact: true })],
-            [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByText('0 selected', { exact: true })],
+            [page.getByRole('button', { name: 'Hidden', exact: true }), page.getByRole('button', { name: 'Cancel Selection', exact: true })],
+            [page.getByRole('button', { name: 'Cancel Selection', exact: true }), page.getByRole('button', { name: 'Collection Controls', exact: true })],
+            [page.getByRole('button', { name: 'Collection Controls', exact: true }), page.getByRole('button', { name: 'Done Editing', exact: true })],
             [page.getByText('0 selected', { exact: true }), page.getByRole('button', { name: 'Edit Selected', exact: true })],
           ]) {
             const leftBox = (await left.boundingBox())!, rightBox = (await right.boundingBox())!
             expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width)
+            if (await left.getAttribute('role') !== 'status') expect(rightBox.x - leftBox.x - leftBox.width).toBeLessThanOrEqual(5)
             expect(Math.abs(leftBox.y + leftBox.height / 2 - rightBox.y - rightBox.height / 2)).toBeLessThan(1)
           }
           await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width)
@@ -2235,8 +2239,8 @@ test('Shift-drag selects a range and selected collections move together without 
   const book = (name: string) => shelf.getByRole('button', { name, exact: true })
   const titles = shelf.locator('.collection-spine-editor .collection-spine-title')
   const help = page.locator('.collection-selection-trigger button[aria-label="Collection Controls"]')
-  if (page.viewportSize()!.width <= 650) await expect(help).toBeHidden()
-  else {
+  await expect(help).toBeVisible()
+  if (page.viewportSize()!.width > 650) {
     await help.focus()
     await expect(page.getByRole('tooltip')).toContainText('Shift + click or drag: select a range.')
     await expect(page.getByRole('tooltip')).toContainText('Drag a selected book: move the selected group.')
@@ -2280,8 +2284,8 @@ test('Shift-drag selects a range and selected collections move together without 
   await expect(titles).toHaveText(['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'])
   for (const name of ['Beta', 'Gamma', 'Delta']) await expect(book(name)).toHaveAttribute('aria-pressed', 'true')
   const count = page.getByText('3 selected', { exact: true })
-  if (page.viewportSize()!.width <= 650) await expect(help).toBeHidden()
-  else await expect(count.locator('..').getByRole('button', { name: 'Collection Controls', exact: true })).toBeVisible()
+  await expect(help).toBeVisible()
+  await expect(count.locator('..').getByRole('button', { name: 'Collection Controls', exact: true })).toBeVisible()
   async function shiftDrag(fromName: string, toName: string, expected: number, cancel = false) {
     const { start, end } = await dragBounds(fromName, toName)
     await page.keyboard.down('Shift')
@@ -2437,8 +2441,12 @@ test('adds stories to custom collections from story actions and collection pages
   await dialog.getByRole('button', { name: 'Add to Collections' }).click()
   await expect(dialog).toHaveCount(0)
   await selectLibraryShelf(page, 'Night reads')
-  const addToCollection = page.locator('.library-heading-actions').getByRole('button', { name: 'Add Story', exact: true })
+  const collectionTitle = page.locator('.collection-title-row')
+  const addToCollection = collectionTitle.getByRole('button', { name: 'Add Story', exact: true })
   await expect(addToCollection).toBeVisible()
+  const nameBox = (await collectionTitle.getByRole('heading', { name: 'Night reads', exact: true }).boundingBox())!, addBox = (await addToCollection.boundingBox())!
+  expect(addBox.x).toBeGreaterThan(nameBox.x + nameBox.width)
+  expect(Math.abs(addBox.y + addBox.height / 2 - nameBox.y - nameBox.height / 2)).toBeLessThan(1)
   await expect(page.locator('.results-count')).toHaveCount(0)
   await expect(addToCollection.locator('svg')).toHaveCount(0)
   await expect(addToCollection).toHaveCSS('font-size', '13px')
@@ -2593,6 +2601,9 @@ test('collection editors hide custom collections and View Hidden restores them i
   await shelf.getByRole('button', { name: 'Second', exact: true }).click()
   const editor = page.getByRole('dialog', { name: 'Edit Collection', exact: true })
   const hideButton = editor.getByRole('button', { name: 'Hide Collection', exact: true })
+  await expect(hideButton).toHaveCSS('border-radius', '0px')
+  await expect(hideButton).toHaveCSS('width', '44px')
+  await expect(hideButton).toHaveCSS('height', '44px')
   await expect(hideButton.locator('.lucide-eye')).toBeVisible()
   // Read both boxes in one layout pass; initial focus can recenter a tall dialog.
   await expect(async () => {
@@ -3090,7 +3101,7 @@ test('Re-Reading remains in Finished and resumes the same chapter after a pause'
  for (const status of ['to_read','finished','did_not_finish','waiting_for_updates']) {
   const card = page.locator('.work-card').filter({ has: page.getByRole('heading', { name: `Mode ${status}`, exact: true }) })
   await card.getByLabel(`Story Actions for Mode ${status}`).click()
-  await expect(card.getByRole('button', { name: 'Mark as Paused Reading', exact: true })).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Mark as Paused Reading', exact: true })).toHaveCount(0)
   await expect(card.getByRole('button', { name: 'Resume Reading', exact: true })).toHaveCount(0)
   await card.getByLabel(`Story Actions for Mode ${status}`).click()
  }
@@ -3208,7 +3219,7 @@ test('hidden tile icons become menu actions and paused reading stays available',
   await page.addInitScript(() => localStorage.setItem('between-chapters:display:v1', JSON.stringify({ workTile: { order: ['favorite', 'rec'], hidden: ['favorite', 'rec'] }, tagAppearance: { shape: 'sharp', colors: { relationships: '#123456', characters: '#654321', tags: '#abcdef' } } })))
   const tables = await fixture(page)
   tables.works.push({ id: 'menu-work', ao3_work_id: 900, title: 'Tile Options', verified_chapters: {} })
-  tables.library_entries.push({ id: 'menu-entry', work_id: 'menu-work', reading_status: 'to_read', last_read_chapter: 0, is_favorite: false, is_rec: false, notes: '', personal_rating: null, metadata_overrides: { series_memberships: [{ id: 90, name: 'Tile Series', url: 'https://archiveofourown.org/series/90', position: 1 }] }, original_url: 'https://archiveofourown.org/works/900' })
+  tables.library_entries.push({ id: 'menu-entry', work_id: 'menu-work', reading_status: 'reading', last_read_chapter: 0, is_favorite: false, is_rec: false, notes: '', personal_rating: null, metadata_overrides: { series_memberships: [{ id: 90, name: 'Tile Series', url: 'https://archiveofourown.org/series/90', position: 1 }] }, original_url: 'https://archiveofourown.org/works/900' })
   await page.goto('/library'); await login(page)
   const card = page.locator('.work-card')
   await expect(card.locator('.favorite, .bookmark-rec')).toHaveCount(0)
@@ -4001,7 +4012,11 @@ test('filters crossovers, removes applied chips, sorts words, and saves private 
  await page.keyboard.press('Escape')
  const hide=page.getByRole('button',{name:'Hide',exact:true}).first()
  const height=(await hide.boundingBox())!.height
- for (const button of await filters.locator('.filter-choice-row > .button, .form-actions .button').all()) expect((await button.boundingBox())!.height).toBe(height)
+ for (const button of await filters.locator('.filter-choice-row > .button, .filter-reset-actions .button').all()) expect((await button.boundingBox())!.height).toBe(height)
+ for (const button of await filters.locator('.filter-default-actions .button').all()) {
+  expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48)
+  expect(await button.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true)
+ }
  const card=page.locator('[data-story-id="filter-entry-1"]')
  await card.getByLabel('Story Actions for A Short Work',{exact:true}).click()
  await card.getByRole('button',{name:'Change Status to On Hiatus',exact:true}).click()

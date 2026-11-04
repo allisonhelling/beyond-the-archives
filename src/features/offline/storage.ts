@@ -1,11 +1,11 @@
 import type { EditValues } from '../library/edit-merge'
 import { readerBaseUrl } from '../../lib/reader-connection'
-import { blankMetadata, statuses, savedWorkIdentity, type Metadata, type Status, type Story } from '../library/model'
+import { blankMetadata, statuses, savedWorkIdentity, type Collection, type Metadata, type Status, type Story } from '../library/model'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
 export type CloudReaderBook = { favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
 export type OfflineMarking = { id: string; book?: string; entry?: string; base?: EditValues; field: 'favorite' | 'rec'; value: boolean }
-export type OfflineSnapshot = { pendingMarkings?: OfflineMarking[]; cloudBooks?: CloudReaderBook[]; connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
+export type OfflineSnapshot = { collections?: Collection[]; pendingMarkings?: OfflineMarking[]; cloudBooks?: CloudReaderBook[]; connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
 const key = 'bta:offline-hub:v1'
 export const offlineCleared = 'bta:offline-cleared'
 export function readOfflineSnapshot(): OfflineSnapshot | undefined {

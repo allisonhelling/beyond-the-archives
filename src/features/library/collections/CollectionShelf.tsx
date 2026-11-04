@@ -10,8 +10,8 @@ import { defaultShelfDesigns as shelfDesigns, automaticCollectionSpineDesign, de
 
 const heightOrder = [0, 1, 2, 1]
 
-export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange, onAutomaticEdit, showHidden = false }: {
-  items: { id: string; name: string; count?: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null; spineDesign?: SpineDesign; automatic_rules?: Collection['automatic_rules'] }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void | Promise<void>; onAutomaticEdit?: (id: string) => void; showHidden?: boolean
+export function CollectionShelf({ items, selected, disabled, onSelect, editing = false, onEdit, onMove, selectedIds = [], selecting = false, onSelectionChange, onAutomaticEdit, showHidden = false, readOnly = false }: {
+  items: { id: string; name: string; count?: number; countLabel?: string; hidden?: boolean; color?: string | null; symbol?: string | null; spineDesign?: SpineDesign; automatic_rules?: Collection['automatic_rules'] }[]; selected: string; disabled: boolean; onSelect: (id: string) => void; editing?: boolean; onEdit?: (id: string, appearance: CollectionAppearance, shiftKey: boolean, direct?: boolean) => void; selectedIds?: string[]; selecting?: boolean; onSelectionChange?: (ids: string[]) => void; onMove?: (id: string, target: string) => void | Promise<void>; onAutomaticEdit?: (id: string) => void; readOnly?: boolean; showHidden?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [capacity, setCapacity] = useState(1)
@@ -40,7 +40,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   }, [])
   const showAll = editing || expanded
   const displayedItems = items.filter(item => !item.hidden || editing && showHidden)
-  const visible = showAll || mobile ? displayedItems : displayedItems.slice(0, capacity - 1)
+  const visible = displayedItems
   // Reserve the final slot for creation, in both the single and multiple shelf views.
   const customItems = items.filter(item => !shelfSymbols[item.id])
   const appearanceItems = [...customItems].sort((a, b) => a.name.localeCompare(b.name))
@@ -70,7 +70,7 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
       } else onSelect(item.id)
     }}>{selected === item.id && <SpineBookmark />}{selectedIds.includes(item.id) && <span className="collection-selection-mark" aria-hidden="true"><Check size={16} /></span>}<CollectionSpineLabel design={design} name={item.id === 'all' ? item.name.replace(' ', '\n') : item.name} Icon={Icon} count={item.count} /></button>
     return editable ? <div className={`collection-spine-movable${customIndex >= 0 ? ' collection-spine-editor' : ''}`} data-collection-group={customIndex >= 0 ? 'custom' : 'default'} data-collection-id={item.id} data-dragging={drag?.ids.includes(item.id) || undefined} data-drop-target={drag?.target === item.id && !drag.ids.includes(item.id) || undefined} key={item.id} style={drag?.ids.includes(item.id) ? { '--drag-x': `${drag.x}px`, '--drag-y': `${drag.y}px` } as CSSProperties : undefined} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>{spine}</div> : spine
-  }), <NewCollectionButton key="new" label={<CollectionSpineLabel name="New Collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />]
+  }), ...(!readOnly ? [<NewCollectionButton key="new" label={<CollectionSpineLabel name="New Collection" Icon={Plus} />} className={`collection-spine collection-spine-new collection-spine-height-${heightOrder[visible.length % heightOrder.length]}`} disabled={disabled} />] : [])]
   const expandable = !editing && (mobile || displayedItems.length + 1 > capacity)
   const bookendArtwork =
     <svg viewBox="6 0 88 118" aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -88,15 +88,15 @@ export function CollectionShelf({ items, selected, disabled, onSelect, editing =
   const bookend = expandable
     ? <button type="button" key="bookend" className="collection-shelf-toggle" aria-label={expanded ? 'Show Fewer Collections' : 'Show All Collections'} title={expanded ? 'Show Fewer Collections' : 'Show All Collections'} aria-expanded={expanded} aria-controls={shelfId} onClick={() => setExpanded(!expanded)}>{bookendArtwork}</button>
     : <div key="bookend" className="collection-shelf-toggle" aria-hidden="true">{bookendArtwork}</div>
-  const mobileBookend = <div key="bookend" className="collection-shelf-bookend">
-    <NewCollectionButton label={<CollectionSpineLabel name="New Collection" Icon={Plus} design="plain" />} className="collection-spine collection-spine-new collection-spine-mini" disabled={disabled} />
+  const leadingBookend = <div key="bookend" className="collection-shelf-bookend">
+    {!readOnly && <NewCollectionButton label={<CollectionSpineLabel name="New Collection" Icon={Plus} design="plain" />} className="collection-spine collection-spine-new collection-spine-mini" disabled={disabled} />}
     {bookend}
   </div>
-  const shelfContents = mobile ? [mobileBookend, ...spines] : spines
-  const rowSize = mobile && !showAll ? shelfContents.length : capacity
+  const shelfContents = [leadingBookend, ...spines]
+  const rowSize = showAll ? capacity : shelfContents.length
   const rows = Array.from({ length: Math.ceil(shelfContents.length / rowSize) }, (_, index) => shelfContents.slice(index * rowSize, (index + 1) * rowSize))
-  return <nav className={`collection-shelves${showAll ? ' collection-shelves-expanded' : ''}${editing ? ' collection-shelves-editing' : ''}`} aria-label="Library Shelves" style={{ '--collection-shelf-capacity': capacity } as CSSProperties} onClickCapture={preventDragClick}>
+  return <nav className={`collection-shelves${showAll ? ' collection-shelves-expanded' : ''}${editing ? ' collection-shelves-editing' : ''}`} aria-label="Library Shelves" onClickCapture={preventDragClick}>
     {editing && <span id={dragInstructionsId} className="sr-only">Drag to reorder collections in any position. Use Alt plus Left or Right Arrow to move with the keyboard. Press Escape to cancel dragging. Shift-click or Shift-drag to select collections for bulk editing. Start Shift-drag on a selected collection to deselect a range. Drag a selected collection to move the selected group. Press Delete or Backspace to delete selected collections; non-empty collections require confirmation.</span>}
-    <div id={shelfId} className="collection-shelf-rows" ref={shelfRef}>{rows.map((row, index) => <div className="collection-shelf-row" key={index}>{row}{index === 0 && !mobile && bookend}</div>)}</div>
+    <div id={shelfId} className="collection-shelf-rows" ref={shelfRef}>{rows.map((row, index) => <div className="collection-shelf-row" key={index}>{row}</div>)}</div>
   </nav>
 }

@@ -30,7 +30,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; font-size: 13px; font-weight: 550; }
 button, input, select, textarea { border: 1px solid var(--color-control-border); border-radius: var(--radius-control); background: var(--color-surface); padding: 10px 13px; min-height: 44px; }
-button:hover { border-color: var(--color-brand); color: var(--color-brand); }
+button:hover:not(.collection-spine, .primary, .favorite, .bookmark-rec) { border-color: var(--color-brand); color: var(--color-brand); }
 button:disabled { cursor: default; opacity: .5; }
 :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; }
 a { color: var(--color-brand); }
@@ -54,6 +54,7 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .theme-toggle { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 44px; padding: 0; color: var(--color-brand); }
 .connection-state { color: var(--color-muted); }
 .bookshelf { max-width: 1440px; margin: auto; padding: 40px 5vw 0; }
+.reader-authorization { max-width: 540px; margin: 0 auto 40px; padding: 24px; background: var(--color-surface); border: 1px solid var(--color-border); }
 .library-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
 .library-heading p { margin: 0; font-size: 13px; }
 .library-heading > button { padding: 13px 22px; }

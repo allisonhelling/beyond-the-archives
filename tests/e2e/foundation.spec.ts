@@ -312,11 +312,12 @@ test('creates a shared account or continues with an existing reader account',asy
 test('reuses a reader account from organizer Create Account without signing up again',async({page,context})=>{
  let signups=0
  await page.route('**/auth/v1/signup*',route=>{signups++;return route.fulfill({status:400,json:{message:'Should reuse existing account'}})})
- await context.route('**/auth/bridge',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>const target=opener;if(target){addEventListener('message',event=>{if(event.source===target&&event.data.kind==='connected-login-request')target.postMessage({kind:'connected-login-result',nonce:event.data.nonce,code:'${'b'.repeat(64)}'},event.origin)});target.postMessage({kind:'connected-login-ready'},'http://127.0.0.1:4173')}</script>`}))
+ await context.route('**/auth/authorize?*',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><button>Continue to Organizer</button><script>document.querySelector('button').onclick=()=>{const params=new URLSearchParams(location.search),target=new URL('/auth/connected',params.get('target'));target.hash=new URLSearchParams({code:'${'b'.repeat(64)}',state:params.get('state')});location.replace(target.href)}</script>`}))
  await page.route('**/functions/v1/app-login',route=>route.fulfill({json:{access_token:token(),refresh_token:'reader-account-refresh'}}))
  await page.goto('/')
  await page.getByRole('button',{name:'Create Account',exact:true}).click()
  await page.getByRole('button',{name:'Continue From Reader',exact:true}).click()
+ await page.getByRole('button',{name:'Continue to Organizer',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Currently Reading',exact:true})).toBeVisible()
  expect(signups).toBe(0)
 })

@@ -9,6 +9,23 @@ for (const width of [390, 1280]) test(`customizes reading and scrubs chapter pro
  await page.goto('/')
  await page.getByLabel('Import EPUB File').setInputFiles({name:'display.epub',mimeType:'application/epub+zip',buffer:Buffer.from(await createZip(files).arrayBuffer())})
  await expect(page.getByLabel('Book Content')).toBeVisible()
+ await expect(page.getByText('Choose Chapter', { exact: true }).first()).toBeHidden()
+ await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
+ const start = page.getByRole('button', { name: 'Start Reading →', exact: true })
+ const textColor = await start.evaluate(element => getComputedStyle(element).color)
+ await start.hover()
+ await expect(start).toHaveCSS('color', textColor)
+ await page.getByRole('button', { name: 'Manage EPUB', exact: true }).click()
+ const close = page.getByRole('dialog', { name: 'Manage EPUB', exact: true }).getByRole('button', { name: 'Close Dialog', exact: true })
+ await expect(async () => {
+  const offset = await close.evaluate(button => {
+   const box = button.getBoundingClientRect(), icon = button.querySelector('svg')!.getBoundingClientRect()
+   return { x: Math.abs(box.x + box.width / 2 - icon.x - icon.width / 2), y: Math.abs(box.y + box.height / 2 - icon.y - icon.height / 2) }
+  })
+  expect(offset.x).toBeLessThan(1); expect(offset.y).toBeLessThan(1)
+ }).toPass()
+ await close.click()
+ await start.click()
  await page.getByRole('button',{name:'Contents',exact:true}).click()
  const contents=page.getByRole('complementary',{name:'Contents',exact:true})
  await expect(contents.getByRole('button',{name:'Title Page',exact:true})).toBeVisible()

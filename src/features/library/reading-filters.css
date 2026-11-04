@@ -9,7 +9,7 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
 .title-search, .fandom-select { position: relative; min-width: 0; }
 .fandom-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
 .fandom-panel, .search-suggestions { position: absolute; top: 100%; left: 0; z-index: 4; width: max(100%, 280px); max-width: min(400px, calc(100vw - 40px)); border: 1px solid #dfcbc5; border-radius: var(--radius-surface); padding: 14px; margin-top: 7px; background: var(--color-surface); box-shadow: 0 12px 30px #97000015; }
-.fandom-panel { left: auto; right: 0; width: max(100%, 420px); max-width: min(520px, calc(100vw - 40px)); }
+.fandom-panel { left: auto; right: 0; width: max(100%, 560px); max-width: min(680px, calc(100vw - 40px)); }
 .fandom-panel label { display: grid; gap: 8px; font-size: 14px; }
 .fandom-panel input[type=search] { width: 100%; margin: 0; }
 .fandom-options { max-height: 260px; overflow-y: auto; margin: 12px 0; }
@@ -58,7 +58,8 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
   .filter-grid > *, .filter-grid > .suggestion-search, .filter-grid > .updated-filter-section { grid-column: 1; }
   .reading-toolbar > .button, .filter-grid > .button, .filter-grid .filter-toggle { margin-top: 0; }
   .reading-filters { padding: 16px; }
-  .fandom-panel, .search-suggestions { width: 100%; max-width: 100%; }}
+  .search-suggestions { width: 100%; max-width: 100%; }
+  .fandom-panel { width: calc(100vw - 40px); max-width: calc(100vw - 40px); }}
 
 /* Unified dashboard dropdowns and suggestions. */
 .reading-toolbar { padding: 20px; background: var(--color-surface); border: 1px solid #e6c8c1; border-radius: var(--radius-surface); }
@@ -94,9 +95,10 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
 .updated-filter { margin: 0; }
 .within-search-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: center; }
 .reading-filters > .form-actions { margin-top: 28px; }
-.reading-filters > .form-actions .button { min-height: var(--filter-control-height); height: var(--filter-control-height); padding-block: 7px; font-size: var(--filter-control-font-size); line-height: 20px; }
+.reading-filters > .form-actions .button { min-height: var(--filter-action-height, var(--filter-control-height)); height: auto; padding-block: 7px; font-size: var(--filter-control-font-size); line-height: 20px; }
 .filter-default-actions, .filter-reset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.filter-default-actions { margin-right: auto; align-items: stretch; }
+.filter-default-actions { --filter-action-height: 48px; margin-right: auto; align-items: stretch; }
+.filter-reset-actions { margin-left: auto; justify-content: flex-end; }
 .filter-publication-controls { display: flex; flex-wrap: wrap; max-width: 100%; align-items: start; gap: 12px; }
 
 /* Chapter progress opens beneath its trigger, like the other menus. */
@@ -130,7 +132,7 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
 .reading-toolbar { padding: 12px 10px; gap: 8px; grid-template-columns: max-content minmax(130px, 1.2fr) minmax(110px, .8fr) max-content max-content max-content; }
 .reading-toolbar > .button { grid-column: auto; grid-row: auto; align-self: start; }
 .reading-toolbar > .apply-filters { white-space: nowrap; }
-.reading-toolbar > .button, .filter-grid > .button, .filter-toggle, .reading-toolbar .dropdown-compact .button, .reading-filters .dropdown-compact .button, .pagination-trailing .dropdown-compact .button { border-radius: var(--radius-compact-control); min-height: 36px; height: 36px; padding: 7px 10px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); line-height: 20px; }
+.reading-toolbar > .button, .reading-filters .button, .filter-toggle, .reading-toolbar .dropdown-compact .button, .reading-filters .dropdown-compact .button, .pagination-trailing .dropdown-compact .button { border-radius: var(--radius-compact-control); min-height: 36px; height: 36px; padding: 7px 10px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); line-height: 20px; }
 .reading-toolbar[data-mode="reading"] { grid-template-columns: max-content minmax(130px, 1.2fr) minmax(110px, .8fr) max-content max-content; }
 .reading-toolbar .dropdown-compact .dropdown-trigger, .reading-toolbar > .series-toggle, .pagination-trailing .dropdown-compact .dropdown-trigger { padding-inline: 6px; gap: 6px; }
 .reading-toolbar .suggestion-search > .unlabeled-filter { grid-template-columns: minmax(0, 1fr); }
@@ -146,7 +148,7 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
   .reading-toolbar, .reading-toolbar[data-mode="reading"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reading-toolbar > .button { grid-column: auto; justify-self: end; }}
 @media (max-width: 650px) {
-  .reading-toolbar { grid-template-columns: 36px minmax(0, 1fr) max-content; grid-template-areas: 'group search search' 'sort fandom fandom' 'series apply filters'; }
+  .reading-toolbar { grid-template-columns: 36px minmax(0, 1fr) max-content; grid-template-areas: 'group search search' 'sort fandom fandom' 'series series .' '. apply filters'; }
   .reading-toolbar[data-mode="reading"] { grid-template-columns: 36px minmax(0, 1fr) max-content; grid-template-areas: 'group search search' 'sort fandom fandom' '. apply filters'; }
   .reading-toolbar > .custom-dropdown:first-child { grid-area: group; }
   .reading-toolbar > .toolbar-sort { grid-area: sort; }
@@ -154,7 +156,7 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
   .reading-toolbar > .fandom-select { grid-area: fandom; }
   .reading-toolbar > .apply-filters { grid-area: apply; justify-self: end; }
   .reading-toolbar > .filter-toggle { grid-area: filters; justify-self: end; width: auto; }
-  .reading-toolbar > .series-toggle { grid-area: series; justify-self: start; }
+  .reading-toolbar > .series-toggle { grid-area: series; justify-self: start; width: max-content; white-space: nowrap; }
   .reading-filters { padding: 14px; }}
 
 @media (max-width: 400px) {

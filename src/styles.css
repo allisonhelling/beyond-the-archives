@@ -108,7 +108,6 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .library-toolbar { margin: 24px 0; align-items: end; }
 .library-toolbar label { flex: 1; min-width: 180px; }
 .filter-input.select-fit, .story-form select.select-fit { width: max-content; max-width: 100%; }
-.library-heading > div { width: 100%; min-width: 0; }
 .story-grid { display: grid; grid-template-columns: repeat(var(--story-grid-columns), minmax(0, 1fr)); gap: var(--story-grid-gap); align-items: stretch; }
 .story-card { padding: 24px; background: var(--color-surface); border: 1px solid #970000; border-radius: var(--radius-work-card); min-width: 0; }
 @media (min-width: 1101px) {
@@ -345,7 +344,6 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .reading-title-row h1 { grid-column: 1; }
   .library-editing { position: relative; }
   .library-editing .custom-dropdown { grid-column: 1; grid-row: 2; }
-  .library-editing .button { padding-inline: 4px; }
   .app-header { gap: 8px; }
   .app-header .brand { min-width: 0; flex: 1; white-space: normal; font-size: 21px; }
   .app-header .brand-subtitle { display: none; }
@@ -356,10 +354,6 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
   .page-heading { flex-wrap: wrap; }
 }
 
-@media (max-width: 360px) {
-  .library-editing { column-gap: 2px; }
-  .library-editing .button { padding-inline: 2px; }
-}
 .reader-availability-filter { max-width: 32rem; }
 .reader-availability-filter .field-help { margin: 6px 0 0; }
 .reading-tiles { --tile-icon-size: 24px; --tile-count-size: 32px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; margin: 26px 0 20px; }
@@ -484,7 +478,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .spine-progress .progress-editor { position: static; }
 .book-spine-footer .chapter-progress-button::after { content: ''; position: absolute; inset: calc(-1 * var(--spine-padding-y)) calc(-1 * var(--spine-gap)) calc(-1 * var(--spine-padding-y)) calc(-1 * var(--spine-padding-x)); cursor: pointer; }
 .book-spine-footer .chapter-progress-button:disabled::after { cursor: not-allowed; }
-.book-spine-footer .chapter-progress-button { min-height: 22px; max-width: 100%; padding: 0 0 3px; color: #fff4de; font: 16px/1.2 var(--font-serif); font-variant-numeric: lining-nums tabular-nums; text-decoration: none; white-space: nowrap; }
+.book-spine-footer .chapter-progress-button { min-height: 22px; max-width: 100%; padding: 0 0 3px; text-align: left; color: #fff4de; font: 16px/1.2 var(--font-serif); font-variant-numeric: lining-nums tabular-nums; text-decoration: none; white-space: nowrap; }
 .book-spine-footer .chapter-progress-button strong { font-weight: 400; }
 .book-spine-footer .chapter-progress-button:hover { text-decoration: underline; text-underline-offset: 4px; }
 .book-spine-footer .chapter-progress-button:focus-visible, .book-spine-footer .spine-action:focus-visible { outline: 2px solid #fff4de; outline-offset: 4px; }
