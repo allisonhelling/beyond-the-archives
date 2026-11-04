@@ -4,9 +4,10 @@ export type CloudEdit = { id: string; key: string; value: unknown; base: number 
 export const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function cloudBookFields(book: BookDetails): Record<string, unknown> {
   // Organizer pairing, copied organizer state, and layout-dependent pixels never leave this installation.
-  const { account: _account, remote: _remote, hasFile: _file, position, history, completed, progress, notes, status, active, favorite, rec, ...manifest } = book
-  void _account; void _remote; void _file
-  return { manifest, favorite: Boolean(favorite), rec: Boolean(rec), progress: progress ?? readerProgress(book), position: { chapter: position.chapter, fraction: position.fraction, textOffset: position.textOffset }, completed, notes, status, active, ...Object.fromEntries(history.map(event => [`history:${event.id}`, event])) }
+  const { account: _account, remote: _remote, hasFile: _file, works, position, history, completed, progress: _progress, notes, status, active, favorite, rec, ...manifest } = book
+  void _account; void _remote; void _file; void _progress
+  const members = works?.map(({ remote: _remote, account: _account, ...work }) => { void _remote; void _account; return work })
+  return { manifest: { ...manifest, ...(members && { works: members }) }, favorite: Boolean(favorite), rec: Boolean(rec), progress: readerProgress(book), position: { chapter: position.chapter, fraction: position.fraction, textOffset: position.textOffset }, completed, notes, status, active, ...Object.fromEntries(history.map(event => [`history:${event.id}`, event])) }
 }
 export function cloudPreferences(preferences: Preferences) {
   const { tagSyncAccount: _account, ...value } = preferences

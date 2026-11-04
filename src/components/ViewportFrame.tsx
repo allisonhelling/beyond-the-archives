@@ -31,7 +31,7 @@ function Frame({ viewport, title, tile, children }: { viewport: PreviewViewport;
   measure()
   return () => { window.removeEventListener('resize', measure); styles.disconnect(); observer.disconnect() }
  }, [root, tile, viewport.width, viewport.height])
- const scale = Math.min(1, bounds.available / bounds.width, bounds.availableHeight / bounds.height)
+ const scale = Math.min(1, bounds.available / bounds.width, tile ? 1 : bounds.availableHeight / bounds.height)
  const variables = { '--preview-width': `${viewport.width}px`, '--preview-height': `${tile ? Math.max(viewport.height, bounds.height + bounds.y + 40) : viewport.height}px`, '--preview-scale': scale, '--preview-offset-x': `${-bounds.x}px`, '--preview-offset-y': `${-bounds.y}px`, '--preview-crop-width': `${bounds.width}px`, '--preview-crop-height': `${bounds.height * scale}px` } as CSSProperties
  return <div ref={container} className="viewport-preview" style={variables}>
   <div className="viewport-preview-crop"><iframe ref={frame} title={title} className="viewport-preview-frame" srcDoc="<!doctype html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'></head><body><main class='app-main'></main></body></html>" onLoad={() => { const doc = frame.current?.contentDocument; if (doc) { doc.body.className = 'viewport-preview-document'; setRoot(doc.querySelector('main')) } }} /></div>

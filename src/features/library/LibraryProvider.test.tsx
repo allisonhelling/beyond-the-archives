@@ -305,6 +305,24 @@ it('checks the server on tab return, invalidates older pages, and ignores late r
  expect(view.result.current.revisionError).toBe('')
 })
 
+it('checks revisions when returning from another page without waiting for the polling interval', async () => {
+ const view = renderHook(() => ({ library: useLibrary(), navigate: useNavigate() }), { wrapper })
+ await waitFor(() => expect(view.result.current.library.loading).toBe(false))
+ await act(() => view.result.current.library.checkRevision(true))
+ const signal = new AbortController().signal
+ await act(() => view.result.current.library.fetchPage(query, 1, 50, signal))
+ await act(() => view.result.current.navigate('/offline'))
+ expect(view.result.current.library.hasCachedPage(query, 1, 50)).toBe(true)
+ mocks.revision.mockResolvedValue(1)
+ mocks.navigation.mockResolvedValue({ counts: {}, revision: 1 })
+ const checks = mocks.revision.mock.calls.length
+ await act(() => view.result.current.navigate('/offline?sort=title'))
+ expect(mocks.revision).toHaveBeenCalledTimes(checks)
+ expect(view.result.current.library.hasCachedPage(query, 1, 50)).toBe(true)
+ await act(() => view.result.current.navigate('/library'))
+ await waitFor(() => expect(view.result.current.library.hasCachedPage(query, 1, 50)).toBe(false))
+})
+
 it('coalesces simultaneous revision checks and retains counts after a navigation refresh fails', async () => {
  const view = renderHook(() => useLibrary(),{wrapper})
  await waitFor(() => expect(view.result.current.loading).toBe(false))

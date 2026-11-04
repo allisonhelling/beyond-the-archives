@@ -1,11 +1,12 @@
 import { authSessionStorage } from '../../src/lib/auth-session-storage'
+import { chapterContent, retainedContents, withAnthologyMetadata } from './anthology'
 import { initialAuthIntent } from '../../src/lib/auth-account'
 import type { Database, Json } from '../../src/types/database'
 import { createClient } from '@supabase/supabase-js'
 import { readPublicConfig } from '../../src/lib/config'
 import { enableOrganizerSync, hostedOrganizer } from '../../src/lib/reader-connection'
 import { type CloudEdit, type CloudValue } from './cloud-model'
-import { defaultPreferences, withReadingProgress, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
+import { isAnthology, retainWorkLinks, defaultPreferences, withReadingProgress, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
 import { readerInstallationId, acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
 import { digest, importEpub } from './epub'
 
@@ -197,10 +198,10 @@ async function applyRemote(row: CloudValue) {
         const current = request.result as BookDetails | undefined
         if (field === 'manifest') {
           const manifest = row.value as Omit<BookDetails,'hasFile'>
-          putBook(tx, current ? {...current,...manifest,id,workId:current.workId ?? manifest.workId ?? null} : {...manifest,id,hasFile:false,position:{chapter:manifest.chapters[0]?.id ?? '',fraction:0},history:[],completed:[],notes:'',status:'to_read',active:true}, true)
+          putBook(tx, current ? withAnthologyMetadata({...current,...manifest,id,works:retainWorkLinks(manifest.works,current.works),workId:isAnthology(manifest) ? null : current.workId ?? manifest.workId ?? null}) : {...manifest,id,hasFile:false,position:{chapter:manifest.chapters[0]?.id ?? '',fraction:0},history:[],completed:[],notes:'',status:'to_read',active:true}, true)
         } else if (current) {
           const next = field.startsWith('history:') ? {...current,history:[...current.history.filter(event => event.id !== field.slice(8)),row.value as BookDetails['history'][number]]} : {...current,[field]:row.value}
-          putBook(tx,field === 'progress' && typeof row.value === 'number' ? withReadingProgress(next,row.value) : next,true)
+          putBook(tx,field === 'progress' && typeof row.value === 'number' && !isAnthology(next) ? withReadingProgress(next,row.value) : next,true)
         }
       }
     }
@@ -240,7 +241,8 @@ export async function downloadCloud(id: string) {
       if(!current) return
       const repaired=current.chapterVersion !== imported.chapterVersion
       const workId=current.workId ?? imported.workId, identified=workId !== current.workId
-      putBook(tx,{...imported,...current,workId,...(repaired ? repairChapterState(current,imported.chapters) : {}),file:data,resources:imported.resources,chapters:imported.chapters,chapterVersion:imported.chapterVersion},!repaired && !identified)
+      const chapters = retainedContents(current,imported.chapters)
+      putBook(tx,withAnthologyMetadata({...imported,...current,metadata:repaired && isAnthology(imported) && !current.contentsReviewed ? imported.metadata : current.metadata,works:current.contentsReviewed ? current.works : retainWorkLinks(imported.works,current.works),workId,...(repaired ? repairChapterState(current,chapters) : {}),file:data,resources:imported.resources,chapters:chapterContent(imported.chapters,chapters),chapterVersion:imported.chapterVersion}),!repaired && !identified)
     }
     tx.objectStore('settings').put({id:`cloud-file:${id}`,value:true})
   })

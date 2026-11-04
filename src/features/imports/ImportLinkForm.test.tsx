@@ -7,13 +7,18 @@ vi.mock('./repository', () => ({ submitImport: mocks.submit, importHistory: mock
 vi.mock('../library/LibraryProvider', () => ({ useLibrary: () => ({ refresh: mocks.refresh, refreshSeries: mocks.refresh }) }))
 import { ImportLinkForm } from './ImportLinkForm'
 
-function show() {
-  return render(<MemoryRouter><Routes>
+function show(entry = '/') {
+  return render(<MemoryRouter initialEntries={[entry]}><Routes>
     <Route path="/" element={<ImportLinkForm />} />
     <Route path="/imports" element={<h1>Choose series works</h1>} />
     <Route path="/stories/entry" element={<h1>Saved fic metadata</h1>} />
   </Routes></MemoryRouter>)
 }
+it('prefills an explicit reader work link without starting an import', () => {
+ show('/?url=https%3A%2F%2Farchiveofourown.org%2Fworks%2F91002')
+ expect(screen.getByRole('textbox',{name:'AO3 Work or Series Link'})).toHaveValue('https://archiveofourown.org/works/91002')
+ expect(mocks.submit).not.toHaveBeenCalled()
+})
 async function submit() {
   fireEvent.change(screen.getByRole('textbox', { name: 'AO3 Work or Series Link' }), { target: { value: 'https://archiveofourown.org/works/123' } })
   fireEvent.click(screen.getByRole('button', { name: 'Import from Link' }))

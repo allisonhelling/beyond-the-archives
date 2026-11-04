@@ -120,6 +120,14 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 .work-details-list dt { font-weight: 600; }
 .work-details-list dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .work-details-list ul { margin: 0; padding-left: 18px; }
+.anthology-summary { color: var(--color-muted); font-size: 13px; margin-block: 8px; }
+.anthology-sections { display: grid; gap: 16px; padding-left: 24px; }
+.anthology-sections fieldset, .epub-choices { display: grid; min-width: 0; gap: 12px; border: 1px solid var(--color-border); padding: 12px; }
+.anthology-sections legend { overflow-wrap: anywhere; }
+.epub-choices label { flex-direction: row; align-items: flex-start; }
+.epub-choices input { width: auto; flex: 0 0 auto; margin-top: 4px; }
+.epub-choices span { min-width: 0; overflow-wrap: anywhere; }
+.epub-choices small { display: block; }
 .availability { display: inline-flex; align-items: center; gap: 4px; color: var(--color-muted); font-size: 11px; white-space: nowrap; }
 .story-card h2 { flex: 1; min-width: 0; margin: 2px 0 5px; font-size: 22px; overflow-wrap: anywhere; }
 .series-link { color: var(--color-brand); }
@@ -324,7 +332,7 @@ input[type=range] { padding: 0; border: 0; border-radius: 0; background: transpa
 @media (max-width: 650px) {
   .reading-screen[data-reading-layout=scroll] { height: calc(100dvh + 1px); }
   .reading-screen .reader-toolbar { position: absolute; inset: 0 0 auto; padding: max(8px, env(safe-area-inset-top)) 10px 8px; gap: 6px; flex-wrap: nowrap; }
-  .reader-toolbar .reader-control-label, .reader-toolbar .reader-work-status, .reader-toolbar .reading-title small, .reader-toolbar .toolbar-mark-read { display: none; }
+  .reader-toolbar .reader-control-label, .reader-toolbar .reader-work-status, .reader-toolbar .reading-title small:not(.current-anthology-work), .reader-toolbar .toolbar-mark-read { display: none; }
   .reader-toolbar > button { padding: 6px; min-width: 36px; border: 0; background: transparent; }
   .reader-toolbar .reading-title { flex: 1; min-width: 0; }
   .reader-toolbar .chapter-progress-button { padding: 4px; font-size: 11px; white-space: nowrap; }

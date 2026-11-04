@@ -339,7 +339,12 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     const timer = setInterval(fallback, revisionCheckInterval)
     return () => { clearInterval(timer); window.removeEventListener('focus', returned); document.removeEventListener('visibilitychange', returned) }
   }, [checkRevision])
-  useEffect(() => { void checkRevision() }, [location.pathname, location.search, checkRevision])
+  const revisionPath = useRef(location.pathname)
+  useEffect(() => {
+    const changedPage = revisionPath.current !== location.pathname
+    revisionPath.current = location.pathname
+    void checkRevision(changedPage)
+  }, [location.pathname, location.search, checkRevision])
   const [undoNotices, setUndoNotices] = useState<ReadingUndo[]>([])
   const noticeUrl = location.pathname + location.search
   const [noticeLocation, setNoticeLocation] = useState(noticeUrl)

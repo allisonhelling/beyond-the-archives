@@ -136,7 +136,7 @@ test('pulls AO3 chapter progress into the downloaded EPUB and opens the requeste
  expect(writes).toHaveLength(0)
  await page.goto('/?work=8001&chapter=3')
  await expect(page.getByLabel('Book Content')).toBeVisible()
- await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Ch. 2 / 3')
+ await expect(page.locator('.reader-toolbar .chapter-progress-button')).toHaveText('Chapter 2 / 3')
  await expect(page.getByRole('button',{name:'Mark As Read',exact:true})).toBeEnabled()
  await page.getByRole('button',{name:'Mark As Read',exact:true}).click()
  await expect.poll(()=>writes.length).toBe(1)

@@ -71,6 +71,22 @@ async function dragInformation(page: Page, source: Locator, destination: Locator
   expect(placed.y).toBeCloseTo(projected!.y, 0)
 }
 
+test('tile editors keep readable widths below the fold and in short windows', async ({ page }) => {
+  await setup(page)
+  for (const height of [900, 400]) {
+    await page.setViewportSize({ width: page.viewportSize()!.width, height })
+    for (const preview of await page.locator('.display-device-editor .viewport-preview').all()) {
+      const surface = preview.frameLocator('iframe').locator('.display-edit-surface')
+      await expect(surface).toBeVisible()
+      await expect(async () => {
+        const available = await preview.evaluate(element => element.clientWidth)
+        const natural = await surface.evaluate(element => element.getBoundingClientRect().width)
+        expect((await surface.boundingBox())!.width).toBeCloseTo(Math.min(available, natural), 0)
+      }).toPass()
+    }
+  }
+})
+
 test('full work and series tiles expand on demand, hide/show outside the preview, and save drafts explicitly', async ({ page }, info) => {
   test.setTimeout(60000) // Save/cancel drafts, reload twice, and verify the live tiles.
   await setup(page)

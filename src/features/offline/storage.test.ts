@@ -25,3 +25,13 @@ it('keeps cloud books without AO3 identities and reuses the shared manual-link r
  const recovered={...unlinked,metadata:{...unlinked.metadata,manual_url:'https://archiveofourown.org/works/81234'}}
  expect(offlineStories({...snapshot,cloudBooks:[recovered]})[0].work.ao3_work_id).toBe(81234)
 })
+
+it('retains separate organizer work tiles for anthology members without duplicating the bundle', () => {
+ const first={...exampleWork,id:'one',work:{...exampleWork.work,ao3_work_id:81234}}
+ const second={...exampleWork,id:'two',work:{...exampleWork.work,ao3_work_id:81235}}
+ const anthology={...book,workId:null,workCount:2,workIds:['81234','81235']}
+ expect(offlineStories({...snapshot,stories:[first,second],cloudBooks:[anthology]})).toEqual([first,second])
+ const partial=offlineStories({...snapshot,stories:[first],cloudBooks:[anthology]})
+ expect(partial).toHaveLength(2)
+ expect(partial[1].work.ao3_work_id).toBeNull()
+})

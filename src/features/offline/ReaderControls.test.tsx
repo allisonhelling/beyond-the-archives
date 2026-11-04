@@ -73,3 +73,12 @@ it('uses the matching reader and requested chapter for the shared spine shortcut
  fireEvent.focus(link)
  expect(await screen.findByRole('tooltip')).toHaveTextContent('Read Chapter 4 in EPUB')
 })
+
+it('opens individual work tiles through an uploaded cloud anthology without a download report', () => {
+ mocks.connected=true
+ mocks.cloudBooks=[{id:'a'.repeat(64),workId:null,workCount:2,workIds:['123','456'],metadata:blankMetadata,status:'reading',notes:'',completedCount:1}]
+ render(<MemoryRouter><ReadEpub workId={123} variant="spine" chapter={2} /><ReadEpub workId={456} /><ReaderControls hub /></MemoryRouter>)
+ expect(screen.getByRole('link',{name:'Read Chapter 2 in EPUB'})).toHaveAttribute('href',expect.stringContaining('?work=123&chapter=2'))
+ expect(screen.getByRole('link',{name:'Open in Reader'})).toHaveAttribute('href',expect.stringContaining('?work=456'))
+ expect(screen.getByText(/2 works saved in the reader cloud/)).toBeVisible()
+})

@@ -19,7 +19,7 @@ export function ImportLinkForm() {
   const library = useLibrary(), { refresh } = library
   const location = useLocation()
   const navigate = useNavigate()
-  const initialUrl = typeof location.state?.workUrl === 'string' ? location.state.workUrl : ''
+  const initialUrl = typeof location.state?.workUrl === 'string' ? location.state.workUrl : new URLSearchParams(location.search).get('url') ?? ''
   const [url, setUrl] = useState(initialUrl), [batch, setBatch] = useState(''), [item, setItem] = useState<ImportItem>()
   const [source, setSource] = useState<'ao3' | 'wayback'>(() => waybackSnapshot(initialUrl) ? 'wayback' : 'ao3')
   const [reviewing, setReviewing] = useState(''), [multiple, setMultiple] = useState(false), [finishedBatch, setFinishedBatch] = useState(false), [entries, setEntries] = useState<string[]>([])

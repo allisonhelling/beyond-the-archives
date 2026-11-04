@@ -71,7 +71,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   async function mark(story: Story, field: 'favorite' | 'rec', value: boolean) {
     const current = readOfflineSnapshot()
     if (!current || userId && current.userId !== userId) throw new Error('Open the matching library to save markings.')
-    const book = current.cloudBooks?.find(book => story.id === `reader-cloud-${book.id}` || Boolean(savedWorkIdentity(book) && savedWorkIdentity(book) === String(story.work.ao3_work_id)))
+    const book = current.cloudBooks?.find(book => story.id === `reader-cloud-${book.id}` || Boolean((book.workCount ?? 0) <= 1 && savedWorkIdentity(book) && savedWorkIdentity(book) === String(story.work.ao3_work_id)))
     if (story.id.startsWith('reader-cloud-') && !book) throw new Error('Refresh the reader library before changing this work.')
     const edit: OfflineMarking = { id: crypto.randomUUID(), ...(!story.id.startsWith('reader-cloud-') ? { entry: story.id, base: { [field]: Boolean(field === 'favorite' ? story.is_favorite : story.is_rec) } } : book ? { book: book.id } : {}), field, value }
     generation.current++

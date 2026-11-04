@@ -92,6 +92,30 @@ it('includes active cloud originals with no installation report and excludes del
  expect(snapshot.cloudBooks[0].completedCount).toBe(3)
  expect(snapshot.stories.some(story=>story.work.ao3_work_id===8002)).toBe(true)
 })
+it('exposes only uploaded anthology member identities and retains the owner’s individual work tiles', async () => {
+ await db.exec('reset role;begin')
+ try {
+  const hash='1'.repeat(64)
+  await db.query('insert into public.reader_organizer_links(user_id) values($1) on conflict do nothing',[owner])
+  await db.query('delete from public.reader_availability where user_id=$1',[owner])
+  await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3)',[owner,`${hash}/manifest`,JSON.stringify({id:hash,workId:null,active:true,metadata:{title:'Three Fic Anthology'},works:[{workId:'8001'},{workId:'8002'},{workId:null}]})])
+  await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${owner}/${hash}.epub`])
+  await asUser()
+  const snapshot=(await db.query<{result:{cloudBooks:{id:string;workId:string|null;workIds:string[];workCount:number}[];stories:{work:{ao3_work_id:number}}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result
+  const anthology=snapshot.cloudBooks.find(book=>book.id===hash)!
+  expect(anthology.workId).toBeNull()
+  expect(anthology.workCount).toBe(3)
+  expect(anthology.workIds.sort()).toEqual(['8001','8002'])
+  expect(snapshot.stories.map(story=>story.work.ao3_work_id)).toEqual(expect.arrayContaining([8001,8002]))
+  await asUser(other)
+  expect((await db.query<{result:{cloudBooks:{id:string}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result.cloudBooks.some(book=>book.id===hash)).toBe(false)
+  await db.exec('reset role')
+  await db.query('delete from storage.objects where name=$1',[`${owner}/${hash}.epub`])
+  await asUser()
+  expect((await db.query<{result:{cloudBooks:{id:string}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result.cloudBooks.some(book=>book.id===hash)).toBe(false)
+ } finally {await db.exec('rollback')}
+})
+
 it('disconnects registered and reporting readers, preserves cloud data and other companions, and prevents reconnect through revoked secrets', async () => {
  await report(['8001']);await asUser()
  const unrelated=(await db.query<{result:{code:string}}>("select public.manage_userscript_device('create','Browser Companion') result")).rows[0].result.code

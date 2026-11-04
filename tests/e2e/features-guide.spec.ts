@@ -2,6 +2,7 @@ import { blankMetadata } from '../../src/features/library/model'
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
+import { libraryQueryFixture } from './library-query-fixture'
 
 test('features guide links to every current workflow on desktop and mobile', async ({ page }) => {
  await fixture(page)
@@ -314,6 +315,13 @@ test('offline shows cloud-only reader works and disconnects without deleting boo
 test('offline footers show organizer progress and refresh AO3 reading changes',async({page})=>{
  await page.clock.install()
  const tables=await fixture(page)
+ let revision=0
+ await page.route('**/rest/v1/rpc/*',route=>{
+  const name=new URL(route.request().url()).pathname.split('/').at(-1)!
+  if(name==='library_revision')return route.fulfill({json:revision})
+  if(name==='query_library'||name==='library_navigation_snapshot')return route.fulfill({json:{...libraryQueryFixture(name,route.request().postDataJSON(),tables) as Record<string,unknown>,revision}})
+  return route.fallback()
+ })
  const work={id:'progress-offline-work',ao3_work_id:88001,verified_chapters:{1:'88011',2:'88012',3:'88013'}}
  const entry={id:'progress-offline-entry',work_id:work.id,reading_status:'reading',last_read_chapter:1,notes:'Keep notes',created_at:'2026-11-02T00:00:00Z',original_url:'https://archiveofourown.org/works/88001',metadata_overrides:{title:'Connected Progress',publication_status:'complete',published_chapters:3,total_chapters:3}}
  tables.works.push(work);tables.library_entries.push(entry)
@@ -330,10 +338,12 @@ test('offline footers show organizer progress and refresh AO3 reading changes',a
  await expect(footer.getByRole('button',{name:'Mark as Caught Up'})).toBeDisabled()
  // The AO3 companion saves into this same organizer row while the hub is open.
  entry.last_read_chapter=2
+ revision++
  await page.clock.runFor(30001)
  await expect(footer.locator('.chapter-progress-button')).toHaveText('Ch. 2 / 3')
  await expect(footer.getByRole('link',{name:'Read Chapter 3 in EPUB'})).toHaveAttribute('href','https://reader.example/?work=88001&chapter=3')
  entry.last_read_chapter=3;entry.reading_status='finished'
+ revision++
  await page.getByRole('button',{name:'Refresh Reader Reports',exact:true}).click()
  await expect(footer.getByRole('img',{name:'Finished',exact:true})).toBeVisible()
  await expect(footer.getByRole('link',{name:'Read Chapter 1 in EPUB'})).toHaveAttribute('href','https://reader.example/?work=88001&chapter=1')

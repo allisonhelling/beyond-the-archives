@@ -1,8 +1,9 @@
 import { parseWorkUrl } from '../../src/features/imports/urls'
-import { savedWorkIdentity } from '../../src/features/library/model'
+import { savedWorkIdentity } from './metadata'
 import { importEpub } from './epub'
 import { mergeMetadata, metadataVersion } from './metadata'
-import { repairChapterState, replaceBook, type Book, type BookDetails } from './model'
+import { isAnthology, repairChapterState, replaceBook, type Book, type BookDetails } from './model'
+import { retainedContents, withAnthologyMetadata } from './anthology'
 import { bookStores, getBookDetails, listCatalog, putBook, loadSetting, restoreDeletedVersion, deleteBook, transaction } from './storage'
 
 // Manual imports and both Calibre transports resolve identities in the same place.
@@ -24,6 +25,7 @@ export async function prepareImportVersion<T extends Book | BookDetails>(version
     const embeddedId = savedWorkIdentity(version)
     if (linkedId && embeddedId && linkedId !== embeddedId) throw new Error('Calibre Work Link identifies a different AO3 work from this EPUB. Check the column before replacing it.')
   }
+  if (isAnthology(version) && linkedId) throw new Error('An anthology contains several works. Link each fic through Review Anthology Contents instead of assigning one AO3 link to the entire EPUB.')
   const next = { ...version, calibreId: calibreId ?? version.calibreId, workId: linkedId ?? version.workId, metadata: { ...version.metadata, ...(link && { calibre_work_link: link }) } }
   const saved = await listCatalog()
   if ((await loadSetting<{value:unknown}>(`cloud-edit:${next.id}/deleted`))?.value === true) throw new Error('Cloud deletion of this EPUB is pending. Sync the account before importing this version again.')
@@ -43,7 +45,7 @@ export function importedVersion<T extends Book | BookDetails>(next: T, previous?
   if (!previous) return next
   if (previous.id !== next.id) return replaceBook(previous, next)
   const repaired = previous.chapterVersion !== next.chapterVersion ? repairChapterState(previous,next.chapters) : {}
-  return { ...next, ...previous, ...repaired, workId: previous.workId ?? next.workId, calibreId: next.calibreId ?? previous.calibreId, metadata: mergeMetadata(previous.metadata, next.metadata), metadataVersion, chapters: next.chapters, chapterVersion: next.chapterVersion }
+  return withAnthologyMetadata({ ...next, ...previous, ...repaired, works: previous.contentsReviewed ? previous.works : next.works, workId: previous.workId ?? next.workId, calibreId: next.calibreId ?? previous.calibreId, metadata: mergeMetadata(previous.metadata, next.metadata), metadataVersion, chapters: retainedContents(previous, next.chapters) as T['chapters'], chapterVersion: next.chapterVersion })
 }
 export function writeImport(tx: IDBTransaction, saved: Book | BookDetails, old?: BookDetails, replace: boolean | 'delete' = false) {
   // A restored hash is the same book, not a second version to deactivate.

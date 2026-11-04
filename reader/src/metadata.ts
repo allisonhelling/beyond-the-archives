@@ -190,4 +190,7 @@ export function mergeMetadata<T extends Partial<ReaderMetadata>>(base: T, extra:
   return { ...base, ...fields }
 }
 
-export { savedWorkIdentity } from '../../src/features/library/model'
+import { savedWorkIdentity as sourceWorkIdentity } from '../../src/features/library/model'
+export function savedWorkIdentity(book: Parameters<typeof sourceWorkIdentity>[0] & { works?: unknown[] }) {
+  return (book.works?.length ?? 0) > 1 ? null : sourceWorkIdentity(book)
+}

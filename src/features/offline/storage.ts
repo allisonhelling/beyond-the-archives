@@ -1,9 +1,10 @@
 import type { EditValues } from '../library/edit-merge'
 import { readerBaseUrl } from '../../lib/reader-connection'
+import { readerWorkIdentities } from '../../lib/reader-work-identities'
 import { blankMetadata, statuses, savedWorkIdentity, type Collection, type Metadata, type Status, type Story } from '../library/model'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
-export type CloudReaderBook = { favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
+export type CloudReaderBook = { workIds?: string[]; workCount?: number; favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
 export type OfflineMarking = { id: string; book?: string; entry?: string; base?: EditValues; field: 'favorite' | 'rec'; value: boolean }
 export type OfflineSnapshot = { collections?: Collection[]; pendingMarkings?: OfflineMarking[]; cloudBooks?: CloudReaderBook[]; connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
 const key = 'bta:offline-hub:v1'
@@ -27,11 +28,13 @@ export function readerWorkUrl(readerUrl: string, work: string | number, paramete
 export function offlineStories(snapshot?: OfflineSnapshot): Story[] {
   if (!snapshot) return []
   const cloudBooks = [...(snapshot.cloudBooks ?? [])].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
-  const available = new Set([...snapshot.readers.flatMap(reader => reader.works), ...cloudBooks.flatMap(book => savedWorkIdentity(book) ?? [])])
+  const available = new Set([...snapshot.readers.flatMap(reader => reader.works), ...cloudBooks.flatMap(readerWorkIdentities)])
   const stories = snapshot.stories.filter(story => available.has(String(story.work.ao3_work_id)))
   const seen = new Set(stories.map(story => String(story.work.ao3_work_id)))
   for (const book of cloudBooks) {
-    const workId = savedWorkIdentity(book), key = workId ?? book.id
+    const members = readerWorkIdentities(book)
+    if ((book.workCount ?? 0) > 1 && members.length === book.workCount && members.every(id => seen.has(id))) continue
+    const workId = (book.workCount ?? 0) > 1 ? null : savedWorkIdentity(book), key = workId ?? book.id
     if (seen.has(key)) continue
     seen.add(key)
     const id = `reader-cloud-${book.id}`, url = workId ? `https://archiveofourown.org/works/${workId}` : ''

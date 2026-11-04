@@ -1,4 +1,5 @@
 import { savedWorkIdentity } from '../library/model'
+import { readerWorkIdentities } from '../../lib/reader-work-identities'
 import { useEffect, useState } from 'react'
 import { Dropdown } from '../../components/Dropdown'
 import { BookOpen } from 'lucide-react'
@@ -22,7 +23,7 @@ export function ReaderControls({ hub = false }: { hub?: boolean }) {
   const reports = hub ? snapshot?.readers ?? [] : reader ? [reader] : []
   const report = reports.map(reader => <p key={reader.id} className="field-help">Last reported by {reader.name}: {new Date(reader.reportedAt).toLocaleString()}. The reader confirms local file availability when opened. This is not verified availability on this device.</p>)
   const errorMessage = error && <p role="status">{error}</p>
-  const cloudWorks = new Set(snapshot?.cloudBooks?.map(book => savedWorkIdentity(book) ?? book.id) ?? [])
+  const cloudWorks = new Set(snapshot?.cloudBooks?.flatMap(book => { const ids = readerWorkIdentities(book); return ids.length ? ids : [book.id] }) ?? [])
   const connected = snapshot?.connected ?? Boolean(snapshot?.readers.length || cloudWorks.size)
   function selectReader(value: string) {
     const next = new URLSearchParams(params)
@@ -44,10 +45,10 @@ export function ReadEpub({ workId, bookId, variant = 'default', chapter }: { wor
   const reports = (snapshot?.connected === false ? [] : snapshot?.readers ?? []).filter(reader => workId !== null && reader.works.includes(String(workId)))
   const reader = reports.find(reader => reader.id === readerId.get('reader')) ?? reports[0]
   if (!workId && !bookId) return null
-  const cloud = snapshot?.connected !== false ? snapshot?.cloudBooks?.find(book => bookId ? book.id === bookId : savedWorkIdentity(book) === String(workId)) : undefined
+  const cloud = snapshot?.connected !== false ? snapshot?.cloudBooks?.find(book => bookId ? book.id === bookId : readerWorkIdentities(book).includes(String(workId))) : undefined
   if (!reader && !cloud) return null
   let href: string
-  const targetWork = workId ?? (cloud ? savedWorkIdentity(cloud) : null)
+  const targetWork = workId ?? (cloud && (cloud.workCount ?? 0) <= 1 ? savedWorkIdentity(cloud) : null)
   try { href = readerWorkUrl(reader?.url ?? (snapshot?.readers[0]?.url || import.meta.env.VITE_READER_URL || hostedReaderUrl), targetWork ?? cloud!.id, targetWork ? 'work' : 'book', chapter) } catch { return <p className="field-help">Reconnect this reader to update its URL.</p> }
   if (variant === 'spine') {
     const label = `Read Chapter ${chapter ?? 1} in EPUB`

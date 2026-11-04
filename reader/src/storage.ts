@@ -1,6 +1,7 @@
 import { cloudBookFields, cloudPreferences, equal, type CloudEdit, type CloudValue } from './cloud-model'
 import { chapterVersion, importEpub } from './epub'
-import { withReadingProgress, repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
+import { chapterContent, retainedContents, withAnthologyMetadata } from './anthology'
+import { isAnthology, retainWorkLinks, withReadingProgress, repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
 
 export const readerOwner = localStorage.getItem('reader-cloud-owner') || ''
 export const bookStores = ['books', 'catalog', 'contents', 'settings']
@@ -52,7 +53,7 @@ export async function getBook(id: string): Promise<Book | undefined> {
       if (!saved?.hasFile || !body?.file) { resolve(undefined); return }
       const { hasFile: _hasFile, ...state } = saved
       void _hasFile
-      resolve({ ...state, ...body })
+      resolve({ ...state, ...body, chapters: chapterContent(body.chapters, state.chapters) })
     }
     tx.onerror = event => reject((event.target as IDBRequest).error ?? tx.error); tx.onabort = () => reject(tx.error)
   })
@@ -70,7 +71,9 @@ export async function getBook(id: string): Promise<Book | undefined> {
       // A concurrent read/removal may already have repaired or removed the file.
       if (!saved?.hasFile || !body?.file || body.chapterVersion === chapterVersion) return
       const current = { ...saved, ...body }
-      putBook(tx, { ...current, workId: current.workId ?? imported.workId, ...repairChapterState(current, imported.chapters), chapters: imported.chapters, resources: imported.resources, chapterVersion })
+      const chapters = retainedContents(current, imported.chapters)
+      const next = { ...current, metadata: isAnthology(imported) && !current.contentsReviewed ? imported.metadata : current.metadata, works: current.contentsReviewed ? current.works : retainWorkLinks(imported.works, current.works), workId: current.workId ?? imported.workId, ...repairChapterState(current, chapters), chapters: chapterContent(imported.chapters, chapters), resources: imported.resources, chapterVersion }
+      putBook(tx, withAnthologyMetadata(isAnthology(next) ? { ...next, progress: undefined } : next))
     }
   })
   return getBook(id)
@@ -91,9 +94,9 @@ export function putBook(tx: IDBTransaction, book: Book | BookDetails, fromCloud 
     else tx.objectStore('contents').delete(book.id)
   }
 }
-export async function saveBook(book: Book | BookDetails, pending?: Pending, preservePosition = false) {
+export async function saveBook(book: Book | BookDetails, pending?: Pending | Pending[], preservePosition = false) {
   await transaction(pending ? [...bookStores, 'pending'] : bookStores, tx => {
-    const save = (value: Book | BookDetails) => { putBook(tx, value); if (pending) tx.objectStore('pending').put(pending) }
+    const save = (value: Book | BookDetails) => { putBook(tx, value); for (const event of pending ? Array.isArray(pending) ? pending : [pending] : []) tx.objectStore('pending').put(event) }
     if (!preservePosition) { save(book); return }
     const request = tx.objectStore('books').get(book.id)
     request.onsuccess = () => save({ ...book, position: request.result?.position ?? book.position })
@@ -166,7 +169,7 @@ export async function acceptCloud(value: CloudValue, edit?: CloudEdit) {
             book.onsuccess = () => {
               if (!book.result) return
               const next = { ...book.result, [field]: value.value }
-              putBook(tx, field === 'progress' && typeof value.value === 'number' ? withReadingProgress(next,value.value) : next, true)
+              putBook(tx, field === 'progress' && typeof value.value === 'number' && !isAnthology(next) ? withReadingProgress(next,value.value) : next, true)
             }
           }
         }

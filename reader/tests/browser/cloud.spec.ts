@@ -185,6 +185,8 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
 
 for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and publishes before acknowledgement (${cloudOnly ? 'cloud only' : 'downloaded'})`,async({browser})=>{
  const context=await browser.newContext();await signedIn(context)
+ // Cloud-inbox checks must not wait on a real local Calibre bridge.
+ await context.route('http://127.0.0.1:47821/**',route=>route.abort())
  let file=Buffer.from(await createZip(epubFiles()).arrayBuffer()),hash=createHash('sha256').update(file).digest('hex')
  const originalHash=hash
  let delivery=0,downloads=0

@@ -1,3 +1,4 @@
+import { readerWorkIdentities } from '../../src/lib/reader-work-identities'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { LibraryProvider, useLibrary } from '../../src/features/library/LibraryProvider'
@@ -33,8 +34,8 @@ function CollectionScope({ books, selected, onScope, onSync, onCounts }: { onCou
   const scope = useMemo(() => {
     if (selected === 'all') return null
     const matches = collectionStories(stories, selected)
-    const ids = new Set(matches.map(story => story.id))
-    return books.filter(book => book.organizerEntryId && ids.has(book.organizerEntryId)).map(book => book.id)
+    const ids = new Set(matches.map(story => String(story.work.ao3_work_id)))
+    return books.filter(book => readerWorkIdentities(book).some(id => ids.has(id))).map(book => book.id)
   }, [books, selected, stories])
   useEffect(() => onScope(scope), [scope, onScope])
   // Shared collections are read directly from the organizer; pull their names

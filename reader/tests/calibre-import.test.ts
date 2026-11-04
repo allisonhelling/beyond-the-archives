@@ -5,9 +5,15 @@ import { importEpub } from '../src/epub'
 import { bookDetails, catalogBook } from '../src/model'
 import { importedVersion, prepareImport, prepareImportVersion } from '../src/import-books'
 import { getBookDetails, listCatalog, loadSetting } from '../src/storage'
+import { anthologyFiles } from './anthology-fixture'
 vi.mock('../src/storage',()=>({getBookDetails:vi.fn(),listCatalog:vi.fn(),loadSetting:vi.fn()}))
 beforeAll(()=>{Object.defineProperty(globalThis,'crypto',{value:webcrypto})})
 async function fixture(){const buffer=await epubBuffer();return {size:buffer.byteLength,arrayBuffer:async()=>buffer} as File}
+it('keeps anthology imports from being assigned one Calibre AO3 work link', async () => {
+ const buffer = await epubBuffer(anthologyFiles())
+ const book = await importEpub({size:buffer.byteLength,arrayBuffer:async()=>buffer} as File)
+ await expect(prepareImportVersion(book,undefined,'calibre-anthology','https://archiveofourown.org/works/91001')).rejects.toThrow('Link each fic')
+})
 it('restores an exact removed download with its notes, history, active state, and position',async()=>{
  const next=await importEpub(await fixture()), previous=bookDetails(next)
  previous.hasFile=false;previous.active=false;previous.notes='Keep me';previous.position={chapter:previous.chapters[1].id,fraction:.7};previous.history=[{id:'event',chapter:previous.chapters[1].id,at:'2026-01-01',words:4,reread:false}]

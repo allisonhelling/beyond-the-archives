@@ -58,6 +58,20 @@ Search and filter edits remain pending until you choose **Apply** in the bookshe
 
 The circular **Profile Menu** also contains **Reader Account**, **Organizer & Sync**, and **Customize Tiles**. Publisher names display as **AO3** for archiveofourown.org.
 
+
+## Anthologies
+
+A detected anthology stays one EPUB with separate work and chapter counts: three fics containing three, one, and one chapters display **Anthology · 3 Works · 5 Chapters**. Title pages, covers, contents, and standalone notes stay navigable without increasing chapter totals. Contents groups chapters under each fic, and the reading header shows the current fic’s chapter position alongside aggregate anthology progress. Finishing all chapters finishes this downloaded anthology; each fic keeps its own organizer reading status.
+
+Use **Manage EPUB → Review Anthology Contents**, or the same button in **View Details**, to correct where works begin, their titles and optional AO3 links, and each section’s type. Counts recalculate from the structure; there is no separate total to maintain. Save applies corrections; Cancel leaves the EPUB unchanged. The original EPUB and reading history are retained. Saved corrections follow the reader cloud library and survive downloading the same file again. Older local downloads gain automatic detection when opened.
+
+When connected, identified fics link independently to existing organizer entries. Reading Fic 1 updates that fic’s progress, without finishing Fics 2 and 3. Unknown identities stay local until corrected, and uncertain chapter mappings preserve organizer progress. Explicit numeric corrections and confirmed file ordering can sync numeric progress without manufacturing organizer chapter-read history. Anthologies cannot be assigned a single organizer work link, including through a Calibre Work Link column; review individual fic links instead.
+
+
+In anthology **View Details**, each matched fic has **View in Organizer** and **Read This Fic** actions. A confirmed missing entry shows **Not in Organizer** and **Add to Organizer**, which opens Add Story with the AO3 URL filled in; you still choose **Import from Link** to add it. Missing identities lead to **Review Anthology Contents**. **Refresh Organizer Links** checks again after adding a fic.
+
+The organizer’s EPUB action opens the matching fic inside the anthology at its requested or next unread chapter. If several EPUBs contain that fic, **Choose EPUB** lists active downloads first, followed by retained downloads and cloud copies. Choose **Remember This Choice for This Work** to reuse that copy on this installation; choices are isolated by reader account and work. Use **Read This Fic** in View Details to choose another copy. A cloud-only choice downloads before opening; offline choices require a local download. Uploaded anthology members can expose the organizer’s EPUB action before any installation has downloaded the bundle.
+
 ## Tag Format
 
 Open the circular **Profile Menu** in the bookshelf header, then choose **Tag Format**. Choose **Filled Chips** (the reader default), **Rounded Pill**, **Curved Rectangles**, **Sharp Rectangles**, **Text With Bullet Separators**, or **Text With Comma Separators**. The choice applies to shelf tags, detail tags, and applied-filter chips and is saved on this reader. Tags flow together without category headings. Non-filled styles use category colors; Filled Chips uses the Additional Tags color for every tag. Use the shared color pickers and **Save Colors** to save independent reader colors. Tag search and +# more expansion continue to work in every style.

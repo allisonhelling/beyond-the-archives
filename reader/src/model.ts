@@ -3,41 +3,69 @@ import { caughtUpReadingStatus, type Metadata, type Status } from '../../src/fea
 export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
 export type ReaderMetadata = Metadata & { calibre_work_link?: string; ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
-export type Chapter = { workTitle?: string; workStart?: boolean; kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
+export type Chapter = { displayNumber?: number; sourceWorkId?: string; workKey?: string; sectionType?: 'title' | 'notes' | 'other'; workTitle?: string; workStart?: boolean; kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
+export type AnthologyWork = { key: string; title: string; workId: string | null; metadata: ReaderMetadata; status?: Status; progress?: number; remote?: Remote; account?: string }
 export type Remote = { favorite?: boolean; rec?: boolean; publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }
 export type ReadingPosition = { chapter: string; fraction: number; textOffset?: number; textTop?: number; viewport?: { font?: string; lineHeight?: number; layout: Preferences['layout']; content: Preferences['content']; size: number; width: number; widthPx: number; heightPx: number; scrollHeight: number; scrollWidth: number; scrollTop: number; scrollLeft: number } }
 export function chapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
   if (chapter.kind === 'frontmatter') return null
+  if (chapter.workKey) chapters = chapters.filter(item => item.workKey === chapter.workKey)
   return chapter.number ?? (Number(chapter.title.match(/^Chapter\s+(\d+)(?:\b|:)/i)?.[1]) || chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length)
 }
+export function chapterPosition(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
+  if (chapter.kind === 'frontmatter') return null
+  if (chapter.workKey) chapters = chapters.filter(item => item.workKey === chapter.workKey)
+  return chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length
+}
+export function readerChapterNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
+  if (chapter.displayNumber !== undefined) return chapter.displayNumber
+  return new Set(chapters.map(item => item.workKey).filter(Boolean)).size > 1 ? chapterPosition(chapter, chapters) : chapterNumber(chapter, chapters)
+}
 export function readerChapterLabel(chapter: ChapterSummary, chapters: ChapterSummary[]): string {
-  if (chapter.kind === 'frontmatter') return /^Notes:?$/i.test(chapter.title) ? 'Author Notes' : 'Title Page'
+  if (chapter.kind === 'frontmatter') return chapter.sectionType === 'other' ? chapter.title : chapter.sectionType === 'notes' || /^Notes:?$/i.test(chapter.title) ? 'Author Notes' : 'Title Page'
   const workStart = chapters.slice(0, chapters.indexOf(chapter) + 1).reduce((start, item, index) => item.workStart ? index : start, 0)
-  const number = chapterNumber(chapter, chapters.slice(workStart))
+  const number = chapter.displayNumber ?? (new Set(chapters.map(item => item.workKey).filter(Boolean)).size > 1 ? chapterPosition(chapter, chapters) : chapterNumber(chapter, chapters.slice(workStart)))
   const title = chapter.title.replace(/^(?:Chapter\s+)?\d+\s*[:.–—-]\s*/i, '')
   return `${number}. ${title}`
 }
-export type Book = { favorite?: boolean; rec?: boolean; progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
+export type Book = { works?: AnthologyWork[]; contentsReviewed?: boolean; favorite?: boolean; rec?: boolean; progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
 export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
 export type CatalogBook = { organizerEntryId?: string } & Omit<BookDetails, 'chapters' | 'history' | 'completed' | 'notes' | 'remote' | 'position'> & { position: Pick<ReadingPosition, 'chapter' | 'fraction'>; chapterCount: number; wordCount: number; completedCount: number }
+export function isAnthology(book: Pick<BookDetails, 'works'>) { return (book.works?.length ?? 0) > 1 }
+
+export function progressNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {
+  if (chapter.kind === 'frontmatter') return null
+  return new Set(chapters.map(item => item.workKey).filter(Boolean)).size > 1
+    ? chapters.slice(0, chapters.indexOf(chapter) + 1).filter(item => item.kind !== 'frontmatter').length
+    : chapter.displayNumber ?? chapterNumber(chapter, chapters)
+}
+
+export function retainWorkLinks(incoming: AnthologyWork[] | undefined, previous: AnthologyWork[] | undefined) {
+  return incoming?.map(work => {
+    const old = previous?.find(item => item.workId && item.workId === work.workId || !item.workId && !work.workId && item.key === work.key)
+    return { ...work, ...(old && { remote: old.remote, account: old.account }) }
+  })
+}
+
 export function bookDetails(book: Book): BookDetails {
   const { file, resources: _resources, chapters, ...details } = book
   void _resources
   return { ...details, fileBytes: file?.size ?? details.fileBytes, hasFile: Boolean(file), chapters: chapters.map(({ html: _html, ...chapter }) => { void _html; return chapter }) }
 }
 /** Explicit numeric corrections can include chapters absent from an older EPUB. */
-export function readerProgress(book: Pick<BookDetails, 'progress' | 'completed' | 'chapters'>): number {
+export function readerProgress(book: Pick<BookDetails, 'progress' | 'completed' | 'chapters'> & Pick<Partial<BookDetails>, 'works'>): number {
+  if (isAnthology(book)) return book.chapters.filter(chapter => chapter.kind !== 'frontmatter' && book.completed.includes(chapter.id)).length
   return Number.isSafeInteger(book.progress) && book.progress! >= 0 ? book.progress! : book.chapters.filter(chapter => chapter.kind !== 'frontmatter' && book.completed.includes(chapter.id)).length
 }
 export function catalogBook(book: BookDetails): CatalogBook {
   const { chapters, history: _history, completed: _completed, notes: _notes, remote: _remote, position, ...catalog } = book
   void _history; void _completed; void _notes; void _remote
-  return { ...catalog, organizerEntryId: book.remote?.id, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.filter(chapter => chapter.kind !== 'frontmatter').length, wordCount: chapters.reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: readerProgress(book) }
+  return { ...catalog, organizerEntryId: book.remote?.id, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.filter(chapter => chapter.kind !== 'frontmatter').length, wordCount: chapters.filter(chapter => chapter.kind !== 'frontmatter').reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: readerProgress(book) }
 }
 export type Connection = { expiresAt?: string | null; backend: string; key: string; secret: string; account: string; label: string; name: string }
-export type Pending = { id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
+export type Pending = { memberKey?: string; id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
 export type Preferences = { font?: 'default' | 'georgia' | 'palatino' | 'sans' | 'mono'; theme?: 'system' | 'light' | 'night' | 'sepia' | 'charcoal' | 'gray'; lineHeight?: number; brightness?: number; textColor?: string; linkColor?: string; backgroundColor?: string; tileLayouts?: Partial<Record<'mobile' | 'desktop', DisplayPreference>>; storageColumns?: string[]; storageSort?: { key: string; ascending: boolean }; content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
 export const defaultTagAppearance: TagAppearance = { shape: 'filled', colors: {} }
 export const readingRanges = {
@@ -49,15 +77,20 @@ export function mapChapter(chapter: ChapterSummary, chapters: ChapterSummary[]) 
   const matches = chapters.filter(next => next.id === chapter.id)
   return matches.length === 1 ? matches[0] : undefined
 }
-export function hasVerifiedMapping(chapter: ChapterSummary, chapters: ChapterSummary[]): boolean {
+export function hasVerifiedMapping(chapter: ChapterSummary, chapters: ChapterSummary[], workId?: string | null): boolean {
+  if (workId && chapter.sourceWorkId && workId !== chapter.sourceWorkId) return false
   return chapter.kind !== 'frontmatter' && Number.isSafeInteger(chapter.number) && chapter.number! > 0 &&
     Boolean(chapter.ao3Id && /^[1-9]\d*$/.test(chapter.ao3Id)) &&
-    chapters.filter(other => other.kind !== 'frontmatter' && (other.number === chapter.number || other.ao3Id === chapter.ao3Id)).length === 1
+    chapters.filter(other => other.kind !== 'frontmatter' && other.workKey === chapter.workKey && (other.number === chapter.number || other.ao3Id === chapter.ao3Id)).length === 1
 }
 export function completionStatus(book: BookDetails | Book): Status {
+  if (isAnthology(book)) {
+    const chapters = book.chapters.filter(chapter => chapter.kind !== 'frontmatter')
+    return chapters.length && chapters.every(chapter => book.completed.includes(chapter.id)) ? 'finished' : book.status === 'finished' || book.status === 'to_read' && chapters.some(chapter => book.completed.includes(chapter.id)) ? 'reading' : book.status
+  }
   const published = book.metadata.published_chapters
   if (!published || !['complete', 'in_progress', 'hiatus', 'abandoned', 'deleted'].includes(book.metadata.publication_status)) return book.status
-  const mapped = new Map(book.chapters.filter(chapter => hasVerifiedMapping(chapter, book.chapters)).map(chapter => [chapter.number, chapter]))
+  const mapped = new Map(book.chapters.filter(chapter => hasVerifiedMapping(chapter, book.chapters, book.workId)).map(chapter => [chapter.number, chapter]))
   for (let n = 1; n <= published; n++) {
     const chapter = mapped.get(n)
     if (!chapter || !book.completed.includes(chapter.id)) return book.status === 'to_read' ? 'reading' : book.status
@@ -69,9 +102,9 @@ export function replaceBook<T extends BookDetails | Book>(previous: BookDetails 
   const mapped = old && mapChapter(old, next.chapters)
   // Re-importing an older EPUB must not discard a newer organizer observation.
   const publication = previous.remote?.publication
-  const retainPublication = publication && (next.metadata.published_chapters ?? 0) <= (publication.metadata.published_chapters ?? 0)
+  const retainPublication = !isAnthology(next) && publication && (next.metadata.published_chapters ?? 0) <= (publication.metadata.published_chapters ?? 0)
   const metadata = retainPublication ? { ...next.metadata, publication_status: publication.metadata.publication_status, published_chapters: publication.metadata.published_chapters, total_chapters: publication.metadata.total_chapters } : next.metadata
-  return { ...next, metadata, metadataAt: retainPublication ? publication.at : next.metadataAt, workId: previous.workId ?? next.workId, account: previous.account, remote: previous.remote, notes: previous.notes, collections: previous.collections, favorite: previous.favorite, rec: previous.rec, status: previous.status, progress: previous.progress, history: previous.history,
+  return { ...next, metadata, works: retainWorkLinks(next.works, previous.works), metadataAt: retainPublication ? publication.at : next.metadataAt, workId: isAnthology(next) ? null : previous.workId ?? next.workId, account: previous.account, remote: isAnthology(next) ? undefined : previous.remote, notes: previous.notes, collections: previous.collections, favorite: previous.favorite, rec: previous.rec, status: previous.status, progress: isAnthology(previous) !== isAnthology(next) ? undefined : previous.progress, history: previous.history,
     completed: previous.completed.filter(id => next.chapters.some(c => c.id === id)), position: mapped ? { ...previous.position, chapter: mapped.id } : next.position, resumeRequired: !mapped }
 }
 
@@ -86,8 +119,8 @@ export function withReadingProgress<T extends BookDetails | Book>(book: T, progr
   if (!Number.isSafeInteger(progress) || progress < 0) return book
   const completed = new Set(book.completed)
   for (const chapter of book.chapters) {
-    if (!hasVerifiedMapping(chapter, book.chapters)) continue
-    if (chapter.number! <= progress) completed.add(chapter.id)
+    if (!isAnthology(book) && !hasVerifiedMapping(chapter, book.chapters, book.workId) || chapter.kind === 'frontmatter') continue
+    if (progressNumber(chapter, book.chapters)! <= progress) completed.add(chapter.id)
     else if (replace) completed.delete(chapter.id)
   }
   return { ...book, completed: [...completed], progress: replace ? progress : Math.max(readerProgress(book), progress) }
@@ -95,6 +128,7 @@ export function withReadingProgress<T extends BookDetails | Book>(book: T, progr
 
 /** Mirror checked organizer progress without manufacturing local reading-history events. */
 export function withOrganizerProgress<T extends BookDetails | Book>(book: T, remote: Remote): T {
+  if (isAnthology(book)) return book
   const next = withPublication(book, remote)
   if (!Number.isSafeInteger(remote.progress) || remote.progress < 0) return next
   // A first association keeps standalone reads; later corrections are authoritative.
@@ -110,6 +144,11 @@ export function withOrganizerProgress<T extends BookDetails | Book>(book: T, rem
 export function repairChapterState(previous: Book | BookDetails, chapters: ChapterSummary[]): Pick<Book, 'position' | 'completed' | 'history' | 'resumeRequired'> {
   function mapped(id: string) {
     const old = previous.chapters.filter(chapter => chapter.id === id)
+    if (!old.length) {
+      // A newer cloud manifest can already reference this unchanged file's repaired IDs.
+      const current = chapters.filter(chapter => chapter.id === id)
+      return current.length === 1 ? current[0] : undefined
+    }
     if (old.length !== 1) return
     const matches = chapters.filter(chapter => chapter.path === old[0].path)
     return matches.length === 1 ? matches[0] : undefined
