@@ -324,13 +324,17 @@ test('series review saves only series missing from the library', async ({ page }
  expect(tables.library_series.map(series => series.ao3_series_id).sort()).toEqual([77, 89])
 })
 
-test('series collection failures share retry styling and recover results and suggestions', async ({ page }) => {
+test('series collection failures share retry styling and independently recover results and suggestions', async ({ page }) => {
  await fixture(page)
  let fail = true
- for (const rpc of ['query_library', 'library_query_facets']) {
-  await page.route(`**/rest/v1/rpc/${rpc}`, route => fail
-   ? route.fulfill({ status: 500, json: { code: '57014', message: 'Statement timeout' } })
-   : route.fallback())
+ const requests = { query_library: 0, library_query_facets: 0 }
+ for (const rpc of ['query_library', 'library_query_facets'] as const) {
+  await page.route(`**/rest/v1/rpc/${rpc}`, route => {
+   requests[rpc]++
+   return fail
+    ? route.fulfill({ status: 500, json: { code: '57014', message: 'Statement timeout' } })
+    : route.fallback()
+  })
  }
  await page.goto('/library?shelf=series'); await login(page)
  const alerts = page.locator('.error-message-retry')
@@ -348,10 +352,16 @@ test('series collection failures share retry styling and recover results and sug
   await expect(retry).toHaveCSS('text-decoration-line', 'underline')
  }
  fail = false
+ const before = { ...requests }
  await retry.click()
+ await expect(alerts).toHaveCount(1)
+ await expect(alerts).toContainText('Could not load these results.')
+ expect(requests).toEqual({ ...before, library_query_facets: before.library_query_facets + 1 })
+ await page.getByRole('button', { name: 'Retry Loading', exact: true }).click()
  await expect(alerts).toHaveCount(0)
  await expect(page.locator('[data-results-loading]')).toHaveCount(0)
  await expect(page.getByRole('heading', { name: 'No Stories Here Yet' })).toBeVisible()
+ expect(requests).toEqual({ query_library: before.query_library + 1, library_query_facets: before.library_query_facets + 1 })
 })
 
 test('series results load before suggestions without concurrent catalog or series scans', async ({ page }) => {

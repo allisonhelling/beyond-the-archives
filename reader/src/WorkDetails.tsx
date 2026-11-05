@@ -30,7 +30,7 @@ export function WorkDetails({ book, onClose, onReview, onOpenWork, onCheckLinks,
     { label: 'AO3 Collections', value: metadata.ao3_collections },
     { label: 'BookFusion Link', value: metadata.bookfusion_link ? `${metadata.bookfusion_link.kind === 'bookmark' ? 'Bookmark' : 'Book'} · ${metadata.bookfusion_link.url}` : undefined },
   ]
-  return <Dialog title="View Details" onClose={onClose} className="work-details"><h3>{metadata.title}{'\u00a0'}<PublicationStatusIndicator portal status={metadata.publication_status} /></h3>
+  return <Dialog title="View Details" onClose={onClose} className="work-details" topEdgeLabel="Go to Details Top"><h3>{metadata.title}{'\u00a0'}<PublicationStatusIndicator portal status={metadata.publication_status} /></h3>
     <p className="muted">Information saved with this EPUB. Publication details may differ from the current online work.</p>
     {isAnthology(book) && <section aria-label="Anthology Contents"><h4>{anthologyLabel(book)}</h4><ol>{book.works!.map(work => {
       const chapters = workChapters(book, work).filter(chapter => chapter.kind !== 'frontmatter')

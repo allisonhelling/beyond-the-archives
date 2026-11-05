@@ -1,6 +1,7 @@
 import { tagAliasIndex, type TagResolution } from '../../src/features/library/tags/tag-resolution'
 import { applyAutomaticCollections } from '../../src/features/library/collections/automatic-collections'
 import { effectiveMetadata, type Collection, type Story, type Work } from '../../src/features/library/model'
+import { safeBookFusionLink } from '../../src/features/library/bookfusion/bookfusion'
 import { defaultReadingFilters, filterReading, inReadingSection, tracked } from '../../src/features/library/reading-search'
 import { librarySeries, seriesReadingStatus, type SeriesRecord } from '../../src/features/library/series/series'
 import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series/series-search'
@@ -43,9 +44,10 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
  if (name==='query_library'||name==='library_query_facets') {
   const query=body.p_query as Row,mode=query.mode,shelf=String(query.shelf),filters={...defaultReadingFilters,...query.filters as Row,tagAliases:tagAliasIndex(rows('ao3_tag_resolutions') as unknown as TagResolution[])}
   const series=librarySeries(stories,records)
-  const seriesItems=series.filter(series=>query.author === undefined && (shelf==='all'||shelf==='series'||shelf==='favorites'&&series.record?.is_favorite||shelf==='currently_reading'&&seriesReadingStatus(series)==='reading'||['paused_reading','to_read','finished','did_not_finish'].includes(shelf)&&seriesReadingStatus(series)===shelf||series.record?.collectionIds?.includes(shelf)))
+  const availableStories=stories.filter(story=>query.availability==='bookfusion'?Boolean(safeBookFusionLink(story.metadata.bookfusion_link)):query.availability==='unfolded'?rows('reader_availability').some(report=>(report.works as string[]).includes(String(story.work.ao3_work_id))):true)
+  const seriesItems=series.filter(series=>!query.availability && query.author === undefined && (shelf==='all'||shelf==='series'||shelf==='favorites'&&series.record?.is_favorite||shelf==='currently_reading'&&seriesReadingStatus(series)==='reading'||['paused_reading','to_read','finished','did_not_finish'].includes(shelf)&&seriesReadingStatus(series)===shelf||series.record?.collectionIds?.includes(shelf)))
   const works=stories.filter(story=>(query.author === undefined || story.metadata.authors.includes(String(query.author))) && (shelf==='all'||shelf==='currently_reading'&&['reading','waiting_for_updates','re_reading'].includes(story.reading_status)||shelf==='finished'&&['finished','re_reading'].includes(story.reading_status)||shelf==='recs'&&story.is_rec||shelf==='favorites'&&story.is_favorite||story.reading_status===shelf||story.collectionIds.includes(shelf)||story.automaticCollectionIds?.includes(shelf)))
-  const pool=mode==='reading'?tracked(stories):[...works,...(mode==='series'||shelf==='series'||filters.showSeries?seriesItems.map(seriesSearchStory):[])]
+  const pool=mode==='reading'?tracked(availableStories):[...works.filter(story=>availableStories.includes(story)),...(mode==='series'||shelf==='series'||filters.showSeries?seriesItems.map(seriesSearchStory):[])]
   const filtered=mode==='reading'?filterReading(pool,filters):filterLibraryItems(pool,{...filters,showSeries:mode==='series'||shelf==='series'||filters.showSeries},seriesItems)
   const shown=filtered.filter(story=>mode!=='reading'||inReadingSection(story,shelf))
   const size=Number(body.p_size),pages=Math.max(1,Math.ceil(shown.length/size)),page=Math.min(Number(body.p_page),pages),slice=shown.slice((page-1)*size,page*size)

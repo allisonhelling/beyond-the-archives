@@ -33,7 +33,7 @@ function initialCollectionSort(): CollectionSort {
   return { hideEmpty: false, automaticOrder: shelves.map(([id]) => id), order: 'created_newest', hiddenAutomatic: [], hiddenCustom: [] }
 }
 
-export function CollectionBrowser({ children, title = 'Your Library', countStories, readOnly = false }: { title?: string; countStories?: Story[] | null; readOnly?: boolean; children: (controls: { selected: string; editingCollections: boolean; renderHeader: (actions: ReactNode, count?: number, selectShelf?: (id: string) => void) => ReactNode; shelfStories: Story[]; shelfSeries: ReturnType<typeof librarySeries> }) => ReactNode }) {
+export function CollectionBrowser({ children, title = 'Your Library', countStories, readOnly = false, compactHeader = false }: { compactHeader?: boolean; title?: string; countStories?: Story[] | null; readOnly?: boolean; children: (controls: { selected: string; editingCollections: boolean; renderHeader: (actions: ReactNode, count?: number, selectShelf?: (id: string) => void) => ReactNode; shelfStories: Story[]; shelfSeries: ReturnType<typeof librarySeries> }) => ReactNode }) {
   const layout = useLayout()
   const { stories, collections, series: seriesRecords, navigation, navigationError, navigationLoading, revisionError, retryCounts, refreshCollections: refresh } = useLibrary()
   const [params, setParams] = useSearchParams()
@@ -195,7 +195,7 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
 
   const addStoriesAction = !readOnly && !editingCollections && collection && !collection.default_key && !collection.automatic_rules && <Tooltip description="Add Stories to Collection">{id => <button ref={addStoriesTrigger} type="button" className="button secondary button-small" aria-describedby={id} onClick={() => setAddingToCollection(collection)}>Add Story</button>}</Tooltip>
   const hiddenButton = (descriptionId?: string) => <button aria-describedby={descriptionId} type="button" className="button secondary collection-hidden" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>
-  const renderHeader = (actions: ReactNode, _total: number | undefined, selectShelf: (id: string) => void = id => setParams({ shelf: id })) => <><div className="page-heading library-heading"><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>{title}</h1>
+  const renderHeader = (actions: ReactNode, _total: number | undefined, selectShelf: (id: string) => void = id => setParams({ shelf: id })) => <><div className={`page-heading library-heading${compactHeader ? ' collection-heading-compact' : ''}`}><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>{title}</h1>
     <div className="library-heading-actions">
       <button type="button" className="button secondary collection-hide-empty" aria-pressed={collectionSort.hideEmpty} onClick={() => setCollectionSort(previous => ({ ...previous, hideEmpty: !previous.hideEmpty }))}>Hide Empty</button>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection Selection">
@@ -205,7 +205,7 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
       <button type="button" className="button secondary collection-select" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
       <span className="collection-selection-trigger"><InfoTooltip description={collectionControlHelp} placement="bottom" label="Collection Controls" size={16} /></span>
     </div>}
-      {!readOnly && <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : 'Edit Collections'}</button>}
+      {!readOnly && <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : compactHeader ? 'Edit' : 'Edit Collections'}</button>}
       {actions}
     </div></div></div></div>
     <CollectionShelf readOnly={readOnly} showHidden={viewHidden} onAutomaticEdit={readOnly ? undefined : id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={readOnly ? undefined : editCollection} onMove={moveCollection} items={collectionSort.hideEmpty ? shelfItems.filter(item => item.count !== 0) : shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={selectShelf} />

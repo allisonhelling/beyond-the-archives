@@ -3915,7 +3915,7 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
  const pagers=page.getByRole('navigation',{name:'Result Pages'})
  await expect(pagers).toHaveCount(2)
  for(const pager of await pagers.all()) await expect(pager.getByRole('status').getByRole('spinbutton',{name:'Go to Page'})).toBeVisible()
- await expect(page.getByRole('button',{name:'Available Offline',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('button',{name:'Available In',exact:true})).toHaveCount(0)
  await page.getByRole('button',{name:'Filters',exact:true}).click()
  const filters=page.getByRole('region',{name:'Library Filters'})
  const row=filters.locator('.filter-choice-row').filter({has:page.getByRole('button',{name:'One-Shot',exact:true})})
@@ -3930,8 +3930,8 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
   for(let index=1;index<children.length;index++) if(children[index].y>=children[index-1].bottom+1) expect(Math.abs(children[index].x-choices.x)).toBeLessThan(1)
  }
  await expect(row.locator(':scope > button')).toHaveText(['Exclude Later Series Works','In a Series','Favorites','Personal Notes','Recs'])
- expect(await row.locator('.custom-dropdown > .dropdown-trigger').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(info.project.name==='mobile' ? ['Content Rating','Rating','One-Shot','Crossovers','Publication Status','Available Offline'] : ['Content Rating','Rating','One-Shot','Crossovers','Available Offline'])
- await expect(filters.getByRole('button',{name:'Available Offline',exact:true})).toBeVisible()
+ expect(await row.locator('.custom-dropdown > .dropdown-trigger').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(info.project.name==='mobile' ? ['Content Rating','Rating','One-Shot','Crossovers','Publication Status','Available In'] : ['Content Rating','Rating','One-Shot','Crossovers','Available In'])
+ await expect(filters.getByRole('button',{name:'Available In',exact:true})).toBeVisible()
  const dateRow=filters.locator('.updated-filter-row')
  await expect(filters.getByRole('button',{name:'Publication Status',exact:true})).toHaveCount(1)
  if(info.project.name==='mobile') {
@@ -3950,7 +3950,7 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
   expect(size.width).toBeLessThan(200)
   expect(size.room).toBeGreaterThanOrEqual(size.text)
  }
- for(const name of ['Content Rating','Rating','Publication Status','One-Shot','Available Offline','Search In']) {
+ for(const name of ['Content Rating','Rating','Publication Status','One-Shot','Available In','Search In']) {
   await filters.getByRole('button',{name,exact:true}).click()
   const panel=page.getByRole(name==='Content Rating'||name==='Rating'||name==='Publication Status'?'dialog':'listbox',{name,exact:true})
   await expect(panel).toBeVisible()

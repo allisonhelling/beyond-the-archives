@@ -1,8 +1,8 @@
 /* Settings navigation and section headings. */
-.settings-content { min-width: 0; --settings-text-size: max(var(--work-tile-min-font-size, 0px), 14px); font-size: var(--settings-text-size); line-height: 1.8; color: #000; }
+.settings-content { min-width: 0; --settings-text-size: max(var(--work-tile-min-font-size, 0px), 14px); font-size: var(--settings-text-size); line-height: 1.8; color: var(--settings-text-color, #000); }
 .settings-content :is(p, label, small, li, dt, dd):not(.display-edit-surface *) { font-size: var(--settings-text-size); line-height: inherit; }
-.settings-content :is(p, label, li, dd):not(.display-edit-surface *) { color: #000; }
-.settings-content :is(.muted, .field-help, small, dt):not(.display-edit-surface *) { color: #756363; font-size: var(--settings-text-size); font-weight: 500; }
+.settings-content :is(p, label, li, dd):not(.display-edit-surface *) { color: var(--settings-text-color, #000); }
+.settings-content :is(.muted, .field-help, small, dt):not(.display-edit-surface *) { color: var(--settings-muted-color, #756363); font-size: var(--settings-text-size); font-weight: 500; }
 .settings-content p.error-message:not(.display-edit-surface *) { color: var(--color-brand); }
 .settings-page :is(h2, h3, h4, h5, legend):not(.display-edit-surface *) { color: var(--color-brand); }
 .settings-content h2:not(.display-edit-surface *) { font: 400 23px/1.3 var(--font-serif); margin: 0 0 16px; }

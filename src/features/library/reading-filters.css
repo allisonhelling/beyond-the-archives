@@ -3,7 +3,7 @@
 /* Reading dashboard toolbar, filters, and state tiles. */
 .reading-toolbar { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(150px, 1fr) minmax(190px, 1.4fr) minmax(170px, 1fr) auto; align-items: start; gap: 16px; margin-bottom: 24px; }
 .reading-toolbar label, .reading-filters label { display: grid; gap: 8px; margin: 0; font-size: 14px; }
-select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:not([type=checkbox]), .reading-filters select, .filter-input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; margin: 0; border: 1px solid var(--color-control-border); background: var(--color-surface); border-radius: var(--radius-compact-control); font: inherit; color: #382b2b; }
+select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:not([type=checkbox]), .reading-filters select, .filter-input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; margin: 0; border: 1px solid var(--color-control-border); background: var(--color-surface); border-radius: var(--radius-compact-control); font: inherit; color: var(--color-text, #382b2b); }
 .reading-toolbar > .button { margin-top: 29px; }
 .filter-label { display: block; font-size: 14px; margin-bottom: 8px; }
 .title-search, .fandom-select { position: relative; min-width: 0; }

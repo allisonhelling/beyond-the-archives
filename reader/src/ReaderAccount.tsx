@@ -8,7 +8,7 @@ import { accountConfirmationMessage, confirmPassword, createAccount, isAuthLinkT
 import { isStorageFull } from './storage-info'
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { Dialog } from '../../src/components/Dialog'
+import { ReaderSection } from './ReaderSettings'
 import { restoreOrganizerConnection, clearReaderAuthIntent, readerAuthIntent, importGuestLibrary, readerCloud, resolveCloud, savedConflicts, switchLibrary, type CloudConflict } from './cloud'
 import { getBookDetails, loadSetting, transaction, readerOwner } from './storage'
 import type { BookDetails, Connection } from './model'
@@ -18,7 +18,7 @@ function ConflictDescription({ edit }: { edit: Pick<CloudEdit, 'key' | 'value'> 
  useEffect(()=>{let active=true;void getBookDetails(edit.key.split('/')[0]).then(book=>{if(active)setBook(book)});return()=>{active=false}},[edit.key])
  return <>{book&&<strong>{book.metadata.title}: </strong>}{describeCloudValue(edit.key,edit.value,book)}</>
 }
-export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts }: { onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
+export function ReaderAccount({asPage=false, onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts }: {asPage?:boolean; onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
   const [mode,setMode]=useState<AccountMode>('login'),[needsPassword,setNeedsPassword]=useState(readerAuthIntent==='invite'||readerAuthIntent==='recovery')
   const [session,setSession]=useState<Session|null>(null), [busy,setBusy]=useState(false), [message,setMessage]=useState('')
   const [remember,setRemember]=useState(()=>remembersSession('reader'))
@@ -61,7 +61,7 @@ export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull,
     try { await enableOrganizerSync(readerCloud) } catch { setMessage('Signed in. Organizer sync setup will retry when this account library opens.') }
     await beforeSwitch();await switchLibrary(owner)
   }
-  return <Dialog title="Reader Account & Cloud Library" busy={busy} onClose={onClose}>
+  return <ReaderSection page={asPage} title="Reader Account & Cloud Library" busy={busy} onClose={onClose}>
     <p>Guest reading stays on this device and works offline without an account. Sign in for cloud storage, cross-device reading state, and organizer connection.</p>
     <p>{readerOwner ? 'Saved Account Library' : 'Guest Library'} · {session?.user.email ?? 'Signed out'}</p>
     {(!session || needsPassword || changingPassword) && <form className="account-auth-form" onSubmit={event=>{
@@ -119,7 +119,7 @@ export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull,
       </details>
       <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(onSync)}>Sync Now</button><button disabled={busy} onClick={()=>{if(confirm('Copy guest books, notes, and history into this account? Existing account versions are skipped. The guest library stays on this device.')) void run(async()=>{await importGuestLibrary();await onSync()})}}>Import Guest Library</button></div>
       <p>Downloads remain readable offline. Removing a local download retains its cloud copy. Each account and guest library have separate local storage; organizer credentials are never imported.</p>
-      {conflicts.map(conflict=><div className="pending-item" key={conflict.edit.id}><strong>Conflicting {cloudFieldLabel(conflict.key)}</strong><p>This device and the cloud changed {cloudFieldLabel(conflict.key).toLowerCase()} independently. Choose which version to keep.</p><p>This device: <ConflictDescription edit={{key:conflict.key,value:conflict.edit.value}} /></p><p>Cloud: <ConflictDescription edit={conflict} /></p><div className="dialog-actions"><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,true);await onSync()})}>Use This Device</button><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,false);await onSync()})}>Use Cloud Version</button></div></div>)}
+      {conflicts.map(conflict=><div className="pending-item" key={conflict.edit.id}><strong>Conflicting {cloudFieldLabel(conflict.key)}</strong><p>This device and the cloud changed {cloudFieldLabel(conflict.key).toLowerCase()} independently. Choose which version to keep.</p><p>This device: <ConflictDescription edit={{key:conflict.key,value:conflict.edit.value}} /></p><p>Cloud: <ConflictDescription edit={conflict} /></p><div className="dialog-actions conflict-actions"><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,true);await onSync()})}>Use This Device</button><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,false);await onSync()})}>Use Cloud Version</button></div></div>)}
       {variants.length>0 && <details><summary>Preserved Conflict Versions</summary>{variants.map(edit=><p key={edit.id}><strong>{cloudFieldLabel(edit.key)}</strong>: <ConflictDescription edit={edit} /></p>)}</details>}
     </>}
     <div className="dialog-actions">
@@ -128,5 +128,5 @@ export function ReaderAccount({ onClose, onRefresh, beforeSwitch, onStorageFull,
       {readerOwner && <button disabled={busy} onClick={()=>void run(async()=>{await beforeSwitch();await switchLibrary('')})}>Open Guest Library</button>}
     </div>
     <p role="status">{message}</p>
-  </Dialog>
+  </ReaderSection>
 }

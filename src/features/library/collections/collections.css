@@ -59,6 +59,10 @@ button.collection-shelf-toggle:is(:hover, :focus-visible) { filter: brightness(1
 .collection-title-row { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
 .collection-title-row > .action-tooltip { flex-shrink: 0; }
 .collection-heading h2 { font-size: 24px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.collection-hidden { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.collection-heading-compact .library-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.collection-heading-compact .library-title-row h1 { margin: 0; font-size: 24px; letter-spacing: normal; }
+.collection-heading-compact .library-heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 dialog.collection-dialog { width: min(960px, calc(100vw - 32px)); overflow-x: hidden; touch-action: pan-y; }
 .collection-rule-filters { border: 0; padding: 0; margin: 0; min-width: 0; grid-column: 1 / -1; grid-row: 2; }
 .collection-rule-filters > legend { font-weight: 600; }
@@ -117,7 +121,7 @@ dialog.collection-dialog { width: min(960px, calc(100vw - 32px)); overflow-x: hi
   .library-heading-actions { margin-left: auto; }}
 @media (max-width: 650px) {
   .page-heading.library-heading { margin-bottom: 25px; }
-  .page-heading .library-title-row h1 { font-size: 32px; }
+  .page-heading:not(.collection-heading-compact) .library-title-row h1 { font-size: 32px; }
   .collection-shelves { --collection-spine-width: 72px; --collection-shelf-toggle-width: 44px; }
   .collection-shelves .collection-spine { height: 176px; padding: 26px 6px 30px; gap: 6px; font-size: 12px; }
   .collection-shelves .collection-spine-symbol { width: 20px; height: 20px; }

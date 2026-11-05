@@ -17,7 +17,8 @@
 .dropdown-panel label.dropdown-check-option { display: flex; align-items: center; gap: 9px; margin: 0; cursor: pointer; }
 .dropdown-panel :is([role=option], .menu-item) > svg { flex-shrink: 0; }
 .dropdown-panel [aria-selected=true] { color: var(--color-brand); background: var(--color-brand-soft); }
-.dropdown-panel :is([role=option], .menu-item):hover, .dropdown-panel :is([role=option], .menu-item):focus-visible { color: var(--color-surface); background: var(--color-brand); }
+.dropdown-panel :is([role=option], .menu-item):not(:disabled):is(:hover, :focus-visible) { color: var(--color-surface); background: var(--color-brand); }
+.dropdown-panel [role=option]:disabled { opacity: .5; cursor: not-allowed; }
 .dropdown-panel :is([role=option], .menu-item) > span { min-width: 0; overflow-wrap: anywhere; }
 .dropdown-panel :is([role=option], .menu-item), .dropdown-panel .dropdown-check-option, .search-suggestions button { min-height: 36px; padding: 7px 10px; font-size: 14px; line-height: 20px; }
 .dropdown-search { width: 100%; min-width: 0; margin: 0 0 8px; }
@@ -31,3 +32,9 @@
 .dropdown-text:not(.dropdown-custom-value) .dropdown-trigger > span { text-decoration: underline; text-underline-offset: .15em; }
 .dropdown-text .dropdown-trigger:is(:hover, :focus-visible) { color: var(--color-brand); }
 .dropdown-panel[data-portal] { position: fixed; z-index: 40; top: var(--dropdown-top); left: var(--dropdown-left); width: var(--dropdown-width); max-height: var(--dropdown-max-height); margin: 0; }
+
+@media (max-width: 650px) {
+  .dropdown-mobile-icon-only .dropdown-trigger { width: 36px; justify-content: center; }
+  .dropdown-mobile-icon-only .dropdown-trigger > .dropdown-label { overflow: visible; }
+  .dropdown-mobile-icon-only .dropdown-label-text, .dropdown-mobile-icon-only .dropdown-trigger > svg { display: none; }
+}

@@ -17,7 +17,7 @@ vi.mock('./ReadingFilterControls', () => ({
 }))
 
 beforeEach(() => {
- vi.mocked(useLibraryResults).mockReturnValue({ loading: false, retry: vi.fn() })
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: false, retry: vi.fn(), retrySuggestions: vi.fn() })
  const values = new Map<string, string>()
  vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) })
 })
@@ -87,7 +87,7 @@ it.each([
 it('keeps the bottom page-size control mounted while replacement results load', () => {
  const result = { stories: [], series: [], total: 60, page: 1, pages: 3, sections: {}, fandoms: [] }
  const retry = vi.fn()
- vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result, retry })
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result, retry, retrySuggestions: vi.fn() })
  const navigator: Navigator = { createHref: () => '', go: vi.fn(), push: vi.fn(), replace: vi.fn() }
  const dashboard = () => <Router location={{ pathname: '/library', search: '?shelf=all', key: 'initial' }} navigator={navigator}>
   <ReadingDashboard stories={[]} mode="library" showActions={false} renderStory={() => null} />
@@ -96,7 +96,7 @@ it('keeps the bottom page-size control mounted while replacement results load', 
  const bottom = screen.getAllByRole('navigation', { name: 'Result Pages' }).at(-1)!
  const size = within(bottom).getByRole('combobox', { name: 'Works per Page' })
  size.focus()
- vi.mocked(useLibraryResults).mockReturnValue({ loading: true, previousResult: result, range: { start: 1, end: 25 }, retry })
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: true, previousResult: result, range: { start: 1, end: 25 }, retry, retrySuggestions: vi.fn() })
  fireEvent.change(size, { target: { value: '50' } })
  view.rerender(dashboard())
  expect(screen.getAllByRole('navigation', { name: 'Result Pages' })).toHaveLength(2)
@@ -105,7 +105,7 @@ it('keeps the bottom page-size control mounted while replacement results load', 
  expect(size).toHaveValue('50')
  expect(within(bottom).getByRole('status')).toHaveTextContent('Updating…')
  expect(within(bottom).getByRole('status')).toHaveTextContent('1–25 of 60')
- vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result: { ...result, pages: 2 }, retry })
+ vi.mocked(useLibraryResults).mockReturnValue({ loading: false, result: { ...result, pages: 2 }, retry, retrySuggestions: vi.fn() })
  view.rerender(dashboard())
  expect(size).toHaveValue('50')
  expect(within(bottom).getByRole('status')).toHaveTextContent('1–50 of 60')

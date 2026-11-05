@@ -11,6 +11,38 @@ import type { Story } from '../../src/features/library/model'
 import type { LibraryResults } from '../../src/features/library/repository'
 let db: PGlite
 const alice='10000000-0000-0000-0000-000000000001', bob='10000000-0000-0000-0000-000000000002'
+
+it('caches facet aggregation by owner and scope until the existing library revision changes', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope=JSON.stringify({mode:'library',shelf:'all',filters:{showSeries:false}})
+  for(let i=0;i<25;i++) await db.query('select public.library_query_facets($1)',[JSON.stringify({mode:'library',shelf:`missing-shelf-${i}`})])
+  await db.exec('reset role')
+  expect((await db.query<{n:number}>('select count(*)::integer n from public.library_query_cache where user_id=$1',[alice])).rows[0].n).toBeLessThanOrEqual(20)
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const first=(await db.query<{r:unknown}>('select public.library_query_facets($1) r',[scope])).rows[0].r
+  await db.exec(`reset role;create or replace function public.library_uncached_facets(p_query jsonb default '{}') returns jsonb language plpgsql set search_path='' as $$begin raise exception 'Facet aggregation required';end;$$;set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  expect((await db.query<{r:unknown}>('select public.library_query_facets($1) r',[JSON.stringify({mode:'library',shelf:'all',filters:{sort:'alpha',query:'Ignored result filter'}})])).rows[0].r).toEqual(first)
+  await db.exec(`savepoint other_cache;set request.jwt.claim.sub='${bob}'`)
+  await expect(db.query('select public.library_query_facets($1)',[scope])).rejects.toThrow('Facet aggregation required')
+  await db.exec(`rollback to savepoint other_cache;set request.jwt.claim.sub='${alice}';update public.library_entries set metadata_overrides='{"additional_tags":["Fresh Facet"]}' where id=(select id from public.library_entries limit 1)`)
+  await expect(db.query('select public.library_query_facets($1)',[scope])).rejects.toThrow('Facet aggregation required')
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
+
+it('loads cold work facets from compact documents without reading complete summaries or chapter maps', async () => {
+ await db.exec('reset role;begin')
+ try {
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  const scope=JSON.stringify({mode:'library',shelf:'all',filters:{showSeries:false}})
+  const first=(await db.query<{r:unknown}>('select public.library_query_facets($1) r',[scope])).rows[0].r
+  await db.exec(`reset role;alter table public.library_search_documents alter column facet_story drop expression;alter table public.library_search_documents disable trigger all;
+   update public.library_search_documents set story='null'::jsonb;delete from public.library_query_cache;
+   set role authenticated;set request.jwt.claim.sub='${alice}'`)
+  expect((await db.query<{r:unknown}>('select public.library_query_facets($1) r',[scope])).rows[0].r).toEqual(first)
+ } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
+})
 beforeAll(async () => {
  db=await createTestDatabase()
  await db.exec(`insert into auth.users values('${alice}'),('${bob}'); insert into public.works(ao3_work_id,title,summary,published_chapters,total_chapters,is_complete,verified_chapters) select n,'Tied title','Café friendship and a literal * star',6,9,false,'{"1":"91","2":"92"}' from generate_series(1,57) n;

@@ -8,7 +8,7 @@ vi.mock('../auth/auth-context',()=>({useAuth:()=>({authenticated:true,session:{u
 const snapshot={connected:true,userId:'owner',savedAt:'2026-11-01T12:00:00Z',readers:[],stories:[],cloudBooks:[]}
 function Controls(){
  const hub=useOffline()
- return <><p>{hub.snapshot?'Retained':'Empty'}</p><p role="status">{hub.error}</p><button onClick={()=>void hub.disconnect().catch(()=>{})}>Disconnect</button></>
+ return <><p>{hub.snapshot?'Retained':'Empty'}</p><p role="status">{hub.error}</p><p aria-label="Reports">{hub.snapshot?.readers.map(reader=>reader.id).join(',')}</p><button onClick={()=>void hub.disconnect().catch(()=>{})}>Disconnect</button><button onClick={()=>void hub.forgetReport('older').catch(()=>{})}>Remove Older Report</button></>
 }
 beforeEach(()=>{
  mocks.updateEntry.mockReset().mockResolvedValue(undefined)
@@ -22,6 +22,35 @@ beforeEach(()=>{
  })
 })
 afterEach(()=>vi.unstubAllGlobals())
+it.each([false,true])('removes only the selected report on success and preserves it after failure (%s)',async fails=>{
+ const retained={...snapshot,readers:['older','current'].map(id=>({id,name:'My Organizer',url:'https://reader.example/',works:[],reportedAt:snapshot.savedAt}))}
+ localStorage.setItem('bta:offline-hub:v1',JSON.stringify(retained))
+ mocks.rpc.mockImplementation((name:string,args?:{p_action:string})=>args?.p_action==='forget_report'?Promise.resolve({error:fails?new Error('Failed'):null}):{abortSignal:()=>Promise.resolve({data:name==='reader_offline_snapshot'?retained:{enabled:true},error:null})})
+ render(<OfflineProvider><Controls /></OfflineProvider>)
+ await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('reader_offline_snapshot'))
+ fireEvent.click(screen.getByRole('button',{name:'Remove Older Report'}))
+ await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('reader_organizer_connection',{p_action:'forget_report',p_installation:'older'}))
+ await waitFor(()=>expect(screen.getByLabelText('Reports')).toHaveTextContent(fails?'older,current':'current'))
+ if(fails) expect(screen.getByRole('status')).toHaveTextContent('Could not remove')
+ const saved=JSON.parse(localStorage.getItem('bta:offline-hub:v1')!)
+ expect(saved.readers.map((reader:{id:string})=>reader.id)).toEqual(fails?['older','current']:['current'])
+ expect(saved.connected).toBe(true)
+ expect(saved.cloudBooks).toEqual(snapshot.cloudBooks)
+})
+it('does not restore a removed report when an earlier refresh finishes late',async()=>{
+ const retained={...snapshot,readers:['older','current'].map(id=>({id,name:'My Organizer',url:'https://reader.example/',works:[],reportedAt:snapshot.savedAt}))}
+ localStorage.setItem('bta:offline-hub:v1',JSON.stringify(retained))
+ let resolve!:(value:unknown)=>void
+ const pending=new Promise(done=>{resolve=done})
+ mocks.rpc.mockImplementation((name:string,args?:{p_action:string})=>args?.p_action==='forget_report'?Promise.resolve({error:null}):{abortSignal:()=>name==='reader_offline_snapshot'?pending:Promise.resolve({data:{enabled:true},error:null})})
+ render(<OfflineProvider><Controls /></OfflineProvider>)
+ await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('reader_offline_snapshot'))
+ fireEvent.click(screen.getByRole('button',{name:'Remove Older Report'}))
+ await waitFor(()=>expect(screen.getByLabelText('Reports')).toHaveTextContent('current'))
+ expect(screen.getByLabelText('Reports')).not.toHaveTextContent('older')
+ await act(async()=>{resolve({data:retained,error:null});await pending})
+ expect(screen.getByLabelText('Reports')).not.toHaveTextContent('older')
+})
 it('disables the account connection and clears only the retained hub after success',async()=>{
  render(<OfflineProvider><Controls /></OfflineProvider>)
  fireEvent.click(screen.getByRole('button',{name:'Disconnect'}))

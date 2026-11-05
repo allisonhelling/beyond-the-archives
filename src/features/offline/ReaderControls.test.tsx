@@ -3,12 +3,43 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { CloudReaderBook, ReaderReport } from './storage'
 import { blankMetadata } from '../library/model'
-const mocks=vi.hoisted(()=>({readers:[] as ReaderReport[],connected:undefined as boolean|undefined,cloudBooks:[] as CloudReaderBook[],disconnect:vi.fn()}))
-vi.mock('./OfflineProvider',()=>({useOffline:()=>({snapshot:{readers:mocks.readers,connected:mocks.connected,cloudBooks:mocks.cloudBooks},disconnect:mocks.disconnect})}))
+const mocks=vi.hoisted(()=>({readers:[] as ReaderReport[],connected:undefined as boolean|undefined,cloudBooks:[] as CloudReaderBook[],disconnect:vi.fn(),forgetReport:vi.fn()}))
+vi.mock('./OfflineProvider',()=>({useOffline:()=>({snapshot:{readers:mocks.readers,connected:mocks.connected,cloudBooks:mocks.cloudBooks},disconnect:mocks.disconnect,forgetReport:mocks.forgetReport})}))
 vi.mock('./ConnectReader',()=>({ConnectReader:()=> <button>Open Reader</button>}))
 import { ReadEpub, ReaderControls } from './ReaderControls'
-beforeEach(()=>{mocks.readers=[];mocks.connected=undefined;mocks.cloudBooks=[];mocks.disconnect.mockReset().mockResolvedValue(undefined)})
+import { useLocation } from 'react-router-dom'
+beforeEach(()=>{mocks.readers=[];mocks.connected=undefined;mocks.cloudBooks=[];mocks.disconnect.mockReset().mockResolvedValue(undefined);mocks.forgetReport.mockReset().mockResolvedValue(undefined)})
 const report=(id:string,works:string[]):ReaderReport=>({id,name:id,url:`https://${id}.example/`,works,reportedAt:'2026-11-01T00:00:00Z'})
+it('shows one connection summary and lets the user remove a specific old installation report', async () => {
+ mocks.connected=true
+ mocks.readers=[{...report('older',['123']),name:'My Organizer'},{...report('current',['123']),name:'My Organizer',reportedAt:'2026-11-04T15:40:40Z'}]
+ render(<MemoryRouter><ReaderControls hub /></MemoryRouter>)
+ expect(screen.getAllByText(/Latest download report:/)).toHaveLength(1)
+ expect(screen.getByRole('heading',{name:'Connected Reader'})).toBeVisible()
+ fireEvent.click(screen.getByText('Installation Reports (2)'))
+ fireEvent.click(screen.getAllByRole('button',{name:'Remove Report'})[0])
+ await waitFor(()=>expect(mocks.forgetReport).toHaveBeenCalledWith('older'))
+ expect(mocks.disconnect).not.toHaveBeenCalled()
+ expect(await screen.findByText(/Installation report removed/)).toBeVisible()
+})
+function CurrentQuery() { return <output aria-label="Current Query">{useLocation().search}</output> }
+it('offers platforms instead of installation names and leaves unsupported platforms disabled', () => {
+ mocks.readers=[report('My Organizer',['123'])]
+ render(<MemoryRouter initialEntries={['/library?reader=old-installation&page=3']}><ReaderControls /><CurrentQuery /></MemoryRouter>)
+ const trigger=screen.getByRole('button',{name:'Available In'})
+ expect(trigger).toHaveTextContent('Archives Unfolded')
+ fireEvent.click(trigger)
+ expect(screen.queryByRole('option',{name:'My Organizer'})).not.toBeInTheDocument()
+ for (const name of ['Apple Books','Kindle','PocketBook']) expect(screen.getByRole('option',{name})).toBeDisabled()
+ fireEvent.click(screen.getByRole('option',{name:'BookFusion'}))
+ expect(screen.getByLabelText('Current Query')).toHaveTextContent('availability=bookfusion')
+ expect(screen.getByLabelText('Current Query')).toHaveTextContent('page=1')
+ expect(screen.getByLabelText('Current Query')).not.toHaveTextContent('reader=')
+ expect(screen.getByText(/Download status is not verified/)).toBeVisible()
+ fireEvent.click(trigger)
+ fireEvent.click(screen.getByRole('option',{name:'All Works'}))
+ expect(screen.getByLabelText('Current Query')).not.toHaveTextContent('availability=')
+})
 it.each([[],[report('empty',[])],[report('other',['456'])]].map(readers=>[readers]))('hides Read EPUB when no reader reports this work',readers=>{
  mocks.readers=readers
  render(<MemoryRouter><ReadEpub workId={123} /><ReadEpub workId={123} variant="details" /></MemoryRouter>)

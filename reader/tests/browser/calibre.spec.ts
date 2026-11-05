@@ -119,6 +119,7 @@ test('local Calibre deliveries share duplicates, versions, mapping, and durable 
  const details=page.getByRole('dialog',{name:'View Details',exact:true})
  await expect(details.locator('dt').filter({hasText:/^Calibre Work Link$/}).locator('..').locator('dd')).toHaveText('https://archiveofourown.org/works/8001')
  await details.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await page.setViewportSize({width:1280,height:900})
  await page.reload()
  await page.getByRole('button',{name:'Calibre',exact:true}).click()
  await page.getByRole('tab',{name:/Failed/}).click()

@@ -16,8 +16,8 @@ import { filterPublicationLabel, readingFilterTags, removeReadingFilter } from '
 import { publicationStatuses } from './publication-status'
 import { defaultReadingFilters, filterReading, normalize, type ReadingFilters } from './reading-search'
 
-type FandomOption = { name: string; count: number }
-function FandomSelect({ options, selected, onChange, label = 'Select Fandoms' }: { label?: string; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
+type FandomOption = { name: string; count: number; value?: string }
+export function FandomSelect({ options, selected, onChange, label = 'Select Fandoms', matchingControl }: { label?: string; matchingControl?: ReactNode; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState('')
   const id = useId()
   const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false))
@@ -27,9 +27,10 @@ function FandomSelect({ options, selected, onChange, label = 'Select Fandoms' }:
     {open && <div id={id} className="fandom-panel menu-surface" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
       <input aria-label="Search Fandoms" type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Fandoms" />
       {/* Keep label presses from focusing the page and dismissing the menu before checkbox activation. */}
-      <div className="fandom-options">{options.filter(f => normalize(f.name).includes(normalize(query))).map(f => <label key={f.name} className="check-label" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }} htmlFor={`${id}-${encodeURIComponent(f.name)}`}><input id={`${id}-${encodeURIComponent(f.name)}`} type="checkbox" checked={selected.includes(f.name)} onChange={e => onChange(e.target.checked ? [...selected, f.name] : selected.filter(name => name !== f.name))} /><span className="fandom-option-label"><span>{f.name}</span>{' '}<span className="fandom-count">({f.count})</span></span></label>)}</div>
+      <div className="fandom-options">{options.filter(f => normalize(f.name).includes(normalize(query))).map(f => <label key={f.name} className="check-label" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }} htmlFor={`${id}-${encodeURIComponent(f.value ?? f.name)}`}><input id={`${id}-${encodeURIComponent(f.value ?? f.name)}`} type="checkbox" checked={selected.includes(f.value ?? f.name)} onChange={e => onChange(e.target.checked ? [...selected, f.value ?? f.name] : selected.filter(name => name !== (f.value ?? f.name)))} /><span className="fandom-option-label"><span>{f.name}</span>{' '}<span className="fandom-count">({f.count})</span></span></label>)}</div>
       {!options.some(f => normalize(f.name).includes(normalize(query))) && <p>No matching fandoms.</p>}
     </div>}
+    {matchingControl}
   </div>
 }
 function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: string; onChange: (value: string) => void; stories: Story[]; authorOnly: boolean }) {

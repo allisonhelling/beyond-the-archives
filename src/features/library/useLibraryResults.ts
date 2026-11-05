@@ -4,18 +4,20 @@ import { useEffect, useRef, useState } from 'react'
 import { useLibrary } from './LibraryProvider'
 import { libraryFacetScope, type LibraryFacets, type LibraryQuery, type LibraryResults } from './repository'
 
-export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { range?: { start: number; end: number }; loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void } {
+export function useLibraryResults(query: LibraryQuery, page: number, size: number, enabled: boolean): { range?: { start: number; end: number }; loading: boolean; result?: LibraryResults; previousResult?: LibraryResults; error?: string; suggestions?: LibraryResults['suggestions']; facets?: LibraryFacets; facetsError?: string; retry: () => void; retrySuggestions: () => void } {
   const { hasCachedPage, fetchPage, fetchFacets, revision, tagRevision, collections } = useLibrary()
   const [state, setState] = useState<{ key: string; scopeKey?: string; size?: number; result?: LibraryResults; error?: string }>({ key: '' })
   const [facetState, setFacets] = useState<{ key: string; scopeKey?: string; result?: LibraryFacets; error?: string }>({ key: '' })
   const [attempt, setAttempt] = useState(0)
+  const [facetAttempt, setFacetAttempt] = useState(0)
   const automatic = collections?.some(collection => collection.id === query.shelf && hasTagRules(collection.automatic_rules))
   const aliasRevision = hasTagFilters(query.filters) || automatic ? tagRevision ?? 0 : 0
   const queryKey = JSON.stringify([query, page, size, aliasRevision])
   const key = JSON.stringify([queryKey, revision, attempt])
   const scopeKey = JSON.stringify(libraryFacetScope(query))
   const resultScopeKey = JSON.stringify({ ...libraryFacetScope(query), shelf: query.shelf })
-  const facetKey = JSON.stringify([scopeKey, revision, attempt, automatic ? tagRevision ?? 0 : 0])
+  const facetKey = JSON.stringify([scopeKey, revision, facetAttempt, automatic ? tagRevision ?? 0 : 0])
+  function retrySuggestions() { setFacetAttempt(value => value + 1) }
   function retry() { setState(current => ({ ...current, key: '', error: undefined })); setAttempt(value => value + 1) }
   const { query: search, within, relationship, characters, tags, personalTags, updatedAfter, updatedBefore, ...controls } = query.filters
   const textKey = JSON.stringify([search, within, relationship, characters, tags, personalTags, updatedAfter, updatedBefore])
@@ -58,5 +60,5 @@ export function useLibraryResults(query: LibraryQuery, page: number, size: numbe
   // Retained cards and their range belong to the same completed request. A new
   // page size must not relabel old rows before its replacement arrives.
   const range = state.result && state.size && state.scopeKey === resultScopeKey ? { start: (state.result.page - 1) * state.size + 1, end: Math.min(state.result.page * state.size, state.result.total) } : undefined
-  return { ...results, range, facets: currentFacets?.result ?? (facetState.scopeKey === scopeKey ? facetState.result : undefined), facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
+  return { ...results, retrySuggestions, range, facets: currentFacets?.result ?? (facetState.scopeKey === scopeKey ? facetState.result : undefined), facetsError: currentFacets?.error, suggestions: currentFacets?.result?.suggestions }
 }

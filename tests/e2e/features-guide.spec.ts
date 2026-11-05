@@ -4,6 +4,86 @@ import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 import { libraryQueryFixture } from './library-query-fixture'
 
+test('removes an older installation report without disconnecting the reader or removing cloud books',async({page})=>{
+ await fixture(page)
+ const older='20000000-0000-0000-0000-000000000001',current='20000000-0000-0000-0000-000000000002'
+ let readers=[{id:older,name:'My Organizer',url:'https://reader.example/',reportedAt:'2026-11-04T14:58:40Z',works:[]},{id:current,name:'My Organizer',url:'https://reader.example/',reportedAt:'2026-11-04T15:40:40Z',works:[]}]
+ const cloudBook={id:'a'.repeat(64),workId:null,metadata:{...blankMetadata,title:'Cloud Book Kept'},status:'to_read',notes:'',completedCount:0}
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers,stories:[],cloudBooks:[cloudBook]}}))
+ const actions:string[]=[]
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>{
+  const input=route.request().postDataJSON()
+  actions.push(input.p_action)
+  if(input.p_action==='forget_report') {
+   expect(input.p_installation).toBe(older)
+   readers=readers.filter(reader=>reader.id!==input.p_installation)
+  }
+  return route.fulfill({json:{enabled:true}})
+ })
+ await page.goto('/library');await login(page);await page.goto('/offline')
+ await expect(page.getByText('Latest download report:',{exact:false})).toHaveCount(1)
+ await page.getByText('Installation Reports (2)',{exact:true}).click()
+ await page.locator('.settings-subsection').filter({hasText:older}).getByRole('button',{name:'Remove Report',exact:true}).click()
+ await expect(page.getByText('Installation Reports (1)',{exact:true})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Connected Reader',exact:true})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Cloud Book Kept',exact:true})).toBeVisible()
+ expect(actions).toContain('forget_report');expect(actions).not.toContain('disable')
+ await page.reload()
+ await expect(page.getByText('Installation Reports (1)',{exact:true})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Cloud Book Kept',exact:true})).toBeVisible()
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+})
+
+test('platform availability filters saved works without offering organizer installation names',async({page})=>{
+ const tables=await fixture(page)
+ tables.reader_availability=[{works:['94001']},{works:['94002']}]
+ for(const [index,title] of ['First Download','Second Download','BookFusion Only'].entries()) {
+  tables.works.push({id:`platform-work-${index}`,ao3_work_id:94001+index,verified_chapters:{}})
+  tables.library_entries.push({id:`platform-entry-${index}`,work_id:`platform-work-${index}`,reading_status:'to_read',last_read_chapter:0,original_url:`https://archiveofourown.org/works/${94001+index}`,metadata_overrides:{title,...(index===2?{bookfusion_link:{url:'https://www.bookfusion.com/reader/123',kind:'book'}}:{})}})
+ }
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'organizer',name:'My Organizer',url:'https://reader.example/',reportedAt:'2026-11-04T00:00:00Z',works:['94001']}],stories:[]}}))
+ await page.goto('/library');await login(page)
+ await expect(page.locator('.work-card')).toHaveCount(3)
+ await page.getByRole('button',{name:'Filters',exact:true}).click()
+ const selector=page.getByRole('button',{name:'Available In',exact:true})
+ await selector.click()
+ await expect(page.getByRole('option',{name:'My Organizer',exact:true})).toHaveCount(0)
+ for(const name of ['Apple Books','Kindle','PocketBook']) await expect(page.getByRole('option',{name,exact:true})).toBeDisabled()
+ await page.getByRole('option',{name:'Archives Unfolded',exact:true}).click()
+ await expect(page).toHaveURL(/availability=unfolded/)
+ await expect(page.locator('.work-card')).toHaveCount(2)
+ await selector.click();await page.getByRole('option',{name:'BookFusion',exact:true}).click()
+ await expect(page.locator('.work-card')).toHaveCount(1)
+ await expect(page.getByRole('link',{name:'BookFusion Only',exact:true})).toBeVisible()
+ await page.reload()
+ await expect(page.locator('.work-card')).toHaveCount(1)
+ await page.getByRole('button',{name:'Filters',exact:true}).click()
+ await selector.click();await page.getByRole('option',{name:'All Works',exact:true}).click()
+ await expect(page.locator('.work-card')).toHaveCount(3)
+})
+
+test('suggestion retries preserve results and do not restart requests while idle',async({page})=>{
+ await page.clock.install()
+ const tables=await fixture(page)
+ tables.works.push({id:'suggestions-work',ao3_work_id:94004,verified_chapters:{}})
+ tables.library_entries.push({id:'suggestions-entry',work_id:'suggestions-work',reading_status:'to_read',last_read_chapter:0,original_url:'https://archiveofourown.org/works/94004',metadata_overrides:{title:'Retained Results'}})
+ let facets=0,pages=0
+ await page.route('**/rest/v1/rpc/library_query_facets',route=>++facets===1?route.fulfill({status:500,json:{code:'57014',message:'statement timeout'}}):route.fallback())
+ await page.route('**/rest/v1/rpc/query_library',route=>{pages++;return route.fallback()})
+ await page.goto('/library');await login(page)
+ const retry=page.getByRole('button',{name:'Retry Suggestions',exact:true})
+ await expect(retry).toBeVisible()
+ await expect(page.getByRole('link',{name:'Retained Results',exact:true})).toBeVisible()
+ await page.clock.runFor(60000)
+ expect(facets).toBe(1)
+ const before=pages
+ await retry.click()
+ await expect(retry).toHaveCount(0)
+ expect(facets).toBe(2)
+ expect(pages).toBe(before)
+ await expect(page.getByRole('link',{name:'Retained Results',exact:true})).toBeVisible()
+})
+
 test('features guide links to every current workflow on desktop and mobile', async ({ page }) => {
  await fixture(page)
  await page.goto('/features'); await login(page)

@@ -21,6 +21,23 @@ it('retries a failed page with the same shelf, filters and pagination', async ()
  expect(mocks.fetchPage).toHaveBeenLastCalledWith(query, 2, 25, expect.any(AbortSignal))
 })
 
+it('retries suggestions without refetching results and stays idle after a suggestion failure', async () => {
+ mocks.fetchPage.mockResolvedValue(result)
+ mocks.fetchFacets.mockRejectedValueOnce(new Error('The request took too long.')).mockResolvedValueOnce({suggestions:{tags:['Comfort']},fandoms:[],total:1})
+ const view = renderHook(() => useLibraryResults(query, 1, 25, true))
+ await waitFor(() => expect(view.result.current.facetsError).toBe('The request took too long.'))
+ view.rerender()
+ expect(mocks.fetchFacets).toHaveBeenCalledTimes(1)
+ act(() => view.result.current.retrySuggestions())
+ await waitFor(() => expect(view.result.current.suggestions?.tags).toEqual(['Comfort']))
+ expect(mocks.fetchPage).toHaveBeenCalledTimes(1)
+ expect(view.result.current.result).toEqual(result)
+ expect(view.result.current.facetsError).toBeUndefined()
+ act(() => view.result.current.retry())
+ await waitFor(() => expect(mocks.fetchPage).toHaveBeenCalledTimes(2))
+ expect(mocks.fetchFacets).toHaveBeenCalledTimes(2)
+})
+
 it('aborts obsolete requests and ignores their late failures when switching shelves', async () => {
  let reject!: (error: Error) => void
  mocks.fetchPage.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail })).mockResolvedValueOnce(result)

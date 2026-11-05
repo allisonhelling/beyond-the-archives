@@ -10,33 +10,34 @@ import { useOffline } from './OfflineProvider'
 import { hostedReaderUrl } from '../../lib/reader-connection'
 import { readerWorkUrl } from './storage'
 export function ReaderControls({ hub = false }: { hub?: boolean }) {
-  const { snapshot, shellReady, error, refresh, disconnect, disconnecting } = useOffline()
+  const { snapshot, shellReady, error, refresh, disconnect, disconnecting, forgetReport, removingReport } = useOffline()
   const [message, setMessage] = useState('')
   const [params, setParams] = useSearchParams()
-  const selected = params.get('reader') ?? (hub ? snapshot?.readers[0]?.id ?? '' : '')
-  const reader = snapshot?.readers.find(reader => reader.id === selected)
+  const selected = params.get('availability') ?? (params.get('reader') ? 'unfolded' : '')
   useEffect(() => {
     const requested = params.get('reader')
-    if (!snapshot || !requested || snapshot.readers.some(reader => reader.id === requested)) return
+    if (!snapshot || !requested || !hub || snapshot.readers.some(reader => reader.id === requested)) return
     const next = new URLSearchParams(params); next.delete('reader'); next.set('page', '1'); setParams(next, { replace: true })
-  }, [snapshot, params, setParams])
-  const reports = hub ? snapshot?.readers ?? [] : reader ? [reader] : []
-  const report = reports.map(reader => <p key={reader.id} className="field-help">Last reported by {reader.name}: {new Date(reader.reportedAt).toLocaleString()}. The reader confirms local file availability when opened. This is not verified availability on this device.</p>)
+  }, [snapshot, params, setParams, hub])
+  const reports = hub || selected === 'unfolded' ? snapshot?.readers ?? [] : []
+  const latest = reports.reduce<(typeof reports)[number] | undefined>((current, reader) => !current || Date.parse(reader.reportedAt) > Date.parse(current.reportedAt) ? reader : current, undefined)
+  const report = latest && <p className="field-help">Latest download report: {new Date(latest.reportedAt).toLocaleString()}. The reader confirms local file availability when opened. This is not verified availability on this device.</p>
   const errorMessage = error && <p role="status">{error}</p>
   const cloudWorks = new Set(snapshot?.cloudBooks?.flatMap(book => { const ids = readerWorkIdentities(book); return ids.length ? ids : [book.id] }) ?? [])
   const connected = snapshot?.connected ?? Boolean(snapshot?.readers.length || cloudWorks.size)
-  function selectReader(value: string) {
+  function selectPlatform(value: string) {
     const next = new URLSearchParams(params)
-    if (value) next.set('reader', value); else next.delete('reader')
+    next.delete('reader')
+    if (value) next.set('availability', value); else next.delete('availability')
     next.set('page', '1'); setParams(next)
   }
-  if (!hub) return <div className="reader-availability-filter"><Dropdown fitContent closeOnSelect label="Available Offline" value={selected} onChange={selectReader} options={[{ value: '', label: 'All Works' }, ...(snapshot?.readers.map(reader => ({ value: reader.id, label: reader.name })) ?? [])]} />{report}{errorMessage}</div>
+  if (!hub) return <div className="reader-availability-filter"><Dropdown fitContent closeOnSelect label="Available In" value={selected} onChange={selectPlatform} options={[{ value: '', label: 'All Works' }, { value: 'unfolded', label: 'Archives Unfolded' }, { value: 'bookfusion', label: 'BookFusion' }, ...['Apple Books', 'Kindle', 'PocketBook'].map(label => ({ value: label, label, disabled: true }))]} />{selected === 'bookfusion' && <p className="field-help">Works with a saved BookFusion link. Download status is not verified.</p>}{report}{errorMessage}</div>
   return <section className="settings-card reader-hub-controls" aria-label="Reader Availability"><h2>{connected ? 'Connected Reader' : 'Reader Connection'}</h2>
 
-    {report}{cloudWorks.size > 0 && <p>{cloudWorks.size} {cloudWorks.size === 1 ? 'work saved' : 'works saved'} in the reader cloud. Cloud-only EPUBs need an internet connection to download.</p>}{connected && !cloudWorks.size && !snapshot?.readers.some(reader => reader.works.length) && <p>No downloaded or cloud-saved EPUBs are available yet. Sync the reader account, then Refresh Reader Reports.</p>}
+    {report}{hub && reports.length > 0 && <details><summary>Installation Reports ({reports.length})</summary><p>These are saved download reports, not separate reader connections. Older reports can remain after a browser or storage change. Remove a report you no longer use; books and the reader connection are preserved. An active installation can report again.</p>{reports.map(reader => <div className="settings-subsection" key={reader.id}><p>{reader.name} · Last reported: {new Date(reader.reportedAt).toLocaleString()}</p><p className="field-help">Report ID: <code>{reader.id}</code></p><button className="button secondary" disabled={!navigator.onLine || disconnecting || Boolean(removingReport)} onClick={() => { setMessage(''); void forgetReport(reader.id).then(() => setMessage('Installation report removed. Books and the reader connection are preserved.')).catch(() => {}) }}>{removingReport === reader.id ? 'Removing Report…' : 'Remove Report'}</button></div>)}</details>}{cloudWorks.size > 0 && <p>{cloudWorks.size} {cloudWorks.size === 1 ? 'work saved' : 'works saved'} in the reader cloud. Cloud-only EPUBs need an internet connection to download.</p>}{connected && !cloudWorks.size && !snapshot?.readers.some(reader => reader.works.length) && <p>No downloaded or cloud-saved EPUBs are available yet. Sync the reader account, then Refresh Reader Reports.</p>}
     {!connected && <ConnectReader />}{hub && <p role="status">{shellReady && snapshot ? 'Organizer hub prepared for offline use.' : !snapshot ? 'Connect online and refresh reader reports to retain your hub.' : import.meta.env.DEV ? 'Development mode: build and preview to prepare offline use.' : 'Preparing the organizer interface and retained reports for offline use…'}</p>}
     {hub && <p>Initial setup requires connectivity. Download cloud EPUBs in the reader to prepare them for offline use. The hub does not cache reader files. Browser storage may be cleared; retained reports may be out of date.</p>}
-    {errorMessage}{message && <p role="status">{message}</p>}{hub && <div className="form-actions"><button className="button secondary" disabled={!navigator.onLine || disconnecting} onClick={() => void refresh()}>Refresh Reader Reports</button>{connected && <button className="button secondary" disabled={!navigator.onLine || disconnecting} onClick={() => { setMessage(''); void disconnect().then(() => setMessage('Reader disconnected. Books and reading data are preserved.')).catch(() => {}) }}>{disconnecting ? 'Disconnecting Reader…' : 'Disconnect Reader'}</button>}</div>}
+    {errorMessage}{message && <p role="status">{message}</p>}{hub && <div className="form-actions"><button className="button secondary" disabled={!navigator.onLine || disconnecting || Boolean(removingReport)} onClick={() => void refresh()}>Refresh Reader Reports</button>{connected && <button className="button secondary" disabled={!navigator.onLine || disconnecting || Boolean(removingReport)} onClick={() => { setMessage(''); void disconnect().then(() => setMessage('Reader disconnected. Books and reading data are preserved.')).catch(() => {}) }}>{disconnecting ? 'Disconnecting Reader…' : 'Disconnect Reader'}</button>}</div>}
   </section>
 }
 export function ReadEpub({ workId, bookId, variant = 'default', chapter }: { workId: number | null; bookId?: string; variant?: 'default' | 'details' | 'spine'; chapter?: number }) {

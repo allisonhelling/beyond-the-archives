@@ -187,16 +187,16 @@ export async function loadStories(ids: string[]): Promise<Story[]> {
   if (error) throw new Error('Could not reload the affected works. Check your connection.')
   return ((data ?? []) as unknown as Story[]).map(story => ({ ...story, detailsLoaded: true }))
 }
-export type LibraryQuery = { reader?: string; mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
+export type LibraryQuery = { availability?: 'unfolded' | 'bookfusion'; reader?: string; mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
 export type LibraryResults = { revision?: number; suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export type LibraryFacets = Pick<LibraryResults, 'suggestions' | 'fandoms'> & { total: number }
 export type LibraryNavigation = Record<string, { works: number; series: number; updated_at: string | null }>
 export function libraryQueryHasSeries(query: LibraryQuery) {
-  return !query.reader && query.author === undefined && query.mode !== 'reading' && (query.mode === 'series' || query.shelf === 'series' || query.filters.showSeries)
+  return !query.reader && !query.availability && query.author === undefined && query.mode !== 'reading' && (query.mode === 'series' || query.shelf === 'series' || query.filters.showSeries)
 }
 /** Facets describe the collection pool, independent of page, sort and search filters. */
 export function libraryFacetScope(query: LibraryQuery) {
-  return { ...(query.reader && { reader: query.reader }), mode: query.mode, shelf: query.mode === 'reading' ? 'view_all' : query.shelf, ...(query.author !== undefined && { author: query.author }), filters: { showSeries: query.filters.showSeries } }
+  return { ...(query.reader && { reader: query.reader }), ...(query.availability && { availability: query.availability }), mode: query.mode, shelf: query.mode === 'reading' ? 'view_all' : query.shelf, ...(query.author !== undefined && { author: query.author }), filters: { showSeries: query.filters.showSeries } }
 }
 function libraryLoadError(subject: string, error: { code?: string } | null, status: number) {
   const reason = error?.code === '57014' ? 'The request took too long. Please try again.'

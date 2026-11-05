@@ -11,6 +11,17 @@ function PublicationFilter() {
   ]} /><button>Outside</button></>
 }
 
+it('skips disabled options when navigating from the keyboard', async () => {
+ const user=userEvent.setup()
+ render(<Dropdown label="Reader" value="" onChange={() => {}} options={[{value:'future',label:'Future Reader',disabled:true},{value:'ready',label:'Ready Reader'}]} />)
+ screen.getByRole('button',{name:'Reader'}).focus()
+ await user.keyboard('{ArrowDown}')
+ await waitFor(() => expect(screen.getByRole('option',{name:'Ready Reader'})).toHaveFocus())
+ await user.keyboard('{ArrowDown}')
+ expect(screen.getByRole('option',{name:'Ready Reader'})).toHaveFocus()
+ expect(screen.getByRole('option',{name:'Future Reader'})).toBeDisabled()
+})
+
 it('supports multiple checkbox selections, keyboard navigation, dismissal, and clearing', async () => {
   const user = userEvent.setup()
   render(<PublicationFilter />)

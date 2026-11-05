@@ -167,10 +167,10 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
     return missing || direction * ((b.work.ao3_updated_at ? Date.parse(b.work.ao3_updated_at) : 0) - (a.work.ao3_updated_at ? Date.parse(a.work.ao3_updated_at) : 0)) || alpha
   })
 }
-type ReadingGroup = [name: string, stories: Story[], key: string]
-export function readingGroups(stories: Story[], group: GroupBy): ReadingGroup[] {
+type ReadingGroup<T = Story> = [name: string, stories: T[], key: string]
+export function readingGroups<T extends Pick<Story, 'id' | 'metadata'>>(stories: T[], group: GroupBy): ReadingGroup<T>[] {
   if (group === 'none') return [['', stories, '']]
-  const groups = new Map<string, { name: string; stories: Story[] }>()
+  const groups = new Map<string, { name: string; stories: T[] }>()
   for (const story of stories) {
     let keys: [string, string][]
     if (group === 'series') {

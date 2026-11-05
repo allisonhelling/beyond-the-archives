@@ -4,7 +4,7 @@ import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type Reac
 import { Check, ChevronDown, X, type LucideIcon } from 'lucide-react'
 import { useDismissible } from './useDismissible'
 
-export type DropdownOption = { value: string; label: string }
+export type DropdownOption = { value: string; label: string; disabled?: boolean }
 type DropdownProps = {
   label: string; options: DropdownOption[]; disabled?: boolean; closeOnSelect?: boolean; icon?: LucideIcon; compact?: boolean; mobileIconOnly?: boolean; fitContent?: boolean; searchable?: boolean; showSelections?: boolean; textTrigger?: boolean; portal?: boolean; renderValue?: (label: string) => ReactNode
 } & ({ multiple?: false; value: string; onChange: (value: string) => void } | { multiple: true; value: string[]; onChange: (value: string[]) => void })
@@ -37,8 +37,9 @@ export function Dropdown(props: DropdownProps) {
   }, [open, portal, portalRoot, visibleOptions.length, ref])
   const isSelected = (option: DropdownOption) => Array.isArray(value) ? value.includes(option.value) : value === option.value
   const selected = options.filter(isSelected)
+  const navigableOptions = visibleOptions.filter(option => !option.disabled)
   const valueLabel = selected.length > 1 ? `${selected.length} selected` : selected[0]?.label ?? (props.multiple ? 'All' : 'Select an Option')
-  const optionSelector = props.multiple ? 'input[type=checkbox]' : '[role=option]'
+  const optionSelector = props.multiple ? 'input[type=checkbox]:not(:disabled)' : '[role=option]:not(:disabled)'
   function focusOption(index: number) {
     const buttons = panelRef.current?.querySelectorAll<HTMLElement>(optionSelector)
     if (!buttons?.length) return
@@ -54,7 +55,7 @@ export function Dropdown(props: DropdownProps) {
       event.preventDefault()
       if (!open) {
         setQuery(''); setOpen(true)
-        requestAnimationFrame(() => focusOption(event.key === 'ArrowUp' ? options.length - 1 : Math.max(0, options.findIndex(isSelected))))
+        requestAnimationFrame(() => focusOption(event.key === 'ArrowUp' ? navigableOptions.length - 1 : Math.max(0, navigableOptions.findIndex(isSelected))))
       } else focusOption(event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : index < 0 ? event.key === 'ArrowUp' ? buttons.length - 1 : 0 : index + (event.key === 'ArrowUp' ? -1 : 1))
     }
   }
@@ -62,9 +63,9 @@ export function Dropdown(props: DropdownProps) {
       {props.searchable && <input type="search" className="dropdown-search" aria-label={`Search ${label}`} placeholder={`Search ${label}`} autoFocus value={query} onChange={event => setQuery(event.target.value)} />}
       {!visibleOptions.length && <p className="dropdown-empty">No matching options.</p>}
       {props.multiple ? visibleOptions.map(option => <label key={option.value} className="check-label dropdown-check-option" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }}>
-        <input type="checkbox" disabled={disabled} checked={isSelected(option)} onChange={event => props.onChange(event.target.checked ? [...props.value, option.value] : props.value.filter(value => value !== option.value))} />
+        <input type="checkbox" disabled={disabled || option.disabled} checked={isSelected(option)} onChange={event => props.onChange(event.target.checked ? [...props.value, option.value] : props.value.filter(value => value !== option.value))} />
         <span>{option.label}</span>
-      </label>) : visibleOptions.map(option => <button type="button" role="option" disabled={disabled} key={option.value} aria-selected={value === option.value} onClick={() => {
+      </label>) : visibleOptions.map(option => <button type="button" role="option" disabled={disabled || option.disabled} key={option.value} aria-selected={value === option.value} onClick={() => {
         props.onChange(option.value)
         if (closeOnSelect) { setOpen(false); ref.current?.querySelector<HTMLButtonElement>('.dropdown-trigger')?.focus() }
       }}><span>{option.label}</span>{value === option.value && <Check size={16} />}</button>)}

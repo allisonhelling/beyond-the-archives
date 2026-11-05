@@ -45,9 +45,10 @@ for (const width of [390, 1280]) test(`customizes reading and scrubs chapter pro
   const spacing = (await page.getByRole('group', { name: 'Line Spacing', exact: true }).boundingBox())!
   const layout = (await page.locator('.display-layout-row').boundingBox())!
   expect(colors.y).toBeGreaterThanOrEqual(font.y + font.height)
-  expect(spacing.y).toBeCloseTo(colors.y, 0)
+  expect(spacing.y).toBeCloseTo(font.y, 0)
   expect(layout.y).toBeGreaterThanOrEqual(colors.y + colors.height)
-  await expect(page.getByRole('combobox', { name: 'Content Shown' }).locator('..')).toHaveCSS('flex-direction', 'row')
+  const scrolling=(await page.getByRole('switch',{name:'Scrolling View'}).locator('..').boundingBox())!,content=(await page.getByRole('combobox',{name:'Content Shown'}).locator('..').boundingBox())!
+  expect(Math.abs(scrolling.y-content.y)).toBeLessThan(25)
  }
  await page.screenshot({path:`test-results/reading-general-${width}.png`})
  await page.getByRole('tab',{name:'Advanced',exact:true}).click()

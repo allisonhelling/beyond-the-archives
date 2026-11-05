@@ -6,13 +6,15 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/auth-context'
 import { useActivity } from '../../lib/use-activity'
 import { clearOfflineSnapshot, offlineCleared, readOfflineSnapshot, saveOfflineSnapshot, type OfflineSnapshot } from './storage'
-const Context = createContext<{ snapshot?: OfflineSnapshot; shellReady: boolean; error: string; refresh: () => Promise<void>; disconnect: () => Promise<void>; disconnecting: boolean; mark: (story: Story, field: 'favorite' | 'rec', value: boolean) => Promise<void> }>({ shellReady: false, error: '', refresh: async () => {}, disconnect: async () => {}, disconnecting: false, mark: async () => {} })
+const Context = createContext<{ snapshot?: OfflineSnapshot; shellReady: boolean; error: string; refresh: () => Promise<void>; disconnect: () => Promise<void>; disconnecting: boolean; forgetReport: (id: string) => Promise<void>; removingReport?: string; mark: (story: Story, field: 'favorite' | 'rec', value: boolean) => Promise<void> }>({ shellReady: false, error: '', refresh: async () => {}, disconnect: async () => {}, disconnecting: false, forgetReport: async () => {}, mark: async () => {} })
 export function OfflineProvider({ children }: { children: ReactNode }) {
   const { session, authenticated } = useAuth()
   const userId = session?.user.id
   const identity = useRef(userId)
   const generation = useRef(0)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [removingReport, setRemovingReport] = useState<string>()
+  useActivity(Boolean(removingReport), 'Removing installation report…')
   useActivity(disconnecting, 'Disconnecting reader…')
   useEffect(() => { identity.current = userId }, [userId])
   const [snapshot, setSnapshot] = useState(readOfflineSnapshot)
@@ -81,6 +83,26 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     saveOfflineSnapshot(next); setSnapshot(next)
     await refresh()
   }
+  async function forgetReport(id: string) {
+    setRemovingReport(id); setError('')
+    const requestGeneration = ++generation.current
+    try {
+      if (!supabase || !authenticated || !userId || !navigator.onLine) throw new Error('Sign in online to remove a report.')
+      const { error } = await supabase.rpc('reader_organizer_connection', { p_action: 'forget_report', p_installation: id })
+      if (error) throw error
+      if (identity.current !== userId || generation.current !== requestGeneration) return
+      generation.current++
+      const current = readOfflineSnapshot()
+      if (current?.userId === userId) {
+        const next = { ...current, readers: current.readers.filter(reader => reader.id !== id) }
+        saveOfflineSnapshot(next); setSnapshot(next)
+      }
+    } catch {
+      const message = 'Could not remove this installation report. Sign in online and try again.'
+      if (identity.current === userId && generation.current === requestGeneration) setError(message)
+      throw new Error(message)
+    } finally { setRemovingReport(undefined) }
+  }
   async function disconnect() {
     setDisconnecting(true); setError(''); generation.current++
     try {
@@ -104,7 +126,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     // Account changes must fetch a fresh, owner-scoped snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, authenticated])
-  return <Context value={{ snapshot: userId && snapshot?.userId !== userId ? undefined : snapshot, shellReady, error, refresh, disconnect, disconnecting, mark }}>{children}</Context>
+  return <Context value={{ snapshot: userId && snapshot?.userId !== userId ? undefined : snapshot, shellReady, error, refresh, disconnect, disconnecting, forgetReport, removingReport, mark }}>{children}</Context>
 }
 // eslint-disable-next-line react-refresh/only-export-components
 export function useOffline() { return useContext(Context) }

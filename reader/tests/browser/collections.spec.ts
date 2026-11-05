@@ -27,9 +27,9 @@ for (const width of [390, 1280]) test(`shares organizer collection creation, edi
  await importBook(page, 'Shared Story', undefined, 'Author', 'https://archiveofourown.org/works/8001')
  const heading = page.locator('.page-heading.library-heading')
  await expect(heading).toHaveCSS('margin-bottom', width < 650 ? '25px' : '31px')
- await expect(heading.getByRole('heading', { name: 'Collections', exact: true })).toHaveCSS('font-size', width < 650 ? '32px' : '39px')
+ await expect(heading.getByRole('heading', { name: 'Collections', exact: true })).toHaveCSS('font-size', width < 650 ? '24px' : '39px')
  await expect(heading.getByRole('heading', { name: 'Collections', exact: true })).toHaveCSS('font-weight', '400')
- const edit = heading.getByRole('button', { name: 'Edit Collections', exact: true })
+ const edit = heading.getByRole('button', { name: width < 1100 ? 'Edit' : 'Edit Collections', exact: true })
  await expect(async () => {
   const headerBox = (await heading.boundingBox())!, buttonBox = (await edit.boundingBox())!
   expect(Math.abs(headerBox.x + headerBox.width - buttonBox.x - buttonBox.width)).toBeLessThan(1)
@@ -51,6 +51,7 @@ for (const width of [390, 1280]) test(`shares organizer collection creation, edi
  await spine.hover()
  await expect(title).toHaveCSS('color', textColor)
  await edit.click()
+ if (width >= 650) {
  await expect(async () => {
   const controls = await Promise.all(['Hidden', 'Select Collections', 'Collection Controls', 'Done Editing'].map(name => heading.getByRole('button', { name, exact: true }).boundingBox()))
   for (let i = 1; i < controls.length; i++) {
@@ -60,6 +61,11 @@ for (const width of [390, 1280]) test(`shares organizer collection creation, edi
    expect(right.x - left.x - left.width).toBeLessThanOrEqual(width < 650 ? 4 : 12)
   }
  }).toPass()
+ } else {
+  const hidden=heading.getByRole('button',{name:'Hidden',exact:true}), icon=hidden.locator('svg')
+  const box=(await hidden.boundingBox())!, symbol=(await icon.boundingBox())!
+  expect(Math.abs(box.y+box.height/2-symbol.y-symbol.height/2)).toBeLessThan(1)
+ }
  await heading.getByRole('button', { name: 'Done Editing', exact: true }).click()
  await shelves.getByRole('button', { name: 'New Collection', exact: true }).last().click()
  const dialog = page.getByRole('dialog', { name: 'New Collection', exact: true })
@@ -81,6 +87,11 @@ for (const width of [390, 1280]) test(`shares organizer collection creation, edi
  const nameBox = (await collectionTitle.getByRole('heading', { name: 'Shared Collection', exact: true }).boundingBox())!, addBox = (await addStory.boundingBox())!
  expect(addBox.x).toBeGreaterThan(nameBox.x + nameBox.width)
  expect(Math.abs(addBox.y + addBox.height / 2 - nameBox.y - nameBox.height / 2)).toBeLessThan(1)
+ await expect(card).toBeVisible()
+ await card.locator('.card-actions > button').first().click()
+ await expect(page.getByLabel('Book Content')).toBeVisible()
+ await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
+ await expect(shelves.getByRole('button', { name: 'Shared Collection', exact: true })).toHaveAttribute('aria-pressed', 'true')
  await expect(card).toBeVisible()
  await card.getByRole('button', { name: 'Add to Collection', exact: true }).click()
  await membership.getByRole('checkbox', { name: 'Shared Collection', exact: true }).uncheck()

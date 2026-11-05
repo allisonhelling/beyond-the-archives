@@ -126,7 +126,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
   let error = '', filtered: Story[] = []
   try { filtered = filterItems(localResults ? pool : [], filters) } catch (e) { error = (e as Error).message }
   const localShown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
-  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(params.get('reader') && { reader: params.get('reader')! }), ...(author !== undefined && { author }) }, page, size, !localResults && !error)
+  const availability = params.get('availability')
+  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(availability === 'unfolded' || availability === 'bookfusion' ? { availability } : params.get('reader') ? { reader: params.get('reader')! } : {}), ...(author !== undefined && { author }) }, page, size, !localResults && !error)
   const displayed = remote.result ?? remote.previousResult
   const countsStale = !localResults && !remote.result
   const total = localResults ? localShown.length : displayed?.total
@@ -159,7 +160,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
     <ReadingFilterControls availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={applyFilters} mode={mode} orderingControls={orderingControls} sortControl={mobile ? sortControl : undefined} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
     {pagination(true)}
-    {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retry} retryLabel="Retry Suggestions" />}
+    {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retrySuggestions} retryLabel="Retry Suggestions" />}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <RetryError message={error} onRetry={remote.error ? remote.retry : undefined} />}
     {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <TagFilterContext value={searchTag}><LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /></TagFilterContext> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}

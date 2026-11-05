@@ -1,3 +1,4 @@
+import { SettingsCategoryList, SettingsSectionLabel } from '../../components/SettingsCategoryList'
 import { ReadingStatsSettings } from '../stats/ReadingStatsSettings'
 import { readingStatsSettingsSection } from './settings-sections'
 import { PersonalRatingSettings } from './PersonalRatingSettings'
@@ -11,7 +12,7 @@ import { ao3UsernameSettingsSection, metadataSettingsSection, seriesImportSettin
 import { accountSettingsSection, browserBarSettingsSection, comingSoonSettingsSection, personalRatingSettingsSection } from './settings-sections'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Ao3UsernameSettings } from '../imports/Ao3UsernameSettings'
 import { MetadataSettings } from '../imports/MetadataSettings'
 import { BackupSettings } from '../backups/BackupSettings'
@@ -37,10 +38,6 @@ const settingsSections: { id: string; title: string; description: string; compon
   { ...csvExportSettingsSection, component: CsvExportSettings },
   { ...comingSoonSettingsSection, component: ComingSoonSettings },
 ]
-
-function SettingsSectionLabel({ title, description, descriptionId }: { title: string; description: string; descriptionId: string }) {
-  return <span className="settings-section-label"><span>{title}</span><small className="muted" id={descriptionId}>{description}</small></span>
-}
 
 export function SettingsPage() {
   const location = useLocation(), navigate = useNavigate()
@@ -80,7 +77,7 @@ export function SettingsPage() {
     <aside className="settings-outline"><nav aria-label="Settings Section Outline"><h2>On This Page</h2><ul>{settingsSections.map(({ id, title, description }) => <li key={id}><a aria-label={title} aria-describedby={`outline-description-${id}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={event => { event.preventDefault(); jumpToSection(id) }}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></a></li>)}</ul></nav></aside>
     <div className="settings-content" ref={content}>
       <div className="page-heading settings-index-heading"><h1>Settings</h1></div>
-      <nav className="settings-section-list" aria-label="Settings Sections"><ul>{settingsSections.map(({ id, title, description }) => <li key={id}><Link aria-label={title} aria-describedby={`list-description-${id}`} id={`open-${id}`} to={`/settings#${id}`} state={{ settingsIndex: true }}><SettingsSectionLabel title={title} description={description} descriptionId={`list-description-${id}`} /><ChevronRight size={18} aria-hidden="true" /></Link></li>)}</ul></nav>
+      <SettingsCategoryList sections={settingsSections} renderLink={({ id, title }, contents, descriptionId) => <Link aria-label={title} aria-describedby={descriptionId} id={`open-${id}`} to={`/settings#${id}`} state={{ settingsIndex: true }}>{contents}</Link>} />
       <div className="settings-section-back"><button className="button secondary" onClick={() => { if (location.state?.settingsIndex) navigate(-1); else navigate('/settings', { replace: true }) }}><ArrowLeft size={17} aria-hidden="true" />Back to Settings</button></div>
       {settingsSections.map(({ id, component: Section }) => <div key={id} className="settings-section" data-selected={selectedSection === id}><Section /></div>)}
     </div>

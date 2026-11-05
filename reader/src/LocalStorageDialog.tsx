@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Pagination } from '../../src/features/library/browsing/Pagination'
-import { Dialog } from '../../src/components/Dialog'
+import { ReaderSection } from './ReaderSettings'
 import type { CatalogBook, Preferences } from './model'
 import { formatBytes, storageFullMessage } from './storage-info'
 import { storageColumnLabels, storageColumnOrder, storageRows, storageValue, moveStorageColumn, type StorageColumn } from './storage-table'
 export type StorageEstimate={usage?:number;quota?:number;persistent?:boolean}
-export function LocalStorageDialog({books,storage,full,busy,cloud,online,preferences,onClose,onRemove,onDelete,onDownload,onDetails,onColumns,onSort,onPersist}:{
+export function LocalStorageDialog({asPage=false,books,storage,full,busy,cloud,online,preferences,onClose,onRemove,onDelete,onDownload,onDetails,onColumns,onSort,onPersist}:{asPage?:boolean;
  books:CatalogBook[];storage?:StorageEstimate;full:boolean;busy:boolean;cloud:boolean;online:boolean;preferences:Preferences;onClose:()=>void;onRemove:(books:CatalogBook[])=>void;onDelete:(books:CatalogBook[])=>void;onDownload:(books:CatalogBook[])=>void;onDetails:(id:string)=>void;onColumns:(order:string[])=>void;onSort:(sort:{key:string;ascending:boolean})=>void;onPersist:()=>void
 }){
  const [query,setQuery]=useState(''),[page,setPage]=useState(1),[selected,setSelected]=useState<Set<string>>(new Set()),[anchor,setAnchor]=useState<string>()
@@ -17,7 +17,7 @@ export function LocalStorageDialog({books,storage,full,busy,cloud,online,prefere
  const chosen=books.filter(book=>selected.has(book.id)),downloads=chosen.filter(book=>book.hasFile),remote=chosen.filter(book=>!book.hasFile&&cloud)
  function select(id:string,range=false){setSelected(current=>{const next=new Set(current),a=rows.findIndex(book=>book.id===anchor),b=rows.findIndex(book=>book.id===id);if(range&&a>=0){for(const book of rows.slice(Math.min(a,b),Math.max(a,b)+1))next.add(book.id)}else if(next.has(id))next.delete(id);else next.add(id);return next});setAnchor(id)}
  function reorder(source:StorageColumn,target:StorageColumn){onColumns(moveStorageColumn(columns,source,target));suppressClick.current=true}
- return <Dialog title="Manage Local Storage" className="storage-dialog" busy={busy} onClose={onClose}>
+ return <ReaderSection page={asPage} title="Manage Local Storage" className="storage-dialog" busy={busy} onClose={onClose}>
   {full&&<p role="alert">{storageFullMessage}</p>}
   <p>{storage?.usage!==undefined?`${formatBytes(storage.usage)} used${storage.quota!==undefined?` of ${formatBytes(storage.quota)} browser allowance`:''}.`:'Storage estimate unavailable.'} This estimate covers all reader libraries and the offline application on this site. The table shows the selected library.</p>
   <p>Remove Download keeps your bookshelf information, notes, history, and position. Delete from Cloud permanently deletes selected EPUB versions and their reading data from this account on all synced devices. Keep an original EPUB backup or verify a cloud copy first. Browser eviction can remove local libraries and unsynced changes without warning; nothing is removed automatically by this screen.</p>
@@ -31,5 +31,5 @@ export function LocalStorageDialog({books,storage,full,busy,cloud,online,prefere
     <td><input type="checkbox" aria-label={`Select ${book.metadata.title}`} checked={selected.has(book.id)} onClick={event=>event.stopPropagation()} onChange={()=>select(book.id)} /></td>{columns.map(column=>{const value=storageValue(book,column,cloud),text=column==='size'?value!==undefined?formatBytes(Number(value)):'File size unavailable':column==='date'?value!==undefined?new Date(Number(value)).toLocaleDateString():'Unknown':String(value??'')||'Unknown';return <td key={column} data-column={column}><span title={text}>{text}</span></td>})}
    </tr>)}
   </tbody></table></div>{!rows.length&&<p>{books.length?'No works match this search.':'No works are saved in this library.'}</p>}
- </Dialog>
+ </ReaderSection>
 }

@@ -1,3 +1,4 @@
+import { useLayout } from '../../src/lib/use-layout'
 import { readerWorkIdentities } from '../../src/lib/reader-work-identities'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -21,8 +22,9 @@ export function ReaderCollections({ books, account, onScope, onSync, children }:
 }
 
 function ConnectedCollectionBrowser({ books, onScope, onSync, children }: Omit<Parameters<typeof ReaderCollections>[0], 'account'>) {
+  const mobile = useLayout() === 'mobile'
   const [counts, setCounts] = useState<Story[] | null>(null)
-  return <CollectionBrowser title="Collections" countStories={counts}>{({ selected, renderHeader }) => <>
+  return <CollectionBrowser compactHeader={mobile} title="Collections" countStories={counts}>{({ selected, renderHeader }) => <>
     {renderHeader(null)}<CollectionScope books={books} selected={selected} onScope={onScope} onSync={onSync} onCounts={setCounts} />{children}
   </>}</CollectionBrowser>
 }

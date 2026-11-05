@@ -1,0 +1,9 @@
+.settings-card { --settings-inset: 28px; padding: var(--settings-inset); border: 1px solid var(--settings-card-border, #e8d8d3); border-radius: var(--radius-surface); background: var(--color-surface); margin-bottom: 22px; }
+.settings-card h2 { font-size: 23px; margin-bottom: 12px; }
+.section-title { display: flex; gap: 13px; align-items: center; color: #970000; }
+.section-title h2 { margin: 0; }
+.settings-card dl { margin: 25px 0; }
+.settings-card dl > div { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--color-surface-secondary); padding: 13px 0; font-size: 13px; }
+.settings-card dt { color: #756363; }
+.settings-card dd { margin: 0; overflow-wrap: anywhere; }
+.settings-card > p { margin-top: 15px; }

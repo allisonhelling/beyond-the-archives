@@ -1,3 +1,5 @@
+@import "./components/settings-card.css";
+@import "./components/mobile-navigation.css";
 @import "./features/library/reading-filters.css";
 @import "./features/library/collections/collections.css";
 @import "./components/work-menu.css";
@@ -94,7 +96,6 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .empty-state { border: 1px solid #e8d8d3; background: var(--color-surface); border-radius: var(--radius-surface); margin-top: 24px; padding: 38px 24px 44px; text-align: center; }.empty-art { height: 132px; width: 150px; position: relative; margin: 0 auto 20px; display: grid; place-items: center; color: #970000; }.art-orbit { position: absolute; inset: 0 9px; background: var(--color-surface-secondary); border-radius: 50%; }.empty-art > svg { position: relative; transform: rotate(-9deg); }.art-spark { position: absolute; right: 1px; top: 9px; color: #ad5744; font-size: 33px; }.empty-state h2 { font-size: 29px; letter-spacing: -.65px; margin: 12px 0; }.empty-state > p { color: #756363; font-size: 13px; line-height: 1.9; max-width: 385px; margin: 0 auto 23px; }.empty-state .eyebrow { font-size: 13px; }
 .foundation-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-top: 27px; }.foundation-notes > div { display: flex; align-items: center; gap: 11px; color: #ad7770; }.foundation-notes strong { font-size: 13px; color: #756363; font-weight: 500; display: block; }.foundation-notes small { font-size: 13px; display: block; margin-top: 4px; }
 .app-footer { border-top: 1px solid #ecddd8; padding: 23px 42px; display: flex; justify-content: space-between; color: #756363; font-size: 13px; }.app-footer > :first-child { font-family: var(--font-serif); font-style: italic; font-size: 13px; }.app-footer > span { display: flex; align-items: center; gap: 6px; }
-.settings-card { --settings-inset: 28px; padding: var(--settings-inset); border: 1px solid #e8d8d3; border-radius: var(--radius-surface); background: var(--color-surface); margin-bottom: 22px; }.settings-card h2 { font-size: 23px; margin-bottom: 12px; }.section-title { display: flex; gap: 13px; align-items: center; color: #970000; }.section-title h2 { margin: 0; }.settings-card dl { margin: 25px 0; }.settings-card dl > div { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--color-surface-secondary); padding: 13px 0; font-size: 13px; }.settings-card dt { color: #756363; }.settings-card dd { margin: 0; overflow-wrap: anywhere; }.settings-card > p { margin-top: 15px; }
 .roadmap-current { display: flex; gap: 22px; padding: 30px; border: 1px solid #e6c8c1; background: var(--color-surface-secondary); border-radius: var(--radius-surface); color: #970000; }.roadmap-current > svg { flex-shrink: 0; }.roadmap-current h2 { font-size: 30px; margin: 10px 0; color: #612424; }.roadmap-current p { font-size: 13px; line-height: 1.9; max-width: 600px; }.complete-label { display: flex; gap: 7px; align-items: center; font-size: 13px; margin-top: 18px; }.roadmap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 23px; }.roadmap-card { background: var(--color-surface); border: 1px solid #e8d8d3; padding: 25px; border-radius: var(--radius-surface); position: relative; }.phase-number { font-family: var(--font-serif); font-size: 30px; color: #bd7770; display: block; margin-bottom: 20px; }.roadmap-card .eyebrow { position: absolute; right: 22px; top: 36px; color: #756363; font-size: 13px; }.roadmap-card h2 { font-size: 22px; margin-bottom: 11px; }.roadmap-card p { font-size: 13px; color: #756363; line-height: 1.9; }
 .skip-link { position: absolute; left: 15px; top: -80px; padding: 12px; background: #970000; color: white; z-index: 20; }.skip-link:focus { top: 10px; }
 @media (min-width: 1400px) { .auth-main { padding-top: 65px; padding-bottom: 100px; } }
@@ -326,16 +327,9 @@ label.check-label { display: flex; align-items: center; gap: 9px; }
 }
 .add-menu button:hover small,
 .add-menu button:focus-visible small { color: #fff; }
-.mobile-nav, .profile-action.mobile-profile-action { display: none; }
+.profile-action.mobile-profile-action { display: none; }
 @media (max-width: 1100px) {
   .desktop-nav { display: none; }
-  :root { --mobile-nav-height: 68px; scroll-padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 16px); }
-  .app-shell { padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px)); }
-  .mobile-nav { position: fixed; z-index: 10; inset: auto 0 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px)); padding: 5px 12px calc(5px + env(safe-area-inset-bottom, 0px)); background: var(--color-surface); border-top: 1px solid var(--color-border); }
-  .mobile-nav a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 44px; color: #756363; font-size: 12px; }
-  .mobile-nav a::before { content: ''; position: absolute; top: -5px; width: 32px; height: 3px; border-radius: 0 0 3px 3px; background: transparent; }
-  .mobile-nav a.active { color: var(--color-brand); }
-  .mobile-nav a.active::before { background: currentColor; }
   .profile-action.mobile-profile-action { display: flex; }
   .app-header .add-wrapper { display: none; }
 }
@@ -451,11 +445,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 
 .story-return-link { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 13px; }
 .page-heading .story-details-authors { font-size: 15px; }
-@media (max-width: 650px) {
-  .dropdown-mobile-icon-only .dropdown-trigger { width: 36px; justify-content: center; }
-  .dropdown-mobile-icon-only .dropdown-trigger > .dropdown-label { overflow: visible; }
-  .dropdown-mobile-icon-only .dropdown-label-text, .dropdown-mobile-icon-only .dropdown-trigger > svg { display: none; }
-}
 
 /* A full-width binding keeps chapter tools together at the foot of each card. */
 .story-card { --card-inset: 24px; display: flex; flex-direction: column; padding-bottom: 0; }

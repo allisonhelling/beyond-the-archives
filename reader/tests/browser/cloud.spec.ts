@@ -115,6 +115,10 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  expect([...values.values()].find(row=>row.key.endsWith('/notes'))).toMatchObject({value:'First device note',revision:2})
  await account(other);await other.getByRole('button',{name:'Sync Now'}).click()
  await expect(other.getByText('Conflicting Personal Notes',{exact:true})).toBeVisible()
+ await other.setViewportSize({width:390,height:844})
+ const deviceChoice=(await other.getByRole('button',{name:'Use This Device',exact:true}).boundingBox())!,cloudChoice=(await other.getByRole('button',{name:'Use Cloud Version',exact:true}).boundingBox())!
+ expect(Math.abs(deviceChoice.y-cloudChoice.y)).toBeLessThan(1)
+ expect(cloudChoice.x+cloudChoice.width).toBeLessThanOrEqual(390)
  await other.getByRole('button',{name:'Use Cloud Version',exact:true}).click()
  await expect(other.getByText('Conflicting Personal Notes',{exact:true})).toHaveCount(0)
  await other.getByText('Preserved Conflict Versions',{exact:true}).click()
