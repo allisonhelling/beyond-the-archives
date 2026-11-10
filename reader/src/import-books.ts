@@ -27,7 +27,7 @@ export async function prepareImportVersion<T extends Book | BookDetails>(version
   }
   if (isAnthology(version) && linkedId) throw new Error('An anthology contains several works. Link each fic through Review Anthology Contents instead of assigning one AO3 link to the entire EPUB.')
   const next = { ...version, calibreId: calibreId ?? version.calibreId, workId: linkedId ?? version.workId, metadata: { ...version.metadata, ...(link && { calibre_work_link: link }) } }
-  const saved = await listCatalog()
+  const saved = (await listCatalog()).filter(book => !book.deleting)
   if ((await loadSetting<{value:unknown}>(`cloud-edit:${next.id}/deleted`))?.value === true) throw new Error('Cloud deletion of this EPUB is pending. Sync the account before importing this version again.')
   const duplicate = saved.find(book => book.id === next.id)
   const explicit = saved.find(book => book.id === target)

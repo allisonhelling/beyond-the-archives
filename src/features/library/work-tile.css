@@ -6,3 +6,9 @@
 :is(.series-link, .author-link, .metadata-link):is(:hover, :focus-visible) { text-decoration: underline; }
 
 .metadata-link { display: inline; white-space: normal; background: transparent; border: 0; padding: 0; min-height: 0; font: inherit; letter-spacing: inherit; color: inherit; text-align: left; }
+
+@media (max-width: 900px) {
+ :is(.story-card-title, .card-top) { position: relative; padding-top: 36px; }
+ :is(.story-card-title > .story-quick-actions, .card-top > .card-top-actions) { position: absolute; inset: 0 0 auto auto; }
+ :is(.story-card-title, .card-top) h2 > .action-tooltip:first-of-type { position: absolute; inset: 0 auto auto 0; display: inline-flex; align-items: center; height: 36px; }
+}

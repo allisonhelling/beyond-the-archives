@@ -1,4 +1,4 @@
-import { fixture, login, selectLibraryShelf } from './library-fixture'
+import { fixture, login, selectLibraryShelf, clickPersonalToggle } from './library-fixture'
 import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { verifyPersonalTagControls } from './personal-tag-controls'
@@ -256,7 +256,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect(Math.abs(saveBounds!.y - cancelBounds!.y)).toBeLessThan(1)
   for (const tag of ['Comfort', 'Revisit']) { await page.getByRole('textbox', { name: 'Personal Tags', exact: true }).fill(tag); await page.keyboard.press('Enter') }
   await page.getByLabel('Comfort reads', { exact: true }).check(); await page.getByLabel('Long fics', { exact: true }).check()
-  await page.getByRole('button', { name: 'Mark Favorite', exact: true }).click()
+  await clickPersonalToggle(page.getByRole('button', { name: 'Mark Favorite', exact: true }))
   await expect(page.getByRole('button', { name: 'Unmark Favorite', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'A private story', exact: true })).toBeVisible()
@@ -292,7 +292,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   for (const property of ['width', 'height', 'padding', 'borderRadius'] as const) {
     await expect(refreshMetadata).toHaveCSS(property.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`), await personalTagsEdit.evaluate((el, key) => getComputedStyle(el)[key], property))
   }
-  await expect(refreshMetadata.locator('svg')).toHaveCSS('height', await automaticMetadata.getByRole('heading', { name: 'Automatic Metadata', exact: true }).evaluate(el => getComputedStyle(el).fontSize))
+  await expect(refreshMetadata.locator('svg')).toHaveCSS('height', await automaticMetadata.getByRole('button', { name: 'Export Work Metadata', exact: true }).locator('svg').evaluate(el => getComputedStyle(el).height))
   await refreshMetadata.hover()
   await expect(page.getByRole('tooltip', { name: 'Update Metadata', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
@@ -381,14 +381,14 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   expect((await progressSection.boundingBox())!.y).toBeLessThan((await notesSection.boundingBox())!.y)
   expect((await notesSection.boundingBox())!.y).toBeLessThan((await ficSection.boundingBox())!.y)
   const favorite = page.locator('.story-title-row').getByRole('button', { name: 'Unmark Favorite', exact: true })
-  await favorite.click()
+  await clickPersonalToggle(favorite)
   await expect(page.locator('.story-title-row').getByRole('button', { name: 'Mark Favorite', exact: true })).toHaveAttribute('aria-pressed', 'false')
   const unselectedFavorite = page.locator('.story-title-row').getByRole('button', { name: 'Mark Favorite', exact: true })
   await unselectedFavorite.hover()
   await expect(unselectedFavorite).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
   await expect(unselectedFavorite.locator('svg')).toHaveCSS('fill', await unselectedFavorite.evaluate(el => getComputedStyle(el).color))
   await expect(unselectedFavorite).toHaveAttribute('aria-pressed', 'false')
-  await unselectedFavorite.click()
+  await clickPersonalToggle(unselectedFavorite)
   await expect(favorite).toHaveAttribute('aria-pressed', 'true')
   const readingSection = page.getByRole('region', { name: 'Reading and Organization', exact: true })
   const metadataSection = page.locator('.details-fic-panel')
@@ -631,7 +631,7 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await selectLibraryShelf(page, 'Favorites')
   await expect(page.getByRole('heading', { name: 'No Stories Here Yet' })).toBeVisible()
   await selectLibraryShelf(page, 'All Works')
-  await page.getByRole('button', { name: 'Mark Favorite', exact: true }).click()
+  await clickPersonalToggle(page.getByRole('button', { name: 'Mark Favorite', exact: true }))
   await selectLibraryShelf(page, 'Favorites')
   await expect(page.getByRole('heading', { name: 'A manual story', exact: true })).toBeVisible()
 })
@@ -688,29 +688,32 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     await expect(page.locator('.tile-description').first()).toHaveCSS('font-size', '11px')
   }
   if (info.project.name === 'desktop') {
-    const controls = await toolbar.locator('.dropdown-trigger, input[type=search], .fandom-trigger, :scope > .button').all()
+    const controls = await toolbar.locator('.dropdown-trigger, input[type=search], .fandom-trigger, .toolbar-actions > .button').all()
     const bounds = await Promise.all(controls.map(control => control.boundingBox()))
     for (const box of bounds) expect(Math.abs(box!.y - bounds[0]!.y)).toBeLessThan(1)
   }
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).press('ArrowDown')
-  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Date Added', exact: true })).toBeFocused()
+  await expect(page.getByRole('option', { name: /^Date Added(?: [↑↓])?$/ })).toBeFocused()
   await page.keyboard.press('End')
+  await expect(page.getByRole('option', { name: 'Alphabetical', exact: true })).toBeFocused()
   await page.keyboard.press('ArrowUp')
+  await expect(page.getByRole('option', { name: 'Random', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')
-  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('listbox')).toBeVisible()
+  await expect(page.getByRole('listbox')).toBeVisible()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect((await ordering(page)).getByRole('button', { name: 'Sort', exact: true })).toContainText('Alphabetical')
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
-  await expect(page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('listbox')).toHaveCount(0)
-  await toolbar.getByPlaceholder('Search Title or Author').click()
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await toolbar.getByRole('searchbox', { name: 'Search Title or Author', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Titles Suggestions' })).toBeVisible()
   for (const heading of await page.locator('.search-suggestions .suggestion-heading').all()) {
     await expect(heading).toHaveCSS('text-transform', 'uppercase')
     await expect(heading).toHaveCSS('font-weight', '400')
   }
   await expect(page.getByRole('region', { name: 'Authors Suggestions' })).toBeVisible()
-  await toolbar.getByPlaceholder('Search Title or Author').fill('ja')
+  await toolbar.getByRole('searchbox', { name: 'Search Title or Author', exact: true }).fill('ja')
   await expect(page.getByRole('region', { name: 'Authors Suggestions' })).toBeVisible()
   await page.getByRole('region', { name: 'Authors Suggestions' }).getByRole('button', { name: 'Jane', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Authors Suggestions' })).toBeVisible()
@@ -740,7 +743,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
     await expect(page.locator('.active-reading-filters')).toHaveCount(0)
     await expect(page).toHaveURL(url => url.searchParams.get('favorites') === 'false')
   }
-  await expect(panel.getByPlaceholder('Search Title or Author')).toHaveCount(0)
+  await expect(panel.getByRole('searchbox', { name: 'Search Title or Author', exact: true })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: 'Sort', exact: true })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /Select Fandoms/ })).toHaveCount(0)
   await expect(panel.locator('select')).toHaveCount(0)
@@ -757,7 +760,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   expect(fandomCountBox.x - fandomNameBox.x - fandomNameBox.width).toBeGreaterThanOrEqual(0)
   expect(fandomCountBox.x - fandomNameBox.x - fandomNameBox.width).toBeLessThan(10)
   await toolbar.locator('.fandom-options .check-label').hover()
-  await expect(toolbar.locator('.fandom-options .check-label')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(toolbar.locator('.fandom-options .check-label')).toHaveCSS('background-color', 'rgb(241, 225, 209)')
   const checkbox = await toolbar.getByRole('checkbox', { name: /Fandom A/ }).boundingBox()
   expect(checkbox!.width).toBeLessThanOrEqual(18)
   expect(checkbox!.height).toBeLessThanOrEqual(18)
@@ -840,7 +843,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   await expect(page.getByRole('alert').filter({ hasText: 'Close the quotation marks' })).toContainText('Close the quotation marks')
   await clear()
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Series', exact: true }).click()
+  await page.getByRole('option', { name: 'Series', exact: true }).click()
   await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
   await expect(page.getByRole('heading', { name: 'Garden series (1)' })).toBeVisible()
   await expect(panel.getByLabel('From', { exact: true })).toHaveAttribute('placeholder', 'mm/dd/yyyy')
@@ -1015,8 +1018,8 @@ test('publication tiles exclude waiting and unknown works and update after chang
   const longCard = page.locator('.story-card').filter({ has: page.getByRole('heading', { name: longTitle, exact: true }) })
   const heading = longCard.getByRole('heading', { name: longTitle, exact: true })
   await expect(heading).toBeVisible()
-  // Read all geometry in one browser task so scroll restoration cannot move the
-  // viewport between the title and control measurements. Retry while layout settles.
+  // Read geometry together while layout settles. Mobile reserves an action row
+  // above the title; desktop keeps controls beside its first line.
   await expect(async () => {
     const { titleBox, lineHeight, controls } = await heading.evaluate(element => ({
       titleBox: element.getBoundingClientRect().toJSON(),
@@ -1026,8 +1029,12 @@ test('publication tiles exclude waiting and unknown works and update after chang
     expect(titleBox.height).toBeGreaterThan(lineHeight * 1.5)
     expect(controls).toHaveLength(2)
     for (const box of controls) {
-      expect(Math.abs(box.y + box.height / 2 - (titleBox.y + lineHeight / 2))).toBeLessThan(5)
-      expect(box.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width)
+      if (page.viewportSize()!.width <= 900) {
+        expect(box.y + box.height).toBeLessThanOrEqual(titleBox.y)
+      } else {
+        expect(Math.abs(box.y + box.height / 2 - (titleBox.y + lineHeight / 2))).toBeLessThan(5)
+        expect(box.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width)
+      }
     }
   }).toPass({ timeout: 5000 })
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.evaluate(() => innerWidth))
@@ -1169,10 +1176,10 @@ test('sort and grouping preferences persist across navigation and refresh', asyn
   const toolbar = page.getByRole('region', { name: 'Reading Toolbar' })
   await expect(toolbar.getByRole('button', { name: 'Work Status', exact: true })).toHaveCount(0)
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Date Added', exact: true }).click()
+  await page.getByRole('option', { name: /^Date Added(?: [↑↓])?$/ }).click()
   await page.keyboard.press('Escape')
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Author', exact: true }).click()
+  await page.getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(url => url.searchParams.get('groupBy') === 'author')
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('between-chapters:reading-preferences:v1') ?? '{}').groupBy)).toBe('author')
@@ -1290,11 +1297,13 @@ test('library reuses filters across all statuses and scopes them to the selected
   await expect(page.getByRole('navigation', { name: 'Dashboard Sections' })).toHaveCount(0)
   await expect(page.getByLabel('Search Title or Author', { exact: true })).toHaveCount(1)
   await (await ordering(page)).getByRole('button', { name: 'Sort', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Date Added', exact: true }).click()
+  await page.getByRole('option', { name: 'Date Added ↓', exact: true }).click()
+  await expect(cards.locator('h2 a')).toHaveText(['Library story 1', 'Library story 2', 'Library story 3', 'Library story 4'])
+  await page.getByRole('option', { name: 'Date Added ↑', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(cards.locator('h2 a')).toHaveText(['Library story 4', 'Library story 3', 'Library story 2', 'Library story 1'])
   await (await ordering(page)).getByRole('button', { name: 'Group', exact: true }).click()
-  await page.locator('.reading-toolbar, .reading-filters, .library-heading-actions, .pagination-inline').getByRole('option', { name: 'Author', exact: true }).click()
+  await page.getByRole('option', { name: 'Author', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('heading', { name: 'Saved author (1)', exact: true })).toBeVisible()
   await openFilters(page)
@@ -2706,11 +2715,12 @@ test('one-shot badges and Allowed, Only, Exclude filters share automatic chapter
   await expect(page.locator('.story-card')).toHaveCount(6)
   const sort = page.locator('.pagination-inline, .reading-toolbar').getByRole('button', { name: 'Sort', exact: true })
   await sort.click()
-  await page.getByRole('option', { name: 'Alphabetical • Z–A', exact: true }).click()
+  await page.getByRole('option', { name: 'Alphabetical', exact: true }).click()
+  await page.getByRole('option', { name: 'Alphabetical ↑', exact: true }).click()
   const titles = page.locator('.story-card h2 > a')
   await expect(titles).toHaveText(['Personal tagged', 'Ongoing single', 'Manual one-shot', 'Long fic', 'Complete single', 'AO3 tagged'])
   await page.reload()
-  await expect(sort).toContainText('Alphabetical • Z–A')
+  await expect(sort).toContainText('Alphabetical ↓')
   await expect(titles).toHaveText(['Personal tagged', 'Ongoing single', 'Manual one-shot', 'Long fic', 'Complete single', 'AO3 tagged'])
 })
 
@@ -3177,7 +3187,7 @@ test('unknown AO3 Rec is editable on tiles and details and controls Recs members
  tables.library_entries.push({ id: 'personal-rec-entry', work_id: 'personal-rec-work', reading_status: 'to_read', last_read_chapter: 0, is_favorite: false, is_rec: false, notes: '', source_bookmark: { id: '10200', rec: null }, original_url: 'https://archiveofourown.org/works/9200', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: {} })
  await page.goto('/library'); await login(page)
  const card = page.locator('.work-card')
- await card.getByRole('button', { name: 'Mark as Rec', exact: true }).click()
+ await clickPersonalToggle(card.getByRole('button', { name: 'Mark as Rec', exact: true }))
  await expect(card.getByRole('button', { name: 'Remove Rec', exact: true })).toHaveAttribute('aria-pressed', 'true')
  expect(tables.library_entries[0]).toMatchObject({ is_rec: true, is_favorite: false, source_bookmark: { rec: null } })
  await selectLibraryShelf(page, 'Recs')
@@ -3185,7 +3195,7 @@ test('unknown AO3 Rec is editable on tiles and details and controls Recs members
  await card.getByRole('heading', { name: 'Personal Rec choice', exact: true }).getByRole('link').click()
  const back = page.getByRole('link', { name: 'Back to Library', exact: true })
  await expect(back).toHaveAttribute('href', /[?&]shelf=recs(?:&|$)/)
- await page.getByRole('button', { name: 'Remove Rec', exact: true }).click()
+ await clickPersonalToggle(page.getByRole('button', { name: 'Remove Rec', exact: true }))
  await expect(page.getByRole('button', { name: 'Mark as Rec', exact: true })).toHaveAttribute('aria-pressed', 'false')
  await expect(page.getByRole('button', { name: 'Mark as Rec', exact: true })).toBeEnabled()
  expect(tables.library_entries[0]).toMatchObject({ is_rec: false, is_favorite: false })
@@ -3510,7 +3520,7 @@ test('account rating explanations appear in manual entry and personal editors wi
   await expect(page.getByRole('tooltip')).toHaveCSS('white-space', 'pre-wrap')
   await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/999777')
   await page.getByLabel('Title', { exact: true }).fill('Manually recommended')
-  await page.getByRole('button', { name: 'Mark as Rec', exact: true }).click()
+  await clickPersonalToggle(page.getByRole('button', { name: 'Mark as Rec', exact: true }))
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Manually recommended', exact: true })).toBeVisible()
   expect(tables.library_entries[0].is_rec).toBe(true)
@@ -3518,7 +3528,8 @@ test('account rating explanations appear in manual entry and personal editors wi
 })
 
 test('library actions precede the series filter and information stays open after clicking', async ({ page }) => {
- await fixture(page)
+ const tables = await fixture(page)
+ seedSeriesWork(tables, 101)
  await page.goto('/library'); await login(page)
  const actions = page.locator('.library-heading-actions')
  await expect(actions.locator('a.library-create-action')).toHaveCount(0)
@@ -3906,7 +3917,7 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
  tables.library_entries.push({id:'refinements-entry',work_id:'refinements-work',original_url:'https://archiveofourown.org/works/123',reading_status:'reading',last_read_chapter:0,created_at:'2026-10-01T00:00:00Z',updated_at:'2026-10-01T00:00:00Z',metadata_overrides:{title:'Refinements Work',publication_status:'in_progress',published_chapters:3,total_chapters:5},notes:''})
  await page.goto('/library'); await login(page)
  await page.getByRole('button',{name:'Sort',exact:true}).click()
- await expect(page.getByRole('option',{name:'Last Updated • Oldest First',exact:true})).toBeVisible()
+ await expect(page.getByRole('option',{name:'Last Updated',exact:true})).toBeVisible()
  for(const option of await page.getByRole('listbox',{name:'Sort',exact:true}).getByRole('option').all()) {
   const label=option.locator('span').first()
   expect(await label.evaluate(node=>node.getBoundingClientRect().height<=parseFloat(getComputedStyle(node).lineHeight)+1)).toBe(true)
@@ -3992,6 +4003,19 @@ test('filters crossovers, removes applied chips, sorts words, and saves private 
   tables.library_entries.push({id:`filter-entry-${index}`,work_id:`filter-work-${index}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z',original_url:`https://archiveofourown.org/works/${900+index}`,metadata_overrides:{title,authors:['Writer'],fandoms:index===0?['A Fandom','Another Fandom With Several Words']:['A Fandom'],ao3_tags:[],rating:'Mature',publication_status:'in_progress',published_chapters:5,total_chapters:null,word_count:index===0?1000:100}})
  }
  await page.goto('/library');await login(page)
+
+ if(info.project.name==='mobile') {
+  for(const width of [320,390]) {
+   await page.setViewportSize({width,height:844})
+   const bounds=await page.locator('.toolbar-actions > .button').evaluateAll(buttons=>buttons.map(button=>{const box=button.getBoundingClientRect();return {x:box.x,y:box.y,right:box.right}}))
+   expect(bounds).toHaveLength(3)
+   for(let index=0;index<bounds.length;index++) {
+    expect(bounds[index].y).toBeCloseTo(bounds[0].y,0)
+    expect(bounds[index].right).toBeLessThanOrEqual(width)
+    if(index)expect(bounds[index].x).toBeGreaterThanOrEqual(bounds[index-1].right)
+   }
+  }
+ }
  await openFilters(page)
  const filters=page.getByRole('region',{name:'Library Filters',exact:true})
  await filters.getByRole('button',{name:'Crossovers',exact:true}).click()
@@ -4001,7 +4025,8 @@ test('filters crossovers, removes applied chips, sorts words, and saves private 
  await page.getByRole('button',{name:'Remove Filter Crossovers Only',exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(2)
  await page.getByRole('button',{name:'Sort',exact:true}).click()
- await page.getByRole('option',{name:'Word Count • Shortest First',exact:true}).click()
+ await page.getByRole('option',{name:'Word Count',exact:true}).click()
+ await page.getByRole('option',{name:'Word Count ↓',exact:true}).click()
  await expect(page.locator('.story-card h2 > a')).toHaveText(['A Short Work','A Long Crossover'])
  await page.getByRole('button',{name:'Select Fandoms',exact:false}).click()
  const popup=page.locator('.fandom-panel')

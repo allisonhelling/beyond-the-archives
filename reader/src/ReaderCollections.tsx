@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { LibraryProvider, useLibrary } from '../../src/features/library/LibraryProvider'
 import { CollectionBrowser } from '../../src/features/library/collections/CollectionBrowser'
 import { EditCollectionsButton } from '../../src/features/library/collections/EditCollectionsButton'
+import { LoadingIcon } from '../../src/components/ActivityIndicator'
 import { saveStoryCollections } from '../../src/features/library/repository'
 import type { Story } from '../../src/features/library/model'
 import { collectionStories } from '../../src/features/library/collections/collection-scope'
@@ -18,7 +19,7 @@ const ConnectedCollections = createContext(false)
 export function ReaderCollections({ books, account, onScope, onSync, children }: { books: CatalogBook[]; account?: string; onScope: (ids: string[] | null) => void; onSync: () => void; children: ReactNode }) {
   useEffect(() => { if (!account) onScope(null) }, [account, onScope])
   if (!account) return children
-  return <MemoryRouter><LibraryProvider key={account} userId={account}><ConnectedCollections value={true}><ConnectedCollectionBrowser books={books} onScope={onScope} onSync={onSync}>{children}</ConnectedCollectionBrowser></ConnectedCollections></LibraryProvider></MemoryRouter>
+  return <MemoryRouter><LibraryProvider key={account} userId={account} catalogWorksOnly navigationEnabled={false}><ConnectedCollections value={true}><ConnectedCollectionBrowser books={books} onScope={onScope} onSync={onSync}>{children}</ConnectedCollectionBrowser></ConnectedCollections></LibraryProvider></MemoryRouter>
 }
 
 function ConnectedCollectionBrowser({ books, onScope, onSync, children }: Omit<Parameters<typeof ReaderCollections>[0], 'account'>) {
@@ -32,7 +33,14 @@ function ConnectedCollectionBrowser({ books, onScope, onSync, children }: Omit<P
 function CollectionScope({ books, selected, onScope, onSync, onCounts }: { onCounts: (stories: Story[]) => void; books: CatalogBook[]; selected: string; onScope: (ids: string[] | null) => void; onSync: () => void }) {
   const sync = useRef(onSync)
   sync.current = onSync
-  const { stories, revision, catalogLoaded, error, refresh } = useLibrary({ catalog: true })
+  const { stories, revision, catalogLoaded, error, refresh, ensureCatalog } = useLibrary({ catalog: true })
+  const [retrying,setRetrying]=useState(false)
+  async function retryCollections() {
+    if(retrying)return
+    setRetrying(true)
+    try { await refresh(); await ensureCatalog() } catch { /* The shared provider retains the actual request error. */ }
+    finally { setRetrying(false) }
+  }
   const scope = useMemo(() => {
     if (selected === 'all') return null
     const matches = collectionStories(stories, selected)
@@ -42,12 +50,20 @@ function CollectionScope({ books, selected, onScope, onSync, onCounts }: { onCou
   useEffect(() => onScope(scope), [scope, onScope])
   // Shared collections are read directly from the organizer; pull their names
   // back into the offline catalog after a revision or membership edit.
-  useEffect(() => { if (catalogLoaded) sync.current() }, [revision, catalogLoaded])
+  const syncedRevision=useRef<number|undefined>(undefined)
+  useEffect(() => {
+    if(!catalogLoaded)return
+    const previous=syncedRevision.current
+    syncedRevision.current=revision
+    if(previous!==undefined&&previous!==revision)sync.current()
+  }, [revision, catalogLoaded])
   const [countError, setCountError] = useState('')
   useEffect(() => {
-    let active = true
+    let active = true, refreshing = false
     const controller = new AbortController()
     async function refreshCounts() {
+      if(refreshing)return
+      refreshing=true
       try {
         const saved = await loadSetting<OfflineSnapshot>('collection-snapshot')
         if (active && saved?.userId === readerOwner) onCounts(offlineStories({ ...saved, readers: [] }))
@@ -61,13 +77,14 @@ function CollectionScope({ books, selected, onScope, onSync, onCounts }: { onCou
           if (active) { onCounts(offlineStories({ ...snapshot, readers: [] })); setCountError('') }
         }
       } catch { if (active) setCountError('Cloud EPUB counts could not be refreshed. Last saved counts are shown when available.') }
+      finally { refreshing=false }
     }
     void refreshCounts()
     const update = () => { if (!document.hidden) void refreshCounts() }
     window.addEventListener('online', update); window.addEventListener('focus', update)
     return () => { active = false; controller.abort(); window.removeEventListener('online', update); window.removeEventListener('focus', update) }
   }, [books, revision, onCounts])
-  return error ? <p role="status">Collections are unavailable. <button onClick={() => void refresh().catch(() => {})}>Retry Collections</button></p> : countError ? <p role="status">{countError}</p> : null
+  return error || retrying ? <p role="status">{retrying ? <><LoadingIcon /> Reloading collections… </> : error} <button disabled={retrying} onClick={() => void retryCollections()}>{retrying?'Retrying Collections…':'Retry Collections'}</button></p> : countError ? <p role="status">{countError}</p> : null
 }
 
 export function ReaderCollectionMembership({ book }: { book: CatalogBook }) {

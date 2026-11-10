@@ -11,12 +11,6 @@ export const browserBarSettingsSection = {
   aliases: ['#ao3-browser-bar'],
 }
 
-export const comingSoonSettingsSection = {
-  id: 'settings-coming-soon',
-  title: 'More in a Later Chapter',
-  description: 'Upcoming settings and features',
-}
-
 export const personalRatingSettingsSection = {
   id: 'settings-personal-rating',
   title: 'Personal Rating',

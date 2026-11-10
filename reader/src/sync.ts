@@ -1,4 +1,5 @@
 import { savedWorkIdentity } from './metadata'
+import { reportSyncStatus, reportSyncFailure } from './sync-status'
 import { importEpub } from './epub'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
 import { readerInstallationId, readerInstallationAliases, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
@@ -24,8 +25,13 @@ export function pendingUpdate(book: Book | BookDetails, connection: Connection |
 }
 let running: Promise<string> | undefined
 export function synchronize(connection: Connection, force = false): Promise<string> {
+  if (!navigator.onLine) return Promise.resolve('Offline. Changes are saved on this device.')
   if (running) return running
-  running = performSync(connection, force).finally(() => { running = undefined })
+  reportSyncStatus('organizer','syncing')
+  running = performSync(connection, force)
+    .then(report => { reportSyncStatus('organizer',report.startsWith('Reading updates are synced.') ? 'success' : 'attention',report); return report })
+    .catch(error => { reportSyncFailure('organizer',error); throw error })
+    .finally(() => { running = undefined })
   return running
 }
 async function performSync(connection: Connection, force: boolean) {
@@ -66,7 +72,7 @@ async function performSync(connection: Connection, force: boolean) {
   const checkpoint = await loadSetting<{ after: string; at: number }>(checkpointKey)
   if (!force && checkpoint && Date.now() - checkpoint.at < 60_000) return 'Reading updates are synced. Organizer refresh will continue on a later sync.'
   const waiting = new Set((await all<Pending>('pending')).map(p => p.book))
-  const catalog = await listCatalog()
+  const catalog = (await listCatalog()).filter(book => !book.deleting)
   const candidates = catalog.filter(b => !b.account || b.account === connection.account).sort((a,b) => a.id.localeCompare(b.id))
   const after = checkpoint?.after ?? ''
   const remaining = candidates.filter(b => b.id > after)
@@ -158,6 +164,7 @@ export async function reportAvailability(connection: Connection) {
   const installationId = await readerInstallationId()
   const works = new Set<string>()
   for (const entry of await listCatalog()) {
+    if (entry.deleting) continue
     if (entry.active && entry.workId && entry.account === connection.account && entry.hasFile && await getBook(entry.id)) works.add(entry.workId)
     if (entry.active && entry.hasFile && isAnthology(entry) && await getBook(entry.id)) for (const work of entry.works!) if (work.workId && work.account === connection.account && entry.works!.filter(other => other.workId === work.workId).length === 1) works.add(work.workId)
   }

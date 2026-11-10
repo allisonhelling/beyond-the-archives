@@ -63,6 +63,11 @@ async function main() {
       ['sorted-page','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'alpha'}}]],
       ['reading-page', 'select public.query_library($1,1,50) result', [{mode:'reading',shelf:'view_all',includeFacets:false,filters:{sort:'added'}}]],
       ['filtered-page', 'select public.query_library($1,1,250) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'updated',within:'friendship'},terms:[[{parts:['friendship'],exclude:false}]]}]],
+      ['tag-any-cold','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{tagExpressions:{fandoms:{mode:'any',tags:['Fandom 1','Fandom 2']}}}}]],
+      ['tag-any-warm','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{tagExpressions:{fandoms:{mode:'any',tags:['Fandom 1','Fandom 2']}}}}]],
+      ['tag-all-cold','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{tagExpressions:{tags:{mode:'all',tags:['Tag 1','Tag 2']}}}}]],
+      ['tag-custom-cold','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{tagExpressions:{tags:{mode:'custom',groups:[['Tag 1','Tag 2'],['Tag 3','Tag 4']]}}}}]],
+      ['tag-custom-warm','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{tagExpressions:{tags:{mode:'custom',groups:[['Tag 1','Tag 2'],['Tag 3','Tag 4']]}}}}]],
       ['in-series-page','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'alpha',inSeries:true,showSeries:true}}]],
       ['series-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'alpha'}}]],
       ['series-page-warm', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'series',includeFacets:false,filters:{sort:'added'}}]],
@@ -87,16 +92,19 @@ async function main() {
       let plannedSql=sql,plannedValues=values
       let filteredCount
       if(sql.startsWith('select public.query_library')) {
+        // Match the public RPC boundary: compile expressions/aliases once before selection.
         const query=args[0]
+        const prepared=(await db.query("select public.library_alias_filters($1,auth.uid()) filters",[JSON.stringify(query.filters)])).rows[0].filters
+        const plannedQuery=JSON.stringify({...query,filters:prepared})
         const withSeries=query.mode==='series'||query.shelf==='series'||query.filters.showSeries
         if(withSeries) {
           plannedSql=(await db.query("select prosrc from pg_proc where oid='public.library_query_series_matches(jsonb,jsonb,integer,integer)'::regprocedure")).rows[0].prosrc
             .replaceAll('p_query','$1::jsonb').replaceAll('p_ids','null::jsonb').replaceAll('p_page','null::integer').replaceAll('p_size','null::integer')
-          plannedValues=[values[0]]
+          plannedValues=[plannedQuery]
         } else {
-          plannedSql=(await db.query('select public.library_query_work_sql($1,false) statement',[values[0]])).rows[0].statement.replaceAll('$1','$1::jsonb').replaceAll('$2','$2::uuid')
+          plannedSql=(await db.query('select public.library_query_work_sql($1,false) statement',[plannedQuery])).rows[0].statement.replaceAll('$1','$1::jsonb').replaceAll('$2','$2::uuid')
           const owner=(await db.query('select auth.uid() id')).rows[0].id
-          plannedValues=[values[0],owner]
+          plannedValues=[plannedQuery,owner]
         }
         // This is the production selection statement. Work identities are selected
         // without their match cache; series selection reuses its revision pool.

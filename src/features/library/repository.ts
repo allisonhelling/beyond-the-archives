@@ -14,11 +14,14 @@ function failure(error: { code?: string } | null) {
   if (error) throw new Error(error.code === '23505' ? 'This story is already in your library (or that collection name already exists).' : 'Could not save your changes. Check your connection and input, then try again.')
 }
 // PostgREST caps each response; fetch every page so memberships cannot be silently lost.
-export async function allRows<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
+export async function allRows<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; status?: number }>, subject = 'your library') {
   const data: T[] = []
   for (let from = 0; ; from += 500) {
     const result = await page(from, from + 499)
-    if (result.error || !result.data) throw new Error('Could not load your library. Check your connection and apply the Phase 2 migration if needed.')
+    if (result.error || !result.data) {
+      const code = result.error && typeof result.error === 'object' && 'code' in result.error && typeof result.error.code === 'string' ? result.error.code : undefined
+      throw libraryLoadError(subject, { code }, result.status ?? 500)
+    }
     data.push(...result.data)
     if (result.data.length < 500) return data
   }
@@ -162,13 +165,25 @@ export async function reorderCollections(ids: string[]) {
   const { error } = await client().rpc('reorder_collections', { p_ids: ids }); failure(error)
 }
 
-export async function loadCatalog(signal?: AbortSignal) {
+export async function loadCatalog(signal?: AbortSignal, worksOnly = false) {
   if (sampleMode) return loadLibrary()
+  if (worksOnly) {
+    const [rows, collections] = await Promise.all([
+      allRows((from,to) => {
+        let request = client().from('library_search_documents').select('catalog_story,automatic_memberships:automatic_collection_works(collection_id)').order('id').range(from,to)
+        if (signal) request = request.abortSignal(signal)
+        return request
+      }, 'organizer works for collections'),
+      loadCollections(signal),
+    ])
+    if (signal?.aborted) throw new DOMException('Library request cancelled', 'AbortError')
+    return { stories: rows.map(row => storyCatalogEntry({ ...(row.catalog_story as unknown as Story), automaticCollectionIds: row.automatic_memberships.map(link => link.collection_id) })), collections, series: [] as SeriesRecord[] }
+  }
   let request = client().rpc('library_catalog')
   if (signal) request = request.abortSignal(signal)
-  const { data, error } = await request
+  const { data, error, status } = await request
   if (signal?.aborted) throw new DOMException('Library request cancelled', 'AbortError')
-  if (error || !data) throw new Error('Could not load your library. Apply the latest migrations and check your connection.')
+  if (error || !data) throw libraryLoadError('your library', error, status)
   const result = data as unknown as { stories: Story[]; collections: Collection[]; series: SeriesRecord[] }
   result.stories = result.stories.map(storyCatalogEntry)
   result.series = result.series.map(record => ({ ...record, detailsLoaded: false }))
@@ -201,7 +216,7 @@ export function libraryFacetScope(query: LibraryQuery) {
 function libraryLoadError(subject: string, error: { code?: string } | null, status: number) {
   const reason = error?.code === '57014' ? 'The request took too long. Please try again.'
     : status === 401 || error?.code === 'PGRST301' || error?.code === 'PGRST303' ? 'Your session has expired. Sign in again.'
-    : error?.code === 'PGRST202' || error?.code === '42883' ? 'The library database needs an update. Apply the latest migrations, then retry.'
+    : ['PGRST200','PGRST202','PGRST204','42883','42703'].includes(error?.code ?? '') ? 'The library database needs an update. Apply the latest migrations, then retry.'
     : status === 0 ? 'Check your connection and retry.'
     : `Please try again. If this continues, report error ${error?.code || status}.`
   return new Error(`Could not load ${subject}. ${reason}`, { cause: error })
@@ -213,8 +228,8 @@ export async function loadLibraryFacets(query: LibraryQuery, signal: AbortSignal
   return data as unknown as LibraryFacets
 }
 export async function loadLibraryRevision(): Promise<number> {
-  const { data, error } = await client().rpc('library_revision')
-  if (error || data === null) throw new Error('Couldn’t update library counts. Retry updating.')
+  const { data, error, status } = await client().rpc('library_revision', {})
+  if (error || data === null) throw libraryLoadError('library counts', error, status)
   return data
 }
 export async function loadLibraryNavigation(signal?: AbortSignal): Promise<{ counts: LibraryNavigation; revision: number }> {
@@ -257,8 +272,12 @@ export async function loadAffectedCollections(ids: string[]): Promise<Collection
   if (error) throw new Error('Could not reload affected collections.')
   return data ?? []
 }
-export async function loadCollections(): Promise<Collection[]> {
+export async function loadCollections(signal?: AbortSignal): Promise<Collection[]> {
   if (sampleMode) return (await loadLibrary()).collections
-  const rows = await allRows((from,to) => client().from('collections').select('*').order('created_at').order('id').range(from,to))
+  const rows = await allRows((from,to) => {
+    let request = client().from('collections').select('*').order('created_at').order('id').range(from,to)
+    if (signal) request = request.abortSignal(signal)
+    return request
+  }, 'collections')
   return rows.sort(compareCollections)
 }

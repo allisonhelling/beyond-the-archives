@@ -38,7 +38,7 @@
 .display-group-area { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; }
 
 .display-fact-value { font-size: max(var(--work-tile-min-font-size, 0px), 14px); }
-.story-card > .display-fact-value { margin-bottom: 10px; }
+.story-card > .display-fact-value, .reader-tile-content > .display-fact-value { margin-bottom: 10px; }
 
 .display-line-item > div:has(> dt) :is(dt, dd) { display: inline; margin: 0; }
 .display-line-item > div:has(> dt) dt { margin-inline-end: 8px; }

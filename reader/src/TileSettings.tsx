@@ -1,3 +1,4 @@
+import { SummarySettings } from '../../src/features/library/summaries/SummarySettings'
 import { useState } from 'react'
 import { ReaderSection } from './ReaderSettings'
 import { DisplayEditor } from '../../src/features/library/display/DisplayEditor'
@@ -15,7 +16,7 @@ export function TileSettings({asPage=false,preferences,appearance,book=sample,on
  async function save(){setBusy(true);setError('');try{await onSave(layout,draft.workTile);setMessage(`${layout==='mobile'?'Mobile':'Desktop'} tile layout saved.`)}catch(e){setError(String(e))}finally{setBusy(false)}}
  return <ReaderSection page={asPage} title="Customize Tiles" className="tile-settings-dialog" busy={busy} onClose={onClose}>
   <p>Move and hide information directly in the preview. Group fields on one line or add dividers. Mobile and desktop layouts save separately. Tag Format controls tag style and colors.</p>
-  <div className="dialog-actions" role="group" aria-label="Tile Layout"><button aria-pressed={layout==='desktop'} onClick={()=>{setLayout('desktop');setMessage('')}}>Desktop</button><button aria-pressed={layout==='mobile'} onClick={()=>{setLayout('mobile');setMessage('')}}>Mobile</button></div>
+  <SummarySettings /><div className="dialog-actions" role="group" aria-label="Tile Layout"><button aria-pressed={layout==='desktop'} onClick={()=>{setLayout('desktop');setMessage('')}}>Desktop</button><button aria-pressed={layout==='mobile'} onClick={()=>{setLayout('mobile');setMessage('')}}>Mobile</button></div>
   <DisplayEditor key={`${layout}:${version}`} title="Reader Tile" groups={['workTile']} fields={{workTile:readerTileFields}} state={{draft,change:next=>{setDrafts(current=>({...current,[layout]:next}));setMessage('Unsaved changes')}}} viewport={viewportPresets[layout==='mobile'?'iphone-16':'desktop']}>
    <ReaderTile onMarking={async()=>{}} onProgress={async()=>{}} busy book={book} preferences={preferences} appearance={appearance} onRead={noop} onManage={noop} onDetails={noop} onRemove={noop} onDelete={noop} onSearch={noop} />
   </DisplayEditor>

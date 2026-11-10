@@ -4,14 +4,14 @@ export type Ao3TagCategory = typeof ao3TagCategories[number]
 export type TagResolution = { category: Ao3TagCategory; name: string; status: 'canonical' | 'synonym' | 'custom' | 'unverified'; canonical_name: string | null; checked_at: string; attempted_at: string }
 export type TagAliases = Partial<Record<Ao3TagCategory, Record<string, Record<string, true>>>>
 export function validAo3TagName(value: unknown): value is string { return typeof value === 'string' && Boolean(value.trim()) && value.length <= 10000 && !/\p{Cc}/u.test(value) }
-export const hasTagFilters = (filters?: { relationship?: string; characters?: string; tags?: string }) => Boolean(filters?.relationship || filters?.characters || filters?.tags)
+export const hasTagFilters = (filters?: { relationship?: string; characters?: string; tags?: string; tagExpressions?: Partial<Record<string, unknown>> }) => Boolean(filters?.relationship || filters?.characters || filters?.tags || Object.keys(filters?.tagExpressions ?? {}).some(key => key !== 'fandoms'))
 export const hasTagRules = (rules: unknown) => hasTagFilters((rules as { filters?: Parameters<typeof hasTagFilters>[0] } | null)?.filters)
 export const tagResolutionEvent = 'ao3-tag-resolutions-updated'
 export { normalizeTag }
 function verifiedTags(records: TagResolution[]) {
  const roots = new Map(records.map(record => [`${record.category}:${record.name}`, record.status]))
  return records.filter((record): record is TagResolution & { canonical_name: string } => Boolean(record.canonical_name && ['canonical','synonym'].includes(record.status)
-  && (!roots.has(`${record.category}:${record.canonical_name}`) || roots.get(`${record.category}:${record.canonical_name}`) === 'canonical')))
+  && roots.get(`${record.category}:${record.canonical_name}`) === 'canonical'))
 }
 export function tagAliasIndex(records: TagResolution[]): TagAliases {
  const index: TagAliases = Object.create(null)
@@ -27,8 +27,8 @@ export function prioritizeVerifiedTags(values: string[], records: TagResolution[
  const names = new Set(verifiedTags(records).filter(record => record.category === category).map(record => normalizeTag(record.name)))
  return [...values].sort((a,b) => Number(names.has(normalizeTag(b))) - Number(names.has(normalizeTag(a))))
 }
-export function tagMatches(values: string[], term: string, category: Ao3TagCategory, aliases?: TagAliases) {
- const categoryAliases = aliases?.[category]
+export function tagMatches(values: string[], term: string, category: Ao3TagCategory, aliases?: TagAliases, authority: 'ao3' | null = 'ao3') {
+ const categoryAliases = authority === 'ao3' ? aliases?.[category] : undefined
  const names = categoryAliases && Object.hasOwn(categoryAliases, term) ? categoryAliases[term] : undefined
  return values.some(value => names ? Object.hasOwn(names, normalizeTag(value)) : normalizeTag(value).includes(term))
 }

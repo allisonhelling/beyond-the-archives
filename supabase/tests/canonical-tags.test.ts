@@ -109,3 +109,67 @@ it('re-resolves aliases if verification changes between alias loading and revisi
  expect(result.total).toBe(1)
  expect(result.stories[0].metadata.character_tags).toEqual([names[1]])
 })
+
+it('requires a category-correct canonical root in both SQL and TypeScript and preserves raw fallback',async()=>{
+ await cache([records[1]])
+ const rows=(await db.query<import('../../src/features/library/tags/tag-resolution').TagResolution>('select category,name,status,canonical_name,checked_at,attempted_at from public.ao3_tag_resolutions')).rows
+ const aliases=(await db.query<{a:object}>('select public.library_tag_aliases(auth.uid()) a')).rows[0].a
+ expect(aliases).toEqual(tagAliasIndex(rows))
+ expect(aliases).toEqual({})
+ expect((await query({characters:names[0]})).total).toBe(3) // Raw substring, not alias expansion.
+ await cache([{...records[0],category:'relationship'}])
+ expect((await query({characters:names[0]})).total).toBe(3)
+ expect((await db.query<{m:boolean}>("select public.library_tag_matches('Alya (Miraculous Ladybug)','personalTags','alya cesaire',$1) m",[JSON.stringify({freeform:{'alya cesaire':{'alya (miraculous ladybug)':true}}})])).rows[0].m).toBe(false)
+})
+
+it('evaluates Any/All/Custom for every category before pagination and shares the predicate with local results',async()=>{
+ await cache()
+ const stories=(await query()).stories
+ for(const key of ['fandoms','relationship','characters','tags'] as const){
+  const terms=key==='characters'?[names[0],'Custom Alya']:key==='relationship'?['A/B','Missing']:key==='tags'?['Custom','Missing']:['Fandom A','Missing']
+  if(key==='fandoms') await db.query("update public.library_entries set metadata_overrides=metadata_overrides||'{\"fandoms\":[\"Fandom A\"]}'::jsonb where user_id=auth.uid()")
+  const current=key==='fandoms'?(await query()).stories:stories
+  for(const expression of [{mode:'any',tags:terms},{mode:'all',tags:terms},{mode:'custom',groups:[terms,[terms[0]]]},{mode:'custom',groups:[[],terms]}]){
+   const filters={...defaultReadingFilters,tagExpressions:{[key]:expression}}
+   const alias=(await db.query<{a:ReturnType<typeof tagAliasIndex>}>('select public.library_tag_aliases(auth.uid()) a')).rows[0].a
+   const expected=filterReading(current,{...filters,tagAliases:alias} as Parameters<typeof filterReading>[1]).map(s=>s.id).sort()
+   const result=await query(filters)
+   expect(result.total).toBe(expected.length)
+   expect(result.stories.map(s=>s.id).sort()).toEqual(expected)
+  }
+ }
+ await db.exec('reset role')
+ await db.exec("insert into public.works(ao3_work_id,title) select n,'Page fixture '||n from generate_series(1000,1029) n")
+ await db.query("insert into public.library_entries(user_id,work_id,original_url,reading_status,metadata_overrides) select $1,id,'https://archiveofourown.org/works/'||ao3_work_id,'reading',jsonb_build_object('character_tags',jsonb_build_array($2::text)) from public.works where ao3_work_id between 1000 and 1029",[alice,names[0]])
+ await db.exec('set role authenticated')
+ const filters={...defaultReadingFilters,tagExpressions:{characters:{mode:'any',tags:[names[0],'Custom Alya']}}}
+ const input=JSON.stringify({mode:'library',shelf:'all',includeFacets:false,filters})
+ const first=(await db.query<{r:{total:number;stories:Story[]}}>('select public.query_library($1,1,25) r',[input])).rows[0].r
+ const second=(await db.query<{r:{total:number;stories:Story[]}}>('select public.query_library($1,2,25) r',[input])).rows[0].r
+ expect(first.total).toBe(34);expect(second.total).toBe(34)
+ expect(first.stories).toHaveLength(25);expect(second.stories).toHaveLength(9)
+ expect(first.stories[0].id).not.toBe(second.stories[0].id)
+ const id=(await db.query<{id:string}>('insert into public.collections(name,automatic_rules) values($1,$2) returning id',['Expressions',JSON.stringify({filters,terms:[]})])).rows[0].id
+ expect((await query({},id)).total).toBe(34)
+ const nav=(await db.query<{r:Record<string,{works:number}>}>('select public.library_navigation() r')).rows[0].r
+ expect(nav[id].works).toBe(34)
+ expect((await query({tagExpressions:{characters:{mode:'all',tags:[names[0],'Custom Alya']}}})).total).toBe(0)
+ expect((await query({tagExpressions:{characters:{mode:'any',tags:[names[0],'Custom Alya']}}},'view_all','reading')).total).toBe(34)
+})
+
+it('rejects malformed collection expressions and keeps new SQL helpers invoker-only and inaccessible to anonymous callers',async()=>{
+ await expect(db.query('insert into public.collections(name,automatic_rules) values($1,$2)',['Bad',JSON.stringify({filters:{tagExpressions:{fandoms:{mode:'wat'}}},terms:[]})])).rejects.toThrow('Invalid tag expression')
+ await db.exec('rollback;begin;reset role')
+ const rows=(await db.query<{name:string;definer:boolean;anon:boolean}>("select proname name,prosecdef definer,has_function_privilege('anon',oid,'execute') anon from pg_proc where proname in ('library_expression_tags','library_tag_expression_groups','library_tag_groups_match')")).rows
+ expect(rows).toHaveLength(3)
+ expect(rows.every(row=>!row.definer&&!row.anon)).toBe(true)
+})
+it('tolerates malformed external expression payloads without changing legacy selections',async()=>{
+ for(const tagExpressions of [null,[],false,'invalid',{characters:{mode:'custom',groups:[null,[],[7]]}}]) expect((await query({tagExpressions})).total).toBe(5)
+})
+it('normalizes Unicode edge whitespace and duplicate identities with the same expression contract as TypeScript',async()=>{
+ const {tagExpression,convertTagExpression}=await import('../../src/features/library/tags/tag-expressions')
+ const filters={...defaultReadingFilters,tagExpressions:{fandoms:{mode:'all' as const,tags:['\u00a0A\u2003','a','B','\nRejected']}}}
+ const groups=(await db.query<{g:string[][]}>("select public.library_tag_expression_groups($1,'fandoms') g",[JSON.stringify(filters)])).rows[0].g
+ expect(groups).toEqual((convertTagExpression(tagExpression(filters,'fandoms'),'custom') as {groups:string[][]}).groups)
+})

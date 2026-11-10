@@ -19,7 +19,7 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
     series: () => metadata.series?.length ? <SeriesNames metadata={metadata} /> : 'None saved',
     rating: () => ratingLabel(metadata.rating) || 'Rating unknown', words: () => `${count(metadata.word_count)} words`,
     chapters: () => `${metadata.published_chapters ?? '?'} / ${metadata.total_chapters ?? '?'} chapters`,
-    summary: () => <WorkSummary metadata={metadata} fallback={layout === 'info' ? 'No summary saved.' : ''} />,
+    summary: () => <WorkSummary tile={layout !== 'info'} metadata={metadata} fallback={layout === 'info' ? 'No summary saved.' : ''} />,
     relationships: () => <MetadataTags values={tagNames(metadata, 'relationship')} category="relationships" />,
     characters: () => <MetadataTags values={tagNames(metadata, 'character')} category="characters" />,
     tags: () => <MetadataTags values={tagNames(metadata, 'freeform')} />,

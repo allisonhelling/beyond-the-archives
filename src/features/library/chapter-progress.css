@@ -8,3 +8,5 @@
 .progress-popover p, .progress-popover .error-message { font-size: max(var(--work-tile-min-font-size, 0px), 11px); line-height: 1.4; }
 .progress-popover .form-actions { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .progress-popover .button { width: 100%; min-height: 28px; padding: 5px 4px; font-size: max(var(--work-tile-min-font-size, 0px), 11px); border-radius: 4px; gap: 4px; }
+
+@media (max-width: 900px) { .progress-popover input { font-size: 16px; height: 36px; } }

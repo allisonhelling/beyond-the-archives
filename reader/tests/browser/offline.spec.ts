@@ -892,7 +892,7 @@ test('reports verified local files by stable installation identity and replaces 
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Reader Account', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: 'Reader Account & Cloud Library' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Reader Account' })).toBeVisible()
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.getByLabel('Work Actions', { exact: true }).click()
   page.once('dialog', dialog => dialog.accept())

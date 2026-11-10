@@ -220,3 +220,10 @@ export function deleteDisplaySelection(preference: DisplayPreference, fields: st
  }
  return result
 }
+
+export type SummaryMode = 'full' | 'expanded' | 'collapsed'
+export function saveSummaryMode(summaryMode: SummaryMode) {
+ let saved: Record<string, unknown> = {}
+ try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
+ writeDisplay({ ...saved, summaryMode })
+}

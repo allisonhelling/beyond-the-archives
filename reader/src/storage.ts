@@ -1,12 +1,22 @@
+import { sampleMode } from '../../src/lib/sample-mode'
 import { cloudBookFields, cloudPreferences, equal, type CloudEdit, type CloudValue } from './cloud-model'
 import { chapterVersion, importEpub } from './epub'
 import { chapterContent, retainedContents, withAnthologyMetadata } from './anthology'
 import { isAnthology, retainWorkLinks, withReadingProgress, repairChapterState, bookDetails, catalogBook, type Book, type BookContent, type BookDetails, type CatalogBook, type Pending } from './model'
 
-export const readerOwner = localStorage.getItem('reader-cloud-owner') || ''
+export const readerOwner = sampleMode ? '' : localStorage.getItem('reader-cloud-owner') || ''
+// Navigation intent must commit synchronously before a reload can replace this document.
+const openBookKey = `reader-open-book:${sampleMode ? 'sample' : readerOwner || 'guest'}`
+export function lastOpenBook() {
+  try { return localStorage.getItem(openBookKey) ?? undefined } catch { return undefined }
+}
+export function rememberOpenBook(id: string | undefined) {
+  try { if (id) localStorage.setItem(openBookKey, id); else localStorage.removeItem(openBookKey) } catch { /* Reading remains available when persistence is blocked. */ }
+}
 export const bookStores = ['books', 'catalog', 'contents', 'settings']
+export const readerQueueChanged = 'reader-queue-changed'
 const database = new Promise<IDBDatabase>((resolve, reject) => {
-  const request = indexedDB.open(readerOwner ? `bta-reader-account:${readerOwner}` : 'bta-reader', 2)
+  const request = indexedDB.open(sampleMode ? 'bta-reader-sample:v1' : readerOwner ? `bta-reader-account:${readerOwner}` : 'bta-reader', 2)
   request.onupgradeneeded = event => {
     const db = request.result, tx = request.transaction!
     if (event.oldVersion === 0) for (const name of ['books', 'pending', 'settings']) db.createObjectStore(name, { keyPath: 'id' })
@@ -29,7 +39,7 @@ export async function transaction(stores: string[], action: (tx: IDBTransaction)
   const db = await database
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(stores, 'readwrite')
-    tx.oncomplete = () => resolve(); tx.onerror = event => reject((event.target as IDBRequest).error ?? tx.error); tx.onabort = () => reject(tx.error)
+    tx.oncomplete = () => { resolve(); if (stores.includes('settings') || stores.includes('pending')) window.dispatchEvent(new Event(readerQueueChanged)) }; tx.onerror = event => reject((event.target as IDBRequest).error ?? tx.error); tx.onabort = () => reject(tx.error)
     try { action(tx) } catch (error) { tx.abort(); reject(error) }
   })
 }
@@ -124,14 +134,16 @@ export function restoreDeletedVersion(tx: IDBTransaction, id: string) {
   const tombstone = tx.objectStore('settings').get(`cloud-base:${id}/deleted`)
   tombstone.onsuccess = () => { if (tombstone.result?.value.value === true) queueCloud(tx, `${id}/deleted`, false) }
 }
-export function deleteBook(tx: IDBTransaction, id: string, replacementId?: string) {
+export function deleteBook(tx: IDBTransaction, id: string, replacementId?: string, retainCatalog = false) {
+  const catalog = readerOwner && retainCatalog ? tx.objectStore('catalog').get(id) : undefined
   const settings = tx.objectStore('settings'), baseline = settings.get(`cloud-base:${id}/deleted`)
   baseline.onsuccess = () => eraseBook(tx, id, () => {
     if (readerOwner) settings.put({id:`cloud-edit:${id}/deleted`,value:{id:crypto.randomUUID(),key:`${id}/deleted`,value:true,base:baseline.result?.value.revision ?? 0} satisfies CloudEdit})
+    if (catalog?.result) tx.objectStore('catalog').put({ ...catalog.result, deleting: true })
   }, replacementId)
 }
 export async function deleteEpub(id: string) {
-  await transaction([...bookStores, 'pending'], tx => deleteBook(tx, id))
+  await transaction([...bookStores, 'pending'], tx => deleteBook(tx, id, undefined, true))
 }
 export async function setting(id: string, value: unknown) { await transaction(['settings'], tx => {
   tx.objectStore('settings').put({ id, value })
@@ -153,6 +165,16 @@ export function queueCloud(tx: IDBTransaction, key: string, value: unknown) {
 }
 export async function cloudEdits() {
   return (await all<{ id: string; value: CloudEdit }>('settings', 'cloud-edit:')).filter(row => row.id.startsWith('cloud-edit:')).map(row => row.value)
+}
+export async function hasCloudChanges(): Promise<boolean> {
+  const db = await database
+  return new Promise((resolve,reject) => {
+    const tx = db.transaction('settings'), store = tx.objectStore('settings')
+    const edit = store.getKey(IDBKeyRange.bound('cloud-edit:','cloud-edit:\uffff')), flight = store.getKey('cloud-flight')
+    tx.oncomplete = () => resolve(edit.result !== undefined || flight.result !== undefined)
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
 }
 export async function acceptCloud(value: CloudValue, edit?: CloudEdit) {
   await transaction(bookStores, tx => {

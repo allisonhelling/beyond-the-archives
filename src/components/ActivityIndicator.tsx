@@ -1,3 +1,4 @@
+import './activity.css'
 import { useSyncExternalStore } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { activitySnapshot, subscribeActivity } from '../lib/activity'

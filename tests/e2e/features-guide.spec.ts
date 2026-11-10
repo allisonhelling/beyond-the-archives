@@ -183,7 +183,7 @@ test('passive surfaces are square and progress sections are centered and divided
  await expect(card.locator('.book-spine-footer')).toHaveCSS('border-radius', '0px')
  await expect(page.locator('.collection-spine').first()).toHaveCSS('border-radius', '7px')
  await expect(card.locator('.spine-action').first()).toHaveCSS('border-radius', '4px')
- for (const selector of await page.locator('.reading-toolbar .filter-input, .reading-toolbar input, .reading-toolbar > .button').all()) await expect(selector).toHaveCSS('border-radius', '4px')
+ for (const selector of await page.locator('.reading-toolbar .filter-input, .reading-toolbar input, .reading-toolbar .toolbar-actions > .button').all()) await expect(selector).toHaveCSS('border-radius', '4px')
  await page.getByRole('button', { name: 'Filters', exact: true }).click()
  for (const selector of await page.locator('.reading-filters .filter-input, .reading-filters input:not([type=checkbox]), .reading-filters .filter-grid > .button, .reading-filters .filter-choice-row > .button').all()) await expect(selector).toHaveCSS('border-radius', '4px')
  await expect(page.getByRole('region', { name: 'Library Toolbar' }).getByRole('button', { name: 'Hide', exact: true })).toHaveCSS('border-radius', '4px')

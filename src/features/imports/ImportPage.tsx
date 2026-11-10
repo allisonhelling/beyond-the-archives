@@ -20,10 +20,10 @@ import { ImportReadingStatus } from './ImportReadingStatus'
 import { SeriesImportReview } from './SeriesImportReview'
 import { importFinished, classifyUrl, extractUrls, groupWorks, selectedImportText, type SeriesPreview } from './urls'
 const importTabs = [
- { id: 'links', label: 'Work or Series Links' },
- { id: 'sync', label: 'AO3 Library Sync' },
- { id: 'csv', label: 'CSV (Bookmarks or Marked for Later)' },
- { id: 'bookfusion', label: 'Calibre (Bookfusion)' },
+ { id: 'links', mobileLabel: 'Links', label: 'Work or Series Links' },
+ { id: 'sync', mobileLabel: 'AO3 Sync', label: 'AO3 Library Sync' },
+ { id: 'csv', mobileLabel: 'CSV', label: 'CSV (Bookmarks or Marked for Later)' },
+ { id: 'bookfusion', mobileLabel: 'Bookfusion', label: 'Calibre (Bookfusion)' },
 ] as const
 const activeStatuses=['pending','processing']
 const reviewStatuses=['failed','skipped','cancelled']
@@ -88,7 +88,7 @@ export function ImportPage() {
  </section>
  </>
  return <div className="mass-import-page"><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Choose work links, an AO3 library sync, CSV files, or Calibre Bookfusion links.</p></div></div>
- <TabList tabs={importTabs} active={activeTab} onChange={setActiveTab} label="Mass Import Sections" prefix="imports" />
+ <TabList tabs={importTabs} active={activeTab} onChange={setActiveTab} label="Mass Import Sections" prefix="imports" className="import-tabs" />
  {importTabs.map(tab => <section key={tab.id} role="tabpanel" id={`imports-panel-${tab.id}`} aria-labelledby={`imports-tab-${tab.id}`} hidden={activeTab !== tab.id} tabIndex={0}>
   {tab.id === 'sync' && <LibrarySyncForm onImported={onImported} />}
   {tab.id === 'csv' && <CsvImportForm onImported={onImported} />}

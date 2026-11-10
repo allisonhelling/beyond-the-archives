@@ -25,6 +25,7 @@ export async function organizerAccount(context:BrowserContext) {
   if(path==='/auth/v1/user')return route.fulfill({json:accountSession().user})
   if(path==='/auth/v1/token')return route.fulfill({json:accountSession()})
   if(path==='/rest/v1/reader_app_access')return route.fulfill({json:{user_id:owner}})
+  if(path==='/rest/v1/rpc/library_revision')return route.fulfill({json:0})
   if(path==='/rest/v1/rpc/reader_organizer_connection'){
    if(input.p_action==='enable')linked=true
    if(input.p_action==='disable')linked=false
@@ -35,3 +36,5 @@ export async function organizerAccount(context:BrowserContext) {
  })
  await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Signed Out Organizer</title>'}))
 }
+
+export async function cloudLibrary(page:Page){await page.getByRole('button',{name:'Profile Menu',exact:true}).click();await page.getByRole('button',{name:'Cloud Library',exact:true}).click()}

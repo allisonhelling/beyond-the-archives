@@ -1,7 +1,7 @@
 import type { Preferences } from './model'
 
 export const readingFonts = {
-  default: { label: 'Default Font', family: 'var(--font-serif)' },
+  default: { label: 'Georgia', family: 'var(--font-serif)' },
   georgia: { label: 'Georgia', family: 'Georgia, serif' },
   palatino: { label: 'Palatino', family: 'Palatino, "Palatino Linotype", "Book Antiqua", serif' },
   sans: { label: 'System Sans', family: 'system-ui, sans-serif' },

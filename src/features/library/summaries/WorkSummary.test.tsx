@@ -1,7 +1,11 @@
-import { render, screen } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { saveSummaryMode } from '../display/display-settings'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { WorkSummary } from './WorkSummary'
 import { readSummary } from './summary'
+
+beforeEach(() => { const saved = new Map<string, string>(); vi.stubGlobal('localStorage', { getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => saved.set(key, value) }) })
+afterEach(() => vi.unstubAllGlobals())
 
 it('preserves nested emphasis, paragraphs, line breaks, lists and AO3 links', () => {
  const metadata = readSummary('<p>Some <em>italic <strong>and bold</strong></em> text.<br>Next line.</p><ul><li>One</li><li>Two</li></ul><p><a href="/works/123">Original</a></p>')
@@ -49,4 +53,17 @@ it('renders plain metadata line breaks while escaping literal text', () => {
  expect(metadata.summary).toBe('First & second.\nNext line.\n\nLast <3')
  expect(container.querySelectorAll('br')).toHaveLength(3)
  expect(container).toHaveTextContent('Last <3')
+})
+
+it('applies tile summary modes without truncating information pages', () => {
+ act(() => saveSummaryMode('collapsed'))
+ const metadata = readSummary('<p>A story <em>summary</em>.</p>')
+ const view = render(<><WorkSummary tile metadata={metadata} /><WorkSummary metadata={metadata} /></>)
+ const more = screen.getByRole('button', { name: 'Show More' })
+ expect(more).toHaveAttribute('aria-expanded', 'false')
+ fireEvent.click(more)
+ expect(screen.getByRole('button', { name: 'Show Less' })).toHaveAttribute('aria-expanded', 'true')
+ expect(view.container.querySelectorAll('em')).toHaveLength(2)
+ act(() => saveSummaryMode('full'))
+ expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })

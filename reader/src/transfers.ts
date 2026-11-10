@@ -10,6 +10,35 @@ type InboxRow = { destination: string; id: string; hash: string; metadata: Recor
 const jobKey = (id: string) => `calibre-job:${id}`
 const fileKey = (id: string) => `calibre-file:${id}`
 export const transferJobs = async () => (await all<{value: ImportJob}>('settings', 'calibre-job:')).map(row => row.value)
+// Display completion only after publication and acknowledgement, without
+// changing the durable worker statuses used for retries.
+export async function transferDisplayJobs(): Promise<ImportJob[]> {
+  const [jobs, receipts] = await Promise.all([transferJobs(), all<{id:string;value:string}>('settings','calibre-ack:')])
+  const acknowledged = new Map(receipts.map(row => [row.id.slice('calibre-ack:'.length), row.value]))
+  return jobs.map(job => ['imported','duplicate'].includes(job.status) && (job.releaseDownload || acknowledged.get(job.id) !== job.status)
+    ? { ...job, status: 'queued', message: 'Import saved; waiting for transfer confirmation.' } : job)
+}
+export async function queuedCloudTransfers(signal: AbortSignal): Promise<ImportJob[]> {
+  if (!readerOwner) return []
+  const jobs: ImportJob[] = [], size = 500
+  let after: {destination:string;id:string} | undefined
+  while (true) {
+    // Metadata only: seeing the queue must not wait for sync or download EPUBs.
+    let query = readerCloud.from('reader_import_inbox').select('destination,id,hash,filename:metadata->>_filename').eq('status','queued').order('destination').order('id').limit(size)
+    if (after) query = query.or(`destination.gt.${after.destination},and(destination.eq.${after.destination},id.gt.${after.id})`)
+    const {data,error} = await query.abortSignal(signal)
+    if (error) throw error
+    if (signal.aborted) throw new DOMException('Transfer queue request cancelled','AbortError')
+    for (const row of data) jobs.push({id:`cloud:${row.destination}:${row.id}`,hash:row.hash,filename:row.filename || `${row.id}.epub`,metadata:{},status:'queued',message:'Waiting in the cloud inbox for this reader to receive it.'})
+    if (data.length < size) break
+    after = data.at(-1)!
+  }
+  return jobs
+}
+export function mergeTransferJobs(saved: ImportJob[], incoming: ImportJob[]): ImportJob[] {
+  // A staged job replaces its inbox placeholder, including its failure/result.
+  return [...new Map([...incoming,...saved].map(job => [job.id,job])).values()]
+}
 export async function pairCalibre(label: string): Promise<TransferPair> {
   const {data,error} = await readerCloud.auth.getSession()
   if (error) throw error

@@ -27,3 +27,10 @@ it('hides series cards until explicitly enabled without excluding their individu
  expect(filterLibraryItems(pool, defaultReadingFilters, series)).toEqual([])
  expect(filterLibraryItems(pool, { ...defaultReadingFilters, showSeries: true, excludeLaterSeries: true }, series)).toEqual(pool)
 })
+it('applies shared expression modes to merged series categories without unioning members for crossover',()=>{
+ for(const expression of [{mode:'all',tags:['First fandom','Second fandom']},{mode:'custom',groups:[['First fandom','Second fandom'],['Absent']]}]) expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,tagExpressions:{fandoms:expression}} as Parameters<typeof filterLibraryItems>[1],series)).toEqual(pool)
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,tagExpressions:{tags:{mode:'all',tags:['Adventure','Missing']}}},series)).toEqual([])
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,tagExpressions:{tags:{mode:'any',tags:['Adventure','Missing']}}},series)).toEqual(pool)
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,crossovers:'only'},series)).toEqual([])
+ expect(filterLibraryItems(pool,{...defaultReadingFilters,showSeries:true,crossovers:'exclude'},series)).toEqual(pool)
+})

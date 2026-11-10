@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
-test('tag and fandom clicks apply filters immediately and the mobile series action has its own row',async({page},testInfo)=>{
+test('tag and fandom clicks apply filters immediately and the mobile actions fit their shared toolbar row',async({page},testInfo)=>{
  const tables=await fixture(page)
  for(const [id,title,fandom,tags] of [['tagged','Tagged Story','Shared Fandom',['Found Family']],['other','Other Story','Other Fandom',['Adventure']]] as const){
   tables.works.push({id:`${id}-work`,ao3_work_id:id==='tagged'?99201:99202,verified_chapters:{}})
@@ -13,12 +13,13 @@ test('tag and fandom clicks apply filters immediately and the mobile series acti
   // Read both rectangles in one browser turn so scroll restoration cannot
   // move the document between measurements while the library finishes loading.
   await expect(async()=>{
-   const bounds=await toolbar.locator(':scope > .series-toggle, :scope > .apply-filters').evaluateAll(buttons=>buttons.map(button=>{const box=button.getBoundingClientRect();return {x:box.x,y:box.y,width:box.width,height:box.height}}))
+   const bounds=await toolbar.locator('.toolbar-actions > .series-toggle, .toolbar-actions > .apply-filters').evaluateAll(buttons=>buttons.map(button=>{const box=button.getBoundingClientRect();return {x:box.x,y:box.y,width:box.width,height:box.height}}))
    expect(bounds).toHaveLength(2)
    const [s,a]=bounds
-   expect(s.y+s.height).toBeLessThanOrEqual(a.y)
+   expect(s.y).toBe(a.y)
+   expect(s.x+s.width).toBeLessThanOrEqual(a.x)
    expect(s.x).toBeLessThan(a.x)
-   const series=toolbar.locator(':scope > .series-toggle')
+   const series=toolbar.locator('.toolbar-actions > .series-toggle')
    await expect(series).toHaveCSS('white-space','nowrap')
    expect(await series.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true)
   }).toPass({timeout:5000})
@@ -33,4 +34,59 @@ test('tag and fandom clicks apply filters immediately and the mobile series acti
  const search=page.getByLabel('Search Title or Author', {exact:true})
  await search.fill('no matching title');await search.press('Enter')
  await expect(page.getByRole('heading',{name:'Tagged Story',exact:true})).toHaveCount(0)
+})
+
+test('tag modes stage changes, edit Custom groups, restore them and survive URL reload on desktop and mobile',async({page})=>{
+ const tables=await fixture(page)
+ for(const [index,fandoms] of [['a',['A']],['ab',['A','B']],['c',['C']],['d',['D']]] as const){
+  const workId=99500+tables.works.length
+  tables.works.push({id:`expression-${index}-work`,ao3_work_id:workId,verified_chapters:{}})
+  tables.library_entries.push({id:`expression-${index}`,work_id:`expression-${index}-work`,original_url:`https://archiveofourown.org/works/${workId}`,reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{title:`Expression ${index}`,fandoms,character_tags:['Hero'],additional_tags:['Fluff']}})
+ }
+ await page.goto('/library');await login(page)
+ const toolbar=page.getByRole('region',{name:'Library Toolbar',exact:true})
+ const apply=toolbar.getByRole('button',{name:'Apply Filters'})
+ const cards=page.locator('[data-story-id^="expression-"]')
+ await expect(cards).toHaveCount(4)
+ await toolbar.getByRole('button',{name:/Select Fandoms/}).click()
+ await page.getByRole('checkbox',{name:'A (2)',exact:true}).check()
+ await page.getByRole('checkbox',{name:'B (1)',exact:true}).check()
+ await expect(cards).toHaveCount(4)
+ await apply.click();await expect(cards).toHaveCount(2)
+ await toolbar.getByRole('button',{name:/Select Fandoms/}).click()
+ await page.getByRole('tab',{name:'All',exact:true}).click()
+ await expect(cards).toHaveCount(2)
+ await apply.click();await expect(cards).toHaveCount(1)
+ await toolbar.getByRole('button',{name:/Select Fandoms/}).click()
+ await page.getByRole('tab',{name:'Custom',exact:true}).click()
+ await page.getByRole('button',{name:'Add Group',exact:true}).click()
+ await page.getByRole('checkbox',{name:'C (1)',exact:true}).check()
+ await page.getByRole('tab',{name:'Any',exact:true}).click()
+ await page.getByRole('tab',{name:'All',exact:true}).click()
+ await page.getByRole('tab',{name:'Custom',exact:true}).click()
+ await expect(page.getByText('A AND B',{exact:true})).toBeVisible()
+ await expect(cards).toHaveCount(1)
+ await page.getByRole('tab',{name:'Custom',exact:true}).press('Escape')
+ await expect(toolbar.getByRole('button',{name:/Select Fandoms/})).toBeFocused()
+ await apply.click();await expect(cards).toHaveCount(2)
+ await expect(page.getByLabel('Active Filters')).toContainText('Custom · 2 Groups')
+ await page.reload();await expect(cards).toHaveCount(2)
+ await toolbar.getByRole('button',{name:/Select Fandoms/}).click()
+ await expect(page.getByText('A AND B',{exact:true})).toBeVisible()
+ await page.getByRole('tab',{name:'Custom',exact:true}).press('Home')
+ await expect(page.getByRole('tab',{name:'Any',exact:true})).toBeFocused()
+ await page.getByRole('tab',{name:'Any',exact:true}).press('End')
+ await expect(page.getByText('A AND B',{exact:true})).toBeVisible()
+ await page.getByRole('tab',{name:'Custom',exact:true}).press('Escape')
+ await page.getByRole('button',{name:'Clear All Filters',exact:true}).first().click()
+ await expect(cards).toHaveCount(4)
+ await toolbar.getByRole('button',{name:'Filters',exact:true}).click()
+ for(const label of ['Relationships','Characters','Tags']){
+  await page.getByLabel(label,{exact:true}).focus()
+  const menu=page.getByRole('region',{name:`${label} Suggestions`,exact:true})
+  await expect(menu.getByRole('tab',{name:'Any',exact:true})).toBeVisible()
+  await expect(menu.getByRole('tab',{name:'All',exact:true})).toBeVisible()
+  await expect(menu.getByRole('tab',{name:'Custom',exact:true})).toHaveCount(0)
+ }
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })

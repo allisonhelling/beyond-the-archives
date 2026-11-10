@@ -5,6 +5,42 @@ import { libraryQueryFixture } from '../../../tests/e2e/library-query-fixture'
 import type { Story } from '../../../src/features/library/model'
 import { importBook } from './library-fixture'
 
+test('retries compact collection work pages after a timeout without loading full series catalogs or navigation counts',async({page,context})=>{
+ await organizerAccount(context)
+ const tables=await fixture(page,{backend:testOrganizer.url,reader:true})
+ await page.route('**/rest/v1/rpc/reader_organizer_connection',route=>route.fulfill({json:{enabled:true,userId:owner,secret:'a'.repeat(64)}}))
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[],stories:[],collections:tables.collections,cloudBooks:[]}}))
+ for(let index=0;index<501;index++){
+  tables.works.push({id:`collection-work-${index}`,ao3_work_id:10000+index,verified_chapters:{}})
+  tables.library_entries.push({id:`collection-entry-${String(index).padStart(4,'0')}`,work_id:`collection-work-${index}`,original_url:`https://archiveofourown.org/works/${10000+index}`,reading_status:'to_read',last_read_chapter:0,notes:'',metadata_overrides:{title:`Collection Work ${index}`},created_at:'2026-10-01T00:00:00Z'})
+ }
+ let fullReads=0,workReads=0,failed=true,release:(()=>void)|undefined
+ for(const rpc of ['library_catalog','library_navigation_snapshot'])await page.route(`**/rest/v1/rpc/${rpc}`,route=>{fullReads++;return route.fulfill({status:500,json:{code:'57014',message:'Unexpected full catalog/count read'}})})
+ await page.route('**/rest/v1/library_search_documents*',async route=>{
+  workReads++
+  expect(new URL(route.request().url()).searchParams.get('select')).toBe('catalog_story,automatic_memberships:automatic_collection_works(collection_id)')
+  expect(new URL(route.request().url()).searchParams.get('limit')).toBe('500')
+  if(failed)return route.fulfill({status:500,json:{code:'57014',message:'Statement timeout'}})
+  if(workReads===2)await new Promise<void>(resolve=>{release=resolve})
+  return route.fallback()
+ })
+ await page.goto('/')
+ const retry=page.getByRole('button',{name:'Retry Collections',exact:true})
+ await expect(retry).toBeVisible()
+ await expect(page.getByRole('status').filter({has:retry})).toContainText('Could not load organizer works for collections. The request took too long.')
+ expect(workReads).toBe(1)
+ failed=false
+ await retry.click()
+ const pending=page.getByRole('button',{name:'Retrying Collections…',exact:true})
+ await expect(pending).toBeDisabled()
+ await expect.poll(()=>Boolean(release)).toBe(true)
+ release?.()
+ await expect(pending).toHaveCount(0)
+ await expect(retry).toHaveCount(0)
+ expect(workReads).toBe(3)
+ expect(fullReads).toBe(0)
+})
+
 for (const width of [390, 1280]) test(`shares organizer collection creation, editing and memberships at ${width}px`, async ({ page, context }) => {
  await page.setViewportSize({ width, height: 844 })
  await organizerAccount(context)

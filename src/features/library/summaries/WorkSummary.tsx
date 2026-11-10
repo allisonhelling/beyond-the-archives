@@ -1,9 +1,13 @@
-import { createElement, useMemo, type ReactNode } from 'react'
+import { createElement, useId, useMemo, useState, type ReactNode } from 'react'
 import { load } from 'cheerio'
 import type { Metadata } from '../model'
+import { useSummaryMode } from '../display/useDisplayPreference'
 import { readSummary } from './summary'
 
-export function WorkSummary({ metadata, fallback = '' }: { metadata: Pick<Metadata, 'summary' | 'summary_html'>; fallback?: string }) {
+export function WorkSummary({ metadata, fallback = '', tile = false }: { tile?: boolean; metadata: Pick<Metadata, 'summary' | 'summary_html'>; fallback?: string }) {
+ const mode = useSummaryMode(), id = useId()
+ const [disclosure, setDisclosure] = useState({ mode, expanded: mode !== 'collapsed' })
+ const open = disclosure.mode === mode ? disclosure.expanded : mode !== 'collapsed'
  const formatted = useMemo(() => {
   if (typeof metadata.summary_html !== 'string') return null
   const sanitized = readSummary(metadata.summary_html)
@@ -20,7 +24,7 @@ export function WorkSummary({ metadata, fallback = '' }: { metadata: Pick<Metada
   }
   return renderNodes($.root().contents())
  }, [metadata.summary, metadata.summary_html])
- return formatted
-  ? <div className="formatted-summary">{formatted}</div>
-  : <>{metadata.summary || fallback}</>
+ const content = formatted ? <div className="formatted-summary">{formatted}</div> : <>{metadata.summary || fallback}</>
+ if (!tile || mode === 'full' || !metadata.summary) return content
+ return <div className="summary-disclosure"><div id={id} className="summary-content" data-collapsed={!open}>{content}</div><button type="button" className="text-button" aria-expanded={open} aria-controls={id} onClick={() => setDisclosure({ mode, expanded: !open })}>{open ? 'Show Less' : 'Show More'}</button></div>
 }

@@ -217,6 +217,14 @@ it('retries an on-demand catalog failure after refreshing and hydrates compact p
  await act(()=>view.result.current.loadDetails(['three']))
  expect(view.result.current.stories.find(item=>item.id==='three')).toMatchObject({notes:'Private Notes',metadata:{summary:'Full summary'}})
 })
+it('supports a work-only catalog without fetching unused navigation counts',async()=>{
+ const view=renderHook(()=>useLibrary({catalog:true}),{wrapper:({children})=><MemoryRouter><LibraryProvider userId="reader-1" catalogWorksOnly navigationEnabled={false}>{children}</LibraryProvider></MemoryRouter>})
+ await waitFor(()=>expect(view.result.current.catalogLoaded).toBe(true))
+ expect(mocks.catalog).toHaveBeenCalledWith(expect.any(AbortSignal),true)
+ expect(view.result.current.stories).toHaveLength(2)
+ expect(view.result.current.navigationLoading).toBe(false)
+ expect(mocks.navigation).not.toHaveBeenCalled()
+})
 it('preserves work pages and their facets when only collection appearance changes',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
@@ -299,7 +307,7 @@ it('checks the server on tab return, invalidates older pages, and ignores late r
  await waitFor(() => expect(view.result.current.navigation.all?.works).toBe(13))
  mocks.revision.mockRejectedValueOnce(new Error('Offline'))
  await act(()=>view.result.current.checkRevision(true))
- expect(view.result.current.revisionError).toBe('Couldn’t update counts.')
+ expect(view.result.current.revisionError).toBe('Offline')
  expect(view.result.current.navigation.all?.works).toBe(13)
  await act(()=>view.result.current.retryCounts())
  expect(view.result.current.revisionError).toBe('')

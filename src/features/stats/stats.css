@@ -42,13 +42,15 @@
 .stats-breakdown meter::-moz-meter-bar { background: var(--color-brand); }
 .stats-page #habits-heading ~ .settings-card { margin-bottom: 18px; }
 .stats-comparison { margin: 14px 0; }
-.stats-comparison strong { color: var(--color-brand); font-size: 24px; }
+.stats-comparison strong { color: var(--color-brand); font-size: inherit; }
 .stats-chart-scroll, .stats-table-scroll { overflow-x: auto; max-width: 100%; }
 .stats-bars { display: flex; align-items: end; gap: 5px; min-width: 650px; margin: 24px 0; }
 .stats-bars-daily-year { min-width: 6500px; }
 .stats-bar-column { flex: 1; min-width: 0; text-align: center; }
+.stats-bar-column > .action-tooltip { display: block; }
+.stats-bar-button { display: block; width: 100%; border: 0; padding: 0; background: transparent; }
 .stats-bar-column svg { width: 100%; height: 150px; fill: var(--color-brand); border-bottom: 1px solid var(--color-border); }
-.stats-bar-column span { display: block; font-size: 10px; writing-mode: vertical-rl; margin: 8px auto; height: 48px; }
+.stats-bar-column > span:last-child { display: block; font-size: 10px; writing-mode: vertical-rl; margin: 8px auto; height: 48px; }
 .stats-page details summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: var(--color-link); }
 .stats-page table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 16px; }
 .stats-page caption { text-align: left; margin-bottom: 10px; }

@@ -19,3 +19,8 @@ export function useTagAppearance() {
   const preferences = useContext(DisplayEditorContext)?.preferences
   return useMemo(() => preferences?.tagAppearance ?? tagAppearance(raw), [preferences, raw])
 }
+
+export function useSummaryMode(): import('./display-settings').SummaryMode {
+ const raw = useSyncExternalStore(subscribeDisplay, displaySnapshot, () => '{}')
+ try { const mode = JSON.parse(raw).summaryMode; return mode === 'expanded' || mode === 'collapsed' ? mode : 'full' } catch { return 'full' }
+}

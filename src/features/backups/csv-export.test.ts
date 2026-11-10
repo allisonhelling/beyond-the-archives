@@ -47,6 +47,32 @@ function fixture() {
   return { stories: applyAutomaticCollections([story], collections), collections, series }
 }
 
+it.each([123, null])('preserves version 1 work identity and original source URLs in JSON and CSV for AO3 ID %s', async ao3Id => {
+  vi.stubGlobal('Blob', NodeBlob)
+  const original = ao3Id === null
+    ? 'https://archiveofourown.org/bookmarks/456'
+    : 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123/chapters/987'
+  const base = fixture().stories[0]
+  const story: Story = { ...base, original_url: original, detailsLoaded: true,
+    work: { ...base.work, ao3_work_id: ao3Id, canonical_url: null, canonical_verified_at: null },
+  }
+  exportWork(story, 'json', [])
+  const [blob, filename] = mocks.downloadFile.mock.calls[0] as [Blob, string]
+  const value = JSON.parse(await blob.text())
+  expect(value).toMatchObject({ format: 'beyond-the-archives-work', version: 1,
+    work: { id: story.id, work_id: story.work_id, original_url: original,
+      work: { id: story.work.id, ao3_work_id: ao3Id, canonical_url: null, canonical_verified_at: null },
+      metadata_overrides: story.metadata_overrides },
+  })
+  expect(value.work).not.toHaveProperty('detailsLoaded')
+  expect(filename).toBe(`beyond-the-archives-work-${ao3Id ?? story.id}.json`)
+  const [csv] = libraryCsvFiles({ stories: [story], series: [], collections: [] }, ['works.csv'])
+  expect(rows(csv.content)[0]).toMatchObject({ id: story.id, work_id: story.work.id,
+    original_url: original, work_ao3_work_id: ao3Id === null ? '' : String(ao3Id),
+    work_canonical_url: '', work_canonical_verified_at: '' },
+  )
+})
+
 it('exports private fields, rich metadata, custom collections, rules, and both membership types', () => {
   const library = fixture()
   const files = libraryCsvFiles(library, csvFiles.map(file => file.name))

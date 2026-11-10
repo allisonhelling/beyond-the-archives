@@ -9,10 +9,9 @@ import { displaySettingsSection } from '../library/display/settings-sections'
 import { browsingSettingsSection } from '../library/browsing/settings-sections'
 import { backupSettingsSection, csvExportSettingsSection } from '../backups/settings-sections'
 import { ao3UsernameSettingsSection, metadataSettingsSection, seriesImportSettingsSection } from '../imports/settings-sections'
-import { accountSettingsSection, browserBarSettingsSection, comingSoonSettingsSection, personalRatingSettingsSection } from './settings-sections'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { accountSettingsSection, browserBarSettingsSection, personalRatingSettingsSection } from './settings-sections'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Ao3UsernameSettings } from '../imports/Ao3UsernameSettings'
 import { MetadataSettings } from '../imports/MetadataSettings'
 import { BackupSettings } from '../backups/BackupSettings'
@@ -36,54 +35,35 @@ const settingsSections: { id: string; title: string; description: string; compon
   { ...browserBarSettingsSection, component: BrowserBarSettings },
   { ...backupSettingsSection, component: BackupSettings },
   { ...csvExportSettingsSection, component: CsvExportSettings },
-  { ...comingSoonSettingsSection, component: ComingSoonSettings },
+]
+
+const settingsGroups = [
+  { id: 'account', title: 'Account', description: 'Sign-in details and account security.', sections: [accountSettingsSection.id] },
+  { id: 'design', title: 'Design', description: 'Tile layouts, tag appearance, and display preferences.', sections: [displaySettingsSection.id] },
+  { id: 'library', title: 'Library & Reading', description: 'Browsing, ratings, reading statistics, and cleanup.', sections: [browsingSettingsSection.id, personalRatingSettingsSection.id, readingStatsSettingsSection.id, dnfCleanupSettingsSection.id] },
+  { id: 'imports', title: 'Imports & Connections', description: 'AO3 account, metadata, series imports, and browser tools.', sections: [ao3UsernameSettingsSection.id, seriesImportSettingsSection.id, metadataSettingsSection.id, browserBarSettingsSection.id] },
+  { id: 'backups', title: 'Data & Backups', description: 'Back up, restore, and export your library.', sections: [backupSettingsSection.id, csvExportSettingsSection.id] },
 ]
 
 export function SettingsPage() {
-  const location = useLocation(), navigate = useNavigate()
-  const selectedSection = settingsSections.find(({ id, aliases }) => location.hash === `#${id}` || aliases?.includes(location.hash))?.id
-  const previousSection = useRef(selectedSection)
+  const location = useLocation()
+  const section = settingsSections.find(({ id, aliases }) => location.hash === `#${id}` || aliases?.includes(location.hash))
+  const group = settingsGroups.find(group => location.hash === `#${group.id}` || section && group.sections.includes(section.id))
+  const previousGroup = useRef(group?.id)
   useEffect(() => {
-    const target = selectedSection ? document.getElementById(selectedSection)
-      : previousSection.current ? document.getElementById(`open-${previousSection.current}`) : null
-    if (target?.getClientRects().length) target.focus({ preventScroll: true })
-    previousSection.current = selectedSection
-  }, [selectedSection])
-  const [activeSection, setActiveSection] = useState<string>(settingsSections[0].id)
-  const content = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    let frame = 0
-    const sections = settingsSections.flatMap(({ id }) => { const section = document.getElementById(id); return section ? [section] : [] })
-    function update() {
-      const boundary = 120
-      const atBottom = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2
-      const current = atBottom ? sections.at(-1) : sections.filter(section => section.getBoundingClientRect().top <= boundary).at(-1)
-      setActiveSection(current?.id ?? settingsSections[0].id)
-    }
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update) }
-    const observer = new ResizeObserver(schedule)
-    if (content.current) observer.observe(content.current)
-    schedule()
-    window.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule) }
-  }, [])
-  function jumpToSection(id: string) {
-    const section = document.getElementById(id)
-    section?.focus({ preventScroll: true })
-    section?.scrollIntoView({ block: 'start' })
-  }
-  return <div className="settings-page" data-section-open={Boolean(selectedSection)}>
-    <aside className="settings-outline"><nav aria-label="Settings Section Outline"><h2>On This Page</h2><ul>{settingsSections.map(({ id, title, description }) => <li key={id}><a aria-label={title} aria-describedby={`outline-description-${id}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={event => { event.preventDefault(); jumpToSection(id) }}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></a></li>)}</ul></nav></aside>
-    <div className="settings-content" ref={content}>
+    const target = group ? document.getElementById(section?.id ?? `settings-category-${group.id}`)
+      : previousGroup.current ? document.getElementById(`open-${previousGroup.current}`) : null
+    target?.focus({ preventScroll: true })
+    previousGroup.current = group?.id
+    if (section) target?.scrollIntoView?.({ block: 'start' })
+    else window.scrollTo(0, 0)
+  }, [group, section])
+  return <div className="settings-page" data-section-open={Boolean(group)}>
+    <aside className="settings-outline"><nav aria-label="Settings Categories"><h2><Link to="/settings" aria-current={!group ? 'page' : undefined}>Settings Categories</Link></h2><ul>{settingsGroups.map(({ id, title, description }) => <li key={id}><Link aria-label={title} aria-describedby={`outline-description-${id}`} to={`/settings#${id}`} aria-current={group?.id === id ? 'location' : undefined}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></Link></li>)}</ul></nav></aside>
+    <div className="settings-content">
       <div className="page-heading settings-index-heading"><h1>Settings</h1></div>
-      <SettingsCategoryList sections={settingsSections} renderLink={({ id, title }, contents, descriptionId) => <Link aria-label={title} aria-describedby={descriptionId} id={`open-${id}`} to={`/settings#${id}`} state={{ settingsIndex: true }}>{contents}</Link>} />
-      <div className="settings-section-back"><button className="button secondary" onClick={() => { if (location.state?.settingsIndex) navigate(-1); else navigate('/settings', { replace: true }) }}><ArrowLeft size={17} aria-hidden="true" />Back to Settings</button></div>
-      {settingsSections.map(({ id, component: Section }) => <div key={id} className="settings-section" data-selected={selectedSection === id}><Section /></div>)}
+      <SettingsCategoryList sections={settingsGroups} renderLink={({ id, title }, contents, descriptionId) => <Link aria-label={title} aria-describedby={descriptionId} id={`open-${id}`} to={`/settings#${id}`}>{contents}</Link>} />
+      {settingsGroups.map(({ id, title, sections }) => <div key={id} className="settings-section" data-selected={group?.id === id} hidden={group?.id !== id}><h1 id={`settings-category-${id}`} tabIndex={-1}>{title}</h1>{settingsSections.filter(section => sections.includes(section.id)).map(({ id, component: Section }) => <Section key={id} />)}</div>)}
     </div>
   </div>
-}
-
-function ComingSoonSettings() {
-  return <section id={comingSoonSettingsSection.id} tabIndex={-1} className="settings-card"><h2>{comingSoonSettingsSection.title}</h2><p className="muted">Import history is available from Add or Import. Email forwarding arrives in Phase 5. Library backup export and restore are available above.</p></section>
 }

@@ -1,4 +1,5 @@
 import { isDisplayFieldHidden } from '../../src/features/library/display/display-settings'
+import { LoadingIcon } from '../../src/components/ActivityIndicator'
 import { PersonalToggleButton } from '../../src/features/library/FavoriteButton'
 import { ChapterProgress } from '../../src/features/library/ChapterProgress'
 import { organizerAppUrl } from '../../src/lib/connected-login'
@@ -29,7 +30,7 @@ export function ReaderTile({collectionAction,book,preferences,appearance,busy=fa
  const tilePreference = (editor?.preferences ?? readerTilePreferences(preferences,layout,appearance)).workTile
  const chapterCount=metadata.published_chapters??book.chapterCount
  const count=(value:number|null|undefined,label:string)=><span>{value?.toLocaleString()??'Unknown'} {label}</span>
- return <DisplayEditorContext value={editor??{preferences:readerTilePreferences(preferences,layout,appearance),groups:[],selected:null}}><article className="story-card">
+ return <DisplayEditorContext value={editor??{preferences:readerTilePreferences(preferences,layout,appearance),groups:[],selected:null}}><article className="story-card" data-deleting={book.deleting || undefined} aria-busy={book.deleting || undefined}><div className="reader-tile-content" inert={book.deleting || undefined}>
   <div className="card-top"><h2><button className="title-button" onClick={book.hasFile?onRead:onDetails}>{metadata.title}</button>{'\u00a0'}<PublicationStatusIndicator portal status={metadata.publication_status} /></h2><div className="card-top-actions"><DisplayInfo group="workTile" fields={['favorite', 'rec']}>{{ favorite: <PersonalToggleButton kind="favorite" selected={Boolean(book.favorite)} disabled={busy} onChange={value => void onMarking('favorite', value)} />, rec: <PersonalToggleButton kind="rec" selected={Boolean(book.rec)} disabled={busy} onChange={value => void onMarking('rec', value)} /> }}</DisplayInfo><WorkMenu markings={(['favorite','rec'] as const).filter(kind => isDisplayFieldHidden(tilePreference,kind)).map(kind => <PersonalToggleButton key={kind} menu kind={kind} selected={Boolean(book[kind])} disabled={busy} onChange={value => void onMarking(kind,value)} />)} organizerHref={organizerAccount && book.account === organizerAccount && book.organizerEntryId ? new URL(`/stories/${encodeURIComponent(book.organizerEntryId)}`, organizerAppUrl()).href : undefined} onDelete={onDelete} onViewDetails={onDetails} onRemoveDownload={book.hasFile?onRemove:undefined} /></div></div>
   {isAnthology(book) && <p className="anthology-summary">{anthologyLabel(book)}</p>}
   <DisplayInfo group="workTile" lineClassName="work-facts">{{
@@ -37,7 +38,7 @@ export function ReaderTile({collectionAction,book,preferences,appearance,busy=fa
    fandoms:<p className="work-fandoms">{metadata.fandoms.length?<BulletSeparated values={metadata.fandoms} onSelect={onSearch} />:'INDEPENDENT EPUB'}</p>,
    series:series.length ? <span><SeriesNames metadata={{...metadata,series}} onSelect={name=>onSeries?.(name)} /></span> : null,
    rating:<span>{metadata.rating||'Unrated'}</span>,words:count(metadata.word_count??book.wordCount,'words'),
-   summary:<div className="summary"><WorkSummary metadata={metadata} fallback="Open this EPUB to start reading." /></div>,
+   summary:<div className="summary"><WorkSummary tile metadata={metadata} fallback="Open this EPUB to start reading." /></div>,
    allTags:<WorkTags metadata={metadata} onSearch={onSearch} appearance={appearance} />,
    relationships:tags(metadata.relationship_tags,'relationships'),characters:tags(metadata.character_tags,'characters'),tags:tags(metadata.additional_tags),warnings:tags(metadata.archive_warnings,'warnings'),category:tags(metadata.categories),collections:tags(book.collections,'collections'),
    kudos:count(metadata.kudos,'kudos'),bookmarks:count(metadata.bookmark_count,'bookmarks'),comments:count(metadata.comment_count,'comments'),hits:count(metadata.hits,'hits'),
@@ -45,5 +46,5 @@ export function ReaderTile({collectionAction,book,preferences,appearance,busy=fa
    progress:<div className="card-progress"><span>{statuses[book.status]}</span><ChapterProgress label={isAnthology(book) ? 'Anthology Chapters' : 'Chapter'} status={book.status} progress={book.completedCount} metadata={{ ...progressMetadata(book), published_chapters: chapterCount }} disabled={busy} onSave={onProgress} /><span className="availability">{book.hasFile?<CircleArrowDown size={14} aria-hidden="true" />:<CloudOutline size={16} strokeWidth={1.5} aria-hidden="true" />}{book.hasFile?'Downloaded':'Available In Cloud'}</span></div>,
   }}</DisplayInfo>
   <div className="card-actions"><button className="primary" disabled={busy} onClick={onRead}>{book.hasFile?`${book.position.fraction||book.completedCount?'Continue Reading':'Start Reading'} →`:'Download EPUB'}</button><button onClick={onManage}>Manage EPUB</button>{collectionAction}</div>{!book.active&&<small>Retained version · Organizer links open the active version</small>}
- </article></DisplayEditorContext>
+ </div>{book.deleting && <p className="deletion-status" role="status"><LoadingIcon />Deleting</p>}</article></DisplayEditorContext>
 }

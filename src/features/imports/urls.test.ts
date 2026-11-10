@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { classifyUrl, extractUrls, groupWorks, parseWorkUrl } from './urls'
 describe('AO3 identities', () => {
+  it.each([
+    'https://www.fanfiction.net/s/123/1/Fixture',
+    'https://www.wattpad.com/story/123-fixture',
+  ])('does not infer an AO3 identity from another source with the same numeric ID: %s', url => {
+    expect(classifyUrl(url).kind).toBe('unrelated')
+    expect(() => parseWorkUrl(url)).toThrow()
+    expect([...groupWorks(['https://archiveofourown.org/works/123', url]).keys()]).toEqual([123])
+  })
   it.each(['https://archiveofourown.org/works/123', 'http://www.archiveofourown.org/works/123/', 'https://archiveofourown.org/works/123?view_full_work=true#main', 'https://archiveofourown.org/collections/test/works/123'])('normalizes %s without verifying a destination', url => {
     expect(parseWorkUrl(url)).toMatchObject({ workId: 123, normalizedUrl: 'https://archiveofourown.org/works/123', original: url })
   })

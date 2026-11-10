@@ -61,7 +61,14 @@ test('filters expose crossover modes, removable chips, word count and consistent
  await page.getByRole('button',{name:'Select Fandoms',exact:true}).click()
  const fandom=page.locator('.fandom-panel')
  const box=(await fandom.boundingBox())!
- expect(box.width).toBeGreaterThanOrEqual(info.project.name==='desktop'?560:page.viewportSize()!.width-40)
+ if (info.project.name === 'desktop') expect(box.width).toBeGreaterThanOrEqual(560)
+ else {
+  const trigger = (await page.getByRole('button', { name: 'Select Fandoms', exact: true }).boundingBox())!
+  expect(box.x).toBeCloseTo(trigger.x, 0)
+  expect(box.width).toBeCloseTo(trigger.width, 0)
+  const apply = (await page.getByRole('button', { name: 'Apply Filters', exact: true }).boundingBox())!
+  expect(box.y + box.height).toBeLessThanOrEqual(apply.y)
+ }
  expect(box.x).toBeGreaterThanOrEqual(0)
  await page.getByRole('heading',{name:'Your Library',exact:true}).click()
  await page.getByRole('button',{name:'Filters',exact:true}).click()

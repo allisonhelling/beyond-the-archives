@@ -1,3 +1,4 @@
+import { SummarySettings } from '../summaries/SummarySettings'
 import { usePreviewViewports } from './useDisplayPreference'
 import { useLayout, type DisplayLayout } from '../../../lib/use-layout'
 import { DisplayEditor } from './DisplayEditor'
@@ -93,7 +94,7 @@ export function DisplaySettings() {
   const tagState = useDisplayDraft([], true)
   const [expanded, setExpanded] = useState({ work: false, series: false, tags: false })
   return <section id={displaySettingsSection.id} tabIndex={-1} className="settings-card display-settings"><h2>{displaySettingsSection.title}</h2><p className="muted">Arrange your tiles directly in the previews. Mobile and desktop arrangements are saved separately. Save applies only to the layout you are editing. Tag appearance applies to both layouts.</p>
-    <ViewportSettings />
+    <ViewportSettings /><SummarySettings />
     <fieldset className="display-tag-format-section settings-subsection" aria-labelledby="display-tag-format-title"><legend className="display-tile-heading"><h3 id="display-tag-format-title">Tag Format</h3><button type="button" className="button secondary" aria-expanded={expanded.tags} aria-controls="display-tag-format" onClick={() => setExpanded(current => ({ ...current, tags: !current.tags }))}>Edit Tag Format</button></legend>
     <div id="display-tag-format" hidden={!expanded.tags}><TagAppearanceSettings key={tagState.version} state={tagState} /><SaveControls state={tagState} /></div></fieldset>
     <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><h3 id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</h3><button type="button" className="button secondary" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}>Edit {kind === 'work' ? 'Work' : 'Series'} Tiles</button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><div className="display-device-previews">{(layout === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(device => <TileLayoutEditor key={device} kind={kind} layout={device} appearance={tagState.draft.tagAppearance} />)}</div></div></fieldset>)}</div>

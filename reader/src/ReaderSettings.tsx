@@ -4,7 +4,8 @@ import { Dialog } from '../../src/components/Dialog'
 import { SettingsCategoryList } from '../../src/components/SettingsCategoryList'
 
 export const readerSettingsSections = [
- { id: 'account', title: 'Reader Account', description: 'Account, cloud library, and sync conflicts.' },
+ { id: 'account', title: 'Reader Account', description: 'Username, email, password, and sign-in.' },
+ { id: 'cloud', title: 'Cloud Library', description: 'Cloud storage, library sync, and conflict resolution.' },
  { id: 'sync', title: 'Organizer & Sync', description: 'Organizer connection and reading updates.' },
  { id: 'tags', title: 'Tag Format', description: 'Tag shapes, colors, and category order.' },
  { id: 'tiles', title: 'Customize Tiles', description: 'Arrange the information on work tiles.' },

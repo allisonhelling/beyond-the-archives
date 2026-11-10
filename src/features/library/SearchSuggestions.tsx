@@ -1,15 +1,15 @@
 import { compareTagSuggestions, tagSuggestionGroups, type Ao3TagCategory } from './tags/tag-resolution'
 import { useTagResolutions } from './tags/useTagResolutions'
-import { useId, useState, type KeyboardEvent } from 'react'
+import { useId, useState, type ReactNode, type KeyboardEvent } from 'react'
 import { useDismissible } from '../../components/useDismissible'
 import { normalize } from './reading-search'
 import { MetadataTags } from './MetadataTags'
 import { type TagCategory } from './display/display-settings'
 
 export type SuggestionGroup = { label: string; values: string[] }
-export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help, tagCategory }: {
+export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help, tagCategory, matchingControl, matchingPanel }: {
   label: string; placeholder: string; value: string; onChange: (value: string) => void;
-  groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; hideLabel?: boolean; chips?: boolean; help?: string; tagCategory?: TagCategory
+  matchingControl?: ReactNode; matchingPanel?: { id: string; 'aria-labelledby': string }; groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; hideLabel?: boolean; chips?: boolean; help?: string; tagCategory?: TagCategory
 }) {
   const [focused, setFocused] = useState(false), id = useId()
   const [appendSuggestion, setAppendSuggestion] = useState(false)
@@ -25,11 +25,11 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   const suggestions = resolvedGroups.map(group => ({ ...group, values: [...new Set(group.values)].filter(text => !chosen.includes(normalize(text)) && (category ? true : normalize(text).includes(term))).sort(compareTagSuggestions).slice(0, 8) }))
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (chips && event.key === 'Enter' && event.target instanceof HTMLInputElement && draft.trim()) { event.preventDefault(); choose(draft.trim()); return }
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setFocused(false); return }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); ref.current?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true }); setFocused(false); return }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     event.preventDefault()
     if (!focused) { setFocused(true); return }
-    const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>('.search-suggestions button') ?? [])]
+    const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>('.suggestion-options button') ?? [])]
     if (!buttons.length) return
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
     buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus()
@@ -45,9 +45,12 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
     <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'sr-only' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
     {focused && <div role={category ? 'region' : undefined} className="search-suggestions menu-surface" id={id} aria-label={`${label} Suggestions`}>
+      {matchingControl}
+      <div className="suggestion-options" {...matchingPanel} role={matchingPanel ? 'tabpanel' : undefined}>
       {category && unavailable && <p role="status">Tag verification is unavailable. Saved tags can still be searched.</p>}
       {!suggestions.length && <p>No matching saved {label.toLocaleLowerCase()}.</p>}
       {suggestions.map(group => <section role={category ? 'group' : undefined} key={group.label} aria-label={`${group.label} Suggestions`}>{(!hideHeadings || category) && <span className="suggestion-heading">{group.label}</span>}{group.values.length ? group.values.map(text => <button type="button" key={text} onClick={() => choose(text)}>{text}</button>) : <p>No matching saved {group.label.toLocaleLowerCase()}.</p>}</section>)}
+      </div>
     </div>}
     {help && <small className="suggestion-help">{help}</small>}
     {selected.length > 0 && <div className="filter-chips" aria-label={`${label} Selected Filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} Filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}

@@ -16,7 +16,7 @@ import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaul
 import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigationType, useSearchParams } from 'react-router-dom'
 import { Bell, RotateCcw, Pause, Bookmark, Clock, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
@@ -25,19 +25,16 @@ import { ReadingFilterControls } from './ReadingFilterControls'
 import { filterReading, hasReadingFilters, inReadingSection, tracked, type ReadingFilters, type SortOrder } from './reading-search'
 
 const sortOptions: { value: SortOrder; label: string }[] = [
-  { value: 'added', label: 'Date Added' }, { value: 'added_reverse', label: 'Date Added • Oldest First' },
-  { value: 'updated', label: 'Last Updated' }, { value: 'updated_reverse', label: 'Last Updated • Oldest First' },
-  { value: 'ready', label: 'Most Chapters Ready' }, { value: 'ready_reverse', label: 'Fewest Chapters Ready' },
-  { value: 'words', label: 'Word Count' }, { value: 'words_reverse', label: 'Word Count • Shortest First' },
-  { value: 'random', label: 'Random' },
-  { value: 'alpha', label: 'Alphabetical' }, { value: 'alpha_reverse', label: 'Alphabetical • Z–A' },
+  { value: 'added', label: 'Date Added' }, { value: 'updated', label: 'Last Updated' },
+  { value: 'ready', label: 'Chapters Ready' }, { value: 'words', label: 'Word Count' },
+  { value: 'random', label: 'Random' }, { value: 'alpha', label: 'Alphabetical' },
 ]
 const groupOptions: { value: ReadingFilters['groupBy']; label: string }[] = [
   { value: 'none', label: 'None' }, { value: 'fandom', label: 'Fandom' },
   { value: 'author', label: 'Author' }, { value: 'series', label: 'Series' },
 ]
 function SortSelect({ value, onChange }: { value: SortOrder; onChange: (value: SortOrder) => void }) {
-  return <Dropdown fitContent label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value} onChange={value => onChange(value as SortOrder)} options={sortOptions} />
+  return <Dropdown fitContent label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value.replace(/_reverse$/, '')} onChange={next => onChange((next === value && next !== 'random' ? `${next}_reverse` : next) as SortOrder)} options={sortOptions.map(option => ({ ...option, label: `${option.label}${option.value === value.replace(/_reverse$/, '') && value !== 'random' ? value.endsWith('_reverse') !== (option.value === 'alpha') ? ' ↑' : ' ↓' : ''}` }))} />
 }
 const mobileQuery = '(max-width: 650px)'
 const mobileSectionOrder: Partial<Record<string, number>> = { to_read: 4, waiting: 5, paused_reading: 6, view_all: 7 }
@@ -62,6 +59,9 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
   const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
   const [params, setParams] = useSearchParams()
   const { key: entryKey } = useLocation()
+  const navigationType = useNavigationType()
+  const [filterNavigation, setFilterNavigation] = useState({ entryKey, revision: 0 })
+  if (filterNavigation.entryKey !== entryKey) setFilterNavigation({ entryKey, revision: filterNavigation.revision + (navigationType === 'POP' ? 1 : 0) })
   const selected = author !== undefined ? 'all' : params.get('shelf') ?? (mode === 'reading' ? 'view_all' : 'all')
   const defaultScope = author !== undefined ? `author:${author}` : filterDefaultScope(mode, selected)
   const [summaryState, setSummaryState] = useState({ scope: defaultScope, expanded: false, revision: 0 })
@@ -158,12 +158,12 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
       return <button key={key} aria-label={label} aria-pressed={selected === key} className={selected === key ? 'selected' : ''} onClick={() => selectShelf(key)}><Icon className="tile-icon" strokeWidth={1.6} aria-hidden="true" /><strong>{label}</strong><span className="tile-description">{description}</span><span className="tile-count">{localResults ? error ? '—' : filtered.filter(story => inReadingSection(story, key)).length : displayed?.sections[key] ?? '—'}</span></button>
     })}</nav>}
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
-    <ReadingFilterControls availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={applyFilters} mode={mode} orderingControls={orderingControls} sortControl={mobile ? sortControl : undefined} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
+    <ReadingFilterControls navigationKey={String(filterNavigation.revision)} availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={applyFilters} mode={mode} orderingControls={orderingControls} sortControl={mobile ? sortControl : undefined} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
     {pagination(true)}
     {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retrySuggestions} retryLabel="Retry Suggestions" />}
     {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
     {error && <RetryError message={error} onRetry={remote.error ? remote.retry : undefined} />}
     {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <TagFilterContext value={searchTag}><LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /></TagFilterContext> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
-    {!error && (!remote.loading || Boolean(displayed)) && pagination()}
+    {!error && (localResults ? shown.length > 0 : (displayed?.total ?? 0) > 0) && (!remote.loading || Boolean(displayed)) && pagination()}
   </SeriesSummaryContext>
 }

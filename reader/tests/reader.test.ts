@@ -185,11 +185,13 @@ describe('readable cloud conflicts',()=>{
  it('retains explicit progress beyond available EPUB chapters through catalog and cloud fields',async()=>{
   const {readerProgress,catalogBook,bookDetails}=await import('../src/model')
   const {cloudBookFields}=await import('../src/cloud-model')
-  const saved={...bookDetails(await book()),progress:3,completed:[]}
+  const saved={...bookDetails(await book()),progress:3,completed:[],lastOpenedAt:'2026-11-09T12:00:00Z'}
   expect(readerProgress(saved)).toBe(3)
   expect(catalogBook(saved).completedCount).toBe(3)
   expect(cloudBookFields(saved).progress).toBe(3)
   expect(cloudBookFields(saved).manifest).not.toHaveProperty('progress')
+  expect(catalogBook(saved).lastOpenedAt).toBe(saved.lastOpenedAt)
+  expect(cloudBookFields(saved).manifest).not.toHaveProperty('lastOpenedAt')
   const remote={id:'entry',version:'next',progress:0,status:'re_reading' as const,notes:''}
   const prior={...saved,remote:{...remote,progress:3,status:'finished' as const}}
   expect(readerProgress(withOrganizerProgress(prior,remote))).toBe(0)

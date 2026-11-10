@@ -25,7 +25,7 @@ test('orders standard tags first and matches verified aliases without merging re
  await expect(popup.getByRole('group',{name:'Verified Synonyms Suggestions'})).toHaveCount(0)
  for(const name of names.slice(1,3))await expect(popup.getByRole('button',{name,exact:true})).toHaveCount(0)
  await expect(other.getByRole('button',{name:names[1],exact:true})).toHaveCount(0)
- await expect(popup.locator(':scope > section').first()).toHaveAttribute('aria-label','Standard Tags Suggestions')
+ await expect(popup.getByRole('group').first()).toHaveAttribute('aria-label','Standard Tags Suggestions')
  await expect(other).toHaveCSS('border-top-style','solid')
  await standard.getByRole('button',{name:names[0],exact:true}).click()
  await expect(page.locator('.story-card')).toHaveCount(4)

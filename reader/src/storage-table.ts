@@ -7,7 +7,7 @@ export const storageColumns=Object.keys(storageColumnLabels) as StorageColumn[]
 export function storageColumnOrder(saved?:readonly string[]):StorageColumn[]{return [...new Set([...(Array.isArray(saved)?saved:[]).filter((key):key is StorageColumn=>storageColumns.includes(key as StorageColumn)),...storageColumns])]}
 export function storageValue(book:CatalogBook,column:StorageColumn,cloud:boolean):string|number|undefined {
  switch(column){
-  case 'library':return book.hasFile?'Downloaded':cloud?'In Cloud':'Not Downloaded'
+  case 'library':return book.deleting?'Deleting':book.hasFile?'Downloaded':cloud?'In Cloud':'Not Downloaded'
   case 'title':return book.metadata.title
   case 'author':return book.metadata.authors.join(', ')
   case 'fandom':return book.metadata.fandoms.join(' · ')

@@ -3,7 +3,7 @@ import { useDismissible } from './useDismissible'
 import { mobileLayoutWidth } from '../lib/use-layout'
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
-export function Tooltip({ description, children, placement = 'top', pinOnClick = false, portal = false, info = false }: { description: ReactNode; info?: boolean; placement?: 'top' | 'bottom'; pinOnClick?: boolean; portal?: boolean; children: (descriptionId: string, pinned: boolean) => ReactNode }) {
+export function Tooltip({ description, children, placement = 'top', pinOnClick = false, touchPreview = false, portal = false, info = false }: { description: ReactNode; info?: boolean; placement?: 'top' | 'bottom'; pinOnClick?: boolean; touchPreview?: boolean; portal?: boolean; children: (descriptionId: string, pinned: boolean) => ReactNode }) {
   const id = useId()
   const [visible, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -66,7 +66,9 @@ export function Tooltip({ description, children, placement = 'top', pinOnClick =
     return () => { windows.forEach(view => { view.removeEventListener('resize', position); view.removeEventListener('scroll', position, true) }) }
   }, [open, description, placement, portal, previewFrame, info, anchor])
   const content = <span ref={tooltip} id={previewFrame ? `${id}-preview` : id} role="tooltip" data-pinned={pinned || undefined} data-plain-text={info && typeof description === 'string' || undefined} data-portal={portal || Boolean(previewFrame) || undefined} data-preview-portal={Boolean(previewFrame) || undefined} className={`action-tooltip-content${info ? ' info-tooltip-content' : ''}`} style={{ '--tooltip-shift': `${shift.x}px`, '--tooltip-y-shift': `${shift.y}px` } as CSSProperties} hidden={!open}>{description}</span>
-  return <span ref={anchor} className={`action-tooltip${info ? ' info-tooltip' : ''}`} data-placement={resolvedPlacement} onClick={pinOnClick ? event => { if (event.target instanceof Element && event.target.closest('button')) { setPinned(!pinned); setOpen(false) } } : undefined} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); setPinned(false); event.stopPropagation() } }}>
+  return <span ref={anchor} className={`action-tooltip${info ? ' info-tooltip' : ''}`} data-placement={resolvedPlacement} onClickCapture={touchPreview ? event => {
+    if (window.matchMedia?.('(hover: none)').matches && !pinned && event.target instanceof Element && event.target.closest('button:not(:disabled)')) { event.preventDefault(); event.stopPropagation(); setPinned(true); setOpen(false) }
+  } : undefined} onClick={pinOnClick ? event => { if (event.target instanceof Element && event.target.closest('button')) { setPinned(!pinned); setOpen(false) } } : undefined} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); setPinned(false); event.stopPropagation() } }}>
     {children(id, pinned)}
     {previewFrame && <span id={id} className="sr-only">{description}</span>}
     {portal || previewFrame ? createPortal(content, portalRoot ?? document.body) : content}

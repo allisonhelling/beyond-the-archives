@@ -1,55 +1,42 @@
+export { FandomSelect } from './FandomSelect'
+import { TagFilterControl } from './tags/TagFilterControl'
+import type { FandomOption } from './FandomSelect'
 import { useLayout } from '../../lib/use-layout'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { useFilterDraft } from '../../components/useFilterDraft'
 import { ActiveFilters } from '../../components/ActiveFilters'
 import { Fragment, useId, useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, FileText, Heart, Layers3, SlidersHorizontal, Star } from 'lucide-react'
+import { FileText, Heart, Layers3, SlidersHorizontal, Star } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { saveFilterDefaults } from './browsing/filter-defaults'
 import { MetadataTags } from './MetadataTags'
 import { Dropdown } from '../../components/Dropdown'
-import { useDismissible } from '../../components/useDismissible'
 import { DateFilterField } from './DateFilterField'
 import { SearchSuggestions } from './SearchSuggestions'
 import { ratingLabel, ratings, tagNames, type Story } from './model'
 import { filterPublicationLabel, readingFilterTags, removeReadingFilter } from './reading-filter-labels'
 import { publicationStatuses } from './publication-status'
-import { defaultReadingFilters, filterReading, normalize, type ReadingFilters } from './reading-search'
+import { defaultReadingFilters, filterReading, type ReadingFilters } from './reading-search'
 
-type FandomOption = { name: string; count: number; value?: string }
-export function FandomSelect({ options, selected, onChange, label = 'Select Fandoms', matchingControl }: { label?: string; matchingControl?: ReactNode; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
-  const [open, setOpen] = useState(false), [query, setQuery] = useState('')
-  const id = useId()
-  const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false))
-  return <div className="fandom-select" ref={ref}>
-    <button type="button" className="filter-input fandom-trigger" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><span>{label} {selected.length ? `(${selected.length})` : ''}</span><ChevronDown size={16} /></button>
-    {!open && selected.length > 0 && <div className="filter-chips"><MetadataTags values={selected} removeLabel={name => `Remove Fandom ${name}`} onRemove={name => onChange(selected.filter(f => f !== name))} /></div>}
-    {open && <div id={id} className="fandom-panel menu-surface" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
-      <input aria-label="Search Fandoms" type="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Fandoms" />
-      {/* Keep label presses from focusing the page and dismissing the menu before checkbox activation. */}
-      <div className="fandom-options">{options.filter(f => normalize(f.name).includes(normalize(query))).map(f => <label key={f.name} className="check-label" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }} htmlFor={`${id}-${encodeURIComponent(f.value ?? f.name)}`}><input id={`${id}-${encodeURIComponent(f.value ?? f.name)}`} type="checkbox" checked={selected.includes(f.value ?? f.name)} onChange={e => onChange(e.target.checked ? [...selected, f.value ?? f.name] : selected.filter(name => name !== (f.value ?? f.name)))} /><span className="fandom-option-label"><span>{f.name}</span>{' '}<span className="fandom-count">({f.count})</span></span></label>)}</div>
-      {!options.some(f => normalize(f.name).includes(normalize(query))) && <p>No matching fandoms.</p>}
-    </div>}
-    {matchingControl}
-  </div>
-}
 function TitleAuthorSearch({ value, onChange, stories, authorOnly }: { value: string; onChange: (value: string) => void; stories: Story[]; authorOnly: boolean }) {
   const groups = useMemo(() => [
     ...(!authorOnly ? [{ label: 'Titles', values: stories.map(story => story.metadata.title) }] : []),
     { label: 'Authors', values: stories.flatMap(story => story.metadata.authors) },
   ], [stories, authorOnly])
   const label = authorOnly ? 'Search Author' : 'Search Title or Author'
-  return <SearchSuggestions label={label} placeholder={label} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
+  return <SearchSuggestions label={label} placeholder={authorOnly ? label : 'Search Title, Author, or AO3 Work ID'} value={value} onChange={onChange} hideLabel keepOpen groups={groups} />
 }
-export function ReadingFilterControls({ stories, filters: appliedFilters, onChange, mode = 'library', orderingControls, sortControl, availabilityControl, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, worksOnly = false, defaultScope }: {
-  worksOnly?: boolean; defaultScope?: string; stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode; sortControl?: ReactNode; availabilityControl?: ReactNode
+export function ReadingFilterControls({ stories, filters: appliedFilters, onChange, mode = 'library', orderingControls, sortControl, availabilityControl, suggestions, fandomOptions, alwaysExpanded = false, automaticCollection = false, worksOnly = false, defaultScope, navigationKey }: {
+  worksOnly?: boolean; defaultScope?: string; navigationKey?: string; stories: Story[]; filters: ReadingFilters; onChange(filters: ReadingFilters): void; mode?: 'reading' | 'library' | 'series'; orderingControls?: ReactNode; sortControl?: ReactNode; availabilityControl?: ReactNode
   suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; fandomOptions?: FandomOption[]; alwaysExpanded?: boolean; automaticCollection?: boolean
 }) {
   const mobile = useLayout(650) === 'mobile'
-  const [draft, setDraft] = useFilterDraft(appliedFilters, `${mode}:${defaultScope}`)
+  const [draft, setDraft] = useFilterDraft(appliedFilters, `${mode}:${defaultScope}:${navigationKey}`)
   // Collection rules are already a draft saved by the enclosing collection form.
   const filters = automaticCollection ? appliedFilters : draft
   const editFilters = automaticCollection ? onChange : setDraft
+  const [restorationEpoch, setRestorationEpoch] = useState(0)
+  const restorationKey = JSON.stringify([automaticCollection ? null : appliedFilters, mode, defaultScope, navigationKey, restorationEpoch])
   const [confirmLibraryDefault, setConfirmLibraryDefault] = useState(false)
   const [defaultMessage, setDefaultMessage] = useState('')
   let draftError = ''
@@ -78,7 +65,9 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
   const characters = suggestions?.characters ?? localCharacters
   const additionalTags = suggestions?.tags ?? localTags
   const fandoms = fandomOptions ?? localFandoms
+  function applyFilters() { setRestorationEpoch(value => value + 1); onChange(filters) }
   function clearFilters() {
+    setRestorationEpoch(value => value + 1)
     const next = { ...defaultReadingFilters, sort: appliedFilters.sort, groupBy: appliedFilters.groupBy, ...(appliedFilters.randomSeed && { randomSeed: appliedFilters.randomSeed }) }
     setDraft(next); onChange(next)
   }
@@ -97,19 +86,19 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
       <button type="button" className={`button ${filters.recs ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.recs)} onClick={() => change('recs', !filters.recs)}><Heart size={17} fill={filters.recs ? 'currentColor' : 'none'} />Recs</button>
   </>
   return <>
-    <section onKeyDown={event => { if (!automaticCollection && !draftError && event.key === 'Enter' && event.target instanceof HTMLInputElement && !event.defaultPrevented) { event.preventDefault(); onChange(filters) } }} data-mode={mode} className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series Toolbar' : mode === 'library' ? 'Library Toolbar' : 'Reading Toolbar'}>
+    <section onKeyDown={event => { if (!automaticCollection && !draftError && event.key === 'Enter' && event.target instanceof HTMLInputElement && !event.defaultPrevented) { event.preventDefault(); applyFilters() } }} data-mode={mode} className={`reading-toolbar${alwaysExpanded ? ' reading-toolbar-rules' : ''}`} aria-label={mode === 'series' ? 'Series Toolbar' : mode === 'library' ? 'Library Toolbar' : 'Reading Toolbar'}>
       {orderingControls}
       <TitleAuthorSearch value={filters.query} onChange={query => change('query', query)} stories={stories} authorOnly={automaticCollection} />
       {sortControl && <div className="toolbar-sort">{sortControl}</div>}
-      <FandomSelect label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} options={fandoms} selected={filters.fandoms} onChange={value => change('fandoms', value)} />
-      {mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
-      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => onChange(filters)}>Apply Filters</button>}
-      {filterToggle}
+      <TagFilterControl key={restorationKey + "fandoms"} filters={filters} onChange={editFilters} category="fandoms" restorationKey={restorationKey} label={automaticCollection ? 'Fandoms' : 'Select Fandoms'} fandomOptions={fandoms} />
+      <div className="toolbar-actions">{mode === 'library' && !automaticCollection && !worksOnly && <button type="button" className={`button series-toggle ${filters.showSeries ? 'primary' : 'secondary'}`} aria-pressed={Boolean(filters.showSeries)} onClick={() => change('showSeries', !filters.showSeries)}><Layers3 size={17} />Show Series</button>}
+      {!automaticCollection && <button type="button" className="button primary apply-filters" disabled={Boolean(draftError)} onClick={() => applyFilters()}>Apply Filters</button>}
+      {filterToggle}</div>
     </section>
     {expanded && <section className="reading-filters" id={filterId} aria-label={mode === 'series' ? 'Series Filters' : mode === 'library' ? 'Library Filters' : 'Reading Filters'}><div className="filter-grid">
-      <SearchSuggestions label="Relationships" tagCategory="relationships" placeholder="e.g. Castiel/Dean" value={filters.relationship} onChange={value => change('relationship', value)} groups={[{ label: 'Relationships', values: relationships }]} multiple chips keepOpen hideHeadings />
-      <SearchSuggestions label="Characters" tagCategory="characters" placeholder="Search characters" value={filters.characters} onChange={value => change('characters', value)} groups={[{ label: 'Characters', values: characters }]} multiple chips keepOpen hideHeadings />
-      <SearchSuggestions label="Tags" tagCategory="tags" placeholder="Search additional tags" value={filters.tags} onChange={value => change('tags', value)} groups={[{ label: 'Tags', values: additionalTags }]} multiple chips keepOpen hideHeadings />
+      <TagFilterControl key={restorationKey + "relationship"} filters={filters} onChange={editFilters} category="relationship" restorationKey={restorationKey} label="Relationships" placeholder="e.g. Castiel/Dean" suggestions={relationships} />
+      <TagFilterControl key={restorationKey + "characters"} filters={filters} onChange={editFilters} category="characters" restorationKey={restorationKey} label="Characters" placeholder="Search characters" suggestions={characters} />
+      <TagFilterControl key={restorationKey + "tags"} filters={filters} onChange={editFilters} category="tags" restorationKey={restorationKey} label="Tags" placeholder="Search additional tags" suggestions={additionalTags} />
 
       {automaticCollection && personalTagsControl}
 
@@ -125,7 +114,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
         {automaticCollection && <div className="filter-choice-row filter-membership-toggles">{membershipToggles}</div>}
       <div className="updated-filter-section"><div className="updated-filter-row">{!mobile && publicationControl}<div className="updated-filter-heading"><span className="filter-label" id={`${filterId}-updated`}>Last Updated on AO3</span><InfoTooltip label="Last Updated on AO3 Help" placement="bottom" size={18} description="Last updated uses saved AO3 dates in UTC; stories without an AO3 date are excluded by date filters." /></div><div className="updated-filter" role="group" aria-labelledby={`${filterId}-updated`}><DateFilterField label="From" value={filters.updatedAfter} onChange={value => change('updatedAfter', value)} /><DateFilterField label="Through" value={filters.updatedBefore} onChange={value => change('updatedBefore', value)} /></div></div></div>
       </div>
-    </div><div className="within-search"><div className="within-search-row"><div className="within-search-field"><label><span className="filter-name">Search Within Results</span><input onKeyDown={event => { if (!automaticCollection && !draftError && event.key === 'Enter') { event.preventDefault(); onChange(filters) } }} type="search" placeholder="Search Within Results" aria-describedby={helpId} value={filters.within} onChange={e => change('within', e.target.value)} /></label>
+    </div><div className="within-search"><div className="within-search-row"><div className="within-search-field"><label><span className="filter-name">Search Within Results</span><input onKeyDown={event => { if (!automaticCollection && !draftError && event.key === 'Enter') { event.preventDefault(); applyFilters() } }} type="search" placeholder="Search Within Results" aria-describedby={helpId} value={filters.within} onChange={e => change('within', e.target.value)} /></label>
 
       <InfoTooltip label="Search Syntax and Modes" placement="bottom" size={18} description={<div id={helpId}><p><strong>Any Field</strong> combines saved titles, authors, fandoms, AO3 tags, personal tags, summaries, notes, ratings, statuses, and URLs. <strong>Summary</strong> searches only the fic’s summary. <strong>Notes</strong> searches only your private notes.</p><ul><li><code>book*</code> — any characters: book, books, booking.</li><li><code>Harry Potter</code> — AND: both terms must occur.</li><li><code>Harry || Potter</code> — OR: either or both terms.</li><li><code>"Harry Lockhart"</code> — words in exact sequence.</li><li><code>Harry -Lockhart</code> — include Harry, exclude Lockhart.</li></ul><p>AND and NOT apply before OR. Use a backslash to escape literal symbols, such as <code>\*</code>, <code>\-</code>, <code>\"</code>, <code>\|</code>, or <code>\\</code>. Matching ignores case and accents. Searches stay within the selected {mode === 'library' ? 'shelf' : 'tile'} and filters.</p></div>} /></div>
       <Dropdown label="Search In" value={filters.scope} onChange={value => change('scope', value as ReadingFilters['scope'])} options={[{ value: 'any', label: 'Any Field' }, { value: 'summary', label: 'Summary' }, { value: 'notes', label: 'Notes' }]} />

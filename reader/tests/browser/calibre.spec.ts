@@ -2,6 +2,62 @@ import { createHash } from 'node:crypto'
 import { test, expect } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
 import { chapterNotesFiles } from '../../../src/test/epub-fixture'
+import { owner, signedIn } from './account-fixture'
+test('counts the complete cloud inbox before staging files and retains known counts during queue failures',async({page,context})=>{
+ await signedIn(context)
+ const destinations=['40000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000002']
+ let incoming=Array.from({length:503},(_,index)=>({destination:destinations[index<501?0:1],id:`50000000-0000-0000-0000-${String(index<501?index+1:index-500).padStart(12,'0')}`,hash:(index+1).toString(16).padStart(64,'0'),metadata:{_filename:`Queued ${index+1}.epub`},status:'queued',message:''}))
+ const first=incoming[0],jobId=`cloud:${first.destination}:${first.id}`
+ let failQueue=false,metadataPages=0
+ await context.route(url=>/^\/(auth|rest|storage)\/v1\//.test(url.pathname),route=>{
+  const url=new URL(route.request().url()),path=url.pathname
+  if(path.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
+  if(path.includes('/reader_import_inbox')){
+   const metadataOnly=url.searchParams.get('select')!=='*'
+   if(!metadataOnly)return route.fulfill({json:incoming.slice(0,50)})
+   metadataPages++
+   if(failQueue)return route.fulfill({status:500,json:{code:'57014',message:'Queue request timed out'}})
+   const cursor=url.searchParams.get('or')??'',destination=cursor.match(/destination\.gt\.([0-9a-f-]+)/)?.[1],id=cursor.match(/id\.gt\.([0-9a-f-]+)/)?.[1]
+   const rows=incoming.filter(row=>!destination||row.destination>destination||row.destination===destination&&row.id>id!)
+   return route.fulfill({json:rows.slice(0,Number(url.searchParams.get('limit'))).map(row=>({destination:row.destination,id:row.id,hash:row.hash,filename:row.metadata._filename}))})
+  }
+  if(path.includes('/storage/v1/object/'))return route.abort()
+  if(path.includes('/reader_cloud_values'))return route.fulfill({json:[]})
+  if(path.includes('/reader_organizer_connection'))return route.fulfill({json:{enabled:false,userId:owner}})
+  return route.fulfill({json:[]})
+ })
+ await page.goto('/')
+ await page.getByRole('button',{name:'Calibre',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Calibre Transfers',exact:true})
+ await dialog.getByRole('tab',{name:'Pending (503)',exact:true}).click()
+ expect(metadataPages).toBe(2)
+ await expect(dialog.getByText('Queued 1.epub · queued',{exact:true})).toBeVisible()
+ await expect(page.locator('.story-card')).toHaveCount(0)
+ // A local job replaces its inbox placeholder and stays pending until publication/acknowledgement.
+ await page.evaluate(async({owner,jobId,first})=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open(`bta-reader-account:${owner}`);request.onsuccess=()=>resolve(request.result)})
+  await new Promise<void>(resolve=>{const tx=db.transaction('settings','readwrite');tx.objectStore('settings').put({id:`calibre-job:${jobId}`,value:{id:jobId,hash:first.hash,filename:first.metadata._filename,metadata:{},status:'imported',releaseDownload:true,message:'Saved locally'}});tx.oncomplete=()=>resolve()})
+  db.close()
+ },{owner,jobId,first})
+ await expect(dialog.getByText('Import saved; waiting for transfer confirmation.',{exact:true})).toBeVisible()
+ await expect(dialog.getByRole('tab',{name:'Pending (503)',exact:true})).toBeVisible()
+ incoming=incoming.slice(1)
+ await page.evaluate(async({owner,jobId})=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open(`bta-reader-account:${owner}`);request.onsuccess=()=>resolve(request.result)})
+  await new Promise<void>(resolve=>{const tx=db.transaction('settings','readwrite'),store=tx.objectStore('settings'),request=store.get(`calibre-job:${jobId}`);request.onsuccess=()=>store.put({...request.result,value:{...request.result.value,releaseDownload:false}});store.put({id:`calibre-ack:${jobId}`,value:'imported'});tx.oncomplete=()=>resolve()})
+  db.close()
+ },{owner,jobId})
+ await expect(dialog.getByRole('tab',{name:'Successful (1)',exact:true})).toBeVisible()
+ await expect(dialog.getByRole('tab',{name:'Pending (502)',exact:true})).toBeVisible()
+ failQueue=true
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+ await expect(dialog.getByRole('alert')).toContainText('Queue request timed out (57014)')
+ await expect(dialog.getByRole('tab',{name:'Pending (502 Known)',exact:true})).toBeVisible()
+ failQueue=false
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+ await expect(dialog.getByRole('alert')).toHaveCount(0)
+ await expect(dialog.getByRole('tab',{name:'Pending (502)',exact:true})).toBeVisible()
+})
 test('local Calibre deliveries share duplicates, versions, mapping, and durable per-book results',async({page,context})=>{
  const files=chapterNotesFiles(),original=Buffer.from(await createZip(files).arrayBuffer())
  files[2].content=files[2].content.replace('</metadata>','<meta name="revision" content="2"/></metadata>')

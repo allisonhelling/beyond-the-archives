@@ -17,6 +17,9 @@
 
 /* Shared palette and typography for the organizer and independent reader. */
 :root {
+  --app-header-height: 100px;
+  --library-content-width: 1120px;
+  --library-page-gutter: 40px;
   --minimum-text-size: 13px;
   --font-archive-serif: 'Serif Numerals', Georgia, 'Times New Roman', serif;
   --radius-surface: 0px;
@@ -40,3 +43,5 @@
   --color-brand-hover: #750000;
   --color-brand-soft: var(--color-surface-secondary);
 }
+
+@media (max-width: 650px) { :root { --library-page-gutter: 20px; } }

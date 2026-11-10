@@ -94,7 +94,7 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
   }, [editingCollections, selectedCollectionIds.length, busy, collectionDeletion.busy, collectionDeletion.confirming, editingCollection, bulkCollections, addingToCollection, visibilityTarget])
 
   // Display sorts never change the saved manual positions.
-  const displayedCollections = orderCollections(customCollections, [...(sampleMode ? stories : Object.entries(navigation).map(([id, stats]) => ({ collectionIds: [id], updated_at: stats.updated_at ?? '' }))), ...(seriesRecords ?? []).map(series => ({ collectionIds: series.collectionIds ?? [], updated_at: series.updated_at }))], collectionSort.order)
+  const displayedCollections = orderCollections(customCollections, [...(countStories !== undefined ? stories.map(story => ({ ...story, collectionIds: [...story.collectionIds,...(story.automaticCollectionIds ?? [])] })) : sampleMode ? stories : Object.entries(navigation).map(([id, stats]) => ({ collectionIds: [id], updated_at: stats.updated_at ?? '' }))), ...(seriesRecords ?? []).map(series => ({ collectionIds: series.collectionIds ?? [], updated_at: series.updated_at }))], collectionSort.order)
   function toggleCollectionEditing() {
     if (!editingCollections) setCollectionSort(previous => ({ ...previous, order: 'manual' }))
     setEditingCollections(!editingCollections); setViewHidden(false)

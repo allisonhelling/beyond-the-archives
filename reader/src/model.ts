@@ -28,11 +28,11 @@ export function readerChapterLabel(chapter: ChapterSummary, chapters: ChapterSum
   const title = chapter.title.replace(/^(?:Chapter\s+)?\d+\s*[:.–—-]\s*/i, '')
   return `${number}. ${title}`
 }
-export type Book = { works?: AnthologyWork[]; contentsReviewed?: boolean; favorite?: boolean; rec?: boolean; progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
+export type Book = { lastOpenedAt?: string; works?: AnthologyWork[]; contentsReviewed?: boolean; favorite?: boolean; rec?: boolean; progress?: number; unavailableImages?: number; calibreId?: string; fileBytes?: number; id: string; workId: string | null; active: boolean; metadata: ReaderMetadata; metadataVersion?: number; chapterVersion?: number; chapters: Chapter[]; resources: Record<string, Blob>; file: Blob | null; importedAt: string; metadataAt: string; position: ReadingPosition; completed: string[]; history: { id: string; chapter: string; at: string; words: number | null; reread: boolean }[]; status: Status; notes: string; collections: string[]; remote?: Remote; account?: string; resumeRequired?: boolean }
 export type ChapterSummary = Omit<Chapter, 'html'>
 export type BookDetails = Omit<Book, 'file' | 'resources' | 'chapters'> & { hasFile: boolean; chapters: ChapterSummary[] }
 export type BookContent = Pick<Book, 'id' | 'file' | 'resources' | 'chapters' | 'chapterVersion'>
-export type CatalogBook = { organizerEntryId?: string } & Omit<BookDetails, 'chapters' | 'history' | 'completed' | 'notes' | 'remote' | 'position'> & { position: Pick<ReadingPosition, 'chapter' | 'fraction'>; chapterCount: number; wordCount: number; completedCount: number }
+export type CatalogBook = { organizerEntryId?: string; deleting?: boolean } & Omit<BookDetails, 'chapters' | 'history' | 'completed' | 'notes' | 'remote' | 'position'> & { position: Pick<ReadingPosition, 'chapter' | 'fraction'>; chapterCount: number; wordCount: number; completedCount: number }
 export function isAnthology(book: Pick<BookDetails, 'works'>) { return (book.works?.length ?? 0) > 1 }
 
 export function progressNumber(chapter: ChapterSummary, chapters: ChapterSummary[]): number | null {

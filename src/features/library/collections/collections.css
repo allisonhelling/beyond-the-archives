@@ -68,7 +68,7 @@ dialog.collection-dialog { width: min(960px, calc(100vw - 32px)); overflow-x: hi
 .collection-rule-filters > legend { font-weight: 600; }
 .collection-rule-filters .reading-toolbar-rules { position: relative; }
 .collection-rule-filters .reading-toolbar-rules > :is(.suggestion-search, .fandom-select) { position: static; }
-.collection-rule-filters .reading-toolbar-rules :is(.search-suggestions, .fandom-panel) { position: absolute; left: 0; right: 0; top: 100%; width: 100%; max-width: 100%; }
+.collection-rule-filters .reading-toolbar-rules :is(.search-suggestions, .fandom-panel) { grid-column: auto; position: absolute; left: 0; right: 0; top: 100%; width: 100%; max-width: 100%; }
 .collection-dialog-content { display: grid; grid-template-columns: minmax(0, 1fr) var(--collection-spine-width) minmax(0, 1fr); align-items: start; gap: 24px; }
 .collection-dialog-fields, .collection-appearance-options { border: 0; padding: 0; margin: 0; min-width: 0; }
 .collection-dialog-fields { display: grid; gap: 18px; }
@@ -151,3 +151,14 @@ dialog.collection-dialog { width: min(960px, calc(100vw - 32px)); overflow-x: hi
 @media (min-width: 701px) {
   .collection-rule-filters .filter-date-options { flex-direction: row; align-items: center; }
   .collection-rule-filters .filter-membership-toggles { order: 1; flex: 1; }}
+
+.author-heading > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.author-library-summary { display: contents; }
+.author-library-summary > p { grid-column: 1; grid-row: 2; }
+.author-library-summary > .library-heading-actions { grid-column: 2; grid-row: 1; }
+@media (max-width: 900px) {
+ .author-heading > div { display: block; }
+ .author-library-summary { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+}
+
+@media (min-width: 901px) { .collection-shelves .collection-spine.collection-spine-mini { height: 110px; } }

@@ -7,6 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ViteDevServer } from 'vite'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { sampleData } from './sample-data'
+import { isReaderSampleSnapshot } from '../reader/src/sample/snapshot'
 
 let root: string
 beforeEach(async () => {
@@ -16,9 +17,9 @@ beforeEach(async () => {
 afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
 const snapshot = { completeSnapshot: true, sampleVersion: 10, stories: [], collections: [], series: [] }
-async function request(body = JSON.stringify(snapshot), headers = { host: 'localhost:5173', origin: 'http://localhost:5173', 'content-type': 'application/json' }, method = 'POST', enabled = true) {
+async function request(body = JSON.stringify(snapshot), headers = { host: 'localhost:5173', origin: 'http://localhost:5173', 'content-type': 'application/json' }, method = 'POST', enabled = true, options?: Parameters<typeof sampleData>[1]) {
   const use = vi.fn()
-  const plugin = sampleData(enabled)
+  const plugin = sampleData(enabled, options)
   const configure = plugin.configureServer as (server: ViteDevServer) => void
   configure({ config: { root }, middlewares: { use } } as unknown as ViteDevServer)
   if (!enabled) return { use }
@@ -49,4 +50,13 @@ it('rejects cross-origin writes, non-POST requests, and malformed snapshots', as
 it('reports a write failure without claiming success', async () => {
   await rm(join(root, 'src'), { recursive: true })
   expect((await request()).statusCode).toBe(500)
+})
+
+it('reuses the same protected atomic endpoint for reader snapshots without touching organizer defaults', async () => {
+  const reader = { version: 1, completeSnapshot: true, books: [] }
+  const options = { path: 'reader-default.json', validate: isReaderSampleSnapshot }
+  expect((await request(JSON.stringify(reader), undefined, undefined, true, options)).statusCode).toBe(200)
+  expect(JSON.parse(await readFile(join(root, 'reader-default.json'), 'utf8'))).toEqual(reader)
+  expect((await request(JSON.stringify(snapshot), undefined, undefined, true, options)).statusCode).toBe(400)
+  await expect(readFile(join(root, 'src/features/library/sample/default-state.json'))).rejects.toThrow()
 })

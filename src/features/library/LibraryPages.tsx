@@ -210,7 +210,7 @@ export function AuthorPage() {
   const { name = '' } = useParams<{ name: string }>()
   const { stories } = useLibrary()
   return <LibraryBoundary><ReadingDashboard key={name} mode="library" author={name} stories={stories}
-    renderHeader={(actions, count) => <div className="page-heading library-heading"><div><div className="library-title-row"><h1>{name}</h1><div className="library-heading-actions">{actions}</div></div><p>{count ?? '—'} {count === 1 ? 'fic' : 'fics'} saved in your library</p></div></div>}
+    renderHeader={(actions, count) => <div className="page-heading library-heading author-heading"><div><div className="library-title-row"><h1>{name}</h1></div><div className="author-library-summary"><p>{count ?? '—'} {count === 1 ? 'fic' : 'fics'} saved in your library</p><div className="library-heading-actions">{actions}</div></div></div></div>}
     renderStory={(story, linkId) => <StoryCard key={story.id} story={story} linkId={linkId} />} /></LibraryBoundary>
 }
 function LibraryContent() {

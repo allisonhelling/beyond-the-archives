@@ -3,16 +3,36 @@ import { useEffect, useId, useState } from 'react'
 import { Pagination } from '../../src/features/library/browsing/Pagination'
 import { Dialog } from '../../src/components/Dialog'
 import { loadSetting, readerOwner } from './storage'
-import { cancelTransfers, pairCalibre, receiveTransfers, retryTransfer, revokeCalibre, transferJobs, type ImportJob, type TransferPair } from './transfers'
+import { operationErrorMessage } from './errors'
+import { cancelTransfers, pairCalibre, receiveTransfers, retryTransfer, revokeCalibre, transferDisplayJobs, queuedCloudTransfers, mergeTransferJobs, type ImportJob, type TransferPair } from './transfers'
 export function CalibreTransfers({onClose,onRefresh,onError}:{onClose:()=>void;onRefresh:()=>Promise<unknown>;onError:(error:unknown)=>void}) {
   const [pair,setPair]=useState<TransferPair>(),[jobs,setJobs]=useState<ImportJob[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
   const [page,setPage]=useState(1),[tab,setTab]=useState('successful'),id=useId()
+  const [incoming,setIncoming]=useState<ImportJob[]>([]),[queueChecked,setQueueChecked]=useState(!readerOwner),[queueError,setQueueError]=useState(''),[queueAttempt,setQueueAttempt]=useState(0)
+  const transfers=mergeTransferJobs(jobs,incoming),queueUnknown=!queueChecked||Boolean(queueError)
   const tabs=[{id:'successful',label:'Successful',statuses:['imported','duplicate']},{id:'failed',label:'Failed',statuses:['error','cancelled']},{id:'pending',label:'Pending',statuses:['queued']}]
-  const selected=tabs.find(item=>item.id===tab)!,visible=jobs.filter(job=>selected.statuses.includes(job.status))
+  const selected=tabs.find(item=>item.id===tab)!,visible=transfers.filter(job=>selected.statuses.includes(job.status))
   const size=25,pages=Math.max(1,Math.ceil(visible.length/size)),currentPage=Math.min(page,pages)
-  async function refresh(){setPair(await loadSetting<TransferPair>('calibre-pair'));setJobs(await transferJobs())}
+  async function refresh(){setPair(await loadSetting<TransferPair>('calibre-pair'));setJobs(await transferDisplayJobs())}
   useEffect(()=>{void refresh().catch(onError);const timer=window.setInterval(()=>void refresh().catch(onError),2000);return()=>window.clearInterval(timer)},[])
-  async function run(action:()=>Promise<unknown>){setBusy(true);try{await action();await refresh();await onRefresh()}catch(error){setMessage(String(error));onError(error)}finally{setBusy(false)}}
+  useEffect(()=>{
+    if(!readerOwner)return
+    const controller=new AbortController()
+    let checking=false
+    const check=async()=>{
+      if(checking||document.hidden)return
+      if(!navigator.onLine){setQueueError('Offline. Incoming cloud transfers cannot be checked; counts include only known transfers.');return}
+      checking=true
+      try{const next=await queuedCloudTransfers(controller.signal);if(!controller.signal.aborted){setIncoming(next);setQueueChecked(true);setQueueError('')}}
+      catch(error){if(!controller.signal.aborted)setQueueError(`Could not check incoming cloud transfers: ${operationErrorMessage(error,'Check your connection.')} Counts include only known transfers.`)}
+      finally{checking=false}
+    }
+    void check()
+    const timer=window.setInterval(()=>void check(),10000),returned=()=>void check()
+    window.addEventListener('online',returned);document.addEventListener('visibilitychange',returned)
+    return()=>{controller.abort();window.clearInterval(timer);window.removeEventListener('online',returned);document.removeEventListener('visibilitychange',returned)}
+  },[queueAttempt])
+  async function run(action:()=>Promise<unknown>){setBusy(true);try{await action();await refresh();await onRefresh()}catch(error){setMessage(operationErrorMessage(error));onError(error)}finally{setBusy(false);setQueueAttempt(value=>value+1)}}
   return <Dialog title="Calibre Transfers" busy={busy} onClose={onClose}>
     <p>Destination: {readerOwner ? `Reader cloud account ${readerOwner}` : 'This guest library'}. Organizer connection does not affect this choice.</p>
     <p>Cloud delivery can reach other account devices. Local delivery requires Calibre and this reader on the same computer, with the reader open. Allow local network access if your browser requests it.</p>
@@ -22,9 +42,12 @@ export function CalibreTransfers({onClose,onRefresh,onError}:{onClose:()=>void;o
       <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(JSON.stringify(pair)))}>Copy Pairing Configuration</button><button disabled={busy} onClick={()=>void run(()=>revokeCalibre(pair))}>Revoke Pairing</button></div>
       <p>Choose Automatic, Cloud Inbox, or Local Reader in Calibre before sending. Failures remain assigned to that destination. To change the account or device, revoke and pair again. Stop the local bridge in Calibre after revoking.</p>
     </details>}
-    {pair && <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>receiveTransfers())}>Check for Incoming Books</button><button onClick={cancelTransfers}>Cancel Pending Imports</button></div>}
-    <p>{jobs.length} transfers · {jobs.filter(job=>job.status==='queued').length} pending · {jobs.filter(job=>job.hasFile && job.status!=='queued').length} needing attention</p>
-    <TabList tabs={tabs.map(item=>({id:item.id,label:`${item.label} (${jobs.filter(job=>item.statuses.includes(job.status)).length})`}))} active={tab} onChange={value=>{setTab(value);setPage(1)}} label="Transfer Results" prefix={id} className="dialog-actions transfer-results-tabs" />
+    {pair && <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>receiveTransfers())}>Check for Incoming Books</button><button onClick={cancelTransfers}>Cancel Pending Imports</button><button disabled={busy||!transfers.some(job=>job.status==='error'&&job.hasFile)} onClick={()=>void run(async()=>{for(const job of transfers.filter(job=>job.status==='error'&&job.hasFile))await retryTransfer(job.id);await receiveTransfers()})}>Retry All Failed</button></div>}
+    <p>{transfers.length} {queueUnknown?'known ':''}transfers · {transfers.filter(job=>job.status==='queued').length} {queueUnknown?'known ':''}pending · {transfers.filter(job=>job.hasFile && job.status!=='queued').length} needing attention</p>
+    {readerOwner&&<p className="field-help">Pending includes this reader’s queue and uploads waiting in the cloud inbox. Files still waiting to upload from Calibre appear after Calibre delivers them. Importing continues in batches.</p>}
+    {!queueChecked&&!queueError&&<p role="status">Checking Incoming Cloud Transfers…</p>}
+    {queueError&&<p role="alert">{queueError}</p>}
+    <TabList tabs={tabs.map(item=>({id:item.id,label:`${item.label} (${transfers.filter(job=>item.statuses.includes(job.status)).length}${item.id==='pending'&&queueUnknown?' Known':''})`}))} active={tab} onChange={value=>{setTab(value);setPage(1)}} label="Transfer Results" prefix={id} className="dialog-actions transfer-results-tabs" />
     <div role="tabpanel" id={`${id}-panel-${tab}`} aria-labelledby={`${id}-tab-${tab}`} tabIndex={0}>
       {visible.length>size && <Pagination inlinePage page={currentPage} pages={pages} total={visible.length} size={size} onPage={setPage} />}
       {visible.slice((currentPage-1)*size,currentPage*size).map(job=><div className="pending-item" key={job.id}><strong>{job.filename} · {job.status}</strong><p>{job.message}</p>{job.hasFile && job.status!=='queued' && <button disabled={busy} onClick={()=>void run(async()=>{await retryTransfer(job.id);await receiveTransfers()})}>Retry Import</button>}</div>)}

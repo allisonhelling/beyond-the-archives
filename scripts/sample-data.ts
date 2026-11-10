@@ -4,17 +4,22 @@ import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
 
 // Only installed in the development sample server; never exposed by a build.
-export function sampleData(enabled: boolean): Plugin {
+type SampleDataOptions = { path?: string; validate?: (data: unknown) => boolean }
+const librarySnapshot = (data: unknown) => {
+  const value = data as Record<string, unknown> | null
+  return Boolean(value && value.completeSnapshot === true && Array.isArray(value.stories) && Array.isArray(value.collections) && Array.isArray(value.series) && Number.isInteger(value.sampleVersion))
+}
+export function sampleData(enabled: boolean, { path = 'src/features/library/sample/default-state.json', validate = librarySnapshot }: SampleDataOptions = {}): Plugin {
   return {
     name: 'sample-data',
     apply: 'serve',
     // Keep the current preview open after saving. Reset reloads the updated fixture.
     handleHotUpdate(context) {
-      if (enabled && context.file === resolve(context.server.config.root, 'src/features/library/sample/default-state.json')) return []
+      if (enabled && context.file === resolve(context.server.config.root, path)) return []
     },
     configureServer(server) {
       if (!enabled) return
-      const target = resolve(server.config.root, 'src/features/library/sample/default-state.json')
+      const target = resolve(server.config.root, path)
       server.middlewares.use('/__sample-data', async (request, response) => {
         response.setHeader('Content-Type', 'application/json')
         response.setHeader('Cache-Control', 'no-store')
@@ -34,7 +39,7 @@ export function sampleData(enabled: boolean): Plugin {
           }
           let data
           try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { return send(400, 'Invalid sample data.') }
-          if (!data || data.completeSnapshot !== true || !Array.isArray(data.stories) || !Array.isArray(data.collections) || !Array.isArray(data.series) || !Number.isInteger(data.sampleVersion)) return send(400, 'Invalid sample library snapshot.')
+          if (!validate(data)) return send(400, 'Invalid sample library snapshot.')
           temporary = `${target}.${randomUUID()}.tmp`
           await writeFile(temporary, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
           await rename(temporary, target)

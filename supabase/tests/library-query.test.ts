@@ -879,3 +879,29 @@ it('starts rereading at zero through the checked organizer boundary without addi
   expect(entry.reading_history.filter(event=>event.action==='chapter_read')).toHaveLength(before.filter(event=>(event as {action:string}).action==='chapter_read').length)
  } finally { await db.exec(`rollback;set role authenticated;set request.jwt.claim.sub='${alice}'`) }
 })
+
+it('searches AO3 work IDs through the same paged filter as the local library', async () => {
+ const result = await query({ query: '42' })
+ expect(result.total).toBe(1)
+ expect(result.stories[0].work.ao3_work_id).toBe(42)
+ expect(filterReading(await documents(), { ...defaultReadingFilters, query: '42' }).map(story => story.id)).toEqual(result.stories.map(story => story.id))
+})
+
+it('shares expression evaluation across explicit and inferred series, author scopes and intentionally unfiltered facets',async()=>{
+ const saved=(await documents()).slice(0,2)
+ const membership={id:8181,name:'Expression series',url:'https://archiveofourown.org/series/8181'}
+ for(const [index,story] of saved.entries()) await db.query("update public.library_entries set metadata_overrides=metadata_overrides||jsonb_build_object('fandoms',jsonb_build_array($2::text),'additional_tags',jsonb_build_array($3::text),'authors',jsonb_build_array('Expression Author'),'series_memberships',$4::jsonb) where id=$1",[story.id,index?'Fandom B':'Fandom A',index?'Angst':'Fluff',JSON.stringify([{...membership,position:index+1}])])
+ const expression={mode:'custom',groups:[['Fandom A','Fandom B'],['Absent']]}
+ for(const explicit of [false,true]){
+  if(explicit) await db.query("select public.ensure_library_series(8181,'Expression series')")
+  const result=await query({tagExpressions:{fandoms:expression}},1,25,'series')
+  expect(result.stories.map(story=>story.id)).toContain('series:8181')
+  expect((await query({tagExpressions:{fandoms:{mode:'all',tags:['Fandom A','Absent']}}},1,25,'series')).total).toBe(0)
+ }
+ const filters={...defaultReadingFilters,tagExpressions:{tags:{mode:'any',tags:['Fluff','Absent']}}}
+ const author=(await db.query<{r:LibraryResults}>('select public.query_library($1,1,25) r',[JSON.stringify({mode:'library',shelf:'all',author:'Expression Author',filters})])).rows[0].r
+ expect(author.total).toBe(1)
+ const facets=(await db.query<{r:{fandoms:{name:string}[];total:number}}>('select public.library_query_facets($1) r',[JSON.stringify({mode:'library',shelf:'all',author:'Expression Author',filters})])).rows[0].r
+ expect(facets.total).toBe(2)
+ expect(facets.fandoms.map(fandom=>fandom.name).sort()).toEqual(['Fandom A','Fandom B'])
+})

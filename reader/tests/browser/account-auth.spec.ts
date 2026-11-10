@@ -1,6 +1,6 @@
 import { blankMetadata } from '../../src/model'
 import { test, expect, type BrowserContext } from '@playwright/test'
-import { account, accountSession, owner, signedIn, testOrganizer } from './account-fixture'
+import { account, cloudLibrary, accountSession, owner, signedIn, testOrganizer } from './account-fixture'
 async function backend(context:BrowserContext,linked=false){
  const devices:string[]=[]
  await context.route(url=>/^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
@@ -40,7 +40,7 @@ for(const identifier of ['reader@example.com','Reader']) test(`signs in with ${i
  expect(await page.evaluate(()=>Boolean(sessionStorage.getItem('reader-cloud-auth')))).toBe(true)
  await account(page)
  await expect(page.getByText('Saved Account Library',{exact:false})).toContainText('reader@example.com')
- await expect(page.getByRole('button',{name:'Change Password',exact:true})).toBeVisible()
+ await expect(page.getByRole('button',{name:'Edit Password',exact:true})).toBeVisible()
 })
 test('recovers a password back to the reader and saves a new password',async({page,context})=>{
  await backend(context)
@@ -71,13 +71,13 @@ test('recovers a password back to the reader and saves a new password',async({pa
  await expect(page.getByRole('status').filter({hasText:'Password saved.'})).toBeVisible()
  expect(password).toBe('NewValidPassword123!')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click();await account(page)
- await expect(page.getByRole('button',{name:'Change Password',exact:true})).toBeVisible()
+ await expect(page.getByRole('button',{name:'Edit Password',exact:true})).toBeVisible()
 })
 test('automatically enables organizer sync, reuses the installation, and respects a local pause',async({page,context})=>{
  await signedIn(context);const devices=await backend(context)
  await page.goto('/')
  await expect.poll(()=>devices.length).toBe(1)
- await account(page)
+ await cloudLibrary(page)
  await expect(page.getByText('Organizer sync is enabled automatically',{exact:false})).toBeVisible()
  await expect(page.getByRole('button',{name:'Sync Cloud Now',exact:true})).toHaveCount(0)
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
@@ -89,7 +89,7 @@ test('automatically enables organizer sync, reuses the installation, and respect
  await page.reload();await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
  await expect(page.getByRole('button',{name:'Organizer & Sync',exact:true})).toBeVisible()
  expect(devices).toHaveLength(1)
- await page.getByRole('button',{name:'Reader Account',exact:true}).click()
+ await page.getByRole('button',{name:'Cloud Library',exact:true}).click()
  await page.getByText('Advanced Troubleshooting',{exact:true}).click()
  await page.getByRole('button',{name:'Repair Organizer Connection',exact:true}).click()
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
@@ -164,10 +164,10 @@ test('lets the signed-in reader create and change a username',async({page,contex
  })
  await page.goto('/');await account(page)
  const input=page.getByLabel('Account Username',{exact:true})
- await expect(input).toHaveAttribute('readonly');await page.getByRole('button',{name:'Edit',exact:true}).click();await input.fill('Taken')
+ await expect(input).toHaveCSS('border-radius','0px');await expect(input).toHaveAttribute('readonly');await page.getByRole('button',{name:'Edit',exact:true}).click();const draft=page.getByLabel('New Username',{exact:true});await draft.fill('Taken');await page.getByLabel('Current Password',{exact:true}).fill('existing')
  await page.getByRole('button',{name:'Save Username',exact:true}).click()
  await expect(page.getByRole('alert')).toHaveText('That username is already taken.')
- await input.fill('MyReader')
+ await draft.fill('MyReader')
  await page.getByRole('button',{name:'Save Username',exact:true}).click()
  await expect(page.getByRole('status').filter({hasText:'Username saved.'})).toBeVisible()
  expect(username).toBe('MyReader')
@@ -251,11 +251,11 @@ test('keeps guest reading local and defers an organizer pairing until the matchi
  await page.goto('/')
  await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
  await page.getByRole('button',{name:'Organizer & Sync',exact:true}).click()
- await expect(page.getByRole('dialog',{name:'Reader Account & Cloud Library'})).toBeVisible()
+ await expect(page.getByRole('dialog',{name:'Reader Account'})).toBeVisible()
  await expect(page.getByLabel('Pairing Code',{exact:true})).toHaveCount(0)
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  await page.evaluate(pairing=>{location.hash=new URLSearchParams({readerPairing:JSON.stringify(pairing)}).toString()}, {...testOrganizer,code:'a'.repeat(64)})
- await expect(page.getByRole('dialog',{name:'Reader Account & Cloud Library'})).toBeVisible()
+ await expect(page.getByRole('dialog',{name:'Reader Account'})).toBeVisible()
  await expect.poll(()=>page.evaluate(()=>Boolean(sessionStorage.getItem('reader:pending-pairing')))).toBe(true)
  expect(claims).toBe(0)
  expect(new URL(page.url()).hash).toBe('')
@@ -343,7 +343,7 @@ test('requires the old password, checks confirmation, and allows canceling passw
  await context.route('**/auth/v1/token?grant_type=password',route=>{credentials=route.request().postDataJSON();return route.fulfill({status:400,json:{message:'Invalid login credentials'}})})
  await context.route('**/auth/v1/user',route=>{if(route.request().method()==='PUT')updates++;return route.fulfill({json:accountSession().user})})
  await page.goto('/');await account(page)
- await page.getByRole('button',{name:'Change Password',exact:true}).click()
+ await page.getByRole('button',{name:'Edit Password',exact:true}).click()
  await expect(page.getByLabel('Old Password',{exact:true})).toHaveAttribute('required','')
  await page.getByLabel('Old Password',{exact:true}).fill('wrong')
  await page.getByLabel('New Password',{exact:true}).fill('simple')
@@ -357,7 +357,7 @@ test('requires the old password, checks confirmation, and allows canceling passw
  expect(credentials).toMatchObject({email:'reader@example.com',password:'wrong'})
  expect(updates).toBe(0)
  await page.getByRole('button',{name:'Cancel',exact:true}).click()
- await expect(page.getByRole('button',{name:'Change Password',exact:true})).toBeVisible()
+ await expect(page.getByRole('button',{name:'Edit Password',exact:true})).toBeVisible()
 })
 test('changes email only after password verification and requests a confirmation redirect',async({page,context})=>{
  await signedIn(context);await backend(context)
@@ -368,6 +368,7 @@ test('changes email only after password verification and requests a confirmation
   return route.fulfill({json:accountSession().user})
  })
  await page.goto('/');await account(page)
+ await expect(page.getByLabel('Account Email',{exact:true})).toHaveCSS('border-radius','0px')
  await expect(page.getByLabel('Account Email',{exact:true})).toHaveAttribute('readonly')
  await page.getByRole('button',{name:'Edit Email',exact:true}).click()
  await page.getByLabel('New Email Address',{exact:true}).fill('new@example.com')
@@ -379,11 +380,11 @@ test('changes email only after password verification and requests a confirmation
  expect(redirect).toBe(`${new URL(page.url()).origin}/auth/callback`)
  await expect(page.getByLabel('Account Email',{exact:true})).toHaveValue('reader@example.com')
 })
-test('offers Set Password only for accounts with no password',async({page,context})=>{
+test('edits an unset password without requesting an old password',async({page,context})=>{
  await signedIn(context);await backend(context)
  await context.route('**/rest/v1/rpc/account_has_password',route=>route.fulfill({json:false}))
  await page.goto('/');await account(page)
- await page.getByRole('button',{name:'Set Password',exact:true}).click()
+ await page.getByRole('button',{name:'Edit Password',exact:true}).click()
  await expect(page.getByLabel('Old Password',{exact:true})).toHaveCount(0)
  await expect(page.getByLabel('Confirm Password',{exact:true})).toBeVisible()
 })
@@ -393,7 +394,7 @@ test('changes a password shorter than twelve characters after verifying the old 
  await context.route('**/auth/v1/token?grant_type=password',route=>{credentials=route.request().postDataJSON();return route.fulfill({json:accountSession()})})
  await context.route('**/auth/v1/user',route=>{if(route.request().method()==='PUT')update=route.request().postDataJSON();return route.fulfill({json:accountSession().user})})
  await page.goto('/');await account(page)
- await page.getByRole('button',{name:'Change Password',exact:true}).click()
+ await page.getByRole('button',{name:'Edit Password',exact:true}).click()
  await page.getByLabel('Old Password',{exact:true}).fill('existing')
  await page.getByLabel('New Password',{exact:true}).fill('simple')
  await page.getByLabel('Confirm Password',{exact:true}).fill('simple')

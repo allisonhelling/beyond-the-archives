@@ -13,7 +13,7 @@ const revisionCheckInterval = 45_000
 const pageCacheKey = (query: LibraryQuery, page: number, size: number) => JSON.stringify([query, page, size])
 type LibraryState = { userId: string; retryCounts: () => Promise<void>; navigationLoading: boolean; revisionError: string; checkRevision: (force?: boolean) => Promise<void>; hasCachedPage: (query: LibraryQuery, page: number, size: number) => boolean; tagRevision: number; navigation: LibraryNavigation; navigationError: string; catalogLoaded: boolean; ensureCatalog: () => Promise<void>; fetchFacets: (query: LibraryQuery, signal: AbortSignal) => Promise<LibraryFacets>; temporaryPageSizes: Map<LibraryQuery['mode'], number>; rowHeights: Map<string, number>; series: SeriesRecord[]; stories: Story[]; collections: Collection[]; loading: boolean; error: string; revision: number; refresh: (ids?: string[]) => Promise<void>; refreshCollections: () => Promise<void>; loadDetails: (ids: string[]) => Promise<void>; retainDetails: (ids: string[]) => () => void; refreshSeries: (id: number, invalidate?: boolean) => Promise<void>; refreshStory: (id: string) => Promise<void>; fetchPage: (query: LibraryQuery, page: number, size: number, signal: AbortSignal) => Promise<LibraryResults>; markAllRead: (story: Story) => Promise<void>; markFinished: (story: Story) => Promise<void>; removeStory: (story: Story) => Promise<void> }
 const Context = createContext<LibraryState | null>(null)
-export function LibraryProvider({ children, userId = 'sample' }: { children: ReactNode; userId?: string }) {
+export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly = false, navigationEnabled = true }: { children: ReactNode; userId?: string; catalogWorksOnly?: boolean; navigationEnabled?: boolean }) {
   const [data, setData] = useState<{ stories: Story[]; collections: Collection[]; series?: SeriesRecord[] }>({ stories: [], collections: [], series: [] })
   const [loading, setLoading] = useState(true)
   useActivity(Boolean(loading), 'Loading your library…')
@@ -25,7 +25,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
   const [navigationError, setNavigationError] = useState('')
   const [navigationEpoch, setNavigationEpoch] = useState(0)
   const [navigationStatus, setNavigationStatus] = useState({ revision: -1, epoch: -1 })
-  const navigationLoading = !sampleMode && (navigationStatus.revision !== revision || navigationStatus.epoch !== navigationEpoch)
+  const navigationLoading = navigationEnabled && !sampleMode && (navigationStatus.revision !== revision || navigationStatus.epoch !== navigationEpoch)
   const [revisionError, setRevisionError] = useState('')
   const serverRevision = useRef<number | undefined>(undefined)
   const revisionCheckedAt = useRef(0)
@@ -85,7 +85,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     const life = lifecycle.current, controller = new AbortController()
     catalogController.current = controller
     const task = queue.current.catch(() => {}).then(async () => {
-      const next = await readQuery(!sampleMode, controller.signal, () => loadCatalog(controller.signal))
+      const next = await readQuery(!sampleMode, controller.signal, () => catalogWorksOnly ? loadCatalog(controller.signal, true) : loadCatalog(controller.signal))
       if (life !== lifecycle.current) return
       setData(previous => {
         const ids = new Set(next.stories.map(story => story.id))
@@ -100,7 +100,7 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
       if (life === lifecycle.current && catalogRequest.current === task) { catalogRequest.current = null; setError(error instanceof Error ? error.message : 'Could not load your library.') }
       throw error
     }
-  }, [boundDetails, readQuery])
+  }, [boundDetails, readQuery, catalogWorksOnly])
   // Unknown old records and series can affect any pool. Known manual collection
   // and author scopes can safely retain their pages when an edit is unrelated.
   const invalidateQueries = useCallback((affected: (query: LibraryQuery) => boolean) => {
@@ -165,8 +165,8 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
         const next = await loadLibraryRevision()
         if (life !== lifecycle.current || version !== generation.current) return
         acceptRevision(next); revisionCheckedAt.current = Date.now(); setRevisionError('')
-      } catch {
-        if (life === lifecycle.current && version === generation.current) setRevisionError('Couldn’t update counts.')
+      } catch (error) {
+        if (life === lifecycle.current && version === generation.current) setRevisionError(error instanceof Error ? error.message : 'Couldn’t update counts.')
       }
     })()
     revisionRequest.current = task
@@ -323,13 +323,13 @@ export function LibraryProvider({ children, userId = 'sample' }: { children: Rea
     return result
   }, [readQuery])
   useEffect(() => {
-    if (sampleMode || loading || !firstPageLoaded && !catalogLoaded) return
+    if (!navigationEnabled || sampleMode || loading || !firstPageLoaded && !catalogLoaded) return
     let alive = true
     const controller = new AbortController()
     const version = generation.current
     void readQuery(true, controller.signal, () => loadLibraryNavigation(controller.signal)).then(result => { if (alive && version === generation.current && acceptRevision(result.revision)) { setNavigation(result.counts); setNavigationError('') } }).catch(error => { if (alive && version === generation.current) setNavigationError(error instanceof Error ? error.message : 'Couldn’t update counts.') }).finally(() => { if (alive) setNavigationStatus({ revision, epoch: navigationEpoch }) })
     return () => { alive = false; controller.abort() }
-  }, [revision, loading, firstPageLoaded, catalogLoaded, navigationEpoch, acceptRevision, readQuery])
+  }, [revision, loading, firstPageLoaded, catalogLoaded, navigationEpoch, acceptRevision, readQuery, navigationEnabled])
   const location = useLocation()
   useEffect(() => {
     const returned = () => { if (!document.hidden) void checkRevision(true) }

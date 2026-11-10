@@ -95,7 +95,8 @@ test('library and reading actions fit their headers and filters across viewport 
     expect(series.x + series.width).toBeLessThanOrEqual(filters.x)
    } else {
     const apply = (await toolbar.getByRole('button', { name: 'Apply Filters', exact: true }).boundingBox())!
-    expect(series.y + series.height).toBeLessThanOrEqual(apply.y)
+    expect(series.y).toBeCloseTo(apply.y, 0)
+    expect(series.x + series.width).toBeLessThanOrEqual(apply.x)
     expect(apply.y).toBeCloseTo(filters.y, 0)
     expect(await toolbar.getByRole('button', { name: 'Show Series', exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     expect(apply.x + apply.width).toBeLessThanOrEqual(filters.x)

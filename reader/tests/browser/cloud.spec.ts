@@ -2,11 +2,18 @@ import { createHash } from 'node:crypto'
 import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
 import { epubFiles } from '../../../src/test/epub-fixture'
-import { account, accountSession, owner, signedIn } from './account-fixture'
+import { account as readerAccount, cloudLibrary as account, accountSession, organizerAccount, owner, signedIn } from './account-fixture'
 type Value={key:string;value:unknown;revision:number}
+test('shows backend error messages and codes when cloud sync fails',async({page,context})=>{
+ await organizerAccount(context)
+ await context.route('**/rest/v1/reader_app_access*',route=>route.fulfill({status:500,json:{code:'57014',message:'Statement timeout during background sync'}}))
+ await page.goto('/')
+ await expect(page.locator('.toast[role="status"]')).toContainText('Statement timeout during background sync (57014)')
+ await expect(page.locator('.toast[role="status"]')).not.toContainText('[object Object]')
+})
 test('syncs originals and state while organizer setup is unavailable, downloads on a fresh device, and retains offline account isolation',async({browser})=>{
  test.setTimeout(60000)
- let loseNoteResponse = false, failDelete = false
+ let loseNoteResponse = false, failDelete = false, rejectMultipart = true
  const values=new Map<string,Value>(),receipts=new Map<string,Value>(),files=new Map<string,Buffer>()
  async function device(){
   const context=await browser.newContext();await signedIn(context)
@@ -36,9 +43,13 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
     }
     const key=url.pathname.split('reader-epubs/')[1]
     if(request.method()==='POST'){
-     const form=await new Response(new Uint8Array(request.postDataBuffer()!),{headers:{'Content-Type':request.headers()['content-type']}}).formData()
-     const blob=[...form.values()].find(value=>typeof value!=='string') as File
-     const original=Buffer.from(await blob.arrayBuffer())
+     if (rejectMultipart && request.headers()['content-type'].startsWith('multipart/')) { rejectMultipart=false; return route.fulfill({status:400,json:{statusCode:'400',error:'Bad Request',message:'No content provided'}}) }
+     let original:Buffer
+     if(request.headers()['content-type'].startsWith('multipart/')) {
+      const form=await new Response(new Uint8Array(request.postDataBuffer()!),{headers:{'Content-Type':request.headers()['content-type']}}).formData()
+      const blob=[...form.values()].find(value=>typeof value!=='string') as File
+      original=Buffer.from(await blob.arrayBuffer())
+     } else original=request.postDataBuffer()!
      expect(key).toBe(`${owner}/${createHash('sha256').update(original).digest('hex')}.epub`)
      files.set(key,original);return route.fulfill({json:{Key:key}})
     }
@@ -128,7 +139,7 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  await other.getByRole('button',{name:'Bookshelf'}).click();await account(other)
  await other.getByRole('button',{name:'Open Guest Library',exact:true}).click()
  await expect(other.locator('.story-card')).toHaveCount(0)
- await expect(other.getByRole('heading',{name:'Make Yourself at Home'})).toBeVisible()
+ await expect(other.getByRole('heading',{name:'No Stories Here Yet'})).toBeVisible()
  await second.setOffline(false)
  const guestFiles=epubFiles({source:'https://archiveofourown.org/works/8002'})
  for(const item of guestFiles)item.content=item.content.replaceAll('Recovered &amp; Remembered','Guest Edition')
@@ -161,13 +172,19 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  await original.getByLabel('Work Actions',{exact:true}).click()
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Delete EPUB',exact:true}).click()
- await expect(other.locator('.story-card')).toHaveCount(1)
+ await expect(other.locator('.story-card')).toHaveCount(2)
+ await expect(other.locator('.story-card[data-deleting]')).toHaveCount(1)
+ await expect(other.locator('.story-card[data-deleting]').getByRole('status')).toHaveText('Deleting')
+ await expect(other.locator('.story-card[data-deleting] .loading-icon')).toBeVisible()
+ await expect(other.locator('.story-card[data-deleting] .reader-tile-content')).toHaveAttribute('inert','')
  await other.reload()
- await expect(other.locator('.story-card')).toHaveCount(1)
+ await expect(other.locator('.story-card')).toHaveCount(2)
+ await expect(other.locator('.story-card[data-deleting]')).toHaveCount(1)
  failDelete=true
  await second.setOffline(false)
  await account(other);await other.getByRole('button',{name:'Sync Now',exact:true}).click()
  await expect(other.locator('.toast[role="status"]')).toContainText('Storage temporarily unavailable')
+ await expect(other.locator('.story-card[data-deleting]')).toHaveCount(1)
  failDelete=false
  await other.getByRole('button',{name:'Sync Now',exact:true}).click()
  await expect.poll(()=>files.size).toBe(1)
@@ -187,7 +204,7 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  await second.close();await first.close()
 })
 
-for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and publishes before acknowledgement (${cloudOnly ? 'cloud only' : 'downloaded'})`,async({browser})=>{
+for (const {cloudOnly,bulk} of [{cloudOnly:false,bulk:false},{cloudOnly:true,bulk:false},{cloudOnly:true,bulk:true}]) test(`receives the account cloud inbox and publishes before acknowledgement (${cloudOnly ? 'cloud only' : 'downloaded'}${bulk ? ', bulk deletion' : ''})`,async({browser})=>{
  const context=await browser.newContext();await signedIn(context)
  // Cloud-inbox checks must not wait on a real local Calibre bridge.
  await context.route('http://127.0.0.1:47821/**',route=>route.abort())
@@ -196,11 +213,18 @@ for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and
  let delivery=0,downloads=0
  const values=new Map<string,Value>()
  let result='queued',failPublication=cloudOnly,publicationFailed=false
+ let failNextSync=false,releaseFailedSync:(()=>void)|undefined
+ let holdRemoval=false,releaseRemoval:(()=>void)|undefined
+ let holdEdit=false,releaseEdit:(()=>void)|undefined
  await context.route(url=>/^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
   const request=route.request(),url=new URL(request.url())
   if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
   if(url.pathname.includes('/rpc/reader_cloud_apply')){
    const input=request.postDataJSON(),row={key:input.p_key,value:input.p_value,revision:1}
+   if(holdEdit&&input.p_key.endsWith('/favorite')){
+    holdEdit=false
+    await new Promise<void>(resolve=>{releaseEdit=resolve})
+   }
    if(failPublication && input.p_key.endsWith('/manifest')) {
     failPublication=false;publicationFailed=true
     return route.fulfill({status:503,json:{message:'Temporary sync failure'}})
@@ -208,7 +232,14 @@ for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and
    if(input.p_key.endsWith('/deleted') && input.p_value===true)for(const key of values.keys())if(key.startsWith(input.p_key.split('/')[0]+'/'))values.delete(key)
    values.set(row.key,row);return route.fulfill({json:row})
   }
-  if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()].filter(row=>!url.searchParams.getAll('key').some(value=>value.startsWith('like.')) || row.key.endsWith('/deleted'))})
+  if(url.pathname.includes('/reader_cloud_values')){
+   if(failNextSync){
+    failNextSync=false
+    await new Promise<void>(resolve=>{releaseFailedSync=resolve})
+    return route.fulfill({status:500,json:{code:'57014',message:'Statement timeout during background sync'}})
+   }
+   return route.fulfill({json:[...values.values()].filter(row=>!url.searchParams.getAll('key').some(value=>value.startsWith('like.')) || row.key.endsWith('/deleted'))})
+  }
   if(url.pathname.includes('/reader_import_inbox')){
    if(request.method()==='PATCH'){
     expect(values.has(`${hash}/manifest`),JSON.stringify(request.postDataJSON())).toBe(true)
@@ -219,7 +250,10 @@ for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and
   }
   if(url.pathname.includes('/reader_transfer_destinations'))return route.fulfill({status:201,body:''})
   if(url.pathname.includes('/storage/v1/object/')){
-   if(request.method()==='DELETE')return route.fulfill({json:[]})
+   if(request.method()==='DELETE'){
+    if(holdRemoval)await new Promise<void>(resolve=>{releaseRemoval=resolve})
+    return route.fulfill({json:[]})
+   }
    if(request.method()==='POST')return route.fulfill({status:409,json:{statusCode:'409',error:'Duplicate',message:'Already exists'}})
    downloads++
    return route.fulfill({body:file,contentType:'application/epub+zip'})
@@ -267,25 +301,60 @@ for (const cloudOnly of [false,true]) test(`receives the account cloud inbox and
  await page.getByRole('button',{name:'Manage EPUB',exact:true}).click()
  await expect(page.getByRole('textbox',{name:'Personal Notes',exact:true})).toHaveValue('Keep cloud reading data')
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ if(!cloudOnly){
+  holdEdit=true
+  await page.getByRole('button',{name:'Mark Favorite',exact:true}).click()
+  await expect.poll(()=>Boolean(releaseEdit)).toBe(true)
+ }
+ const extraHash='f'.repeat(64)
+ if(bulk){
+  const manifest=values.get(`${hash}/manifest`)!.value as Record<string,unknown>
+  values.set(`${extraHash}/manifest`,{key:`${extraHash}/manifest`,revision:1,value:{...manifest,id:extraHash}})
+  await account(page)
+  await page.getByRole('button',{name:'Sync Now',exact:true}).click()
+  await expect.poll(()=>page.evaluate(async({owner,id})=>{
+   const db=await new Promise<IDBDatabase>(resolve=>{const request=indexedDB.open(`bta-reader-account:${owner}`);request.onsuccess=()=>resolve(request.result)})
+   const present=await new Promise<boolean>(resolve=>{const request=db.transaction('books').objectStore('books').get(id);request.onsuccess=()=>resolve(Boolean(request.result))})
+   db.close();return present
+  },{owner,id:extraHash})).toBe(true)
+  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ }
  await page.getByRole('button',{name:'Storage',exact:true}).click()
  const storage=page.getByRole('dialog',{name:'Manage Local Storage',exact:true})
- await expect(storage.locator('td[data-column=library]')).toHaveText(cloudOnly?'In Cloud':'Downloaded')
+ await expect(storage.locator('td[data-column=library]')).toHaveText(bulk?['In Cloud','In Cloud']:cloudOnly?'In Cloud':'Downloaded')
  await storage.getByLabel('Select Visible Works',{exact:true}).check()
  const deletion=storage.getByRole('button',{name:'Delete from Cloud',exact:true})
  await expect(deletion).toBeEnabled()
  page.once('dialog',dialog=>dialog.dismiss())
  await deletion.click()
- await expect(storage.locator('tbody tr')).toHaveCount(1)
+ await expect(storage.locator('tbody tr')).toHaveCount(bulk?2:1)
+ if(cloudOnly){
+  failNextSync=true
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+  await expect.poll(()=>Boolean(releaseFailedSync)).toBe(true)
+ }
+ holdRemoval=true
  page.once('dialog',dialog=>dialog.accept())
  await deletion.click()
+ releaseFailedSync?.()
+ await expect(storage.locator('td[data-column=library]')).toHaveText(bulk?['Deleting','Deleting']:'Deleting')
+ await expect(storage.locator('tr[data-deleting]')).toHaveCount(bulk?2:1)
+ await expect(deletion).toBeDisabled()
+ // An older field response must not restore a version queued for deletion.
+ releaseEdit?.()
+ await expect.poll(()=>Boolean(releaseRemoval)).toBe(true)
+ // A server tombstone alone is insufficient: retain rows until Storage confirms removal.
+ await expect(storage.locator('tbody tr')).toHaveCount(bulk?2:1)
+ holdRemoval=false;releaseRemoval?.()
  await expect(storage.locator('tbody tr')).toHaveCount(0)
  await expect.poll(()=>values.get(`${hash}/deleted`)?.value).toBe(true)
+ if(bulk) await expect.poll(()=>values.get(`${extraHash}/deleted`)?.value).toBe(true)
  await context.close()
 })
 
 test('offers password sign-in without email sign-in links or a cloud download list',async({page})=>{
  await page.goto('/')
- await account(page)
+ await readerAccount(page)
  await expect(page.getByRole('button',{name:'Email Sign-In Link',exact:true})).toHaveCount(0)
  await expect(page.getByRole('button',{name:'Download EPUB',exact:true})).toHaveCount(0)
  await expect(page.getByRole('textbox',{name:'Username or Email',exact:true})).toHaveAttribute('placeholder','Username or Email')

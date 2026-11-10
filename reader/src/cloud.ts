@@ -1,3 +1,4 @@
+import { sampleMode } from '../../src/lib/sample-mode'
 import { authSessionStorage } from '../../src/lib/auth-session-storage'
 import { chapterContent, retainedContents, withAnthologyMetadata } from './anthology'
 import { initialAuthIntent } from '../../src/lib/auth-account'
@@ -9,12 +10,14 @@ import { type CloudEdit, type CloudValue } from './cloud-model'
 import { isAnthology, retainWorkLinks, defaultPreferences, withReadingProgress, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
 import { readerInstallationId, acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
 import { digest, importEpub } from './epub'
+import { reportSyncStatus, reportSyncFailure } from './sync-status'
 
-export const readerCloudConfig = readPublicConfig(import.meta.env) ?? hostedOrganizer
+export const readerCloudConfig = sampleMode ? { url: 'http://127.0.0.1:54321', key: 'sb_publishable_sample_local_only' } : readPublicConfig(import.meta.env) ?? hostedOrganizer
 const config = readerCloudConfig
 export const readerCloud = createClient<Database>(config.url, config.key, {
-  auth: { storage: authSessionStorage('reader'), storageKey: 'reader-cloud-auth', flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  auth: { storage: sampleMode ? undefined : authSessionStorage('reader'), storageKey: sampleMode ? 'reader-sample-cloud-disabled' : 'reader-cloud-auth', flowType: 'pkce', persistSession: !sampleMode, autoRefreshToken: !sampleMode, detectSessionInUrl: !sampleMode },
   global: { fetch: (input, init) => {
+    if (sampleMode) throw new Error('Cloud operations are unavailable in the local sample reader.')
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
     if (url.pathname.startsWith('/rest/v1/') || url.pathname.startsWith('/storage/v1/')) {
       // Auth can change in another tab during sync. Never send this library's data with a different owner's token.
@@ -33,7 +36,7 @@ export const readerCloud = createClient<Database>(config.url, config.key, {
     return fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, signal]) : signal })
   } },
 })
-export let readerAuthIntent = initialAuthIntent
+export let readerAuthIntent = sampleMode ? null : initialAuthIntent
 export function clearReaderAuthIntent() {readerAuthIntent=null}
 readerCloud.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')readerAuthIntent='recovery'})
 async function organizerSession(connection: Connection) {
@@ -86,6 +89,7 @@ export async function restoreOrganizerConnection(existing?: Connection): Promise
   return next
 }
 export type CloudConflict = CloudValue & { edit: CloudEdit }
+export const cloudEpubDeleted = 'reader-cloud-epub-deleted'
 export async function switchLibrary(owner: string) {
   if (owner === readerOwner) return
   localStorage.setItem('reader-cloud-owner', owner)
@@ -94,7 +98,7 @@ export async function switchLibrary(owner: string) {
 async function requireOwner() {
   const { data, error } = await readerCloud.auth.getSession()
   if (error) throw error
-  if (!readerOwner || data.session?.user.id !== readerOwner) throw new Error('Sign in to this library’s reader account to sync. Downloaded books remain available offline.')
+  if (!readerOwner || data.session?.user.id !== readerOwner) throw Object.assign(new Error('Sign in to this library’s reader account to sync. Downloaded books remain available offline.'), { code: 'READER_SIGN_IN_REQUIRED' })
   const access = await readerCloud.from('reader_app_access').select('user_id').eq('user_id', readerOwner).maybeSingle()
   if (access.error) throw access.error
   if (!access.data) throw new Error('Reader cloud access has not been granted. Ask the application owner for reader access.')
@@ -104,7 +108,10 @@ async function upload(id: string) {
   if (await loadSetting(`cloud-file:${id}`)) return
   const content = await get<{file: Blob}>('contents', id)
   if (!content?.file) return
-  const result = await readerCloud.storage.from('reader-epubs').upload(path(id), content.file, { contentType: 'application/epub+zip', upsert: false })
+  const bucket = readerCloud.storage.from('reader-epubs'), options = { contentType: 'application/epub+zip', upsert: false }
+  let result = await bucket.upload(path(id), content.file, options)
+  // Retry a rejected multipart body as raw EPUB bytes; keep the same immutable key.
+  if (result.error?.message === 'No content provided' && content.file.size > 0) result = await bucket.upload(path(id), await content.file.arrayBuffer(), options)
   if (result.error && String(result.error.statusCode) !== '409') throw result.error
   await transaction(['settings'], tx => tx.objectStore('settings').put({id:`cloud-file:${id}`,value:true}))
 }
@@ -113,7 +120,13 @@ export function syncCloud(fresh = false): Promise<CloudConflict[]> {
   if (!readerOwner || !navigator.onLine) return Promise.resolve([])
   // Import acknowledgement must see writes committed after an existing sync started.
   if (fresh && running) return running.then(() => syncCloud())
-  if (!running) running = (async () => navigator.locks ? await navigator.locks.request(`reader-cloud:${readerOwner}`, performSync) : await performSync())().finally(() => { running = undefined })
+  if (!running) {
+    reportSyncStatus('cloud','syncing')
+    running = (async () => navigator.locks ? await navigator.locks.request(`reader-cloud:${readerOwner}`, performSync) : await performSync())()
+      .then(conflicts => { reportSyncStatus('cloud',conflicts.length ? 'attention' : 'success',conflicts.length ? 'Resolve conflicting reading changes in Cloud Library.' : undefined); return conflicts })
+      .catch(error => { reportSyncFailure('cloud',error); throw error })
+      .finally(() => { running = undefined })
+  }
   return running!
 }
 async function performSync(): Promise<CloudConflict[]> {
@@ -206,6 +219,7 @@ async function applyRemote(row: CloudValue) {
       }
     }
   })
+  if (row.key.endsWith('/deleted') && row.value === true) window.dispatchEvent(new CustomEvent(cloudEpubDeleted, { detail: row.key.split('/')[0] }))
 }
 export async function resolveCloud(conflict: CloudConflict, useLocal: boolean) {
   await transaction(['settings'], tx => tx.objectStore('settings').put({id:`cloud-conflict:${conflict.edit.id}:${useLocal ? 'cloud' : 'device'}`,value:useLocal ? {...conflict.edit,value:conflict.value} : conflict.edit}))
@@ -253,7 +267,7 @@ export async function importGuestLibrary() {
   if(!guest) return
   try {
     const rows=await new Promise<BookDetails[]>((resolve,reject)=>{const request=guest.transaction('books').objectStore('books').getAll();request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})
-    const activeWorks=new Set((await listCatalog()).filter(book=>book.active && book.workId).map(book=>book.workId))
+    const activeWorks=new Set((await listCatalog()).filter(book=>!book.deleting && book.active && book.workId).map(book=>book.workId))
     for(const details of rows) {
       if(await getBookDetails(details.id)) continue
       const content=guest.objectStoreNames.contains('contents') ? await new Promise<Record<string,unknown>|undefined>((resolve,reject)=>{const request=guest.transaction('contents').objectStore('contents').get(details.id);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)}) : undefined
@@ -269,5 +283,5 @@ export async function importGuestLibrary() {
     }
   } finally {guest.close()}
 }
-export async function cloudShelf() {return (await listCatalog()).filter(book=>!book.hasFile)}
+export async function cloudShelf() {return (await listCatalog()).filter(book=>!book.deleting && !book.hasFile)}
 export async function savedConflicts() {return (await all<{id:string;value:CloudEdit}>('settings','cloud-conflict:')).filter(row=>row.id.startsWith('cloud-conflict:')).map(row=>row.value)}

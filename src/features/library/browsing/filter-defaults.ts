@@ -1,3 +1,4 @@
+import { normalizeTagExpressions, tagFilterConfig } from '../tags/tag-expressions'
 import { defaultReadingFilters, type ReadingFilters } from '../reading-search'
 import { readBrowsing, readingPreferencesKey } from './browsing'
 
@@ -18,9 +19,16 @@ export function readFilterDefaults(scope: string, fallback?: ReadingFilters): Re
   let preferences = {}
   try { preferences = JSON.parse(window.localStorage.getItem(readingPreferencesKey) ?? '{}') ?? {} }
   catch { /* Use built-in ordering when storage is unavailable. */ }
-  const values = { ...preferences, ...fallback, ...saved.library, ...saved.collections?.[scope] }
+  let values: Partial<ReadingFilters> = {}
+  for (const source of [preferences as Partial<ReadingFilters>, fallback, saved.library, saved.collections?.[scope]]) {
+    if (!source) continue
+    values = { ...values, ...source, tagExpressions: normalizeTagExpressions(source.tagExpressions ?? values.tagExpressions) }
+    for (const key of Object.keys(tagFilterConfig) as (keyof typeof tagFilterConfig)[]) {
+      if (Object.hasOwn(source, key) && !source.tagExpressions?.[key]) delete values.tagExpressions?.[key]
+    }
+  }
   const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(values)) params.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value))
+  for (const [key, value] of Object.entries(values)) params.set(key, value && typeof value === 'object' ? JSON.stringify(value) : String(value))
   const filters = readBrowsing(params, defaultReadingFilters).filters
   if (filters.sort === 'random') filters.randomSeed = crypto.randomUUID()
   return filters

@@ -12,7 +12,7 @@
 
 .expandable-metadata-tags .tags-toggle { display: inline-flex; align-items: center; min-height: 0; padding: 3px 8px; border: 1px solid transparent; background: transparent; color: var(--color-brand); font: inherit; line-height: 1.5; white-space: nowrap; }
 .expandable-metadata-tags [data-tag-shape="filled"] .tags-toggle { min-height: 30px; padding-block: 4px; }
-.expandable-metadata-tags .tags-toggle:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: .15em; }
+.expandable-metadata-tags .tags-toggle:is(:hover, :focus-visible) { border-color: transparent; text-decoration: underline; text-underline-offset: .15em; }
 
 .metadata-link[role="button"] { cursor: pointer; }
 .metadata-link[role="button"]:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }

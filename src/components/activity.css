@@ -1,0 +1,5 @@
+.metadata-refresh-spinning, .loading-icon { animation: metadata-refresh-spin 1s linear infinite; }
+.loading-icon { flex: none; }
+.loading-status, .activity-indicator { display: inline-flex; align-items: center; gap: 8px; }
+@keyframes metadata-refresh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .metadata-refresh-spinning, .loading-icon { animation: none; } }

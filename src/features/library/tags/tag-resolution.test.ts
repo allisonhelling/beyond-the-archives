@@ -21,3 +21,11 @@ it('matches only verified synonyms for a canonical selection and preserves parti
  expect(tagMatches(['Protective Alya Césaire'],'alya','character',aliases)).toBe(true)
  expect(tagMatches(['Custom Alya'],'custom alya','character',aliases)).toBe(true)
 })
+it('requires a category-correct verified canonical root, preserving raw fallback and foreign authority isolation',()=>{
+ const incomplete=tagAliasIndex([records[1]])
+ expect(tagMatches([records[1].name],'alya cesaire','character',incomplete)).toBe(false)
+ expect(tagMatches(['Protective Alya Césaire'],'alya cesaire','character',incomplete)).toBe(true)
+ const wrongRoot=tagAliasIndex([records[1],record('Alya Césaire','canonical','Alya Césaire','relationship')])
+ expect(tagMatches([records[1].name],'alya cesaire','character',wrongRoot)).toBe(false)
+ expect(tagMatches([records[1].name],'alya cesaire','character',tagAliasIndex(records),null)).toBe(false)
+})

@@ -18,11 +18,12 @@ function ConflictDescription({ edit }: { edit: Pick<CloudEdit, 'key' | 'value'> 
  useEffect(()=>{let active=true;void getBookDetails(edit.key.split('/')[0]).then(book=>{if(active)setBook(book)});return()=>{active=false}},[edit.key])
  return <>{book&&<strong>{book.metadata.title}: </strong>}{describeCloudValue(edit.key,edit.value,book)}</>
 }
-export function ReaderAccount({asPage=false, onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts }: {asPage?:boolean; onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
+export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts }: {cloudLibrary?:boolean; asPage?:boolean; onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
   const [mode,setMode]=useState<AccountMode>('login'),[needsPassword,setNeedsPassword]=useState(readerAuthIntent==='invite'||readerAuthIntent==='recovery')
   const [session,setSession]=useState<Session|null>(null), [busy,setBusy]=useState(false), [message,setMessage]=useState('')
   const [remember,setRemember]=useState(()=>remembersSession('reader'))
   const [changingPassword,setChangingPassword]=useState(false),[editingEmail,setEditingEmail]=useState(false),[hasPassword,setHasPassword]=useState<boolean|null>(null)
+  const [resolved,setResolved]=useState<Set<string>>(new Set())
   const [variants,setVariants]=useState<CloudEdit[]>([])
   useEffect(()=>{
     void (async()=>{
@@ -61,8 +62,8 @@ export function ReaderAccount({asPage=false, onClose, onRefresh, beforeSwitch, o
     try { await enableOrganizerSync(readerCloud) } catch { setMessage('Signed in. Organizer sync setup will retry when this account library opens.') }
     await beforeSwitch();await switchLibrary(owner)
   }
-  return <ReaderSection page={asPage} title="Reader Account & Cloud Library" busy={busy} onClose={onClose}>
-    <p>Guest reading stays on this device and works offline without an account. Sign in for cloud storage, cross-device reading state, and organizer connection.</p>
+  return <ReaderSection page={asPage} title={cloudLibrary ? "Cloud Library" : "Reader Account"} busy={busy} onClose={onClose}>
+    {!cloudLibrary && <><p>Guest reading stays on this device and works offline without an account. Sign in for cloud storage, cross-device reading state, and organizer connection.</p>
     <p>{readerOwner ? 'Saved Account Library' : 'Guest Library'} · {session?.user.email ?? 'Signed out'}</p>
     {(!session || needsPassword || changingPassword) && <form className="account-auth-form" onSubmit={event=>{
       event.preventDefault()
@@ -98,20 +99,23 @@ export function ReaderAccount({asPage=false, onClose, onRefresh, beforeSwitch, o
     </form>}
     {needsPassword && !session && <button disabled={busy} onClick={()=>{setNeedsPassword(false);setMode('reset')}}>Request a New Recovery Link</button>}
     {session && !needsPassword && !changingPassword && <>
-      <UsernameSettings key={session.user.id} client={readerCloud} disabled={busy} actions={<button type="button" disabled={busy||hasPassword===null} onClick={()=>{setChangingPassword(true);setMessage('')}}>{hasPassword===false?'Set Password':'Change Password'}</button>} />
-      <form className="story-form" onSubmit={event=>{
+      <UsernameSettings key={session.user.id} client={readerCloud} disabled={busy} verifyPassword={verifyPassword} />
+      <form className="story-form account-details-form" onSubmit={event=>{
         event.preventDefault();const form=event.currentTarget,fields=new FormData(form)
         void run(async()=>{
           await verifyPassword(String(fields.get('currentPassword')??''))
           const {error}=await readerCloud.auth.updateUser({email:String(fields.get('newEmail')).trim()},{emailRedirectTo:`${location.origin}/auth/callback`});if(error)throw error
           form.reset();setEditingEmail(false);setMessage('Check your new email address and click the confirmation link to finish changing your email. A notification will be sent to your old address.')
         })
-      }}><label>Account Email<input type="email" aria-label="Account Email" readOnly value={session.user.email??''} /></label>
+      }}><label>Account Email<input type="email" aria-label="Account Email" readOnly value={session.user.email??''} /></label>{!editingEmail&&<button type="button" disabled={busy} aria-label="Edit Email" onClick={()=>setEditingEmail(true)}>Edit</button>}
         {editingEmail&&<><label>New Email Address<input name="newEmail" type="email" autoComplete="email" required disabled={busy} /></label><label>Current Password<input name="currentPassword" type="password" autoComplete="current-password" required disabled={busy} /></label></>}
-        <div className="form-actions">{editingEmail?<><button disabled={busy}>Save Email</button><button type="button" disabled={busy} onClick={()=>setEditingEmail(false)}>Cancel</button></>:<button type="button" disabled={busy} aria-label="Edit Email" onClick={()=>setEditingEmail(true)}>Edit</button>}</div>
+        {editingEmail&&<div className="form-actions"><button disabled={busy}>Save Email</button><button type="button" disabled={busy} onClick={()=>setEditingEmail(false)}>Cancel</button></div>}
       </form>
+      <div className="account-details-form"><span>Password</span><button type="button" aria-label="Edit Password" disabled={busy||hasPassword===null} onClick={()=>{setChangingPassword(true);setMessage('')}}>Edit</button></div>
     </>}
-    {session?.user.id === readerOwner && <>
+    </>}
+    {cloudLibrary && !readerOwner && <p>Sign in to Reader Account to store your library in the cloud and sync across devices.</p>}
+    {cloudLibrary && session?.user.id === readerOwner && <>
       <p>Organizer sync is enabled automatically for your shared account. This reader registers itself and reuses its connection when you return.</p>
       <details><summary>Advanced Troubleshooting</summary>
         <button disabled={busy} onClick={()=>void run(async()=>{await transaction(['settings'],tx=>tx.objectStore('settings').delete('organizer-disabled-here'));await restoreOrganizerConnection(await loadSetting<Connection>('connection'));setMessage('Organizer sync restored on this device.')})}>Repair Organizer Connection</button>
@@ -119,7 +123,7 @@ export function ReaderAccount({asPage=false, onClose, onRefresh, beforeSwitch, o
       </details>
       <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(onSync)}>Sync Now</button><button disabled={busy} onClick={()=>{if(confirm('Copy guest books, notes, and history into this account? Existing account versions are skipped. The guest library stays on this device.')) void run(async()=>{await importGuestLibrary();await onSync()})}}>Import Guest Library</button></div>
       <p>Downloads remain readable offline. Removing a local download retains its cloud copy. Each account and guest library have separate local storage; organizer credentials are never imported.</p>
-      {conflicts.map(conflict=><div className="pending-item" key={conflict.edit.id}><strong>Conflicting {cloudFieldLabel(conflict.key)}</strong><p>This device and the cloud changed {cloudFieldLabel(conflict.key).toLowerCase()} independently. Choose which version to keep.</p><p>This device: <ConflictDescription edit={{key:conflict.key,value:conflict.edit.value}} /></p><p>Cloud: <ConflictDescription edit={conflict} /></p><div className="dialog-actions conflict-actions"><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,true);await onSync()})}>Use This Device</button><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,false);await onSync()})}>Use Cloud Version</button></div></div>)}
+      {conflicts.filter(conflict=>!resolved.has(conflict.edit.id)).map(conflict=><div className="pending-item" key={conflict.edit.id}><strong>Conflicting {cloudFieldLabel(conflict.key)}</strong><p>This device and the cloud changed {cloudFieldLabel(conflict.key).toLowerCase()} independently. Choose which version to keep.</p><p>This device: <ConflictDescription edit={{key:conflict.key,value:conflict.edit.value}} /></p><p>Cloud: <ConflictDescription edit={conflict} /></p><div className="dialog-actions conflict-actions"><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,true);setResolved(current=>new Set([...current,conflict.edit.id]));await onSync()})}>Use This Device</button><button disabled={busy} onClick={()=>void run(async()=>{await resolveCloud(conflict,false);setResolved(current=>new Set([...current,conflict.edit.id]));await onSync()})}>Use Cloud Version</button></div></div>)}
       {variants.length>0 && <details><summary>Preserved Conflict Versions</summary>{variants.map(edit=><p key={edit.id}><strong>{cloudFieldLabel(edit.key)}</strong>: <ConflictDescription edit={edit} /></p>)}</details>}
     </>}
     <div className="dialog-actions">

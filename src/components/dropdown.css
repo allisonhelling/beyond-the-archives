@@ -16,11 +16,11 @@
 .dropdown-panel .dropdown-check-option > span { min-width: 0; overflow-wrap: anywhere; }
 .dropdown-panel label.dropdown-check-option { display: flex; align-items: center; gap: 9px; margin: 0; cursor: pointer; }
 .dropdown-panel :is([role=option], .menu-item) > svg { flex-shrink: 0; }
-.dropdown-panel [aria-selected=true] { color: var(--color-brand); background: var(--color-brand-soft); }
+.dropdown-panel [aria-selected=true], .dropdown-panel .dropdown-check-option:not(:has(:disabled)):is(:hover, :focus-within), .fandom-options .check-label:is(:hover, :focus-within) { color: var(--color-brand); background: var(--color-brand-soft); }
 .dropdown-panel :is([role=option], .menu-item):not(:disabled):is(:hover, :focus-visible) { color: var(--color-surface); background: var(--color-brand); }
 .dropdown-panel [role=option]:disabled { opacity: .5; cursor: not-allowed; }
 .dropdown-panel :is([role=option], .menu-item) > span { min-width: 0; overflow-wrap: anywhere; }
-.dropdown-panel :is([role=option], .menu-item), .dropdown-panel .dropdown-check-option, .search-suggestions button { min-height: 36px; padding: 7px 10px; font-size: 14px; line-height: 20px; }
+.dropdown-panel :is([role=option], .menu-item), .dropdown-panel .dropdown-check-option, .suggestion-options button { min-height: 36px; padding: 7px 10px; font-size: 14px; line-height: 20px; }
 .dropdown-search { width: 100%; min-width: 0; margin: 0 0 8px; }
 .dropdown-empty { padding: 8px; margin: 0; font-size: 13px; }
 .dropdown-selected { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; }
@@ -38,3 +38,5 @@
   .dropdown-mobile-icon-only .dropdown-trigger > .dropdown-label { overflow: visible; }
   .dropdown-mobile-icon-only .dropdown-label-text, .dropdown-mobile-icon-only .dropdown-trigger > svg { display: none; }
 }
+
+select:is(:hover, :focus-visible):not(:disabled), .fandom-trigger:is(:hover, :focus-visible):not(:disabled), .dropdown-trigger:is(:hover, :focus-visible):not(:disabled) { border-color: var(--color-brand); background-color: var(--color-brand-soft); }

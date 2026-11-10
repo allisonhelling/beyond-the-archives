@@ -10,3 +10,8 @@
 .account-auth-back { justify-self: start; font-size: 13px; }
 .account-auth-actions { display: flex; align-items: stretch; gap: 10px; }
 .account-auth-actions > button { flex: 1; min-width: 0; margin: 0; border-radius: 0; }
+
+.account-details-form { --radius-form-field: 0px; display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; max-width: 420px; min-width: 0; gap: 12px; align-items: end; margin-block: 20px; }
+.account-details-form > * { min-width: 0; }
+.account-details-form > :is(.field-help, .form-actions, [role="alert"], [role="status"]) { grid-column: 1 / -1; }
+.account-details-form > label:has(input:not([readonly])) { grid-column: 1; }

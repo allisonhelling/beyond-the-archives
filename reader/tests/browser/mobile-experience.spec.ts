@@ -37,7 +37,7 @@ test('shows full summaries, organizer-style controls and four persistent mobile 
  await expect(toolbar.getByRole('button', { name: 'Group', exact: true })).toBeVisible()
  await expect(toolbar.getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
  await toolbar.getByRole('button', { name: 'Sort', exact: true }).click()
- await page.getByRole('option', { name: 'Title', exact: true }).click()
+ await page.getByRole('option', { name: /^Title(?: [↑↓])?$/ }).click()
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
  await page.getByRole('heading', { name: 'The Bookshelf', exact: true }).click()
  const dismiss = page.getByRole('button', { name: 'Dismiss Message' }); if (await dismiss.count()) await dismiss.click()
@@ -48,8 +48,8 @@ test('opens mobile settings categories as pages and supports history and direct 
  const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
  await nav.getByRole('button', { name: 'Settings', exact: true }).click()
  const categories = page.getByRole('navigation', { name: 'Settings Sections' })
- await expect(categories.getByRole('link')).toHaveText([/Reader Account/, /Organizer & Sync/, /Tag Format/, /Customize Tiles/, /Manage Local Storage/])
- for (const title of ['Reader Account', 'Organizer & Sync', 'Tag Format', 'Customize Tiles', 'Manage Local Storage']) {
+ await expect(categories.getByRole('link')).toHaveText([/Reader Account/, /Cloud Library/, /Organizer & Sync/, /Tag Format/, /Customize Tiles/, /Manage Local Storage/])
+ for (const title of ['Reader Account', 'Cloud Library', 'Organizer & Sync', 'Tag Format', 'Customize Tiles', 'Manage Local Storage']) {
   await categories.getByRole('link', { name: title, exact: true }).click()
   await expect(page.getByRole('button', { name: 'Back to Settings', exact: true })).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)

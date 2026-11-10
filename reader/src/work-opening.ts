@@ -11,7 +11,7 @@ export function requestedWork(search: string): WorkOpening | undefined {
 /** Prefer active downloads, then retained downloads, before requiring a cloud download. */
 export function workVersions(books: CatalogBook[], target: string): CatalogBook[] {
   const rank = (book: CatalogBook) => book.hasFile ? book.active ? 0 : 1 : book.active ? 2 : 3
-  return books.filter(book => containsWork(book, target)).sort((a, b) => rank(a) - rank(b) || b.importedAt.localeCompare(a.importedAt) || a.id.localeCompare(b.id))
+  return books.filter(book => !book.deleting && containsWork(book, target)).sort((a, b) => rank(a) - rank(b) || b.importedAt.localeCompare(a.importedAt) || a.id.localeCompare(b.id))
 }
 export function openingPosition(book: Pick<BookDetails, 'id' | 'metadata' | 'workId' | 'works' | 'chapters' | 'position' | 'completed'>, opening: WorkOpening): ReadingPosition | undefined {
   if (!containsWork(book, opening.target)) throw new Error('The selected EPUB no longer identifies this work. Choose another EPUB or review its work links.')
