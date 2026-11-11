@@ -103,6 +103,44 @@ The expanded `npm run perf:db` completed for **10,000 works per owner, three own
 
 Forced uncached selection for Custom still took approximately 5.9–6.0 seconds; the 23 ms number measures an existing revision-cache hit, not repeated fresh classification. Cold expression scans and invalidation under load therefore remain material performance risks. The benchmark bulk-seeds fixtures and does not establish import throughput, trigger write amplification, real concurrent cache behavior or hierarchy fan-out performance. No crossover hierarchy performance claim follows from this run.
 
+## Tag Matching Follow-Up — 10 November 2026
+
+The tag-matching proposal was audited against the implemented B1.2/B1.3 system before editing. Its shared model, mode conversions/restoration, draft/Apply boundary, URL/default codecs, account/revision caches and server/local consumers already implement the requested matching contract. The follow-up preserves these boundaries. Fandoms defaults to Any and exposes Custom; the other categories default to All and expose Any/All. Custom remains supported for all categories by the model and SQL. The Boolean evaluator accepts a tag predicate independently of provider extraction, source authority and canonical-name resolution; no additional platform integration was added.
+
+The remaining editor gap was addressed in a small UI phase: `tags/TagGroupEditor.tsx` provides category-independent group controls with an injected picker, and `tags/useTagGroupDraft.ts` retains ordered editing placeholders independently of the normalized executable expression. `tags/TagFilterControl.tsx` composes these with the existing `FandomChoices` and conversion/restoration controller. Previously, filling a blank group moved it ahead of all remaining blank groups, potentially changing which group the user was editing. Filling or clearing a group now preserves its position and selection across dropdown dismissal. Empty placeholders still never enter URLs, defaults, requests or cache identities. A separate Character-editor test exercises reuse without enabling another Custom UI tab. The restored connected-tab styling was retained.
+
+The persistence/query phase needed regression coverage rather than another implementation or migration. Audited SQL boundaries are `library_tag_expression_groups`, `library_tag_groups_match`, `library_alias_filters`, `library_filter`, `library_query_work_sql`, `query_library` and `check_automatic_collection_rules`. Existing series aggregate metadata, author ownership/scope, collection-pool facets, automatic memberships and local/sample/retained filtering retain their meaning. New SQL tests distinguish groups with the same flattened selections, compare legacy and explicit defaults in every category, exercise category AND and verify account isolation. No SQL function, generated type or dependency changed. Apply the complete existing migration chain, including `20261109000200_tag_expressions.sql`, before deploying expression UI; no new migration is required by this follow-up.
+
+Runtime changes are limited to the three editor modules above. Tests changed in `tags/TagGroupEditor.test.tsx`, `tags/tag-expressions.test.ts`, `ReadingFilterControls.test.tsx`, `supabase/tests/canonical-tags.test.ts` and `tests/e2e/tag-filters.spec.ts`. README, IMPLEMENTATION and PROJECT_OVERVIEW were updated alongside this record.
+
+| Validation | Observed Result |
+| --- | --- |
+| Focused frontend suite below | Passed: 11 files / 81 tests covering conversions/restoration, reusable editing, draft/history, URLs/defaults, series/local filtering and result lifecycle. |
+| `node node_modules/vitest/vitest.mjs run supabase/tests/canonical-tags.test.ts supabase/tests/library-query.test.ts` | Passed: 2 files / 66 tests against the full embedded migration chain, including matching/count/pagination, alias rules, cache separation, authors, series and automatic collections. |
+| `node node_modules/@playwright/test/cli.js test tests/e2e/tag-filters.spec.ts --workers=1` | Passed: all 6 desktop/mobile cases with normal timeouts, including long fandoms, eight editing groups, Escape/focus, Apply, reload and exclusion of blank groups from the URL. |
+| `npm run build` | Passed: TypeScript and production Vite build; existing large-chunk warning remains. |
+| `npm run lint` | Passed for the full repository with zero warnings. |
+| `npm run test:offline` | Passed: production build plus both retained/cold-start browser checks. |
+| `npm run perf:db` | Passed: existing 10,000-work-per-owner, three-owner synthetic benchmark and count/page checks. |
+| `git diff --check` | Passed. |
+
+Focused frontend command (the Node 25 experimental browser-storage globals were disabled for worker processes):
+
+```sh
+NODE_OPTIONS=--no-experimental-webstorage node node_modules/vitest/vitest.mjs run \
+  src/features/library/tags/tag-expressions.test.ts \
+  src/features/library/tags/TagGroupEditor.test.tsx \
+  src/features/library/ReadingFilterControls.test.tsx \
+  src/features/library/series/series-search.test.ts \
+  src/features/library/browsing \
+  src/features/library/ReadingDashboard.test.tsx \
+  src/features/library/useLibraryResults.test.ts --maxWorkers 2
+```
+
+Initial validation attempts encountered slow dependency reads, an actual `ETIMEDOUT` reading jsdom, worker startup timeouts and browser navigation timeouts. An extended-timeout browser diagnostic passed five cases but still timed out on its initial navigation; it is not the passing browser gate above. After dependency initialization and the test-only Node storage setting, the focused frontend suite and normal-timeout browser rerun passed. No product timeout, test budget or dependency was changed to obtain those passes. Local browser server binding required execution outside the filesystem sandbox.
+
+The ignored `artifacts/performance/library.json` was regenerated. Observed page/RPC times were 63 ms unfiltered, 1,506 / 53 ms cold/cached Fandom Any, 5,366 ms cold Additional Tags All, 6,100 / 23 ms cold/cached Additional Tags Custom, and 124 / 118 ms series first/warm pages. Forced uncached Custom selection remained around 6.0–6.4 seconds; the cached number does not measure a fresh scan. These are single-process PGlite observations and do not establish hosted concurrency, migration refresh cost or production health. No hosted migration, deployment or full-suite release gate was performed in this follow-up.
+
 ## Changed Files And Scope
 
 Runtime changes extend the existing reading matcher, filter labels, browsing/default codecs, draft controls, dashboard navigation, suggestions and shared dropdown styles. `FandomSelect.tsx` extracts the existing selector for reuse by flat and grouped editing; its original export remains available to the reader. `tags/tag-expressions.ts` and `tags/TagFilterControl.tsx` hold shared semantics/controller behavior. `fandoms/crossover-evidence.ts` is a pure, inactive policy module. Only `20261109000200_tag_expressions.sql` is a new migration; no applied SQL, identity schema, production resource or generated type was hand-edited.

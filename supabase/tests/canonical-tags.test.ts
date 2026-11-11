@@ -196,3 +196,31 @@ it('normalizes Unicode edge whitespace and duplicate identities with the same ex
  const groups=(await db.query<{g:string[][]}>("select public.library_tag_expression_groups($1,'fandoms') g",[JSON.stringify(filters)])).rows[0].g
  expect(groups).toEqual((convertTagExpression(tagExpression(filters,'fandoms'),'custom') as {groups:string[][]}).groups)
 })
+
+it('separates cached group structures and preserves legacy defaults in every category', async () => {
+ const selections = [['A','B'],['A','C'],['B'],['C'],['A','B','C','Extra']]
+ for (const [index,tags] of selections.entries()) {
+  await db.query(`update public.library_entries set metadata_overrides=metadata_overrides||$1::jsonb
+   where user_id=auth.uid() and work_id=(select id from public.works where ao3_work_id=$2)`,
+   [JSON.stringify({fandoms:tags,relationship_tags:tags,character_tags:tags,additional_tags:tags}),index+1])
+ }
+ for (const key of ['fandoms','relationship','characters','tags'] as const) {
+  const run = (expression: object) => query({tagExpressions:{[key]:expression}})
+  const first = await run({mode:'custom',groups:[['A','B'],['C']]})
+  const second = await run({mode:'custom',groups:[['A','C'],['B']]})
+  expect(first.total).toBe(4)
+  expect(second.total).toBe(4)
+  expect(first.stories.map(story=>story.id).sort()).not.toEqual(second.stories.map(story=>story.id).sort())
+  expect((await run({mode:'custom',groups:[['C'],['B','A'],[]]})).stories.map(story=>story.id).sort()).toEqual(first.stories.map(story=>story.id).sort())
+  expect((await run({mode:'any',tags:['A','B']})).total).toBe(4)
+  expect((await run({mode:'all',tags:['A','B']})).total).toBe(2)
+  const legacy = await query({[key]:key==='fandoms'?['A','B']:'A, B'})
+  const explicit = await run({mode:key==='fandoms'?'any':'all',tags:['A','B']})
+  expect(legacy.stories.map(story=>story.id)).toEqual(explicit.stories.map(story=>story.id))
+  expect((await run({mode:'custom',groups:[[],[]]})).total).toBe(5)
+ }
+ // Different categories remain conjunctive, including Custom on a hidden UI mode.
+ expect((await query({tagExpressions:{fandoms:{mode:'all',tags:['A','B']},characters:{mode:'custom',groups:[['C']]}}})).total).toBe(1)
+ await db.exec(`set request.jwt.claim.sub='${bob}'`)
+ expect((await query({tagExpressions:{fandoms:{mode:'custom',groups:[['A','B'],['C']]}}})).total).toBe(0)
+})

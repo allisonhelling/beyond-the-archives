@@ -536,7 +536,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3
 .automatic-collection-filters li { border: 1px solid var(--color-border); padding: 4px 8px; font-size: 13px; background: var(--color-brand-soft); overflow-wrap: anywhere; }
 
 .tab-mobile-label { display: none; }
-.import-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 24px; border: 1px solid var(--color-brand); }
-.import-tabs .button { border-radius: 0; border: 0; border-inline-end: 1px solid var(--color-border); height: 100%; }
-.import-tabs .button:last-child { border-inline-end: 0; }
+.tab-bar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin-bottom: var(--tab-bar-margin-bottom, 24px); border: 1px solid var(--color-brand); }
+.section-tabs.tab-bar .button { border-radius: 0; border: 0; border-inline-end: 1px solid var(--color-border); height: 100%; min-height: var(--tab-bar-min-height, 44px); padding-block: var(--tab-bar-padding-block, 12px); }
+.section-tabs.tab-bar .button:last-child { border-inline-end: 0; }
 @media (max-width: 900px) { .tab-desktop-label { display: none; } .tab-mobile-label { display: inline; } }

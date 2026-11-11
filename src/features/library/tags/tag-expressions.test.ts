@@ -8,6 +8,17 @@ import { readingFilterLabels, removeReadingFilter, readingFilterTags } from '../
 beforeEach(() => { const storage = new Map<string,string>(); vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key,value) }) })
 afterEach(() => vi.unstubAllGlobals())
 const custom: TagExpression = { mode: 'custom', groups: [['A','B'],['C']] }
+it.each([
+ [{mode:'any',tags:['A','B','C']},'all',{mode:'all',tags:['A','B','C']}],
+ [{mode:'all',tags:['A','B','C']},'any',{mode:'any',tags:['A','B','C']}],
+ [custom,'all',{mode:'all',tags:['A','B','C']}],
+ [{mode:'any',tags:[]},'custom',{mode:'custom',groups:[]}],
+ [{mode:'all',tags:[]},'custom',{mode:'custom',groups:[]}],
+ [{mode:'any',tags:['A']},'custom',{mode:'custom',groups:[['A']]}],
+ [{mode:'all',tags:['A']},'custom',{mode:'custom',groups:[['A']]}],
+] as const)('converts %j to %s without an independent selection', (expression, mode, expected) => {
+ expect(convertTagExpression(expression as TagExpression,mode)).toEqual(expected)
+})
 it('converts the current selection in stable order and preserves equivalent Any/All to Custom results', () => {
  for (const mode of ['any','all'] as const) {
   const original = { mode, tags: ['A','B'] }, converted = convertTagExpression(original,'custom')

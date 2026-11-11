@@ -89,7 +89,7 @@ export function ImportPage() {
  </section>
  </>
  return <div className="mass-import-page"><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Choose work links, an AO3 library sync, CSV files, or Calibre Bookfusion links.</p></div></div>
- <TabList tabs={importTabs} active={activeTab} onChange={setActiveTab} label="Mass Import Sections" prefix="imports" className="import-tabs" />
+ <TabList tabs={importTabs} active={activeTab} onChange={setActiveTab} label="Mass Import Sections" prefix="imports" className="import-tabs tab-bar" />
  {importTabs.map(tab => <section key={tab.id} role="tabpanel" id={`imports-panel-${tab.id}`} aria-labelledby={`imports-tab-${tab.id}`} hidden={activeTab !== tab.id} tabIndex={0}>
   {tab.id === 'bookfusion' && <BookFusionImport />}
   {tab.id !== 'bookfusion' && <DesktopRetrievalGate>
