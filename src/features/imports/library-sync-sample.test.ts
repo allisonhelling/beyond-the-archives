@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 const extension = vi.hoisted(() => ({ connect: vi.fn(), series: vi.fn() }))
-vi.mock('./extension', () => ({ connectExtension: extension.connect, previewSeriesWithExtension: extension.series }))
+vi.mock('./extension', () => ({ connectExtension: extension.connect, requireDesktopExtension: async () => {}, previewSeriesWithExtension: extension.series }))
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/sample-mode', () => ({ sampleMode: true }))
 vi.mock('../../lib/supabase', () => ({ supabase: { rpc } }))

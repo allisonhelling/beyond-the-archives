@@ -1,3 +1,4 @@
+vi.mock('../../imports/useDesktopCompanion', () => ({ useDesktopCompanion: () => ({ connected: true, checking: false, reconnect: () => {} }) }))
 import { SeriesSummaryContext } from './series-summary-context'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'

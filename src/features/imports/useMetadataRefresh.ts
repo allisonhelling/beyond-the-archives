@@ -16,7 +16,7 @@ function jobFeedback(job: Job): Feedback {
     case 'pending': return { status: 'pending', busy: true, message: job.retrieval_mode === 'extension'
       ? (job.error_message || 'Waiting for the browser extension. Connect it in Settings.') : job.error_message
       ? `Metadata refresh waiting to retry: ${job.error_message} Next eligible: ${formatDateTime(job.next_attempt_at)}.`
-      : 'Metadata refresh queued. Waiting for the worker.' }
+      : 'Metadata refresh queued. Waiting for the desktop companion.' }
     case 'processing': return { status: 'processing', busy: true, message: job.retrieval_mode === 'extension' ? (job.error_message || 'Waiting for the browser extension to load the requested AO3 work…') : 'Refreshing metadata from AO3…' }
     case 'completed': return job.error_category
       ? { status: 'partial', busy: false, message: `Metadata partially refreshed. ${job.error_message || 'Some metadata could not be retrieved. See import history for details.'}` }
@@ -102,7 +102,7 @@ export function useMetadataRefresh(story: Story | undefined, importBatchId?: str
       const batchId = await submitImport(story.original_url, false)
       if (version !== generation.current) return
       if (!batchId) throw new Error('Could not confirm the metadata refresh. Check import history before trying again.')
-      setFeedback({ entryId: story.id, status: 'pending', busy: true, message: 'Metadata refresh queued. Waiting for the worker.' })
+      setFeedback({ entryId: story.id, status: 'pending', busy: true, message: 'Metadata refresh queued. Waiting for the desktop companion.' })
       setRequest({ entryId: story.id, batchId })
     } catch (error) {
       if (version !== generation.current) return

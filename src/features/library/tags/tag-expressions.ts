@@ -1,4 +1,4 @@
-import { normalizeTag } from './tag-resolution'
+import { normalizeSearchText as normalizeTag } from '../../../lib/search-text'
 
 export const tagFilterConfig = {
   fandoms: { label: 'Fandoms', defaultMode: 'any', modes: ['any', 'all', 'custom'] },

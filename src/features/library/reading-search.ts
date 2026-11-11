@@ -136,10 +136,12 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&
       (!filters.personalNotes || Boolean(s.notes?.trim())) && (!filters.recs || s.is_rec) &&
       (!filters.personalRating?.length || (s.personalRatings?.length ? s.personalRatings : [s.personal_rating ?? null]).some(rating => filters.personalRating.includes(rating === null ? 'unrated' : String(rating)))) &&
-      matchesTagExpression(expressions.relationship, term => tagMatches(tagNames(s.metadata, 'relationship'), normalize(term), 'relationship', filters.tagAliases)) &&
-      matchesTagExpression(expressions.characters, term => tagMatches(tagNames(s.metadata, 'character'), normalize(term), 'character', filters.tagAliases)) &&
+      // This effective-metadata path accepts AO3 records/owner corrections only.
+      // A future provider must establish mapping authority before entering it.
+      matchesTagExpression(expressions.relationship, term => tagMatches(tagNames(s.metadata, 'relationship'), normalize(term), 'relationship', filters.tagAliases, 'ao3')) &&
+      matchesTagExpression(expressions.characters, term => tagMatches(tagNames(s.metadata, 'character'), normalize(term), 'character', filters.tagAliases, 'ao3')) &&
       personalTags.every(term => s.personalTags.some(tag => normalize(tag).includes(term))) &&
-      matchesTagExpression(expressions.tags, term => tagMatches(tagNames(s.metadata, 'freeform'), normalize(term), 'freeform', filters.tagAliases)) &&
+      matchesTagExpression(expressions.tags, term => tagMatches(tagNames(s.metadata, 'freeform'), normalize(term), 'freeform', filters.tagAliases, 'ao3')) &&
       (after === null || (updated !== null && updated >= after)) &&
       (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))
   }).sort((a, b) => {

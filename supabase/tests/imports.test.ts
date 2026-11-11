@@ -9,7 +9,7 @@ type Claim={id:string;token:string;workId:number;attempt:number}
 async function asUser<T>(id:string,fn:()=>Promise<T>) {await db.exec(`set role authenticated; set request.jwt.claim.sub='${id}'`);try{return await fn()}finally{await db.exec('reset role; reset request.jwt.claim.sub')}}
 async function submit(urls:string[],owner=alice,updateReadingLocation=false,readingStatus:string|null=null,seriesIds:number[]=[]) {return asUser(owner,async()=>(await db.query<{id:string}>('select public.submit_import_urls($1::text[],$2,$3::public.reading_status,$4::bigint[]) id',[urls,updateReadingLocation,readingStatus,seriesIds])).rows[0].id)}
 async function ready() {await db.exec("update public.metadata_worker_state set next_request_at=now()-interval '1 second',paused_until=null;update public.metadata_jobs set next_attempt_at=now()-interval '1 second' where status='pending'")}
-async function claim() {return (await db.query<{job:Claim|null}>('select public.claim_metadata_job() job')).rows[0].job}
+async function claim() { const job=await claimExtension(); return job ? {...job,attempt:(await db.query<{attempts:number}>('select attempts from public.metadata_jobs where id=$1',[job.id])).rows[0].attempts} : null }
 async function finish(j:Claim,metadata:object|null={title:'Automatic',authors:['One','Two'],author_links:{One:'https://archiveofourown.org/users/One'},fandoms:['F'],relationship_tags:['A/B'],published_chapters:6},chapters:object={'1':'910','2':'920','6':'960'},category:string|null=null,retry=false,pause=0) {return (await db.query<{ok:boolean}>('select public.finish_metadata_job($1,$2,$3,$4,$5,$6,$7,$8) ok',[j.id,j.token,metadata===null?null:JSON.stringify(metadata),JSON.stringify(chapters),category,category,retry,pause])).rows[0].ok}
 async function clearJobs() {await db.exec('delete from public.import_batches; update public.metadata_worker_state set next_request_at=now(),paused_until=null')}
 beforeAll(async()=>{db=await createTestDatabase();await db.exec(`insert into auth.users values('${alice}'),('${bob}')`)},30000)
@@ -23,8 +23,7 @@ it('tracks every AO3 submission in a 100+ batch, ignores unrelated hosts, saves 
  expect(await finish(j)).toBe(true)
  const row=(await db.query('select last_read_chapter,reading_status,metadata_overrides,original_url from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=1000')).rows[0]
  expect(row).toMatchObject({last_read_chapter:5,reading_status:'reading',metadata_overrides:{},original_url:'https://archiveofourown.org/works/1000'})
- expect((await db.query('select * from public.authors')).rows).toHaveLength(2)
- expect((await db.query('select * from public.work_tags')).rows).toHaveLength(1)
+ expect((await db.query('select extension_metadata from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=1000')).rows[0]).toMatchObject({extension_metadata:{authors:['One','Two'],relationship_tags:['A/B']}})
  expect((await db.query('select total_chapters from public.works where ao3_work_id=1000')).rows[0]).toEqual({total_chapters:null})
  expect(await finish(j)).toBe(false);await clearJobs()
 })
@@ -69,17 +68,6 @@ it('cancels processing and pending jobs without deleting saved works or acceptin
  expect((await db.query('select * from public.library_entries e join public.works w on w.id=e.work_id where ao3_work_id in (4000,4001)')).rows).toHaveLength(2)
  await clearJobs()
 })
-it('backs off transient failures, caps attempts, refuses permanent retries and pauses all retrieval on blocking signals',async()=>{
- await submit(['https://archiveofourown.org/works/5000','https://archiveofourown.org/works/5001'])
- const j=(await claim())!;await finish(j,null,{},'rate_limited',true,3600)
- expect(await claim()).toBeNull()
- await asUser(alice,()=>db.query('select public.retry_metadata_job($1)',[j.id]));expect(await claim()).toBeNull()
- await ready();const second=(await claim())!;await finish(second,null,{},'unavailable')
- await asUser(alice,()=>expect(db.query('select public.retry_metadata_job($1)',[second.id])).rejects.toThrow('Retry unavailable'))
- for(let attempt=2;attempt<=4;attempt++) {await ready();const next=(await claim())!;expect(next.attempt).toBe(attempt);await finish(next,null,{},'timeout',true);if(attempt<4){expect(await claim()).toBeNull();expect((await db.query<{delay:number}>('select extract(epoch from next_attempt_at-now())::integer delay from public.metadata_jobs where id=$1',[next.id])).rows[0].delay).toBeGreaterThanOrEqual(30)}}
- expect((await db.query('select status,retryable,attempts from public.metadata_jobs where id=$1',[j.id])).rows[0]).toEqual({status:'failed',retryable:false,attempts:4})
- await clearJobs()
-})
 it('rejects anonymous access, isolates all private import tables and restricts worker operations',async()=>{
  const batch=await submit(['https://archiveofourown.org/works/6000'])
  const job=(await claim())!
@@ -99,7 +87,7 @@ it('retains valid metadata on partial retrieval and permits collection URL edits
  await submit(['https://archiveofourown.org/collections/test/works/7000'])
  let job=(await claim())!;await finish(job,{title:'Full metadata',summary:'Keep this',published_chapters:6,total_chapters:6})
  await clearJobs();await submit(['https://archiveofourown.org/works/7000']);job=(await claim())!;await finish(job,{title:'Partial metadata'}, {}, 'partial')
- expect((await db.query('select title,summary,published_chapters,total_chapters from public.works where ao3_work_id=7000')).rows[0]).toEqual({title:'Partial metadata',summary:'Keep this',published_chapters:6,total_chapters:6})
+ expect((await db.query('select extension_metadata from public.library_entries e join public.works w on w.id=e.work_id where ao3_work_id=7000')).rows[0]).toMatchObject({extension_metadata:{title:'Partial metadata',summary:'Keep this',published_chapters:6,total_chapters:6}})
  const entry=(await db.query<{id:string}>('select e.id from public.library_entries e join public.works w on w.id=e.work_id where ao3_work_id=7000')).rows[0].id
  await asUser(alice,()=>db.query("select public.save_library_story($1,$2,'to_read',0,'',null,false,'{}','{}',$3)",[ 'https://archiveofourown.org/collections/test/works/7000', JSON.stringify({title:'My correction'}), entry ]))
  await asUser(alice,()=>db.query("select public.save_library_story($1,$2,'to_read',0,'Private reading update',null,false,'{}','{}',$3)",[ 'https://archiveofourown.org/works/7000', JSON.stringify({summary:'Only this field changed'}), entry ]))
@@ -107,12 +95,12 @@ it('retains valid metadata on partial retrieval and permits collection URL edits
  await asUser(alice,()=>db.query("select public.save_library_story($1,'{}','reading',1,'Notes only',null,false,'{}','{}',$2)",[ 'https://archiveofourown.org/works/7000', entry ]))
  await clearJobs()
 })
-it('makes worker interruption at the attempt limit terminal and prevents unauthorized retry or progress inference',async()=>{
+it('makes extension interruption at the attempt limit terminal and prevents unauthorized retry or progress inference',async()=>{
  await submit(['https://archiveofourown.org/works/8000/chapters/123456'])
  const job=(await claim())!
  await db.query("update public.metadata_jobs set attempts=4,lease_until=now()-interval '1 second' where id=$1",[job.id]);await ready()
  expect(await claim()).toBeNull()
- expect((await db.query('select status,retryable,error_category from public.metadata_jobs')).rows[0]).toEqual({status:'failed',retryable:false,error_category:'worker_interrupted'})
+ expect((await db.query('select status,retryable,error_category from public.metadata_jobs')).rows[0]).toEqual({status:'failed',retryable:false,error_category:'extension_error'})
  const item=(await db.query<{id:string}>('select id from public.import_items')).rows[0].id
  await asUser(alice,()=>expect(db.query('select public.approve_import_progress($1)',[item])).rejects.toThrow('Verified chapter unavailable'))
  await clearJobs()
@@ -122,11 +110,11 @@ it('preserves AO3 tag order across metadata refreshes independently of tag ident
  await submit(['https://archiveofourown.org/works/9000'])
  let job=(await claim())!
  await finish(job,{title:'Ordered tags',additional_tags:['Zulu tag','Alpha tag','Middle tag']},{})
- const ordered=async()=>db.query<{name:string;source_position:number}>(`select t.name,wt.source_position from public.work_tags wt join public.tags t on t.id=wt.tag_id join public.works w on w.id=wt.work_id where w.ao3_work_id=9000 and t.category='freeform' order by wt.source_position,wt.tag_id`)
- expect((await ordered()).rows.map(row=>row.name)).toEqual(['Zulu tag','Alpha tag','Middle tag'])
+ const ordered=async()=>(await db.query<{extension_metadata:{additional_tags:string[]}}>('select extension_metadata from public.library_entries e join public.works w on w.id=e.work_id where ao3_work_id=9000')).rows[0].extension_metadata.additional_tags
+ expect(await ordered()).toEqual(['Zulu tag','Alpha tag','Middle tag'])
  await clearJobs();await submit(['https://archiveofourown.org/works/9000']);job=(await claim())!
  await finish(job,{title:'Ordered tags',additional_tags:['Middle tag','Zulu tag','Alpha tag']},{})
- expect((await ordered()).rows).toEqual([{name:'Middle tag',source_position:1},{name:'Zulu tag',source_position:2},{name:'Alpha tag',source_position:3}])
+ expect(await ordered()).toEqual(['Middle tag','Zulu tag','Alpha tag'])
  await clearJobs()
 })
 
@@ -134,33 +122,20 @@ async function extensionMode(owner=alice) {
  await asUser(owner,()=>db.query("insert into public.metadata_preferences(user_id,retrieval_mode) values($1,'extension') on conflict(user_id) do update set retrieval_mode='extension'",[owner]))
 }
 async function claimExtension(owner=alice) { return asUser(owner,async()=>(await db.query<{job:Claim|null}>('select public.claim_extension_job() job')).rows[0].job) }
-it('snapshots independent mobile and desktop retrieval choices and preserves legacy inheritance', async () => {
+it('ignores legacy desktop/mobile choices and rejects hosted claims',async()=>{
  await clearJobs(); await db.exec('delete from public.metadata_preferences')
- await asUser(alice, () => db.query("insert into public.metadata_preferences(user_id,retrieval_mode,retrieval_mode_mobile) values($1,'extension','direct')", [alice]))
- const mode = async (batch: string) => (await db.query<{retrieval_mode:string}>('select retrieval_mode from public.metadata_jobs where batch_id=$1', [batch])).rows[0].retrieval_mode
- try {
-  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-client-info': 'supabase-js-web/test ao3-library/mobile' })])
-  const mobile = await submit(['https://archiveofourown.org/works/97001'])
-  expect(await mode(mobile)).toBe('direct')
-  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-client-info': 'supabase-js-web/test ao3-library/desktop' })])
-  const desktop = await submit(['https://archiveofourown.org/works/97002'])
-  expect(await mode(desktop)).toBe('extension')
-  await asUser(alice, () => db.exec("update public.metadata_preferences set retrieval_mode='direct',retrieval_mode_mobile='extension'"))
-  expect(await mode(desktop)).toBe('extension')
-  expect(await mode(mobile)).toBe('direct')
-  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-client-info': 'ao3-library/mobile' })])
-  expect(await mode(await submit(['https://archiveofourown.org/works/97003']))).toBe('extension')
-  expect(await mode(await submit(['https://archiveofourown.org/works/97004'], bob))).toBe('direct')
-  await asUser(alice, () => db.exec('update public.metadata_preferences set retrieval_mode_mobile=null'))
-  expect(await mode(await submit(['https://archiveofourown.org/works/97005']))).toBe('direct')
-  await db.exec('reset request.headers')
-  expect(await mode(await submit(['https://archiveofourown.org/works/97006']))).toBe('direct')
- } finally { await db.exec('reset request.headers'); await clearJobs(); await db.exec('delete from public.metadata_preferences') }
+ await asUser(alice,()=>db.query("insert into public.metadata_preferences(user_id,retrieval_mode,retrieval_mode_mobile) values($1,'direct','direct')",[alice]))
+ await db.exec(`set request.headers='{"x-client-info":"ao3-library/mobile"}'`)
+ await submit(['https://archiveofourown.org/works/97001'])
+ expect((await db.query('select retrieval_mode from public.metadata_jobs')).rows).toEqual([{retrieval_mode:'extension'}])
+ expect((await db.query('select public.claim_metadata_job() job')).rows[0]).toEqual({job:null})
+ expect((await db.query('select retrieval_mode,retrieval_mode_mobile from public.metadata_preferences')).rows[0]).toEqual({retrieval_mode:'extension',retrieval_mode_mobile:null})
+ await db.exec('reset request.headers'); await clearJobs();await db.exec('delete from public.metadata_preferences')
 })
 it('routes explicitly submitted extension jobs separately, snapshots mode, and isolates claims by owner',async()=>{
  await extensionMode()
  const batch=await submit(['https://archiveofourown.org/works/9100'])
- expect(await claim()).toBeNull()
+ expect((await db.query('select public.claim_metadata_job() job')).rows[0]).toEqual({job:null})
  expect(await claimExtension(bob)).toBeNull()
  await asUser(bob,async()=>{
   expect((await db.query('select * from public.metadata_preferences')).rows).toHaveLength(0)
@@ -171,7 +146,7 @@ it('routes explicitly submitted extension jobs separately, snapshots mode, and i
  expect(browser.workId).toBe(9100)
  expect(await claimExtension()).toBeNull()
  await submit(['https://archiveofourown.org/works/9101'],bob);await ready()
- const direct=(await claim())!;expect(direct.workId).toBe(9101)
+ const direct=(await claimExtension(bob))!;expect(direct.workId).toBe(9101)
  await finish(direct)
  await asUser(alice,()=>db.query('select public.cancel_import_batch($1)',[batch]))
  expect(await finish(browser)).toBe(false)
@@ -252,7 +227,7 @@ it('requires explicit retry after browser confirmation timeout and fences expire
  await clearJobs();await db.exec('delete from public.metadata_preferences')
 })
 
-it.each(['direct','extension'])('updates existing reading locations only for explicit verified chapter imports: %s',async mode=>{
+it.each(['extension'])('updates existing reading locations only for explicit verified chapter imports: %s',async mode=>{
  if(mode==='extension') await extensionMode()
  const claimJob=async()=>mode==='extension' ? claimExtension() : claim()
  const base=mode==='extension' ? 9800 : 9700
@@ -290,26 +265,6 @@ it.each(['direct','extension'])('updates existing reading locations only for exp
  await db.exec('delete from public.metadata_preferences')
 })
 
-it('paces series previews with hosted jobs and restricts reservations to the service role',async()=>{
- await clearJobs()
- await asUser(alice,async()=>{await expect(db.query('select public.reserve_series_preview()')).rejects.toThrow(/permission denied/)})
- const reserve=async()=> (await db.query<{ok:boolean}>('select public.reserve_series_preview() ok')).rows[0].ok
- expect(await reserve()).toBe(true)
- expect(await reserve()).toBe(false)
- await submit(['https://archiveofourown.org/works/998877'])
- expect(await claim()).toBeNull()
- await ready()
- const j=(await claim())!
- expect(await reserve()).toBe(false)
- await finish(j)
- await clearJobs()
- await db.query("select public.pause_series_preview(3600,'rate_limited')")
- expect(await reserve()).toBe(false)
- await db.query("select public.pause_series_preview(30,'shorter_pause')")
- expect((await db.query<{ok:boolean}>("select paused_until>now()+interval '59 minutes' ok from public.metadata_worker_state")).rows[0].ok).toBe(true)
- await clearJobs()
-})
-
 it('persists every explicit reading status through chapter metadata and scopes series changes to the owner',async()=>{
  await clearJobs()
  const preview={seriesId:8088,normalizedUrl:'https://archiveofourown.org/series/8088',title:'Status import',works:[]}
@@ -337,7 +292,7 @@ it('keeps edits made after an explicit import status was selected',async()=>{
  expect((await asUser(alice,()=>db.query('select reading_status from public.library_entries e join public.works w on e.work_id=w.id where w.ao3_work_id=88999'))).rows).toEqual([{reading_status:'did_not_finish'}])
 })
 
-it('rebuilds each affected document once when imports share common tags and fandoms',async()=>{
+it('rebuilds only the owning account document once for private extension metadata',async()=>{
  await clearJobs()
  await db.exec(`create table public.document_rebuild_audit(id uuid);
  create table public.entity_update_audit(kind text);
@@ -356,12 +311,12 @@ it('rebuilds each affected document once when imports share common tags and fand
    expect(job.workId).toBe(work)
    await db.exec('truncate public.document_rebuild_audit,public.entity_update_audit')
    if(i===0) {
-    await expect(finish(job,[])).rejects.toThrow('Invalid adapter result')
+    await expect(finish(job,[])).rejects.toThrow(/Invalid .*result/)
     expect((await db.query('select * from public.document_rebuild_audit')).rows).toEqual([])
    }
    expect(await finish(job,{title:`Shared metadata ${i}`,summary:'Final summary',authors:['Common author'],fandoms:['Common fandom'],relationship_tags:['Common A/B'],character_tags:['Common A'],additional_tags:['Common tag','Another tag'],published_chapters:6,total_chapters:6,is_complete:true})).toBe(true)
    const changed=(await db.query<{id:string;count:number}>('select id,count(*)::integer count from public.document_rebuild_audit group by id')).rows
-   const expected=(await db.query<{id:string}>('select id from public.library_entries where work_id=(select id from public.works where ao3_work_id=$1)',[work])).rows.map(row=>row.id)
+   const expected=(await db.query<{id:string}>('select id from public.library_entries where user_id=\'10000000-0000-0000-0000-000000000001\' and work_id=(select id from public.works where ao3_work_id=$1)',[work])).rows.map(row=>row.id)
    expect(changed.map(row=>row.id).sort()).toEqual(expected.sort())
    expect(changed.every(row=>row.count===1)).toBe(true)
    expect((await db.query('select * from public.entity_update_audit')).rows).toEqual([])
@@ -377,7 +332,7 @@ it('rebuilds each affected document once when imports share common tags and fand
   await db.exec("truncate public.document_rebuild_audit; update public.tags set name=name where name='Common tag'; update public.fandoms set name=name where name='Common fandom'")
   expect((await db.query('select * from public.document_rebuild_audit')).rows).toEqual([])
   await db.exec("update public.tags set name='Renamed common tag' where name='Common tag'")
-  expect((await db.query('select * from public.document_rebuild_audit')).rows).toHaveLength(16)
+  expect((await db.query('select * from public.document_rebuild_audit')).rows).toHaveLength(0)
   await extensionMode()
   await submit(['https://archiveofourown.org/works/89000'])
   const browser=(await claimExtension())!
@@ -400,14 +355,14 @@ it('persists zero and updated kudos in automatic metadata, preserves missing cou
  for (const kudos of [0, 1234, undefined]) {
   await ready(); await submit([url]); const job = (await claim())!
   expect(await finish(job, { title: 'Kudos fic', published_chapters: 6, ...(kudos !== undefined && { kudos }) })).toBe(true)
-  expect((await db.query<{ count: number }>("select (automatic_metadata->>'kudos')::integer as count from public.works where ao3_work_id=987652")).rows[0].count).toBe(kudos === 0 ? 0 : 1234)
+  expect((await db.query<{ count: number }>("select (extension_metadata->>'kudos')::integer as count from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=987652")).rows[0].count).toBe(kudos === 0 ? 0 : 1234)
   await clearJobs()
  }
  const details = await asUser(alice, () => db.query<{ count: number }>("select (public.library_story_details(array[e.id])->0->'metadata'->>'kudos')::integer as count from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=987652"))
  expect(details.rows[0].count).toBe(1234)
  await ready(); await submit([url]); const job = (await claim())!
  await expect(finish(job, { title: 'Bad', kudos: -1 })).rejects.toThrow(/Invalid kudos/)
- expect((await db.query<{ count: number }>("select (automatic_metadata->>'kudos')::integer as count from public.works where ao3_work_id=987652")).rows[0].count).toBe(1234)
+ expect((await db.query<{ count: number }>("select (extension_metadata->>'kudos')::integer as count from public.library_entries e join public.works w on w.id=e.work_id where w.ao3_work_id=987652")).rows[0].count).toBe(1234)
  await clearJobs()
 })
 

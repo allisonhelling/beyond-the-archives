@@ -4,7 +4,7 @@ import { localExtensionId } from './extension-config'
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 
-type ExtensionReply = { state?: LibrarySyncState | null; rows?: Record<string, string>[]; ok?: boolean; page?: { url: string; html: string }; error?: string }
+type ExtensionReply = { state?: LibrarySyncState | null; rows?: Record<string, string>[]; ok?: boolean; page?: { url: string; html: string }; error?: string; capabilities?: string[] }
 type ExtensionRuntime = {
  lastError?: { message?: string }
  sendMessage(id: string, message: object, callback: (reply?: ExtensionReply) => void): void
@@ -21,23 +21,44 @@ export function setExtensionId(id: string) {
  if (!/^[a-p]{32}$/.test(id)) throw new Error('Enter the 32-letter extension ID from your browser’s Extensions page.')
  window.localStorage.setItem('ao3-library-extension-id', id)
 }
-function message(payload: object): Promise<boolean> {
+function message(payload: object, capability?: string): Promise<boolean> {
  const api = runtime(), id = extensionId()
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) return Promise.resolve(false)
  return new Promise(resolve => {
   const timer = setTimeout(() => resolve(false), 25000)
-  try { api.sendMessage(id, payload, reply => { clearTimeout(timer); resolve(!api.lastError && reply?.ok === true) }) }
+  try { api.sendMessage(id, payload, reply => { clearTimeout(timer); resolve(!api.lastError && reply?.ok === true && (!capability || reply.capabilities?.includes(capability) === true)) }) }
   catch { clearTimeout(timer); resolve(false) }
  })
 }
-export async function connectExtension(session?: Session): Promise<boolean> {
+export const desktopExtensionHelp = 'Automatic retrieval requires the compatible, connected Chrome/Edge desktop companion. On mobile, open an AO3 work and save it with the mobile companion, or add metadata manually. Saved library entries and Import History remain available.'
+export function desktopExtensionAvailable() {
+ return message({ type: 'AO3_LIBRARY_CAPABILITIES' }, 'metadata-retrieval-v1')
+}
+export async function requireDesktopExtension() {
+ if (!await connectExtension()) throw new Error(desktopExtensionHelp)
+}
+let connecting: Promise<boolean> | undefined
+let connectionGeneration = 0
+export function connectExtension(session?: Session): Promise<boolean> {
+ if (!connecting) {
+  const pending = connectDesktopExtension(session, connectionGeneration).finally(() => { if (connecting === pending) connecting = undefined })
+  connecting = pending
+ }
+ return connecting
+}
+async function connectDesktopExtension(session: Session | undefined, generation: number): Promise<boolean> {
+ if (!await desktopExtensionAvailable() || generation !== connectionGeneration) return false
  if (sampleMode) return isLocalApp() && message({ type: 'AO3_LIBRARY_SAMPLE_CONNECT' })
  if (!extensionId() || !supabase) return false
  const current = session ?? (await supabase.auth.getSession()).data.session
- if (!current?.expires_at) return false
+ if (!current?.expires_at || generation !== connectionGeneration) return false
  return message({ type: 'AO3_LIBRARY_CONNECT', token: current.access_token, expiresAt: current.expires_at })
 }
-export function disconnectExtension() { return message({ type: 'AO3_LIBRARY_DISCONNECT' }) }
+export function disconnectExtension() {
+ connectionGeneration += 1
+ connecting = undefined
+ return message({ type: 'AO3_LIBRARY_DISCONNECT' })
+}
 
 function previewPageWithExtension(url: string, type: 'AO3_LIBRARY_PREVIEW_SERIES' | 'AO3_LIBRARY_CAPTURE_WORK'): Promise<{ url: string; html: string }> {
  const api = runtime(), id = extensionId()

@@ -1,12 +1,10 @@
 import { readBoundedBody } from './read-body.ts'
 import { seriesPageUrl } from '../../src/features/imports/urls.ts'
-import { parseSeries, retrieveSeries } from './series.ts'
+import { parseSeries } from './series.ts'
 
 type Dependencies = {
  authenticate(token: string): Promise<boolean>
- reserve(): Promise<boolean>
- pause(seconds: number, reason: string): Promise<void>
- retrieve?: typeof retrieveSeries
+
 }
 /** Previews do not write works, entries, notes, or reading progress. */
 export function seriesHandler(deps: Dependencies) {
@@ -27,14 +25,7 @@ export function seriesHandler(deps: Dependencies) {
     if (typeof input.html !== 'string') return reply({ error: 'Invalid snapshot.' }, 400)
     return reply({ preview: parseSeries(input.html, url) })
    }
-   if (!await deps.reserve()) return reply({ error: 'AO3 retrieval is busy or paused. Retry this series shortly, or skip it and continue.' }, 429)
-   const result = await (deps.retrieve ?? retrieveSeries)(url)
-   if (result.failure) {
-    if (result.failure.pauseSeconds) await deps.pause(result.failure.pauseSeconds, result.failure.category ?? 'series_preview')
-    return reply({ error: 'Could not preview this series. AO3 may require sign-in or be unavailable. Retry later, use the browser extension, or skip this series.' }, 422)
-   }
-   // Match reserve_series_preview’s 35-second hosted retrieval gate.
-   return reply({ preview: result.preview, ...(result.preview?.nextUrl && { nextPageDelayMs: 35_000 }) })
+   return reply({ error: 'A desktop companion snapshot is required. Hosted series retrieval has retired.' }, 410)
   } catch (error) { return reply({ error: error instanceof Error && /Series preview|different series|more pages/.test(error.message) ? error.message : 'Could not preview this series. Retry or skip it to continue.' }, 422) }
  }
 }

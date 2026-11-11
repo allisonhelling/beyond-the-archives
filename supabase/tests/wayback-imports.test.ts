@@ -13,7 +13,7 @@ async function asUser<T>(user: string, action: () => Promise<T>) {
  try { return await action() } finally { await db.exec('reset role;reset request.jwt.claim.sub') }
 }
 async function submit(urls: string[]) { return asUser(alice, async () => (await db.query<{ id: string }>('select public.submit_import_urls($1) id', [urls])).rows[0].id) }
-it('deduplicates live and archived links, preserves source history, and privately commits archived direct metadata', async () => {
+it('deduplicates live and archived links, preserves source history, and privately commits archived extension metadata', async () => {
  const batch = await submit([archived(17199254), 'https://archiveofourown.org/works/17199254'])
  expect((await db.query<{ original_url: string }>('select original_url from public.library_entries')).rows[0].original_url).toBe(archived(17199254))
  expect((await db.query('select original_url from public.import_items where batch_id=$1 order by ordinal', [batch])).rows).toHaveLength(2)
@@ -21,8 +21,10 @@ it('deduplicates live and archived links, preserves source history, and privatel
  expect((await db.query<{story:{metadata:{title:string;publication_status:string}}}>('select story from public.library_search_documents')).rows[0].story.metadata).toMatchObject({title:'AO3 work 17199254',publication_status:'deleted'})
  expect((await db.query('select * from public.metadata_jobs where batch_id=$1', [batch])).rows).toHaveLength(1)
  await db.exec("set role service_role; update public.metadata_worker_state set next_request_at=now()-interval '1 second',paused_until=null")
- const claim = (await db.query<{ job: { id: string; token: string; sourceUrl: string } }>('select public.claim_metadata_job() job')).rows[0].job
+ await db.exec("set role authenticated;set request.jwt.claim.sub='10000000-0000-0000-0000-000000000001'")
+ const claim = (await db.query<{ job: { id: string; token: string; sourceUrl: string } }>('select public.claim_extension_job() job')).rows[0].job
  expect(claim.sourceUrl).toBe(archived(17199254))
+ await db.exec('reset role;reset request.jwt.claim.sub')
  await db.query('select public.finish_metadata_job($1,$2,$3,$4,null,null,false,0)', [claim.id, claim.token, JSON.stringify({ title: 'Archived title', authors: ['Archived author'], published_chapters: 2, total_chapters: 2, is_complete: true }), JSON.stringify({ 1: '101', 2: '102' })])
  await db.exec('reset role')
  expect((await db.query('select title,canonical_url from public.works where ao3_work_id=17199254')).rows[0]).toEqual({ title: null, canonical_url: null })
@@ -38,6 +40,7 @@ it('makes the archived source available to extension claims through the existing
  await asUser(alice, async () => {
   const claim = (await db.query<{ job: { sourceUrl: string } }>('select public.claim_extension_job() job')).rows[0].job
   expect(claim.sourceUrl).toBe(archived(17199255))
+  await db.query("select public.cancel_import_batch(batch_id) from public.metadata_jobs where status='processing'")
  })
 })
 it.each([17199256, 17199257])('supports manual save and deletion undo for archived work %s, including collection-qualified links', async workId => {
@@ -67,7 +70,7 @@ it('preserves current shared metadata and personal overrides when refreshing an 
  await db.query("update public.works set title='Current live title' where ao3_work_id=$1", [workId])
  await submit([archived(workId)])
  await db.exec("set role service_role; update public.metadata_worker_state set next_request_at=now()-interval '1 second',paused_until=null")
- const claim = (await db.query<{ job: { id: string; token: string } }>('select public.claim_metadata_job() job')).rows[0].job
+ const claim = await asUser(alice,async()=>(await db.query<{ job: { id: string; token: string } }>('select public.claim_extension_job() job')).rows[0].job)
  await db.query('select public.finish_metadata_job($1,$2,$3,$4,null,null,false,0)', [claim.id, claim.token, JSON.stringify({ title: 'Historical title', published_chapters: 2 }), '{}'])
  await db.exec('reset role')
  expect((await db.query('select title from public.works where ao3_work_id=$1', [workId])).rows[0]).toEqual({ title: 'Current live title' })

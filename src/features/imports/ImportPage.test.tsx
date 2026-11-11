@@ -1,3 +1,4 @@
+vi.mock('./DesktopRetrievalGate', () => ({ DesktopRetrievalGate: ({ children }: { children: import('react').ReactNode }) => <>{children}</> }))
 import type { Story } from '../library/model'
 vi.mock('../auth/auth-context', () => ({ useAuth: () => ({ session: { user: { id: 'test' } } }) }))
 import { LibrarySyncProvider } from './LibrarySyncProvider'

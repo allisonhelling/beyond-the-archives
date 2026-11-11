@@ -42,7 +42,7 @@ profile('local', localEnv, localEnv.EXTENSION_LOCAL_APP_ORIGIN)
 const defaultId = values.local ? 'local' : 'hosted'
 if (!profiles[defaultId]) throw new Error(`Configure the ${defaultId} public Supabase URL, publishable key, and matching website origin.`)
 const { appOrigin, backend, publicKey } = profiles[defaultId]
-const version = '0.7.7'
+const version = '0.7.8'
 const define = {
  __EXTENSION_ENVIRONMENTS__: JSON.stringify(profiles), __DEFAULT_ENVIRONMENT__: JSON.stringify(defaultId),
  'process.env.NODE_ENV': JSON.stringify('production'),

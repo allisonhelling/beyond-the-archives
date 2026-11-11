@@ -4,7 +4,7 @@ import { readFile, readdir } from 'node:fs/promises'
 // Actual embedded PostgreSQL, with a minimal Supabase Auth contract for local SQL tests.
 // Includes the minimal Storage metadata contract for policy tests, not the
 // Storage HTTP service/blob store, GoTrue, PostgREST, Edge Functions or Docker.
-export async function createTestDatabase() {
+export async function createTestDatabase({ beforeMigration } = {}) {
   const migrations = (await readdir(new URL('../supabase/migrations/', import.meta.url))).filter(name => name.endsWith('.sql')).sort()
   const versions = new Set()
   for (const name of migrations) {
@@ -38,6 +38,7 @@ export async function createTestDatabase() {
     grant select,insert,update,delete on storage.objects to anon,authenticated,service_role;
   `)
   for (const name of migrations) {
+    if (beforeMigration && name >= beforeMigration) break
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
   }
   return db

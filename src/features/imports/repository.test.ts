@@ -1,11 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const {rpc,session,settings,invoke,connect,extensionPreview}=vi.hoisted(()=>({rpc:vi.fn(),session:vi.fn(),settings:vi.fn(),invoke:vi.fn(),connect:vi.fn(),extensionPreview:vi.fn()}))
 vi.mock('../../lib/supabase',()=>({supabase:{rpc,auth:{getSession:session},from:()=>({select:()=>({eq:()=>({maybeSingle:settings})})}),functions:{invoke}}}))
-vi.mock('./extension',()=>({connectExtension:connect,previewSeriesWithExtension:extensionPreview}))
+vi.mock('./extension',()=>({requireDesktopExtension:async()=>{if(!await connect())throw new Error('Connect the extension in Settings before retrieving metadata.')},previewSeriesWithExtension:extensionPreview}))
 vi.mock('../library/repository',()=>({allRows:vi.fn()}))
 import { previewSeries, submitImport } from './repository'
 import { librarySyncReports } from './library-sync-reports'
-beforeEach(()=>{rpc.mockReset();invoke.mockReset();session.mockReset();settings.mockReset();connect.mockReset().mockResolvedValue(true);extensionPreview.mockReset()})
+beforeEach(()=>{rpc.mockReset();invoke.mockReset();session.mockReset();settings.mockReset();connect.mockReset().mockResolvedValue(true);extensionPreview.mockReset().mockImplementation(async (url: string) => ({url,html:'<html></html>'}))})
 it('saves completed sync totals and diagnostics through account storage and reports persistence errors', async () => {
  const state = { id: 'scan', status: 'ready' as const, url: 'https://archiveofourown.org/users/alice/bookmarks', mode: 'full', pages: 117, listPages: 117, count: 2037, skipped: 4, error: '', chapterDateIssues: [{ title: 'Work', sourceUrl: 'https://archiveofourown.org/works/12/navigate', reason: 'Incomplete index' }] }
  rpc.mockResolvedValue({ data: { reports: [], total: 1 }, error: null })
@@ -66,27 +66,21 @@ it('fetches a temporary preview without writing any series metadata', async () =
  const preview = {seriesId:77,normalizedUrl:'https://archiveofourown.org/series/77',title:'Series',works:[]}
  invoke.mockResolvedValue({data:{preview},error:null})
  await expect(previewSeries(preview.normalizedUrl)).resolves.toMatchObject(preview)
- expect(invoke).toHaveBeenCalledWith('series-preview',{body:{url:preview.normalizedUrl}})
+ expect(invoke).toHaveBeenCalledWith('series-preview',{body:{url:preview.normalizedUrl,html:'<html></html>'}})
  expect(rpc).not.toHaveBeenCalled()
 })
 
-it('uses the mobile override for series previews while preserving the desktop extension choice', async () => {
- const width = window.innerWidth
- session.mockResolvedValue({ data: { session: { user: { id: 'reader' } } } })
- settings.mockResolvedValue({ data: { retrieval_mode: 'extension', retrieval_mode_mobile: 'direct' }, error: null })
- const preview = { seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Series', works: [] }
- invoke.mockResolvedValue({ data: { preview }, error: null })
- extensionPreview.mockResolvedValue({ url: preview.normalizedUrl, html: '<html></html>' })
+it('requires the extension at mobile and desktop widths and ignores old preferences', async () => {
+ const width=window.innerWidth
  try {
-  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
-  await previewSeries(preview.normalizedUrl)
-  expect(extensionPreview).not.toHaveBeenCalled()
-  expect(invoke).toHaveBeenLastCalledWith('series-preview', { body: { url: preview.normalizedUrl } })
-  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
-  await previewSeries(preview.normalizedUrl)
-  expect(extensionPreview).toHaveBeenCalledWith(preview.normalizedUrl)
-  expect(invoke).toHaveBeenLastCalledWith('series-preview', { body: { url: preview.normalizedUrl, html: '<html></html>' } })
- } finally { Object.defineProperty(window, 'innerWidth', { configurable: true, value: width }) }
+  for(const size of [390,1440]) {
+   Object.defineProperty(window,'innerWidth',{configurable:true,value:size})
+   connect.mockResolvedValueOnce(false)
+   await expect(previewSeries('https://archiveofourown.org/series/77')).rejects.toThrow('Connect the extension')
+  }
+  expect(invoke).not.toHaveBeenCalled()
+  expect(settings).not.toHaveBeenCalled()
+ } finally {Object.defineProperty(window,'innerWidth',{configurable:true,value:width})}
 })
 
 it('follows every Next link and deduplicates overlapping works before returning the preview', async () => {
@@ -120,27 +114,9 @@ it('can retrieve the series name from one page without following pagination or c
  const preview = await previewSeries(url, { firstPageOnly: true })
  expect(preview).toMatchObject({title:'The named series',basic:true,works:[{workId:101}]})
  expect(preview.nextUrl).toBeUndefined()
- expect(invoke).toHaveBeenCalledExactlyOnceWith('series-preview',{body:{url}})
+ expect(invoke).toHaveBeenCalledExactlyOnceWith('series-preview',{body:{url,html:'<html></html>'}})
  expect(rpc).not.toHaveBeenCalled()
 })
-
-it('respects the hosted retrieval gate between series pages', async () => {
- vi.useFakeTimers()
- try {
-  session.mockResolvedValue({data:{session:{user:{id:'reader'}}}})
-  settings.mockResolvedValue({data:{retrieval_mode:'worker'},error:null})
-  const url = 'https://archiveofourown.org/series/77'
-  invoke.mockResolvedValueOnce({data:{preview:{seriesId:77,works:[],nextUrl:url+'?page=2'},nextPageDelayMs:35_000},error:null})
-   .mockResolvedValueOnce({data:{preview:{seriesId:77,works:[]}},error:null})
-  const result = previewSeries(url)
-  await vi.advanceTimersByTimeAsync(34_999)
-  expect(invoke).toHaveBeenCalledTimes(1)
-  await vi.advanceTimersByTimeAsync(1)
-  await result
-  expect(invoke).toHaveBeenCalledTimes(2)
- } finally { vi.useRealTimers() }
-})
-
 
 it('loads a legacy scan series name directly through the connected extension without backend settings or functions', async () => {
  const { readFile } = await import('node:fs/promises')
@@ -195,7 +171,7 @@ it.each(['preview', 'csv', 'scan'] as const)('retains the database failure for %
  const request = boundary === 'preview' ? previewCsvImport([row]) : boundary === 'csv' ? submitCsvImport([row], [], {}) : submitLibrarySync([row])
  await expect(request).rejects.toMatchObject({ cause: original, message: expect.stringContaining('[57014] canceling statement due to statement timeout') })
  expect(rpc).toHaveBeenCalledOnce()
- expect(connect).not.toHaveBeenCalled()
+ expect(connect).toHaveBeenCalledTimes(boundary === 'preview' ? 0 : 1)
 })
 
 it('stops loading further series pages when a preview is cancelled', async () => {
@@ -209,5 +185,12 @@ it('stops loading further series pages when a preview is cancelled', async () =>
  })
  await expect(previewSeries(url, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
  expect(invoke).toHaveBeenCalledTimes(1)
- expect(invoke).toHaveBeenCalledWith('series-preview', { body: { url }, signal: controller.signal })
+ expect(invoke).toHaveBeenCalledWith('series-preview', { body: { url, html: '<html></html>' }, signal: controller.signal })
+})
+it.each(['url','csv','scan','retry'])('blocks %s writes while disconnected without creating a dead-end queue',async boundary=>{
+ const {submitCsvImport,submitLibrarySync,retryJob}=await import('./repository')
+ connect.mockResolvedValue(false)
+ const request=boundary==='url'?submitImport('https://archiveofourown.org/works/123'):boundary==='csv'?submitCsvImport([],[],{}):boundary==='scan'?submitLibrarySync([]):retryJob('job')
+ await expect(request).rejects.toThrow('Connect the extension')
+ expect(rpc).not.toHaveBeenCalled()
 })

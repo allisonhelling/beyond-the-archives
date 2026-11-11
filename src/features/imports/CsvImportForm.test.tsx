@@ -1,3 +1,4 @@
+vi.mock('./DesktopRetrievalGate', () => ({ DesktopRetrievalGate: ({ children }: { children: import('react').ReactNode }) => <>{children}</> }))
 import { beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { Story } from '../library/model'

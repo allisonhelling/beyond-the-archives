@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { blankMetadata, type Story } from './model'
 import { compileSearch, defaultReadingFilters, filterReading, inReadingSection, readingGroups, tracked } from './reading-search'
+import { tagAliasIndex, type TagResolution } from './tags/tag-resolution'
 function story(title: string, values: Partial<Story> = {}): Story {
   return { id: title, metadata: { ...blankMetadata, title }, reading_status: 'reading', last_read_chapter: 0,
     notes: '', personalTags: [], is_favorite: false, work: { ao3_updated_at: null, verified_chapters: {} },
     last_update_notification_at: null, update_dismissed_at: null, ...values } as Story
 }
+it('keeps personal and legacy unclassified labels separate from categorized AO3 aliases', () => {
+ const tagAliases = tagAliasIndex(['Canonical', 'Synonym'].map((name, i) => ({
+  category: 'character', name, status: i ? 'synonym' : 'canonical', canonical_name: 'Canonical', checked_at: '', attempted_at: '',
+ } as TagResolution)))
+ const entries = [story('Personal', { personalTags: ['Synonym'] }), story('Legacy', { metadata: { ...blankMetadata, ao3_tags: ['Synonym'] } }), story('Categorized', { metadata: { ...blankMetadata, character_tags: ['Synonym'] } })]
+ expect(filterReading(entries, { ...defaultReadingFilters, characters: 'Canonical', tagAliases })).toEqual([entries[2]])
+ expect(filterReading(entries, { ...defaultReadingFilters, personalTags: 'Canonical', tagAliases })).toEqual([])
+ expect(filterReading(entries, { ...defaultReadingFilters, personalTags: 'Synonym', tagAliases })).toEqual([entries[0]])
+})
 it('combines notes, Rec evidence, personal rating and content rating independently', () => {
  const entries = [
   story('Recommended', { personal_rating: 5, notes: 'My thoughts', is_rec: true, source_bookmark: { rec: true }, metadata: { ...blankMetadata, rating: 'Mature' } }),

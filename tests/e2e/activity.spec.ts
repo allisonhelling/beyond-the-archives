@@ -1,3 +1,4 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
@@ -50,3 +51,6 @@ test('series preview loading stays visible in its dialog and clears after failur
   await expect(indicator).toHaveCount(0)
  } finally { release() }
 })
+
+// These workflows exercise desktop retrieval at both responsive viewport sizes.
+test.beforeEach(async({page})=>{await desktopCompanion(page)})

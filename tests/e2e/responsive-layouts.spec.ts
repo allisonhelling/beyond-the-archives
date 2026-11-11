@@ -1,3 +1,4 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 
@@ -132,6 +133,8 @@ test('library and reading actions fit their headers and filters across viewport 
 })
 
 test('mobile collection holds, filter defaults, inputs and work controls fit', async ({ page }) => {
+ // This checks responsive desktop controls; eligibility still comes from the companion.
+ await desktopCompanion(page)
  const tables = await fixture(page)
  tables.collections.push({ id: 'mobile-collection', name: 'Mobile Collection', default_key: null, sort_position: 1 })
  tables.works.push({ id: 'mobile-work', ao3_work_id: 123, title: 'Mobile work', verified_chapters: {} })

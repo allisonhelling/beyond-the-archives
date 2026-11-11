@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { localExtensionId, localExtensionKey } from './extension-config'
-import { extensionId, setExtensionId, librarySyncCommand } from './extension'
+import { extensionId, setExtensionId, librarySyncCommand, connectExtension, desktopExtensionAvailable } from './extension'
 import { isLocalApp } from '../../lib/local-app'
+vi.mock('../../lib/supabase', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: null } }) } } }))
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 function location(hostname: string, savedId: string | null = 'a'.repeat(32)) {
  const store = new Map<string, string>(savedId ? [['ao3-library-extension-id', savedId]] : [])
@@ -32,7 +33,7 @@ it('matches Chrome’s ID derivation from the public manifest key', () => {
 it('uses the tokenless local sample connection when sample mode is enabled', async () => {
  vi.stubEnv('DEV', true); vi.stubEnv('VITE_SAMPLE_DATA', 'true'); vi.resetModules()
  location('127.0.0.1')
- const sendMessage = vi.fn((_id, _message, callback) => callback({ ok: true }))
+ const sendMessage = vi.fn((_id, _message, callback) => callback({ ok: true, capabilities: ['metadata-retrieval-v1'] }))
  Object.assign(window, { chrome: { runtime: { sendMessage } } })
  const { connectExtension } = await import('./extension')
  expect(await connectExtension()).toBe(true)
@@ -55,4 +56,33 @@ it('explains how to preserve a scan when an older companion rejects End Scan', a
  expect(sendMessage).toHaveBeenCalledTimes(1)
  expect(sendMessage).toHaveBeenCalledWith('a'.repeat(32), { type: 'AO3_LIBRARY_SYNC', action: 'end', scanId: 'older-scan' }, expect.any(Function))
  await expect(librarySyncCommand('resume', { scanId: 'older-scan' })).rejects.toThrow('This action is unavailable for the saved scan.')
+})
+
+it('rejects older companions and forged success replies without the supported capability', async () => {
+ location('localhost')
+ const sendMessage=vi.fn((_id,_message,callback)=>callback({ok:true}))
+ Object.assign(window,{chrome:{runtime:{sendMessage}}})
+ expect(await desktopExtensionAvailable()).toBe(false)
+ expect(await connectExtension()).toBe(false)
+ expect(sendMessage.mock.calls.every(call=>call[1].type==='AO3_LIBRARY_CAPABILITIES')).toBe(true)
+})
+it('recognizes compatible companions independently of viewport width',async()=>{
+ location('localhost')
+ Object.assign(window,{innerWidth:390,chrome:{runtime:{sendMessage:(_id:string,_message:object,callback:(reply:object)=>void)=>callback({ok:true,capabilities:['metadata-retrieval-v1']})}}})
+ expect(await desktopExtensionAvailable()).toBe(true)
+})
+it('sign-out fences a connection waiting for its capability response',async()=>{
+ location('localhost')
+ let capabilityReply: ((reply:object)=>void)|undefined
+ const sendMessage=vi.fn((_id:string,message:{type:string},callback:(reply:object)=>void)=>{
+  if(message.type==='AO3_LIBRARY_CAPABILITIES')capabilityReply=callback
+  else callback({ok:true})
+ })
+ Object.assign(window,{chrome:{runtime:{sendMessage}}})
+ const {connectExtension,disconnectExtension}=await import('./extension')
+ const pending=connectExtension({access_token:'signed-out-token',expires_at:Math.floor(Date.now()/1000)+3600} as import('@supabase/supabase-js').Session)
+ await disconnectExtension()
+ capabilityReply!({ok:true,capabilities:['metadata-retrieval-v1']})
+ expect(await pending).toBe(false)
+ expect(sendMessage.mock.calls.some(call=>call[1].type==='AO3_LIBRARY_CONNECT')).toBe(false)
 })

@@ -1,3 +1,4 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { blankMetadata } from '../../src/features/library/model'
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
@@ -430,3 +431,6 @@ test('offline footers show organizer progress and refresh AO3 reading changes',a
  await page.getByRole('link',{name:'Library',exact:true}).click()
  await expect(page.locator('.book-spine-footer .chapter-progress-button')).toHaveText('Ch. 3 / 3')
 })
+
+// These workflows exercise desktop retrieval at both responsive viewport sizes.
+test.beforeEach(async({page})=>{await desktopCompanion(page)})

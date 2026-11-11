@@ -1,3 +1,4 @@
+vi.mock('./DesktopRetrievalGate', () => ({ DesktopRetrievalGate: ({ children }: { children: import('react').ReactNode }) => <>{children}</> }))
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ history: vi.fn(), submit: vi.fn(), preview: vi.fn(), remember: vi.fn(), refresh: vi.fn(), stories: [{ id: 'saved-101', work: { ao3_work_id: 101 }, metadata: { title: 'Saved fic', series_memberships: [{ id: 77, name: 'Related series', url: 'https://archiveofourown.org/series/77', position: 1 }] } }] }))

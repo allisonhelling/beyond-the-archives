@@ -1,3 +1,5 @@
+import { useDesktopCompanion } from '../../imports/useDesktopCompanion'
+import { desktopExtensionHelp } from '../../imports/extension'
 import { BulletSeparated } from '../BulletSeparated'
 import { usePageMetadataRefresh } from '../../imports/usePageMetadataRefresh'
 import { useActivity } from '../../../lib/use-activity'
@@ -27,6 +29,7 @@ import { sampleMode } from '../../../lib/sample-mode'
 import type { SeriesPreview } from '../../imports/urls'
 
 export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
+ const { connected } = useDesktopCompanion()
  const seriesBehavior = useSeriesImportBehavior()
  const { id } = useParams(), library = useLibrary({ catalog: !example }), seriesId = example?.seriesId ?? Number(id)
  const valid = Boolean(example) || /^[1-9]\d*$/.test(id ?? '') && Number.isSafeInteger(seriesId)
@@ -72,7 +75,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
     <DisplayInfo group="seriesHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> }}</DisplayInfo>
     <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.length ? <BulletSeparated values={series.fandoms} /> : 'Fandom unknown'}</p> }}</DisplayInfo>
     <div className="story-title-toggles">{favorite}</div>
-    <div className="story-metadata-actions"><Tooltip description="Refresh AO3 metadata for all works in this series that are in your library">{tooltipId => <button className="button secondary" aria-describedby={tooltipId} aria-busy={workRefresh.busy} disabled={busy || workRefresh.busy || workRefresh.unavailable || !library.catalogLoaded || sampleMode} onClick={() => void workRefresh.refresh()}><RefreshCw size={16} aria-hidden="true" />{workRefresh.busy ? 'Refreshing Works…' : 'Refresh Works'}</button>}</Tooltip><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
+    <div className="story-metadata-actions"><Tooltip description="Refresh AO3 metadata for all works in this series that are in your library">{tooltipId => <button className="button secondary" aria-describedby={tooltipId} aria-busy={workRefresh.busy} disabled={busy || workRefresh.busy || !connected || workRefresh.unavailable || !library.catalogLoaded || sampleMode} onClick={() => void workRefresh.refresh()}><RefreshCw size={16} aria-hidden="true" />{workRefresh.busy ? 'Refreshing Works…' : 'Refresh Works'}</button>}</Tooltip><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode || !connected} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')
      try { await removeSeriesDetails(seriesId); await refreshSeries(seriesId) } catch (error) { setError(error instanceof Error ? error.message : 'Could not remove series details.') } finally { setBusy(false) }
     }}>Remove</button>}</Tooltip>}</div>
@@ -89,6 +92,7 @@ source: <>
 }}</DisplayInfo>
   </div></div>
 
+  {!connected && <p className="field-help">{desktopExtensionHelp}</p>}
   {workRefresh.message && <p role="status">{workRefresh.message}</p>}
   {!review && errorMessage}
 
@@ -104,7 +108,7 @@ creatorNotes: <>    {series.creatorNotes && <div><dt>Creator Notes</dt><dd class
 }}</DisplayInfo>
   </dl></section>} </>,
 progress: <>
-  <section className="settings-card details-progress-panel" aria-label="Reading and Organization"><div className="series-progress-controls"><div className="series-progress-columns progress-sections"><div className="series-progress-state"><div className="story-section-heading"><h2>Your Progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}<div className="series-import-actions">{!basic && series.savedStories.length !== series.workCount && <button className="button secondary" aria-pressed={hideUnsaved} onClick={() => setHideUnsaved(!hideUnsaved)}>{hideUnsaved ? 'Show Works Not in Library' : 'Hide Works Not in Library'}</button>}<button className="button secondary series-choose-works" disabled={busy || sampleMode} onClick={() => setReview(!review)}>Choose Works to Import</button></div></div></div></section> </>,
+  <section className="settings-card details-progress-panel" aria-label="Reading and Organization"><div className="series-progress-controls"><div className="series-progress-columns progress-sections"><div className="series-progress-state"><div className="story-section-heading"><h2>Your Progress</h2></div><div className="series-progress-row"><p className="series-reading-status reading-status-value"><StatusIcon size={18} aria-hidden="true" />{seriesReadingLabel(series)}</p>{finishButton}</div></div>{collectionsField}<div className="series-import-actions">{!basic && series.savedStories.length !== series.workCount && <button className="button secondary" aria-pressed={hideUnsaved} onClick={() => setHideUnsaved(!hideUnsaved)}>{hideUnsaved ? 'Show Works Not in Library' : 'Hide Works Not in Library'}</button>}<button className="button secondary series-choose-works" disabled={busy || sampleMode || !connected} onClick={() => setReview(!review)}>Choose Works to Import</button></div></div></div></section> </>,
 notes: <>   <section className="details-private-notes" aria-label="Private Notes"><PersonalNote key={seriesId} notes={record?.notes ?? ''} disabled={busy} onSave={async (notes, base) => { await ensureSeries(series); await saveSeriesNote(seriesId, notes, base) }} onRefresh={() => refreshSeries(seriesId)} /></section> </>,
 works: <>   <section aria-label="Works in Series"><h2>{basic ? 'Works in Your Library' : 'Works in This Series'}</h2><div className="story-grid">{visibleWorks.map(work => {
    const saved = savedById.get(work.workId)

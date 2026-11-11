@@ -1,7 +1,9 @@
 import { normalizeSearchText as normalizeTag } from '../../../lib/search-text.ts'
 export const ao3TagCategories = ['relationship', 'character', 'freeform'] as const
 export type Ao3TagCategory = typeof ao3TagCategories[number]
+/** AO3-only resolver/cache payload. A foreign label requires a separately verified mapping. */
 export type TagResolution = { category: Ao3TagCategory; name: string; status: 'canonical' | 'synonym' | 'custom' | 'unverified'; canonical_name: string | null; checked_at: string; attempted_at: string }
+/** One owner's AO3 evidence, partitioned by AO3 category; never a global label ontology. */
 export type TagAliases = Partial<Record<Ao3TagCategory, Record<string, Record<string, true>>>>
 export function validAo3TagName(value: unknown): value is string { return typeof value === 'string' && Boolean(value.trim()) && value.length <= 10000 && !/\p{Cc}/u.test(value) }
 export const hasTagFilters = (filters?: { relationship?: string; characters?: string; tags?: string; tagExpressions?: Partial<Record<string, unknown>> }) => Boolean(filters?.relationship || filters?.characters || filters?.tags || Object.keys(filters?.tagExpressions ?? {}).some(key => key !== 'fandoms'))
@@ -27,7 +29,8 @@ export function prioritizeVerifiedTags(values: string[], records: TagResolution[
  const names = new Set(verifiedTags(records).filter(record => record.category === category).map(record => normalizeTag(record.name)))
  return [...values].sort((a,b) => Number(names.has(normalizeTag(b))) - Number(names.has(normalizeTag(a))))
 }
-export function tagMatches(values: string[], term: string, category: Ao3TagCategory, aliases?: TagAliases, authority: 'ao3' | null = 'ao3') {
+/** Callers must establish AO3 backing upstream; null permits raw matching only. */
+export function tagMatches(values: string[], term: string, category: Ao3TagCategory, aliases: TagAliases | undefined, authority: 'ao3' | null) {
  const categoryAliases = authority === 'ao3' ? aliases?.[category] : undefined
  const names = categoryAliases && Object.hasOwn(categoryAliases, term) ? categoryAliases[term] : undefined
  return values.some(value => names ? Object.hasOwn(names, normalizeTag(value)) : normalizeTag(value).includes(term))

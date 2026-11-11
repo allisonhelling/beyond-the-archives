@@ -31,7 +31,6 @@
     "invite": "node server/invite-user.mjs",
     "test:integration": "node scripts/test-supabase.mjs",
     "test:integration:config": "node --test scripts/tests/supabase-status.mjs",
-    "worker": "node --env-file-if-exists=.env.worker --experimental-strip-types server/import-worker.ts",
     "perf:db": "node scripts/performance-library.mjs",
     "perf:backup": "node scripts/performance-backups.mjs",
     "perf:hosted": "node scripts/performance-hosted.mjs",

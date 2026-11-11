@@ -1,8 +1,10 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 import type { CleanupSettings } from '../../src/features/settings/dnf-cleanup'
 
 test('DNF settings support custom retention, previewed cleanup, and archive navigation', async ({ page }, info) => {
+ await desktopCompanion(page)
  await fixture(page)
  let settings: CleanupSettings = { enabled: false, hours: 168, protect_favorites: true, protect_personal: true, protect_collections: true }
  let cleaned = false

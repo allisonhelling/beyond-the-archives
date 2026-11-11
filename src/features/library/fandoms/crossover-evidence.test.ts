@@ -20,6 +20,16 @@ it('uses parent, shared ancestor and transitive bridge proofs even with incomple
  expect(classify(known('A','B'),[node('A',['Root']),node('B',['Root']),node('Root',[],{complete:false})]).status).toBe('not_crossover')
  expect(classify(known('A','B','C'),[node('A',['X']),node('B',['X','Y']),node('C',['Y']),node('X'),node('Y')]).status).toBe('not_crossover')
 })
+it.each(['fanfiction_net','wattpad'])('does not grant a synthetic %s identity or relationship AO3 policy authority', authority=>{
+ expect(classify({state:'known',fandoms:[{authority,key:'A',verified:true}],unresolved:false}).status).toBe('unknown')
+ // Runtime validation also rejects foreign edge snapshots despite identical opaque keys.
+ const foreign = JSON.parse(JSON.stringify(node('A',['B']))) as FandomSnapshot
+ Object.assign(foreign,{authority})
+ expect(classify(known('A','B'),[foreign,node('B')]).status).toBe('unknown')
+ // A native assertion remains outside the classifier input; unmapped observations stay unknown.
+ const sourceEnvelope = { nativeCrossoverAssertion:true, effectiveObservation:{state:'unknown' as const} }
+ expect(classify(sourceEnvelope.effectiveObservation).status).toBe('unknown')
+})
 it('requires complete fresh separation proof and expires at 30 days without a network event',()=>{
  expect(classify(known('A','B'),[node('A'),node('B')])).toMatchObject({status:'crossover',policy:'ao3_hierarchy_v1',classifierVersion:1,evidenceRevision:'fixture-1'})
  for(const extra of [{complete:false},{lastCompleteSuccessfulAt:null},{lastCompleteSuccessfulAt:new Date(now-negativeEvidenceMaxAgeMs).toISOString()},{parserVersion:'obsolete'},{verified:false}]) expect(classify(known('A','B'),[node('A'),node('B',[],extra)]).status).toBe('unknown')

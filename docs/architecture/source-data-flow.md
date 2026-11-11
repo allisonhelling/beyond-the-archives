@@ -13,10 +13,10 @@ flowchart TD
   S --> W[Shared Work UUID / AO3 Identity]
   W --> E[Owner-Private Entry UUID / Original URL]
   E --> J[Metadata Job UUID / Lease / Token]
-  J --> R[Direct Retrieval Or Browser Capture]
+  J --> R[Desktop Companion Capture]
   A --> R
   R --> X[AO3 Extraction And Validation]
-  X --> O[Public Direct Metadata Or Private Browser / Archive Observation]
+  X --> O[Private Browser / Archive Observation]
   O --> M[Effective Metadata / Private Manual Overrides]
   M --> D[Owner-Private Search Document]
   D --> C[Revision-Cached IDs / Counts / Series / Facets]
@@ -26,14 +26,14 @@ flowchart TD
   M --> B
 ```
 
-URL normalization does not prove existence. Direct live extraction can establish canonical verification; browser/archive observations commit privately. A deleted bookmark can enter with a shared UUID but no AO3 work number. EPUB recovery supplies reviewed private metadata through the existing save boundary; it does not upload chapter prose or establish shared source verification.
+URL normalization does not prove existence. The current chain retires hosted direct work retrieval; browser/archive observations commit privately. Historical direct snapshots remain readable. A deleted bookmark can enter with a shared UUID but no AO3 work number. EPUB recovery supplies reviewed private metadata through the existing save boundary; it does not upload chapter prose or establish shared source verification.
 
 ## Stage Boundaries And Extension Points
 
 | Stage | Implemented Boundary / Consumer | Future Insertion Point And Preservation Requirement |
 | --- | --- | --- |
 | Discovery | `urls.ts`: `parseWorkUrl`, `classifyUrl`, `extractUrls`, `groupWorks`; SQL `submit_import`/`save_library_story` independently validate | Select source before invoking its URL parser; keep SQL independently authoritative. No broader regex acceptance without persistence support. Preserve exact original URLs and archived-target dedup. |
-| Acquisition: Direct | `server/ao3/worker.ts`: `runWorkerOnce`; Node `server/import-worker.ts` and Deno `supabase/functions/import-worker/index.ts`; `adapter.ts`: `retrieveMetadata` | Reuse JobStore claim/finish orchestration. Dispatch source acquisition only after source-qualified claim contract exists. Keep leases, tokens, bounded requests, retry/cancel semantics; decide per-provider pacing explicitly. |
+| Acquisition: Retired Direct Path | `20261109000300_extension_only_retrieval.sql`: `claim_metadata_job` returns NULL; import-worker entrypoints are retired; parser helpers remain | Do not revive hosted work retrieval for readiness. A future provider needs an explicitly supported acquisition path; retain leases and trusted completion checks. |
 | Acquisition: Browser | `src/features/imports/extension.ts`; Chrome `background.js`, `capture.js`; `server/ao3/extension-handler.ts`; `supabase/functions/extension-metadata/index.ts` | Browser acquisition remains separate from provider parser. Keep owner-bound live lease, request bounds, sender/environment checks and returned identity validation. No new host permissions in A. |
 | Acquisition: Other | `ao3-csv.ts`, `sample-import.ts`, `imports/epub.ts`; `server/ao3/series-handler.ts`; `server/ao3/wayback.ts` | Retain CSV review, local EPUB partial metadata and archive locator semantics. Series previews and Wayback lookup are distinct from ordinary work acquisition. No speculative common fetcher. |
 | Extraction | `extractWorkMetadata` reused by `parseMetadata` and companions; `ao3-series.ts`, `server/ao3/series.ts`; `parseTagResolution` | Add source-specific extraction beside AO3 only when chosen. Require identity proof and partial-field fixtures; parser code must not know personal reading state. |
@@ -79,11 +79,13 @@ The ordered chain was executed in PGlite and resolved definitions inspected. Man
 | `20261102000400_reading_filters_and_series_search.sql` | Actual legacy `library_crossover`, plural `crossovers` filter, collection validator, per-member series crossover booleans; **not hierarchy evidence**. |
 | `20261103000100_cached_series_text_search.sql`, `20261103000200_offline_collections.sql`, `20261104000100_reader_anthology_links.sql` | Cached series text, offline collections and anthology source-member association. |
 | `20261104000200_cached_facets_and_reader_platforms.sql`, `20261104000300_remove_reader_installation_reports.sql` | Stored `facet_story`, `library_facet_document`, cached `library_query_facets`/`library_uncached_facets`; owner/revision scope plus availability predicates keyed by AO3 reader IDs; installation-report changes. |
-| `20261109000100_work_id_search.sql` (pre-existing untracked file) | Patches active shared `library_filter` to append `ao3_work_id` to title/author query text; clears old cache rows. Included in working-tree tests, not proof of deployed migration. |
+| `20261109000100_work_id_search.sql` | Patches active shared `library_filter` to append `ao3_work_id` to title/author query text; clears old cache rows. Included in working-tree tests, not proof of deployed migration. |
+
+The B1-R replay on 10 November 2026 also includes `20261109000200_tag_expressions.sql` (expression normalization/groups, shared predicate, rule validation, selection guard and public query preparation) and `20261109000300_extension_only_retrieval.sql` (retired hosted work claims). The latter does not replace matching/projection functions. Active `library_tag_matches` maps only the three supported metadata categories; other categories cannot inherit freeform aliases. `query_library` discards caller `tagAliases`/`tagGroups` before preparing trusted owner-scoped inputs.
 
 ## Matcher Consumers And Invalidation
 
-Current local path: `filterReading` → `tagNames`/`tagMatches`; automatic collections reuse the reading predicate; `series-search.ts` evaluates member-specific filters and shared merged text; ReadingDashboard powers library/reading/author views. URL/default/draft state lives in `browsing/browsing.ts`, `filter-defaults.ts` and shared draft controls. Sample mode and retained offline hub use local evaluation. `useTagResolutions` loads an account-scoped paginated cache, builds aliases, and emits `ao3-tag-resolutions-updated`. Suggestions/fandom counts use existing facet scope rather than arbitrary UI result slices.
+Current local path: `filterReading` → `matchesTagExpression` → `tagNames`/`tagMatches` with explicit AO3 authority; automatic collections reuse the reading predicate; `series-search.ts` evaluates member-specific filters and shared merged text; ReadingDashboard powers library/reading/author views. URL/default/draft state lives in `browsing/browsing.ts`, `filter-defaults.ts` and shared draft controls. Sample mode and retained offline hub use local evaluation. `useTagResolutions` loads an account-scoped paginated AO3 cache for suggestions/ordering and emits `ao3-tag-resolutions-updated`; it does not build/inject a local matching alias index. `filterReading` accepts an optional prevalidated index (including SQL parity tests); sample/offline evaluation without it uses raw fallback. Suggestions/fandom counts use existing facet scope rather than arbitrary UI result slices.
 
 SQL path: authenticated query prepares `library_alias_filters` and parsed terms → candidate predicate narrows owner/shelf/author/reader availability → `library_filter` runs **before** matching IDs/counts/page selection → compact payload hydration. Series uses `library_query_pool` / cached series merger and the same filter contract. Automatic membership uses `library_alias_rules` and the same effective document. Preserve these semantics, including facets' intentional scoped suggestion universe rather than assuming facets equal current filtered-result counts.
 
@@ -101,7 +103,7 @@ A future shared fandom cache may hold public AO3 facts only. Lookup request rows
 
 ## Complete Ordered Migration Ledger
 
-This is the exact local input order used by `scripts/test-database.mjs` during the audit. It includes the pre-existing untracked head. The grouped map above explains relevant supersession; this ledger makes the baseline reproducible and does not assert hosted installation.
+This is the local input order used by `scripts/test-database.mjs`, rechecked in B1-R on 10 November 2026: 123 migrations through extension-only retrieval. The grouped map above explains relevant supersession; this ledger does not assert hosted installation. The [readiness assessment](filter-source-readiness.md) records resolved projection fields and future integration gates.
 
 ```text
 20261014000100_foundation.sql
@@ -225,4 +227,6 @@ This is the exact local input order used by `scripts/test-database.mjs` during t
 20261104000200_cached_facets_and_reader_platforms.sql
 20261104000300_remove_reader_installation_reports.sql
 20261109000100_work_id_search.sql
+20261109000200_tag_expressions.sql
+20261109000300_extension_only_retrieval.sql
 ```

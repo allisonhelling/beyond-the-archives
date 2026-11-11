@@ -1,3 +1,4 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { fixture, login, selectLibraryShelf, clickPersonalToggle } from './library-fixture'
 import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page, type Locator } from '@playwright/test'
@@ -1384,7 +1385,7 @@ for (const outcome of ['completed', 'failed'] as const) {
       await expect(button).toHaveAttribute('data-refresh-status', 'pending')
     }
     const panel = page.getByRole('region', { name: 'Automatic Metadata' })
-    await expect(panel.getByRole('status')).toHaveText('Metadata refresh queued. Waiting for the worker.')
+    await expect(panel.getByRole('status')).toHaveText('Metadata refresh queued. Waiting for the desktop companion.')
     Object.assign(tables.metadata_jobs[0], { status: outcome, error_category: outcome === 'failed' ? 'unavailable' : null, error_message: outcome === 'failed' ? 'AO3 is unavailable.' : null })
     tables.works[0].last_metadata_check = '2026-10-16T12:00:00Z'
     if (outcome === 'completed') tables.works[0].last_metadata_success = '2026-10-16T12:00:00Z'
@@ -3723,7 +3724,7 @@ test('End Scan review survives reload and imports selected works before finishin
    if (message.action === 'finish') state = { ...state, status: 'complete' }
    sessionStorage.setItem('test-ended-scan', JSON.stringify(state))
    if (message.action === 'page') callback({ ok: true, seriesUrl: preview.normalizedUrl, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) })
-   else callback({ ok: true, state })
+   else callback({ ok: true, state, capabilities: ['metadata-retrieval-v1'] })
   } } } })
  }, { preview })
  await page.goto('/imports'); await login(page)
@@ -3777,7 +3778,7 @@ test('bookmark scans show explicitly bookmarked series before series containing 
    if (message.action === 'page') {
     const preview = previews[message.page! - 1]
     callback({ ok: true, seriesUrl: preview.normalizedUrl, seriesPreview: preview, rows: preview.works.map(work => ({ title: work.title, link: work.url, source_list: 'marked_for_later' })) })
-   } else callback({ ok: true, state })
+   } else callback({ ok: true, state, capabilities: ['metadata-retrieval-v1'] })
   } } } })
  }, { previews })
  await page.goto('/imports'); await login(page)
@@ -3826,7 +3827,7 @@ test('bookmark conflicts offer explicit choices in a spaced responsive grid with
   const state = () => ({ id: 'bookmark-review-scan', status: complete ? 'complete' : 'ready', pages: 1, count: 2, skipped: 0, error: '', url: 'https://archiveofourown.org/users/reader/bookmarks', mode: 'full' })
   const runtime = { sendMessage(_id: string, request: { action?: string }, callback: (result: object) => void) {
    if (request.action === 'finish') complete = true
-   callback(request.action === 'page' ? { ok: true, rows: [401, 402].map(id => ({ title: `Bookmark ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'bookmarks', 'bookmark notes': 'Incoming note', 'bookmark tags': 'Incoming tag' })) } : { ok: true, state: state() })
+   callback(request.action === 'page' ? { ok: true, rows: [401, 402].map(id => ({ title: `Bookmark ${id}`, link: `https://archiveofourown.org/works/${id}`, source_list: 'bookmarks', 'bookmark notes': 'Incoming note', 'bookmark tags': 'Incoming tag' })) } : { ok: true, state: state(), capabilities: ['metadata-retrieval-v1'] })
   } }
   Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime } })
  })
@@ -4050,3 +4051,6 @@ test('filters crossovers, removes applied chips, sorts words, and saves private 
  await card.getByRole('button',{name:'Change Status to Abandoned',exact:true}).click()
  await expect(card.getByRole('img',{name:'Abandoned',exact:true})).toBeVisible()
 })
+
+// These workflows exercise desktop retrieval at both responsive viewport sizes.
+test.beforeEach(async({page})=>{await desktopCompanion(page)})

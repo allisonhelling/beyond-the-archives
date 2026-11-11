@@ -2,7 +2,7 @@ import { brandSlug } from '../../src/lib/brand.ts'
 import { parseChapterDates } from './chapter-dates.ts'
 import { load } from 'cheerio'
 import { readBoundedBody } from './read-body.ts'
-import { parseWorkUrl, waybackSnapshot } from '../../src/features/imports/urls.ts'
+import { parseWorkUrl } from '../../src/features/imports/urls.ts'
 import { extractWorkMetadata, type AutomaticMetadata } from '../../src/features/imports/ao3-metadata.ts'
 export type { AutomaticMetadata } from '../../src/features/imports/ao3-metadata.ts'
 export type RetrievalResult = { metadata: AutomaticMetadata | null; chapters: Record<string,string>; category: string | null; message: string | null; retryable: boolean; pauseSeconds: number; sourceUrl?: string }
@@ -26,33 +26,6 @@ export function parseMetadata(html: string, workId: number, sourceUrl: string): 
  if (!identityVerified) return failure('parser_failure','The page did not provide verifiable work identity.')
  const partial = !metadata.authors || metadata.published_chapters === undefined
  return {metadata,chapters,category:partial?'partial':null,message:partial?'Some metadata is unavailable. Unknown fields were preserved.':null,retryable:false,pauseSeconds:0,sourceUrl}
-}
-/** Fetch only an allowlisted normalized work URL. Redirects are inspected before following. No cookies/auth or restriction bypass. */
-export async function retrieveMetadata(input: { workId: number; normalizedUrl: string; sourceUrl?: string; chapterDates?: boolean }, fetcher: typeof fetch = fetch): Promise<RetrievalResult> {
- const expected=`https://archiveofourown.org/works/${input.workId}`
- if (!Number.isSafeInteger(input.workId) || input.workId<1 || input.normalizedUrl!==expected) return failure('invalid_identity','Invalid metadata identity.')
- let target = expected
- if (input.sourceUrl) {
-  try {
-   const identity = parseWorkUrl(input.sourceUrl)
-   if (!identity.archiveUrl || identity.workId !== input.workId) return failure('invalid_identity', 'Invalid archived work identity.')
-   target = identity.archiveUrl
-  } catch { return failure('invalid_identity', 'Invalid archived work identity.') }
- }
- const result = await retrieveAo3Document(target, url => parseWorkUrl(url).workId === input.workId && Boolean(waybackSnapshot(url)) === Boolean(input.sourceUrl), fetcher)
- if (!('html' in result)) return input.sourceUrl ? { ...result, category: result.category === 'not_found' ? 'unavailable' : result.category, message: result.message?.replaceAll('AO3', 'Wayback Machine') ?? null } : result
- const parsed = parseMetadata(result.html, input.workId, result.sourceUrl)
- if (input.sourceUrl && parsed.category === 'not_found') return failure('unavailable', 'This archived capture does not contain the work. The saved work remains editable.')
- if (input.sourceUrl || !input.chapterDates || !parsed.metadata) return parsed
- if (parsed.metadata.published_chapters === 1 && parsed.metadata.ao3_published_at) {
-  parsed.metadata.chapter_dates = { '1': parsed.metadata.ao3_published_at.slice(0, 10) }; return parsed
- }
- // This request stays inside the global worker lease and respects AO3 pacing.
- await new Promise(resolve => setTimeout(resolve, 15000))
- const navigationUrl = `${expected}/navigate`
- const navigation = await retrieveAo3Document(navigationUrl, url => url === navigationUrl, fetcher)
- if (!('html' in navigation)) return { ...navigation, metadata: parsed.metadata, chapters: parsed.chapters }
- return withChapterDates(parsed, navigation.html, input.workId)
 }
 /** Shared bounded AO3 retrieval. Callers supply an allowlisted URL and identity check. */
 export async function retrieveAo3Document(expected: string, matches: (url: string) => boolean, fetcher: typeof fetch = fetch, followRedirects = true): Promise<RetrievalResult | { html: string; sourceUrl: string }> {

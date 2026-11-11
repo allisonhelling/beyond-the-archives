@@ -1,3 +1,4 @@
+import { DesktopRetrievalGate } from './DesktopRetrievalGate'
 import { TabList } from '../../components/TabList'
 import { useActivity } from '../../lib/use-activity'
 import { BookFusionImport } from '../library/bookfusion/BookFusionImport'
@@ -60,7 +61,7 @@ export function ImportPage() {
    const importText = works ? selectedImportText(text,works) : text
    const id = await submitImport(importText,true,status,seriesIds)
    for (const seriesId of seriesIds) await library.refreshSeries(seriesId)
-   setMessage(sampleMode?'Works saved to this browser’s sample library. Existing works were kept.':id?'Batch saved. Processing follows your Settings. Keep this app open for long extension imports.':'No AO3 URLs found. Unrelated URLs were ignored.')
+   setMessage(sampleMode?'Works saved to this browser’s sample library. Existing works were kept.':id?'Batch saved. The desktop companion will retrieve metadata. Keep this app open for long imports.':'No AO3 URLs found. Unrelated URLs were ignored.')
    setReviewing(false); setText('')
    setRelatedImport(id && seriesBehavior.reviewRelatedSeries ? { batchId:id, behavior:seriesBehavior.behavior, workIds:[...groupWorks(extractUrls(importText)).keys()], reviewedSeriesIds:seriesIds } : undefined)
    seriesBehavior.reset()
@@ -90,9 +91,10 @@ export function ImportPage() {
  return <div className="mass-import-page"><div className="page-heading"><div><h1>Mass Import from AO3</h1><p>Choose work links, an AO3 library sync, CSV files, or Calibre Bookfusion links.</p></div></div>
  <TabList tabs={importTabs} active={activeTab} onChange={setActiveTab} label="Mass Import Sections" prefix="imports" className="import-tabs" />
  {importTabs.map(tab => <section key={tab.id} role="tabpanel" id={`imports-panel-${tab.id}`} aria-labelledby={`imports-tab-${tab.id}`} hidden={activeTab !== tab.id} tabIndex={0}>
+  {tab.id === 'bookfusion' && <BookFusionImport />}
+  {tab.id !== 'bookfusion' && <DesktopRetrievalGate>
   {tab.id === 'sync' && <LibrarySyncForm onImported={onImported} />}
   {tab.id === 'csv' && <CsvImportForm onImported={onImported} />}
-  {tab.id === 'bookfusion' && <BookFusionImport />}
   {tab.id === 'links' && <>
  {reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} text={text} initialReadingStatus={readingStatus} onReadingStatusChange={setReadingStatus} savedIds={new Set((library.stories??[]).map(story=>story.work.ao3_work_id).filter((id):id is number=>id!==null))} busy={busy} onConfirm={saveImport} onCancel={()=>setReviewing(false)} /> : <form className="story-form settings-card" onSubmit={event=>{event.preventDefault();if(seriesCount){setError('');setMessage('');setReviewing(true)}else saveImport()}}>
  <h2>Import Work or Series Links</h2>
@@ -104,11 +106,12 @@ export function ImportPage() {
  <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; ${seriesBehavior.behavior === 'all' ? 'all available works will be included.' : 'review and select their works before importing.'}`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
  <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount ? seriesBehavior.behavior === 'all' ? 'Import All Series Works' : 'Review Series' : 'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
  </form>}
- {!sampleMode && <p className="muted">Processing uses the metadata mode selected in Settings: the hosted worker or the connected browser extension. For extension requests, keep your browser running and complete any AO3 confirmation in the requested tab. This page checks persisted progress every five seconds. Closing it does not cancel jobs.</p>}
+ {!sampleMode && <p className="muted">The connected desktop companion retrieves metadata. Keep your browser running and complete any AO3 confirmation in the requested tab. This page checks persisted progress every five seconds. Closing it does not cancel jobs.</p>}
  {sampleMode && <p className="muted">Pasted links use the extension with Local selected and save to this browser’s sample library. Keep this page open while importing and complete any AO3 sign-in in the requested tab. Series follow the default and temporary option shown above; existing saved works are kept. New work-page requests wait 15 seconds between captures. Retry interrupted imports with the same links to continue safely.</p>}
  {message&&<p role="status">{message}</p>}{!reviewing&&error&&<p className="error-message" role="alert">{error}</p>}
  {relatedImport && (sampleMode || finished && batch?.id === relatedImport.batchId) && <ImportedSeriesNotice key={relatedImport.batchId} reviewedSeriesIds={relatedImport.reviewedSeriesIds} reviewRelatedSeries initialBehavior={relatedImport.behavior} stories={(library.stories ?? []).filter(story => sampleMode ? story.work.ao3_work_id !== null && relatedImport.workIds.includes(story.work.ao3_work_id) : batchEntries.has(story.id))} onImported={id => { setSelected(id); setRelatedImport(undefined) }} />}
  </>}
+  </DesktopRetrievalGate>}
   {activeTab === tab.id && batchHistory}
  </section>)}
  </div>

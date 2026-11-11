@@ -233,6 +233,9 @@ function externalMessage(message, sender, respond) {
   if (!sender.id && profiles && Object.values(profiles).some(profile => { try { return profile.appOrigin === new URL(sender.url).origin } catch { return false } })) respond({ ok: false, error: 'Select the matching Hosted or Local environment in the extension settings, then retry.' })
   return
  }
+ if (message?.type === 'AO3_LIBRARY_CAPABILITIES') {
+  respond({ ok: true, capabilities: ['metadata-retrieval-v1'] }); return
+ }
  if (message?.type === 'AO3_LIBRARY_SAMPLE_CONNECT') {
   if (!isLocalHostname(new URL(appOrigin).hostname)) { respond({ ok: false, error: 'Sample imports require the local extension.' }); return }
   const version = connectionVersion

@@ -1,3 +1,4 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -22,7 +23,7 @@ async function signIn(page: Page) {
   await expect(page.getByRole('heading', { name: 'Currently Reading' })).toBeVisible()
 }
 
-test.beforeEach(async ({ page }) => { await mockAuth(page) })
+test.beforeEach(async ({ page }) => { await desktopCompanion(page); await mockAuth(page) })
 
 test('private deep links require sign-in and the form works with a keyboard', async ({ page }) => {
   await page.goto('/library')

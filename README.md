@@ -106,8 +106,7 @@ Run the following long-running commands in **separate terminals**. Leave each re
 | --- | --- | --- |
 | 1 | `npm run dev` | Normal authenticated website at `http://127.0.0.1:5173` |
 | 2 | `npx supabase functions serve extension-metadata` | Browser-extension imports and metadata refreshes |
-| 3 | `npm run worker` | Direct retrieval mode; requires `.env.worker` below |
-| 4 | `npx supabase functions serve` | Optional full function runtime for series previews, canonical tag resolution, and saved backups; use instead of terminal 2 |
+| 3 | `npx supabase functions serve` | Optional full function runtime for series previews, canonical tag resolution, and saved backups; use instead of terminal 2 |
 
 Use the URL printed by Vite. For the local extension build, it must match `EXTENSION_LOCAL_APP_ORIGIN` exactly (default `http://127.0.0.1:5173`), including the port and `127.0.0.1` versus `localhost`. The extension and app must target the same Supabase instance.
 
@@ -121,26 +120,9 @@ With `.env.local` pointing to local Supabase, build into the local directory so 
 npm run build:extension:local
 ```
 
-In Chrome/Edge, open `chrome://extensions` or `edge://extensions`, enable Developer mode, and **Load unpacked → `extension/local/dist`**. After rebuilding, click **Reload** on that extension's card. If you have an older local extension without the fixed ID, remove that older local installation and load the new local build once. In the local app’s **Settings → AO3 Metadata Retrieval**, select **Browser Extension**, and click **Save Metadata Mode**. With no saved or configured extension ID, the local app falls back to the fixed ID of **Beyond the Archives Companion (Local)**. If Settings already contains another companion ID, enter the local build’s ID from your browser’s Extensions page. A shared companion build can instead target Local through its extension settings; see the extension guide. Use **Reconnect extension** after a browser restart. Complete any AO3 sign-in or adult-content confirmation in the requested AO3 tab.
+In Chrome/Edge, open `chrome://extensions` or `edge://extensions`, enable Developer mode, and **Load unpacked → `extension/local/dist`**. After rebuilding, click **Reload** on that extension's card. If you have an older local extension without the fixed ID, remove that older local installation and load the new local build once. In the local app’s **Settings → AO3 Metadata Retrieval**, enter the extension ID and click **Reconnect Extension**. With no saved or configured extension ID, the local app falls back to the fixed ID of **Beyond the Archives Companion (Local)**. If Settings already contains another companion ID, enter the local build’s ID from your browser’s Extensions page. A shared companion build can instead target Local through its extension settings; see the extension guide. Use **Reconnect Extension** after a browser restart. Complete any AO3 sign-in or adult-content confirmation in the requested AO3 tab.
 
-Import one work with **Add → Add Story**, which opens **Add Story → Import from link**, or use **Add → Import History from AO3** for batches. Importing a verified chapter link opens the existing fic when already saved and sets its reading location: chapter 10 means chapters 1–9 read. This also supports returning to an earlier chapter. Metadata-only refreshes preserve reading location; edits made while retrieval is pending take precedence. Existing queued requests keep their original retrieval mode. See [the extension guide](companions/chrome/README.md) for hosted builds and detailed behavior.
-
-### Configure the Direct Metadata Worker
-
-For **Direct retrieval** in Settings, create the ignored `.env.worker` with these server-only values from local Supabase status:
-
-```dotenv
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_SECRET_KEY=YOUR_LOCAL_SECRET_OR_SERVICE_ROLE_KEY
-```
-
-`npm run worker` loads this file automatically and polls continuously. To process at most one eligible job and exit:
-
-```sh
-npm run worker -- --once
-```
-
-The worker processes direct jobs; the extension and Edge Function handler process extension jobs. Run the service for the mode being tested. Neither service changes the mode of already queued requests.
+Import one work with **Add → Add Story**, which opens **Add Story → Import from link**, or use **Add → Import History from AO3** for batches. Importing a verified chapter link opens the existing fic when already saved and sets its reading location: chapter 10 means chapters 1–9 read. This also supports returning to an earlier chapter. Metadata-only refreshes preserve reading location; edits made while retrieval is pending take precedence. Saved jobs survive disconnection; reconnect the desktop companion to continue. See [the extension guide](companions/chrome/README.md) for hosted builds and detailed behavior.
 
 ### Test a Production Build Locally
 
@@ -149,11 +131,11 @@ npm run build
 npm run preview
 ```
 
-Open the preview URL printed by Vite, normally `http://127.0.0.1:4173`. Preview serves the built frontend; Supabase and the selected metadata service must still be running. To test extension imports there, run `EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:4173 npm run build:extension:local`, reload the local extension, and reconnect in Settings. Use the local build’s ID in Settings if another ID is already configured. Settings stored under port 5173 do not carry over to port 4173.
+Open the preview URL printed by Vite, normally `http://127.0.0.1:4173`. Preview serves the built frontend; Supabase and the extension metadata handler must still be running. To test extension imports there, run `EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:4173 npm run build:extension:local`, reload the local extension, and reconnect in Settings. Use the local build’s ID in Settings if another ID is already configured. Settings stored under port 5173 do not carry over to port 4173.
 
 ### Stop Local Services
 
-Press **Ctrl+C** in the Vite, function-handler, preview, and worker terminals that you started. When finished with the local database:
+Press **Ctrl+C** in the Vite, function-handler, and preview terminals that you started. When finished with the local database:
 
 ```sh
 npx supabase stop
@@ -233,7 +215,7 @@ Repeat imports refresh factual metadata while preserving manual corrections. **B
 
 ### Choose Browser Integration
 
-In **Settings → Imports & Connections → AO3 Metadata Retrieval**, choose Direct Retrieval with a running worker or Browser Extension. Desktop and mobile choices are independent; mobile may inherit desktop or use direct retrieval. The mobile layout applies at widths up to 1,100 CSS pixels. Queued jobs retain the retrieval mode selected when created.
+In **Settings → Imports & Connections → AO3 Metadata Retrieval**, connect the current Chrome/Edge desktop companion. All website imports, CSV imports, Full Scan, Quick Sync, series previews, metadata refreshes and Wayback snapshot imports require its compatible connection. Narrow desktop windows remain supported. On mobile, open an AO3 work and save it with the Safari companion, or add a story manually. Your saved library, editing, reading progress, Import History and Wayback lookup remain available.
 
 Chrome/Edge Companion supports retrieval, scans, and AO3 reading controls. The [Safari userscript](companions/safari/README.md) supplies AO3 reading controls and pairing, but does not process metadata jobs or Library Sync scans. Rebuild and reload companions after updates; their installation guides cover hosted builds and pairing. Paired AO3 reading bars remain authorized until you disconnect the device in the bar or revoke it in Settings; website sign-out does not revoke them.
 

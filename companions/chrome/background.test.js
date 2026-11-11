@@ -388,3 +388,14 @@ it('captures the archived source of a claimed job without opening the live work 
  expect(fetcher).toHaveBeenCalledWith('https://project.supabase.co/functions/v1/extension-metadata', expect.objectContaining({ body: expect.stringContaining(sourceUrl) }))
  expect(chrome.tabs.update).not.toHaveBeenCalled()
 })
+
+it('advertises retrieval capabilities only to the configured app origin without reading AO3',async()=>{
+ const listener=chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]
+ const trusted=vi.fn(),untrusted=vi.fn()
+ listener({type:'AO3_LIBRARY_CAPABILITIES'},{url:origin},trusted)
+ listener({type:'AO3_LIBRARY_CAPABILITIES'},{url:'https://evil.example'},untrusted)
+ await vi.waitFor(()=>expect(trusted).toHaveBeenCalledWith({ok:true,capabilities:['metadata-retrieval-v1']}))
+ expect(untrusted).not.toHaveBeenCalled()
+ expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
+ expect(fetcher).not.toHaveBeenCalled()
+})

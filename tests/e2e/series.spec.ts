@@ -1,3 +1,4 @@
+import { desktopCompanion } from './desktop-companion-fixture'
 import { isTooltipPaintedAt } from './tooltip-assertions'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
@@ -468,3 +469,6 @@ test('saving series details preserves review spacing', async ({ page }) => {
  expect(await measure()).toEqual(before)
  expect(requests).toBe(1)
 })
+
+// These workflows exercise desktop retrieval at both responsive viewport sizes.
+test.beforeEach(async({page})=>{await desktopCompanion(page)})

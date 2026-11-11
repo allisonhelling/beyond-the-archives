@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
-import { parseSeries, retrieveSeries } from './series'
+import { parseSeries } from './series'
 import { seriesHandler } from './series-handler'
 const html = readFileSync(new URL('./fixtures/series.html', import.meta.url), 'utf8')
 const url = 'https://archiveofourown.org/series/77'
@@ -17,28 +17,19 @@ it('rejects unavailable, different, and invalid paginated listings', () => {
  expect(() => parseSeries(html, 'https://archiveofourown.org/series/78')).toThrow('different series')
  expect(() => parseSeries(html + '<ol class="pagination"><li class="next"><a>Next</a></li></ol>', url)).toThrow('invalid Next link')
 })
-it('fetches only the normalized listing, never follows redirects or loads its works', async () => {
- const fetcher = vi.fn().mockResolvedValue(new Response(html, { headers: { 'content-type': 'text/html' } }))
- expect((await retrieveSeries(url + '?x=1', fetcher)).preview?.works).toHaveLength(2)
- expect(fetcher).toHaveBeenCalledTimes(1)
- expect(fetcher.mock.calls[0][0]).toBe(url)
- fetcher.mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://evil.example' } }))
- expect((await retrieveSeries(url, fetcher)).failure?.category).toBe('redirect')
- expect(fetcher).toHaveBeenCalledTimes(2)
-})
 function setup() {
  const deps = { authenticate: vi.fn().mockResolvedValue(true), reserve: vi.fn().mockResolvedValue(true), pause: vi.fn().mockResolvedValue(undefined), retrieve: vi.fn().mockResolvedValue({ preview: parseSeries(html, url), failure: null }) }
  return { deps, handler: seriesHandler(deps) }
 }
 function request(body: object, token = 'session') { return new Request('https://library.example/series-preview', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(body) }) }
-it('authenticates and validates URLs before fetching; respects hosted pacing', async () => {
+it('authenticates and validates URLs before rejecting retired hosted retrieval', async () => {
  const { deps, handler } = setup()
  deps.authenticate.mockResolvedValueOnce(false)
  expect((await handler(request({ url }))).status).toBe(401)
  expect(deps.reserve).not.toHaveBeenCalled()
  expect((await handler(request({ url: 'https://evil.example/series/77' }))).status).toBe(400)
  deps.reserve.mockResolvedValue(false)
- expect((await handler(request({ url }))).status).toBe(429)
+ expect((await handler(request({ url }))).status).toBe(410)
  expect(deps.retrieve).not.toHaveBeenCalled()
 })
 it('parses authenticated browser snapshots without hosted AO3 traffic, and bounds input', async () => {
@@ -48,11 +39,11 @@ it('parses authenticated browser snapshots without hosted AO3 traffic, and bound
  expect(deps.retrieve).not.toHaveBeenCalled()
  expect((await handler(request({ url, html: 'x'.repeat(1_000_001) }))).status).toBe(413)
 })
-it('propagates AO3 rate limits into the shared worker pause', async () => {
+it('rejects stale URL-only requests without any hosted retrieval', async () => {
  const { deps, handler } = setup()
- deps.retrieve.mockResolvedValue({ preview: null, failure: { pauseSeconds: 3600, category: 'rate_limited' } } as never)
- expect((await handler(request({ url }))).status).toBe(422)
- expect(deps.pause).toHaveBeenCalledWith(3600, 'rate_limited')
+ expect((await handler(request({url}))).status).toBe(410)
+ expect(deps.retrieve).not.toHaveBeenCalled()
+ expect(deps.pause).not.toHaveBeenCalled()
 })
 
 it('extracts creator links, dates, readable notes, series statistics and fandoms', () => {
@@ -73,9 +64,7 @@ it('extracts the Next page and retains its page number for retrieval', async () 
  const next = url + '?page=2'
  const page = html + '<ol class="pagination"><li class="next"><a href="?page=2">Next</a></li></ol>'
  expect(parseSeries(page, url).nextUrl).toBe(next)
- const fetcher = vi.fn().mockResolvedValue(new Response(html, { headers: { 'content-type': 'text/html' } }))
- await retrieveSeries(next, fetcher)
- expect(fetcher.mock.calls[0][0]).toBe(next)
+ expect(parseSeries(html, next).seriesId).toBe(77)
  for (const href of ['https://evil.example/series/77?page=2', '/series/78?page=2', '?page=1', '?page=oops']) {
   expect(() => parseSeries(html + `<ol class="pagination"><li class="next"><a href="${href}">Next</a></li></ol>`, url)).toThrow()
  }

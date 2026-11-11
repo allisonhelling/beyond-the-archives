@@ -1,15 +1,12 @@
-import { localExtensionConnectionHelp } from './extension-config'
 import { importError } from './import-error'
 import { bookmarkConflicts, bookmarkReadingState, csvWorkKey } from './ao3-csv'
 import type { Database } from '../../types/database'
 import type { Status } from '../library/model'
 import { sampleMode } from '../../lib/sample-mode'
-import { getLayout } from '../../lib/use-layout'
-import { metadataRetrievalMode } from './metadata-preferences'
 import { supabase } from '../../lib/supabase'
 import { addStoriesToCollections, allRows } from '../library/repository'
 import { classifyUrl, extractUrls, mergeSeriesPreviews, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
-import { connectExtension, previewSeriesWithExtension } from './extension'
+import { requireDesktopExtension, previewSeriesWithExtension } from './extension'
 function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
 type Row<K extends keyof Database['public']['Tables']> = Database['public']['Tables'][K]['Row']
 export type ImportHistory = { selectedBatch?: string; batches: Row<'import_batches'>[]; items: (Row<'import_items'> & { work_info?: { title: string; authors: string[]; author_links?: Record<string, string> } | null })[]; jobs: Row<'metadata_jobs'>[];
@@ -36,6 +33,7 @@ export async function submitImport(text:string, updateReadingLocation = true, re
  if(urls.some(url=>classifyUrl(url).kind==='series')) throw new Error('Review series and choose works before importing.')
  if(!urls.length) throw new Error('Paste at least one http or https URL.')
  if(urls.length>2000) throw new Error('Use at most 2,000 URLs per submission.')
+ await requireDesktopExtension()
  if (sampleMode) {
   await (await import('./sample-import')).importSampleWorkUrls(urls, readingStatus ?? 'to_read', seriesIds, updateReadingLocation)
   return 'sample-import'
@@ -47,11 +45,10 @@ export async function submitImport(text:string, updateReadingLocation = true, re
   if(error.code==='42501') throw new Error('Import access was denied. Sign in again; if it continues, check the Phase 3 database permissions.')
   throw new Error('Could not confirm the import. Check your connection and import history before trying again.')
  }
- if (data) void connectExtension().catch(()=>{})
  return data
 }
 export async function cancelBatch(id:string) { const {error}=await client().rpc('cancel_import_batch',{p_batch:id}); if(error) throw new Error('Could not cancel this batch.') }
-export async function retryJob(id:string) { const {error}=await client().rpc('retry_metadata_job',{p_job:id}); if(error) throw new Error('Retry unavailable. Check the attempt limit, cancellation and retry time.'); void connectExtension().catch(()=>{}) }
+export async function retryJob(id:string) { await requireDesktopExtension(); const {error}=await client().rpc('retry_metadata_job',{p_job:id}); if(error) throw new Error('Retry unavailable. Check the attempt limit, cancellation and retry time.'); }
 export async function approveProgress(id:string) { const {error}=await client().rpc('approve_import_progress',{p_item:id}); if(error) throw new Error('Could not apply verified progress.') }
 export async function clearOverride(entry:string,field:string) { const {error}=await client().rpc('clear_metadata_override',{p_entry:entry,p_field:field}); if(error) throw new Error('Could not restore automatic metadata.') }
 
@@ -71,17 +68,7 @@ export async function markWorkDeleted(entryId: string, jobId: string) {
 export async function previewSeries(url: string, options: { firstPageOnly?: boolean; viaExtension?: boolean; signal?: AbortSignal } = {}): Promise<SeriesPreview> {
  options.signal?.throwIfAborted()
  const identity = parseSeriesUrl(url)
- let useExtension = sampleMode || Boolean(options.viaExtension)
- if (useExtension) {
-  if (!await connectExtension()) throw new Error(sampleMode ? localExtensionConnectionHelp : 'Connect the extension in Settings, then retry the series preview.')
- } else {
-  const db = client()
-  const { data: session } = await db.auth.getSession()
-  if (!session.session) throw new Error('Sign in to preview series.')
-  const { data: preferences, error: settingsError } = await db.from('metadata_preferences').select('retrieval_mode,retrieval_mode_mobile').eq('user_id', session.session.user.id).maybeSingle()
-  if (settingsError) throw new Error('Could not load metadata settings. Retry the preview.')
-  useExtension = metadataRetrievalMode(preferences, getLayout()) === 'extension'
- }
+ await requireDesktopExtension()
  let nextUrl: string | undefined = identity.normalizedUrl
  const pages: SeriesPreview[] = []
  const visited = new Set<string>()
@@ -90,10 +77,9 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
   const pageUrl = seriesPageUrl(nextUrl, identity.seriesId)
   if (visited.has(pageUrl)) throw new Error('Series preview returned a repeated page. Retry the preview.')
   visited.add(pageUrl)
-  let body: { url: string; html?: string } = { url: pageUrl }
-  if (useExtension) body = await previewSeriesWithExtension(pageUrl)
+  const body = await previewSeriesWithExtension(pageUrl)
   options.signal?.throwIfAborted()
-  let page: SeriesPreview, nextPageDelayMs: number | undefined
+  let page: SeriesPreview
   if (sampleMode || options.viaExtension) {
    const { parseSeries } = await import('./ao3-series')
    page = parseSeries(body.html ?? '', body.url)
@@ -105,13 +91,12 @@ export async function previewSeries(url: string, options: { firstPageOnly?: bool
     throw new Error(message)
    }
    if (!data?.preview || data.preview.seriesId !== identity.seriesId || !Array.isArray(data.preview.works)) throw new Error('The preview did not match this series. Retry or skip it.')
-   page = data.preview as SeriesPreview; nextPageDelayMs = data.nextPageDelayMs
+   page = data.preview as SeriesPreview
   }
   options.signal?.throwIfAborted()
   pages.push(page)
   if (options.firstPageOnly) break
   nextUrl = page.nextUrl
-  if (nextUrl && !useExtension && nextPageDelayMs === 35_000) await new Promise(resolve => setTimeout(resolve, nextPageDelayMs))
  }
  return { ...mergeSeriesPreviews(pages), ...(options.firstPageOnly && pages[0].nextUrl ? { basic: true } : {}) }
 }
@@ -127,6 +112,7 @@ export async function previewCsvImport(works: import('./ao3-csv').CsvWork[]): Pr
  })
 }
 export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conflicts: import('./ao3-csv').CsvConflict[], choices: Record<string, import('./ao3-csv').CsvChoice>, checkChapterDates = false) {
+ await requireDesktopExtension()
  const saved = new Map(conflicts.map(conflict => [csvWorkKey(conflict), conflict]))
  const rows = works.map(work => ({ ...work, checkChapterDates, choice: choices[csvWorkKey(work)] ?? 'keep', expectedVersion: saved.get(csvWorkKey(work))?.version ?? null }))
  const { data, error } = await client().rpc('submit_ao3_csv_import', { p_rows: rows as unknown as import('../../types/database').Json })
@@ -134,11 +120,11 @@ export async function submitCsvImport(works: import('./ao3-csv').CsvWork[], conf
   if (error.code === '40001') throw new Error('Your library changed after CSV review. Choose the files again to refresh conflicts before importing.')
   throw importError('Could not confirm the CSV import', error)
  }
- void connectExtension().catch(() => {})
  return data as unknown as { batch: string | null; imported: number; kept: number; metadataRepaired: number; seriesRepaired: number; readingCorrections: number; repairWorkIds?: Record<'metadata' | 'series' | 'reading', string[]> }
 }
 
 export async function submitLibrarySync(works: import('./ao3-csv').CsvWork[], collectionId?: string, readingStatus?: import('../library/model').Status, scan?: { id: string; url: string; reviewExisting?: boolean; readingStatusOrigin?: 'default' | 'manual' }, approved?: import('./ao3-csv').CsvConflict) {
+ await requireDesktopExtension()
  works = works.map(work => ({ ...work, ...(readingStatus ? { importReadingStatus: readingStatus, ...(scan?.readingStatusOrigin ? { importReadingStatusOrigin: scan.readingStatusOrigin } : {}) } : {}), reviewExisting: scan?.reviewExisting ?? true, ...(approved && csvWorkKey(work) === csvWorkKey(approved) ? { choice: 'overwrite' as const, expectedVersion: approved.version } : {}) }))
  const conflicts = !approved && works.some(work => work.source === 'bookmarks') ? bookmarkConflicts(works, await previewCsvImport(works)) : []
  let result: { batch: string | null; imported: number; kept: number; metadataRepaired?: number; seriesRepaired?: number; readingCorrections?: number; repairWorkIds?: Record<'metadata' | 'series' | 'reading', string[]> }

@@ -1,3 +1,4 @@
+vi.mock('./DesktopRetrievalGate', () => ({ DesktopRetrievalGate: ({ children }: { children: import('react').ReactNode }) => <>{children}</> }))
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

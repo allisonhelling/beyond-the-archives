@@ -65,12 +65,15 @@ Proposed minimum logical matcher input:
 type AppTagCategory = 'fandom' | 'relationship' | 'character' | 'additional';
 type TagObservation = {
   source: SourceWorkIdentity;
+  rawCategory: string;                  // Preserve provider vocabulary before mapping.
   category: AppTagCategory;
   rawLabel: string;
   nativeTagId?: string;
+  sourceOrder: number;                 // Preserve extraction order.
+  sourceLocator: string;
   provenance: SourceObservationProvenance;
   // Present only after verified identity mapping, never just label similarity.
-  canonical?: { authority: 'ao3'; key: string; evidenceRevision: string };
+  canonical?: { authority: 'ao3'; category: AppTagCategory; key: string; evidenceRevision: string };
 };
 ```
 
@@ -89,9 +92,11 @@ Expression evaluation receives normalized category observations, validated selec
 | Fandom Any `[A,B]`, observed `[A]` | True; All false; Custom `[[A,B],[C]]` false. |
 | Custom `[[A,B],[C]]`, observed `[A,B]` or `[C]` | True; observed `[A]` false. |
 | Failed refresh of a verified alias | Retain verified mapping; timestamps alone do not change matches. |
-| Alias record with absent canonical root | Audit gap: TS currently permits it, SQL root join does not. Phase B must test incomplete snapshots and define one verified-root rule. |
+| Alias record with absent or wrong-category canonical root | TS and SQL both use raw fallback; no verified synonym expansion. Implemented by B1 and rechecked by B1-R. |
 
-These are design truth fixtures, not a second implemented matcher. Current executable coverage: `tags/tag-resolution.test.ts`, `server/ao3/tag-resolution.test.ts`, `supabase/tests/canonical-tags.test.ts`, `reading-search.test.ts`, series/automatic-collection tests. New-source authority fixtures remain acceptance tests for the first boundary implementation; current types cannot carry another source safely.
+The observation types above remain design notation, not accepted import payloads. Current executable coverage: `tags/tag-resolution.test.ts`, `server/ao3/tag-resolution.test.ts`, `supabase/tests/canonical-tags.test.ts`, `reading-search.test.ts`, series/automatic-collection tests. B1-R exercises synthetic source-qualified collisions through the existing pure matcher: `tagMatches` requires explicit `authority: 'ao3' | null`; null disables aliases but retains raw text matching. `TagResolution` and `TagAliases` remain AO3-only, owner-scoped cache contracts. Current `filterReading` explicitly supplies AO3 authority for its existing AO3 effective metadata and owner corrections. It is not a multi-provider observation adapter; a future foreign record must not enter that path with an unqualified alias index. See the [current boundary inventory](filter-source-readiness.md).
+
+At a future adapter boundary, qualify native tag identity by `(platform, rawCategory, nativeTagId)` and retain raw label/order even when no native ID exists. The same native ID or label from two platforms never establishes equivalence. Record capture method/time/extraction version and trust level before producing a normalized category. AO3 `freeform` maps to application `additional` upstream; today's legacy filter key `tags` and cache key `freeform` are unchanged. Missing, failed, unsupported and explicitly verified empty inputs must remain distinguishable before existing lossy validation/display paths. A future known-empty fandom update requires a reviewed persistence contract; today's `[]`/NULL cannot supply that evidence.
 
 ## Crossover Evidence Contract
 
@@ -108,12 +113,14 @@ Inputs must preserve source fandom observations, authority-qualified identity ma
 | Two disjoint components, all needed identities/closures complete and fresh | `crossover`. |
 | A–B related, C unresolved; missing/failed/ambiguous closure | `unknown`, never default false. |
 | Positive connected proof, some closure incomplete | `not_crossover` if every effective fandom is accounted for. |
-| Disjoint components with expired negative closure | `unknown`; stale positive edges can remain usable unless contradicted. Proposed negative maximum age is 30 days, pending parser design. |
+| Disjoint components with expired negative closure | `unknown`; stale positive edges can remain usable unless contradicted. Approved negative maximum age is 30 days; authentic parser fixtures remain deferred. |
 | Native source assertion only / unmapped hashtag candidate | `unknown` under v1; assertion retained separately. |
 | Explicit supported known-empty fandom set | `not_crossover` under proposed AO3 zero/one policy. |
-| Absent/unsupported/unprocessed fandom set | Preserve `unknown` observation; do not invent known-empty. See ambiguity below. |
+| Absent/unsupported/unprocessed fandom set | Preserve `unknown` observation; do not invent known-empty. See the approved B1 decision below. |
 
-**Proposal inconsistency to resolve before implementation:** crossover §3.4 says zero/one distinct saved names and “no valid fandom metadata” are `not_crossover`, while §3.2/§3.3 and the readiness contract require verified effective identities and conservative unknown handling. An absent category is not the same as a verified empty set. Phase A adopts the conservative observation distinction for new contracts; the exact legacy AO3 zero/one shortcut needs an explicit product/classifier decision before rollout. Do not silently change current boolean filtering in Phase A. Likewise agree the plural existing `crossovers` payload and series member aggregation semantics rather than introducing a competing singular field.
+The approved B1 decision resolves the original proposal inconsistency: verified known-empty or one confirmed effective identity without unresolved candidates is `not_crossover`; absent, unsupported or unprocessed observations remain `unknown`. Negative separation evidence expires at 30 days. These semantics are implemented only in the isolated pure policy and synthetic fixtures; runtime filters retain legacy name-count behavior, plural `crossovers` and any-member series semantics. See [ADR 0003's approved addendum](../adr/0003-crossover-evidence-policy.md#phase-b1-approved-decision-addendum).
+
+Future adapter-to-policy mapping must first apply owner overrides, then map each confirmed observation to an opaque `ConfirmedFandom` key with verified AO3 authority. Unmapped candidates set `unresolved`; unsupported/missing observations yield `unavailable`/`unknown`; `known_empty.verified` requires explicit supported absence evidence. Identity-equivalent synonyms collapse to one key. Related fandoms retain distinct keys and contribute only separately verified AO3 parent edges in `FandomSnapshot`. Capture native assertions separately with source identity and provenance; they are not classifier arguments. No label normalization, user-confirmed mapping alone, foreign taxonomy edge or native assertion establishes AO3 verification. The adapter must retain provenance outside the compact policy input so evidence revisions remain traceable; these are future requirements, not existing persisted fields.
 
 Allowed includes all states; Only includes known crossover; Exclude retains unknown. Evidence and classifier revisions must be consistent across page results, exact counts, series and automatic collections. A filter must never fetch hierarchy data per row.
 

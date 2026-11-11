@@ -73,3 +73,7 @@ While a panel is open, the footer displays the installed version and links to Se
 Automated tests cover defaults, credential boundaries, ownership, revocation/expiry, atomic saves, stale-write rejection and failure recovery. Actual iOS Safari and the App Store Userscripts runtime still require a device check after deployment.
 
 - Series pages show the same connected library toolbar. Add the series alone or select installments and set individual progress, notes, ratings, tags, and collections. Already saved works retain their details. For paginated series, save each listing page; saved series installments are combined across pages.
+
+## Mobile Website Imports
+
+The mobile website does not start automatic metadata jobs, CSV imports or library scans. To save one work with metadata, open it on AO3 and use this companion's existing Add/Collect metadata controls. Website library browsing, notes, collections, reading actions, manual metadata editing and Import History remain available. Desktop website retrieval requires the compatible Chrome/Edge companion.

@@ -1,3 +1,4 @@
+import { DesktopRetrievalGate } from './DesktopRetrievalGate'
 import { useActivity } from '../../lib/use-activity'
 import { SeriesImportOptions } from './SeriesImportOptions'
 import { CompletedImportSeriesNotice } from './ImportedSeriesNotice'
@@ -75,7 +76,7 @@ export function ImportLinkForm() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not import selected works.') }
     finally { setBusy(false) }
   }
-  return <>
+  return <DesktopRetrievalGate><>
     {sampleMode ? <section className="settings-card import-link-form"><p>Importing requires the connected application.</p><Link className="clickable-text" to="/add?import=manual">Add a Story Manually</Link></section> : reviewing ? <SeriesImportReview previewCache={seriesBehavior.previewCache} onPreview={seriesBehavior.cachePreview} error={error} automatic={seriesBehavior.behavior === 'all'} key={reviewing} text={reviewing} savedIds={new Set((library.stories ?? []).flatMap(story => story.work.ao3_work_id ? [story.work.ao3_work_id] : []))} busy={busy} onConfirm={(works, status, seriesIds) => void importSelected(works, status, seriesIds)} onCancel={() => setReviewing('')} /> : !batch ? <form className="story-form settings-card import-link-form" onSubmit={event => void submit(event)}>
       <label>Import Source<select value={source} disabled={busy} onChange={event => setSource(event.target.value as typeof source)}><option value="ao3">AO3 Work or Series Link</option><option value="wayback">Import from Wayback Machine</option></select></label>
       <label>{source === 'wayback' ? 'Wayback Machine Link' : 'AO3 Work or Series Link'}<input type="url" required value={url} disabled={busy} onChange={event => { setUrl(event.target.value); if (waybackSnapshot(event.target.value)) setSource('wayback') }} placeholder={source === 'wayback' ? 'https://web.archive.org/web/20251007001146/https://archiveofourown.org/works/123' : 'https://archiveofourown.org/works/123'} /></label>
@@ -92,5 +93,5 @@ export function ImportLinkForm() {
     </>}
     {batch && multiple && relatedOptions.reviewRelatedSeries && <CompletedImportSeriesNotice reviewedSeriesIds={relatedOptions.reviewedSeriesIds} batchId={batch} initialBehavior={relatedOptions.behavior} reviewRelatedSeries={relatedOptions.reviewRelatedSeries} />}
     {error && !reviewing && <p className="error-message" role="alert">{error}</p>}
-  </>
+  </></DesktopRetrievalGate>
 }

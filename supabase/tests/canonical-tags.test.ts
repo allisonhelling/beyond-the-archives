@@ -122,6 +122,29 @@ it('requires a category-correct canonical root in both SQL and TypeScript and pr
  expect((await db.query<{m:boolean}>("select public.library_tag_matches('Alya (Miraculous Ladybug)','personalTags','alya cesaire',$1) m",[JSON.stringify({freeform:{'alya cesaire':{'alya (miraculous ladybug)':true}}})])).rows[0].m).toBe(false)
 })
 
+it('keeps personal and unclassified label collisions separate and ignores forged public-query alias authority', async()=>{
+ await cache()
+ const forged={character:{'forged canonical':{[names[1].toLowerCase()]:true}}}
+ expect((await query({characters:'Forged Canonical',tagAliases:forged,tagGroups:{characters:[[names[1]]]}})).total).toBe(0)
+ await db.query("update public.library_entries set metadata_overrides=metadata_overrides||jsonb_build_object('ao3_tags',jsonb_build_array($1::text),'character_tags','[]'::jsonb) where user_id=auth.uid()",[names[1]])
+ const tag=(await db.query<{id:string}>('insert into public.personal_tags(name) values($1) returning id',[names[1]])).rows[0].id
+ await db.query('insert into public.library_entry_tags(library_entry_id,personal_tag_id) select id,$1 from public.library_entries where user_id=auth.uid()',[tag])
+ expect((await query({characters:names[0]})).total).toBe(0)
+ expect((await query({personalTags:names[0]})).total).toBe(0)
+ expect((await query({personalTags:names[1]})).total).toBe(5)
+})
+
+it('preserves the current lossy SQL observation boundary without inventing verified empty fandoms', async()=>{
+ await db.exec('reset role')
+ const normalized=(await db.query<{m:object}>("select public.nonempty_ao3_metadata($1) m",[JSON.stringify({fandoms:[],character_tags:[],kudos:0,is_complete:false,series_checked:true,series:[],series_memberships:[]})])).rows[0].m
+ expect(normalized).toEqual({kudos:0,is_complete:false,publication_status:'in_progress',series_checked:true,series:[],series_memberships:[]})
+ await db.query("update public.library_entries set extension_metadata=$1,metadata_overrides=$2 where user_id=$3",[JSON.stringify({fandoms:['Private Source']}),JSON.stringify({fandoms:[]}),alice])
+ await db.exec('set role authenticated')
+ const result=await query()
+ expect(result.total).toBe(5)
+ expect(result.stories.every(story=>story.metadata.fandoms.length===0)).toBe(true)
+})
+
 it('evaluates Any/All/Custom for every category before pagination and shares the predicate with local results',async()=>{
  await cache()
  const stories=(await query()).stories

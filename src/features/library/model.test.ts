@@ -1,6 +1,16 @@
 import { exampleWork } from './display/display-examples'
 import { describe, expect, it } from 'vitest'
-import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, initialProgress, nextUnread, parseWorkUrl, progressReadingStatus, validateProgress, type Work } from './model'
+import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, effectiveWork, initialProgress, nextUnread, parseWorkUrl, progressReadingStatus, validateProgress, type Work } from './model'
+it('keeps display defaults distinct from source observations and preserves private empty fandom overrides', () => {
+ const work = { automatic_metadata: {}, verified_chapters: {} } as Work
+ expect(effectiveMetadata(work, {}).fandoms).toEqual([])
+ expect(Object.hasOwn(work.automatic_metadata as object, 'fandoms')).toBe(false)
+ const privateWork = effectiveWork({ ...work, automatic_metadata: { fandoms: ['Shared'] } }, { extension_metadata: { fandoms: ['Private Observation'] }, extension_chapters: {} })
+ expect(effectiveMetadata(privateWork, {}).fandoms).toEqual(['Private Observation'])
+ expect(effectiveMetadata(privateWork, { fandoms: [] }).fandoms).toEqual([])
+ expect(effectiveMetadata(privateWork, { fandoms: ['Manual'] }).fandoms).toEqual(['Manual'])
+ expect(privateWork.automatic_metadata).toEqual({ fandoms: ['Private Observation'] })
+})
 it('projects deleted availability without losing saved work fields or manual corrections', () => {
   const work = { title: 'Source title', summary: 'Saved summary', is_complete: true, published_chapters: 8, automatic_metadata: {} } as Work
   const manual = { title: 'My title', publication_status: 'complete' }
