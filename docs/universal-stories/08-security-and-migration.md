@@ -3,6 +3,8 @@
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
+**Phase 1 reconciliation:** The [current foundation record](PHASE_1_FOUNDATION.md) audits reviewed `main` at `600ef23`, including hierarchy crossover filtering and Phase 0. It finalizes typed identity/provenance adapters against existing owner-protected data and adds only starter provisioning. General-source persistence and later product features remain unimplemented; the earlier accessible-main reconciliation below is historical evidence, not a statement that the new foundation creates a universal save API.
+
 ## 12. Security, Provenance, And Reliability
 
 - **Safe URL fetching:** Restrict protocols, block SSRF/private-network targets, handle redirects safely, enforce size/time limits, and sanitize extracted HTML. Do not treat arbitrary page content as trusted instructions.

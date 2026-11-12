@@ -309,7 +309,12 @@ test('exports one work in either format and shows Unfolded beside Wayback only f
   const download=await downloading
   expect(download.suggestedFilename()).toBe(`beyond-the-archives-work-99001.${format}`)
   const content=await readFile((await download.path())!,'utf8')
-  if(format==='json') expect(JSON.parse(content).work).toMatchObject({id:'export-entry',notes:'Saved private note',metadata:{title:'Export Example'}})
+  if(format==='json') {
+   const exported = JSON.parse(content)
+   expect(exported.work).toMatchObject({id:'export-entry',notes:'Saved private note',metadata:{title:'Export Example'}})
+   expect(exported.source_version).toMatchObject({contractVersion:1,storyId:'export-entry',identity:{kind:'native',platform:'ao3',nativeWorkId:'99001'},
+    publishedChapters:{value:3,source:'manual',manualOverride:true},publicationStatus:{value:'in_progress',source:'manual'}})
+  }
   else {expect(content).toContain('Export Example');expect(content).toContain('Saved private note')}
  }
  expect(downloads).toBe(2)

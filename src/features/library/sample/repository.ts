@@ -3,7 +3,7 @@ import type { AutomaticMetadata } from '../../imports/ao3-metadata'
 import { csvBookmark, bookmarkReadingState, nonemptyMetadata, type CsvWork } from '../../imports/ao3-csv'
 import { recordReadingTransition } from '../reading-history'
 import { defaultReadingFilters, filterReading } from '../reading-search'
-import { applyAutomaticCollections, automaticCollectionRules, collectionRules, type AutomaticCollectionRules } from '../collections/automatic-collections'
+import { applyAutomaticCollections, automaticCollectionRules, collectionRules, originalWorksRules, type AutomaticCollectionRules } from '../collections/automatic-collections'
 import type { SeriesPreview } from '../../imports/urls'
 import { librarySeries, type SeriesRecord } from '../series/series'
 import type { Json } from '../../../types/database'
@@ -21,7 +21,7 @@ import { normalizeReadingStatus, blankMetadata, bookmarkRec, deletedWorkTitle, s
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
 const capturedAt = '2026-10-15T12:00:00.000Z'
-const sampleVersion = 10
+const sampleVersion = 11
 const seriesVersions: Record<number, number> = { 132147: 6, 1030529: 3, 2404765: 3, 2888871: 3 }
 const spineSamples = [
   { name: 'Celestial', spineDesign: 'celestial', color: '#92504e', introducedIn: 4 },
@@ -113,6 +113,12 @@ function originalSamples(): Library {
     automatic_rules: automaticCollectionRules({ ...defaultReadingFilters, publication: ['deleted'] }) as unknown as Json,
     sort_position: collections.length, last_story_added_at: null, created_at: capturedAt, updated_at: capturedAt,
   })
+  collections.push({
+    id: 'sample-original-works', user_id: userId, name: 'Original Works', default_key: null,
+    color: '#07534a', symbol: 'book', description: null,
+    automatic_rules: originalWorksRules() as unknown as Json,
+    sort_position: collections.length, last_story_added_at: null, created_at: capturedAt, updated_at: capturedAt,
+  })
   return { stories, collections, series, sampleVersion }
 }
 
@@ -132,7 +138,7 @@ function orderSampleCollections(collections: Library['collections']) {
 // Keep originalSamples separate for legacy upgrades, which must preserve historical seeds.
 function seedLibrary(): Library {
   const saved = structuredClone(defaultState)
-  if ('completeSnapshot' in saved && saved.completeSnapshot === true) return saved as unknown as Library
+  if ('completeSnapshot' in saved && saved.completeSnapshot === true) return { ...saved, sampleVersion } as unknown as Library
   const original = originalSamples()
   const collections = [...saved.collections] as Library['collections']
   for (const collection of original.collections) {
@@ -140,7 +146,7 @@ function seedLibrary(): Library {
     collections.push({ ...collection, sort_position: Math.max(-1,...collections.map(saved => saved.sort_position ?? -1)) + 1 })
   }
   return {
-    ...saved, collections: orderSampleCollections(collections),
+    ...saved, sampleVersion, collections: orderSampleCollections(collections),
     stories: saved.stories.map(story => ({ ...original.stories.find(sample => sample.id === story.id), ...story })),
     series: saved.series.map(series => ({ ...original.series?.find(sample => sample.id === series.id), ...series })),
   } as Library
@@ -195,8 +201,9 @@ function read(): Library {
         }
         const newDesigns = new Set<SpineDesign>(spineSamples.filter(sample => sample.introducedIn > (data.sampleVersion ?? 1)).map(sample => sample.spineDesign))
         for (const collection of seed.collections) {
-          const starter = collection.id === 'sample-one-shots' || collection.id === 'sample-deleted-works'
-          const introduced = collection.spineDesign ? newDesigns.has(collection.spineDesign) : starter && (data.sampleVersion ?? 1) < (collection.id === 'sample-one-shots' ? 8 : 9)
+          const starterVersion = ({ 'sample-one-shots': 8, 'sample-deleted-works': 9, 'sample-original-works': 11 } as Record<string, number>)[collection.id]
+          const starter = starterVersion !== undefined
+          const introduced = collection.spineDesign ? newDesigns.has(collection.spineDesign) : starter && (data.sampleVersion ?? 1) < starterVersion
           if (!introduced || data.collections.some(saved => saved.id === collection.id || starter && saved.name === collection.name)) continue
           const lastPosition = Math.max(-1, ...data.collections.map(saved => saved.sort_position ?? -1))
           data.collections.push({ ...collection, sort_position: lastPosition + 1 })

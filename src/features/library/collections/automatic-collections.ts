@@ -3,6 +3,11 @@ import { readingFilterLabels } from '../reading-filter-labels'
 import { defaultReadingFilters, filterReading, hasReadingFilters, parseSearch, type ReadingFilters, type SearchTerms } from '../reading-search'
 
 export type AutomaticCollectionRules = { filters: ReadingFilters; terms: SearchTerms }
+/** Source labels, not canonical synonym evidence. Both variants use the ordinary Any matcher. */
+export const originalWorkFandoms = ['Original Work', 'Original Works']
+export function originalWorksRules(): AutomaticCollectionRules {
+  return automaticCollectionRules({ ...defaultReadingFilters, fandoms: [...originalWorkFandoms] })
+}
 export function collectionRules(collection: Pick<Collection, 'automatic_rules'>): AutomaticCollectionRules | null {
   return collection.automatic_rules ? collection.automatic_rules as unknown as AutomaticCollectionRules : null
 }

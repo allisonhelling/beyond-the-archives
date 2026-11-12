@@ -3,6 +3,8 @@
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
+**Phase 1 status:** [Foundation contracts](PHASE_1_FOUNDATION.md) now provide a used typed source-version/provenance adapter and the editable/deletable Original Works starter. Existing AO3 UUID/native identity and private progress remain unchanged. General-source persistence, shared multi-version tiles and crosspost linking below remain later-phase requirements.
+
 ## 9. Story Identity, Source Versions, And Crossposting
 
 ### 9.1 Core Data Model

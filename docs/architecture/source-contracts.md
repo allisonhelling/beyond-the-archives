@@ -2,6 +2,8 @@
 
 Status: accepted design vocabulary for Phase A; **not exported runtime types, persisted fields, supported providers, or a new adapter framework**. Existing AO3 payloads remain authoritative at runtime. See [ADR 0001](../adr/0001-source-identity-boundary.md), [ADR 0002](../adr/0002-observation-and-tag-authority.md) and [ADR 0003](../adr/0003-crossover-evidence-policy.md).
 
+The broader proposed types below remain design notation. [Phase 1](../universal-stories/PHASE_1_FOUNDATION.md) implements the narrower, currently consumed `story-source.ts` adapter for namespaced native/URL candidates, legacy provenance and work-export snapshots; it adds no general-source persistence, import authority or provider registry.
+
 ## Identity And Capabilities
 
 ```ts

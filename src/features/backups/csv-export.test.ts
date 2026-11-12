@@ -65,6 +65,9 @@ it.each([123, null])('preserves version 1 work identity and original source URLs
       metadata_overrides: story.metadata_overrides },
   })
   expect(value.work).not.toHaveProperty('detailsLoaded')
+  expect(value.source_version).toMatchObject({ contractVersion: 1, storyId: story.id, sourceVersionId: story.id,
+    workId: story.work.id, canonicalUrl: null, publishedChapters: { value: null, manualOverride: false } })
+  expect(value.source_version.identity).toEqual(ao3Id === null ? null : { kind: 'native', platform: 'ao3', nativeWorkId: String(ao3Id) })
   expect(filename).toBe(`beyond-the-archives-work-${ao3Id ?? story.id}.json`)
   const [csv] = libraryCsvFiles({ stories: [story], series: [], collections: [] }, ['works.csv'])
   expect(rows(csv.content)[0]).toMatchObject({ id: story.id, work_id: story.work.id,

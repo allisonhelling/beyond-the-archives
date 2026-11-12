@@ -4,6 +4,8 @@
 
 **Phase 0 implementation:** The [current baseline](PHASE_0_BASELINE.md) records actual boundaries, schema-1 capability negotiation, known legacy decoders, source-error mappings, the cross-layer fixture manifest, rollout and remaining gaps. The requirements below also cover later features; unchecked future scenarios are not represented as working functionality. Existing retrieval, reader, Safari, SQL and backup envelopes are preserved through narrow adapters rather than replaced with the illustrative envelope below.
 
+**Phase 1 implementation:** The [foundation record](PHASE_1_FOUNDATION.md) defines the used source-identity/provenance adapter and Original Works starter. Work JSON v1 adds an optional `source_version` snapshot with separate `contractVersion:1`; `work`, CSV, account backup v1, RPC/companion/reader envelopes and numeric AO3 IDs remain unchanged. The same Phase 0 SQL fixtures now compare source keys/provenance after restore; additional fixtures exercise namespace collisions, nullable counts, protected manual precedence, populated migration, starter ownership/deletion and older backups. Non-AO3 persistence and manual-count/crosspost workflows are still deferred, not passing fixture claims.
+
 ## Purpose And Boundaries
 
 Beyond the Archives has independently deployed components: organizer web app, archives unfolded EPUB reader, Chrome/Edge companion, Safari userscript, Supabase Edge Functions, any still-active worker services, and the database. The architecture is already prepared for future multi-site support. This specification adds **incremental compatibility protections**, not a platform rewrite or a revival of the retired hosted AO3 metadata worker.

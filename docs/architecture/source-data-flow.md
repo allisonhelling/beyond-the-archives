@@ -103,7 +103,7 @@ A future shared fandom cache may hold public AO3 facts only. Lookup request rows
 
 ## Complete Ordered Migration Ledger
 
-This is the local input order used by `scripts/test-database.mjs`, extended on 11 November 2026: 125 migrations through hierarchy crossover filtering. The grouped map above explains relevant supersession; this ledger does not assert hosted installation. The [readiness assessment](filter-source-readiness.md) records resolved projection fields; the [crossover foundation](crossover-foundation.md) records new identity/evidence storage and the remaining runtime gate. The hierarchy migration extends indexing/compact projections and the shared predicate; classification stays in the shared TypeScript worker rather than query-time traversal.
+This is the local input order used by `scripts/test-database.mjs`, extended on 12 November 2026: 126 migrations through the Original Works starter. The grouped map above explains relevant supersession; this ledger does not assert hosted installation. The [readiness assessment](filter-source-readiness.md) records resolved projection fields; the [crossover foundation](crossover-foundation.md) records identity/evidence storage and runtime gates. The hierarchy migration extends indexing/compact projections and the shared predicate; classification stays in the shared TypeScript worker rather than query-time traversal. The [Phase 1 foundation](../universal-stories/PHASE_1_FOUNDATION.md) adds only starter provisioning, leaving that identity/projection pipeline intact.
 
 ```text
 20261014000100_foundation.sql
@@ -231,4 +231,5 @@ This is the local input order used by `scripts/test-database.mjs`, extended on 1
 20261109000300_extension_only_retrieval.sql
 20261111000100_fandom_identity_foundation.sql
 20261111000200_hierarchy_crossover_filter.sql
+20261112000100_original_works_starter.sql
 ```

@@ -53,17 +53,21 @@ The fixture item remains partially open: current AO3/Original Work/nullable coun
 
 ## Phase 1 — Validate And Extend The Existing Foundation
 
+Implementation record: [Phase 1 Foundation](PHASE_1_FOUNDATION.md), branch `universal-stories/01-story-foundation` from reviewed `main` at `600ef23`. This phase finalizes typed source/provenance contracts against existing protected storage and adds the ordinary Original Works starter; general-source persistence remains an explicit Phase 2 dependency.
+
 **Suggested Git branch:** `phase/01-story-foundation` (create from the current reviewed integration branch after the previous phase is merged).
 
 **Goal:** Confirm the prepared architecture supports planned source versions and universal metadata without breaking AO3.
 
-- [ ] Inventory implemented multi-site seams in database, TypeScript types, repositories, import paths, and companion.
-- [ ] Define or confirm Shared Story, Source Version, source-specific URL/identity, and independent progress ownership.
-- [ ] Define or confirm field-level provenance: source/extracted/mapped/manual, verification, observation time, and overrides.
-- [ ] Specify publication status separately from reading status and chapter-count confidence.
-- [ ] Confirm migration/backward compatibility for nullable legacy counts and AO3 identities.
-- [ ] Define Original Work fandom and editable/deletable Original Works starter collection using existing collection semantics.
-- [ ] Add migration/RLS, restore/export, and existing AO3/EPUB regression coverage.
+- [x] Inventory implemented multi-site seams in database, TypeScript types, repositories, import paths, and companion.
+- [x] Define or confirm Shared Story, Source Version, source-specific URL/identity, and independent progress ownership.
+- [x] Define or confirm field-level provenance: source/extracted/mapped/manual, verification, observation time, and overrides.
+- [x] Specify publication status separately from reading status and chapter-count confidence.
+- [x] Confirm migration/backward compatibility for nullable legacy counts and AO3 identities.
+- [x] Define Original Work fandom and editable/deletable Original Works starter collection using existing collection semantics.
+- [x] Add migration/RLS, restore/export, and existing AO3/EPUB regression coverage.
+
+Verification above means the local automated baseline: pure/SQL/reader regressions, embedded migration replay and desktop/mobile sample checks. Full local Supabase/PostgREST, native Safari and hosted rollout remain unverified. Legacy field observation times are nullable and honest; persisted per-field manual timestamps/mapping provenance belong with their actual Phase 2/3 write workflows.
 
 **Exit criteria:** No destructive migration or new universal identity collision; existing AO3 and EPUB reading flows pass tests.
 

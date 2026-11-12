@@ -10,6 +10,7 @@ import { defaultReadingFilters } from '../../src/features/library/reading-search
 import { readChapter, type Story } from '../../src/features/library/model'
 import { savedWorkIdentity } from '../../reader/src/metadata'
 import type { EditValues } from '../../src/features/library/edit-merge'
+import { storySourceVersion, sourceIdentityKey } from '../../src/features/library/story-source'
 
 let db: PGlite
 const alice = '10000000-0000-0000-0000-000000000001', bob = '10000000-0000-0000-0000-000000000002'
@@ -80,6 +81,12 @@ it.each(compatibilityFixtures)('round-trips $key through extraction, owned persi
  expect(after.metadata).toEqual(before.metadata)
  expect(after.last_read_chapter).toBe(before.last_read_chapter)
  expect(after.reading_history).toEqual(before.reading_history)
+ const sourceBefore = storySourceVersion(before), sourceAfter = storySourceVersion(after)
+ expect(sourceAfter.publishedChapters).toEqual(sourceBefore.publishedChapters)
+ expect(sourceAfter.publicationStatus).toEqual(sourceBefore.publicationStatus)
+ expect(sourceIdentityKey(sourceAfter.identity!)).toBe(sourceIdentityKey(sourceBefore.identity!))
+ expect(sourceAfter.workId).toBe(sourceBefore.workId)
+ expect(sourceAfter.ownerId).toBe(alice)
  expect(after.collectionIds).toHaveLength(1)
  expect(savedWorkIdentity({ workId: String(after.work.ao3_work_id), metadata: after.metadata })).toBe(String(fixture.workId))
  expect((await query(bob)).total).toBe(0)

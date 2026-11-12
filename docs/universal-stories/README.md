@@ -55,6 +55,8 @@ Use one branch per phase (`phase/00-compatibility-contracts` through `phase/06-h
 
 The [Phase 0 Baseline](PHASE_0_BASELINE.md) records the implemented compatibility safeguards and actual test coverage. It does not mark the universal story features below as implemented.
 
+The [Phase 1 Foundation](PHASE_1_FOUNDATION.md) adds the typed source/provenance adapter and editable Original Works starter while preserving existing AO3 storage and protocols. Non-AO3 persistence, universal manual entry and crosspost linking remain later-phase features.
+
 The existing application is AO3-focused, uses a Chrome/Edge companion for website-initiated AO3 retrieval, has private reading history and chapter progress, and maintains a separate EPUB reader. The architecture is **prepared** for multi-site work; do not conflate source-qualified AO3 fandom hierarchy with universal story identity. Do not restore retired direct hosted AO3 retrieval.
 
 ## Working With These Specs
