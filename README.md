@@ -219,6 +219,8 @@ In **Settings → Imports & Connections → AO3 Metadata Retrieval**, connect th
 
 Chrome/Edge Companion supports retrieval, scans, and AO3 reading controls. The [Safari userscript](companions/safari/README.md) supplies AO3 reading controls and pairing, but does not process metadata jobs or Library Sync scans. Rebuild and reload companions after updates; their installation guides cover hosted builds and pairing. Paired AO3 reading bars remain authorized until you disconnect the device in the bar or revoke it in Settings; website sign-out does not revoke them.
 
+If the app reports an incompatible companion response, update and reconnect the existing companion. Keep saved scans and library data; manual entry remains available while retrieval is unavailable.
+
 ### Export, Restore, and Clean Up
 
 Use Settings → Data & Backups to export spreadsheet CSVs or a complete JSON backup. CSV is for analysis and is not a full restore format. **Export Backup** includes account data and supported browser preferences; saved Supabase copies require the backup function. **Restore Backup** previews JSON/JSON.gz or a saved copy, requires replacement confirmation, and saves a safety copy first. Saved storage retains three successful backups per account with a 50 MiB file limit and one save attempt per minute. Keep downloaded copies too. See the [backup guide](docs/BACKUPS.md).

@@ -1,9 +1,13 @@
+import { sourceFailure } from '../../lib/source-errors'
 type ImportFailure = { code?: string; message?: string; details?: string; hint?: string }
 
 /** Preserve the backend reason instead of diagnosing every failure as a migration. */
 export function importError(operation: string, error: ImportFailure): Error {
   let advice = 'Resolve the reported error before retrying.'
-  if (['PGRST202', 'PGRST204', '42883', '42P01', '42703'].includes(error.code ?? '')) {
+  const source = sourceFailure(error.code, operation)
+  if (source) {
+    advice = source.recovery
+  } else if (['PGRST202', 'PGRST204', '42883', '42P01', '42703'].includes(error.code ?? '')) {
     advice = 'The database/API schema does not match this app. Check the connected project, installed migrations, and API schema cache.'
   } else if (['42501', 'PGRST301', 'PGRST302', 'PGRST303'].includes(error.code ?? '')) {
     advice = 'Sign in again. If access is still denied, check the account’s import permissions.'

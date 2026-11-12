@@ -4,9 +4,21 @@ import { webcrypto } from 'node:crypto'
 import { chapterNotesFiles, epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub, sanitize } from '../src/epub'
 import { withReadingProgress, withOrganizerProgress, completionStatus, replaceBook, withPublication, repairChapterState } from '../src/model'
+import { compatibilityFixtures } from '../../src/test/compatibility-fixtures'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 async function book() { const buffer = await epubBuffer(); return importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File) }
 describe('EPUB import and rendering', () => {
+  it.each(compatibilityFixtures)('retains the $key association and existing reading events across metadata updates', async fixture => {
+    const buffer = await epubBuffer(epubFiles({ source: `https://archiveofourown.org/works/${fixture.workId}` }))
+    const imported = await importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File)
+    const chapter = imported.chapters.find(item => item.kind !== 'frontmatter')!
+    const history = [{ id: 'fixture-read-1', chapter: chapter.id, at: '2026-11-01T00:00:00Z', words: null, reread: false }]
+    const previous = { ...imported, history }
+    const updated = replaceBook(previous, { ...imported, metadata: { ...imported.metadata, title: 'Updated source title' } })
+    expect(savedWorkIdentity(updated)).toBe(String(fixture.workId))
+    expect(updated.id).toBe(imported.id)
+    expect(updated.history).toEqual(history)
+  })
   it('reuses AO3 metadata and ignores story recommendations when matching identity', async () => {
     const imported = await book()
     expect(imported.workId).toBe('8001')

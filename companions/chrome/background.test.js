@@ -394,8 +394,21 @@ it('advertises retrieval capabilities only to the configured app origin without 
  const trusted=vi.fn(),untrusted=vi.fn()
  listener({type:'AO3_LIBRARY_CAPABILITIES'},{url:origin},trusted)
  listener({type:'AO3_LIBRARY_CAPABILITIES'},{url:'https://evil.example'},untrusted)
- await vi.waitFor(()=>expect(trusted).toHaveBeenCalledWith({ok:true,capabilities:['metadata-retrieval-v1']}))
+ await vi.waitFor(()=>expect(trusted).toHaveBeenCalledWith({ok:true,contractVersion:1,capabilities:['metadata-retrieval-v1']}))
  expect(untrusted).not.toHaveBeenCalled()
+ expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
+ expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('correlates the revised capability handshake and rejects unsupported revisions before capture', async () => {
+ const listener = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0]
+ const supported = vi.fn(), unsupported = vi.fn(), invalid = vi.fn()
+ listener({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: 1, requestId: 'request-a' }, { url: origin }, supported)
+ listener({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: 2, requestId: 'request-a' }, { url: origin }, unsupported)
+ listener({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: 1 }, { url: origin }, invalid)
+ await vi.waitFor(() => expect(supported).toHaveBeenCalledWith({ ok: true, contractVersion: 1, requestId: 'request-a', capabilities: ['metadata-retrieval-v1'] }))
+ expect(unsupported).toHaveBeenCalledWith(expect.objectContaining({ ok: false, code: 'CONTRACT_UNSUPPORTED' }))
+ expect(invalid).toHaveBeenCalledWith(expect.objectContaining({ ok: false, code: 'CONTRACT_UNSUPPORTED' }))
  expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
  expect(fetcher).not.toHaveBeenCalled()
 })

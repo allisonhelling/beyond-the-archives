@@ -1,5 +1,7 @@
 # Source Compatibility And Trust Boundaries
 
+This is the historical Phase A inventory. The [Phase 0 baseline](../universal-stories/PHASE_0_BASELINE.md) records the current extension-only cutover, additive capability handshake, active boundaries and mixed-version behavior; older worker/version statements below describe the audited Phase A baseline.
+
 Phase A preserves current formats, storage keys, permissions and runtime behavior. New contract vocabulary is [design notation](source-contracts.md), not additional fields accepted by old clients. Source-neutral compatibility changes belong to a separately reviewed later phase. Detailed backup procedures remain in [BACKUPS.md](../BACKUPS.md); reader operations remain in [reader implementation](../../reader/docs/IMPLEMENTATION.md).
 
 ## Producer And Consumer Matrix
