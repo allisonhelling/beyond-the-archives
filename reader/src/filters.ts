@@ -1,7 +1,6 @@
 import { normalizeSearchText as normalize } from '../../src/lib/search-text'
 import type { Book, CatalogBook } from './model'
 import { publisherName, seriesNames } from './metadata'
-import { isCrossover } from '../../src/features/library/model'
 import { statuses } from './model'
 export const unknownValue = '__reader_unknown__'
 export { normalize }
@@ -29,7 +28,9 @@ export const facets = [
   { key: 'freeform', label: 'Freeform Tags', values: (b: FilterBook) => b.metadata.additional_tags ?? [] },
   { key: 'series', label: 'Series', values: (b: FilterBook) => seriesNames(b.metadata) },
   { key: 'version', label: 'EPUB Version', values: (b: FilterBook) => [b.active ? 'Active Version' : 'Retained Version'] },
-  { key: 'fandomCount', label: 'Crossover', values: (b: FilterBook) => b.metadata.fandoms.length ? [isCrossover(b.metadata) ? 'Multiple Fandoms' : 'One Fandom'] : [] },
+  // EPUB metadata has no organizer hierarchy evidence. Keep the existing saved
+  // facet values, accurately named as a count of distinct source labels.
+  { key: 'fandomCount', label: 'Fandom Count', values: (b: FilterBook) => b.metadata.fandoms.length ? [new Set(b.metadata.fandoms.map(value=>normalize(value.trim())).filter(Boolean)).size > 1 ? 'Multiple Fandoms' : 'One Fandom'] : [] },
 ] as const
 export const numericFields = [
   { key: 'words', label: 'Words', value: (b: FilterBook) => b.metadata.word_count },

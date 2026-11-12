@@ -58,6 +58,9 @@ async function main() {
       ['all-facets','select public.library_query_facets($1) result',[{mode:'library',shelf:'all',filters:{}}]],
       ['manual-collection','select public.query_library($1,1,50) result',[{mode:'library',shelf:collection,includeFacets:false,filters:{sort:'added'}}]],
       ['first-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
+      ['crossover-allowed','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added',crossovers:'allowed'}}]],
+      ['crossover-only','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added',crossovers:'only'}}]],
+      ['crossover-exclude','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added',crossovers:'exclude'}}]],
       ['finished-page', 'select public.query_library($1,1,50) result', [{mode:'library',shelf:'finished',includeFacets:false,filters:{sort:'added',showSeries:false}}]],
       ['last-page', 'select public.query_library($1,200,50) result', [{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'added'}}]],
       ['sorted-page','select public.query_library($1,1,50) result',[{mode:'library',shelf:'all',includeFacets:false,filters:{sort:'alpha'}}]],
@@ -86,6 +89,8 @@ async function main() {
       const values = args.map(value => typeof value === 'object' ? JSON.stringify(value) : value)
       const start = performance.now(), response = await db.query(sql, values), elapsedMs = performance.now()-start
       if (label === 'finished-page' && response.rows[0].result.total !== finishedWorks) throw new Error('Finished shelf count does not match its fixture.')
+      if (label === 'crossover-only' && response.rows[0].result.total !== 0) throw new Error('Unresolved fandoms must not become verified crossovers.')
+      if (['crossover-allowed','crossover-exclude'].includes(label) && response.rows[0].result.total !== workCount) throw new Error('Unknown crossover status must remain included.')
       if (label === 'reading-page' && workCount >= 2 && response.rows[0].result.total === 0) throw new Error('Currently Reading must exercise a nonempty result set.')
       if (label === 'offset-identities') offsetIds = response.rows.map(row => row.id)
       if (label === 'cursor-identities' && JSON.stringify(response.rows.map(row => row.id)) !== JSON.stringify(offsetIds)) throw new Error('Offset and cursor returned different identities.')

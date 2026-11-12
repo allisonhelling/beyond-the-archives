@@ -1,6 +1,6 @@
 # ADR 0003: Keep Hierarchy Crossover Evidence Versioned And Conservative
 
-Status: Accepted (evidence boundary); classifier implementation and ambiguous zero/one rules deferred.
+Status: Accepted (evidence boundary); zero/one rules resolved by the B1 addendum. Hierarchy policy and coordinated runtime publication are implemented; hosted rollout is separate.
 
 ## Context
 
@@ -23,3 +23,11 @@ The crossover feature is implemented: resolve the proposal inconsistency, canoni
 The approved B1 decisions resolve the historical zero/one and freshness questions: verified known-empty or one confirmed fandom with no unresolved candidates is `not_crossover`; missing/unprocessed metadata remains `unknown`. Negative separation proof expires after 30 days without requiring a successful fetch. Positive connectivity can suffice with incomplete closure. Keep plural `crossovers`, Exclude retains unknown, and series match any individual member. Owner-effective overrides and native assertions remain separate from public hierarchy evidence.
 
 A pure policy with synthetic tests now exists; verified fandom profile fixtures, resolver persistence and coordinated projections/expiry fan-out remain blocked. Legacy runtime name-count behavior is unchanged until the whole semantic switch passes its gates. See [Phase B1 Rollout](../architecture/phase-b1-rollout.md). This addendum supersedes the historical unresolved decisions above, not the authority/privacy boundary.
+
+## Identity Foundation Addendum — 11 November 2026
+
+The [guarded foundation](../architecture/crossover-foundation.md) now supplies UUID identities, exact source-qualified mappings, public partial-profile persistence and authenticated bounded fandom resolution. The pure classifier also rejects dangling shared-ancestor endpoints. Upstream template inspection establishes that empty metatag sections are omitted; live profile retrieval returned HTTP 418. Parser v1 cannot establish negative closure and never publishes complete hierarchy evidence. Runtime queries, collections and sample mode retain the legacy policy until verified fixtures and the coordinated projection/expiry pipeline are complete.
+
+## Validated Omission And Runtime Publication — 11 November 2026
+
+The user explicitly approved interpreting intentional omission as no direct metatags after strict complete-profile validation. Parser v2 checks source end tags and the recognized surrounding profile/footer, rejects malformed or unexpected sections, and is covered by checksummed real Wayback fixtures. This supersedes the literal-empty-list gate above. Direct-parent completeness remains separate from ancestor closure; negative proofs still expire after 30 days. A single TypeScript classifier now publishes private observation-set results through existing document/membership/revision boundaries. Only/Exclude use three-state projections everywhere in the organizer. See the [current contract and deployment order](../architecture/crossover-foundation.md); historical reports do not establish hosted deployment or live recovery verification.

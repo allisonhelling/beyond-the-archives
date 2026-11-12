@@ -1,0 +1,38 @@
+[
+  {
+    "filename": "comics.html.gz",
+    "name": "Batman (Comics)",
+    "timestamp": "20260608165235",
+    "originalUrl": "https://archiveofourown.org/tags/Batman%20(Comics)",
+    "archiveUrl": "https://web.archive.org/web/20260608165235id_/https://archiveofourown.org/tags/Batman%20(Comics)",
+    "sha256": "8e4a4ee02c26da6b5547a305a462bfa2826c3bf11628ce752868c912a16abffd",
+    "purpose": "Historical parser fixture only; not current production classification evidence."
+  },
+  {
+    "filename": "all-media.html.gz",
+    "name": "Batman - All Media Types",
+    "timestamp": "20260816113711",
+    "originalUrl": "https://archiveofourown.org/tags/Batman%20-%20All%20Media%20Types",
+    "archiveUrl": "https://web.archive.org/web/20260816113711id_/https://archiveofourown.org/tags/Batman%20-%20All%20Media%20Types",
+    "sha256": "0cb836c6c26d57dc8fecd816fb457c47dab0fd0d3b2cf90733e847bf6a6c1c80",
+    "purpose": "Historical parser fixture only; not current production classification evidence."
+  },
+  {
+    "filename": "fandom-alias.html.gz",
+    "name": "Batman Universe",
+    "timestamp": "20251010033641",
+    "originalUrl": "https://archiveofourown.org/tags/Batman%20Universe",
+    "archiveUrl": "https://web.archive.org/web/20251010033641id_/https://archiveofourown.org/tags/Batman%20Universe",
+    "sha256": "50748b4e9fdf2453337b526fe7b8731fe25285a9e8bffed392e62509838f2b3d",
+    "purpose": "Historical parser fixture only; not current production classification evidence."
+  },
+  {
+    "filename": "dcu-profile.html.gz",
+    "name": "DCU",
+    "timestamp": "20251204015856",
+    "originalUrl": "https://archiveofourown.org/tags/DCU/",
+    "archiveUrl": "https://web.archive.org/web/20251204015856id_/https://archiveofourown.org/tags/DCU/",
+    "sha256": "eede0a7780c4bb59347d9fff99c4f0702c0c5c49627ac4d1b3319773a8eab70e",
+    "purpose": "Historical parser fixture only; not current production classification evidence."
+  }
+]

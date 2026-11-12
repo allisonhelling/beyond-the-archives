@@ -45,6 +45,11 @@ it('terminates cycles and traversal bounds, rejecting ambiguous snapshots and ch
  expect(classify(known('0','Other'),[...deep,node('Other')]).status).toBe('unknown')
  expect(classify(known('A','B'),[node('A',['B'],{parserVersion:'old'}),node('B')]).status).toBe('unknown')
 })
+it('does not connect fandoms through an unverified, missing or conflicting shared endpoint',()=>{
+ for (const endpoints of [[], [node('Root',[],{verified:false})], [node('Root'),node('Root')], [node('Root',[],{parserVersion:'old'})]]) {
+  expect(classify(known('A','B'),[node('A',['Root']),node('B',['Root']),...endpoints]).status).toBe('unknown')
+ }
+})
 it.each(['crossover','not_crossover','unknown'] as const)('keeps plural-filter Allowed/Only/Exclude semantics for %s',status=>{
  expect(matchesCrossoverStatus(status,'allowed')).toBe(true)
  expect(matchesCrossoverStatus(status,'only')).toBe(status==='crossover')

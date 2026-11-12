@@ -4001,7 +4001,7 @@ test('filters crossovers, removes applied chips, sorts words, and saves private 
  const tables=await fixture(page)
  for (const [index,title] of ['A Long Crossover','A Short Work'].entries()) {
   tables.works.push({id:`filter-work-${index}`,ao3_work_id:900+index,verified_chapters:{}})
-  tables.library_entries.push({id:`filter-entry-${index}`,work_id:`filter-work-${index}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z',original_url:`https://archiveofourown.org/works/${900+index}`,metadata_overrides:{title,authors:['Writer'],fandoms:index===0?['A Fandom','Another Fandom With Several Words']:['A Fandom'],ao3_tags:[],rating:'Mature',publication_status:'in_progress',published_chapters:5,total_chapters:null,word_count:index===0?1000:100}})
+  tables.library_entries.push({id:`filter-entry-${index}`,...(index===0?{crossoverStatus:'crossover',crossoverPolicy:'ao3_hierarchy_v1',crossoverClassifierVersion:1,crossoverValidUntil:new Date(Date.now()+86400000).toISOString()}:{}),work_id:`filter-work-${index}`,reading_status:'reading',last_read_chapter:0,notes:'',is_favorite:false,created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z',original_url:`https://archiveofourown.org/works/${900+index}`,metadata_overrides:{title,authors:['Writer'],fandoms:index===0?['A Fandom','Another Fandom With Several Words']:['A Fandom'],ao3_tags:[],rating:'Mature',publication_status:'in_progress',published_chapters:5,total_chapters:null,word_count:index===0?1000:100}})
  }
  await page.goto('/library');await login(page)
 

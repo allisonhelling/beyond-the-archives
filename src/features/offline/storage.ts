@@ -2,6 +2,7 @@ import type { EditValues } from '../library/edit-merge'
 import { readerBaseUrl } from '../../lib/reader-connection'
 import { readerWorkIdentities } from '../../lib/reader-work-identities'
 import { blankMetadata, statuses, savedWorkIdentity, type Collection, type Metadata, type Status, type Story } from '../library/model'
+import { applyAutomaticCollections, collectionRules } from '../library/collections/automatic-collections'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
 export type CloudReaderBook = { workIds?: string[]; workCount?: number; favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
@@ -53,5 +54,15 @@ export function offlineStories(snapshot?: OfflineSnapshot): Story[] {
         metadata_source: 'manual', field_provenance: {}, automatic_metadata: {}, verified_chapters: {}, created_at: created, updated_at: updated },
     })
   }
-  return stories
+  const crossoverCollections = (snapshot.collections ?? []).filter(collection => {
+    const mode = collectionRules(collection)?.filters.crossovers
+    return mode === 'only' || mode === 'exclude'
+  })
+  if (!crossoverCollections.length) return stories
+  const affected = new Set(crossoverCollections.map(collection => collection.id))
+  const retainedIds = new Set(snapshot.stories.map(story=>story.id))
+  const refreshed = new Map(applyAutomaticCollections(stories.filter(story=>retainedIds.has(story.id)),crossoverCollections).map(story=>[story.id,story.automaticCollectionIds ?? []]))
+  return stories.map(story => refreshed.has(story.id) ? {...story,automaticCollectionIds:[
+    ...(story.automaticCollectionIds ?? []).filter(id=>!affected.has(id)),...refreshed.get(story.id)!,
+  ]} : story)
 }

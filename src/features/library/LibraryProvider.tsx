@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { UndoNotice } from '../../components/UndoNotice'
 import { abandonedReadingStatus, caughtUpReadingStatus, type Collection, type Story } from './model'
 import { sampleMode } from '../../lib/sample-mode'
+import { useFandomEnrichment } from './fandoms/useFandomEnrichment'
 import { libraryQueryHasSeries, libraryFacetScope, loadLibraryFacets, loadLibraryNavigation, loadLibraryRevision, type LibraryFacets, type LibraryNavigation, deleteStory, loadCatalog, loadStories, loadSeriesRecord, loadAffectedCollections, loadCollections, queryLibrary, storyCatalogEntry, restoreStory, updateEntry, type LibraryQuery, type LibraryResults } from './repository'
 type ReadingUndo = { id: string; storyId: string; title: string; message: string; saved?: { status: Story['reading_status']; progress: number }; previous?: { last_read_chapter: number; reading_status: Story['reading_status'] }; removed?: Story }
 const revisionCheckInterval = 45_000
@@ -173,6 +174,7 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
     try { await task } finally { if (revisionRequest.current === task) revisionRequest.current = null }
   }, [acceptRevision])
   const retryCounts = useCallback(async () => { await checkRevision(true); await reloadCollections(); setNavigationEpoch(value => value + 1) }, [checkRevision, reloadCollections])
+  useFandomEnrichment(userId, retryCounts)
   useEffect(() => {
     const changed = (event: Event) => {
       if ((event as CustomEvent<{ userId: string }>).detail?.userId !== userId) return

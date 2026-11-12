@@ -229,7 +229,7 @@ it('searches personal tags separately from AO3 tags and combines selected terms'
 
 it('filters crossovers independently of one-shots and sorts known word counts before unknowns', () => {
  const entries = [
-  story('Long crossover', { metadata: { ...blankMetadata, fandoms: ['A', 'B'], word_count: 1000 } }),
+  story('Long crossover', { crossoverStatus:'crossover',crossoverPolicy:'ao3_hierarchy_v1',crossoverClassifierVersion:1,crossoverValidUntil:new Date(Date.now()+86400000).toISOString(),metadata: { ...blankMetadata, fandoms: ['A', 'B'], word_count: 1000 } }),
   story('Short single', { metadata: { ...blankMetadata, fandoms: ['A', ' a ', ''], word_count: 100 } }),
   story('Unknown', { metadata: { ...blankMetadata, fandoms: [], word_count: null } }),
  ]

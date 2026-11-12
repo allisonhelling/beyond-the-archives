@@ -55,7 +55,9 @@ test('filters expose crossover modes, removable chips, word count and consistent
  const tables=await fixture(page)
  for (const [index,fandoms] of [['one',['Alpha']],['cross',['Alpha','Beta']]] as const) {
   tables.works.push({id:`filters-${index}`,ao3_work_id:index==='one'?88003:88004,verified_chapters:{}})
-  tables.library_entries.push({id:`entry-${index}`,work_id:`filters-${index}`,original_url:`https://archiveofourown.org/works/${index==='one'?88003:88004}`,reading_status:'reading',last_read_chapter:1,is_favorite:false,notes:'',metadata_overrides:{title:`Filters ${index}`,authors:[],fandoms,word_count:index==='one'?100:200,publication_status:'in_progress',published_chapters:2}})
+  tables.library_entries.push({id:`entry-${index}`,work_id:`filters-${index}`,original_url:`https://archiveofourown.org/works/${index==='one'?88003:88004}`,reading_status:'reading',last_read_chapter:1,is_favorite:false,notes:'',
+   crossoverStatus:index==='cross'?'crossover':'not_crossover',crossoverPolicy:'ao3_hierarchy_v1',crossoverClassifierVersion:1,crossoverEvidenceRevision:'fixture-1',crossoverValidUntil:index==='cross'?new Date(Date.now()+86400000).toISOString():null,
+   metadata_overrides:{title:`Filters ${index}`,authors:[],fandoms,word_count:index==='one'?100:200,publication_status:'in_progress',published_chapters:2}})
  }
  await page.goto('/library');await login(page)
  await page.getByRole('button',{name:'Select Fandoms',exact:true}).click()
@@ -80,6 +82,7 @@ test('filters expose crossover modes, removable chips, word count and consistent
  await page.getByRole('option',{name:'Only',exact:true}).click()
  await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
  await expect(page.locator('.work-card')).toHaveCount(1)
+ await expect(page.locator('.work-card h2 a')).toHaveText(['Filters cross'])
  await page.getByRole('button',{name:'Remove Filter Crossovers Only',exact:true}).click()
  await expect(page.locator('.work-card')).toHaveCount(2)
  await page.getByRole('button',{name:'Sort',exact:true}).click()

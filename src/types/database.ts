@@ -21,6 +21,64 @@ export type Database = {
         Relationships: [
         ]
       }
+      ao3_fandom_profiles: {
+        Row: {
+          name: string
+          canonical_name: string | null
+          status: string
+          aliases: string[]
+          metatag_names: string[]
+          hierarchy_state: string
+          hierarchy_complete: boolean
+          parser_version: string
+          profile_url: string
+          checked_at: string | null
+          attempted_at: string
+          last_failure_at: string | null
+          disputed: boolean
+          evidence_revision: number
+          profile_complete: boolean
+          last_complete_at: string | null
+        }
+        Insert: {
+          name: string
+          canonical_name?: string | null
+          status: string
+          aliases?: string[]
+          metatag_names?: string[]
+          hierarchy_state: string
+          hierarchy_complete?: boolean
+          parser_version: string
+          profile_url: string
+          checked_at?: string | null
+          attempted_at?: string
+          last_failure_at?: string | null
+          disputed?: boolean
+          evidence_revision?: number
+          profile_complete?: boolean
+          last_complete_at?: string | null
+        }
+        Update: {
+          name?: string
+          canonical_name?: string | null
+          status?: string
+          aliases?: string[]
+          metatag_names?: string[]
+          hierarchy_state?: string
+          hierarchy_complete?: boolean
+          parser_version?: string
+          profile_url?: string
+          checked_at?: string | null
+          attempted_at?: string
+          last_failure_at?: string | null
+          disputed?: boolean
+          evidence_revision?: number
+          profile_complete?: boolean
+          last_complete_at?: string | null
+        }
+        Relationships: [
+        ]
+      }
       ao3_tag_resolutions: {
         Row: {
           user_id: string
@@ -167,6 +225,25 @@ export type Database = {
         Relationships: [
         ]
       }
+      canonical_fandoms: {
+        Row: {
+          id: string
+          preferred_display_name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          preferred_display_name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          preferred_display_name?: string
+          created_at?: string
+        }
+        Relationships: [
+        ]
+      }
       collection_series: {
         Row: {
           user_id: string
@@ -257,6 +334,131 @@ export type Database = {
           sort_position?: number | null
           last_story_added_at?: string | null
           automatic_rules?: Json | null
+        }
+        Relationships: [
+        ]
+      }
+      external_fandom_mappings: {
+        Row: {
+          source_site: string
+          source_category: string
+          identity_scheme: string
+          source_key: string
+          canonical_fandom_id: string
+          mapping_state: string
+          verification_method: string
+          evidence_ref: string
+          verified_at: string
+          mapping_revision: number
+        }
+        Insert: {
+          source_site: string
+          source_category: string
+          identity_scheme: string
+          source_key: string
+          canonical_fandom_id: string
+          mapping_state: string
+          verification_method: string
+          evidence_ref: string
+          verified_at?: string
+          mapping_revision?: number
+        }
+        Update: {
+          source_site?: string
+          source_category?: string
+          identity_scheme?: string
+          source_key?: string
+          canonical_fandom_id?: string
+          mapping_state?: string
+          verification_method?: string
+          evidence_ref?: string
+          verified_at?: string
+          mapping_revision?: number
+        }
+        Relationships: [
+          { foreignKeyName: 'external_fandom_mappings_canonical_fandom_id_fkey'; columns: ['canonical_fandom_id']; isOneToOne: false; referencedRelation: 'canonical_fandoms'; referencedColumns: ['id'] },
+        ]
+      }
+      fandom_classifications: {
+        Row: {
+          user_id: string
+          key: string
+          fandoms: string[]
+          verified_empty: boolean
+          status: string
+          evidence_revision: number
+          valid_until: string | null
+          dependency_names: string[]
+          dirty: boolean
+          lease_token: string | null
+          leased_until: string | null
+          next_attempt_at: string
+        }
+        Insert: {
+          user_id: string
+          key: string
+          fandoms: string[]
+          verified_empty?: boolean
+          status?: string
+          evidence_revision?: number
+          valid_until?: string | null
+          dependency_names?: string[]
+          dirty?: boolean
+          lease_token?: string | null
+          leased_until?: string | null
+          next_attempt_at?: string
+        }
+        Update: {
+          user_id?: string
+          key?: string
+          fandoms?: string[]
+          verified_empty?: boolean
+          status?: string
+          evidence_revision?: number
+          valid_until?: string | null
+          dependency_names?: string[]
+          dirty?: boolean
+          lease_token?: string | null
+          leased_until?: string | null
+          next_attempt_at?: string
+        }
+        Relationships: [
+        ]
+      }
+      fandom_evidence_state: {
+        Row: {
+          singleton: boolean
+          revision: number
+        }
+        Insert: {
+          singleton?: boolean
+          revision?: number
+        }
+        Update: {
+          singleton?: boolean
+          revision?: number
+        }
+        Relationships: [
+        ]
+      }
+      fandom_resolution_requests: {
+        Row: {
+          user_id: string
+          name: string
+          next_attempt_at: string
+          leased_until: string | null
+        }
+        Insert: {
+          user_id: string
+          name: string
+          next_attempt_at?: string
+          leased_until?: string | null
+        }
+        Update: {
+          user_id?: string
+          name?: string
+          next_attempt_at?: string
+          leased_until?: string | null
         }
         Relationships: [
         ]
@@ -584,6 +786,8 @@ export type Database = {
           catalog_story: Json | null
           sort_words: number | null
           facet_story: Json | null
+          crossover_key: string | null
+          crossover_status: string | null
         }
         Insert: {
           id: string
@@ -605,6 +809,8 @@ export type Database = {
           catalog_story?: Json | null
           sort_words?: number | null
           facet_story?: Json | null
+          crossover_key?: string | null
+          crossover_status?: string | null
         }
         Update: {
           id?: string
@@ -626,6 +832,8 @@ export type Database = {
           catalog_story?: Json | null
           sort_words?: number | null
           facet_story?: Json | null
+          crossover_key?: string | null
+          crossover_status?: string | null
         }
         Relationships: [
           { foreignKeyName: 'library_search_documents_id_fkey'; columns: ['id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },

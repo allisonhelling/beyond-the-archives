@@ -1,9 +1,11 @@
+import { matchesCrossoverStatus } from './fandoms/crossover-evidence'
+import { projectedCrossoverStatus } from './fandoms/fandom-classification'
 import { expressionTags, matchesTagExpression, tagExpression, tagFilterConfig, type TagExpressions } from './tags/tag-expressions'
 import { normalizeTag as normalize, tagMatches, type TagAliases } from './tags/tag-resolution'
 import { datePlaceholder } from '../../lib/dates'
 import { inSeries, seriesMemberships } from './series/series'
 import { publicationStatuses } from './publication-status'
-import { active, isCalendarDate, isOneShot, isCrossover, statuses, tagNames, type Story } from './model'
+import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
 
 type BaseSortOrder = 'updated' | 'added' | 'ready' | 'words' | 'alpha'
 export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
@@ -130,7 +132,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       matchesTagExpression(expressions.fandoms, term => s.metadata.fandoms.includes(term)) &&
       (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
-      (!filters.crossovers || filters.crossovers === 'allowed' || isCrossover(s.metadata) === (filters.crossovers === 'only')) &&
+      matchesCrossoverStatus(projectedCrossoverStatus(s), filters.crossovers ?? 'allowed') &&
       (!filters.inSeries || inSeries(s)) &&
       (!filters.excludeLaterSeries || !inSeries(s) || seriesMemberships(s).some(series => series.position === 1)) &&
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&

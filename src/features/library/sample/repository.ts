@@ -11,6 +11,7 @@ import { applyStoryEdits, editSnapshot, EditConflict, mergeEdits, resolveEdits, 
 import { automaticCollectionSpineDesign, defaultShelfDesigns, compareCollections, normalizeCollectionChanges, type CollectionAppearance } from '../collections/collection-appearance'
 import defaultState from './default-state.json'
 import snapshots from './stories.json'
+import { sampleFandomProjection } from './fandom-evidence'
 import seriesSnapshots from './series.json'
 import { collectionSortKey } from '../browsing/browsing'
 import { waybackSnapshot } from '../../imports/urls'
@@ -229,7 +230,15 @@ function find(data: Library, id: string) {
   return story
 }
 
-export async function loadSampleLibrary() { const data = read(); data.collections.sort(compareCollections); return { ...data, stories: applyAutomaticCollections(data.stories, data.collections), series: data.series ?? [] } }
+export async function loadSampleLibrary() {
+ const data = read(); data.collections.sort(compareCollections)
+ const stories = data.stories.map(story => ({...story,...sampleFandomProjection(story.metadata.fandoms,snapshots.flatMap(sample=>sample.metadata.fandoms))}))
+ const series = (data.series ?? []).map(record => {
+  const preview = record.metadata as unknown as SeriesPreview
+  return {...record,metadata:{...preview,works:preview.works?.map(work=>({...work,...sampleFandomProjection(work.fandoms ?? [],snapshots.flatMap(sample=>sample.metadata.fandoms))}))} as unknown as Json}
+ })
+ return {...data,stories:applyAutomaticCollections(stories,data.collections),series}
+}
 export async function updateSampleLibrary() {
   const data = read()
   const response = await fetch('/__sample-data', {

@@ -1,4 +1,6 @@
-import { isOneShot, isCrossover, type Story } from '../model'
+import { matchesCrossoverStatus } from '../fandoms/crossover-evidence'
+import { projectedCrossoverStatus } from '../fandoms/fandom-classification'
+import { isOneShot, type Story } from '../model'
 import { compileSearch, searchText, defaultReadingFilters, filterReading, normalize, type ReadingFilters } from '../reading-search'
 import { seriesReadingStatus, seriesWorkMetadata, type LibrarySeries } from './series'
 
@@ -26,7 +28,11 @@ export function filterLibraryItems(pool: Story[], filters: ReadingFilters, serie
   const query = normalize(filters.query.trim())
   if (query && !normalize([item.title, ...(item.creators ?? []), ...sources.flatMap(source => [source.title, ...source.authors])].join('\n')).includes(query)) return false
   if (filters.rating.length && !sources.some(source => filters.rating.includes(source.rating))) return false
-  if (filters.crossovers && filters.crossovers !== 'allowed' && !sources.some(source => isCrossover(source) === (filters.crossovers === 'only'))) return false
+  if (filters.crossovers && filters.crossovers !== 'allowed' && !item.works.some(work => {
+   const saved = item.savedStories.find(story => story.work.ao3_work_id === work.workId)
+   const projection = saved ?? work
+   return matchesCrossoverStatus(projectedCrossoverStatus(projection),filters.crossovers!)
+  })) return false
   if (filters.oneShot !== 'allowed' && !sources.some(source => isOneShot(source) === (filters.oneShot === 'only'))) return false
   const withinText = searchText(story, filters.scope) + (filters.scope === 'any' ? '\n' + item.works.map(work => [work.title, work.url, work.rating, work.chapters, work.updated].join('\n')).join('\n') : '')
   if (!compileSearch(filters.within)(withinText)) return false

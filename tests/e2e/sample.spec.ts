@@ -4,6 +4,30 @@ import { selectLibraryShelf } from './library-fixture'
 // Run with VITE_SAMPLE_DATA=true so the existing Vite server uses local fixtures.
 test.skip(process.env.VITE_SAMPLE_DATA !== 'true', 'Requires the sample preview environment')
 
+test('sample crossover filters use simulated evidence without AO3 or Supabase requests',async({page})=>{
+ const requests:string[]=[]
+ await page.route(/https:\/\/(?:[^/]+\.)?(?:supabase\.co|archiveofourown\.org)\//,route=>{requests.push(route.request().url());return route.abort()})
+ await page.goto('/library')
+ const cards=page.locator('.story-card')
+ await expect(page.getByRole('heading',{name:'Your Library',exact:true})).toBeVisible()
+ const total=await cards.count();expect(total).toBeGreaterThan(2)
+ await page.getByRole('button',{name:'Filters',exact:true}).click()
+ await page.getByRole('button',{name:'Crossover Classification Help',exact:true}).click()
+ await expect(page.getByRole('tooltip')).toContainText('simulated hierarchy evidence')
+ await page.getByRole('button',{name:'Crossover Classification Help',exact:true}).click()
+ await page.getByRole('button',{name:'Crossovers',exact:true}).click()
+ await page.getByRole('option',{name:'Only',exact:true}).click()
+ await expect(cards).toHaveCount(total)
+ await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
+ await expect.poll(()=>cards.count()).toBeGreaterThan(0)
+ const only=await cards.count();expect(only).toBeLessThan(total)
+ await page.getByRole('button',{name:'Crossovers',exact:true}).click()
+ await page.getByRole('option',{name:'Exclude',exact:true}).click()
+ await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
+ await expect(cards).toHaveCount(total-only)
+ expect(requests).toEqual([])
+})
+
 const originalSeriesCard = (page: Page) => page.locator('.series-card').filter({ has: page.getByRole('link', { name: 'play it again', exact: true }) })
 
 async function showSeries(page: Page) {

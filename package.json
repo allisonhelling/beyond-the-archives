@@ -28,6 +28,7 @@
     "db:types:embedded": "node scripts/generate-test-types.mjs",
     "backup:restore": "node --env-file-if-exists=.env.worker server/restore-backup.mjs",
     "backup:prune": "node --env-file-if-exists=.env.worker --experimental-strip-types server/prune-backups.mjs",
+    "metadata:fandoms": "node --env-file-if-exists=.env.worker --experimental-strip-types server/refresh-fandoms.mjs",
     "invite": "node server/invite-user.mjs",
     "test:integration": "node scripts/test-supabase.mjs",
     "test:integration:config": "node --test scripts/tests/supabase-status.mjs",

@@ -59,7 +59,7 @@ Web links in EPUB text are clickable, including plain URLs such as **URL: https:
 
 Import AO3-generated or ordinary reflowable EPUB 2/3 files. Search saved titles, authors, fandoms, tags, summaries, series, collections, publisher, or AO3 work ID. Metadata search and the Fandoms multi-select stay visible on the collapsed toolbar. The **Filters** button opens the filter box; **Hide** closes it without clearing selections. Basic expanded filters cover reading status, author, rating, and organizer collection. Expand **More Metadata Filters**, **Length & Popularity**, and **Publication & File Dates** for:
 
-- Publisher (first in More Metadata Filters), publication status, category, language, archive warnings, relationships, characters, freeform tags, series, active/retained EPUB version, and single/multiple fandoms.
+- Publisher (first in More Metadata Filters), publication status, category, language, archive warnings, relationships, characters, freeform tags, series, active/retained EPUB version, and **Fandom Count** (single/multiple saved fandom labels). Fandom Count does not use the organizer’s verified crossover hierarchy.
 - Excluding freeform tags, warnings, characters, or relationships.
 - Minimum/maximum words, published chapters, kudos, bookmarks, comments, and hits.
 - Inclusive date ranges for original publication, story update, EPUB packaging, and local import.

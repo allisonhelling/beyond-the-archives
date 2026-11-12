@@ -1,6 +1,6 @@
-import { normalizeSearchText } from '../../lib/search-text'
 import { parseWorkUrl, waybackSnapshot } from '../imports/urls'
 import type { Database, Json } from '../../types/database'
+import type { CrossoverProjection } from './fandoms/fandom-classification'
 export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-Reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
@@ -10,7 +10,7 @@ type EntryRow = Database['public']['Tables']['library_entries']['Row']
 export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance'>>
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Omit<Database['public']['Tables']['collections']['Row'], 'automatic_rules'> & { automatic_rules?: Json | null }
-export type Story = Omit<Entry, 'reading_history'> & { reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
+export type Story = Omit<Entry, 'reading_history'> & CrossoverProjection & { reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 /** Overlay account-specific source data before resolving manual corrections. */
 export function effectiveWork(sharedWork: Work, entry: Pick<Entry, 'extension_metadata' | 'extension_chapters' | 'source_bookmark' | 'work_status'>): Work {
   const browser = entry.extension_metadata && typeof entry.extension_metadata === 'object' && !Array.isArray(entry.extension_metadata) ? entry.extension_metadata : {}
@@ -33,9 +33,6 @@ export function initialProgress(url: string, verifiedChapters: Record<string, st
   const position = parsed.chapterId ? Number(Object.keys(verifiedChapters).find(key => verifiedChapters[key] === parsed.chapterId)) : 1
   const verified = Number.isInteger(position) && position > 0
   return { status: (verified && position > 1 ? 'reading' : 'to_read') as Status, lastRead: verified ? position - 1 : 0, chapterVerified: verified }
-}
-export function isCrossover(metadata: Pick<Metadata, 'fandoms'>): boolean {
-  return new Set(metadata.fandoms.map(value => normalizeSearchText(value.trim())).filter(Boolean)).size > 1
 }
 
 /** Status after reading all currently published chapters, shared by the app and companions. */

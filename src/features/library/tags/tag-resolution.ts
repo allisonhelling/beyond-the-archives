@@ -2,7 +2,7 @@ import { normalizeSearchText as normalizeTag } from '../../../lib/search-text.ts
 export const ao3TagCategories = ['relationship', 'character', 'freeform'] as const
 export type Ao3TagCategory = typeof ao3TagCategories[number]
 /** AO3-only resolver/cache payload. A foreign label requires a separately verified mapping. */
-export type TagResolution = { category: Ao3TagCategory; name: string; status: 'canonical' | 'synonym' | 'custom' | 'unverified'; canonical_name: string | null; checked_at: string; attempted_at: string }
+export type TagResolution<C extends Ao3TagCategory | 'fandom' = Ao3TagCategory> = { category: C; name: string; status: 'canonical' | 'synonym' | 'custom' | 'unverified'; canonical_name: string | null; checked_at: string; attempted_at: string }
 /** One owner's AO3 evidence, partitioned by AO3 category; never a global label ontology. */
 export type TagAliases = Partial<Record<Ao3TagCategory, Record<string, Record<string, true>>>>
 export function validAo3TagName(value: unknown): value is string { return typeof value === 'string' && Boolean(value.trim()) && value.length <= 10000 && !/\p{Cc}/u.test(value) }

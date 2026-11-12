@@ -6,7 +6,7 @@ This document carries forward the detailed feature behavior, implementation deci
 
 ## Current Upgrade Requirements
 
-Apply the complete migration chain through `20261109000300_extension_only_retrieval.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
+Apply the complete migration chain through `20261111000200_hierarchy_crossover_filter.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
 
 Recent implementation changes:
 
@@ -25,9 +25,9 @@ Verification: `npx vitest run src/features/library/bookfusion src/features/libra
 
 ## Architecture and Source Layout
 
-The [Phase A source-readiness audit](architecture/source-assumptions.md) records the 9 November 2026 working-tree baseline, source contracts, SQL dependencies, compatibility requirements, ADRs, verification results and prioritized Phase B backlog. It adds documentation and regression coverage; additional fiction-source ingestion and evidence-based crossover classification remain proposed.
+The [Phase A source-readiness audit](architecture/source-assumptions.md) records the 9 November 2026 working-tree baseline, source contracts, SQL dependencies, compatibility requirements, ADRs, verification results and prioritized Phase B backlog. That historical phase added documentation and regression coverage; additional fiction-source ingestion remains proposed.
 
-The [B1-R filter-source readiness assessment](architecture/filter-source-readiness.md) records current authority guards, observation limitations, resolved projection seams and verification. Alias matching requires explicit AO3 authority; current AO3 callers retain their behavior. Foreign observations require a future verified mapping/adapter boundary. This readiness work adds no provider, schema or runtime crossover feature.
+The [B1-R filter-source readiness assessment](architecture/filter-source-readiness.md) records historical authority/projection boundaries. [AO3 Hierarchy Crossover Filtering](architecture/crossover-foundation.md) now owns UUID identities, source-qualified mappings, validated intentional metatag omission, historical profile fixtures, bounded resolution/classification, private cached projections and expiry. Apply both fandom migrations before updated `tag-resolution` and the frontend, and configure `npm run metadata:fandoms` for unattended maintenance. Classification and membership revisions publish through existing search documents. Live AO3 recovery and hosted rollout remain unverified.
 
 React 19, TypeScript, React Router 7, Vite 7, Tailwind CSS 4, and Supabase provide the existing stack. The [Project Layout](../README.md#project-layout) is maintained in the README. Generated database types come from the migration chain: `npm run db:types:embedded` uses the embedded schema; `npm run db:types` uses a running local Supabase stack. Do not hand-edit generated types.
 
@@ -47,7 +47,7 @@ Fandoms offer Any/All/Custom; the other three categorized tag menus offer Any/Al
 
 `TagGroupEditor` and `useTagGroupDraft` provide category-independent group editing with an injected tag picker; Fandoms supplies the existing `FandomChoices` search, checkboxes and counts. The controller retains ordered empty placeholders and the selected group across dropdown dismissal, while only nonempty groups enter the active expression. Filling or clearing a group never moves another group into its editing position. The Boolean evaluator consumes a tag predicate independently of source extraction or verified-name resolution; current AO3 exact-fandom and categorized alias/substring rules remain at the matching boundary. No additional platform support or identity mapping is introduced.
 
-Apply the full chain through `20261109000200_tag_expressions.sql` before publishing the frontend. The shared SQL predicate, collection validator and query preparation must be upgraded together. Rollout cost, compatibility, validation and the blocked hierarchy stages are maintained in [Phase B1 Rollout](architecture/phase-b1-rollout.md). The pure classifier is not used by live queries: crossover semantics remain legacy name-count everywhere.
+Apply the full chain through `20261109000200_tag_expressions.sql` before publishing the frontend. The shared SQL predicate, collection validator and query preparation must be upgraded together. Rollout cost, compatibility, validation and the blocked hierarchy stages are maintained in [Phase B1 Rollout](architecture/phase-b1-rollout.md). Crossover filtering now reads precomputed hierarchy classifications; the later fandom migrations and rollout requirements are documented in [AO3 Hierarchy Crossover Filtering](architecture/crossover-foundation.md).
 
 ## Canonical Tag Suggestions
 

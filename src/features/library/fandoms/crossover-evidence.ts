@@ -1,13 +1,14 @@
-/** Pure B1 policy contract only. No resolver, persistence or runtime cutover is enabled. */
+/** AO3-authority policy over application-owned canonical fandom identities. */
 export const crossoverPolicy = 'ao3_hierarchy_v1'
 export const negativeEvidenceMaxAgeMs = 30 * 86400000
 export type CrossoverStatus = 'crossover' | 'not_crossover' | 'unknown'
+export type CrossoverFilter = 'allowed' | 'only' | 'exclude'
 export type ConfirmedFandom = { authority: string; key: string; verified: boolean }
 export type FandomObservation =
   | { state: 'unknown' | 'unavailable' }
   | { state: 'known_empty'; verified: boolean }
   | { state: 'known'; fandoms: ConfirmedFandom[]; unresolved: boolean }
-/** Opaque keys are supplied by a future verified resolver, never derived from labels here. */
+/** Opaque app IDs are supplied by the verified mapping boundary, never display labels. */
 export type FandomSnapshot = {
   authority: 'ao3'; key: string; parents: string[]; verified: boolean;
   complete: boolean; lastCompleteSuccessfulAt: string | null; parserVersion: string;
@@ -36,9 +37,10 @@ export function classifyCrossover(observation: FandomObservation, evidence: Cros
       if (visiting.has(current)) { complete = false; return }
       if (ancestors.has(current)) return
       if (depth > 64 || ++visitedCount > 4096) { exceeded = true; complete = false; return }
-      ancestors.add(current)
       const node = nodes.get(current)
       if (!node || ambiguous.has(current) || node.authority !== 'ao3' || !node.verified || node.parserVersion !== evidence.parserVersion) { complete = false; return }
+      // A dangling/foreign/conflicting endpoint cannot establish a shared ancestor.
+      ancestors.add(current)
       visiting.add(current)
       const timestamp = Date.parse(node.lastCompleteSuccessfulAt ?? '')
       if (!node.complete || !Number.isFinite(timestamp) || timestamp > now || now - timestamp >= negativeEvidenceMaxAgeMs) complete = false
@@ -61,6 +63,6 @@ export function classifyCrossover(observation: FandomObservation, evidence: Cros
   return result(closures.every(closure => closure.complete) ? 'crossover' : 'unknown')
 }
 
-export function matchesCrossoverStatus(status: CrossoverStatus, mode: 'allowed' | 'only' | 'exclude') {
-  return mode === 'allowed' || (mode === 'only' ? status === 'crossover' : status !== 'crossover')
+export function matchesCrossoverStatus(status: CrossoverStatus, mode: CrossoverFilter) {
+  return mode !== 'only' && mode !== 'exclude' || (mode === 'only' ? status === 'crossover' : status !== 'crossover')
 }

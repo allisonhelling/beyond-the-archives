@@ -1,8 +1,17 @@
 import { expect, it } from 'vitest'
 import { exampleWork } from '../library/display/display-examples'
 import { offlineStories, type CloudReaderBook, type OfflineSnapshot } from './storage'
+import { automaticCollectionRules } from '../library/collections/automatic-collections'
+import { defaultReadingFilters } from '../library/reading-search'
+import type { Collection } from '../library/model'
 const book: CloudReaderBook = { id: 'a'.repeat(64), workId: '81234', metadata: { ...exampleWork.metadata, title: 'Saved in Cloud' }, status: 'reading', notes: 'Reader note', completedCount: 2 }
 const snapshot: OfflineSnapshot = { userId: 'reader', savedAt: '2026-11-01T12:00:00Z', readers: [], stories: [], cloudBooks: [book] }
+it('recomputes retained crossover-rule memberships when negative evidence expires without a network request',()=>{
+ const linked = {...exampleWork,work:{...exampleWork.work,ao3_work_id:81234},automaticCollectionIds:['only','unrelated-rule'],crossoverStatus:'crossover' as const,crossoverPolicy:'ao3_hierarchy_v1',crossoverClassifierVersion:1,crossoverValidUntil:new Date(Date.now()-1000).toISOString()}
+ const collections = ['only','exclude'].map(mode=>({id:mode,automatic_rules:automaticCollectionRules({...defaultReadingFilters,crossovers:mode as 'only'|'exclude'})})) as unknown as Collection[]
+ expect(offlineStories({...snapshot,stories:[linked],collections})[0].automaticCollectionIds).toEqual(['unrelated-rule','exclude'])
+ expect(offlineStories({...snapshot,stories:[],collections})[0].automaticCollectionIds ?? []).toEqual([])
+})
 it('shows reader cloud works without download reports or organizer entries', () => {
  const stories = offlineStories(snapshot)
  expect(stories).toHaveLength(1)

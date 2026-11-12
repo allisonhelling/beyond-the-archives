@@ -1,6 +1,8 @@
 import { readBoundedBody } from './read-body.ts'
 import { retrieveTagResolution } from './tag-resolution.ts'
 import { ao3TagCategories, validAo3TagName, type Ao3TagCategory, type TagResolution } from '../../src/features/library/tags/tag-resolution.ts'
+import { resolveFandomRequest, type FandomResolutionStore } from './fandom-resolution.ts'
+import { processFandomWork, type FandomWorker } from './fandom-worker.ts'
 
 type Dependencies = {
  authenticate(token:string):Promise<string|null>
@@ -10,6 +12,8 @@ type Dependencies = {
  pause(seconds:number,reason:string):Promise<void>
  retrieve?:typeof retrieveTagResolution
  now?:()=>number
+ fandom?:FandomResolutionStore
+ fandomWorker?:FandomWorker
 }
 const refreshMs=30*86400000, failureMs=10*60000
 export function tagResolutionHandler(deps:Dependencies) {
@@ -25,7 +29,9 @@ export function tagResolutionHandler(deps:Dependencies) {
    const body=await readBoundedBody(request.body,100000)
    if('error' in body)return reply({error:'Invalid tag request.'},400)
    const input=JSON.parse(body.text)
-   if(!ao3TagCategories.includes(input.category)||!Array.isArray(input.names)||input.names.length<1||input.names.length>8||input.names.some((name:unknown)=>!validAo3TagName(name)))return reply({error:'Choose up to eight saved AO3 tags.'},400)
+   if(input.processFandoms===true&&deps.fandomWorker)return reply(await processFandomWork(user,deps.fandomWorker))
+   if(!(ao3TagCategories.includes(input.category)||input.category==='fandom'&&deps.fandom)||!Array.isArray(input.names)||input.names.length<1||input.names.length>8||input.names.some((name:unknown)=>!validAo3TagName(name)))return reply({error:'Choose up to eight saved AO3 tags.'},400)
+   if(input.category==='fandom'&&deps.fandom)return reply(await resolveFandomRequest([...new Set(input.names)] as string[],deps.fandom,deps,(deps.now??Date.now)(),user))
    const names=[...new Set(input.names)] as string[],category=input.category as Ao3TagCategory
    let records=await deps.cached(user,category,names)
    const now=(deps.now??Date.now)()

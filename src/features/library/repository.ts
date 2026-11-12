@@ -45,7 +45,7 @@ function orderedRelations<T extends { id: string }, L extends { work_id: string 
 export async function loadLibrary(): Promise<{ stories: Story[]; collections: Collection[]; series: SeriesRecord[] }> {
   if (sampleMode) return (await import('./sample/repository')).loadSampleLibrary()
   const db = client()
-  const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms, series, seriesMemberships] = await Promise.all([
+  const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms, series, seriesMemberships, crossoverDocuments] = await Promise.all([
     allRows((from, to) => db.from('library_entries').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('works').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collections').select('*').order('created_at').order('id').range(from, to)),
@@ -60,7 +60,9 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     allRows((from, to) => db.from('work_fandoms').select('*').order('work_id').order('fandom_id').range(from, to)),
     allRows((from, to) => db.from('library_series').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collection_series').select('*').order('library_series_id').order('collection_id').range(from, to)),
+    allRows((from, to) => db.from('library_search_documents').select('id,catalog_story').order('id').range(from, to)),
   ])
+  const projections = new Map(crossoverDocuments.map(row=>[row.id,row.catalog_story as unknown as Partial<Story>]))
   const worksById = new Map(works.map(work => [work.id, work]))
   const personalTagsById = new Map(tags.map(tag => [tag.id, tag.name]))
   const membershipsByEntry = groupLinks(memberships, link => link.library_entry_id, link => link.collection_id)
@@ -79,7 +81,7 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     const work = effectiveWork(sharedWork, entry)
-    return { ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id), entry.work_status), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
+    return { ...projections.get(entry.id), ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id), entry.work_status), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
   }), collections) }
 }
 export async function saveStory(input: StoryInput) {

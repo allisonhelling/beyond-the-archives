@@ -8,20 +8,24 @@ export function ao3TagUrl(name: string) {
  if (!validAo3TagName(name)) throw new Error('Invalid tag name.')
  return `https://archiveofourown.org/tags/${encodeURIComponent(name.replace(/[/&.?#]/g, value => escapes[value]))}?language_id=en`
 }
-export function parseTagResolution(html: string, name: string, category: Ao3TagCategory): TagResolution[] {
+/** Exact, source-qualified profile identity. No case/accent folding proves identity. */
+export function verifiedAo3TagLink(text: string, href: string | undefined) {
+ const name = text.trim(), url = new URL(href ?? '', 'https://archiveofourown.org')
+ if (!validAo3TagName(name) || url.origin !== 'https://archiveofourown.org' || decodeURIComponent(url.pathname) !== decodeURIComponent(new URL(ao3TagUrl(name)).pathname) || url.search || url.hash || url.username || url.password) throw new Error('Unverified tag link.')
+ return name
+}
+export function parseTagResolution<C extends Ao3TagCategory | 'fandom'>(html: string, name: string, category: C): TagResolution<C>[] {
  const $ = load(html), root = $('#main > .tag.home.profile').first(), heading = root.children('.primary').find('h2.heading').first().text().trim()
  if (heading !== name) throw new Error('Tag identity could not be verified.')
- const description = root.children('p').first(), label = { character:'Character', relationship:'Relationship', freeform:'Additional Tags' }[category]
+ const description = root.children('p').first(), label = { character:'Character', relationship:'Relationship', freeform:'Additional Tags', fandom:'Fandom' }[category]
  // Read category evidence from the tag profile, never work blurbs or related lists.
  const categoryText = description.text().replace(/\s+/g,' ')
  if (!categoryText.includes(`This tag belongs to the ${label} Category.`)) throw new Error('Tag category could not be verified.')
  const checked_at = new Date().toISOString()
- const record = (tag: string, status: TagResolution['status'], canonical_name: string | null): TagResolution => ({ category, name:tag, status, canonical_name, checked_at, attempted_at:checked_at })
+ const record = (tag: string, status: TagResolution['status'], canonical_name: string | null): TagResolution<C> => ({ category, name:tag, status, canonical_name, checked_at, attempted_at:checked_at })
  const merger = root.children('.merger').find('a.tag').first()
  function verifiedLink(link: ReturnType<typeof $>) {
-  const text = link.text().trim(), url = new URL(link.attr('href') ?? '', 'https://archiveofourown.org')
-  if (!text || url.origin !== 'https://archiveofourown.org' || decodeURIComponent(url.pathname) !== decodeURIComponent(new URL(ao3TagUrl(text)).pathname) || url.search || url.hash) throw new Error('Unverified tag link.')
-  return text
+  return verifiedAo3TagLink(link.text(), link.attr('href'))
  }
  if (merger.length) {
   const canonical = verifiedLink(merger)
