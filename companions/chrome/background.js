@@ -4,6 +4,7 @@ import { isLocalHostname } from '../../src/lib/local-app.ts'
 import { createLibrarySync } from './library-sync.js'
 import { installBarBridge } from './bar-background.js'
 import { configuredEnvironments, createEnvironmentManager } from './environments.js'
+import { companionContractVersion, metadataRetrievalCapability, validCapabilityRequest } from '../../src/features/imports/companion-contract.ts'
 
 const profiles = configuredEnvironments()
 const environments = profiles ? createEnvironmentManager(profiles, __DEFAULT_ENVIRONMENT__) : null
@@ -234,7 +235,10 @@ function externalMessage(message, sender, respond) {
   return
  }
  if (message?.type === 'AO3_LIBRARY_CAPABILITIES') {
-  respond({ ok: true, capabilities: ['metadata-retrieval-v1'] }); return
+  if (!validCapabilityRequest(message)) {
+   respond({ ok: false, code: 'CONTRACT_UNSUPPORTED', error: 'Update and reconnect compatible components, or enter metadata manually.' }); return
+  }
+  respond({ ok: true, contractVersion: companionContractVersion, ...(message.requestId && { requestId: message.requestId }), capabilities: [metadataRetrievalCapability] }); return
  }
  if (message?.type === 'AO3_LIBRARY_SAMPLE_CONNECT') {
   if (!isLocalHostname(new URL(appOrigin).hostname)) { respond({ ok: false, error: 'Sample imports require the local extension.' }); return }

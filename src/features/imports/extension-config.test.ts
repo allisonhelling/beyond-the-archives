@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { localExtensionId, localExtensionKey } from './extension-config'
-import { extensionId, setExtensionId, librarySyncCommand, connectExtension, desktopExtensionAvailable } from './extension'
+import { extensionId, setExtensionId, librarySyncCommand, connectExtension, desktopExtensionAvailable, captureWorkWithExtension, disconnectExtension } from './extension'
 import { isLocalApp } from '../../lib/local-app'
 vi.mock('../../lib/supabase', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: null } }) } } }))
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
@@ -85,4 +85,25 @@ it('sign-out fences a connection waiting for its capability response',async()=>{
  capabilityReply!({ok:true,capabilities:['metadata-retrieval-v1']})
  expect(await pending).toBe(false)
  expect(sendMessage.mock.calls.some(call=>call[1].type==='AO3_LIBRARY_CONNECT')).toBe(false)
+})
+
+it('rejects malformed capture replies with an actionable contract error', async () => {
+ location('localhost')
+ Object.assign(window, { chrome: { runtime: { sendMessage: (_id: string, _message: object, callback: (reply: object) => void) => callback({ ok: true, page: { url: 'https://archiveofourown.org/works/456', html: '<h2>Wrong work</h2>' } }) } } })
+ await expect(captureWorkWithExtension('https://archiveofourown.org/works/123')).rejects.toMatchObject({ code: 'CONTRACT_UNSUPPORTED', message: expect.stringContaining('manually') })
+})
+
+it.each(['capture', 'scan'] as const)('rejects a late %s response after account disconnect', async operation => {
+ location('localhost')
+ let respond: ((reply: object) => void) | undefined
+ Object.assign(window, { chrome: { runtime: { sendMessage: (_id: string, message: { type: string }, callback: (reply: object) => void) => {
+  if (message.type === 'AO3_LIBRARY_DISCONNECT') callback({ ok: true })
+  else respond = callback
+ } } } })
+ const url = 'https://archiveofourown.org/works/123'
+ const pending = operation === 'capture' ? captureWorkWithExtension(url) : librarySyncCommand('status')
+ const rejected = expect(pending).rejects.toThrow('current account')
+ await disconnectExtension()
+ respond!({ ok: true, page: { url, html: '<h2>Old account</h2>' } })
+ await rejected
 })

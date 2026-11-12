@@ -3,8 +3,10 @@ import { isLocalApp } from '../../lib/local-app'
 import { localExtensionId } from './extension-config'
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
+import { companionContractVersion, readCompanionPage, hasMetadataRetrievalCapability, validLibrarySyncReply } from './companion-contract'
+import { sourceFailure } from '../../lib/source-errors'
 
-type ExtensionReply = { state?: LibrarySyncState | null; rows?: Record<string, string>[]; ok?: boolean; page?: { url: string; html: string }; error?: string; capabilities?: string[] }
+type ExtensionReply = { state?: LibrarySyncState | null; rows?: Record<string, string>[]; ok?: boolean; page?: { url: string; html: string }; error?: string; capabilities?: string[]; contractVersion?: number }
 type ExtensionRuntime = {
  lastError?: { message?: string }
  sendMessage(id: string, message: object, callback: (reply?: ExtensionReply) => void): void
@@ -21,18 +23,19 @@ export function setExtensionId(id: string) {
  if (!/^[a-p]{32}$/.test(id)) throw new Error('Enter the 32-letter extension ID from your browser’s Extensions page.')
  window.localStorage.setItem('ao3-library-extension-id', id)
 }
-function message(payload: object, capability?: string): Promise<boolean> {
+function message(payload: object, validate?: (reply: unknown) => boolean): Promise<boolean> {
  const api = runtime(), id = extensionId()
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) return Promise.resolve(false)
  return new Promise(resolve => {
   const timer = setTimeout(() => resolve(false), 25000)
-  try { api.sendMessage(id, payload, reply => { clearTimeout(timer); resolve(!api.lastError && reply?.ok === true && (!capability || reply.capabilities?.includes(capability) === true)) }) }
+  try { api.sendMessage(id, payload, reply => { clearTimeout(timer); resolve(!api.lastError && reply?.ok === true && (!validate || validate(reply))) }) }
   catch { clearTimeout(timer); resolve(false) }
  })
 }
 export const desktopExtensionHelp = 'Automatic retrieval requires the compatible, connected Chrome/Edge desktop companion. On mobile, open an AO3 work and save it with the mobile companion, or add metadata manually. Saved library entries and Import History remain available.'
 export function desktopExtensionAvailable() {
- return message({ type: 'AO3_LIBRARY_CAPABILITIES' }, 'metadata-retrieval-v1')
+ const requestId = crypto.randomUUID()
+ return message({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: companionContractVersion, requestId }, reply => hasMetadataRetrievalCapability(reply, requestId))
 }
 export async function requireDesktopExtension() {
  if (!await connectExtension()) throw new Error(desktopExtensionHelp)
@@ -52,7 +55,8 @@ async function connectDesktopExtension(session: Session | undefined, generation:
  if (!extensionId() || !supabase) return false
  const current = session ?? (await supabase.auth.getSession()).data.session
  if (!current?.expires_at || generation !== connectionGeneration) return false
- return message({ type: 'AO3_LIBRARY_CONNECT', token: current.access_token, expiresAt: current.expires_at })
+ const connected = await message({ type: 'AO3_LIBRARY_CONNECT', token: current.access_token, expiresAt: current.expires_at })
+ return connected && generation === connectionGeneration
 }
 export function disconnectExtension() {
  connectionGeneration += 1
@@ -62,14 +66,18 @@ export function disconnectExtension() {
 
 function previewPageWithExtension(url: string, type: 'AO3_LIBRARY_PREVIEW_SERIES' | 'AO3_LIBRARY_CAPTURE_WORK'): Promise<{ url: string; html: string }> {
  const api = runtime(), id = extensionId()
+ const generation = connectionGeneration
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) throw new Error('Connect the updated extension in Settings to preview series.')
  return new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error('AO3 page retrieval timed out. Complete sign-in in its tab, then retry.')), 125000)
   try {
    api.sendMessage(id, { type, url }, reply => {
     clearTimeout(timer)
-    if (api.lastError || !reply?.ok || !reply.page) reject(new Error(reply?.error ?? 'Could not read the AO3 page. Rebuild and reconnect the extension, then retry.'))
-    else resolve(reply.page)
+    const page = readCompanionPage(reply?.page, url, type === 'AO3_LIBRARY_CAPTURE_WORK' ? 'work' : 'series')
+    if (generation !== connectionGeneration) reject(new Error('Connection changed. Retry from the current account.'))
+    else if (api.lastError || reply?.ok !== true) reject(new Error(reply?.error ?? 'Could not read the AO3 page. Rebuild and reconnect the extension, then retry.'))
+    else if (!page) reject(Object.assign(new Error(sourceFailure('CONTRACT_UNSUPPORTED', 'capture')!.recovery), { code: 'CONTRACT_UNSUPPORTED' }))
+    else resolve(page)
    })
   } catch { clearTimeout(timer); reject(new Error('Could not contact the extension. Reconnect in Settings.')) }
  })
@@ -83,16 +91,19 @@ export type SyncRepairCounts = { metadata: number; series: number; reading: numb
 export type LibrarySyncState = { readingStatusOrigin?: 'default' | 'manual'; reviewExisting?: boolean; repairPages?: Record<string, SyncRepairCounts>; batchVersion?: number; batchStart?: number; hasMore?: boolean; endedEarly?: boolean; canContinue?: boolean; diagnosticsVersion?: number; skippedEntries?: LibrarySyncIssue[]; chapterDateIssues?: LibrarySyncIssue[]; id: string; status: 'running' | 'paused' | 'ready' | 'complete' | 'discarded'; url: string; mode: string; pages: number; listPages?: number; count: number; skipped: number; error: string; startPage?: number; endPage?: number; limited?: boolean; partial?: boolean; delaySeconds?: number; attention?: 'login' | 'rate_limit' | 'page_error' | 'safety_limit'; attentionId?: string; autoImport?: boolean; checkChapterDates?: boolean; chapterDatesChecked?: number; chapterDatesUnavailable?: number; readingStatus?: import('../library/model').Status; seenSeries?: string[]; bookmarkedSeries?: string[]; seriesReviewVersion?: number; reviewRelatedSeries?: boolean; seriesBehavior?: import('./series-import-preferences').SeriesImportBehavior; importToCollection?: boolean; collectionId?: string; collection?: { name: string; description: string } }
 export function librarySyncCommand(action: string, options: { readingStatusOrigin?: 'default' | 'manual'; reviewExisting?: boolean; repairs?: SyncRepairCounts; batchStart?: number; batchEnd?: number; url?: string; mode?: string; page?: number; scanId?: string; startPage?: number; endPage?: number; delaySeconds?: number; autoImport?: boolean; checkChapterDates?: boolean; readingStatus?: import('../library/model').Status; importToCollection?: boolean; collectionId?: string; reviewRelatedSeries?: boolean; seriesBehavior?: import('./series-import-preferences').SeriesImportBehavior } = {}): Promise<{ state?: LibrarySyncState | null; rows?: Record<string, string>[]; seriesUrl?: string; seriesPreview?: import('./urls').SeriesPreview }> {
  const api = runtime(), id = extensionId()
+ const generation = connectionGeneration
  if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) return Promise.reject(new Error('Connect Beyond the Archives Companion in Settings first.'))
  return new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error('Extension did not respond. Rebuild, reload, and reconnect it in Settings.')), 25000)
   try {
    api.sendMessage(id, { type: 'AO3_LIBRARY_SYNC', action, ...options }, reply => {
     clearTimeout(timer)
+    if (generation !== connectionGeneration) { reject(new Error('Connection changed. Retry from the current account.')); return }
     if (api.lastError || !reply?.ok) {
      const unsupportedEnd = action === 'end' && reply?.error === 'This action is unavailable for the saved scan.'
      reject(new Error(unsupportedEnd ? 'The loaded companion does not support End Scan. Update and reload the existing extension, reconnect it in Settings, then retry End Scan. Keep this scan saved; do not discard it or uninstall the extension.' : reply?.error ?? 'Could not contact library sync. Update and reconnect the extension.'))
     }
+    else if (!validLibrarySyncReply(reply)) reject(Object.assign(new Error(sourceFailure('CONTRACT_UNSUPPORTED', 'scan')!.recovery), { code: 'CONTRACT_UNSUPPORTED' }))
     else resolve(reply)
    })
   } catch { clearTimeout(timer); reject(new Error('Could not contact the extension.')) }
