@@ -13,6 +13,15 @@ export function workVersions(books: CatalogBook[], target: string): CatalogBook[
   const rank = (book: CatalogBook) => book.hasFile ? book.active ? 0 : 1 : book.active ? 2 : 3
   return books.filter(book => !book.deleting && containsWork(book, target)).sort((a, b) => rank(a) - rank(b) || b.importedAt.localeCompare(a.importedAt) || a.id.localeCompare(b.id))
 }
+/** Honor an explicit version choice, otherwise use an unambiguous active/downloaded copy. */
+export function preferredWorkVersion(candidates: CatalogBook[], remembered: string | undefined, cloudAvailable: boolean): CatalogBook | undefined {
+ const preferred = candidates.find(book => book.id === remembered && (book.hasFile || cloudAvailable))
+ if (preferred) return preferred
+ const local = candidates.filter(book => book.hasFile)
+ const available = local.length ? local : cloudAvailable ? candidates : []
+ const active = available.filter(book => book.active)
+ return available.length === 1 ? available[0] : active.length === 1 ? active[0] : undefined
+}
 export function openingPosition(book: Pick<BookDetails, 'id' | 'metadata' | 'workId' | 'works' | 'chapters' | 'position' | 'completed'>, opening: WorkOpening): ReadingPosition | undefined {
   if (!containsWork(book, opening.target)) throw new Error('The selected EPUB no longer identifies this work. Choose another EPUB or review its work links.')
   const members = book.works?.filter(work => work.workId === opening.target) ?? []

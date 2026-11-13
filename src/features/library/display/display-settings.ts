@@ -227,3 +227,15 @@ export function saveSummaryMode(summaryMode: SummaryMode) {
  try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
  writeDisplay({ ...saved, summaryMode })
 }
+
+export const offlineReadingOptions = { unfolded: 'Archives Unfolded', bookfusion: 'BookFusion' } as const
+export type OfflineReadingPriority = keyof typeof offlineReadingOptions
+export function offlineReadingPriority(raw = displaySnapshot()): OfflineReadingPriority {
+ try { return JSON.parse(raw)?.offlineReadingPriority === 'bookfusion' ? 'bookfusion' : 'unfolded' }
+ catch { return 'unfolded' }
+}
+export function saveOfflineReadingPriority(priority: OfflineReadingPriority) {
+ let saved: Record<string, unknown> = {}
+ try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
+ writeDisplay({ ...saved, offlineReadingPriority: priority === 'bookfusion' ? 'bookfusion' : 'unfolded' })
+}

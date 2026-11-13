@@ -199,6 +199,8 @@ Create manual or automatic custom collections, choose colors and symbols, and or
 
 Use **Export Work Metadata** in a work tile’s **…** menu or the download symbol immediately beside **Retry / Update Metadata** on its information page. Choose **JSON** or **CSV**, then **Export**. The confirmation also appears on mobile. Each download contains one saved work, including its effective metadata, reading progress, private notes, and personal tags. JSON also describes the saved source identity and available chapter-count/status provenance; unknown evidence and dates remain unknown.
 
+The bookspine’s **Read Offline** icon sits beside reading status. It opens a matching archives unfolded EPUB or your saved BookFusion link and is greyed out when neither is available. Choose **Read Offline Priority** under **Settings → Library & Reading → Library Browsing** when both are available; the choice is saved in this browser. Archives unfolded opens a downloaded EPUB immediately or downloads the matching cloud EPUB and then opens it while online.
+
 ### Import Lists and Review Changes
 
 **Import Selected Works** shows saved-page progress and a completion summary inside **Choose Works From Series**. Successful imports remain in your library while the review stays open; library and history refreshes continue in the background.

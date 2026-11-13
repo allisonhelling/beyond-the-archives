@@ -281,6 +281,41 @@ test('clears a retired reader installation selection after report cleanup',async
  await expect(page).toHaveURL(url=>!url.searchParams.has('reader'))
 })
 
+test('Read Offline follows availability and the saved priority in the shared bookspine', async ({ page }, info) => {
+ const tables = await fixture(page)
+ let available = false
+ await page.route('**/rest/v1/rpc/reader_offline_snapshot', route => route.fulfill({ json: { readers: [{ id: 'offline-reader', name: 'Reader', url: 'https://reader.example/', reportedAt: '2026-11-12T00:00:00Z', works: available ? ['99002'] : [] }], stories: [] } }))
+ await page.route('**/rest/v1/rpc/reader_organizer_connection', route => route.fulfill({ json: { enabled: true } }))
+ tables.works.push({ id: 'offline-work', ao3_work_id: 99002, verified_chapters: {} })
+ const metadata = { title: 'Offline Choices', authors: [], published_chapters: 2, total_chapters: 3, publication_status: 'in_progress', bookfusion_link: null as { url: string; kind: string } | null }
+ tables.library_entries.push({ id: 'offline-entry', work_id: 'offline-work', original_url: 'https://archiveofourown.org/works/99002', reading_status: 'reading', last_read_chapter: 1, metadata_overrides: metadata })
+ await page.goto('/library'); await login(page)
+ const card = page.locator('[data-story-id="offline-entry"]'), footer = card.locator('.book-spine-footer')
+ await expect(footer.getByRole('button', { name: 'Read Offline', exact: true })).toBeDisabled()
+ await expect(footer.getByRole('button', { name: 'Read Offline', exact: true })).toHaveCSS('filter', 'grayscale(1)')
+ if (info.project.name === 'desktop') {
+  await footer.getByRole('button', { name: 'Read Offline', exact: true }).hover()
+  await expect(page.getByRole('tooltip', { name: 'Read Offline', exact: true })).toBeVisible()
+ }
+ available = true; await page.reload()
+ const link = footer.getByRole('link', { name: 'Read Offline', exact: true })
+ await expect(link).toHaveAttribute('href', 'https://reader.example/?work=99002')
+ const statusBox = (await footer.locator('.spine-status').boundingBox())!, offlineBox = (await link.boundingBox())!
+ expect(offlineBox.x).toBeGreaterThanOrEqual(statusBox.x + statusBox.width)
+ metadata.bookfusion_link = { url: 'https://www.bookfusion.com/reader/99002', kind: 'book' }
+ await page.reload()
+ await expect(link).toHaveAttribute('href', 'https://reader.example/?work=99002')
+ await page.goto('/settings#settings-browsing')
+ await page.getByRole('combobox', { name: 'Read Offline Priority', exact: true }).selectOption('bookfusion')
+ await page.goto('/library')
+ await expect(link).toHaveAttribute('href', metadata.bookfusion_link.url)
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+ available = false; await page.reload()
+ await expect(link).toHaveAttribute('href', metadata.bookfusion_link.url)
+ metadata.bookfusion_link = null; await page.reload()
+ await expect(footer.getByRole('button', { name: 'Read Offline', exact: true })).toBeDisabled()
+})
+
 test('exports one work in either format and shows Unfolded beside Wayback only for a connected EPUB', async ({page},info)=>{
  const tables=await fixture(page)
  let available=false

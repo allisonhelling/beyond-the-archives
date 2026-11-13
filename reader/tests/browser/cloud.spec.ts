@@ -14,8 +14,9 @@ test('shows backend error messages and codes when cloud sync fails',async({page,
 test('syncs originals and state while organizer setup is unavailable, downloads on a fresh device, and retains offline account isolation',async({browser})=>{
  test.setTimeout(60000)
  let loseNoteResponse = false, failDelete = false, rejectMultipart = true
+ let downloadRequests = 0
  const values=new Map<string,Value>(),receipts=new Map<string,Value>(),files=new Map<string,Buffer>()
- async function device(){
+ async function device(catalogGate?: Promise<void>){
   const context=await browser.newContext();await signedIn(context)
   await context.route(url => /^\/(auth|rest|storage)\/v1\//.test(url.pathname),async route=>{
    const request=route.request(),url=new URL(request.url())
@@ -34,7 +35,10 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
     if((before?.revision??0)!==input.p_base && JSON.stringify(before?.value)!==JSON.stringify(input.p_value))return route.fulfill({json:{...before,conflict:true}})
     const next={key:input.p_key,value:input.p_value,revision:(before?.revision??0)+1};values.set(next.key,next);receipts.set(input.p_id,next);if(loseNoteResponse && input.p_key.endsWith('/notes')){loseNoteResponse=false;return route.abort()}return route.fulfill({json:next})
    }
-   if(url.pathname.includes('/reader_cloud_values'))return route.fulfill({json:[...values.values()].filter(row=>row.key>String(url.searchParams.getAll('key').find(value=>value.startsWith('gt.'))??'gt.').slice(3) && (!url.searchParams.getAll('key').some(value=>value.startsWith('like.')) || row.key.endsWith('/deleted'))).sort((a,b)=>a.key.localeCompare(b.key))})
+   if(url.pathname.includes('/reader_cloud_values')) {
+    if (catalogGate) await catalogGate
+    return route.fulfill({json:[...values.values()].filter(row=>row.key>String(url.searchParams.getAll('key').find(value=>value.startsWith('gt.'))??'gt.').slice(3) && (!url.searchParams.getAll('key').some(value=>value.startsWith('like.')) || row.key.endsWith('/deleted'))).sort((a,b)=>a.key.localeCompare(b.key))})
+   }
    if(url.pathname.includes('/storage/v1/object/')){
     if(request.method()==='DELETE'){
      if(failDelete){return route.fulfill({status:503,json:{message:'Storage temporarily unavailable'}})}
@@ -53,6 +57,7 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
      expect(key).toBe(`${owner}/${createHash('sha256').update(original).digest('hex')}.epub`)
      files.set(key,original);return route.fulfill({json:{Key:key}})
     }
+    downloadRequests++
     return route.fulfill({body:files.get(key),contentType:'application/epub+zip'})
    }
    return route.fulfill({json:{}})
@@ -70,6 +75,21 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  expect([...values.keys()].some(key=>key.includes('organizer'))).toBe(false)
  const manifest=[...values.values()].find(row=>row.key.endsWith('/manifest'))!
  manifest.value={...manifest.value as object,workId:null};manifest.revision++
+ const handoff = await device(), handoffPage = await handoff.newPage()
+ await handoffPage.goto(`/?book=${manifest.key.split('/')[0]}`)
+ await expect(handoffPage.getByLabel('Book Content')).toBeVisible()
+ await handoff.close()
+ let releaseCatalog!: () => void
+ const catalogGate = new Promise<void>(resolve => { releaseCatalog = resolve })
+ const cancelled = await device(catalogGate), cancelledPage = await cancelled.newPage()
+ const downloadsBeforeCancel = downloadRequests
+ await cancelledPage.goto(`/?book=${manifest.key.split('/')[0]}`)
+ await readerAccount(cancelledPage)
+ releaseCatalog()
+ await expect(cancelledPage.locator('.story-card')).toHaveCount(1)
+ await expect(cancelledPage.getByLabel('Book Content')).toHaveCount(0)
+ expect(downloadRequests).toBe(downloadsBeforeCancel)
+ await cancelled.close()
  const second=await device(),other=await second.newPage();await other.goto('/');await expect(other.getByText('Reader prepared for offline use',{exact:false})).toBeVisible();await account(other)
  other.once('dialog',dialog=>void dialog.accept())
  await other.getByRole('button',{name:'Import Guest Library',exact:true}).click()
@@ -88,9 +108,12 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  await other.getByRole('button',{name:'Remove Download',exact:true}).click()
  await expect(other.locator('.story-card .availability')).toHaveText('Available In Cloud')
  await other.goto(`/?book=${manifest.key.split('/')[0]}`)
- await expect(other.getByRole('button',{name:'Download and Read',exact:true})).toBeVisible()
- await other.getByRole('button',{name:'Download and Read',exact:true}).click()
  await expect(other.getByLabel('Book Content')).toBeVisible()
+ await expect(other.getByRole('button',{name:'Download and Read',exact:true})).toHaveCount(0)
+ const downloaded = downloadRequests
+ await other.goto(`/?book=${manifest.key.split('/')[0]}`)
+ await expect(other.getByLabel('Book Content')).toBeVisible()
+ expect(downloadRequests).toBe(downloaded)
  await other.getByRole('button',{name:'Bookshelf',exact:true}).click()
  await other.goto('/')
  await other.getByLabel('Work Actions',{exact:true}).click()

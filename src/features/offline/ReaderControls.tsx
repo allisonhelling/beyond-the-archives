@@ -1,4 +1,3 @@
-import { savedWorkIdentity } from '../library/model'
 import { readerWorkIdentities } from '../../lib/reader-work-identities'
 import { useEffect, useState } from 'react'
 import { Dropdown } from '../../components/Dropdown'
@@ -7,8 +6,7 @@ import { Tooltip } from '../../components/Tooltip'
 import { ConnectReader } from './ConnectReader'
 import { useSearchParams } from 'react-router-dom'
 import { useOffline } from './OfflineProvider'
-import { hostedReaderUrl } from '../../lib/reader-connection'
-import { readerWorkUrl } from './storage'
+import { useReaderDestination } from './useReaderDestination'
 export function ReaderControls({ hub = false }: { hub?: boolean }) {
   const { snapshot, shellReady, error, refresh, disconnect, disconnecting, forgetReport, removingReport } = useOffline()
   const [message, setMessage] = useState('')
@@ -41,16 +39,9 @@ export function ReaderControls({ hub = false }: { hub?: boolean }) {
   </section>
 }
 export function ReadEpub({ workId, bookId, variant = 'default', chapter }: { workId: number | null; bookId?: string; variant?: 'default' | 'details' | 'spine'; chapter?: number }) {
-  const { snapshot } = useOffline()
-  const [readerId, setReaderId] = useSearchParams()
-  const reports = (snapshot?.connected === false ? [] : snapshot?.readers ?? []).filter(reader => workId !== null && reader.works.includes(String(workId)))
-  const reader = reports.find(reader => reader.id === readerId.get('reader')) ?? reports[0]
-  if (!workId && !bookId) return null
-  const cloud = snapshot?.connected !== false ? snapshot?.cloudBooks?.find(book => bookId ? book.id === bookId : readerWorkIdentities(book).includes(String(workId))) : undefined
-  if (!reader && !cloud) return null
-  let href: string
-  const targetWork = workId ?? (cloud && (cloud.workCount ?? 0) <= 1 ? savedWorkIdentity(cloud) : null)
-  try { href = readerWorkUrl(reader?.url ?? (snapshot?.readers[0]?.url || import.meta.env.VITE_READER_URL || hostedReaderUrl), targetWork ?? cloud!.id, targetWork ? 'work' : 'book', chapter) } catch { return <p className="field-help">Reconnect this reader to update its URL.</p> }
+  const { href, invalid, reader, reports, readerId, setReaderId } = useReaderDestination({ workId, bookId, chapter })
+  if (invalid) return <p className="field-help">Reconnect this reader to update its URL.</p>
+  if (!href) return null
   if (variant === 'spine') {
     const label = `Read Chapter ${chapter ?? 1} in EPUB`
     return <Tooltip description={label}>{id => <a className="spine-action" href={href} target="_blank" rel="noopener noreferrer" aria-label={label} aria-describedby={id}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>

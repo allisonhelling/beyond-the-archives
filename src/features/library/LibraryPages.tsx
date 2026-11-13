@@ -5,6 +5,7 @@ import { ExportWorkMetadata } from './ExportWorkMetadata'
 import { BulletSeparated } from './BulletSeparated'
 import { WaybackLink } from './WaybackPage'
 import { ReadEpub } from '../offline/ReaderControls'
+import { ReadOffline } from '../offline/ReadOffline'
 import { useActivity } from '../../lib/use-activity'
 import { BookFusionButton } from './bookfusion/BookFusionFields'
 import { RetryError } from '../../components/RetryError'
@@ -159,7 +160,7 @@ function StoryControls({ story, children, readOnly = false, onMarking, details =
     {error && <p className="error-message" role="alert">{error}</p>}
   </>
 }
-function BookSpineFooter({ story, editProgress, caughtUp, readAction }: { story: Story; editProgress: ReactNode; caughtUp: ReactNode; readAction?: ReactNode }) {
+function BookSpineFooter({ story, editProgress, caughtUp, readAction, readerBookId }: { story: Story; editProgress: ReactNode; caughtUp: ReactNode; readAction?: ReactNode; readerBookId?: string }) {
   const StatusIcon = readingStatusIcons[story.reading_status]
   const published = story.metadata.published_chapters
   const knownPublished = published !== null && published > 0
@@ -174,6 +175,7 @@ function BookSpineFooter({ story, editProgress, caughtUp, readAction }: { story:
       </div>
     </div>
     <Tooltip description={statuses[story.reading_status]}>{descriptionId => <span className="spine-status" role="img" tabIndex={0} aria-label={statuses[story.reading_status]} aria-describedby={descriptionId}><StatusIcon size={18} aria-hidden="true" /></span>}</Tooltip>
+    <ReadOffline story={story} bookId={readerBookId} />
     <span className="spine-divider" aria-hidden="true"><SpineOrnament /></span>
     <div className="spine-actions">
       {readAction ?? <Tooltip description={`Read Chapter ${position}`}>{descriptionId => <a className="spine-action" href={readingUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>}
@@ -197,7 +199,7 @@ export function StoryCard({ story: candidate, linkId, readOnly = false, readerBo
       notes: <p className="story-summary">{story.notes || 'No private notes saved.'}</p>,
       reading: <p className="story-facts">{statuses[story.reading_status]}</p>,
       saved: !isDisplayFieldHidden(tilePreference, 'saved') && <p className="story-facts">Saved: {formatDateTime(story.created_at)}</p>,
-      progress: <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} readAction={readOnly ? <ReadEpub workId={story.work.ao3_work_id} bookId={readerBookId} variant="spine" chapter={readChapter(story)} /> : undefined} />
+      progress: <BookSpineFooter story={story} editProgress={editProgress} caughtUp={caughtUp} readerBookId={readerBookId} readAction={readOnly ? <ReadEpub workId={story.work.ao3_work_id} bookId={readerBookId} variant="spine" chapter={readChapter(story)} /> : undefined} />
     }}</DisplayInfo>
   </>}</StoryControls></article>
 }

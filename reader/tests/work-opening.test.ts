@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto'
 import { epubBuffer } from '../../src/test/epub-fixture'
 import { importEpub } from '../src/epub'
 import { bookDetails, catalogBook } from '../src/model'
-import { openingPosition, requestedWork, workVersions } from '../src/work-opening'
+import { openingPosition, preferredWorkVersion, requestedWork, workVersions } from '../src/work-opening'
 import { anthologyFiles } from './anthology-fixture'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 async function book() { const buffer = await epubBuffer(anthologyFiles()); return importEpub({ size: buffer.byteLength, arrayBuffer: async () => buffer } as File) }
@@ -18,6 +18,17 @@ it('ranks active downloads before retained downloads and cloud-only versions', a
   ]
   expect(workVersions(versions, '91002').map(book => book.id)).toEqual(['active', 'retained', 'cloud'])
   expect(workVersions(versions, 'retained').map(book => book.id)).toEqual(['retained'])
+})
+it('selects an active local copy before cloud versions and preserves deliberate version choices', async () => {
+ const base = catalogBook(bookDetails(await book()))
+ const local = { ...base, id: 'local', hasFile: true, active: true }
+ const cloud = { ...base, id: 'cloud', hasFile: false, active: true }
+ expect(preferredWorkVersion([cloud, local], undefined, true)).toBe(local)
+ expect(preferredWorkVersion([cloud, local], 'cloud', true)).toBe(cloud)
+ expect(preferredWorkVersion([cloud, local], 'cloud', false)).toBe(local)
+ expect(preferredWorkVersion([cloud], undefined, true)).toBe(cloud)
+ expect(preferredWorkVersion([cloud], undefined, false)).toBeUndefined()
+ expect(preferredWorkVersion([local, { ...local, id: 'second' }], undefined, true)).toBeUndefined()
 })
 it('opens the requested fic at its next unread chapter without crossing work boundaries', async () => {
   const imported = await book(), chapters = imported.chapters.filter(chapter => chapter.kind !== 'frontmatter')
