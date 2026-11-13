@@ -1,11 +1,16 @@
 // Run only in a trusted terminal. Never import this module into src/.
 import { createClient } from '@supabase/supabase-js'
+import { verifiedLocalTarget, assertLocalEndpoint } from '../scripts/local-target.mjs'
 
-export async function inviteUser({ url, secret, email, redirectTo }, clientFactory = createClient) {
-  if (!url || !secret || !email || !redirectTo) throw new Error('SUPABASE_URL, SUPABASE_SECRET_KEY, INVITE_EMAIL, and APP_ORIGIN are required.')
+export async function inviteUser({ url, secret, email, redirectTo }, clientFactory = createClient, readTarget) {
+  if (!email || !redirectTo) throw new Error('SUPABASE_URL, SUPABASE_SECRET_KEY, INVITE_EMAIL, and APP_ORIGIN are required.')
+  if (!/^[^@\s]+@example\.test$/.test(email)) throw new Error('Local invitations require a synthetic example.test address.')
   const destination = new URL(redirectTo)
   if (destination.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(destination.hostname)) throw new Error('APP_ORIGIN must use HTTPS outside local development.')
-  const client = clientFactory(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
+  if (!['localhost','127.0.0.1','[::1]'].includes(destination.hostname)) throw new Error('Invitations are local-only in S1.')
+  assertLocalEndpoint(url || 'http://127.0.0.1:54321')
+  const target = await verifiedLocalTarget({url,secret},readTarget)
+  const client = clientFactory(target.url, target.secretKey, { auth: { persistSession: false, autoRefreshToken: false } })
   const { error } = await client.auth.admin.inviteUserByEmail(email, { redirectTo: `${destination.origin}/auth/callback` })
   if (error) throw new Error('Invitation failed. Check project configuration and the email delivery log.')
 }

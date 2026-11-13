@@ -168,6 +168,8 @@ Repeat observations update nonempty factual fields while preserving manual corre
 
 ## Runtime Architecture and Security
 
+The [S0 security/environment audit](security-foundation/BASELINE_AUDIT.md) inventories the current trust boundaries and independently observed public deployment state. It documents the audited production release-gate, target-isolation and recovery gaps. [S1 local isolation](security-foundation/LOCAL_AND_STAGING.md) removes the repository main-push migration job, requires explicit environment configuration and limits operator tooling to a verified synthetic local stack; hosted changes and staging verification remain approval-gated. Application User/Admin/Owner RBAC remains planned. The current hosted project is production with personal data. Audit/test evidence does not attest hosted RLS or authorize a production release.
+
 | Layer | Responsibility |
 | --- | --- |
 | Website | React 19/TypeScript, Router 7, Vite 7, Tailwind CSS 4; authenticated shell, shared library state, feature repositories and reusable UI. |

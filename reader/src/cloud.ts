@@ -4,15 +4,15 @@ import { chapterContent, retainedContents, withAnthologyMetadata } from './antho
 import { initialAuthIntent } from '../../src/lib/auth-account'
 import type { Database, Json } from '../../src/types/database'
 import { createClient } from '@supabase/supabase-js'
-import { readPublicConfig } from '../../src/lib/config'
-import { enableOrganizerSync, hostedOrganizer } from '../../src/lib/reader-connection'
+import { requireRuntimeEnvironmentConfig } from '../../src/lib/environment'
+import { enableOrganizerSync } from '../../src/lib/reader-connection'
 import { type CloudEdit, type CloudValue } from './cloud-model'
 import { isAnthology, retainWorkLinks, defaultPreferences, withReadingProgress, type Connection, repairChapterState, type BookDetails, type Preferences } from './model'
 import { readerInstallationId, acceptCloud, all, bookStores, cloudEdits, eraseBook, get, getBookDetails, listCatalog, loadSetting, putBook, readerOwner, restoreDeletedVersion, transaction } from './storage'
 import { digest, importEpub } from './epub'
 import { reportSyncStatus, reportSyncFailure } from './sync-status'
 
-export const readerCloudConfig = sampleMode ? { url: 'http://127.0.0.1:54321', key: 'sb_publishable_sample_local_only' } : readPublicConfig(import.meta.env) ?? hostedOrganizer
+export const readerCloudConfig = sampleMode ? { url: 'http://127.0.0.1:54321', key: 'sb_publishable_sample_local_only' } : requireRuntimeEnvironmentConfig(import.meta.env)
 const config = readerCloudConfig
 export const readerCloud = createClient<Database>(config.url, config.key, {
   auth: { storage: sampleMode ? undefined : authSessionStorage('reader'), storageKey: sampleMode ? 'reader-sample-cloud-disabled' : 'reader-cloud-auth', flowType: 'pkce', persistSession: !sampleMode, autoRefreshToken: !sampleMode, detectSessionInUrl: !sampleMode },

@@ -3,20 +3,14 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { gzipSync, gunzipSync } from 'node:zlib'
-import { readFile } from 'node:fs/promises'
-import { spawnSync } from 'node:child_process'
-import { parseLocalSupabaseStatus } from './supabase-status.mjs'
+import { verifiedLocalTarget } from './local-target.mjs'
 
+if (process.env.INTEGRATION_BACKUP_FIXTURE) throw new Error('External backup files are not permitted in synthetic local integration tests.')
 console.log('Checking local Supabase service status…')
-const status = spawnSync('npx', ['supabase', 'status', '-o', 'json'], { encoding: 'utf8', timeout: 60000 })
-if (status.status !== 0) {
-  console.error('Local Supabase is unavailable. Install/start Docker, then run npm run db:start and npm run db:reset.')
-  process.exit(1)
-}
 let settings
-try { settings = parseLocalSupabaseStatus(status.stdout) } catch (error) {
-  console.error(error.message)
-  process.exit(1)
+try { settings = await verifiedLocalTarget() } catch {
+ console.error('Synthetic local Supabase is unavailable. Start its isolated stack; no hosted fallback is permitted.')
+ process.exit(1)
 }
 const { url, publicKey, secretKey } = settings
 const { createClient } = await import('@supabase/supabase-js')
@@ -194,8 +188,7 @@ try {
     const [alice, bob] = users
     const snapshot = await alice.client.rpc('export_library_backup')
     assert.ok(!snapshot.error, 'Apply the library backup migrations before running Storage integration checks')
-    const expected = process.env.INTEGRATION_BACKUP_FIXTURE
-      ? JSON.parse(gunzipSync(await readFile(process.env.INTEGRATION_BACKUP_FIXTURE)).toString()) : snapshot.data
+    const expected = snapshot.data
     const bytes = gzipSync(JSON.stringify(expected))
     const bucket = client => client.storage.from('library-backups')
     const invoke = client => client.functions.invoke('save-backup', { body: new Blob([bytes], { type: 'application/gzip' }), headers: { 'Content-Type': 'application/gzip' } })
@@ -235,7 +228,6 @@ try {
     const downloaded = await bucket(alice.client).download(newest)
     assert.ok(!downloaded.error, 'Another account deleted a backup or owner download failed')
     assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(await downloaded.data.arrayBuffer())).toString()),expected)
-    if (process.env.INTEGRATION_BACKUP_FIXTURE) console.log(`Verified live Storage round trip: ${expected.tables.library_entries.length} works; ${bytes.length} compressed bytes.`)
     // Administrative clock adjustment is test-only; users cannot access this table.
     assert.ok(!(await admin.from('backup_save_state').update({ attempted_at: new Date(0).toISOString() }).eq('user_id',alice.id)).error)
     const concurrent = await Promise.all([invoke(alice.client),invoke(alice.client)])

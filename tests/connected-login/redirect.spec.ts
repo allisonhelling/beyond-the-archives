@@ -9,7 +9,7 @@ const access = `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toSt
 const sourceSession = { access_token: access, refresh_token: 'source-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, token_type: 'bearer', user }
 
 async function setup(page: Page, remembered = false, failExchange = false) {
- await fixture(page)
+ await fixture(page,{backend:'http://127.0.0.1:54321'})
  if (remembered) await page.addInitScript(({ reader, session }) => { if (location.origin === reader) localStorage.setItem('reader-cloud-auth', JSON.stringify(session)) }, { reader, session: sourceSession })
  const issued: Record<string, unknown>[] = [], redeemed: Record<string, unknown>[] = []
  await page.route('**/functions/v1/app-login', async route => {

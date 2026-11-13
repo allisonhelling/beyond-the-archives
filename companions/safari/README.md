@@ -17,7 +17,11 @@ Apply migrations through `20261019000100_userscript_metadata_refresh.sql` to the
 For an iPhone, put the same hosted public project configuration as the deployed website in `.env.local.hosted`:
 
 ```dotenv
-VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_APP_ENV=staging
+VITE_SUPABASE_PROJECT_REF=your-approved-staging-ref
+VITE_SUPABASE_URL=https://your-approved-staging-ref.supabase.co
+VITE_ORGANIZER_URL=https://your-staging-organizer.example/
+VITE_READER_URL=https://your-staging-reader.example/
 VITE_SUPABASE_PUBLISHABLE_KEY=your_public_publishable_or_anon_key
 EXTENSION_APP_ORIGIN=https://your-library.example.com
 ```
@@ -28,7 +32,7 @@ npm run build:userscript
 
 When upgrading from the previous app name, replace the old userscript file so only one library userscript is enabled.
 
-Output: `userscript/dist/beyond-the-archives.user.js` and a metadata file. Every userscript build loads `.env.local.hosted` and requires hosted HTTPS backend and app origins. Localhost builds are rejected before writing files. Explicit environment variables can supply hosted public settings in CI. `npm run build:userscript:hosted` is an alias of the same build command; there is no local userscript build mode.
+Output: `userscript/dist/beyond-the-archives.user.js` and a metadata file. Every userscript build loads `.env.local.hosted` and requires explicit staging/production environment/ref, matching hosted HTTPS backend and app origins. Staging cannot select the known production project or app aliases. Obtain approval before provisioning or releasing any hosted target; see [S1 setup](../../docs/security-foundation/LOCAL_AND_STAGING.md). Localhost builds are rejected before writing files. Explicit environment variables can supply hosted public settings in CI. `npm run build:userscript:hosted` is an alias of the same build command; there is no local userscript build mode.
 
 ## Install and Connect
 

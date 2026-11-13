@@ -6,17 +6,18 @@ import { BookOpen } from 'lucide-react'
 import { readFile, writeFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 import { join } from 'node:path'
-import { readPublicConfig } from '../src/lib/config.ts'
+import { requireEnvironmentConfig, environmentOrigin } from '../src/lib/environment.ts'
 
 // Keep --hosted compatible with older build commands; hosted validation is always enforced.
 const { values } = parseArgs({ options: { outDir: { type: 'string', default: 'userscript/dist' }, hosted: { type: 'boolean', default: false } } })
 // Every entrypoint uses the hosted settings; explicit CI environment values still take precedence.
 try { process.loadEnvFile('.env.local.hosted') } catch (error) { if (error.code !== 'ENOENT') throw error }
 const env = { ...loadEnv('production', process.cwd(), ''), ...process.env }
-const config = readPublicConfig(env)
+const config = requireEnvironmentConfig(env)
 if (!config) throw new Error('Configure the public Supabase URL and publishable/anon key.')
 const backend = new URL(config.url)
-const app = new URL(env.EXTENSION_APP_ORIGIN ?? 'http://127.0.0.1:5173')
+const app = new URL(environmentOrigin(env.EXTENSION_APP_ORIGIN, config.environment))
+if (app.origin !== config.organizerUrl) throw new Error('Userscript origin does not match the configured organizer.')
 for (const url of [backend, app]) {
  if (url.protocol !== 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Safari userscripts require hosted HTTPS backend and app origins. Configure .env.local.hosted; local builds are not supported.')
  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Configure origins without paths or credentials.')

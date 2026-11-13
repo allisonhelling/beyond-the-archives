@@ -1,8 +1,10 @@
 import { sha256 as digest, randomSecret as random } from './crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { hostedReaderUrl, readerBaseUrl } from './reader-connection'
-export const organizerAppUrl = () => readerBaseUrl(import.meta.env.VITE_ORGANIZER_URL || 'https://beyondthearchives.vercel.app/').href
-export const readerAppUrl = () => readerBaseUrl(import.meta.env.VITE_READER_URL || hostedReaderUrl).href
+import { readerBaseUrl } from './reader-connection'
+import { requireRuntimeEnvironmentConfig } from './environment'
+import { sampleMode } from './sample-mode'
+export const organizerAppUrl = () => readerBaseUrl(sampleMode ? 'http://127.0.0.1:5173/' : requireRuntimeEnvironmentConfig(import.meta.env).organizerUrl).href
+export const readerAppUrl = () => readerBaseUrl(sampleMode ? 'http://127.0.0.1:5174/' : requireRuntimeEnvironmentConfig(import.meta.env).readerUrl).href
 export const isLoginBridge = () => location.pathname==='/auth/bridge'
 
 type BridgeResult = { code?: string; error?: 'signed-out' | 'access-denied' | 'unavailable' | 'account-changed' }

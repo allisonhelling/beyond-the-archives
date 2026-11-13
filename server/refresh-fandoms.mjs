@@ -1,10 +1,10 @@
 // Trusted bounded scheduled pass. Credentials remain in the host environment.
 import { createClient } from '@supabase/supabase-js'
+import { verifiedLocalTarget } from '../scripts/local-target.mjs'
 import { supabaseFandomWorker } from './ao3/fandom-store.ts'
 import { processFandomWork } from './ao3/fandom-worker.ts'
 try {
- const url=process.env.SUPABASE_URL,secret=process.env.SUPABASE_SECRET_KEY
- if(!url||!secret)throw new Error('Missing configuration')
+ const {url,secretKey:secret}=await verifiedLocalTarget({url:process.env.SUPABASE_URL,secret:process.env.SUPABASE_SECRET_KEY})
  const client=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}})
  const {data,error}=await client.rpc('pending_fandom_owners',{p_limit:20})
  if(error)throw error

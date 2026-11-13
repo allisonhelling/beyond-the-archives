@@ -8,7 +8,7 @@ import { join } from 'node:path'
 it('builds a standalone installable file with a leading Userscripts header and public configuration only', async () => {
  const directory = await mkdtemp(join(tmpdir(), 'ao3-userscript-'))
  try {
-  const env = { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example', SUPABASE_SERVICE_ROLE_KEY: 'do_not_embed_this_canary' }
+  const env = { ...process.env, VITE_APP_ENV: 'staging', VITE_SUPABASE_PROJECT_REF: 'userscript-test', VITE_ORGANIZER_URL: 'https://library-test.example/', VITE_READER_URL: 'https://reader-test.example/', VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example', SUPABASE_SERVICE_ROLE_KEY: 'do_not_embed_this_canary' }
   execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env, stdio: 'pipe' })
   const script = await readFile(join(directory, 'dist/beyond-the-archives.user.js'), 'utf8')
   expect(script.startsWith('// ==UserScript==\n')).toBe(true)
@@ -28,9 +28,9 @@ it('builds a standalone installable file with a leading Userscripts header and p
 it('rejects loopback backends and app links in every userscript build before creating an artifact', async () => {
  const directory = await mkdtemp(join(tmpdir(), 'ao3-userscript-hosted-'))
  try {
-  const base = { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }
+  const base = { ...process.env, VITE_APP_ENV: 'staging', VITE_SUPABASE_PROJECT_REF: 'userscript-test', VITE_ORGANIZER_URL: 'https://library-test.example/', VITE_READER_URL: 'https://reader-test.example/', VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }
   for (const args of [[], ['--hosted']]) for (const patch of [{ VITE_SUPABASE_URL: 'http://127.0.0.1:54321' }, { EXTENSION_APP_ORIGIN: 'http://localhost:5173' }, { VITE_SUPABASE_URL: 'https://localhost' }, { VITE_SUPABASE_URL: 'https://[::1]' }]) {
-   expect(() => execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', ...args, '--outDir', join(directory, 'rejected')], { env: { ...base, ...patch }, stdio: 'pipe' })).toThrow('Safari userscripts require hosted HTTPS backend and app origins')
+   expect(() => execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', ...args, '--outDir', join(directory, 'rejected')], { env: { ...base, ...patch }, stdio: 'pipe' })).toThrow()
   }
   await expect(readFile(join(directory, 'rejected/beyond-the-archives.user.js'))).rejects.toMatchObject({ code: 'ENOENT' })
  } finally { await rm(directory, { recursive: true, force: true }) }

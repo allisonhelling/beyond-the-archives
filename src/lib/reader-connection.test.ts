@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { afterEach, expect, it, vi } from 'vitest'
-import { consumeReaderPairing, enableOrganizerSync, hostedOrganizer, readerBaseUrl, readerPairingUrl } from './reader-connection'
-const pairing = { ...hostedOrganizer, code: 'a'.repeat(64) }
+import { consumeReaderPairing, enableOrganizerSync, readerBaseUrl, readerPairingUrl } from './reader-connection'
+const pairing = { url: 'https://synthetic-test.supabase.co', key: 'sb_publishable_synthetic_test', code: 'a'.repeat(64) }
 afterEach(() => window.history.replaceState(null, '', '/'))
 it('hands off a one-time code only in the fragment and scrubs it while preserving other URL state', () => {
   const url = new URL(readerPairingUrl(window.location.origin, pairing))

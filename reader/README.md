@@ -9,6 +9,7 @@ Requires Node.js 22.13+ (22.x) or 24+ and the full repository checkout. From thi
 ```sh
 npm ci --prefix ..
 npm ci
+# From the repository root, complete npm run db:configure first.
 npm run dev
 ```
 
@@ -37,9 +38,9 @@ Cloud sync, organizer pairing and Calibre delivery use the regular reader (`npm 
 
 ## Connect To The Local Organizer
 
-For local use, set `VITE_READER_URL=http://127.0.0.1:5174/` in the organizer’s root `.env.local` and `VITE_ORGANIZER_URL=http://127.0.0.1:5173/` in this folder’s `.env.local`. Give both apps the same public Supabase configuration and restart their dev servers. Run the reader with `npm run dev`, sign in, and choose **Open Reader** from organizer settings or Offline. Local Auth redirects must allow the reader origin.
+Run `npm run db:configure` from repository root after starting the synthetic local stack. Both apps require the complete explicit configuration in the root `.env.example`: local environment/ref, backend URL/public key and organizer/reader origins. The reader has no default production backend. Missing or mismatched connected configuration fails the build; guest EPUBs still stay local.
 
-For local organizer sync and reader-account testing, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in this folder’s untracked `.env.local` to the same public values as the organizer and restart the reader. Organizer sync requires this matching account backend; guest reading needs no account. The local Supabase configuration allows reader sign-in redirects at ports 5174 and 4174; restart the local Supabase stack after changing its Auth configuration. Create an account and confirm its email, or use an existing organizer account in the same local project; invitations remain supported. Local browser storage stays separate from the hosted reader’s origin. Keep `127.0.0.1` consistent rather than switching to `localhost`.
+Use synthetic accounts and EPUBs only for local/staging tests. Create/confirm a synthetic account through the local inbox and sign into the same local backend in both apps. Do not copy production data or credentials. A saved organizer connection from another environment is rejected before transmitting its paired secret. The [local setup guide](../docs/security-foundation/LOCAL_AND_STAGING.md) covers the synthetic seed, local functions and restore drill.
 
 ## Hosting
 

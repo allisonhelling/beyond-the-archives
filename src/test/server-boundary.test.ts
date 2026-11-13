@@ -42,8 +42,8 @@ describe('server authentication boundary', () => {
   it('keeps invitation administration on the server and disables token persistence', async () => {
     const invite = vi.fn().mockResolvedValue({ error: null })
     const factory = vi.fn().mockReturnValue({ auth: { admin: { inviteUserByEmail: invite } } })
-    await inviteUser({ url: 'https://example.supabase.co', secret: 'server-only-test-secret', email: 'reader@example.com', redirectTo: origin }, factory)
-    expect(factory).toHaveBeenCalledWith('https://example.supabase.co', 'server-only-test-secret', { auth: { persistSession: false, autoRefreshToken: false } })
-    expect(invite).toHaveBeenCalledWith('reader@example.com', { redirectTo: `${origin}/auth/callback` })
+    await inviteUser({ url: 'http://127.0.0.1:54321', secret: 'server-only-test-secret', email: 'reader@example.test', redirectTo: 'http://127.0.0.1:5173' }, factory, async () => ({url:'http://127.0.0.1:54321',secretKey:'server-only-test-secret'}))
+    expect(factory).toHaveBeenCalledWith('http://127.0.0.1:54321', 'server-only-test-secret', { auth: { persistSession: false, autoRefreshToken: false } })
+    expect(invite).toHaveBeenCalledWith('reader@example.test', { redirectTo: 'http://127.0.0.1:5173/auth/callback' })
   })
 })

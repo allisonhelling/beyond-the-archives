@@ -12,9 +12,13 @@ The checked editor records explicit/derived status origin in existing `reading_p
 
 Deploy reviewed migrations first, then organizer and companions. Backups containing general-source entries export version 2 so older readers reject them instead of dropping source identity. Current restore supports versions 1 and 2, with owner/fingerprint/safety-copy guards and source validation. AO3-only exports remain version 1. No Edge Function, new dependency, hosted scraping, crosspost sync or DOM mapping is added. Leave additive columns and written identities in place when rolling back the frontend. See [Phase 2 delivery](universal-stories/PHASE_2_MANUAL_STORIES_PROGRESS.md) for exact checks, limits and handoff; [Backups](BACKUPS.md) owns restore procedures.
 
+## Security And Environment Review Gate
+
+The existing hosted Supabase project is production and contains personal data. The [S0 baseline audit](security-foundation/BASELINE_AUDIT.md) is historical evidence of the main-push deployment gap. S1 removes that job and production secret bindings from the working-tree CI definition, adds explicit app/companion configuration and guards local operator/CLI commands. These edits do not alter hosted GitHub/Vercel/Supabase settings until a separately approved release. The [S1 local/staging guide](security-foundation/LOCAL_AND_STAGING.md) owns setup, templates, recovery drill, remaining hosted gaps and approval gates. A merge or passing CI is not release authorization. No hosted mutations are enabled by the S1 script runner; never copy production into nonproduction. S2 roles/RLS remain separate.
+
 ## Current Upgrade Requirements
 
-Apply the complete migration chain through `20261112000400_universal_backup_compatibility.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
+Apply the complete migration chain through `20261112000400_universal_backup_compatibility.sql`. Use `npm run db:migrate` for the isolated synthetic local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
 
 Recent implementation changes:
 
@@ -276,7 +280,7 @@ Choose either a hosted project or a local Docker stack. Database changes always 
 5. Set the Site URL to your app origin. Allow the exact `http://127.0.0.1:5173/auth/callback` development redirect and the exact `https://YOUR-APP.vercel.app/auth/callback` production redirect. Avoid broad wildcard production redirects.
 6. Set the minimum password length to 12 and require upper/lower case letters, a number, and a symbol. Configure your SMTP provider for reliable confirmation, invitation, and recovery delivery.
 7. Set email templates as described below, then create your account through either app. Operator invitations through **Authentication → Users → Invite user** remain supported.
-8. Set the two public environment variables in `.env.local`, restart Vite, choose Create Account, confirm your email, and sign in.
+8. Set the complete explicit browser environment configuration from the approved template in `.env.local`, restart Vite, choose Create Account, confirm your email, and sign in.
 
 Use these email-template links so signup confirms the existing password, while invitation and recovery request a password:
 
@@ -291,7 +295,7 @@ Use these email-template links so signup confirms the existing password, while i
 
 These templates honor the requested callback and fall back to the configured organizer Site URL. Keep organizer and reader callback URLs in the exact Auth redirect allowlist. Default Supabase invitation/recovery redirect links are also recognized. PKCE recovery links must be opened in the browser that requested them. Expired or already consumed links fail closed.
 
-For operator invitations, `npm run invite` is an alternative to the Dashboard. Supply `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_EMAIL`, and `APP_ORIGIN` through your trusted terminal's environment/secret manager. It calls the Admin API from `server/` with session persistence disabled. Never store the secret in frontend env files, paste it into chat, or prefix it with `VITE_`.
+During S1, `npm run invite` is restricted to a verified local synthetic stack, an `example.test` address and loopback `APP_ORIGIN`; it derives local credentials or verifies supplied ones against CLI status. No hosted invitation is authorized by this utility. Existing deployed private-beta signup and operator Dashboard invitations remain unchanged; production administrative actions require separate explicit approval. Never put server credentials in `VITE_` variables.
 
 create a commit message for changes since last commit using the standard conventions
 ### Private Beta Signup
@@ -303,7 +307,7 @@ Use the hosted SQL Editor or local Studio SQL Editor as the project administrato
 ```sql
 insert into public.beta_signup_allowlist (email)
 select lower(btrim(address))
-from (values ('allisonh263@gmail.com'), ('moonwolf332@gmail.com')) as approved(address)
+from (values ('owner@example.test'), ('tester@example.test')) as approved(address)
 on conflict (email) do nothing;
 ```
 
@@ -332,7 +336,7 @@ Keep `[auth].enable_signup = true`, `[auth.email].enable_signup = true`, and `[a
 
 The live integration script reads local keys into process memory, creates two temporary accounts, signs in through real Supabase Auth, checks the twelve foundation tables through PostgREST, and removes its fixtures. It refuses non-loopback endpoints. Do not point destructive integration tests at production.
 
-If startup fails, retry `npm run db:start -- --debug` after confirming Docker Desktop is running. Already downloaded images are reused. If that returns success but lists Auth, Kong or PostgREST under **Stopped services**, run `npx supabase stop` (the default keeps a database backup), then `npm run db:start -- --debug` again. Do not use `--no-backup` for this recovery. The integration runner accepts both legacy flat status JSON and newer CLI status responses containing an `env` map. If it reports a missing API URL or keys, complete startup before retrying `npm run test:integration`; do not substitute your hosted project's credentials.
+If startup fails, first confirm Docker Desktop is running and no older stack occupies local ports. The guarded commands do not accept arbitrary debug/remote flags or print credential-bearing CLI output. Follow the [S1 local setup guide](security-foundation/LOCAL_AND_STAGING.md#reproducible-local-setup); do not substitute hosted credentials, reset established volumes or bypass the local target guard to make a check pass.
 
 ## Server Boundary
 
@@ -441,7 +445,7 @@ GitHub Actions runs lint/build/tests/security/audit/browser checks and a separat
 
 The separate EPUB reader uses `reader/vercel.json` and a different Vercel project with Root Directory `reader`. Its shared-source access, clean dependency installs, and deployment settings are maintained in the [reader deployment guide](../reader/docs/IMPLEMENTATION.md#vercel-deployment). The configuration below applies to the organizer.
 
-Connect your eventual GitHub repository to Vercel, choose Vite, and use `npm run build` with output `dist`. Set **only** the two public environment variables for the frontend. `vercel.json` supplies SPA route fallback, CSP and other security headers. Hosted Supabase uses `*.supabase.co`; update CSP deliberately if using a custom Supabase domain. Configure the exact production Auth URL/redirect and server `APP_ORIGIN` before inviting your production account. Verify an invite, sign-in, refresh, recovery, sign-out, unauthenticated API denial, and isolation using two accounts before relying on production.
+Connect your eventual GitHub repository to Vercel, choose Vite, and use `npm run build` with output `dist`. Set the explicit public environment/ref, backend/key and both app-origin variables from the appropriate template, scoped to the deployment environment. Never provide service credentials to a frontend build. `vercel.json` supplies SPA route fallback, CSP and other security headers. Hosted Supabase uses `*.supabase.co`; update CSP deliberately if using a custom Supabase domain. Configure the exact production Auth URL/redirect and server `APP_ORIGIN` before inviting your production account. Verify an invite, sign-in, refresh, recovery, sign-out, unauthenticated API denial, and isolation using two accounts before relying on production.
 
 Local builds do not push commits, migrate hosted databases, or deploy services. Never commit `.env.local` or server credentials. Verify the target environment independently before rollout.
 
@@ -566,33 +570,17 @@ Migration `20261028000800_trim_series_chapter_dates.sql` extends the existing `l
 
 Inferred series require two distinct saved works; saved records retain their existing eligibility rules. `librarySeries` filters inferred groups before constructing previews. Migration `20261028000900_inferred_series_minimum.sql` applies the same rule at the shared SQL grouping boundary before preview/metadata aggregation, covering pages, facets and navigation. It advances existing query-state revisions to expire old series pools and navigation snapshots. Source additions/removals continue using normal revision invalidation. `SeriesPage` waits for the catalog before rejecting a direct visit, then offers an AO3 link for ineligible identities. Apply the migration and deploy the matching frontend together.
 
-The checked-in [GitHub Actions workflow](../.github/workflows/ci.yml) validates migrations in temporary CI databases, then deploys pending hosted migrations on successful pushes to `main` after deployment secrets are configured. See [Automatic Database Deployment](#automatic-database-deployment) for setup and scope.
+The checked-in [GitHub Actions workflow](../.github/workflows/ci.yml) validates migrations in disposable local CI databases. S1 removes automatic hosted migration execution and production credential bindings from ordinary push/PR jobs.
 
+## Production Release Gate
 
-## Automatic Database Deployment
-
-The existing [CI workflow](../.github/workflows/ci.yml) includes **Deploy Production Database**, which depends on both `checks` and `supabase`. It runs only for pushes to `main`, including merged pull requests; pull-request checks and other branches never receive a deployment job. It uses the committed npm lockfile’s Supabase CLI, links the configured hosted project, previews pending migrations with `db push --linked --skip-vault --dry-run`, and applies them with `db push --linked --skip-vault --yes`. Database deployments share one concurrency group, and a newer run does not cancel an active migration. GitHub may replace a queued deployment with a newer queued run; each run includes the complete ordered migration history.
-
-Configure these three GitHub Actions secrets under **Repository Settings → Secrets and Variables → Actions**, or under the repository’s `production` environment:
-
-| Secret | Value |
-| --- | --- |
-| `SUPABASE_ACCESS_TOKEN` | A Supabase personal access token authorized for the production project. |
-| `SUPABASE_DB_PASSWORD` | The production project’s database password. |
-| `SUPABASE_PROJECT_REF` | The production project reference from its Supabase Dashboard URL. |
-
-The production project must already be initialized and its migration history must agree with the committed files. The first deployment applies every pending migration, including older unapplied migrations. Keep existing migration files unchanged after application. Missing secrets fail the job with their names only. Enter values directly into GitHub’s secret settings; do not add them to source files. The CLI follows Supabase’s [GitHub Actions deployment guidance](https://supabase.com/docs/guides/deployment/managing-environments).
-
-The database job requires both the aggregate `checks` gate (quality, all browser shards, performance, and reader checks) and `supabase` to pass and runs only on pushes to `main`; a failed or skipped prerequisite skips it. Frontend hosting deployments are independent, so an older database-environment deployment timestamp does not prove the environment is unused. The job targets the `production` GitHub environment (GitHub environment names are case-insensitive, so this selects Production). A separate environment named `Production – beyond-the-archives` does not replace it. Before consolidating environments, migrate required secrets and protection rules and explicitly update the workflow target; do not delete Production while this job still references it. Leave required-reviewer protection off for fully automatic deployment; if reviewers are configured, GitHub waits for their approval. Re-run a failed workflow from GitHub Actions after correcting its reported failure. Migration-history mismatches require operator review; the workflow does not reset the hosted database or repair migration history automatically.
-
-This job deploys SQL migrations only. Frontend hosting, Edge Functions, worker scheduling, Supabase secrets/configuration, and companion releases retain their existing deployment procedures. A separately configured frontend auto-deployment is not gated by this database job. Use compatible schema changes or coordinate the frontend release when changes require the database migration first. Adding this workflow locally does not enable GitHub secrets, push commits, or apply a hosted migration.
-
+No production migration runner is supplied in S1. A reviewed PR, successful CI run or merge to `main` is not production release authorization. Existing hosted GitHub rules, Vercel Git auto-deploys, Supabase integrations and credentials were not changed; the working-tree workflow change has no remote effect until an explicitly approved push. Keep production credentials inaccessible to ordinary test/preview/staging jobs. [S1 setup and approval gates](security-foundation/LOCAL_AND_STAGING.md#staging-preparation-and-approval-gate) defines the remaining hosted evidence and staged work. Each later release must identify approved artifact, actual target, component scopes, backup/recovery evidence, authorized approver and release window before any command executes.
 
 ## Project Names and App Origin
 
 The repository and working directory are named `beyond-the-archives`; the hosted app origin is `https://beyondthearchives.vercel.app`. Runtime imports and build entrypoints use relative paths. Historical phase reports retain the folder names used at that time. Git remotes should point to `https://github.com/allisonhelling/beyond-the-archives.git`.
 
-The local `supabase/config.toml` uses `project_id = "beyond-the-archives"`. This identifies the local Docker stack; it is separate from the hosted project reference in `SUPABASE_PROJECT_REF`, which retains its Supabase-assigned value. Changing the local ID does not rename or migrate an existing `ao3-library-tracker` database. Before starting the renamed stack, preserve any needed local data using the existing [backup procedures](BACKUPS.md), stop the old stack without deleting its volumes, and restore into the new stack if needed. Existing containers and volumes were not changed by this configuration edit. Local ports and Auth callback origins remain the same.
+The local `supabase/config.toml` uses `project_id = "beyond-the-archives-local-synthetic"`. This selects a separate disposable local stack; it does not rename, restore or reset old volumes. Never copy personal libraries/production backups into it. If another local stack occupies the ports, preserve and stop that known stack without deleting its volumes; local/S1 tooling does not retarget the ignored production CLI link. Local ports and Auth callback origins remain unchanged.
 
 For the hosted origin change, update these existing settings:
 

@@ -1,12 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readPublicConfig, type PublicConfig } from './config'
 
-// Public browser configuration; account access still requires a private device credential.
-export const hostedOrganizer: PublicConfig = {
-  url: 'https://pnrdztfydurupcqwumvr.supabase.co',
-  key: 'sb_publishable_f7JEDWH8xFPjvQtPms-Rzw_M9341Q9A',
-}
-export const hostedReaderUrl = 'https://archivesunfolded.vercel.app/'
 export type ReaderPairing = PublicConfig & { code: string }
 const pendingPairingKey = 'reader:pending-pairing'
 function parseReaderPairing(input: unknown): ReaderPairing | undefined {

@@ -1,4 +1,4 @@
-project_id = "beyond-the-archives"
+project_id = "beyond-the-archives-local-synthetic"
 
 [api]
 enabled = true

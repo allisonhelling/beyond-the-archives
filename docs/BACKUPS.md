@@ -26,7 +26,7 @@ This uses the existing authenticated client, Storage bucket, and `save-backup` E
 
 ## Administrator Restore of Application Tables
 
-Use a trusted terminal with this repository and installed dependencies. Configure `SUPABASE_URL` and the server-only `SUPABASE_SECRET_KEY` in the environment or `.env.worker`. Never put the secret in a `VITE_*` variable. Apply the migrations to the destination project first, and create/invite the target Auth account. Use its UUID from Supabase Authentication, which may differ from the exported account UUID.
+S1 limits the checked-in operator restore script to the verified synthetic local stack. It derives local credentials from Supabase CLI status, rejects hosted URLs/foreign keys and does not load `.env.worker`. Use synthetic backups only. Production recovery needs a separately reviewed/approved release procedure; do not bypass the guard or copy personal backups into staging. [S1 setup](security-foundation/LOCAL_AND_STAGING.md) owns the target checks and outstanding full recovery requirements.
 
 Stop metadata workers and avoid app writes during restoration. The restore transaction briefly locks application tables, restores data with foreign keys/check constraints enforced, preserves saved timestamps, and rebuilds the derived search index. A failure rolls back the whole operation, including trigger changes.
 

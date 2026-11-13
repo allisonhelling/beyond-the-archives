@@ -18,13 +18,13 @@ it('requires an operator secret and explicit target, defaults to refusing replac
   const factory = vi.fn().mockReturnValue({ rpc })
   const sortKey = 'between-chapters:collection-sort:v1'
   const backup = { format: 'between-chapters-backup', version: 1, tables: {}, browser_preferences: { [sortKey]: JSON.stringify({ hiddenCustom: ['old'] }) } }
-  const config = { backup, userId: '10000000-0000-0000-0000-000000000001', url: 'https://example.supabase.co', secret: 'operator-only' }
-  await expect(restoreBackup({ ...config, secret: '' }, factory)).rejects.toThrow('required')
+  const config = { backup, userId: '10000000-0000-0000-0000-000000000001', url: 'http://127.0.0.1:54321', secret: 'operator-only' }
+  await expect(restoreBackup({ ...config, userId: '' }, factory)).rejects.toThrow('required')
   expect(factory).not.toHaveBeenCalled()
-  const result = await restoreBackup(config, factory)
+  const result = await restoreBackup(config, factory, async () => ({url:config.url,secretKey:config.secret}))
   expect(JSON.parse(result.browser_preferences[sortKey]).hiddenCustom).toEqual(['new'])
   expect(factory).toHaveBeenCalledWith(config.url, config.secret, { auth: { persistSession: false, autoRefreshToken: false } })
   expect(rpc).toHaveBeenCalledWith('restore_library_backup', { p_backup: backup, p_user: config.userId, p_replace: false })
   rpc.mockResolvedValue({ error: { message: 'Target has data' } })
-  await expect(restoreBackup({ ...config, replace: true }, factory)).rejects.toThrow('Check the destination')
+  await expect(restoreBackup({ ...config, replace: true }, factory, async () => ({url:config.url,secretKey:config.secret}))).rejects.toThrow('Check the destination')
 })

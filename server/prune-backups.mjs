@@ -1,21 +1,16 @@
 // Trusted operator utility. Uses the same lease and retention implementation as
 // save-backup, including physical deletion through the Storage API.
 import { createClient } from '@supabase/supabase-js'
-import { spawnSync } from 'node:child_process'
-import { parseLocalSupabaseStatus } from '../scripts/supabase-status.mjs'
+import { verifiedLocalTarget } from '../scripts/local-target.mjs'
 import { backupBucket } from '../src/types/backups.ts'
 import { supabaseBackupStore } from './backups/store.ts'
 import { pruneAccountBackups } from './backups/prune.ts'
 
 try {
  let url = process.env.SUPABASE_URL, secret = process.env.SUPABASE_SECRET_KEY
- if (process.argv.includes('--local')) {
-  const status = spawnSync('npx',['supabase','status','-o','json'],{ encoding:'utf8',timeout:60000 })
-  if (status.status !== 0) throw new Error('Local Supabase is unavailable.')
-  const settings = parseLocalSupabaseStatus(status.stdout)
-  url = settings.url; secret = settings.secretKey
- }
- if (!url || !secret) throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY are required, or use --local.')
+ if (process.argv.slice(2).some(arg=>arg!=='--local')) throw new Error('Only local backup pruning is supported.')
+ const target = await verifiedLocalTarget({url,secret})
+ url=target.url; secret=target.secretKey
  const client = createClient(url,secret,{ auth:{ persistSession:false,autoRefreshToken:false } })
  const store = supabaseBackupStore(client)
  let accounts = 0, skipped = 0

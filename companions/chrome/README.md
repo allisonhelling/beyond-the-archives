@@ -116,7 +116,7 @@ Each successful page is saved in extension local storage, scoped to the connecte
 
 ### Local Build, Page Ranges, and Sample Imports
 
-Run `npm run build:extension:local` with the local app's public Supabase configuration in `.env.local`. This reads development configuration, ignores the hosted `EXTENSION_APP_ORIGIN`, and writes **Beyond the Archives Companion (Local)** to `extension/local/dist`. The standard shared extension in `extension/dist` is preserved; using its environment selector is the recommended testing workflow. The public manifest key gives the local companion a stable ID, selected automatically by the app on loopback hostnames; both local and hosted Settings accept the shared extension ID, while the local build ID remains a fallback.
+Run `npm run build:extension:local` with the local app's public Supabase configuration in `.env.local`. This reads development configuration, ignores the hosted `EXTENSION_APP_ORIGIN`, and writes **Beyond the Archives Companion (Local)** to `extension/local/dist`. The hosted artifact in `extension/dist` is preserved. S1 artifacts each contain only one explicitly configured environment; do not reuse a production installation for staging/local testing. The public manifest key gives the local companion a stable ID, selected automatically by the app on loopback hostnames; both local and hosted Settings accept the shared extension ID, while the local build ID remains a fallback.
 
 Load the local folder in Chrome (replace an older local installation without the fixed ID once), use `http://127.0.0.1:5173`, and reconnect in Settings. For another local origin/port, set `EXTENSION_LOCAL_APP_ORIGIN` when building; it must match the website exactly. Apply pending local migrations with `npx supabase migration up --local`, without resetting the database.
 
@@ -156,3 +156,7 @@ The app requests the archived tab explicitly and captures only AO3 metadata. His
 ## Extension-Only Website Imports
 
 Version 0.7.8 advertises the `metadata-retrieval-v1` capability to the configured website origin. Rebuild and reload the existing companion, then reconnect in website Settings → AO3 Metadata Retrieval. Website automatic retrieval and bulk workflows require this handshake and an authenticated app connection, including in narrow windows. Old retrieval preferences cannot enable hosted fetching. Disconnected jobs and existing scan checkpoints remain saved; reconnect the same account to recover. Mobile users save individual works through the on-AO3 companion. [Cutover operations](../../docs/REMOVE_DIRECT_RETRIEVAL.md) are maintained separately.
+
+## Explicit Environment Builds
+
+Configure all variables from the root `.env.example` for local or `.env.staging.example` for approved staging. `build:extension:local` includes only loopback permissions and settings. Hosted builds require explicit staging/production identity and a matching `EXTENSION_APP_ORIGIN`; they no longer bundle the other local/hosted profile. Existing installed artifacts are unchanged until rebuilt/reloaded. Preserve production installations and obtain separate approval before any release. [S1 setup and gates](../../docs/security-foundation/LOCAL_AND_STAGING.md) owns staging instructions.

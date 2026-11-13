@@ -4,8 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs, parseEnv } from 'node:util'
 import { localExtensionKey, localExtensionId } from '../src/features/imports/extension-config.ts'
-import { isLocalHostname } from '../src/lib/local-app.ts'
-import { readPublicConfig } from '../src/lib/config.ts'
+import { requireEnvironmentConfig, environmentOrigin } from '../src/lib/environment.ts'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { BookOpen } from 'lucide-react'
@@ -24,23 +23,16 @@ const localEnv = { ...development, ...localFile, ...(values.local && process.env
  ...(process.env.EXTENSION_LOCAL_SUPABASE_PUBLISHABLE_KEY && { VITE_SUPABASE_PUBLISHABLE_KEY: process.env.EXTENSION_LOCAL_SUPABASE_PUBLISHABLE_KEY }),
  ...(process.env.EXTENSION_LOCAL_APP_ORIGIN && { EXTENSION_LOCAL_APP_ORIGIN: process.env.EXTENSION_LOCAL_APP_ORIGIN }),
 }
-const profiles = {}
-function profile(id, env, appValue) {
- const config = readPublicConfig(env)
- if (!config) return
- const app = new URL(appValue ?? 'http://127.0.0.1:5173'), backend = new URL(config.url)
- if (id === 'hosted' && !isLocalHostname(app.hostname) && isLocalHostname(backend.hostname) && !values.local) throw new Error('Hosted extension builds cannot use a local Supabase backend. Configure .env.local.hosted or use --local for local development.')
- if (isLocalHostname(app.hostname) !== (id === 'local') || isLocalHostname(backend.hostname) !== (id === 'local')) return
- for (const url of [app, backend]) {
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLocalHostname(url.hostname))) throw new Error('Use HTTPS or local development origins.')
-  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Configure origins without paths or credentials.')
- }
- profiles[id] = { label: id === 'hosted' ? 'Hosted' : 'Local', appOrigin: app.origin, backend: backend.origin, publicKey: config.key }
-}
-profile('hosted', hostedEnv, hostedEnv.EXTENSION_APP_ORIGIN)
-profile('local', localEnv, localEnv.EXTENSION_LOCAL_APP_ORIGIN)
+// An artifact contains exactly one environment. Local builds never import a
+// production host permission, key, origin or session from the hosted profile.
+const selectedEnv = values.local ? localEnv : hostedEnv
+const target = requireEnvironmentConfig(selectedEnv)
+if (values.local !== (target.environment === 'local')) throw new Error('Extension build selection does not match its configured environment.')
+const appOriginValue = values.local ? selectedEnv.EXTENSION_LOCAL_APP_ORIGIN : selectedEnv.EXTENSION_APP_ORIGIN
+const selectedOrigin = environmentOrigin(appOriginValue, target.environment)
+if (selectedOrigin !== target.organizerUrl) throw new Error('Extension origin does not match the configured organizer.')
 const defaultId = values.local ? 'local' : 'hosted'
-if (!profiles[defaultId]) throw new Error(`Configure the ${defaultId} public Supabase URL, publishable key, and matching website origin.`)
+const profiles = { [defaultId]: { label: target.environment, appOrigin: selectedOrigin, backend: new URL(target.url).origin, publicKey: target.key } }
 const { appOrigin, backend, publicKey } = profiles[defaultId]
 const version = '0.7.8'
 const define = {

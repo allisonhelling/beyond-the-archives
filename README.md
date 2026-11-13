@@ -57,60 +57,40 @@ npm run test:e2e:ci -- --shard=1/1      # all functional browser tests
 
 This uses your current files, including uncommitted edits, with the same Node 22 Linux environment as GitHub’s organizer browser shards. Docker installs dependencies and Chromium; no host `npm ci` or browser installation is required for this command. Tests run headlessly with `CI=true`, two workers, and both desktop/mobile projects, excluding `@performance`. Failure traces remain in `test-results/e2e/<run-id>/`. Keep source files unchanged while a run is active.
 
-The container is limited to two CPUs and 7 GiB of memory. For comparable capacity, give Docker Desktop at least those resources. On an 8 GB Mac, keep Docker at 4 GiB and stop local Supabase first with `npx supabase stop`; these browser tests use mocked data. The 7 GiB limit is a ceiling, not reserved memory, and a smaller Docker allocation cannot reproduce CI’s available memory. The first run downloads and builds the image; later runs reuse cached layers, rebuilding dependencies when the lockfile changes. Apple Silicon uses Linux amd64 emulation to match GitHub’s architecture, so timing can still differ. See the [verification reference](docs/IMPLEMENTATION.md#verify) for environment details.
+The container is limited to two CPUs and 7 GiB of memory. For comparable capacity, give Docker Desktop at least those resources. On an 8 GB Mac, keep Docker at 4 GiB and stop local Supabase first with `npm run db:stop`; these browser tests use mocked data. The 7 GiB limit is a ceiling, not reserved memory, and a smaller Docker allocation cannot reproduce CI’s available memory. The first run downloads and builds the image; later runs reuse cached layers, rebuilding dependencies when the lockfile changes. Apple Silicon uses Linux amd64 emulation to match GitHub’s architecture, so timing can still differ. See the [verification reference](docs/IMPLEMENTATION.md#verify) for environment details.
 
 ## Run Locally
 
 Run commands from `beyond-the-archives/`. Requires Node **22.13+ (22.x) or 24+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
 
-### First-Time Setup and Database Upgrades
+### First-Time Setup And Database Upgrades
 
 ```sh
 npm ci
-npx supabase start
-npx supabase migration up --local
-npx supabase status
+npm ci --prefix reader
+npm run db:start
+npm run db:migrate
+npm run db:configure
+npm run db:seed
 ```
 
-Run each command after the previous one succeeds. `supabase start` starts the Docker services in the background; leave Docker running. The local Supabase stack is named `beyond-the-archives`. If you previously used `ao3-library-tracker`, preserve its data and stop that stack before starting the renamed stack; the different project ID does not automatically move its database. See the [rename instructions](docs/IMPLEMENTATION.md#project-names-and-app-origin). Apply migrations again after pulling database changes. Use migration upgrades for an existing database; resetting it is optional and destructive, as described below.
+Run each command after the previous one succeeds. The isolated stack is named `beyond-the-archives-local-synthetic`. Existing local volumes and hosted profiles are preserved; no personal data is copied. If another local stack occupies the ports, preserve its data and stop that known local stack first. Do not reset an established database to solve a port conflict.
 
-On a fresh checkout only, create the browser configuration:
+`db:configure` writes verified local **public** configuration to both apps without logging server keys or overwriting a different backend profile. `.env.example` lists all required variables, including explicit environment/ref and organizer/reader origins. Keep service-role credentials out of browser variables. Connected builds reject missing configuration; the reader has no production fallback. Restart Vite after configuration changes.
 
-```sh
-cp .env.example .env.local
-```
-
-Keep an existing `.env.local` rather than copying over it. Set these values using the local URL and **publishable/anon** key shown by `npx supabase status`:
-
-```dotenv
-VITE_SUPABASE_URL=http://127.0.0.1:54321
-VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_LOCAL_PUBLISHABLE_OR_ANON_KEY
-EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:5173
-```
-
-Without valid public configuration, the app shows a setup screen. Server secret/service-role keys belong only in server configuration, never in `VITE_` variables. Restart Vite after changing `.env.local`.
-
-Have the project owner approve your email for the private beta, then choose **Create Account** in either app with your email, password, and username. Confirmation, invitation, and recovery emails appear at `http://127.0.0.1:54324`; local Studio is at `http://127.0.0.1:54323`. Confirm your email before signing in. The [Supabase setup guide](docs/IMPLEMENTATION.md#set-up-supabase) covers Auth configuration, [beta approvals](docs/IMPLEMENTATION.md#private-beta-signup), and operator invitations.
+`db:seed` creates only synthetic test accounts and library/reader fixtures. For manual sign-in, approve an additional synthetic `example.test` address in the local beta allowlist, choose Create Account and confirm through the local inbox at `http://127.0.0.1:54324`. Local Studio is at `http://127.0.0.1:54323`. Never use production passwords, personal backups or real library data for local/staging testing. The [local setup guide](docs/security-foundation/LOCAL_AND_STAGING.md#reproducible-local-setup) covers recovery checks and environment troubleshooting.
 
 ### Start Each Local Session
 
-Start Docker Desktop, then ensure Supabase is running:
+Start Docker Desktop, then run `npm run db:start`. Run these in separate terminals:
 
-```sh
-npx supabase start
-```
+| Terminal | Command | Purpose |
+|---|---|---|
+| 1 | `npm run dev` | Organizer at `http://127.0.0.1:5173` |
+| 2 | `npm run dev --prefix reader` | Reader at `http://127.0.0.1:5174` |
+| 3 | `npm run db:serve` | Local Edge Functions for metadata uploads, connected login, tags and saved backups |
 
-Run the following long-running commands in **separate terminals**. Leave each required process running while using the app.
-
-| Terminal | Command | When needed |
-| --- | --- | --- |
-| 1 | `npm run dev` | Normal authenticated website at `http://127.0.0.1:5173` |
-| 2 | `npx supabase functions serve extension-metadata` | Browser-extension imports and metadata refreshes |
-| 3 | `npx supabase functions serve` | Optional full function runtime for series previews, canonical tag resolution, and saved backups; use instead of terminal 2 |
-
-Use the URL printed by Vite. For the local extension build, it must match `EXTENSION_LOCAL_APP_ORIGIN` exactly (default `http://127.0.0.1:5173`), including the port and `127.0.0.1` versus `localhost`. The extension and app must target the same Supabase instance.
-
-**Extension mode needs both the website and the Edge Function handler.** A successful “Extension connected” message confirms authentication but does not prove the handler is running. If it is stopped, metadata uploads fail and older requests can hold up the queue. A `503` with `name resolution failed` from `/functions/v1/extension-metadata` means the local function runtime is unavailable; start terminal 2 and reconnect in Settings.
+The app, reader and extension must use the same local backend and exact configured origins, including ports and `127.0.0.1` versus `localhost`. Extension connection confirms authentication; successful metadata uploads also require the local function runtime. If imports return 503, check terminal 3 and reconnect in Settings. `npm run db:stop` stops only this synthetic stack; Docker is left running.
 
 ### Build and Connect the Local Browser Extension
 
@@ -131,14 +111,14 @@ npm run build
 npm run preview
 ```
 
-Open the preview URL printed by Vite, normally `http://127.0.0.1:4173`. Preview serves the built frontend; Supabase and the extension metadata handler must still be running. To test extension imports there, run `EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:4173 npm run build:extension:local`, reload the local extension, and reconnect in Settings. Use the local build’s ID in Settings if another ID is already configured. Settings stored under port 5173 do not carry over to port 4173.
+Open the preview URL printed by Vite, normally `http://127.0.0.1:4173`. Preview serves the built frontend; Supabase and the extension metadata handler must still be running. To test extension imports there, run `VITE_ORGANIZER_URL=http://127.0.0.1:4173/ EXTENSION_LOCAL_APP_ORIGIN=http://127.0.0.1:4173 npm run build:extension:local`, reload the local extension, and reconnect in Settings. Use the local build’s ID in Settings if another ID is already configured. Settings stored under port 5173 do not carry over to port 4173.
 
 ### Stop Local Services
 
 Press **Ctrl+C** in the Vite, function-handler, and preview terminals that you started. When finished with the local database:
 
 ```sh
-npx supabase stop
+npm run db:stop
 ```
 
 The default stop keeps a database backup for the next start. Avoid `--no-backup` when keeping development data.
@@ -148,10 +128,10 @@ The default stop keeps a database backup for the next start. Avoid `--no-backup`
 Only when you deliberately want to erase and recreate the local database:
 
 ```sh
-npx supabase db reset --local
+npm run db:reset
 ```
 
-This deletes local library entries and test accounts and reapplies migrations. Use `npx supabase migration up --local` for normal upgrades instead.
+This deletes local library entries and test accounts and reapplies migrations. Use `npm run db:migrate` for normal upgrades instead.
 
 ## Using the Application
 

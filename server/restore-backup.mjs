@@ -4,18 +4,20 @@ import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { gunzipSync } from 'node:zlib'
 import { createClient } from '@supabase/supabase-js'
+import { verifiedLocalTarget } from '../scripts/local-target.mjs'
 
 export function parseBackup(file) {
   return JSON.parse((file[0] === 0x1f && file[1] === 0x8b ? gunzipSync(file) : file).toString('utf8'))
 }
 
-export async function restoreBackup({ backup, userId, replace = false, url, secret }, clientFactory = createClient) {
-  if (!url || !secret || !userId) throw new Error('SUPABASE_URL, SUPABASE_SECRET_KEY, and --user <Auth UUID> are required.')
+export async function restoreBackup({ backup, userId, replace = false, url, secret }, clientFactory = createClient, readTarget) {
+  if (!userId) throw new Error('--user <Auth UUID> is required.')
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) throw new Error('--user must be an Auth UUID.')
   if (backup?.format !== 'between-chapters-backup' || ![1, 2].includes(backup.version) || !backup.tables) throw new Error('Unsupported backup format.')
-  const client = clientFactory(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
+  const target = await verifiedLocalTarget({ url, secret }, readTarget)
+  const client = clientFactory(target.url, target.secretKey, { auth: { persistSession: false, autoRefreshToken: false } })
   const { data: identities, error } = await client.rpc('restore_library_backup', { p_backup: backup, p_user: userId, p_replace: replace })
-  if (error) throw new Error(`Restore did not return success. Check the destination before retrying. ${error.message}`)
+  if (error) throw new Error(`Restore did not return success. Check the destination before retrying. Details are withheld to protect private data.`)
   const preferences = { ...backup.browser_preferences }
   const sortKey = 'between-chapters:collection-sort:v1'
   // This browser setting contains collection UUIDs; they change across accounts.
@@ -47,5 +49,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       await writeFile(preferencesPath, JSON.stringify(preferences, null, 2), { mode: 0o600 })
       console.log(`Restore browser settings from ${preferencesPath}; see docs/BACKUPS.md.`)
     } catch { throw new Error('Database restore succeeded, but the browser preferences file could not be saved. Check directory permissions before retrying with --replace.') }
-  } catch (error) { console.error(error.message); process.exitCode = 1 }
+  } catch { console.error('Local restore refused or failed. Check the synthetic target/input; private response details are withheld.'); process.exitCode = 1 }
 }

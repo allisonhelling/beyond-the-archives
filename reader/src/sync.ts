@@ -1,4 +1,5 @@
 import { savedWorkIdentity } from './metadata'
+import { requireRuntimeEnvironmentConfig } from '../../src/lib/environment'
 import { reportSyncStatus, reportSyncFailure } from './sync-status'
 import { importEpub } from './epub'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
@@ -7,7 +8,9 @@ import { isAnthology, withPublication, withOrganizerProgress } from './model'
 import { withWorkProgress } from './anthology'
 import type { AnthologyWork, Book, BookDetails, Connection, Pending, Remote } from './model'
 export async function rpc(connection: Connection, action: string, work: string, input: Record<string, unknown> = {}): Promise<{entry: Remote | null; collections?: {id: string; name: string}[]; secret?: string; userId?: string; tagAppearance?: TagAppearance | null}> {
+  const target = requireRuntimeEnvironmentConfig(import.meta.env)
   const url = new URL(connection.backend)
+  if (url.origin !== new URL(target.url).origin || connection.key !== target.key) throw new Error('Organizer connection belongs to another environment. Reconnect using this environment.')
   if (url.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(url.hostname)) throw new Error('Use HTTPS for the organizer backend.')
   const response = await fetch(`${url.origin}/rest/v1/rpc/userscript_library`, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: connection.key }, body: JSON.stringify({ p_secret: connection.secret, p_action: action, p_work: Number(work), p_input: input }), signal: AbortSignal.timeout(20000) })
   const data = await response.json()
