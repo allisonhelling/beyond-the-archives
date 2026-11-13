@@ -1,3 +1,4 @@
+import { sourceLocation, sourceDuplicateFromError } from './story-source'
 import { readReadingHistory } from './reading-history'
 import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './collections/automatic-collections'
 import type { Json } from '../../types/database'
@@ -10,8 +11,8 @@ import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork, savedWork
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collections/collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
-function failure(error: { code?: string } | null) {
-  if (error) throw new Error(error.code === '23505' ? 'This story is already in your library (or that collection name already exists).' : 'Could not save your changes. Check your connection and input, then try again.')
+function failure(error: { code?: string; message?: string } | null) {
+  if (error) throw new Error(error.code === '22023' || error.code === '40001' ? error.message ?? 'Reload and review these changes before saving.' : error.code === '23505' ? 'This story is already in your library (or that collection name already exists).' : 'Could not save your changes. Check your connection and input, then try again.')
 }
 // PostgREST caps each response; fetch every page so memberships cannot be silently lost.
 export async function allRows<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; status?: number }>, subject = 'your library') {
@@ -88,9 +89,13 @@ export async function saveStory(input: StoryInput) {
   if (sampleMode) return (await import('./sample/repository')).saveSampleStory(input)
   const edits = storyEdits(input)
   async function save(values: EditValues, base: EditValues | null): Promise<string> {
-    const { data, error } = await client().rpc('save_library_story_checked', { p_id: input.id ?? null, p_url: input.url, p_input: values, p_base: base })
+    const location = input.id && input.url.includes('/bookmarks/') ? null : sourceLocation(input.url)
+    const generic = location?.identity.kind === 'url'
+    const { data, error } = await client().rpc('save_library_story_checked', { p_id: input.id ?? null, p_url: generic ? location.normalizedUrl : input.url, p_input: { ...values, ...(generic && { submittedUrl: input.url }) }, p_base: base })
     const conflict = conflictFromError(error, save)
     if (conflict) throw conflict
+    const duplicate = sourceDuplicateFromError(error)
+    if (duplicate) throw duplicate
     failure(error); return data!
   }
   return save(edits, input.base ?? null)
@@ -112,14 +117,14 @@ export async function addStoriesToCollections(storyIds: string[], collectionIds:
   const { error } = await client().from('collection_works').upsert(rows, { onConflict: 'collection_id,library_entry_id', ignoreDuplicates: true })
   failure(error)
 }
-export async function updateEntry(id: string, changes: EntryUpdate, base: EditValues) {
+export async function updateEntry(id: string, changes: EntryUpdate, base: EditValues, statusOrigin: 'explicit' | 'derived' | 'preserve' = 'explicit') {
   const keys = { reading_status: 'status', last_read_chapter: 'progress', notes: 'notes', personal_rating: 'rating', is_favorite: 'favorite', is_rec: 'rec' } as const
-  const edits: EditValues = Object.fromEntries(Object.entries(changes).map(([key, value]) => [keys[key as keyof EntryUpdate], value]))
+  const edits: EditValues = { ...((changes.reading_status !== undefined || changes.last_read_chapter !== undefined) && { statusOrigin }), ...Object.fromEntries(Object.entries(changes).map(([key, value]) => [keys[key as keyof EntryUpdate], value])) }
   async function save(values: EditValues, baseline: EditValues): Promise<void> {
     if (sampleMode) return (await import('./sample/repository')).updateSampleEntryChecked(id, values, baseline)
     // Retries also contain the full saved snapshot; this boundary accepts only
     // entry columns and preserves tags, collections and metadata separately.
-    const patch = Object.fromEntries(Object.entries(values).filter(([key]) => Object.values(keys).includes(key as typeof keys[keyof typeof keys])))
+    const patch = Object.fromEntries(Object.entries(values).filter(([key]) => key === 'statusOrigin' || Object.values(keys).includes(key as typeof keys[keyof typeof keys])))
     const { error } = await client().rpc('update_library_entry_checked', { p_id: id, p_input: patch, p_base: baseline })
     const conflict = conflictFromError(error, save)
     if (conflict) throw conflict

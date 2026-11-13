@@ -58,8 +58,8 @@ function timestamp(value: unknown): string | null {
 function observation<T>(story: Story, field: 'published_chapters' | 'publication_status', value: T): FieldObservation<T> {
  const manual = record(story.metadata_overrides), browser = record(story.extension_metadata)
  const result: FieldObservation<T> = { value, source: 'unknown', confirmation: 'unknown', observedAt: null, manualOverride: false }
+ if (Object.hasOwn(manual, field)) return { ...result, source: 'manual', confirmation: value === null || value === 'unknown' || field === 'published_chapters' && manual.chapter_count_manual === false ? 'unknown' : 'user_asserted', observedAt: timestamp(record(story.metadata_confirmation_times)[field]), manualOverride: true }
  if (field === 'publication_status' && story.work_status === 'deleted') return { ...result, source: 'private_availability' }
- if (Object.hasOwn(manual, field)) return { ...result, source: 'manual', confirmation: 'user_asserted', manualOverride: true }
  const sourceField = field === 'publication_status' ? 'is_complete' : field
  if (Object.hasOwn(browser, field) || Object.hasOwn(browser, sourceField)) return { ...result,
   source: waybackSnapshot(story.original_url) ? 'archive' : 'browser', confirmation: value === null || value === 'unknown' ? 'unknown' : 'observed',
@@ -79,7 +79,8 @@ export function storySourceVersion(story: Story): StorySourceVersion {
   normalizedUrl = `https://archiveofourown.org/works/${work.ao3_work_id}`
  }
  let canonicalUrl: string | null = null, canonicalVerifiedAt: string | null = null
- if (identity && work.canonical_url === normalizedUrl && timestamp(work.canonical_verified_at)) {
+ if (!identity && story.source_url) { try { const location = sourceLocation(story.source_url); identity = location.identity; normalizedUrl = location.normalizedUrl } catch { /* Invalid legacy evidence remains unknown. */ } }
+ if (identity?.kind === 'native' && work.canonical_url === normalizedUrl && timestamp(work.canonical_verified_at)) {
   canonicalUrl = work.canonical_url; canonicalVerifiedAt = timestamp(work.canonical_verified_at)
  }
  const count = story.metadata.published_chapters
@@ -89,4 +90,31 @@ export function storySourceVersion(story: Story): StorySourceVersion {
   publishedChapters: observation(story, 'published_chapters', published),
   publicationStatus: observation(story, 'publication_status', story.metadata.publication_status),
   progress: { status: story.reading_status, chaptersRead: story.last_read_chapter } }
+}
+
+export type MetadataConfidence = 'any' | 'verified' | 'automatic' | 'manual' | 'unknown'
+export const confidenceLabels: Record<MetadataConfidence, string> = { any: 'Any', verified: 'Source-Verified', automatic: 'Automatically Extracted', manual: 'Manually Supplied', unknown: 'Unknown' }
+export function fieldConfidence(story: Story, field: 'published_chapters' | 'publication_status'): MetadataConfidence {
+ if (story.metadataConfidence?.[field]) return story.metadataConfidence[field]!
+ const value = story.metadata[field]
+ if (value === null || value === 'unknown' || value === undefined) return 'unknown'
+ if (Object.hasOwn(record(story.metadata_overrides), field)) return 'manual'
+ if (field === 'publication_status' && story.work_status === 'deleted') return 'unknown'
+ const sourceField = field === 'publication_status' ? 'is_complete' : field
+ if (Object.hasOwn(record(story.extension_metadata), field) || Object.hasOwn(record(story.extension_metadata), sourceField)) return 'automatic'
+ return !story.source_url && record(record(story.work.field_provenance)[sourceField]).source === 'ao3' ? 'verified' : 'unknown'
+}
+
+export type SourceDuplicateCandidate = { id: string; title: string; exact: boolean }
+export class SourceDuplicateError extends Error {
+ constructor(public candidates: SourceDuplicateCandidate[]) { super('Review similar story URLs before saving.') }
+}
+export function sourceDuplicateFromError(error: { code?: string; details?: string | null } | null) {
+ if (error?.code !== '23505' || !error.details) return null
+ try {
+  const parsed = JSON.parse(error.details)
+  if (!Array.isArray(parsed.similarStories) || !parsed.similarStories.length) return null
+  const candidates = parsed.similarStories.filter((value: unknown): value is SourceDuplicateCandidate => Boolean(value && typeof value === 'object' && 'id' in value && typeof value.id === 'string' && 'title' in value && typeof value.title === 'string' && 'exact' in value && typeof value.exact === 'boolean'))
+  return candidates.length ? new SourceDuplicateError(candidates) : null
+ } catch { return null }
 }

@@ -2,6 +2,8 @@
 
 **Status:** Accepted future-feature specification, organized on 12 November 2026. The project's architecture has already been prepared for future multi-site support; that does **not** mean the proposed site integrations, mapping interface, or crosspost features are already implemented. Build on the existing foundations, with a compatibility audit rather than assuming a wholesale refactor is required.
 
+Phase 2 implements single-source manual stories and safe chapter-total editing; see the [delivery and verification record](PHASE_2_MANUAL_STORIES_PROGRESS.md). Extraction, mapping and linked crossposts remain later phases.
+
 ## Purpose
 
 Support stories from any URL with manual tracking, richer site-aware extraction where available, optional visual mappings, deterministic tag classification, and confirmed crosspost linking, while preserving AO3 and archives unfolded behavior.

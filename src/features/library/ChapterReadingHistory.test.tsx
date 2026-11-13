@@ -20,3 +20,16 @@ it('shows how tracking starts for older works and forwards editor field attribut
  expect(container.firstChild).toHaveAttribute('data-display-field', 'chapterHistory')
  expect(container.firstChild).toHaveAttribute('tabindex', '0')
 })
+it('flags out-of-range chapter history without deleting or renumbering it',()=>{
+ const history=[{action:'chapter_read' as const,id:'past',at:'2026-11-12T00:00:00Z',status:'finished' as const,chapter:20,chapter_id:'120',word_count:42,is_reread:true}]
+ render(<dl><ChapterReadingHistory history={history} published={15} /></dl>)
+ expect(screen.getByText(/Out of Range/)).toBeInTheDocument()
+ expect(screen.getByText(/Chapter 20 · 42 Words · Re-Read/)).toBeInTheDocument()
+ expect(history[0]).toMatchObject({chapter:20,chapter_id:'120',is_reread:true})
+})
+it('retains and flags stale chapter links even when there are no chapter-read events',()=>{
+ const links={1:'101',16:'116',20:'120'}
+ render(<dl><ChapterReadingHistory published={15} chapterLinks={links} /></dl>)
+ expect(screen.getByText(/2 saved chapter links are outside/)).toBeInTheDocument()
+ expect(links).toEqual({1:'101',16:'116',20:'120'})
+})

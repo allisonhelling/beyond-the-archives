@@ -1,3 +1,4 @@
+import { confidenceLabels } from './story-source'
 import { expressionTags, tagExpression, tagFilterConfig, withTagExpression, type TagFilterKey } from './tags/tag-expressions'
 import { filterDateText, ratingLabel } from './model'
 import { publicationStatuses } from './publication-status'
@@ -30,6 +31,8 @@ export function readingFilterTags(filters: ReadingFilters, { authorOnly = false,
   for (const [key, label] of [['oneShot', 'One-Shot'], ['crossovers', 'Crossovers']] as const) {
     if (filters[key] && filters[key] !== 'allowed') add(key, `${label} ${filters[key] === 'only' ? 'Only' : 'Exclude'}`)
   }
+  for (const [key, label] of [['countConfidence', 'Chapter Count'], ['publicationConfidence', 'Publication Status']] as const) { const value = filters[key]; if (value && value !== 'any') add(key, `${label}: ${confidenceLabels[value]}`) }
+  if (filters.needsCompletionVerification) add('needsCompletionVerification', 'Needs Completion Verification')
   if (filters.inSeries) add('inSeries', 'In a Series Only')
   if (!authorOnly && !series && (filters.showSeries || seriesVisibility)) add('showSeries', filters.showSeries ? 'Show Series' : 'Hide Series')
   if (filters.excludeLaterSeries) add('excludeLaterSeries', 'Exclude Later Series Works')

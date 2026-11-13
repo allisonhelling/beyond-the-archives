@@ -1,6 +1,6 @@
 import { exampleWork } from './display/display-examples'
 import { describe, expect, it } from 'vitest'
-import { ao3Date, authorPageUrl, blankMetadata, effectiveMetadata, effectiveWork, initialProgress, nextUnread, parseWorkUrl, progressReadingStatus, validateProgress, type Work } from './model'
+import { ao3Date, chapterUrl, authorPageUrl, blankMetadata, effectiveMetadata, effectiveWork, initialProgress, nextUnread, parseWorkUrl, progressReadingStatus, validateProgress, type Story, type Work } from './model'
 it('keeps display defaults distinct from source observations and preserves private empty fandom overrides', () => {
  const work = { automatic_metadata: {}, verified_chapters: {} } as Work
  expect(effectiveMetadata(work, {}).fandoms).toEqual([])
@@ -14,7 +14,7 @@ it('keeps display defaults distinct from source observations and preserves priva
 it('projects deleted availability without losing saved work fields or manual corrections', () => {
   const work = { title: 'Source title', summary: 'Saved summary', is_complete: true, published_chapters: 8, automatic_metadata: {} } as Work
   const manual = { title: 'My title', publication_status: 'complete' }
-  expect(effectiveMetadata(work, manual, [], [], [], 'deleted')).toMatchObject({ title: 'My title', summary: 'Saved summary', published_chapters: 8, publication_status: 'deleted' })
+  expect(effectiveMetadata(work, manual, [], [], [], 'deleted')).toMatchObject({ title: 'My title', summary: 'Saved summary', published_chapters: 8, publication_status: 'complete' })
   expect(effectiveMetadata(work, manual, [], [], [], 'available').publication_status).toBe('complete')
   expect(manual.publication_status).toBe('complete')
 })
@@ -144,4 +144,8 @@ it('retains rereading during progress corrections until the publication is caugh
  expect(progressReadingStatus(2, metadata, 're_reading')).toBe('re_reading')
  expect(progressReadingStatus(3, metadata, 're_reading')).toBe('finished')
  for (const publication_status of ['in_progress', 'hiatus'] as const) expect(progressReadingStatus(3, { ...metadata, publication_status }, 're_reading')).toBe('waiting_for_updates')
+})
+it('does not offer an out-of-range mapped next chapter after the published count changes',()=>{
+ const story: Story={...exampleWork,work:{...exampleWork.work,ao3_work_id:123,verified_chapters:{16:'116'}},metadata:{...blankMetadata,published_chapters:15},metadata_overrides:{published_chapters:15},original_url:'https://archiveofourown.org/works/123',reading_status:'reading',last_read_chapter:15}
+ expect(chapterUrl(story)).toBeNull()
 })

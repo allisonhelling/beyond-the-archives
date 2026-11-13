@@ -6,7 +6,7 @@ import { backupClient, backupBucket, BackupRequestError, browserPreferenceKeys, 
 
 type Tables = Database['public']['Tables']
 export type LibraryBackup = {
-  format: 'between-chapters-backup'; version: 1; user_id: string; exported_at: string
+  format: 'between-chapters-backup'; version: 1 | 2; user_id: string; exported_at: string
   tables: { [K in typeof backupTables[number]]: Tables[K]['Row'][] }
   browser_preferences?: Record<string, string | null>
 }
@@ -31,7 +31,7 @@ export function privateBackupMetadata(backup: LibraryBackup): LibraryBackup {
     // the source snapshot that was present when the backup was created.
     const metadata = effectiveMetadata(work, {}, tagLinks.get(work.id)?.filter(Boolean), authorLinks.get(work.id)?.filter(Boolean), fandomLinks.get(work.id)?.filter(Boolean))
     const fields = Object.fromEntries(['title', 'summary', 'rating', 'word_count', 'published_chapters', 'total_chapters', 'is_complete', 'ao3_published_at', 'ao3_updated_at', 'last_metadata_check', 'last_metadata_success'].map(key => [key, work[key as keyof Work]]))
-    return { ...entry, reading_provenance: entry.reading_provenance ?? {}, dnf_since: entry.dnf_since ?? null, is_rec: entry.is_rec ?? (bookmarkRec(entry) === true), work_status: entry.work_status ?? 'unknown', source_bookmark: entry.source_bookmark ?? {}, extension_metadata: { ...fields, ...metadata } as Json, extension_chapters: work.verified_chapters }
+    return { ...entry, source_url: entry.source_url ?? null, metadata_confirmation_times: entry.metadata_confirmation_times ?? {}, reading_provenance: entry.reading_provenance ?? {}, dnf_since: entry.dnf_since ?? null, is_rec: entry.is_rec ?? (bookmarkRec(entry) === true), work_status: entry.work_status ?? 'unknown', source_bookmark: entry.source_bookmark ?? {}, extension_metadata: { ...fields, ...metadata } as Json, extension_chapters: work.verified_chapters }
   })
   return { ...backup, tables: { ...tables, library_entries: entries } }
 }
@@ -53,10 +53,10 @@ export async function readBackup(file: Blob): Promise<LibraryBackup> {
     } }))
     const value = JSON.parse(await new Response(bounded).text())
     if (value?.tables && typeof value.tables === 'object' && !Object.hasOwn(value.tables, 'reading_records')) value.tables.reading_records = []
-    if (value?.format !== 'between-chapters-backup' || value.version !== 1 || typeof value.user_id !== 'string'
+    if (value?.format !== 'between-chapters-backup' || ![1, 2].includes(value.version) || typeof value.user_id !== 'string'
       || typeof value.exported_at !== 'string' || !Number.isFinite(Date.parse(value.exported_at))
       || !value.tables || backupTables.some(table => !Array.isArray(value.tables[table]) || value.tables[table].some((row: unknown) => !row || typeof row !== 'object' || Array.isArray(row)))) {
-      throw new BackupRequestError('Unsupported or incomplete backup. Choose a version 1 JSON backup exported by this app.')
+      throw new BackupRequestError('Unsupported or incomplete backup. Choose a version 1 or 2 JSON backup exported by this app.')
     }
     return privateBackupMetadata(value as LibraryBackup)
   } catch (error) {

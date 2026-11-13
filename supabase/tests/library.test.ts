@@ -145,7 +145,7 @@ it('keeps abandonment private and independent of reading status, finishing when 
       expect((await row()).reading_status).toBe(status)
     }
     await db.query('update public.library_entries set last_read_chapter=3 where id=$1', [id])
-    expect((await row()).reading_status).toBe('finished')
+    expect((await row()).reading_status).toBe('did_not_finish') // Explicit DNF survives a numeric correction.
     expect((await row()).metadata_overrides).toMatchObject({ publication_status: 'abandoned' })
     await save({ id, url, metadata, status: 'reading', progress: 3 })
     expect((await row()).reading_status).toBe('finished')

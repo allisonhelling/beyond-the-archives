@@ -33,6 +33,7 @@ export function readBrowsing(params: URLSearchParams, defaults = defaultReadingF
   if (!['allowed','only','exclude'].includes(filters.oneShot)) filters.oneShot = 'allowed'
   if (!['allowed','only','exclude'].includes(filters.crossovers ?? 'allowed')) filters.crossovers = 'allowed'
   if (!['any','summary','notes'].includes(filters.scope)) filters.scope = 'any'
+  for (const key of ['countConfidence','publicationConfidence'] as const) if (!['','any','verified','automatic','manual','unknown'].includes(filters[key] ?? '')) filters[key] = ''
   const requested = Number(params.get('page'))
   return { filters, page: Number.isSafeInteger(requested) && requested > 0 && requested <= 2147483647 ? requested : 1, size: pageSize(params.get('size')) ?? savedPageSize() }
 }

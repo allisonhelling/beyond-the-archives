@@ -27,7 +27,7 @@ async function createBackup() {
   const browser_preferences = Object.fromEntries(browserPreferenceKeys.map(key => [key, localStorage.getItem(key)]))
   const { data, error } = await backupClient().rpc('export_library_backup')
   if (error || !data || typeof data !== 'object' || Array.isArray(data)
-    || data.format !== 'between-chapters-backup' || data.version !== 1 || !data.tables || typeof data.user_id !== 'string') {
+    || data.format !== 'between-chapters-backup' || (data.version !== 1 && data.version !== 2) || !data.tables || typeof data.user_id !== 'string') {
     throw new Error('Backup snapshot unavailable.')
   }
   const backup = { ...data, browser_preferences }

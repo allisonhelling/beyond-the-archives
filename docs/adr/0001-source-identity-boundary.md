@@ -1,6 +1,6 @@
 # ADR 0001: Separate Application And Source Identity
 
-Status: Accepted (design boundary); source persistence migration deferred.
+Status: Accepted; the Phase 2 addendum implements private single-source persistence. Multi-version associations remain deferred.
 
 ## Context
 
@@ -17,3 +17,7 @@ Current AO3 files/clients stay valid. Another provider cannot use existing AO3-n
 ## Revisit When
 
 A first additional provider is selected for a vertical slice, or an immediately used contract removes demonstrated coupling. Never loosen the frontend URL allowlist ahead of trusted storage support.
+
+## Phase 2 Storage Addendum
+
+The universal manual vertical slice now uses the existing private entry UUID as its single source-version identity, with an owner-private `source_url` candidate and empty work UUID stub. Existing numeric AO3 identities and FKs are retained. Submitted URL, normalized unverified candidate, independently verified canonical URL, private metadata/provenance and reading state remain distinct. Generic sources never enter AO3 alias/hierarchy authority through spelling. Account backups containing them use version 2; current readers retain version 1 support. This resolves the column-versus-relation question only for the current one-source workflow. Crosspost associations and multi-version identity remain Phase 5 work. See [Phase 2 delivery](../universal-stories/PHASE_2_MANUAL_STORIES_PROGRESS.md).

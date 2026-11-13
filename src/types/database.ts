@@ -634,6 +634,8 @@ export type Database = {
           is_rec: boolean
           dnf_since: string | null
           reading_provenance: Json
+          source_url: string | null
+          metadata_confirmation_times: Json
         }
         Insert: {
           id?: string
@@ -660,6 +662,8 @@ export type Database = {
           is_rec?: boolean
           dnf_since?: string | null
           reading_provenance?: Json
+          source_url?: string | null
+          metadata_confirmation_times?: Json
         }
         Update: {
           id?: string
@@ -686,6 +690,8 @@ export type Database = {
           is_rec?: boolean
           dnf_since?: string | null
           reading_provenance?: Json
+          source_url?: string | null
+          metadata_confirmation_times?: Json
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },

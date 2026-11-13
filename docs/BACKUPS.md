@@ -2,15 +2,17 @@
 
 DNF cleanup adds compact reading records and account cleanup preferences to JSON backups, and `reading_records.csv` to CSV exports. Apply `20261024000200_dnf_cleanup.sql` for these fields. Older version-1 files remain accepted with an empty compact archive. See [DNF cleanup](DNF_CLEANUP.md) for retention and recovery behavior.
 
-Apply migrations through `supabase/migrations/20261021001000_account_backup_restore.sql` before deploying the frontend. In Settings → Export Backup, download a versioned JSON file or choose **Save Backup to Supabase** to store a private copy. Both use the same consistent database snapshot of the signed-in account, independent of loaded pages and PostgREST's row limit.
+Apply migrations through `supabase/migrations/20261112000400_universal_backup_compatibility.sql` before deploying the frontend. In Settings → Export Backup, download a versioned JSON file or choose **Save Backup to Supabase** to store a private copy. Both use the same consistent database snapshot of the signed-in account, independent of loaded pages and PostgREST's row limit.
 
 Included: all library entries and their original URLs, source metadata and normalized authors/fandoms/tags, chapter verification data, personal/extension overrides, reading progress and dates, notes, favorites, ratings, personal tags, collections and memberships (including appearance, order, visibility and automatic rules), saved series and memberships, metadata preferences, import batches/items/jobs/logs, and timestamps. Works referenced only by retained import jobs are included too. Browser display/date/page-size/reading/collection-sort preferences come from the exporting browser and are stored separately as `browser_preferences`.
 
 Excluded: Auth accounts/passwords/sessions, API keys, paired-device secrets, active worker lease credentials, global worker throttling/fairness state, backup save cooldown/leases, and derived search documents. Recreate Auth accounts and reconnect paired devices as needed. The application schema, policies and functions come from migrations, rather than the data file. This is an account data export, not a whole Supabase project dump. Future incompatible schema changes must bump the backup version and add a format migration before accepting older files.
 
+Backups containing universal manual stories use version 2 to protect their private source identity from older readers. AO3-only libraries still export version 1. Current restore accepts both; upgrade the database, organizer and administrator restore script before restoring version 2. Private source URLs, manual field times, reading provenance and chapter history are retained.
+
 ## Restore Your Own Account in the App
 
-Under Settings → Export Backup → Restore Backup, choose a local JSON/JSON.gz file or preview a saved Supabase backup. Files must use backup version 1 and belong to the signed-in account. CSV ZIP exports are for spreadsheets and cannot be restored here. The file limit is 50 MiB, with a 128 MiB expanded limit for compressed files.
+Under Settings → Export Backup → Restore Backup, choose a local JSON/JSON.gz file or preview a saved Supabase backup. Files must use backup version 1 or 2 and belong to the signed-in account. CSV ZIP exports are for spreadsheets and cannot be restored here. The file limit is 50 MiB, with a 128 MiB expanded limit for compressed files.
 
 The server validates ownership, references within the file, automatic collection rules, and database constraints. Preview exercises the existing restore transaction inside a rolled-back subtransaction, then shows current and backup counts. Cancel leaves the library unchanged. Both preview and restore briefly lock the application tables, so larger libraries can interrupt other library requests while validation runs. Each request has a 60-second database limit; use an administrator restore for libraries that exceed it.
 

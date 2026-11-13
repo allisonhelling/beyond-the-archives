@@ -3,7 +3,7 @@
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
-**Phase 1 reconciliation:** The [current foundation record](PHASE_1_FOUNDATION.md) audits reviewed `main` at `600ef23`, including hierarchy crossover filtering and Phase 0. It finalizes typed identity/provenance adapters against existing owner-protected data and adds only starter provisioning. General-source persistence and later product features remain unimplemented; the earlier accessible-main reconciliation below is historical evidence, not a statement that the new foundation creates a universal save API.
+**Phase 1 reconciliation:** The [current foundation record](PHASE_1_FOUNDATION.md) audits reviewed `main` at `600ef23`, including hierarchy crossover filtering and Phase 0. It finalizes typed identity/provenance adapters against existing owner-protected data and adds only starter provisioning. Phase 2 now implements private manual source candidates, field times and checked reading/count reviews with backup version 2; see its [delivery record](PHASE_2_MANUAL_STORIES_PROGRESS.md). Extraction and crossposts remain unimplemented; the earlier accessible-main reconciliation below is historical evidence, not a statement that the new foundation creates a universal save API.
 
 ## 12. Security, Provenance, And Reliability
 

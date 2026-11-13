@@ -1,3 +1,4 @@
+import { readingMetadata } from './chapter-edit'
 import { useActivity } from '../../lib/use-activity'
 import { hasTagFilters, hasTagRules, tagResolutionEvent } from './tags/tag-resolution'
 import { useLocation } from 'react-router-dom'
@@ -352,8 +353,8 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
   const [noticeLocation, setNoticeLocation] = useState(noticeUrl)
   if (noticeLocation !== noticeUrl) { setNoticeLocation(noticeUrl); setUndoNotices([]) }
   const dismissUndo = useCallback((id: string) => setUndoNotices(notices => notices.filter(notice => notice.id !== id)), [])
-  async function updateReadingWithUndo(story: Story, status: Story['reading_status'], chapters: number, message: string) {
-    await updateEntry(story.id, { last_read_chapter: chapters, reading_status: status }, editSnapshot(story))
+  async function updateReadingWithUndo(story: Story, status: Story['reading_status'], chapters: number, message: string, origin: 'explicit' | 'derived' = 'explicit') {
+    await updateEntry(story.id, { last_read_chapter: chapters, reading_status: status }, editSnapshot(story), origin)
     setUndoNotices(notices => [{
       id: crypto.randomUUID(), storyId: story.id, title: story.metadata.title, message,
       saved: { status, progress: chapters },
@@ -363,8 +364,8 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
   }
   async function markAllRead(story: Story) {
     if (story.metadata.published_chapters === null) return
-    const status = abandonedReadingStatus(caughtUpReadingStatus(story.reading_status, story.metadata), story.metadata.published_chapters, story.metadata)
-    await updateReadingWithUndo(story, status, story.metadata.published_chapters, `Marked all chapters of “${story.metadata.title}” as read${status === 'finished' ? ' and fic as finished.' : status === 'waiting_for_updates' ? '. Waiting for updates.' : '.'}`)
+    const status = abandonedReadingStatus(caughtUpReadingStatus(story.reading_status, readingMetadata(story)), story.metadata.published_chapters, story.metadata)
+    await updateReadingWithUndo(story, status, story.metadata.published_chapters, `Marked all chapters of “${story.metadata.title}” as read${status === 'finished' ? ' and fic as finished.' : status === 'waiting_for_updates' ? '. Waiting for updates.' : '.'}`, 'derived')
   }
   async function removeStory(story: Story) {
     const snapshot = (await loadStories([story.id]))[0] ?? story

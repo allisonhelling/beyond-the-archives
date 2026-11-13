@@ -115,7 +115,7 @@ it.each(['safari', 'chrome'].flatMap(browser => ['finished', 'waiting_for_update
  expect(within(root).getByLabelText('Current Chapter')).toHaveValue(chapter)
  expect(within(root).getByLabelText('This Chapter Is Finished')).not.toBeChecked()
  expect(within(root).getByLabelText('Private Notes')).toHaveValue('Unsaved Notes')
- expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status, progress: 10 }, status: 're_reading', progress: chapter - 1 })
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status, progress: 10 }, status: 're_reading', progress: chapter - 1, statusOrigin: 'explicit' })
  for (const surface of [root, bottomRoot]) {
   expect(within(surface).getByRole('button', { name: chapter === 10 ? 'Finish Fic' : 'Read' })).toBeVisible()
  }
@@ -164,7 +164,7 @@ it('marks this chapter finished without transmitting or replacing personal field
  await mount()
  fireEvent.click(findButton('Read'))
  await waitFor(() => expect(network).toHaveBeenCalledTimes(2))
- expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading', chapter_read: { chapter: 4, chapter_id: '104', word_count: null, previous_chapters: [{ chapter: 2, chapter_id: '102', word_count: null }, { chapter: 3, chapter_id: '103', word_count: null }] } })
+ expect(JSON.parse(network.mock.lastCall[0].data).p_input).toEqual({ version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading', statusOrigin: 'derived', chapter_read: { chapter: 4, chapter_id: '104', word_count: null, previous_chapters: [{ chapter: 2, chapter_id: '102', word_count: null }, { chapter: 3, chapter_id: '103', word_count: null }] } })
 
 })
 it('offers reconnection on expired authorization without showing a false save confirmation', async () => {
@@ -861,7 +861,7 @@ it.each(['safari', 'chrome'].flatMap(browser => ['reading', 're_reading'].map(st
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  network.mockImplementation(async ({ data }) => {
   const request = JSON.parse(data)
-  expect(Object.keys(request.p_input).sort()).toEqual(['base', 'progress', 'status', 'version'])
+  expect(Object.keys(request.p_input).sort()).toEqual(['base', 'progress', 'status', 'statusOrigin', 'version'])
   const previous = entry.status
   entry = { ...entry, ...request.p_input, version: 'v2', readingHistory: [{ action: 'paused_reading', previous_status: previous === 'paused_reading' ? status : previous }] }
   return { status: 200, responseText: JSON.stringify({ entry, collections: [] }) }
@@ -931,7 +931,7 @@ it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => 
  fireEvent.submit(chapters.closest('form'))
  await waitFor(() => expect(dialog).not.toHaveAttribute('open'))
  expect(JSON.parse(network.mock.lastCall[0].data)).toMatchObject({ p_action: 'progress', p_input: { version: 'v1', base: { status: 'reading', progress: 1 }, progress: 4, status: 'reading' } })
- expect(Object.keys(JSON.parse(network.mock.lastCall[0].data).p_input).sort()).toEqual(['base', 'progress', 'status', 'version'])
+ expect(Object.keys(JSON.parse(network.mock.lastCall[0].data).p_input).sort()).toEqual(['base', 'progress', 'status', 'statusOrigin', 'version'])
  for (const surface of [root, bottomRoot]) {
   expect(surface.querySelector('.chapter-progress')).toHaveTextContent('Ch. 4 / 10')
   expect(surface.querySelector('.completion-indicator')).toHaveTextContent('Read')

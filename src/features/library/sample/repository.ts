@@ -1,3 +1,5 @@
+import { sourceLocation } from '../story-source'
+import { chapterReview, chapterState, explicitReadingStatus, reviewedChapterProgress, readingStatusOrigin } from '../chapter-edit'
 import { importProgressKnown, readingSnapshot, type ReadingProvenance, type ReadingReviews } from '../../imports/import-reading-review'
 import type { AutomaticMetadata } from '../../imports/ao3-metadata'
 import { csvBookmark, bookmarkReadingState, nonemptyMetadata, type CsvWork } from '../../imports/ao3-csv'
@@ -16,7 +18,7 @@ import seriesSnapshots from './series.json'
 import { collectionSortKey } from '../browsing/browsing'
 import { waybackSnapshot } from '../../imports/urls'
 import type { SpineDesign } from '../collections/SpineDetails'
-import { normalizeReadingStatus, blankMetadata, bookmarkRec, deletedWorkTitle, sourceBookmark, parseWorkUrl, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
+import { normalizeReadingStatus, blankMetadata, bookmarkRec, deletedWorkTitle, sourceBookmark, validateProgress, type Collection, type Entry, type Story, type StoryInput, type Work } from '../model'
 
 const storageKey = 'between-chapters:sample-library:v1'
 const userId = 'sample-reader'
@@ -239,7 +241,7 @@ function find(data: Library, id: string) {
 
 export async function loadSampleLibrary() {
  const data = read(); data.collections.sort(compareCollections)
- const stories = data.stories.map(story => ({...story,...sampleFandomProjection(story.metadata.fandoms,snapshots.flatMap(sample=>sample.metadata.fandoms))}))
+ const stories = data.stories.map(story => ({...story,...(story.source_url ? { crossoverStatus: 'unknown' as const } : sampleFandomProjection(story.metadata.fandoms,snapshots.flatMap(sample=>sample.metadata.fandoms)))}))
  const series = (data.series ?? []).map(record => {
   const preview = record.metadata as unknown as SeriesPreview
   return {...record,metadata:{...preview,works:preview.works?.map(work=>({...work,...sampleFandomProjection(work.fandoms ?? [],snapshots.flatMap(sample=>sample.metadata.fandoms))}))} as unknown as Json}
@@ -259,26 +261,41 @@ export function resetSampleLibrary() { window.localStorage.removeItem(storageKey
 export async function saveSampleStory(input: StoryInput, verifiedChapters?: Record<string, string>, automaticMetadata?: AutomaticMetadata, bookmark?: CsvWork) {
   const data = read()
   const existing = input.id ? find(data, input.id) : null
-  const workId = bookmark?.workId === null || existing?.work.ao3_work_id === null ? null : parseWorkUrl(input.url).workId
-  if (workId === null && input.url !== (bookmark?.url ?? existing?.original_url)) throw new Error('Bookmark identity cannot be changed.')
+  const location = bookmark?.workId === null || existing?.work.ao3_work_id === null && !existing.source_url ? null : sourceLocation(input.url)
+  const workId = location?.identity.kind === 'native' ? Number(location.identity.nativeWorkId) : null
+  const sourceUrl = location?.identity.kind === 'url' ? location.normalizedUrl : existing?.source_url ?? null
+  if (!existing && sourceUrl && (input.metadata.published_chapters === null || !Number.isInteger(input.metadata.published_chapters) || input.metadata.published_chapters < 1 || input.metadata.published_chapters > 100000)) throw new Error('Enter 1–100,000 published chapters.')
+  if (!sourceUrl && workId === null && input.url !== (bookmark?.url ?? existing?.original_url)) throw new Error('Bookmark identity cannot be changed.')
   if (data.collections.some(collection => collection.automatic_rules && input.collections.includes(collection.id))) throw new Error('Automatic collection membership is determined by its filters.')
-  validateProgress(input.progress, input.metadata)
   if (workId !== null && data.stories.some(story => story.work.ao3_work_id === workId && story.id !== input.id)) throw new Error('This story is already in your library.')
   if (existing && existing.work.ao3_work_id !== workId) throw new Error('The AO3 work identity cannot be changed.')
+  if (sourceUrl && data.stories.some(story => story.id !== input.id && story.source_url === sourceUrl)) throw new Error('This story is already in your library.')
+  if (existing && existing.source_url !== undefined && (existing.source_url ?? null) !== sourceUrl) throw new Error('Story source identity cannot be changed.')
   if (existing && input.base) {
+    if (input.chapterChoice && (input.base.status !== existing.reading_status || input.base.progress !== existing.last_read_chapter)) throw new Error('Reading progress changed. Review the chapter choice again.')
+    if (input.metadata.published_chapters !== existing.metadata.published_chapters && input.base.chapterState && JSON.stringify(input.base.chapterState) !== JSON.stringify(chapterState(existing.metadata))) throw new Error('Chapter metadata changed. Reload and review the count again.')
     const base = editSnapshot(existing), review = mergeEdits(input.base, storyEdits(input), base)
     if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => saveSampleStory(applyStoryEdits(input, resolveEdits(review.merged, choices), base), verifiedChapters, automaticMetadata, bookmark))
     input = applyStoryEdits(input, review.merged, base)
   }
+  if (existing && chapterReview(existing, input.metadata)) {
+    if (!input.chapterChoice) throw new Error('Review the chapter total and current reading progress before saving.')
+    const reviewed = reviewedChapterProgress(existing, input.metadata, input.chapterChoice)
+    if (input.progress !== reviewed.progress || input.status !== reviewed.status) throw new Error('Chapter review no longer matches the saved reading state.')
+  }
+  validateProgress(input.progress, input.metadata)
   const now = new Date().toISOString()
+  const times = { ...(existing?.metadata_confirmation_times as Record<string, string> | undefined) }
+  for (const key of ['published_chapters','publication_status'] as const) if (!existing || input.metadata[key] !== existing.metadata[key]) times[key] = now
+
   const work = existing?.work ?? makeWork(workId)
   if (verifiedChapters) work.verified_chapters = verifiedChapters
   if (automaticMetadata) Object.assign(work, { metadata_source: 'extension', canonical_url: workId === null ? null : `https://archiveofourown.org/works/${workId}`, ao3_updated_at: automaticMetadata.ao3_updated_at ?? null })
   const story: Story = {
     id: input.id ?? crypto.randomUUID(), user_id: userId, work_id: work.id,
-    original_url: existing?.original_url ?? input.url, work, work_status: waybackSnapshot(input.url) ? 'deleted' : existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
+    metadata_confirmation_times: times, source_url: sourceUrl, original_url: existing?.original_url ?? input.url, work, work_status: waybackSnapshot(input.url) ? 'deleted' : existing?.work_status ?? (bookmark?.workStatus ?? (automaticMetadata ? 'available' : 'unknown')),
     source_bookmark: bookmark?.bookmarkId ? { ...sourceBookmark(existing ?? {}), ...csvBookmark(bookmark) } : existing?.source_bookmark ?? {},
-    reading_status: normalizeReadingStatus(input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
+    reading_status: existing && input.statusOrigin === 'preserve' && explicitReadingStatus(existing) && ['re_reading','paused_reading','did_not_finish'].includes(input.status) && input.status === existing.reading_status ? input.status : normalizeReadingStatus(existing && input.statusOrigin !== 'explicit' && !explicitReadingStatus(existing) && ['finished','waiting_for_updates'].includes(input.status) && input.metadata.published_chapters !== null && input.progress < input.metadata.published_chapters ? 'reading' : input.status, input.progress, input.metadata), last_read_chapter: input.progress, notes: input.notes,
     is_favorite: input.favorite, is_rec: input.rec ?? existing?.is_rec ?? (bookmark?.bookmarkRec === true), personal_rating: input.personalRating,
     metadata: { ...blankMetadata, ...input.metadata }, metadata_overrides: automaticMetadata ? {} : existing && input.metadataChanges ? { ...(existing.metadata_overrides as object), ...input.metadataChanges } : input.metadata, extension_metadata: automaticMetadata ? { ...nonemptyMetadata(automaticMetadata), publication_status: input.metadata.publication_status } as Json : existing?.extension_metadata ?? {}, extension_chapters: existing?.extension_chapters ?? {},
     reading_provenance: existing?.reading_provenance ?? {},
@@ -288,7 +305,7 @@ export async function saveSampleStory(input: StoryInput, verifiedChapters?: Reco
     last_update_notification_at: existing?.last_update_notification_at ?? null,
     update_dismissed_at: existing?.update_dismissed_at ?? null,
   }
-  if (!automaticMetadata && (!existing || input.status !== existing.reading_status || input.progress !== existing.last_read_chapter)) story.reading_provenance = { source: 'manual', progressKnown: true }
+  if (!automaticMetadata && (!existing || input.status !== existing.reading_status || input.progress !== existing.last_read_chapter || input.statusOrigin === 'explicit' && !explicitReadingStatus(existing))) story.reading_provenance = { source: 'manual', progressKnown: true, statusOrigin: readingStatusOrigin(existing ?? undefined, story.reading_status, story.reading_status !== input.status ? 'derived' : input.statusOrigin) }
   recordReadingTransition(story, existing ?? undefined, now)
   for (const collection of data.collections) {
     if (input.collections.includes(collection.id) && !existing?.collectionIds.includes(collection.id)) collection.last_story_added_at = now
@@ -414,13 +431,13 @@ export async function addSampleStoriesToCollections(storyIds: string[], collecti
   write(data)
 }
 
-export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'is_rec' | 'notes' | 'personal_rating'>) {
+export async function updateSampleEntry(id: string, changes: Pick<Partial<Entry>, 'reading_status' | 'last_read_chapter' | 'is_favorite' | 'is_rec' | 'notes' | 'personal_rating'>, statusOrigin: 'explicit' | 'derived' | 'preserve' = 'explicit') {
   const data = read(), story = find(data, id)
   if (changes.last_read_chapter !== undefined) validateProgress(changes.last_read_chapter, story.metadata)
   const previous = { ...story }
-  if (changes.reading_status !== undefined || changes.last_read_chapter !== undefined) story.reading_provenance = { source: 'manual', progressKnown: true }
   Object.assign(story, changes, { updated_at: new Date().toISOString() })
   story.reading_status = normalizeReadingStatus(story.reading_status, story.last_read_chapter, story.metadata)
+  if (story.reading_status !== previous.reading_status || story.last_read_chapter !== previous.last_read_chapter || statusOrigin === 'explicit' && (changes.reading_status !== undefined || changes.last_read_chapter !== undefined)) story.reading_provenance = { source: 'manual', progressKnown: true, statusOrigin: readingStatusOrigin(previous, story.reading_status, statusOrigin) }
   recordReadingTransition(story, previous, story.updated_at)
   write(data)
 }
@@ -428,7 +445,7 @@ export async function updateSampleEntryChecked(id: string, values: EditValues, b
   const data = read(), story = find(data, id), base = editSnapshot(story), review = mergeEdits(baseline, values, base)
   if (review.conflicts.length) throw new EditConflict({ ...review, base }, choices => updateSampleEntryChecked(id, resolveEdits(review.merged, choices), base))
   const merged = review.merged
-  await updateSampleEntry(id, { reading_status: merged.status as Entry['reading_status'], last_read_chapter: merged.progress as number, notes: merged.notes as string, personal_rating: merged.rating as number | null, is_favorite: merged.favorite as boolean, is_rec: merged.rec as boolean })
+  await updateSampleEntry(id, { reading_status: merged.status as Entry['reading_status'], last_read_chapter: merged.progress as number, notes: merged.notes as string, personal_rating: merged.rating as number | null, is_favorite: merged.favorite as boolean, is_rec: merged.rec as boolean }, (values.statusOrigin ?? (Object.hasOwn(values,'status') || Object.hasOwn(values,'progress') ? 'explicit' : 'preserve')) as 'explicit' | 'derived' | 'preserve')
 }
 export async function deleteSampleStory(id: string) {
   const data = read()

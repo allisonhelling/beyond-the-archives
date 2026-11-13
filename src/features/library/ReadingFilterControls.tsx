@@ -1,3 +1,4 @@
+import { confidenceLabels } from './story-source'
 export { FandomSelect } from './FandomSelect'
 import { TagFilterControl } from './tags/TagFilterControl'
 import type { FandomOption } from './FandomSelect'
@@ -109,6 +110,7 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
       <Dropdown fitContent label="Rating" multiple value={filters.personalRating ?? []} onChange={value => change('personalRating', value)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value}/5` })).concat({ value: 'unrated', label: 'Unrated' })} />
       {mobile ? <div className="filter-publication-controls">{workTypeControls}{publicationControl}</div> : workTypeControls}
       {availabilityControl}
+      {mode !== 'series' && <>{([['countConfidence', 'Chapter Count Confidence'], ['publicationConfidence', 'Publication Status Confidence']] as const).map(([key, label]) => <Dropdown key={key} fitContent label={label} value={filters[key] || 'any'} onChange={value => change(key, value === 'any' ? '' : value as ReadingFilters[typeof key])} options={Object.entries(confidenceLabels).map(([value, label]) => ({ value, label }))} closeOnSelect />)}<label className="check-label"><input type="checkbox" checked={filters.needsCompletionVerification ?? false} onChange={event => change('needsCompletionVerification', event.target.checked)} />Needs Completion Verification</label></>}
       {!automaticCollection && membershipToggles}
       </div>
       <div className={automaticCollection ? "filter-date-options" : "filter-date-only"}>

@@ -12,7 +12,7 @@ export function parseBackup(file) {
 export async function restoreBackup({ backup, userId, replace = false, url, secret }, clientFactory = createClient) {
   if (!url || !secret || !userId) throw new Error('SUPABASE_URL, SUPABASE_SECRET_KEY, and --user <Auth UUID> are required.')
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) throw new Error('--user must be an Auth UUID.')
-  if (backup?.format !== 'between-chapters-backup' || backup.version !== 1 || !backup.tables) throw new Error('Unsupported backup format.')
+  if (backup?.format !== 'between-chapters-backup' || ![1, 2].includes(backup.version) || !backup.tables) throw new Error('Unsupported backup format.')
   const client = clientFactory(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
   const { data: identities, error } = await client.rpc('restore_library_backup', { p_backup: backup, p_user: userId, p_replace: replace })
   if (error) throw new Error(`Restore did not return success. Check the destination before retrying. ${error.message}`)

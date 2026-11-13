@@ -4,9 +4,17 @@ Technical reference for Beyond the Archives, reviewed against the repository on 
 
 This document carries forward the detailed feature behavior, implementation decisions, setup notes, and migration references previously in the README. Historical phase reports remain evidence of their recorded work, not a description of current deployment status. The executable schema is the complete ordered migration chain; feature-specific migration names below are dependencies, not an instruction to stop upgrading at that version.
 
+## Universal Manual Stories And Progress
+
+The Phase 2 migrations extend the existing checked writer, private `library_entries`, empty work UUID stubs, projections, revisions, history and backup engine. `source_url` is an unverified conservative URL candidate, unique per owner; original submission stays separate and immutable. General-source data stays private and cannot claim AO3/native identity, canonical verification, aliases or crossover hierarchy. `metadata_confirmation_times` stores server-set field times without changing metadata value shapes. New generic saves validate published counts at 1–100,000; existing AO3/EPUB nullable counts and older companion/source snapshots keep their compatibility behavior.
+
+The checked editor records explicit/derived status origin in existing `reading_provenance`, carries a chapter-metadata baseline, and sends count-review intent to the common validation trigger. Reductions never clamp or delete history. Source refreshes preserve explicit Finished and expose mismatches; old clients without intent are treated conservatively. The shared Chrome/Safari bar sends optional `statusOrigin`; Finish Fic/manual status choices are explicit, ordinary chapter reads are derived. No capability or numeric AO3 identity meaning changes. Rebuild/reload both companions after deployment. Manual Abandoned/Deleted declarations authorize terminal completion on all sources; availability observations alone do not. Existing native/reader/history regressions remain gates.
+
+Deploy reviewed migrations first, then organizer and companions. Backups containing general-source entries export version 2 so older readers reject them instead of dropping source identity. Current restore supports versions 1 and 2, with owner/fingerprint/safety-copy guards and source validation. AO3-only exports remain version 1. No Edge Function, new dependency, hosted scraping, crosspost sync or DOM mapping is added. Leave additive columns and written identities in place when rolling back the frontend. See [Phase 2 delivery](universal-stories/PHASE_2_MANUAL_STORIES_PROGRESS.md) for exact checks, limits and handoff; [Backups](BACKUPS.md) owns restore procedures.
+
 ## Current Upgrade Requirements
 
-Apply the complete migration chain through `20261112000100_original_works_starter.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
+Apply the complete migration chain through `20261112000400_universal_backup_compatibility.sql`. Use `npx supabase migration up --local` for an existing local stack; use the reviewed hosted push workflow below for a hosted project. Local startup commands are maintained once in [Run Locally](../README.md#run-locally).
 
 Recent implementation changes:
 

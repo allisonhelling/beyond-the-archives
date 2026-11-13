@@ -108,7 +108,7 @@ it('filters Deleted as publication status while preserving stored source metadat
  expect((await db.query<{ text: string }>("select public.library_search_text($1,'any') text", [JSON.stringify(saved)])).rows[0].text).not.toContain('AO3 Status Unknown')
 })
 
-it('requires an owner-confirmed 404 job and changes only work availability', async () => {
+it('records a manual Deleted declaration after an owner-confirmed 404 while preserving reading history', async () => {
  await sync([available(105)])
  const before = await story(1105)
  const job = (await db.query<{ id: string }>('select id from public.metadata_jobs where entry_id=$1', [before!.id])).rows[0]
@@ -119,7 +119,7 @@ it('requires an owner-confirmed 404 job and changes only work availability', asy
  await expect(db.query('select public.mark_work_deleted($1,$2)', [before!.id, job.id])).rejects.toThrow('404 refresh')
  await db.exec(`set request.jwt.claim.sub='${alice}'`)
  await db.query('select public.mark_work_deleted($1,$2)', [before!.id, job.id])
- expect(await story(1105)).toMatchObject({ ...before, work_status: 'deleted', metadata: { ...(before!.metadata as object), publication_status: 'deleted' }, updated_at: expect.any(String) })
+ expect(await story(1105)).toMatchObject({ ...before, work_status: 'deleted', metadata: { ...(before!.metadata as object), publication_status: 'deleted' }, metadata_overrides: { ...(before!.metadata_overrides as object), publication_status: 'deleted' }, metadata_confirmation_times: expect.objectContaining({ publication_status: expect.any(String) }), updated_at: expect.any(String) })
 })
 it('saves true, false and unknown Rec observations without changing Favorites or work metadata', async () => {
  await sync([{ ...available(107), bookmarkRec: true }])

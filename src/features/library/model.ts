@@ -5,17 +5,17 @@ export type Status = Database['public']['Enums']['reading_status']
 export const statuses: Record<Status, string> = { to_read: 'To Read', reading: 'Reading', paused_reading: 'Paused Reading', waiting_for_updates: 'Waiting for Updates', re_reading: 'Re-Reading', finished: 'Finished', did_not_finish: 'Did Not Finish' }
 export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit', 'Not Rated']
 export function ratingLabel(rating: string): string { return /^teen and up audiences$/i.test(rating) ? 'Teen and Up' : rating }
-export type Metadata = { bookfusion_link?: { url: string; kind: 'book' | 'bookmark' } | null; language?: string; kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'hiatus' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
+export type Metadata = { chapter_count_manual?: boolean;  bookfusion_link?: { url: string; kind: 'book' | 'bookmark' } | null; language?: string; kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'hiatus' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 type EntryRow = Database['public']['Tables']['library_entries']['Row']
-export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance'>>
+export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance' | 'source_url' | 'metadata_confirmation_times'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance' | 'source_url' | 'metadata_confirmation_times'>>
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Omit<Database['public']['Tables']['collections']['Row'], 'automatic_rules'> & { automatic_rules?: Json | null }
-export type Story = Omit<Entry, 'reading_history'> & CrossoverProjection & { reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
+export type Story = Omit<Entry, 'reading_history'> & CrossoverProjection & { metadataConfidence?: Partial<Record<'published_chapters' | 'publication_status', import('./story-source').MetadataConfidence>>; reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 /** Overlay account-specific source data before resolving manual corrections. */
-export function effectiveWork(sharedWork: Work, entry: Pick<Entry, 'extension_metadata' | 'extension_chapters' | 'source_bookmark' | 'work_status'>): Work {
+export function effectiveWork(sharedWork: Work, entry: Pick<Entry, 'extension_metadata' | 'extension_chapters' | 'source_bookmark' | 'work_status' | 'source_url'>): Work {
   const browser = entry.extension_metadata && typeof entry.extension_metadata === 'object' && !Array.isArray(entry.extension_metadata) ? entry.extension_metadata : {}
   const fields = Object.fromEntries(Object.entries(browser).filter(([key]) => ['title','summary','rating','word_count','published_chapters','total_chapters','is_complete','ao3_published_at','ao3_updated_at','last_metadata_check','last_metadata_success'].includes(key)))
-  return { ...sharedWork, title: sharedWork.title ?? (sharedWork.ao3_work_id === null || entry.work_status === 'deleted' ? deletedWorkTitle(entry) : null), ...fields, automatic_metadata: { ...(sharedWork.automatic_metadata as object), ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : sharedWork.verified_chapters } as Work
+  return { ...sharedWork, title: sharedWork.title ?? (entry.source_url ? 'Untitled Story' : sharedWork.ao3_work_id === null || entry.work_status === 'deleted' ? deletedWorkTitle(entry) : null), ...fields, automatic_metadata: { ...(sharedWork.automatic_metadata as object), ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : sharedWork.verified_chapters } as Work
 }
 export const blankMetadata: Metadata = { title: '', authors: [], fandoms: [], ao3_tags: [], summary: '', rating: '', publication_status: 'unknown', published_chapters: null, total_chapters: null, word_count: null }
 /** Manual corrections take precedence; automatic labels follow current metadata and tags. */
@@ -37,10 +37,10 @@ export function initialProgress(url: string, verifiedChapters: Record<string, st
 
 /** Status after reading all currently published chapters, shared by the app and companions. */
 export function caughtUpReadingStatus(status: Status, metadata: Pick<Metadata, 'publication_status'>): Status {
-  return ['complete', 'deleted'].includes(metadata.publication_status) ? 'finished' : ['in_progress', 'hiatus'].includes(metadata.publication_status) ? 'waiting_for_updates' : status
+  return ['complete', 'deleted'].includes(metadata.publication_status) ? 'finished' : ['in_progress', 'hiatus'].includes(metadata.publication_status) ? 'waiting_for_updates' : ['to_read','waiting_for_updates'].includes(status) ? 'reading' : status
 }
 export function abandonedReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
-  return metadata.publication_status === 'abandoned' && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters ? 'finished' : status
+  return !['did_not_finish','paused_reading'].includes(status) && metadata.publication_status === 'abandoned' && metadata.published_chapters !== null && metadata.published_chapters > 0 && progress >= metadata.published_chapters ? 'finished' : status
 }
 /** Normalize caught-up active reads without changing paused or manually finished works. */
 export function normalizeReadingStatus(status: Status, progress: number, metadata: Metadata): Status {
@@ -60,7 +60,7 @@ export function progressReadingStatus(progress: number, metadata: Metadata, curr
 export function nextUnread(lastRead: number) { return lastRead + 1 }
 export function validateProgress(value: number, metadata: Metadata) {
   if (!Number.isInteger(value) || value < 0 || value > 2147483647) throw new Error('Chapters read must be a non-negative whole number.')
-  if ((metadata.published_chapters !== null && value > metadata.published_chapters) || (metadata.total_chapters !== null && value > metadata.total_chapters)) throw new Error('Progress cannot exceed the known chapter count.')
+  if ((metadata.published_chapters !== null && value > metadata.published_chapters) || (metadata.published_chapters === null && metadata.total_chapters !== null && value > metadata.total_chapters)) throw new Error('Progress cannot exceed the known chapter count.')
   return value
 }
 export function readChapter(story: Pick<Story, 'reading_status' | 'last_read_chapter'>) {
@@ -68,7 +68,10 @@ export function readChapter(story: Pick<Story, 'reading_status' | 'last_read_cha
 }
 export function chapterUrl(story: Story, position = readChapter(story)) {
   // A verified AO3 chapter ID does not prove that Wayback captured that URL.
-  if (story.original_url && waybackSnapshot(savedWorkUrl(story))) return null
+  if (!story.work.ao3_work_id || story.original_url && waybackSnapshot(savedWorkUrl(story))) return null
+  const published = story.metadata?.published_chapters
+  const manualCount = story.metadataConfidence?.published_chapters === 'manual' || story.metadata_overrides !== null && typeof story.metadata_overrides === 'object' && Object.hasOwn(story.metadata_overrides, 'published_chapters')
+  if (manualCount && typeof published === 'number' && position > published) return null
   const map = story.work.verified_chapters as Record<string, Json>
   const chapter = map?.[String(position)]
   return typeof chapter === 'string' && /^[1-9]\d*$/.test(chapter) ? `https://archiveofourown.org/works/${story.work.ao3_work_id}/chapters/${chapter}` : null
@@ -76,11 +79,12 @@ export function chapterUrl(story: Story, position = readChapter(story)) {
 export function active(story: Story) { return ['reading', 'waiting_for_updates', 're_reading'].includes(story.reading_status) }
 export function effectiveMetadata(work: Work, overrides: Json, tags: Pick<Database['public']['Tables']['tags']['Row'], 'name' | 'category'>[] = [], authors: { name: string; ao3_url: string | null }[] = [], fandoms: {name: string}[] = [], workStatus?: Entry['work_status']): Metadata {
   const manual = overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {}
-  return { ...blankMetadata, authors: authors.map(a => a.name), author_links: Object.fromEntries(authors.filter(a => a.ao3_url).map(a => [a.name, a.ao3_url!])), fandoms: fandoms.map(f => f.name), title: work.title ?? `AO3 Work ${work.ao3_work_id}`, summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', archive_warnings: tags.filter(tag => tag.category === 'warning').map(tag => tag.name), categories: tags.filter(tag => tag.category === 'category').map(tag => tag.name), ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...(work.automatic_metadata as Partial<Metadata>), ...manual, ...(workStatus === 'deleted' ? { publication_status: 'deleted' } : {}) } as Metadata
+  return { ...blankMetadata, authors: authors.map(a => a.name), author_links: Object.fromEntries(authors.filter(a => a.ao3_url).map(a => [a.name, a.ao3_url!])), fandoms: fandoms.map(f => f.name), title: work.title ?? `AO3 Work ${work.ao3_work_id}`, summary: work.summary ?? '', rating: work.rating ?? '', word_count: work.word_count, published_chapters: work.published_chapters, total_chapters: work.total_chapters, publication_status: work.is_complete === null ? 'unknown' : work.is_complete ? 'complete' : 'in_progress', archive_warnings: tags.filter(tag => tag.category === 'warning').map(tag => tag.name), categories: tags.filter(tag => tag.category === 'category').map(tag => tag.name), ao3_tags: tags.map(tag => tag.name), relationship_tags: tags.filter(tag => tag.category === 'relationship').map(tag => tag.name), character_tags: tags.filter(tag => tag.category === 'character').map(tag => tag.name), additional_tags: tags.filter(tag => tag.category === 'freeform').map(tag => tag.name), ...(work.automatic_metadata as Partial<Metadata>), ...manual, ...(workStatus === 'deleted' && !Object.hasOwn(manual, 'publication_status') ? { publication_status: 'deleted' } : {}) } as Metadata
 }
-export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; rec?: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata>; base?: import('./edit-merge').EditValues }
+export type StoryInput = { url: string; metadata: Metadata; status: Status; progress: number; notes: string; personalRating: number | null; favorite: boolean; rec?: boolean; collections: string[]; tags: string[]; id?: string; metadataChanges?: Partial<Metadata>; base?: import('./edit-merge').EditValues; allowSeparate?: boolean; statusOrigin?: 'explicit' | 'derived' | 'preserve'; chapterChoice?: import('./chapter-edit').ChapterChoice }
 
-export function savedWorkUrl(story: Pick<Story, 'metadata' | 'original_url'> & { work: Pick<Work, 'ao3_work_id'> }) {
+export function savedWorkUrl(story: Pick<Story, 'metadata' | 'original_url'> & { work: Pick<Work, 'ao3_work_id'>; source_url?: string | null }) {
+  if (story.source_url) return story.source_url
   try {
     const url = story.metadata.manual_url
     if (typeof url === 'string' && parseWorkUrl(url).workId === story.work.ao3_work_id) return url

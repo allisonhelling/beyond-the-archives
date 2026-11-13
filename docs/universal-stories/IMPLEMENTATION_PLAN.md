@@ -79,17 +79,19 @@ Verification above means the local automated baseline: pure/SQL/reader regressio
 
 **Goal:** A user can save and track a story from an unsupported URL without automatic extraction.
 
-- [ ] Accept arbitrary valid story URLs in the universal single-story entry flow; preserve submitted vs verified source URL.
-- [ ] Add chapter count input with **1–100,000** validation and **Manually entered chapter count** checkbox.
-- [ ] Keep legacy unknown-count entries valid; distinguish single-story requirements from deferred bulk review.
-- [ ] Preserve unread `0/N` and Read Chapter 1 next action where navigation is available.
-- [ ] Implement manual published chapter progress, source URL/location, and independent publication status.
-- [ ] Implement status confidence/origin indicators and field-aware filters (including Needs Completion Verification).
-- [ ] Increase total: preserve read progress; prompt for explicitly Finished stories whose new total exceeds progress, defaulting to keeping progress; allow deliberate 25/25 or Finished override.
-- [ ] Decrease total: save normally if progress remains valid; if total falls below progress, block pending explicit review/confirmation.
-- [ ] Preserve chapter-read history by default when adjusting current progress; separately warn before explicit history deletion.
-- [ ] Distinguish automatically derived status from manual status; preserve manual Finished and Re-Reading decisions.
-- [ ] Add acceptance tests for 0/N, status derivation, increased/decreased counts, and historical events.
+- [x] Accept arbitrary valid story URLs in the universal single-story entry flow; preserve submitted vs verified source URL.
+- [x] Add chapter count input with **1–100,000** validation and **Manually entered chapter count** checkbox.
+- [x] Keep legacy unknown-count entries valid; distinguish single-story requirements from deferred bulk review.
+- [x] Preserve unread `0/N` and Read Chapter 1 next action where navigation is available.
+- [x] Implement manual published chapter progress, source URL/location, and independent publication status.
+- [x] Implement status confidence/origin indicators and field-aware filters (including Needs Completion Verification).
+- [x] Increase total: preserve read progress; prompt for explicitly Finished stories whose new total exceeds progress, defaulting to keeping progress; allow deliberate 25/25 or Finished override.
+- [x] Decrease total: save normally if progress remains valid; if total falls below progress, block pending explicit review/confirmation.
+- [x] Preserve chapter-read history by default when adjusting current progress; separately warn before explicit history deletion.
+- [x] Distinguish automatically derived status from manual status; preserve manual Finished and Re-Reading decisions.
+- [x] Add acceptance tests for 0/N, status derivation, increased/decreased counts, and historical events.
+
+Implementation record: [Phase 2 Delivery And Verification](PHASE_2_MANUAL_STORIES_PROGRESS.md), branch `universal-stories/02-manual-stories-progress` from reviewed `main` at `df19dcc`. Local SQL/unit and desktop/mobile sample gates passed. Manual Abandoned/Deleted declarations permit Finished for every source; observed unavailability alone does not. History deletion is not added to the count editor; its existing separate confirmation/Undo behavior is retained. Full local Supabase service integration, native Safari and hosted rollout remain unverified.
 
 **Exit criteria:** Unsupported-site manual tracking works end-to-end; no silent progress loss or unauthorized status change.
 

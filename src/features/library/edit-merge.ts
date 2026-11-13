@@ -1,3 +1,4 @@
+import { chapterState } from './chapter-edit'
 import type { Json } from '../../types/database'
 import type { Story, StoryInput } from './model'
 
@@ -5,7 +6,7 @@ export type EditValues = Record<string, Json | undefined>
 export type FieldConflict = { field: string; base: Json; local: Json; saved: Json }
 export type MergeResult = { merged: EditValues; conflicts: FieldConflict[] }
 export function editSnapshot(story: Story): EditValues {
-  return { status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, rating: story.personal_rating, favorite: story.is_favorite, rec: story.is_rec, tags: story.personalTags, collections: story.collectionIds, metadata: story.metadata_overrides }
+  return { chapterState: chapterState(story.metadata), status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, rating: story.personal_rating, favorite: story.is_favorite, rec: story.is_rec, tags: story.personalTags, collections: story.collectionIds, metadata: story.metadata_overrides }
 }
 function equal(a: Json | undefined, b: Json | undefined, set = false): boolean {
   if (set && Array.isArray(a) && Array.isArray(b)) return equal([...new Set(a)].sort(), [...new Set(b)].sort())
@@ -62,7 +63,7 @@ export function conflictFromError<T>(error: { code?: string; details?: string } 
 }
 
 export function storyEdits(input: StoryInput): EditValues {
-  return { metadata: input.metadataChanges ?? input.metadata, status: input.status, progress: input.progress, notes: input.notes, rating: input.personalRating, favorite: input.favorite, ...(input.rec !== undefined && { rec: input.rec }), collections: input.collections, tags: input.tags }
+  return { ...(input.allowSeparate && { allowSeparate: true }), ...(input.statusOrigin && { statusOrigin: input.statusOrigin }), ...(input.chapterChoice && { chapterChoice: input.chapterChoice }), metadata: input.metadataChanges ?? input.metadata, status: input.status, progress: input.progress, notes: input.notes, rating: input.personalRating, favorite: input.favorite, ...(input.rec !== undefined && { rec: input.rec }), collections: input.collections, tags: input.tags }
 }
 export function applyStoryEdits(input: StoryInput, values: EditValues, base: EditValues): StoryInput {
   return { ...input, base, status: values.status as StoryInput['status'], progress: values.progress as number, notes: values.notes as string, personalRating: values.rating as number | null, favorite: values.favorite as boolean, ...(values.rec !== undefined && { rec: values.rec as boolean }), collections: values.collections as string[], tags: values.tags as string[], metadata: { ...input.metadata, ...(values.metadata as object) }, metadataChanges: values.metadata as StoryInput['metadataChanges'] }

@@ -186,11 +186,11 @@ export async function mountLibrary(doc = document, href = location.href, options
   return api.setValue(draftKey(), draft).catch(() => { message.textContent = 'Could not preserve the draft on this device. Keep this panel open.' })
  }
  async function load() { accept(await rpc('get')); renderToolbar() }
- async function progress(value, status, markRead = false, current = page.current) {
+ async function progress(value, status, markRead = false, current = page.current, statusOrigin = markRead ? 'derived' : 'explicit') {
   validateProgress(value, page.metadata)
   const previous = entry
   entry = { ...entry, progress: value, status }; renderToolbar()
-  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, ...(markRead && { chapter_read: await collectChapterRead(doc, { ...page, current }, href, previous?.progress ?? 0) }) })) }
+  try { accept(await rpc('progress', { version: previous.version, base: { status: previous.status, progress: previous.progress }, progress: value, status, statusOrigin, ...(markRead && { chapter_read: await collectChapterRead(doc, { ...page, current }, href, previous?.progress ?? 0) }) })) }
   catch (error) { entry = previous; renderToolbar(); throw error }
   renderToolbar()
   await syncProgressDraft()
@@ -279,7 +279,7 @@ export async function mountLibrary(doc = document, href = location.href, options
       if (!input.value.trim()) throw new Error('Enter chapters read.')
       const value = validateProgress(Number(input.value), page.metadata)
       const status = (entry.status === 'to_read' && value > 0) || (entry.status === 'finished' && value < entry.progress) ? 'reading' : entry.status
-      await progress(value, status)
+      await progress(value, status, false, page.current, 'derived')
       closeProgressEditor()
      } catch (failure) {
       error.textContent = failure instanceof Error ? failure.message : 'Could not save progress. Try again.'
@@ -299,13 +299,13 @@ export async function mountLibrary(doc = document, href = location.href, options
  function isFinalChapter(current) {
   return Boolean(current && current === page.metadata.total_chapters && page.metadata.published_chapters === page.metadata.total_chapters)
  }
- async function saveUnsaved(status, current, markRead = false) {
+ async function saveUnsaved(status, current, markRead = false, statusOrigin = markRead ? 'derived' : 'explicit') {
   const previous = entry
   if (!tile) Object.assign(page, await collectWorkPage(doc, href))
   const progress = markRead ? current : 0
   validateProgress(progress, page.metadata)
   const readingStatus = markRead && current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status
-  accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: readingStatus, progress, notes: '', rating: null, tags: [], collections: [],
+  accept(await rpc('save', { version: null, base: {}, metadata: page.metadata, status: readingStatus, statusOrigin, progress, notes: '', rating: null, tags: [], collections: [],
    ...(markRead && { chapter_read: await collectChapterRead(doc, { ...page, current }, href, previous?.progress ?? 0) }) }))
   await syncProgressDraft()
   if (markRead) showReadNotice(previous, progress)
@@ -350,7 +350,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    const starting = ['to_read', 'paused_reading'].includes(entry.status)
    const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
    const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
-   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current), actions)
+   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current, label === 'Finish Fic' ? 'explicit' : 'derived'), actions)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
@@ -391,7 +391,7 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (tile || top && current === 1) button('To Read', () => saveUnsaved('to_read', current), center)
     if (!tile && current) {
      if (top && current === 1) button('Reading', () => saveUnsaved('reading', current), center)
-     else button(!top && isFinalChapter(current) ? 'Finish Fic' : 'Mark Read', () => saveUnsaved('reading', current, true), center)
+     else button(!top && isFinalChapter(current) ? 'Finish Fic' : 'Mark Read', () => saveUnsaved('reading', current, true, !top && isFinalChapter(current) ? 'explicit' : 'derived'), center)
     }
    }
   }
@@ -615,6 +615,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    const label = node('label', title, fieldset), input = node(tag, '', label)
    input.setAttribute('aria-label', title)
    input.addEventListener('change', () => {
+    if (key === 'status') draft.statusTouched = true
     draft[key] = ['chapterFinished', 'favorite', 'rec'].includes(key) ? input.checked : input.value
     void preserveDraft()
    })
@@ -693,7 +694,7 @@ export async function mountLibrary(doc = document, href = location.href, options
     await api.setValue(draftKey(), draft)
     const previous = entry
     const chapterRead = !tile && (page.current === value || chapterSections.some(({ current }) => current === value)) && (draft.status === 'finished' || draft.chapterFinished) && (entry?.progress ?? 0) < value ? await collectChapterRead(doc, { ...page, current: value }, href, entry?.progress ?? 0) : null
-    accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), favorite: draft.favorite ?? false, rec: draft.rec ?? false, tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
+    accept(await rpc('save', { version: draft.version, base: draft.base, metadata: page.metadata, status: draft.status, statusOrigin: draft.statusTouched || !entry || draft.status !== draft.base?.status ? 'explicit' : value !== draft.base?.progress ? 'derived' : 'preserve', progress: value, notes: draft.notes, rating: draft.rating === '' ? null : Number(draft.rating), favorite: draft.favorite ?? false, rec: draft.rec ?? false, tags: parseLines(draft.tags), collections: draft.collections, ...(chapterRead && { chapter_read: chapterRead }) }))
     if (chapterRead) showReadNotice(previous, value)
     else message.textContent = 'Saved'
     clearEditor(); draft = null; showPanel(null)

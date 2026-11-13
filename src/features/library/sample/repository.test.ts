@@ -313,17 +313,17 @@ it('moves selected collections as an ordered group while leaving other books in 
 
 it('finishes abandoned fics only after all known published chapters are read', async () => {
   const original = (await loadSampleLibrary()).stories[0]
-  const input = { id: original.id, url: original.original_url, metadata: { ...original.metadata, publication_status: 'abandoned' as const, published_chapters: 3, total_chapters: 8 }, status: 'to_read' as const, progress: 0, notes: '', personalRating: null, favorite: false, collections: [], tags: [] }
-  await saveSampleStory(input)
-  const saved = async () => (await loadSampleLibrary()).stories.find(story => story.id === original.id)!
+  const input = { url: 'https://archiveofourown.org/works/90000001', metadata: { ...original.metadata, publication_status: 'abandoned' as const, published_chapters: 3, total_chapters: 8 }, status: 'to_read' as const, progress: 0, notes: '', personalRating: null, favorite: false, collections: [], tags: [] }
+  const id = await saveSampleStory(input)
+  const saved = async () => (await loadSampleLibrary()).stories.find(story => story.id === id)!
   expect((await saved()).reading_status).toBe('to_read')
-  await updateSampleEntry(original.id, { last_read_chapter: 2, reading_status: 'reading' })
+  await updateSampleEntry(id, { last_read_chapter: 2, reading_status: 'reading' })
   expect((await saved()).reading_status).toBe('reading')
-  await updateSampleEntry(original.id, { last_read_chapter: 3 })
+  await updateSampleEntry(id, { last_read_chapter: 3 })
   expect((await saved()).reading_status).toBe('finished')
-  await saveSampleStory({ ...input, progress: 3 })
+  await saveSampleStory({ ...input, id, progress: 3 })
   expect((await saved()).reading_status).toBe('finished')
-  await saveSampleStory({ ...input, metadata: { ...input.metadata, published_chapters: null } })
+  await saveSampleStory({ ...input, id, metadata: { ...input.metadata, published_chapters: null } })
   expect((await saved()).reading_status).toBe('to_read')
 })
 

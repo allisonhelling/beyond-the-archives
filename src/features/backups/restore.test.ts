@@ -89,3 +89,11 @@ it('handles stale previews and distinguishes preference failures after a success
   vi.stubGlobal('localStorage', { setItem() { throw new Error('storage unavailable') } })
   expect(await restoreBackup(prepared)).toContain('library was restored, but')
 })
+it('accepts version 2 while preserving universal source identity and manual field confirmation times', async () => {
+ const data={...backup(),version:2 as const}
+ data.tables.works[0].ao3_work_id=null
+ data.tables.library_entries[0]={...data.tables.library_entries[0],source_url:'https://fiction.example/story',original_url:'https://fiction.example/story',metadata_confirmation_times:{published_chapters:'2026-11-12T00:00:00Z'}}
+ const read=await readBackup(new NodeBlob([JSON.stringify(data)]) as unknown as Blob)
+ expect(read.version).toBe(2)
+ expect(read.tables.library_entries[0]).toMatchObject({source_url:'https://fiction.example/story',metadata_confirmation_times:{published_chapters:'2026-11-12T00:00:00Z'}})
+})
