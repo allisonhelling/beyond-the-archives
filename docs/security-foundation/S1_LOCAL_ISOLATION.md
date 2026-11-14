@@ -87,6 +87,14 @@ Production still requires its own release authorization separate from PR/merge, 
 
 ## Changed Paths
 
+### Hosted Staging Frontend Release Outcome
+
+The user approved the prepared staging-only actions and supplied the remaining operator evidence: both Production Branch settings are `main`, Preview covers unassigned branches, Shared variables are empty, and no deploy hooks exist. Twelve branch-specific public variables were created and independently scope-checked without replacing existing Production/unscoped entries. Approved commit `6fa2ece5ddf09c9f8a434b9ae71ec058417b8cc1` was applied locally and pushed to `staging` only.
+
+Both Git Preview deployments are **READY**: organizer `dpl_EUXZuosYBnJkP8rpgSK9cyUeP88T`, reader `dpl_Ex4scwDC6Qdp886MkFvUoBk6SgNx`. Authenticated metadata verifies their exact SHA, branch and Preview target, and project-scoped alias reads verify both stable staging URLs point to those deployments. Post-push remote `main` remains `4d225ab9f064495bf195be7b8408805e16fc4a2a`; both production aliases retain their previous deployment IDs. No production promotion/settings change, protection bypass or Supabase mutation occurred.
+
+The [current frontend release record](LOCAL_AND_STAGING.md#successful-staging-frontend-release) supersedes earlier statements that frontend release approval or provider evidence is missing. Those earlier sections remain historical validation/preparation evidence. Hosted frontend builds/ref/target/alias checks now pass; live protected browser/header behavior, deployed-asset scans and backend Auth/Storage/Edge/cross-user/recovery acceptance are not established. Supabase remains a separate approval stage, so S1 as a whole is not yet verified complete.
+
 ### Actual-Origin Preview Preparation Follow-Up
 
 After the authenticated Vercel audit, authorized local preparation completed both ignored staging profiles using the verified branch origins and generated two CSP/header review candidates plus twelve exact Preview/`staging` variable bindings. No payload was submitted and no active working-tree Vercel config was replaced. The shared header preparer was extended to handle already-prepared staging sources consistently; repeat/sibling-replacement assertions were added to the existing environment tests. The [current runbook follow-up](LOCAL_AND_STAGING.md#local-preparation-and-failure-investigation-follow-up) is authoritative for the exact findings, artifacts and approval requests.

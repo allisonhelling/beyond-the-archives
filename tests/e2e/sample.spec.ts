@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { selectLibraryShelf } from './library-fixture'
+import { clickPersonalToggle, selectLibraryShelf } from './library-fixture'
+import { displayPreference, displaySettingsKey } from '../../src/features/library/display/display-settings'
 
 // Run with VITE_SAMPLE_DATA=true so the existing Vite server uses local fixtures.
 test.skip(process.env.VITE_SAMPLE_DATA !== 'true', 'Requires the sample preview environment')
@@ -29,6 +30,13 @@ test('sample crossover filters use simulated evidence without AO3 or Supabase re
 })
 
 const originalSeriesCard = (page: Page) => page.locator('.series-card').filter({ has: page.getByRole('link', { name: 'play it again', exact: true }) })
+
+// Status workflows explicitly enable the optional series reading field.
+async function showSeriesReading(page: Page) {
+ const preference = displayPreference('seriesTile', '{}')
+ await page.addInitScript(({ key, preference }) => localStorage.setItem(key, JSON.stringify({ seriesTile: preference })), { key: displaySettingsKey, preference: { ...preference, hidden: preference.hidden.filter(field => field !== 'reading') } })
+}
+const summaryControl = (page: Page, expanded: boolean) => page.getByRole('button', { name: `${expanded ? 'Expand' : 'Collapse'} All Work Summaries`, exact: true }).first()
 
 async function showSeries(page: Page) {
  const toggle = page.getByRole('button', { name: 'Show Series', exact: true })
@@ -66,9 +74,11 @@ test('sample logout previews branded login and recovery, preserves edits, and ac
  await expect(page.getByRole('alert')).toContainText('Use Sample and password 123')
  await page.getByRole('button', { name: 'Forgot Your Password?', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Find Your Way Back.', exact: true })).toBeVisible()
+ await page.getByLabel('Email Address', { exact: true }).fill('sample@example.com')
  await page.getByRole('button', { name: 'Send Recovery Link', exact: true }).click()
  await expect(page.getByRole('status')).toContainText('no recovery email is sent')
  await page.getByRole('button', { name: 'Back to Sign In', exact: true }).click()
+ await page.getByLabel('Username or Email', { exact: true }).fill('Sample')
  await page.getByLabel('Password', { exact: true }).fill('123')
  await page.getByRole('button', { name: 'Sign In', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Your Library', exact: true })).toBeVisible()
@@ -151,20 +161,23 @@ test('series share work layouts, search contained fics, organize independently a
  await page.goto('/library?shelf=series')
  const card = originalSeriesCard(page)
  await expect(card).toHaveCount(1)
- await expect(card.locator('.metadata-tags')).toHaveCount(0)
+ await expect(card.locator('.metadata-tags')).toBeVisible()
+ await expect(card.locator('.series-reading-status')).toHaveCount(0)
  await expect(card).not.toContainText('No description provided.')
  const grid = page.locator('.reading-group .story-grid')
  const columns = await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)
  expect(columns).toBe(page.viewportSize()!.width <= 650 ? 1 : 2)
  const summaries = card.locator('.series-work-list details'), text = summaries.locator('.story-summary')
+ await expect(text.nth(0)).toBeHidden(); await expect(text.nth(1)).toBeHidden()
+ await summaryControl(page, true).click()
  await expect(text.nth(0)).toBeVisible(); await expect(text.nth(1)).toBeVisible()
  await summaries.first().locator('summary').click()
  await expect(text.nth(0)).toBeHidden(); await expect(text.nth(1)).toBeVisible()
- await card.getByRole('button', { name: 'Expand All', exact: true }).click()
+ await summaryControl(page, true).click()
  await expect(text.nth(0)).toBeVisible()
- await card.getByRole('button', { name: 'Collapse All', exact: true }).click()
+ await summaryControl(page, false).click()
  await expect(text.nth(1)).toBeHidden()
- await card.getByRole('button', { name: 'Expand All', exact: true }).click()
+ await summaryControl(page, true).click()
  await expect(text.nth(0)).toBeVisible(); await expect(text.nth(1)).toBeVisible()
  await expect(card.getByRole('link', { name: 'View Saved Work: Play It Again', exact: true }).locator('.lucide-book-open-text')).toBeVisible()
  const search = page.getByLabel('Search Title or Author', { exact: true })
@@ -173,7 +186,7 @@ test('series share work layouts, search contained fics, organize independently a
  await search.fill('')
  await page.getByRole('button', { name: 'Apply Filters', exact: true }).click()
  await page.locator('.app-header').click({ position: { x: 1, y: 1 } })
- await card.getByRole('button', { name: 'Mark Favorite', exact: true }).click()
+ await clickPersonalToggle(card.getByRole('button', { name: 'Mark Favorite', exact: true }))
  await expect(card.getByRole('button', { name: 'Unmark Favorite', exact: true })).toBeVisible()
  await card.getByLabel('Series Actions for play it again', { exact: true }).click()
  await card.getByRole('button', { name: 'Add to Collection', exact: true }).click()
@@ -230,11 +243,12 @@ test('series share work layouts, search contained fics, organize independently a
 
 test('series summary links open work details and work headings and collection editors share styles', async ({ page }) => {
  await page.goto('/library?shelf=series')
- const card = originalSeriesCard(page), toggle = card.getByRole('button', { name: 'Collapse All', exact: true })
+ const card = originalSeriesCard(page), toggle = summaryControl(page, false)
+ await summaryControl(page, true).click()
  await expect(toggle).toBeVisible()
  await expect(toggle).toHaveCSS('min-height','28px')
  await toggle.hover()
- await expect(toggle).toHaveCSS('text-decoration-line','underline')
+ await expect(toggle).toHaveCSS('text-decoration-line','none')
  const summary = card.locator('.series-work-list summary').first(), detailsLink = card.getByRole('link', { name: 'View Series Details', exact: true })
  const summaryBounds = (await summary.boundingBox())!, detailsBounds = (await detailsLink.boundingBox())!
  expect(Math.abs(summaryBounds.x-detailsBounds.x)).toBeLessThan(1)
@@ -244,7 +258,7 @@ test('series summary links open work details and work headings and collection ed
  const bodyBounds = (await card.locator('.series-work-list .story-summary').first().boundingBox())!
  expect(Math.abs(bodyBounds.x-detailsBounds.x)).toBeLessThan(1)
  await toggle.click()
- await expect(card.getByRole('button', { name: 'Expand All', exact: true })).toBeVisible()
+ await expect(summaryControl(page, true)).toBeVisible()
  const first = card.locator('.series-work-list summary').first()
  const icon = first.getByRole('link', { name: 'View Saved Work: Play It Again', exact: true })
  const iconBounds = (await icon.boundingBox())!, titleBounds = (await first.locator('.series-work-title').boundingBox())!
@@ -252,7 +266,7 @@ test('series summary links open work details and work headings and collection ed
  await icon.click()
  await expect(page).toHaveURL(/\/stories\/sample-entry-862320$/)
  const panel = page.getByRole('region', { name: 'Reading and Organization' })
- await expect(page.locator('.details-story-stats > div').filter({ has: page.getByText('Date Updated', { exact: true }) }).locator('dd')).toHaveText('Jul 12, 2013')
+ await expect(page.locator('.details-story-stats > div').filter({ has: page.getByText('Date Updated', { exact: true }) }).locator('dd').first()).toHaveText('Jul 12, 2013')
  const progress = panel.getByRole('heading', { name: 'Reading and Organization', exact: true })
  const typography = await progress.evaluate(el => {const s = getComputedStyle(el);return {size:s.fontSize,family:s.fontFamily,weight:s.fontWeight,color:s.color,transform:s.textTransform,spacing:s.letterSpacing}})
  for (const label of [panel.locator('.status-select .details-control-heading'), panel.locator('.rating-heading')]) {
@@ -265,7 +279,8 @@ test('series summary links open work details and work headings and collection ed
  }
  const add = panel.getByRole('button', { name: 'Add to Collection', exact: true })
  const starsBounds = (await panel.locator('.rating-stars').boundingBox())!, addBounds = (await add.boundingBox())!
- expect(Math.abs((starsBounds.y+starsBounds.height/2)-(addBounds.y+addBounds.height/2))).toBeLessThan(5)
+ if (page.viewportSize()!.width <= 1100) expect(addBounds.y).toBeGreaterThanOrEqual(starsBounds.y + starsBounds.height)
+ else expect(Math.abs((starsBounds.y+starsBounds.height/2)-(addBounds.y+addBounds.height/2))).toBeLessThan(5)
  await add.click()
  const editor = page.getByRole('dialog', { name: 'Edit Collections', exact: true })
  await editor.getByRole('button', { name: 'New Collection', exact: true }).click()
@@ -289,6 +304,7 @@ test('series summary links open work details and work headings and collection ed
 })
 
 test('series status follows individual work status changes and headers show date-only updates', async ({ page }) => {
+ await showSeriesReading(page)
  await page.goto('/library?shelf=series')
  const status = originalSeriesCard(page).locator('.series-reading-status')
  await expect(status).toHaveText('Currently Reading')
@@ -332,7 +348,7 @@ test('series status follows individual work status changes and headers show date
  await expect(updated.locator('dd')).toHaveText('Aug 09, 2020')
  const progress = page.getByRole('region',{name:'Reading and Organization'})
  await expect(progress.locator('.series-reading-status')).toHaveText('To Read')
- const heading = (await progress.getByRole('heading',{name:'Reading and Organization',exact:true}).boundingBox())!
+ const heading = (await progress.getByRole('heading',{name:'Your Progress',exact:true}).boundingBox())!
  const collections = (await progress.getByRole('heading',{name:'Collections',exact:true}).boundingBox())!
  if (page.viewportSize()!.width > 600) {
   expect(Math.abs(heading.y-collections.y)).toBeLessThan(3)
@@ -343,9 +359,10 @@ test('series status follows individual work status changes and headers show date
 })
 
 test('finishing a series leaves missing works absent and recalculates status when one is added', async ({ page }) => {
+ await showSeriesReading(page)
  await page.goto('/library?shelf=series')
  await expect(originalSeriesCard(page)).toHaveCount(1)
- await originalSeriesCard(page).getByRole('button', {name:'Mark Favorite',exact:true}).click()
+ await clickPersonalToggle(originalSeriesCard(page).getByRole('button', {name:'Mark Favorite',exact:true}))
  await expect(originalSeriesCard(page).getByRole('button', {name:'Unmark Favorite',exact:true})).toBeVisible()
  const removed = await page.evaluate(() => {
   const key = 'between-chapters:sample-library:v1', library = JSON.parse(localStorage.getItem(key)!)
@@ -415,7 +432,7 @@ test('automatic collections match saved filters, new works and rule edits with a
  await dialog.getByRole('textbox',{name:'Name',exact:true}).fill('Automatic Teen Wolf')
  await dialog.getByRole('checkbox',{name:'Automatic Collection',exact:true}).check()
  await expect(dialog.locator('.collection-preview .collection-spine')).toHaveAttribute('data-spine-design','lunar-phases')
- await dialog.getByRole('button',{name:/Select Fandoms/}).click()
+ await dialog.getByRole('button',{name:'Fandoms',exact:true}).click()
  await dialog.getByRole('checkbox',{name:/Teen Wolf \(TV\)/}).check()
  await dialog.getByRole('textbox',{name:'Name',exact:true}).click()
  await dialog.screenshot({path:`test-results/automatic-collection-editor-${info.project.name}.png`})
@@ -444,7 +461,7 @@ test('automatic collections match saved filters, new works and rule edits with a
  await expect(dialog.getByRole('checkbox',{name:'Automatic Collection',exact:true})).toBeChecked()
  await dialog.getByRole('searchbox',{name:'Search Within Results',exact:true}).fill('Kiss of Death')
  await dialog.getByRole('heading',{name:'Edit Collection',exact:true}).click()
- await dialog.getByRole('button',{name:'Save Changes',exact:true}).click()
+ await dialog.getByRole('button',{name:'Save',exact:true}).click()
  await expect(dialog).toHaveCount(0)
  await expect(page.locator('.work-card')).toHaveCount(1)
  await expect(page.getByRole('heading',{name:'Kiss of Death',exact:true})).toBeVisible()

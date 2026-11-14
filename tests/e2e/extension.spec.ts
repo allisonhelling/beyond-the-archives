@@ -1,3 +1,4 @@
+import { browserTestEnv, hostedBrowserTestEnv } from '../../scripts/playwright-env'
 import { verifyReadUndo } from './read-undo-controls'
 import { verifyReadingActionOrder } from './reading-action-controls'
 import { chromium, expect, test, type Page } from '@playwright/test'
@@ -18,7 +19,6 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  const authentications: { host: string; authorization: string }[] = []
  const barRequests: { p_action: string; p_work: number; p_input: Record<string, unknown> }[] = []
  const barEntries = new Map<number, Record<string, unknown>>()
- const localBarEntries = new Map<number, Record<string, unknown>>()
  // Use real HTTP for extension-worker fetches. Browser route interception can
  // delay delivery until the worker's next alarm, obscuring the actual flow.
  const server = createServer(async (request, response) => {
@@ -33,7 +33,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    for await (const part of request) data += part
    const requestBody = JSON.parse(data)
    barRequests.push(requestBody)
-   const entries = request.headers.host?.startsWith('localhost:') ? localBarEntries : barEntries
+   const entries = barEntries
    if (requestBody.p_action === 'claim') body = { secret: 'paired-chrome-secret', userId: 'alice' }
    else {
     if (['save', 'progress'].includes(requestBody.p_action)) {
@@ -55,8 +55,9 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  const backend = `http://127.0.0.1:${address.port}`
  const profile = await mkdtemp(join(tmpdir(), 'ao3-extension-test-'))
  const extension = join(profile, 'extension')
- const buildBackend = local ? backend : 'https://extension-test.supabase.co'
- execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension, ...(local ? ['--local'] : [])], { env: { ...process.env, EXTENSION_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_APP_ORIGIN: 'http://127.0.0.1:5173', EXTENSION_LOCAL_SUPABASE_URL: local ? backend : `http://localhost:${address.port}`, EXTENSION_LOCAL_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_local_test', VITE_SUPABASE_URL: buildBackend, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only_not_a_real_key' }, stdio: 'pipe' })
+ const buildEnv = local ? browserTestEnv : hostedBrowserTestEnv
+ const buildBackend = buildEnv.VITE_SUPABASE_URL
+ execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-extension.mjs', '--outDir', extension, ...(local ? ['--local'] : [])], { env: { ...process.env, ...buildEnv, VITE_ORGANIZER_URL: appOrigin, EXTENSION_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_APP_ORIGIN: appOrigin, EXTENSION_LOCAL_SUPABASE_URL: browserTestEnv.VITE_SUPABASE_URL, EXTENSION_LOCAL_SUPABASE_PUBLISHABLE_KEY: browserTestEnv.VITE_SUPABASE_PUBLISHABLE_KEY }, stdio: 'pipe' })
  // Only temporary test artifacts use the HTTP fixture backend. Hosted builds
  // reject local backends so deployed pairing codes cannot target the wrong DB.
  for (const file of ['background.js', 'content.js', 'manifest.json']) {
@@ -76,6 +77,8 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
  await writeFile(contentPath, content.replaceAll('mode: "closed"', 'mode: "open"'))
  const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'utf8'))
  expect(manifest.content_scripts).toEqual([{ matches: ['https://archiveofourown.org/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }])
+ expect(manifest.host_permissions).toEqual(['https://archiveofourown.org/*', 'https://web.archive.org/*', `${backend}/*`])
+ expect(manifest.externally_connectable.matches).toEqual([`${appOrigin}/*`])
  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [
   `--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
   // Extension-created tabs can navigate before Playwright attaches its routes.
@@ -327,71 +330,27 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    } else await expect(work.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
   }
   await listing.close()
-  if (!local) {
-   queued = false
-   await bar.getByRole('button', { name: 'Edit', exact: true }).click()
-   await bar.getByLabel('Private Notes', { exact: true }).fill('Hosted draft retained')
-   await expect(bar.getByLabel('Library environment: Hosted')).toBeVisible()
-   const options = await context.newPage()
-   await options.goto(`chrome-extension://${extensionId}/options.html`)
-   await expect(options.getByLabel('Library environment')).toHaveValue('hosted')
-   const localOrigin = 'http://127.0.0.1:5173'
-   await context.route(`${localOrigin}/**`, route => route.fulfill({ contentType: 'text/html', body: '<html><body>Local library test</body></html>' }))
-   const localApp = await context.newPage()
-   await localApp.goto(`${localOrigin}/settings`)
-   const authCount = authentications.length
-   expect(await connectFrom(localApp, 'test-local-session')).toMatchObject({ ok: false, error: expect.stringContaining('Select the matching') })
-   expect(authentications).toHaveLength(authCount)
-
-   async function switchTo(environment: string) {
-    await options.getByLabel('Library environment').selectOption(environment)
-    await options.getByRole('button', { name: 'Switch Environment' }).click()
-    await expect(options.getByRole('status')).toContainText('Environment saved.')
-   }
-   await options.evaluate(async () => {
-    const api = (window as Window & { chrome: { storage: { local: { set(values: object): Promise<void> } } } }).chrome
-    await api.storage.local.set({ librarySync: { id: 'hosted-paused-scan', userId: 'alice', status: 'running' } })
-   })
-   await options.getByLabel('Library environment').selectOption('local')
-   await options.getByRole('button', { name: 'Switch Environment' }).click()
-   await expect(options.getByRole('status')).toContainText('Pause the running scan')
-   await options.evaluate(async () => {
-    const api = (window as Window & { chrome: { storage: { local: { set(values: object): Promise<void> } } } }).chrome
-    await api.storage.local.set({ librarySync: { id: 'hosted-paused-scan', userId: 'alice', status: 'paused' } })
-   })
-   await switchTo('local')
-   expect(await connectFrom(localApp, 'test-local-session')).toMatchObject({ ok: true })
-   expect(authentications.at(-1)).toEqual({ host: `localhost:${address.port}`, authorization: 'Bearer test-local-session' })
-   await expect(bar.getByRole('status')).toContainText('Environment changed to Local')
-   const beforeStaleSave = barRequests.length
-   await bar.getByRole('button', { name: 'Save', exact: true }).click()
-   await expect(bar.getByRole('status')).toContainText('Environment changed.')
-   expect(barRequests.length).toBe(beforeStaleSave)
-   await ao3.reload()
-   await expect(bar.getByLabel('Library environment: Local')).toBeVisible()
-   await bar.getByRole('button', { name: 'Connect Library', exact: true }).click()
-   await bar.getByLabel('One-Time Pairing Code', { exact: true }).fill('local-pairing-code')
-   await bar.getByRole('button', { name: 'Connect', exact: true }).click()
-   await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
-   await bar.getByLabel('Private Notes', { exact: true }).fill('Local draft retained')
-   const claims = barRequests.filter(request => request.p_action === 'claim').length
-   await switchTo('hosted')
-   const retainedImport = await app.evaluate(({ id, url }) => new Promise(resolve => {
-    const api = (window as Window & { chrome: { runtime: { sendMessage(id: string, body: object, callback: (reply: unknown) => void): void } } }).chrome
-    api.runtime.sendMessage(id, { type: 'AO3_LIBRARY_PREVIEW_SERIES', url }, resolve)
-   }), { id: extensionId, url: seriesUrl })
-   expect(retainedImport).toMatchObject({ ok: true })
-   await ao3.reload()
-   await bar.getByRole('button', { name: 'Edit', exact: true }).click()
-   await expect(bar.getByLabel('Private Notes', { exact: true })).toHaveValue('Hosted draft retained')
-   await switchTo('local')
-   await ao3.reload()
-   await bar.getByRole('button', { name: 'Add to Library', exact: true }).click()
-   await expect(bar.getByLabel('Private Notes', { exact: true })).toHaveValue('Local draft retained')
-   expect(barRequests.filter(request => request.p_action === 'claim')).toHaveLength(claims)
-   await options.reload()
-   await expect(options.getByLabel('Library environment')).toHaveValue('local')
-  }
+  // Each installed artifact exposes only its configured environment.
+  queued = false
+  await bar.getByRole('button', { name: 'Edit', exact: true }).click()
+  await bar.getByLabel('Private Notes', { exact: true }).fill('Environment draft retained')
+  const options = await context.newPage()
+  await options.goto(`chrome-extension://${extensionId}/options.html`)
+  const environment = options.getByLabel('Library Environment', { exact: true })
+  await expect(environment).toHaveValue(local ? 'local' : 'hosted')
+  await expect(environment.locator('option')).toHaveCount(1)
+  await expect(options.getByRole('button', { name: 'Switch Environment', exact: true })).toBeDisabled()
+  const rejected = await options.evaluate(async other => {
+   const api = (window as Window & { chrome: { runtime: { sendMessage(message: object): Promise<unknown> } } }).chrome
+   return api.runtime.sendMessage({ type: 'AO3_LIBRARY_ENVIRONMENT', action: 'select', environment: other })
+  }, local ? 'hosted' : 'local')
+  expect(rejected).toMatchObject({ ok: false, error: expect.stringContaining('not configured') })
+  await options.reload()
+  await expect(environment).toHaveValue(local ? 'local' : 'hosted')
+  await ao3.reload()
+  await bar.getByRole('button', { name: 'Edit', exact: true }).click()
+  await expect(bar.getByLabel('Private Notes', { exact: true })).toHaveValue('Environment draft retained')
+  await options.close()
   if (local) {
    // Sample listing scans authenticate only with the local website boundary.
    queued = false

@@ -4,9 +4,10 @@ import type { Story } from '../../src/features/library/model'
 import { mergeEdits, type EditValues } from '../../src/features/library/edit-merge'
 import type { Page } from '@playwright/test'
 import { libraryQueryFixture } from './library-query-fixture'
+import { browserTestEnv } from '../../scripts/playwright-env'
 // Browser contract fixtures persist independently of the page and Auth session.
 // Real PostgreSQL/RLS coverage is in supabase/tests and the local integration runner.
-export async function fixture(page: Page, { backend = 'https://ao3-phase1-test.supabase.co', reader = false } = {}) {
+export async function fixture(page: Page, { backend = browserTestEnv.VITE_SUPABASE_URL, reader = false } = {}) {
   await page.route('**/auth/bridge', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Signed Out Reader</title>' }))
   const user = { id: '10000000-0000-0000-0000-000000000001', email: 'reader@example.com', email_confirmed_at: '2026-10-14T12:00:00Z', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-10-14T12:00:00Z' }
   const token = `${btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${btoa(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }))}.test`

@@ -4,14 +4,15 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { StrictMode, type ReactNode } from 'react'
 import { blankMetadata, type Story } from './model'
 import { defaultReadingFilters } from './reading-search'
-const mocks=vi.hoisted(()=>({catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn(),facets:vi.fn(),navigation:vi.fn(),revision:vi.fn()}))
+const mocks=vi.hoisted(()=>({sampleMode:false,catalog:vi.fn(),stories:vi.fn(),collections:vi.fn(),query:vi.fn(),series:vi.fn(),facets:vi.fn(),navigation:vi.fn(),revision:vi.fn()}))
+vi.mock('../../lib/sample-mode',()=>({get sampleMode(){return mocks.sampleMode}}))
 vi.mock('./repository',async importOriginal=>({...(await importOriginal<typeof import('./repository')>()),loadLibraryFacets:mocks.facets,loadLibraryNavigation:mocks.navigation,loadLibraryRevision:mocks.revision,loadCatalog:mocks.catalog,loadStories:mocks.stories,loadAffectedCollections:mocks.collections,loadCollections:mocks.collections,queryLibrary:mocks.query,loadSeriesRecord:mocks.series,deleteStory:vi.fn(),restoreStory:vi.fn(),updateEntry:vi.fn()}))
 import { LibraryProvider, useLibrary } from './LibraryProvider'
 const query={mode:'library' as const,shelf:'all',filters:defaultReadingFilters}
 const result={stories:[],series:[],total:0,page:1,pages:1,sections:{},fandoms:[]}
 const story=(id:string,title=id)=>({id,metadata:{...blankMetadata,title,summary:'Full summary'},notes:'Private Notes',personalTags:['Personal tag'],work:{ao3_work_id:1,verified_chapters:{'1':'910'}},collectionIds:[],reading_status:'reading',last_read_chapter:0}) as unknown as Story
 const wrapper=({children}:{children:ReactNode})=><MemoryRouter><LibraryProvider userId="reader-1">{children}</LibraryProvider></MemoryRouter>
-beforeEach(()=>{vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.revision.mockResolvedValue(0);mocks.navigation.mockResolvedValue({counts:{},revision:0});mocks.facets.mockResolvedValue({suggestions:{tags:[],relationships:[],characters:[]},fandoms:[],total:0});mocks.query.mockResolvedValue(result)})
+beforeEach(()=>{mocks.sampleMode=false;vi.clearAllMocks();mocks.catalog.mockResolvedValue({stories:[story('one'),story('two')],collections:[],series:[]});mocks.collections.mockResolvedValue([]);mocks.revision.mockResolvedValue(0);mocks.navigation.mockResolvedValue({counts:{},revision:0});mocks.facets.mockResolvedValue({suggestions:{tags:[],relationships:[],characters:[]},fandoms:[],total:0});mocks.query.mockResolvedValue(result)})
 it('serializes targeted refreshes and preserves unrelated works without reloading the catalog',async()=>{
  const view=renderHook(()=>useLibrary(),{wrapper})
  await waitFor(()=>expect(view.result.current.loading).toBe(false))
@@ -446,4 +447,18 @@ it('cancels catalog requests queued behind a series read when the provider unmou
  view.unmount()
  await act(async()=>{finishPage(result);await obsolete;await aborted})
  expect(mocks.catalog).not.toHaveBeenCalled()
+})
+
+it('reloads sample automatic memberships and counts when collections change', async () => {
+ mocks.sampleMode = true
+ const view = renderHook(() => useLibrary({ catalog: true }), { wrapper })
+ await waitFor(() => expect(view.result.current.catalogLoaded).toBe(true))
+ const updated = { ...story('one'), automaticCollectionIds: ['automatic'] }
+ const collections = [{ id: 'automatic', name: 'New Automatic Collection', automatic_rules: { filters: { ...defaultReadingFilters, favorites: true } } }]
+ mocks.catalog.mockResolvedValueOnce({ stories: [updated], collections, series: [] })
+ await act(() => view.result.current.refreshCollections())
+ expect(view.result.current.stories).toEqual([updated])
+ expect(view.result.current.collections).toEqual(collections)
+ expect(view.result.current.catalogLoaded).toBe(true)
+ expect(mocks.catalog).toHaveBeenCalledTimes(2)
 })

@@ -97,7 +97,59 @@ The drill is scoped recovery, not whole-project disaster recovery. It keeps the 
 
 ## Vercel Staging Preview Proposal
 
-**Status: local preparation authorized and implemented; no push, deployment or hosted settings change authorized.** Reuse the two existing Vercel projects and the single GitHub repository. No new Vercel project, custom domain purchase, custom environment or production setting change is proposed. Supabase changes remain separately gated.
+**Current Status: both staging frontend Preview deployments are READY at approved commit `6fa2ece5ddf09c9f8a434b9ae71ec058417b8cc1`. All twelve Preview/`staging` variable bindings are applied and verified.** The user confirmed Production=`main`, Preview=all unassigned branches and empty Shared variables, clearing the remaining operator-evidence gate. The approved staging-only push and two Git Preview builds completed. Production domains/settings and Supabase remain untouched. S1 backend/privacy acceptance is still incomplete and separately gated.
+
+### Successful Staging Frontend Release
+
+Following the user's confirmation that Production uses `main`, Preview uses all unassigned branches and shared variables are empty, the existing staging release approval was exercised without requesting it again. Record these settings as **operator-confirmed Dashboard evidence**, not newly exposed MCP settings fields. The earlier no-deploy-hooks confirmation and build screenshots complete the previously missing target/build/shared-scope evidence for this release.
+
+Remote refs were verified before pushing: `main=4d225ab9f064495bf195be7b8408805e16fc4a2a`, `staging=7a79f58b1c49e62d0ef411545c9a4011096c7f6c`. `git push origin refs/heads/staging:refs/heads/staging` then published only the approved `6fa2ece5ddf09c9f8a434b9ae71ec058417b8cc1` commit. The first sandboxed GitHub lookup failed DNS resolution; the approved network-enabled retry and push succeeded. A post-push remote ref read confirms `main` unchanged and `staging=6fa2ece5ddf09c9f8a434b9ae71ec058417b8cc1`. Local status documentation edits were preserved and not included in this push.
+
+| App / Project | Preview Deployment | Verified State And Alias |
+|---|---|---|
+| Organizer / `prj_Rb584lKdVjCt7wikZSF1bTCWAujo` | `dpl_EUXZuosYBnJkP8rpgSK9cyUeP88T` | READY; `https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app` |
+| Reader / `prj_EoxUyrPPjVqvdZvsir6OeITXbYWM` | `dpl_Ex4scwDC6Qdp886MkFvUoBk6SgNx` | READY; `https://archives-unfolded-git-staging-allisonhellings-projects.vercel.app` |
+
+Authenticated deployment reads confirm Git branch `staging`, the exact approved SHA and Preview target (`target=null` in these responses) for both. Project-scoped alias reads confirm each stable branch URL points to its new deployment, without a redirect or deletion. Build events report successful Vite builds and completed deployments: organizer build output completed in 28 seconds; reader in 39 seconds. The organizer log confirms effective Node 26 despite Dashboard Node 24, due to the package engine range. The previous configuration-load failures are resolved for these two builds. A successful hosted build does not establish complete runtime compatibility or Auth acceptance.
+
+Production alias verification confirms **unchanged** assignments: `beyondthearchives.vercel.app` still points to `dpl_9WRFbW4DiQoev86ANkNJZ1mTExGa`, and `archivesunfolded.vercel.app` still points to `dpl_4bArWtzXsufQJc9aLRk2qvLgipA9`. No promotion, production branch push, production variable/settings change, new project/domain, protection bypass/share link, paid upgrade, hosted job or Supabase action was performed.
+
+Verification boundary: local actual-origin builds, credential scans, CSP/browser checks and the exact-commit tests are recorded below. This release adds authenticated hosted build/ref/target/alias verification. It does not claim an authenticated live browser sign-in, live effective-header/iframe test through Vercel protection, deployed-asset credential scan, cross-account privacy test or successful backend operation. No temporary share link was created to bypass protection. Supabase migrations, Auth hook/redirect/email configuration, private Storage, Edge Functions and synthetic hosted recovery/acceptance remain separately approved work. Existing Vercel Authentication protection remains enabled.
+
+### Approved Application Status
+
+The user's subsequent instruction, “approved, implement anything needed,” authorizes the previously presented staging-only configuration and exact reviewed release. It does not supply the missing Dashboard evidence or waive the documented pre-release checks. Production and Supabase operations remain outside scope.
+
+- Created the two reviewed six-variable payloads with `upsert=false`, target `preview`, Git branch `staging`, on organizer `prj_Rb584lKdVjCt7wikZSF1bTCWAujo` and reader `prj_EoxUyrPPjVqvdZvsir6OeITXbYWM`. Both requests returned six created entries and zero failures.
+- Independent post-write inventory confirms exactly six staging-specific Preview bindings per app. Organizer inventory is now 28 entries; reader is six. Every pre-existing entry retained its ID/name/type/target/branch/integration-source/update metadata. No existing unscoped Preview or Production variable was replaced. No secret values were logged.
+- Applied reviewed commit `6fa2ece5ddf09c9f8a434b9ae71ec058417b8cc1` to local `staging`, after verifying all six files still matched the reviewed snapshot and the index contained no other staged work. This preserves the user's prepared work, installs the approved staging CSP configs locally, and leaves `main` at `4d225ab9f064495bf195be7b8408805e16fc4a2a`. No merge or push was performed. The local branch is one commit ahead of its existing tracking ref.
+- Reran the environment/origin/header suite on the applied local branch: **9 tests passed**. Prior exact-commit builds, TypeScript and browser evidence remain recorded below; no hosted build success is claimed.
+- At the variable-application checkpoint, project reads still showed the two failed Preview deployments and no deployment had started. The subsequent successful approved release is recorded above. Redacted variable verification is saved in ignored `artifacts/staging/applied-preview-variables.json`; the release manifest records the current build/alias outcome.
+
+The former release blocker is **resolved** by the user's explicit confirmation that Production is `main`, Preview covers all unassigned branches and shared variables are empty. Combined with the preceding project/integration scope inventory, absent-hook confirmation and build screenshots, this clears the missing evidence for the approved staging frontend release. These fields remain operator-confirmed where MCP omits them. Production and separately gated Supabase operations are not authorized.
+
+#### Supplied Dashboard Evidence
+
+The user explicitly reports that **no deploy hooks exist**; record this as operator-provided evidence for the two projects, not an MCP deploy-hook inventory. No hook change is needed.
+
+The supplied screenshots show:
+
+| Setting | Organizer Root Profile | Reader Root Profile |
+|---|---|---|
+| Framework | Vite | Vite; Framework Settings section displays `Overridden` |
+| Dashboard Build / Output / Install / Development Overrides | All four switches off | All four switches off |
+| Root Directory | `./` | `reader` |
+| Include Files Outside Root | Enabled | Enabled |
+| Ignored Build Step | Automatic | Automatic |
+| Node Selection | `24.x`, warning indicator visible | `26.x` |
+
+The build/output/install text in the disabled inputs is placeholder/default text, not a manually entered override. Repository `vercel.json` settings and the previously observed build logs remain relevant to effective commands. The reader's `Overridden` badge alone does not demonstrate an enabled Dashboard command override; the individual switches are off and its repository configuration supplies explicit settings. No Dashboard setting was changed. Reader skip-unchanged-root deployments is visibly enabled; the organizer row is labelled Enabled with a gray control, so no stronger interpretation of that control is recorded.
+
+Project-variable screenshots corroborate the six Preview/`staging` public bindings in each project. Organizer screenshots show its database/service credentials scoped to Production, consistent with authenticated inventory. All displayed values remain masked. The reader screenshot has **Project** selected and a separate **Shared** tab; the Shared tab's contents are not shown. These project-level screenshots therefore do not close the team/shared-scope gap. No screenshot shows the configured Production Branch for either project.
+
+Resolved from the screenshots: operator confirmation of absent deploy hooks, root directories, outside-root inclusion, Dashboard command override switches, ignored-build behavior and Node selections. The user's subsequent text confirms Production Branch=`main` for both projects, Preview=all unassigned branches and Shared variables empty. The staging frontend release has now completed under the existing approval, as recorded above.
+
+The following sections retain the pre-application audit and preparation evidence; their original counts and pending-action descriptions are historical. The current status above supersedes them.
 
 ### Inspected State And Missing Hosted Evidence
 
@@ -206,7 +258,7 @@ Local validation results:
 
 Proposed local review commit: `fix: configure isolated staging Preview origins`, parent `7a79f58b1c49e62d0ef411545c9a4011096c7f6c`. Its six-file tree consists of this runbook, the S1 report, shared build/header preparation code and its existing tests, plus the two generated candidates installed **only in the proposed commit tree** as `vercel.json` and `reader/vercel.json`. An isolated Git index prepares the review commit without changing the user's index, current branch or active working-tree headers. Its exact SHA and tree are recorded in ignored `artifacts/staging/proposed-commit.json` and presented for review. Ignored profiles, bindings, build outputs and public-key values are excluded from the commit.
 
-No hosted action is currently approved. Remaining requests, after missing Dashboard/shared-scope evidence is reviewed: (1) submit the two exact six-binding Preview/`staging` payloads on the verified organizer/reader IDs; (2) approve the exact review commit for a `staging`-only push and its two Git Preview deployments, with no promotion or `main` change. Any separate redeployment must name its project/SHA/Preview target. Preview protection remains unchanged. Supabase migrations, Auth, Storage, Edge origins/functions and hosted synthetic fixtures remain a separate stage. No bootstrap release is proposed.
+At the preparation review these hosted actions awaited approval. They were subsequently approved as recorded above: the two exact six-binding payloads are now applied, and the exact staging release remains pending the required Dashboard/shared-scope evidence. No promotion or `main` change is authorized. Any separate redeployment must name its project/SHA/Preview target. Preview protection remains unchanged. Supabase migrations, Auth, Storage, Edge origins/functions and hosted synthetic fixtures remain a separate stage. No bootstrap release is proposed.
 
 ### Stable URLs And Revised Deployment Sequence
 

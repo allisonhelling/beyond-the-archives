@@ -1,11 +1,15 @@
+import { testOrganizer } from './account-fixture'
 import { test, expect } from '@playwright/test'
 import { importBook } from './library-fixture'
 test('shows series on tiles and opens every saved work in the clicked series',async({page,context})=>{
- await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}))
+ await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}))
  await page.goto('/')
  await importBook(page,'First Adventure','Shared Adventures')
  await importBook(page,'Another Adventure','Shared Adventures')
  await importBook(page,'Unrelated Story','Shared Adventures Extra')
+ await page.getByRole('button', { name: 'Sort', exact: true }).click()
+ await page.getByRole('option', { name: 'Title', exact: true }).click()
+ await page.getByRole('heading', { name: 'The Bookshelf', exact: true }).click()
  for(const width of [1280,390]){
   await page.setViewportSize({width,height:844})
   await expect(page.getByRole('button',{name:'Shared Adventures',exact:true})).toHaveCount(2)

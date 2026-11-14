@@ -234,6 +234,7 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
     await task
   }, [boundDetails, invalidate, recordOwnRevision])
   const refreshCollections = useCallback(async () => {
+    if (sampleMode) return refresh()
     const life = lifecycle.current
     const task = queue.current.catch(() => {}).then(async () => {
       if (life !== lifecycle.current) return
@@ -259,7 +260,7 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
     })
     queue.current = task
     await task
-  }, [invalidate, invalidateQueries, recordOwnRevision])
+  }, [invalidate, invalidateQueries, recordOwnRevision, refresh])
   const refreshSeries = useCallback(async (id: number, invalidate = true) => {
     const life = lifecycle.current
     const task = queue.current.catch(() => {}).then(async () => {

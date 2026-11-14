@@ -1,3 +1,4 @@
+import { browserTestEnv } from '../../scripts/playwright-env'
 import { desktopCompanion } from './desktop-companion-fixture'
 import { fixture, login, selectLibraryShelf, clickPersonalToggle } from './library-fixture'
 import { libraryQueryFixture } from './library-query-fixture'
@@ -616,7 +617,10 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await page.getByLabel('Story URL', { exact: true }).fill('https://example.com/works/123')
   await page.getByLabel('Title', { exact: true }).fill('A manual story')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
-  await expect(page.locator('.story-form').getByRole('alert')).toContainText('supported AO3 work URL')
+  await expect(page.locator('.story-form').getByRole('alert')).toContainText('Enter a whole published chapter count from 1 to 100,000.')
+  await page.getByLabel('Story URL', { exact: true }).fill('http://127.0.0.1/private-story')
+  await page.getByRole('button', { name: 'Save Story', exact: true }).click()
+  await expect(page.locator('.story-form').getByRole('alert')).toContainText('without credentials or local addresses')
   await page.getByLabel('Story URL', { exact: true }).fill('https://archiveofourown.org/works/123/chapters/4')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Chapter 0 of ? — Edit Progress', exact: true })).toBeVisible()
@@ -626,7 +630,9 @@ test('Add menu defaults, invalid URLs, duplicates and Cancel preserve the librar
   await page.getByLabel('Story URL', { exact: true }).fill('https://archiveofourown.org/works/123')
   await page.getByLabel('Title', { exact: true }).fill('Duplicate')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()
-  await expect(page.locator('.story-form').getByRole('alert')).toContainText('already in your library')
+  await expect(page.locator('.story-form').getByRole('alert')).toContainText('Review Similar Story URLs')
+  await expect(page.locator('.story-form').getByRole('link', { name: 'A manual story', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save Separately', exact: true })).toHaveCount(0)
   await page.getByRole('link', { name: 'Cancel', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'A manual story', exact: true })).toHaveCount(1)
   await selectLibraryShelf(page, 'Favorites')
@@ -724,7 +730,7 @@ test('reading toolbar, suggestions, filters, grouping and tiles use saved metada
   const panel = page.getByRole('region', { name: 'Reading Filters' })
   await expect((await ordering(page)).getByRole('button', { name: 'Group', exact: true })).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Work Status', exact: true })).toBeVisible()
-  const sizing = await page.locator('.reading-toolbar .filter-input, .reading-toolbar input[type=search], .reading-filters .filter-input, .reading-filters input').evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, font: getComputedStyle(element).fontSize, textInput: element.matches('input:not([type=checkbox], [type=radio]), textarea, select') })))
+  const sizing = await page.locator('.reading-toolbar .filter-input, .reading-toolbar input[type=search], .reading-filters .filter-input, .reading-filters input:not([type=checkbox]):not([type=radio])').evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, font: getComputedStyle(element).fontSize, textInput: element.matches('input:not([type=checkbox], [type=radio]), textarea, select') })))
   expect(sizing.length).toBeGreaterThan(8)
   const touchText = await page.evaluate(() => matchMedia('(max-width: 1100px), (any-pointer: coarse)').matches)
   for (const control of sizing) { expect(control.height).toBe(36); expect(control.font).toBe(touchText && control.textInput ? '16px' : '14px') }
@@ -1372,7 +1378,7 @@ for (const outcome of ['completed', 'failed'] as const) {
     const tables = await fixture(page)
     tables.works.push({ id: 'refresh-work', ao3_work_id: 123, verified_chapters: {} })
     tables.library_entries.push({ id: 'refresh-entry', work_id: 'refresh-work', reading_status: 'to_read', last_read_chapter: 0, is_favorite: false, notes: '', original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', metadata_overrides: { title: 'Refresh example', authors: [], fandoms: [] } })
-    await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+    await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, route => {
       tables.metadata_jobs.push({ id: 'refresh-job', entry_id: 'refresh-entry', batch_id: 'refresh-batch', status: 'pending', error_category: null, error_message: null, created_at: new Date().toISOString() })
       return route.fulfill({ json: 'refresh-batch' })
     })
@@ -1428,11 +1434,11 @@ test('AO3 404 refresh asks before marking publication Deleted and preserves save
   const entry = { id: 'missing-entry', work_id: 'missing-work', reading_status: 'reading', last_read_chapter: 3, is_favorite: true, notes: 'My private notes', original_url: 'https://archiveofourown.org/works/123', created_at: '2026-10-15T00:00:00Z', updated_at: '2026-10-15T00:00:00Z', work_status: 'available', metadata_overrides: { title: 'My saved title', authors: [], fandoms: [] } }
   tables.library_entries.push(entry)
   const original = structuredClone(entry)
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, route => {
     tables.metadata_jobs.splice(0, tables.metadata_jobs.length, { id: 'missing-job', entry_id: entry.id, batch_id: 'missing-batch', status: 'pending', error_category: null, created_at: new Date().toISOString() })
     return route.fulfill({ json: 'missing-batch' })
   })
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/mark_work_deleted', route => {
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/mark_work_deleted`, route => {
     expect(route.request().postDataJSON()).toEqual({ p_entry: entry.id, p_job: 'missing-job' })
     entry.work_status = 'deleted'
     return route.fulfill({ status: 204 })
@@ -1469,7 +1475,7 @@ for (const source of ['menu', 'add'] as const) {
 test(`Add Story opens the saved work and displays retrieved metadata from ${source}`, async ({ page }) => {
   const tables = await fixture(page)
   tables.import_batches = []; tables.import_items = []
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', async route => {
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, async route => {
     expect(route.request().postDataJSON()).toEqual({ p_urls: ['https://archiveofourown.org/works/456'], p_update_reading_location: true })
     tables.import_batches.push({ id: 'batch', created_at: new Date().toISOString(), cancelled_at: null })
     tables.import_items.push({ id: 'item', batch_id: 'batch', entry_id: 'entry', status: 'pending', metadata_status: 'pending' })
@@ -2820,8 +2826,8 @@ function seedSeriesWork(tables: Record<string, Record<string, unknown>[]>, numbe
 
 test('Add Story reviews series in place, then shows a Series shelf, details, private notes and series filters', async ({ page }) => {
  const tables = await fixture(page), submitted: string[][] = []
- await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: seriesPreview } }))
- await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/functions/v1/series-preview`, route => route.fulfill({ json: { preview: seriesPreview } }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, route => {
   const body = route.request().postDataJSON()
   expect(body.p_reading_status).toBe('finished')
   expect(body.p_series_ids).toEqual([77])
@@ -2953,8 +2959,8 @@ test('Add Story reviews series in place, then shows a Series shelf, details, pri
 
 test('a completed direct fic import offers its related series and imports only selected unsaved works', async ({ page }) => {
  const tables = await fixture(page), submissions: Record<string, unknown>[] = []
- await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: seriesPreview } }))
- await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', route => {
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/functions/v1/series-preview`, route => route.fulfill({ json: { preview: seriesPreview } }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, route => {
   const body = route.request().postDataJSON(); submissions.push(body)
   if (submissions.length === 1) {
    seedSeriesWork(tables, 101)
@@ -3942,7 +3948,8 @@ test('fits sort and filter menus, aligns membership filters, and shares inline p
   for(let index=1;index<children.length;index++) if(children[index].y>=children[index-1].bottom+1) expect(Math.abs(children[index].x-choices.x)).toBeLessThan(1)
  }
  await expect(row.locator(':scope > button')).toHaveText(['Exclude Later Series Works','In a Series','Favorites','Personal Notes','Recs'])
- expect(await row.locator('.custom-dropdown > .dropdown-trigger').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(info.project.name==='mobile' ? ['Content Rating','Rating','One-Shot','Crossovers','Publication Status','Available In'] : ['Content Rating','Rating','One-Shot','Crossovers','Available In'])
+ expect(await row.locator('.custom-dropdown > .dropdown-trigger').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(info.project.name==='mobile' ? ['Content Rating','Rating','One-Shot','Crossovers','Publication Status','Available In','Chapter Count Confidence','Publication Status Confidence'] : ['Content Rating','Rating','One-Shot','Crossovers','Available In','Chapter Count Confidence','Publication Status Confidence'])
+ await expect(filters.getByRole('checkbox', { name: 'Needs Completion Verification', exact: true })).not.toBeChecked()
  await expect(filters.getByRole('button',{name:'Available In',exact:true})).toBeVisible()
  const dateRow=filters.locator('.updated-filter-row')
  await expect(filters.getByRole('button',{name:'Publication Status',exact:true})).toHaveCount(1)

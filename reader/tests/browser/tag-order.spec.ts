@@ -1,7 +1,8 @@
+import { testOrganizer } from './account-fixture'
 import { test, expect } from '@playwright/test'
 import { importBook } from './library-fixture'
 test('reorders tag categories independently and keeps the choice after reload',async({page,context})=>{
- await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}))
+ await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}))
  await page.goto('/');await importBook(page,'Ordered Tags')
  const tags=page.locator('.story-card .expandable-metadata-tags .metadata-tag')
  await expect(tags.first()).toHaveText('Recovered Tag')

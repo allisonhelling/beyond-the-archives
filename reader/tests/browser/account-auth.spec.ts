@@ -19,7 +19,7 @@ async function backend(context:BrowserContext,linked=false){
   return route.fulfill({json:path.includes('reader_cloud_values')||path.includes('reader_import_inbox')?[]:{}})
  })
  // Tests that do not exercise cross-origin login should never contact the hosted application.
- await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Signed Out Organizer</title>'}))
+ await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Signed Out Organizer</title>'}))
  return devices
 }
 for(const identifier of ['reader@example.com','Reader']) test(`signs in with ${identifier} and opens an isolated account library`,async({page,context})=>{
@@ -99,7 +99,7 @@ test('automatically enables organizer sync, reuses the installation, and respect
 })
 test('automatically opens the reader account through an origin-bound organizer handoff',async({page,context})=>{
  await backend(context,true)
- await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>addEventListener('message',e=>{if(e.source===parent&&e.data.kind==='connected-login-request')parent.postMessage({kind:'connected-login-result',nonce:e.data.nonce,code:'${'b'.repeat(64)}'},e.origin)});</script>`}))
+ await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>addEventListener('message',e=>{if(e.source===parent&&e.data.kind==='connected-login-request')parent.postMessage({kind:'connected-login-result',nonce:e.data.nonce,code:'${'b'.repeat(64)}'},e.origin)});</script>`}))
  let verifier=''
  await context.route('**/functions/v1/app-login',route=>{verifier=route.request().postDataJSON().verifier;return route.fulfill({json:{access_token:accountSession().access_token,refresh_token:'independent-refresh'}})})
  await page.goto('/')
@@ -110,7 +110,7 @@ test('automatically opens the reader account through an origin-bound organizer h
 
 for(const mode of ['login','signup']) test(`offers popup login from ${mode} when the browser cannot use the embedded organizer session`,async({page,context})=>{
  await backend(context,true)
- await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>{
+ await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>{
   const popup=route.request().frame().parentFrame()===null
   return route.fulfill({contentType:'text/html',body:popup?`<!doctype html><script>const target=opener;addEventListener('message',e=>{if(e.source===target&&e.data.kind==='connected-login-request')target.postMessage({kind:'connected-login-result',nonce:e.data.nonce,code:'${'b'.repeat(64)}'},e.origin)});target.postMessage({kind:'connected-login-ready'},'${'http://127.0.0.1:4174'}');</script>`:'<!doctype html><title>Storage Blocked</title>'})
  })
@@ -177,7 +177,7 @@ test('lets the signed-in reader create and change a username',async({page,contex
 
 test('shows a useful failure when the organizer cannot issue a login ticket',async({page,context})=>{
  await backend(context,true)
- await context.route('https://beyondthearchives.vercel.app/auth/bridge',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>const target=opener;addEventListener('message',event=>{if(event.source===target&&event.data.kind==='connected-login-request')target.postMessage({kind:'connected-login-result',nonce:event.data.nonce,error:'unavailable'},event.origin)});if(target)target.postMessage({kind:'connected-login-ready'},'http://127.0.0.1:4174');</script>`}))
+ await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>route.fulfill({contentType:'text/html',body:`<!doctype html><script>const target=opener;addEventListener('message',event=>{if(event.source===target&&event.data.kind==='connected-login-request')target.postMessage({kind:'connected-login-result',nonce:event.data.nonce,error:'unavailable'},event.origin)});if(target)target.postMessage({kind:'connected-login-ready'},'http://127.0.0.1:4174');</script>`}))
  await page.goto('/');await account(page)
  await page.getByRole('button',{name:'Continue From Organizer',exact:true}).click()
  await expect(page.getByRole('status').filter({hasText:'The other app could not complete sign-in.'})).toBeVisible()
@@ -320,7 +320,7 @@ test('manual Sync Now links the full cloud catalog and distinguishes cloud-only 
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
  const card=page.locator('.story-card').filter({has:page.getByRole('button',{name:'Cloud Work 0',exact:true})})
  await card.getByLabel('Work Actions',{exact:true}).click()
- await expect(card.getByRole('link',{name:'View in Organizer',exact:true})).toHaveAttribute('href','https://beyondthearchives.vercel.app/stories/entry-8001')
+ await expect(card.getByRole('link',{name:'View in Organizer',exact:true})).toHaveAttribute('href',`${testOrganizer.organizerUrl}/stories/entry-8001`)
  await expect(card.getByRole('link',{name:'View in Organizer',exact:true})).toHaveAttribute('target','_blank')
  await page.keyboard.press('Escape')
  await card.getByRole('button',{name:'Manage EPUB',exact:true}).click()

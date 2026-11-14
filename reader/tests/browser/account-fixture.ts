@@ -1,6 +1,6 @@
-import { loadEnv } from 'vite'
 import { requireEnvironmentConfig } from '../../../src/lib/environment'
-export const testOrganizer = requireEnvironmentConfig(loadEnv('production', process.cwd(), 'VITE_'))
+import { browserTestEnv } from '../../../scripts/playwright-env'
+export const testOrganizer = requireEnvironmentConfig(browserTestEnv)
 import type { BrowserContext, Page } from '@playwright/test'
 export const owner='10000000-0000-0000-0000-000000000001'
 export function accountSession() {return {access_token:`${Buffer.from('{}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:owner,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')}.test-signature`,refresh_token:'mock-refresh',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user:{id:owner,email:'reader@example.com',email_confirmed_at:'2026-01-01',app_metadata:{},user_metadata:{},aud:'authenticated',created_at:'2026-01-01'}}}

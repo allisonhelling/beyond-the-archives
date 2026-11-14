@@ -1,3 +1,4 @@
+import { browserTestEnv } from '../../scripts/playwright-env'
 import { desktopCompanion } from './desktop-companion-fixture'
 import { libraryQueryFixture } from './library-query-fixture'
 import { expect, test, type Page } from '@playwright/test'
@@ -7,8 +8,8 @@ const token = () => `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
 
 async function mockAuth(page: Page) {
   await page.route('**/auth/bridge', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Signed Out Reader</title>' }))
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/**', route => { const name=new URL(route.request().url()).pathname.split('/').pop()!; return route.fulfill({json:libraryQueryFixture(name,route.request().method()==='POST'?route.request().postDataJSON():{}, {})??[]}) })
-  await page.route('https://ao3-phase1-test.supabase.co/auth/v1/**', async route => {
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/**`, route => { const name=new URL(route.request().url()).pathname.split('/').pop()!; return route.fulfill({json:libraryQueryFixture(name,route.request().method()==='POST'?route.request().postDataJSON():{}, {})??[]}) })
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/auth/v1/**`, async route => {
     const path = new URL(route.request().url()).pathname
     if (path.endsWith('/token')) return route.fulfill({ json: { access_token: token(), refresh_token: 'test-only-refresh', expires_in: 3600, token_type: 'bearer', user } })
     if (path.endsWith('/user')) return route.fulfill({ json: user })
@@ -130,13 +131,13 @@ test('recovery form reports delivery without exposing account existence', async 
 test('large imports show persisted results and fit the viewport after returning to the page', async ({ page }) => {
   let originals: string[] = []
   const batch = { id: '20000000-0000-0000-0000-000000000001', user_id: user.id, created_at: new Date().toISOString(), cancelled_at: null }
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', async route => {
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, async route => {
     originals = (route.request().postDataJSON() as { p_urls: string[] }).p_urls
     return route.fulfill({ json: batch.id })
   })
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/import_batches*', route => route.fulfill({ json: originals.length ? [batch] : [] }))
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/import_items*', route => route.fulfill({ json: originals.filter(url => url.includes('archiveofourown.org')).map((url, i) => ({ id: `item-${i}`, batch_id: batch.id, original_url: url, ao3_work_id: Number(url.match(/works\/(\d+)/)?.[1]), chapter_id: null, status: 'completed', result: 'imported', metadata_status: 'completed', error_category: null, entry_id: `entry-${i}`, last_attempt_at: batch.created_at })) }))
-  await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/paged_import_history',route=>route.fulfill({json:libraryQueryFixture('paged_import_history',route.request().postDataJSON(),{import_batches:originals.length?[batch]:[],import_items:originals.filter(url => url.includes('archiveofourown.org')).map((url,i)=>({id:`item-${i}`,batch_id:batch.id,original_url:url,ao3_work_id:Number(url.match(/works\/(\d+)/)?.[1]),chapter_id:null,status:'completed',result:'imported',metadata_status:'completed',error_category:null,entry_id:`entry-${i}`,last_attempt_at:batch.created_at}))})}))
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/import_batches*`, route => route.fulfill({ json: originals.length ? [batch] : [] }))
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/import_items*`, route => route.fulfill({ json: originals.filter(url => url.includes('archiveofourown.org')).map((url, i) => ({ id: `item-${i}`, batch_id: batch.id, original_url: url, ao3_work_id: Number(url.match(/works\/(\d+)/)?.[1]), chapter_id: null, status: 'completed', result: 'imported', metadata_status: 'completed', error_category: null, entry_id: `entry-${i}`, last_attempt_at: batch.created_at })) }))
+  await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/paged_import_history`,route=>route.fulfill({json:libraryQueryFixture('paged_import_history',route.request().postDataJSON(),{import_batches:originals.length?[batch]:[],import_items:originals.filter(url => url.includes('archiveofourown.org')).map((url,i)=>({id:`item-${i}`,batch_id:batch.id,original_url:url,ao3_work_id:Number(url.match(/works\/(\d+)/)?.[1]),chapter_id:null,status:'completed',result:'imported',metadata_status:'completed',error_category:null,entry_id:`entry-${i}`,last_attempt_at:batch.created_at}))})}))
   await page.goto('/')
   await signIn(page)
   if (test.info().project.name === 'mobile') {
@@ -197,14 +198,14 @@ test('large imports show persisted results and fit the viewport after returning 
 
 test('series imports require explicit work selection and fit desktop and mobile', async ({ page }) => {
  let submitted: string[] = []
- await page.route('https://ao3-phase1-test.supabase.co/functions/v1/series-preview', route => route.fulfill({ json: { preview: {
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/functions/v1/series-preview`, route => route.fulfill({ json: { preview: {
   seriesId: 77, normalizedUrl: 'https://archiveofourown.org/series/77', title: 'Stories and art', description: 'Choose the works you want.',
   works: [
    { workId: 101, url: 'https://archiveofourown.org/works/101', position: 1, title: 'The story', authors: ['Author'], summary: 'An adventure.', tags: ['Adventure'], wordCount: 12000, chapters: '2/2', complete: true },
    { workId: 102, url: 'https://archiveofourown.org/works/102', position: 4, title: 'Art extras', authors: ['Author'], summary: 'Drawings.', tags: ['Fanart'], wordCount: 0, chapters: '1/1', complete: true },
   ],
  } } }))
- await page.route('https://ao3-phase1-test.supabase.co/rest/v1/rpc/submit_import_urls', async route => {
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_import_urls`, async route => {
   const body = route.request().postDataJSON()
   submitted = body.p_urls
   expect(body.p_reading_status).toBe('reading')
@@ -276,7 +277,7 @@ test('login shares the compact form layout and keeps unchecked sessions in the c
  await page.screenshot({path:test.info().outputPath('organizer-login.png'),fullPage:true})
  await remember.uncheck()
  await signIn(page)
- const key='sb-ao3-phase1-test-auth-token'
+ const key=`sb-${new URL(browserTestEnv.VITE_SUPABASE_URL).hostname.split('.')[0]}-auth-token`
  expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBeNull()
  expect(await page.evaluate(key=>Boolean(sessionStorage.getItem(key)),key)).toBe(true)
  await page.reload()

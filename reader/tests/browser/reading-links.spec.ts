@@ -31,7 +31,6 @@ for (const width of [390, 1280]) test(`opens web URLs from EPUB text without lea
   expect(await content.evaluate(element => ({ top: element.scrollTop, left: element.scrollLeft }))).toEqual(before)
  }
  await page.reload()
- await expect(page.getByRole('button', { name: /Continue Reading|Start Reading/ })).toBeVisible()
- await page.getByRole('button', { name: /Continue Reading|Start Reading/ }).click()
+ await expect(page.getByLabel('Book Content')).toBeVisible()
  await expect(page.getByLabel('Book Content').getByRole('link', { name: url, exact: true })).toBeVisible()
 })

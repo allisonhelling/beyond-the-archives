@@ -82,6 +82,8 @@ test('downloads a chosen cloud anthology and opens the requested member', async 
   await organizerAccount(context)
   await context.route('**/rest/v1/rpc/userscript_library', route => route.fulfill({ json: { entry: null, collections: [] } }))
   await page.goto('/')
+  // Two downloaded versions keep the choice ambiguous even with a cloud copy.
+  await importAnthology(page, 'Other Downloaded Anthology')
   await importAnthology(page, 'Local Anthology')
   const cloud = await importAnthology(page, 'Cloud Anthology')
   await context.route('**/storage/v1/object/**', route => route.request().method() === 'GET' ? route.fulfill({ body: cloud.buffer, contentType: 'application/epub+zip' }) : route.fulfill({ json: {} }))

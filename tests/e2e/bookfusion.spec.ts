@@ -6,7 +6,7 @@ test('BookFusion links persist, appear after caught-up, and distinguish bookmark
   await page.route('**/rest/v1/rpc/reader_offline_snapshot', route => route.fulfill({ json: { readers: [{ id: 'bookfusion-reader', name: 'My Reader', url: 'https://reader.example/', reportedAt: '2026-11-01T00:00:00Z', works: ['12345'] }], stories: [] } }))
   await page.route('**/rest/v1/rpc/reader_organizer_connection', route => route.fulfill({ json: { enabled: true } }))
   await page.goto('/add?import=manual'); await login(page)
-  await page.getByLabel('AO3 URL', { exact: true }).fill('https://archiveofourown.org/works/12345')
+  await page.getByLabel('Story URL', { exact: true }).fill('https://archiveofourown.org/works/12345')
   await page.getByLabel('Title', { exact: true }).fill('BookFusion Linked Work')
   await page.getByLabel('BookFusion Link', { exact: true }).fill('https://www.bookfusion.com/reader/123')
   await page.getByRole('button', { name: 'Save Story', exact: true }).click()

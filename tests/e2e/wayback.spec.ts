@@ -1,3 +1,4 @@
+import { browserTestEnv } from '../../scripts/playwright-env'
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
 const workUrl = 'https://archiveofourown.org/works/123'
@@ -7,8 +8,8 @@ test('work actions open the newest checked Wayback result in a new tab and detai
  tables.works.push({ id: 'wayback-work', ao3_work_id: 123, verified_chapters: {} })
  tables.library_entries.push({ id: 'wayback-entry', work_id: 'wayback-work', original_url: workUrl, reading_status: 'to_read', last_read_chapter: 0, notes: '', metadata_overrides: { title: 'Archived Story' } })
  // Popups share context routing; the lookup tab keeps the existing organizer session.
- await context.route('https://ao3-phase1-test.supabase.co/auth/v1/**', route => route.fulfill({ json: {} }))
- await context.route('https://ao3-phase1-test.supabase.co/functions/v1/wayback-lookup', async route => {
+ await context.route(`${browserTestEnv.VITE_SUPABASE_URL}/auth/v1/**`, route => route.fulfill({ json: {} }))
+ await context.route(`${browserTestEnv.VITE_SUPABASE_URL}/functions/v1/wayback-lookup`, async route => {
   expect(route.request().postDataJSON()).toEqual({ url: workUrl })
   await route.fulfill({ json: { url: snapshot, kind: 'adult_warning', checked: 2 } })
  })
@@ -30,7 +31,7 @@ test('work actions open the newest checked Wayback result in a new tab and detai
 })
 test('lookup failures offer the work calendar and retry without altering library data', async ({ page }) => {
  await fixture(page)
- await page.route('https://ao3-phase1-test.supabase.co/functions/v1/wayback-lookup', route => route.fulfill({ json: { kind: 'calendar', reason: 'unavailable', checked: 0 } }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/functions/v1/wayback-lookup`, route => route.fulfill({ json: { kind: 'calendar', reason: 'unavailable', checked: 0 } }))
  await page.goto(`/wayback?${new URLSearchParams({ url: workUrl })}`); await login(page)
  await expect(page.getByText('Wayback Machine could not be fully checked.', { exact: false })).toBeVisible()
  await expect(page.getByRole('link', { name: 'Browse Snapshot Calendar' })).toHaveAttribute('href', `https://web.archive.org/web/*/${workUrl}`)

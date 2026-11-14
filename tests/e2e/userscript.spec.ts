@@ -1,3 +1,4 @@
+import { hostedBrowserTestEnv } from '../../scripts/playwright-env'
 import { verifyReadUndo } from './read-undo-controls'
 import { verifyReadingActionOrder } from './reading-action-controls'
 import { mergeEdits, type EditValues, type MergeResult } from '../../src/features/library/edit-merge'
@@ -13,7 +14,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
  test.setTimeout(90000)
  const directory = await mkdtemp(join(tmpdir(), 'ao3-userscript-browser-'))
  try {
-  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
+  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, ...hostedBrowserTestEnv, EXTENSION_APP_ORIGIN: hostedBrowserTestEnv.VITE_ORGANIZER_URL }, stdio: 'pipe' })
   const bundle = await readFile(join(directory, 'dist/beyond-the-archives.user.js'), 'utf8')
   // Userscripts supplies GM in the script's scope, without exposing it on globalThis.
   const script = `(function (GM) {\n${bundle}\n})(window.userscriptTestApi);`
@@ -603,7 +604,7 @@ test('built userscript saves unsaved works through first-chapter and completion 
  test.setTimeout(90000) // Bundle build plus four page loads and chapter captures.
  const directory = await mkdtemp(join(tmpdir(), 'ao3-unsaved-reading-'))
  try {
-  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, VITE_SUPABASE_URL: 'https://userscript-test.supabase.co', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only', EXTENSION_APP_ORIGIN: 'https://library-test.example' }, stdio: 'pipe' })
+  execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/build-userscript.mjs', '--outDir', join(directory, 'dist')], { env: { ...process.env, ...hostedBrowserTestEnv, EXTENSION_APP_ORIGIN: hostedBrowserTestEnv.VITE_ORGANIZER_URL }, stdio: 'pipe' })
   const bundle = await readFile(join(directory, 'dist/beyond-the-archives.user.js'), 'utf8')
   await page.route('https://archiveofourown.org/**', route => {
    const current = Number(new URL(route.request().url()).pathname.split('/').at(-1)) - 100

@@ -47,6 +47,8 @@ Both organizer development modes and the reader’s local development server off
 
 ## Run Browser Tests Like GitHub
 
+Browser tests configure their own synthetic local environment and mock backend requests. They do not require a running Supabase stack or hosted credentials. Run reader browser tests with `npx playwright test` from `reader/`; its configuration builds the reader first. Run organizer offline checks with `npm run test:offline` from the project directory; that configuration also builds its test shell first.
+
 With Docker Desktop running (Docker Engine with Compose v2 also works), run from `beyond-the-archives/`:
 
 ```sh

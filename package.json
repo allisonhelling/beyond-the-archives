@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:unit": "vitest run src server",
     "test:db": "vitest run supabase/tests",
-    "test:offline": "npm run build && playwright test --config playwright.offline.config.ts",
+    "test:offline": "playwright test --config playwright.offline.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ci": "docker compose -f compose.e2e.yml run --build --rm browser",
     "check:security": "node scripts/check-security.mjs",
