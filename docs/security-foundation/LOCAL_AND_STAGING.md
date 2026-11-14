@@ -101,31 +101,130 @@ The drill is scoped recovery, not whole-project disaster recovery. It keeps the 
 
 ### Inspected State And Missing Hosted Evidence
 
-Local `staging` already points to reviewed S1 commit `2d75d28101e2ff9637da665e7b4df9013df84e8d`; `main` remains `4d225ab9f064495bf195be7b8408805e16fc4a2a`. Preserve both uncommitted security-document edits; do not reset, stash away, overwrite or merge them. Prepare subsequent reviewed commits on `staging` only.
+Reviewed S1 commit `2d75d28101e2ff9637da665e7b4df9013df84e8d` is the preparation base. At the authenticated audit below, local `staging` and its existing `origin/staging` tracking state are at `7a79f58b1c49e62d0ef411545c9a4011096c7f6c`; `main` remains `4d225ab9f064495bf195be7b8408805e16fc4a2a`. The working tree was clean before this documentation audit. The audit did not create that commit or push it. Preserve all existing S1 work and prepare subsequent reviewed changes on `staging` only.
 
 Repository organizer settings are `npm run build`, output `dist`, root SPA rewrites and existing security headers. Reader settings specify Vite, `npm ci --include=dev --prefix .. && npm ci --include=dev`, `npm run build`, output `dist`, reader SPA rewrites and security headers. Both currently name production sibling origins in CSP. The reader imports shared parent code, so hosted root-directory/outside-root access and install overrides must be checked rather than inferred from the JSON files. S1 CI has checks only and no production deployment job.
 
-After the user connected Vercel, discovery confirmed `installed: true`. However, this session exposes **no Vercel management tools**, and no local Vercel project links, CLI authentication files or `VERCEL_TOKEN` are available. No authenticated project-settings request could be issued. Consequently live project IDs/names/team, Git integrations, Production Branch settings, effective build overrides, environment scopes/inheritance, integrations, hooks, domain assignments, protection settings, roles and promotion automation have **not** been inspected or verified. This is a tool-access gap, not a claim that the user failed to connect Vercel. Public production hostnames do not prove project names or branch configuration. Available authenticated read-only project tools or redacted operator settings evidence are required to complete this inventory; no credentials should be pasted into chat.
+The earlier tool-access gap is resolved: authenticated Vercel MCP reads now succeed. The following audit replaces that connection blocker with verified findings and specific response/tool limitations. Full provider isolation and release readiness remain unverified; do not equate a working connection with complete settings access.
 
 Before approval to push, record for each project: its exact ID/team; repository and root; actual Production Branch (expected `main`, never assume); effective install/build/output/Node and ignored-build settings; system-variable exposure; production domain mapping; all project/team/integration variable names, scopes, branch restrictions and access sources; deploy-hook branches without secret URLs; external CI/API promotion capabilities; and Preview protection behavior. If a correction requires production or shared-scope changes, stop for a separately scoped request.
 
-### Stable URLs And Bootstrap Sequence
+### Authenticated Read-Only Vercel Audit — 13 November 2026
 
-Use Vercel's Git **branch URL**, which remains stable across commits, rather than its unique per-deployment URL. The documented general shape is `<project-name>-git-staging-<scope-slug>.vercel.app`. This is a naming pattern, not either application's actual URL; truncation and provider naming rules mean it must not be guessed. Read the actual branch aliases from authenticated deployment metadata after approved bootstrap deployments. No domain purchase is needed for the generated `vercel.app` addresses; existing plan usage/build limits still apply. [Vercel generated URLs](https://vercel.com/docs/deployments/generated-urls).
+**Scope:** management metadata only. No project creation, settings mutation, source upload, push, deployment, promotion, share-link/bypass creation, runtime log query, application sign-in or production database/Storage access occurred. Environment inventory requests explicitly used `decrypt=false`; values were excluded from output and documentation. Single-variable decrypted-value tools were not used. This audit changes only this runbook locally.
 
-Resolve the sibling-origin dependency with two minimal, backend-disconnected **Preview bootstrap deployments** after the settings/credential inventory and explicit approval:
+Authenticated account: `allisonhelling`. The complete returned team page contains one team, **allisonhelling's projects**, slug `allisonhellings-projects`, ID `team_mB5Tjb4FpnSFh8QCEAgvtRJV`. The account's default team matches. Git deployment context reports the **Hobby** plan. No paid upgrade is proposed.
 
-1. Prepare a small temporary commit on `staging` that serves only a static staging-setup page for both roots. Keep all S1 application sources and migration files intact. Use one shared bootstrap script/asset where practical, no dependency installation or application/Auth/Storage initialization, a dedicated static output directory, deny framing and outbound connections, and a Preview/staging-branch assertion. Override only the branch's repository build configuration, never Dashboard production build settings. Inspect effective project overrides first; do not publish repository source as a static output directory.
-2. Obtain approval for that exact commit push **and its two automatic Git Preview deployments** together. Confirm both projects still classify `staging` as Preview immediately before pushing. Do not push an application commit expecting to fix inherited environment variables afterward.
-3. Read and verify both successful bootstrap deployments' project IDs, Git ref/SHA, Preview target and generated branch aliases. Call their HTTPS origins `O` (organizer) and `R` (reader). Check that neither equals a production origin and that both belong to the intended projects. No guessed alias or production sibling is used at any point.
-4. Present the now-concrete `O`/`R` environment-variable, header and Auth plan for approval. Configure branch-specific Preview variables only after that approval. Restore the normal application build configuration in a subsequent reviewed staging commit, retaining the new guards and exact staging headers. Bootstrap output must not remain the application output.
-5. Test both real builds locally with the actual origins, then request approval for the exact application commit push and two Preview deployments. Until staging backend readiness has been separately approved and verified, successful frontend publication does not imply functional Auth/library/reader acceptance.
+| Setting | Organizer | EPUB Reader |
+|---|---|---|
+| Project Name | `beyond-the-archives` | `archives-unfolded` |
+| Project ID | `prj_Rb584lKdVjCt7wikZSF1bTCWAujo` | `prj_EoxUyrPPjVqvdZvsir6OeITXbYWM` |
+| Owner | The verified team above | The verified team above |
+| Git Integration | GitHub: `allisonhelling/beyond-the-archives` | GitHub: `allisonhelling/beyond-the-archives` |
+| Verified Production Domain | `beyondthearchives.vercel.app` | `archivesunfolded.vercel.app` |
+| Framework / Node Setting | Vite / `24.x` | Vite / `26.x` |
+| Vercel Authentication | `enabled=true`, `deploymentType=all_except_custom_domains` | Same |
+| Password Protection | `enabled=false`, deployment type null | Same |
+| Trusted IP Protection | `enabled=false`, no addresses | Same |
+| Custom Environments | Empty returned list | Empty returned list |
+| Configured Production Branch | **Not exposed by available project/context responses** | **Not exposed by available project/context responses** |
 
-This adds temporary bootstrap history on `staging`, preserves reviewed S1 ancestry and avoids a production fallback, synthetic-domain application release or a project-wide build-setting change. If hosted settings cannot support this branch-only bootstrap safely, stop before pushing and present the specific limitation rather than changing production.
+Git linkage is independently verified by `get_git_deployment_context`; the compact `get_project` response omits `link`, so its absence there is not evidence of a disconnected repository. `list_project_domains` independently confirms both production domains are verified, without a branch or custom-environment assignment.
+
+Production history provides useful but narrower evidence: the latest three production deployment records for **each** app are READY and have Git ref `main`. The latest returned production SHA for both is `4d225ab9f064495bf195be7b8408805e16fc4a2a`. This corroborates observed production behavior; it does **not** substitute for reading the current configured Production Branch. The latest existing deployments are staging SHA `7a79f58b1c49e62d0ef411545c9a4011096c7f6c`, ref `staging`, target null (Preview in these Vercel records), state ERROR, `errorCode=failed_config_load`, `errorStep=buildStep`. The initial metadata audit did not read build logs; the subsequent authorized investigation below now identifies the immediate failures.
+
+Both stable aliases were read from deployment metadata **and** independently checked with project-scoped `get_alias`:
+
+| App | Verified Branch Origin | Current Referenced Deployment |
+|---|---|---|
+| Organizer (`O`) | `https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app` | `dpl_4mio1pBFomZvpQFCfBuA94K5YZyp` (ERROR) |
+| Reader (`R`) | `https://archives-unfolded-git-staging-allisonhellings-projects.vercel.app` | `dpl_4nasitQigwXvTM2RpdCWB6ubvZBL` (ERROR) |
+
+These are actual provider-returned aliases associated with the correct project IDs, not inferred names. Their existence does not establish a working application, successful HTTP response, correct headers or connected-login acceptance.
+
+#### Environment Names, Scopes And Inheritance
+
+Organizer inventory contains **22** entries and `hiddenProductionEnvCount=0`:
+
+| Source / Scope | Variable Names | Finding |
+|---|---|---|
+| Project-managed Preview, type `encrypted` | `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_REF`, `VITE_APP_ENV` | No Git branch restriction returned; `configurationId=null`. Values were not inspected, so their actual selected backend/key is not attested. |
+| Project-managed Production, type `encrypted` | `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_URL` | Production-only targets; values uninspected. |
+| Supabase integration, Production-only, type `sensitive` | `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_PASSWORD`, `SUPABASE_JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY` | All seven returned credential entries target only Production. No values decrypted or printed. |
+| Supabase integration, Production-only, type `encrypted` | `POSTGRES_USER`, `POSTGRES_HOST`, `POSTGRES_DATABASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Nine remaining integration entries; no Preview target returned. |
+
+Reader inventory returns **zero entries**, also with `hiddenProductionEnvCount=0`. Neither app lists `VITE_ORGANIZER_URL` or `VITE_READER_URL`. Separate `gitBranch=staging`, `decrypt=false` inventory requests return zero entries for both projects: no staging-specific overrides are returned. This does not mean organizer's unscoped Preview defaults cease to apply to staging; it does mean an exact staging-only six-variable profile has not been established by this inventory.
+
+Team integration inventory contains one external Supabase configuration, `icfg_cFzDptCmQVs0ckhtt2gH6Vtx`, matching the organizer variable source. Its `projectSelection` is `all`; declared scopes include read/write project environment variables and deployments, integration configuration/resource/check access, and read team/project/user access. Broad integration eligibility does not demonstrate that credentials are currently injected into the reader or Preview. It does require review of future integration inheritance before asserting enduring separation.
+
+The returned project inventories expose no shared-variable linkage metadata. The available MCP tool set has **no shared-variable list/inheritance audit tool**. `get_shared_env_var` requires a known shared-variable ID and retrieves a decrypted value; it was deliberately not called for this names/scopes audit. `get_team` returns only identity/SAML metadata, without shared variables or secret-enforcement policy. Therefore complete team/shared inheritance, external secret-fetch permissions and production-credential inaccessibility are **not verified**. The narrower verified fact is that the listed project/integration server credentials are scoped Production-only, not Preview.
+
+#### Hooks, Build Overrides And Protection Limits
+
+- `get_webhooks` returned an empty team webhook array. These are outbound Vercel event webhooks, **not Git deploy hooks**. No deploy-hook listing tool is exposed, and `get_project` omits deploy-hook configuration. Git deploy hooks, their target branches and external promotion automation remain unverified; no hook URL/secret was requested or printed.
+- `get_project` returns framework and Node versions but omits root directory, install/build/output overrides, ignored-build command, outside-root source access, auto-exposed system-variable settings and Production Branch. `get_deployment` also omits these settings and `gitSource` despite `withGitRepoInfo=true`. Its Git ref/SHA metadata remains available. No permission-denied error occurred; these are unavailable response fields/tool capabilities, not evidence of missing settings.
+- Repository settings remain organizer `npm run build` / `dist` and reader Vite with `npm ci --include=dev --prefix .. && npm ci --include=dev`, `npm run build` / `dist`. These are source configuration, not verified effective Dashboard overrides. Reader root/outside-root access must still be confirmed.
+- Authentication/password/IP protection settings are verified as reported above. No protected website was fetched, bypass token generated or protection setting changed. Effective callback/iframe access for a tester remains untested. Keep protection unchanged unless a concrete Preview-only adjustment is separately reviewed.
+- No role/promotion-permission or external CI credential audit was performed. Existing S1 build guards do not prove an infrastructure operator cannot manually promote or reassign domains.
+
+No additional hosted read approval is needed within this audit scope, but completing the missing items requires an authenticated interface that actually returns those settings, or a redacted Dashboard export of Production Branch, Git deploy hooks, build overrides and team/shared variable scopes. Do not request secret values. Release approval remains blocked on this evidence.
+
+#### Local Preparation And Failure Investigation Follow-Up
+
+The user authorized continued read-only inspection, local preparation and local tests, without hosted mutation or push. The supplied follow-up evidence confirms both branch hostnames; it does not include Production Branch, deploy hooks, build overrides or shared-variable scopes. Those specific Dashboard evidence gaps remain open. Fresh project/environment reads still show 22 organizer entries, zero reader entries, zero staging-specific overrides, no listed non-`VITE_` Preview credentials, unchanged protection, and the same two failed Preview deployments. No production-credential exposure was demonstrated in the listed entries; complete shared/integration/CI isolation and promotion permissions remain unproven.
+
+`list_deployment_events(builds=1)` returned 37 organizer and 51 reader events for the two known failed **staging** deployments. Only redacted diagnostic summaries are retained:
+
+| Deployment | Verified Immediate Failure | Additional Build Evidence |
+|---|---|---|
+| Organizer `dpl_4mio1pBFomZvpQFCfBuA94K5YZyp` | `Explicit application origins are required.` Stack passes through `environmentOrigin`, `requireEnvironmentConfig` and `validateBrowserEnv` during Vite config loading. | Git ref `staging`, commit `7a79f58`; build invoked `tsc -b && vite build` from `/vercel/path0`. Logs say package engine selection used Node `26.x`, overriding the Dashboard `24.x` setting. |
+| Reader `dpl_4nasitQigwXvTM2RpdCWB6ubvZBL` | `Set explicit environment, project reference, backend and public key configuration.` Stack passes through the shared environment validator during Vite config loading. | Git ref `staging`, commit `7a79f58`; reader build invoked `tsc --noEmit && vite build` from `/vercel/path0/reader`. Logs show install command `npm ci --include=dev --prefix .. && npm ci --include=dev`. |
+
+These failures are the intended fail-closed behavior, not justification to remove validation. The organizer inventory lacks sibling-origin variables; the reader inventory lacks the full profile. Preparing the six explicit bindings for each project addresses the observed missing configuration, but no hosted rebuild has verified the fix or ruled out later failures. Build logs corroborate these particular commands/paths at that commit, not every current Dashboard override. The broad package engine range allows automatic Node-major upgrades; local checks used Node `v25.6.1`, so matching the remote Node 26 runtime remains unverified. No engine or production setting was changed.
+
+Prepared **local-only** artifacts:
+
+- Root and reader `.env.staging.local` now contain matching verified staging public settings, both actual branch origins and `EXTENSION_APP_ORIGIN=O`. Only the existing staging profiles were completed. Content hashes confirm `.env.local`, `.env.local.hosted`, reader `.env.local` and both active `vercel.json` files are unchanged.
+- `artifacts/staging/preview-bindings.json` contains exactly two proposed `create_project_env` payloads, one per verified project ID, with six bindings each. Every entry has `target=[preview]`, `gitBranch=staging`, `type=encrypted`; both payloads use `upsert=false`. This ignored file includes the public staging key but no server credentials. It has **not** been submitted. Reinventory exact branch bindings immediately before any approved submission; reject an unexpected conflict instead of overwriting a default or Production variable.
+- `artifacts/staging/organizer.vercel.json` and `reader.vercel.json` contain the exact staging header candidates. They preserve build commands, output directories, rewrites, normal-page framing denial, bridge cache/referrer policy and existing routes; only sibling framing origins and existing wildcard backend origins change. Active working-tree configs remain unchanged.
+- Header preparation now replaces the existing frame directives using the selected sibling, so it remains reusable after a staging candidate becomes the source. Tests cover repeat preparation and changing the sibling without retaining the prior one. It does not introduce a parallel header policy.
+- Organizer/reader local staging build outputs are under `artifacts/staging/builds/{organizer,reader}/dist`; `local-validation.json` records redacted checks. They use actual staging origins and simulated provider Preview/staging metadata. No application sign-in or backend request was made.
+
+Local validation results:
+
+| Check | Result And Boundary |
+|---|---|
+| Targeted environment, config, reader connection, ConnectReader, Chrome/Safari build and Calibre import suite | 8 files / **42 tests passed**. The environment file's **9 tests** passed again after the header reuse assertions were added. |
+| `npm run test:integration:config` | **13 tests passed**, synthetic/local target checks only. |
+| Both full `npm run build -- --mode staging --outDir ...` commands | Passed with the actual completed staging profile. TypeScript and Vite succeeded; no hosted deployment occurred. |
+| Output credential scans | All organizer/reader output files passed known production credential, privileged JWT/`sb_secret_`, production API hostname and injected server-secret canary checks. A standalone production-ref denylist constant is expected code, not a credential. |
+| Four negative Vite builds per app | Missing sibling, production sibling, internally consistent Production promotion and privileged browser key each failed closed. |
+| Exact-origin candidate/header checks | Both preserve routes/build settings, use only the configured sibling on `/auth/bridge`, retain no-store/no-referrer and omit bridge `X-Frame-Options: DENY`; ordinary pages remain denied framing. |
+| Browser CSP fixtures | **4 checks passed**: each app permits its configured sibling bridge and blocks an unapproved ancestor. All HTTPS fixture requests were intercepted locally. This does not verify Vercel protection middleware or live headers. |
+| Connected-login browser regression | **12 desktop/mobile tests passed** with synthetic loopback sessions. No hosted Auth/Edge acceptance claimed. |
+| Lint / source preservation | `npm run lint` passed. Protected profile/config hashes match; all 129 migrations and production branches/configuration remain untouched. |
+
+Proposed local review commit: `fix: configure isolated staging Preview origins`, parent `7a79f58b1c49e62d0ef411545c9a4011096c7f6c`. Its six-file tree consists of this runbook, the S1 report, shared build/header preparation code and its existing tests, plus the two generated candidates installed **only in the proposed commit tree** as `vercel.json` and `reader/vercel.json`. An isolated Git index prepares the review commit without changing the user's index, current branch or active working-tree headers. Its exact SHA and tree are recorded in ignored `artifacts/staging/proposed-commit.json` and presented for review. Ignored profiles, bindings, build outputs and public-key values are excluded from the commit.
+
+No hosted action is currently approved. Remaining requests, after missing Dashboard/shared-scope evidence is reviewed: (1) submit the two exact six-binding Preview/`staging` payloads on the verified organizer/reader IDs; (2) approve the exact review commit for a `staging`-only push and its two Git Preview deployments, with no promotion or `main` change. Any separate redeployment must name its project/SHA/Preview target. Preview protection remains unchanged. Supabase migrations, Auth, Storage, Edge origins/functions and hosted synthetic fixtures remain a separate stage. No bootstrap release is proposed.
+
+### Stable URLs And Revised Deployment Sequence
+
+Use the independently verified Git **branch origins** in the audit above, rather than unique per-deployment URLs. Branch URLs remain stable across commits. No domain purchase is needed for these generated `vercel.app` addresses; existing plan usage/build limits still apply. [Vercel generated URLs](https://vercel.com/docs/deployments/generated-urls).
+
+**The earlier bootstrap-release proposal is superseded.** Existing failed staging deployment records and project-scoped alias reads already provide both real origins, so no bootstrap deployment is necessary merely to discover them. Preserve the prepared bootstrap source/candidates as an unused fallback; do not deploy them under this audit.
+
+1. Complete the remaining Production Branch, build override, Git deploy-hook and team/shared credential-scope evidence before authorizing a release.
+2. Obtain approval for the twelve branch-specific public variable bindings below (six per verified project). Preserve existing unscoped Preview defaults and Production variables.
+3. Prepare and review staging header/configuration changes using both verified origins; do not substitute production or synthetic origins. No active configuration change is made by this audit.
+4. Test both real application builds locally with actual staging settings. Request approval for the exact reviewed staging commit push and its two automatic Git Preview deployments, or explicitly identified Preview redeployments. Confirm provider target/ref and project identity again immediately beforehand.
+5. Verify both successful deployments and effective protected bridge/callback behavior. Until staging backend readiness has been separately approved and verified, frontend publication does not imply functional Auth/library/reader acceptance.
+
+The current plan needs no temporary bootstrap commit, project-wide build-setting change or production fallback. If missing settings require production/shared-scope remediation, stop and present that specific change for separate authorization.
 
 ### Proposed Variables And Headers
 
-Apply this same public configuration to **both** projects with target **Preview** and Git branch **`staging`**:
+Proposed approval: create **six branch-specific public bindings per project**, target **Preview**, Git branch **`staging`**, on organizer `prj_Rb584lKdVjCt7wikZSF1bTCWAujo` and reader `prj_EoxUyrPPjVqvdZvsir6OeITXbYWM`, under team `team_mB5Tjb4FpnSFh8QCEAgvtRJV`. Recheck inventory immediately before writing; if exact branch bindings then exist, review their diff rather than blindly replacing them. Do not alter current unscoped Preview entries or any Production/shared setting.
 
 | Variable | Proposed Value |
 |---|---|
@@ -133,8 +232,8 @@ Apply this same public configuration to **both** projects with target **Preview*
 | `VITE_SUPABASE_PROJECT_REF` | `vzqrpjzfwcuuiqxanyoy` |
 | `VITE_SUPABASE_URL` | `https://vzqrpjzfwcuuiqxanyoy.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Previously supplied publishable key, independently matched to staging inventory; value intentionally omitted from documentation. |
-| `VITE_ORGANIZER_URL` | `O`, the verified organizer branch origin. |
-| `VITE_READER_URL` | `R`, the verified reader branch origin. |
+| `VITE_ORGANIZER_URL` | `https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app` |
+| `VITE_READER_URL` | `https://archives-unfolded-git-staging-allisonhellings-projects.vercel.app` |
 
 Do not manually set/override `VERCEL_ENV`, use `VERCEL_PROJECT_PRODUCTION_URL` as a sibling fallback, or add service-role/database/management credentials to either frontend project. Keep sample mode disabled. `VERCEL_BRANCH_URL`, when exposed, can corroborate the current project's own branch alias; it cannot identify the sibling project's origin. Branch-specific project variables override same-name Preview defaults, but **other Preview/shared variables still remain accessible**. Overrides are not credential isolation. [Environment scopes](https://vercel.com/docs/environment-variables), [shared variables](https://vercel.com/docs/environment-variables/shared-environment-variables), [system variables](https://vercel.com/docs/environment-variables/system-environment-variables).
 
@@ -144,9 +243,9 @@ After aliases are verified, generate review candidates with `npm run prepare:sta
 
 The shared build validator, used by both Vite entrypoints, now checks provider Git/environment metadata: branch `staging` requires provider scope `preview`, declared app environment `staging` and the verified staging backend ref. Missing provider environment/branch metadata, conflicting target metadata and production scope fail closed even if inherited Production variables are internally consistent. The shared runtime origin guard now covers staging as well as production, preventing connected clients on production or arbitrary deployment origins. Immutable deployment URLs are rejected unless explicitly configured; use the verified branch origins for connected testing. Local/sample behavior is preserved. These are local source changes, not deployed protection.
 
-`npm run prepare:staging -- --bootstrap` has generated ignored organizer/reader bootstrap config candidates for review. They use one dependency-free `scripts/staging-bootstrap.mjs`, disable dependency installation, publish only `.staging-bootstrap/index.html` and deny outbound connections/framing. The script refuses wrong/missing provider scope/branch, recognized privileged credentials and unknown working directories before producing output. Synthetic local checks exercised both roots and removed only their generated test output. Neither candidate has been installed as an active `vercel.json`. Effective hosted overrides and credentials must be audited before approving either bootstrap build.
+Earlier `npm run prepare:staging -- --bootstrap` work generated ignored organizer/reader bootstrap candidates using the dependency-free `scripts/staging-bootstrap.mjs`. They remain an unused fallback; the verified existing aliases remove the current need for a bootstrap release. Neither candidate is installed as an active `vercel.json`.
 
-Ignored root and reader `.env.staging.local` files now contain the explicit verified staging ref/URL/public key with empty sibling origins and extension origin. They are intentionally incomplete and fail closed; no guessed origins or production profile was substituted. Existing `.env.local` and `.env.local.hosted` were preserved. Do not use `vercel env pull` to overwrite these or the local profiles.
+Ignored root and reader `.env.staging.local` files are now complete with the explicit verified staging ref/URL/public key and actual sibling/extension origins, as recorded in the follow-up above. No guessed origins or production profile was substituted. Existing `.env.local` and `.env.local.hosted` were preserved. Do not use `vercel env pull` to overwrite these or the local profiles.
 
 The audited projects must retain a non-staging Production Branch and have no hook, domain mapping or external automation promoting staging. Preview-to-Production is a separate deployment operation; build guards are not proof that a privileged operator cannot reassign domains or bypass Git. Inventory effective promotion permissions and require a separate protected production release path. Do not claim that manual promotion is impossible merely because environment variables are Preview-scoped. If stronger enforcement needs a production permission/settings change, report it for separate authorization. [Vercel promotion behavior](https://vercel.com/docs/deployments/promoting-a-deployment).
 
@@ -156,21 +255,21 @@ Review existing Preview protection without disabling it globally. Test access to
 
 ### Auth Values, Validation And Approval Requests
 
-Once actual origins are known, report the literal values replacing these symbols:
+Actual origin-dependent values are now known. These remain proposals requiring separate Supabase approval:
 
-- Staging Supabase Site URL: `O`.
-- Staging redirect allowlist: `O/auth/callback` and `R/auth/callback` only, for the inspected signup/recovery/email-change/invitation flow. No production origin, wildcard or invented callback.
-- Staging Edge origin settings, under separate Supabase approval: `APP_ORIGIN=O`, `READER_ORIGIN=R`.
+- Staging Supabase Site URL: `https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app`.
+- Staging redirect allowlist: `https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app/auth/callback` and `https://archives-unfolded-git-staging-allisonhellings-projects.vercel.app/auth/callback` only, for the inspected signup/recovery/email-change/invitation flow. No production origin, wildcard or invented callback.
+- Staging Edge origins: `APP_ORIGIN=https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app`, `READER_ORIGIN=https://archives-unfolded-git-staging-allisonhellings-projects.vercel.app`.
 
-No exact Auth URLs can be honestly supplied before the aliases are observed. Do not change Supabase during Vercel preparation. Companion staging builds later reuse the same origins and `EXTENSION_APP_ORIGIN=O`; use separate artifacts/profiles/pairing and preserve extension-only AO3 retrieval, Calibre destinations, reader isolation and Universal Stories. All 129 migrations remain unchanged.
+No Supabase settings were changed during this audit. Companion staging builds later reuse these origins and `EXTENSION_APP_ORIGIN=O`; use separate artifacts/profiles/pairing and preserve extension-only AO3 retrieval, Calibre destinations, reader isolation and Universal Stories. All 129 migrations remain unchanged.
 
 Required checks before the application push: real organizer/reader builds with actual staging variables; output scans for known production credentials, privileged JWTs/keys and injected server-secret canaries; wrong branch/scope/backend/missing-variable build rejection; staging-runtime origin denial; regression checks of production header source values; bridge framing/login tests; reader cloud/Calibre and relevant companion configuration tests. Reuse existing tests/validators and extend only the missing behavior. After separately approved deployments, inspect actual target/ref/aliases, effective headers and the final hosted artifact. Tests requiring hosted Auth/Storage/Edge readiness remain pending until the separately approved backend exists.
 
 Approval requests must be staged and concrete:
 
-1. **Repository preparation:** authorized locally. Branch/runtime guards, bootstrap script/candidates and configuration preparation helper are implemented for review; no push implied. Actual aliases, project identity and provider settings remain unavailable.
-2. **Bootstrap release:** after read-only inventory clears production-access/target risks, approve the exact staging bootstrap SHA push and two Preview builds on the named existing project IDs. This approval includes expected automatic Git deployments and build usage only.
-3. **Preview variables:** after actual aliases are returned, approve the exact six public variables for each named project, scoped to Preview/`staging`, plus any specifically identified Preview-only credential/protection remediation. No Production/shared scope edit is bundled into this request.
+1. **Remaining settings evidence:** complete configured Production Branch, Git deploy hooks, effective build overrides and team/shared scope verification through read-only access/redacted export. No new permission request is needed for ordinary read-only inspection, but these fields are not currently obtainable through the exposed MCP tools/responses.
+2. **No bootstrap release requested:** both real aliases and project IDs are independently verified already.
+3. **Preview variables:** approve the twelve exact public bindings in the table above for the two verified project IDs, Preview/`staging` only. No Production/shared scope edit, protection bypass or deployment is bundled into this request. Any necessary scope/protection remediation needs its own exact diff and approval.
 4. **Application release:** approve the exact final staging SHA push and two application Preview deployments after local checks. No promotion, `main` merge, production alias assignment, paid upgrade, new project/domain or production redeployment is included.
 5. **Separate future Supabase request:** literal Auth/origin settings, migration/function/allowlist actions and synthetic acceptance tests remain outside Vercel approval.
 
@@ -184,16 +283,16 @@ This is a preparation plan, not hosted mutation approval. Authenticated read-onl
 
 | Environment | Verified Identity And Targets |
 |---|---|
-| Staging | `beyond-the-archives-staging`, ref `vzqrpjzfwcuuiqxanyoy`, region `us-east-1`, `ACTIVE_HEALTHY`, created 13 November 2026. API origin: `https://vzqrpjzfwcuuiqxanyoy.supabase.co`. Organizer/reader deployment URLs are not yet supplied or verified. |
+| Staging | `beyond-the-archives-staging`, ref `vzqrpjzfwcuuiqxanyoy`, region `us-east-1`, `ACTIVE_HEALTHY`, created 13 November 2026. API origin: `https://vzqrpjzfwcuuiqxanyoy.supabase.co`. Organizer/reader branch aliases are now independently verified in the Vercel audit above; current referenced staging deployments are failed. |
 | Production | `Beyond the Archives`, ref `pnrdztfydurupcqwumvr`, region `us-east-1`, `ACTIVE_HEALTHY`. API origin: `https://pnrdztfydurupcqwumvr.supabase.co`. Organizer: `https://beyondthearchives.vercel.app`; reader: `https://archivesunfolded.vercel.app`. |
 | CLI Link | Still production, confirmed by both authenticated inventory and ignored `supabase/.temp/project-ref`. Not changed. Never use an unqualified linked deployment. |
 | Local Apps | Root and reader `.env.local` remain loopback/local. Existing `.env.local.hosted` still selects production; it is unsuitable for staging and was not modified. |
 
-Project/key identity is verified. Database emptiness, migration history, remote Auth/Storage/function settings, billing tier, Vercel targets and provider secret access scopes remain unverified. A newly created project is not evidence that it contains no production data. No remote data, schema or settings were mutated during intake.
+Project/key identity and both Vercel project/branch-alias identities are verified. Database emptiness, migration history, remote Auth/Storage/function settings, Supabase billing tier, effective Vercel build overrides and complete provider secret access scopes remain unverified. A newly created project is not evidence that it contains no production data. No remote data, schema or settings were mutated during intake or the Vercel audit.
 
 #### Missing Inputs And Dashboard Configuration Plan
 
-Supply the actual HTTPS staging organizer and reader origins, the intended Vercel projects/Preview aliases, and a controlled SMTP/test-mail destination with synthetic recipients. Do not paste SMTP passwords, database passwords or service-role keys into documentation or chat. Confirm the staging project owner/billing arrangement; incremental project compute, email, Storage and Vercel costs have not been established. No plan or billing change is proposed by this intake.
+The Vercel audit now identifies both actual HTTPS branch origins and project IDs; no user-supplied or guessed application origin is needed. Remaining inputs are a controlled SMTP/test-mail destination with synthetic recipients and the missing provider settings evidence listed above. Do not paste SMTP passwords, database passwords or service-role keys into documentation or chat. Confirm the staging Supabase project owner/billing arrangement; incremental compute, email, Storage and Vercel usage costs have not been established. No plan or billing change is proposed by this intake.
 
 After migration and explicit Auth approval, configure these settings in the **staging** Supabase Dashboard:
 
@@ -224,7 +323,7 @@ Provider preparation requires Preview-only staging variables in both Vercel targ
 
 Intake checks: `npm run test:integration:config` passed **13/13 tests**. Auth callbacks, Edge entrypoints, Storage migrations and current Vercel headers were inspected. All 129 migrations remain unchanged. No hosted Auth, cross-user library/Storage, reader cloud/login, companion, restore or wrong-credential acceptance test has run. Local configuration, unit/SQL and build/browser tests can run before hosted approval using existing synthetic fixtures; real service/recovery checks still require a working disposable local stack. Hosted tests must later cover approved/rejected signup, confirmation, two-user isolation, Storage/EPUBs, connected login, companions, Universal Stories and synthetic restore.
 
-Approval is still required for each concrete hosted migration, Edge deployment, Auth/Storage setting, synthetic data/allowlist mutation, secret provisioning, GitHub environment change and Vercel project/domain/configuration action. Jobs and destructive cleanup require separate approval. Missing origins/email choices and unverified database state prevent a complete executable deployment approval request now; stop at this preparation plan.
+Approval is still required for each concrete hosted migration, Edge deployment, Auth/Storage setting, synthetic data/allowlist mutation, secret provisioning, GitHub environment change and Vercel project/domain/configuration action. Jobs and destructive cleanup require separate approval. Actual app origins are known, but missing email choices, unverified database state and remaining provider settings/scope gaps still prevent complete release approval; stop at this preparation plan.
 
 Rollback preparation: record redacted staging-only pre-change settings and exact migration/function artifact versions before applying changes. If staging validation fails, stop staging deployments/jobs, revoke staging-only pairing credentials and remove only identified synthetic fixtures through an approved guarded cleanup. Reverse application/settings changes using recorded staging values. Applied migrations require a reviewed forward repair or separately approved recreation of a verified disposable staging project, never an automatic hosted reset or production rollback. Disable staging deploy hooks before any separately approved resource deletion; retain production untouched. No cleanup or deletion is authorized by this plan.
 

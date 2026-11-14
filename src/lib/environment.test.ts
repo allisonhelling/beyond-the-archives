@@ -74,6 +74,13 @@ it('derives staging CSP from both existing configs without changing production p
   expect(JSON.stringify(source)).toBe(original)
   expect(prepared.rewrites).toEqual(source.rewrites)
   expect(prepared.buildCommand).toBe(source.buildCommand)
+  expect(stagingVercelConfig(prepared,organizer,reader,app)).toEqual(prepared)
+  const nextReader='https://synthetic-reader-git-staging-next.vercel.app'
+  const refreshed=stagingVercelConfig(prepared,organizer,nextReader,app)
+  if(app==='organizer'){
+   expect(JSON.stringify(refreshed.headers)).toContain(nextReader)
+   expect(JSON.stringify(refreshed.headers)).not.toContain(reader)
+  }
   const bridge=prepared.headers.find(rule=>rule.source==='/auth/bridge')!
   expect(bridge.headers).toEqual(expect.arrayContaining([{key:'Cache-Control',value:'no-store'},{key:'Referrer-Policy',value:'no-referrer'}]))
   expect(bridge.headers.some(header=>header.key==='X-Frame-Options')).toBe(false)

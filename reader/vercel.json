@@ -38,7 +38,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "frame-src https://beyondthearchives.vercel.app 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+          "value": "frame-src 'self' https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
         }
       ]
     },
@@ -55,15 +55,21 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors https://beyondthearchives.vercel.app; base-uri 'self'; form-action 'none'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://vzqrpjzfwcuuiqxanyoy.supabase.co wss://vzqrpjzfwcuuiqxanyoy.supabase.co; frame-ancestors https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app; base-uri 'self'; form-action 'none'; object-src 'none'"
         }
       ]
     },
     {
       "source": "/auth/authorize",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" },
-        { "key": "Referrer-Policy", "value": "no-referrer" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        }
       ]
     }
   ]

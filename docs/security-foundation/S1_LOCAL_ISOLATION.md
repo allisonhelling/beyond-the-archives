@@ -87,6 +87,14 @@ Production still requires its own release authorization separate from PR/merge, 
 
 ## Changed Paths
 
+### Actual-Origin Preview Preparation Follow-Up
+
+After the authenticated Vercel audit, authorized local preparation completed both ignored staging profiles using the verified branch origins and generated two CSP/header review candidates plus twelve exact Preview/`staging` variable bindings. No payload was submitted and no active working-tree Vercel config was replaced. The shared header preparer was extended to handle already-prepared staging sources consistently; repeat/sibling-replacement assertions were added to the existing environment tests. The [current runbook follow-up](LOCAL_AND_STAGING.md#local-preparation-and-failure-investigation-follow-up) is authoritative for the exact findings, artifacts and approval requests.
+
+Read-only staging build events explain the existing `failed_config_load` errors: organizer sibling origins were missing; reader explicit backend/environment configuration was missing. Both stopped at the shared validation boundary. Logs also show Node 26 selected by the package's broad engine range despite the organizer Dashboard's Node 24 setting. Local Node 25 results are not remote Node 26 verification. The user's additional Dashboard evidence supplied branch URLs only, leaving Production Branch, hooks, complete build overrides and shared/credential scope evidence unresolved.
+
+Validation: 42 tests in the broader eight-file targeted suite, 13 Node isolation tests, 12 connected-login browser tests and four local intercepted-origin CSP browser checks passed. The environment file's nine tests passed again after header reuse coverage changed, and lint passed. Both full actual-origin staging builds and credential/canary scans passed; each app rejected four wrong/missing configurations. Protected local/production profile and active-config hashes are unchanged. No hosted acceptance, Supabase deployment or production data access occurred. A separate local review commit tree holds the proposed header changes without moving `staging` or `main`; its exact object identity is reported in the ignored review manifest and final handoff. This does not authorize a push or Git-triggered Preview release.
+
 ### Dedicated Staging Branch Preparation
 
 The user subsequently authorized creation of a dedicated `staging` branch from reviewed S1 without merging into `main`, with build-credential and Vercel production-promotion checks required before push. Local `staging` was created at `2d75d28101e2ff9637da665e7b4df9013df84e8d`, matching the existing reviewed S1 branch. `main` remains at `4d225ab9f064495bf195be7b8408805e16fc4a2a`. Existing uncommitted staging-intake documentation edits were preserved. No push or merge occurred.

@@ -44,14 +44,14 @@ export function stagingVercelConfig<T extends VercelHeaders>(config: T, organize
   const organizer = environmentOrigin(organizerUrl, 'staging')
   const reader = environmentOrigin(readerUrl, 'staging')
   if (organizer === reader || [organizer, reader].some(origin => !new URL(origin).hostname.endsWith('.vercel.app'))) throw new Error('Provide distinct, verified Vercel branch origins for both staging apps.')
-  const productionSibling = app === 'organizer' ? 'https://archivesunfolded.vercel.app' : 'https://beyondthearchives.vercel.app'
   const sibling = app === 'organizer' ? reader : organizer
   const result = structuredClone(config)
   for (const rule of result.headers) for (const header of rule.headers) {
     if (header.key.toLowerCase() !== 'content-security-policy') continue
-    header.value = header.value.replaceAll(productionSibling, sibling)
+    header.value = header.value.replace(/frame-src [^;]+/, `frame-src 'self' ${sibling}`)
       .replaceAll('https://*.supabase.co', `https://${stagingProjectRef}.supabase.co`)
       .replaceAll('wss://*.supabase.co', `wss://${stagingProjectRef}.supabase.co`)
+    if (rule.source === '/auth/bridge') header.value = header.value.replace(/frame-ancestors [^;]+/, `frame-ancestors ${sibling}`)
   }
   if (/https:\/\/(beyondthearchives|archivesunfolded)\.vercel\.app/.test(JSON.stringify(result.headers))) throw new Error('Production application origins remain in the staging header configuration.')
   return result
