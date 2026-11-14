@@ -41,7 +41,8 @@
     "db:serve": "node scripts/local-supabase.mjs serve",
     "db:seed": "node scripts/seed-local.mjs",
     "test:restore:local": "node --experimental-strip-types scripts/local-restore-drill.mjs",
-    "db:configure": "node --experimental-strip-types scripts/configure-local.mjs"
+    "db:configure": "node --experimental-strip-types scripts/configure-local.mjs",
+    "prepare:staging": "node --experimental-strip-types scripts/prepare-staging-vercel.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",

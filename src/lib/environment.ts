@@ -3,6 +3,7 @@ import { isLocalHostname as isLoopback } from './local-app.ts'
 
 // Public identity denylist, never an authorization credential.
 export const productionProjectRef = 'pnrdztfydurupcqwumvr'
+export const stagingProjectRef = 'vzqrpjzfwcuuiqxanyoy'
 export type AppEnvironment = 'local' | 'staging' | 'production'
 export type EnvironmentConfig = PublicConfig & { environment: AppEnvironment; projectRef: string; organizerUrl: string; readerUrl: string }
 
@@ -36,6 +37,6 @@ export function requireEnvironmentConfig(env: Record<string, unknown>, vercelEnv
 
 export function requireRuntimeEnvironmentConfig(env: Record<string, unknown>) {
  const config=requireEnvironmentConfig(env)
- if (config.environment==='production' && ![config.organizerUrl,config.readerUrl].includes(window.location.origin)) throw new Error('Production configuration cannot run on this application origin.')
+ if (config.environment!=='local' && ![config.organizerUrl,config.readerUrl].includes(window.location.origin)) throw new Error('Hosted configuration cannot run on this application origin.')
  return config
 }

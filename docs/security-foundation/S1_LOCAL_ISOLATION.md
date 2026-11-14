@@ -70,6 +70,8 @@ Earlier diagnostic attempts are not acceptance evidence: the first connected-log
 
 ## Hosted Approval Gate And Remaining Risks
 
+Staging intake update, 13 November 2026: authenticated read-only Supabase inventory now independently confirms `beyond-the-archives-staging` (`vzqrpjzfwcuuiqxanyoy`) in `us-east-1`, healthy, and project-bound key inventory matches the supplied publishable key without logging its value. The CLI remains linked to production. No hosted mutation occurred. The [current intake plan](LOCAL_AND_STAGING.md#hosted-staging-intake--13-november-2026) records exact candidate artifacts, required Dashboard settings, missing origins/email choices, proposed guard/configuration work and rollback. The configuration/isolation suite was rerun successfully: 13/13 tests. Historical statements above about no identified staging project describe the original S1 implementation review; project identity is now verified, while database emptiness/history, hosted settings, deployment targets, billing and credential access separation remain unverified. No hosted acceptance test has passed.
+
 No hosted staging changes are authorized. Before executing any, present a concrete request identifying resource/project/cost/region, aliases, owners, actual verified ref/keys, origin/redirect/CSP settings, CI secret access scopes, synthetic fixtures and rollback/cleanup plan. The runbook lists the required Supabase Auth hook/callbacks, private buckets, Edge artifacts, queues/schedules, reader associations, companion identities and Vercel Preview scope. Those prepared instructions are not a claim of hosted configuration.
 
 Remaining blockers:
@@ -84,6 +86,41 @@ Remaining blockers:
 Production still requires its own release authorization separate from PR/merge, covering exact artifact/target/component actions, recovery evidence, approver and window. No credentials, production contents or real backup artifacts are attached to this report.
 
 ## Changed Paths
+
+### Dedicated Staging Branch Preparation
+
+The user subsequently authorized creation of a dedicated `staging` branch from reviewed S1 without merging into `main`, with build-credential and Vercel production-promotion checks required before push. Local `staging` was created at `2d75d28101e2ff9637da665e7b4df9013df84e8d`, matching the existing reviewed S1 branch. `main` remains at `4d225ab9f064495bf195be7b8408805e16fc4a2a`. Existing uncommitted staging-intake documentation edits were preserved. No push or merge occurred.
+
+The targeted organizer/reader environment tests passed (2 files, 5 tests), and `npm run test:integration:config` passed all 13 tests again. Only sample/example environment files are tracked. Actual Vercel project Production Branch, inherited/Preview credentials, branch-domain assignments, hooks and promotion automation remain a required remote verification gate. No local Vercel link, authenticated CLI or token was found. Vercel was initially unconnected; its later installation and remaining tool-access limitation are recorded below. Do not push until the actual projects have been inspected; repository build guards alone cannot attest provider settings.
+
+Both `npm run build -- --mode staging --outDir <temporary-directory>` runs (organizer and reader) passed using the verified staging backend/public key, `VERCEL_ENV=preview` and reserved synthetic sibling origins. Scans of all 20 organizer and 8 reader output files found none of the known credential values from existing ignored hosted/worker profiles, no privileged JWT or `sb_secret_` key, and no injected server-secret canary. The production-ref denylist remains intentional code, not a credential. Both real build entrypoints rejected each of three injected configurations: Vercel Production scope, production backend identity, and privileged browser key. These temporary artifacts are build-verification fixtures, not deployable staging releases; actual origins, hosted Preview variables and final artifact verification remain pending. `git diff --check` passed and migrations are unchanged.
+
+### Authorized Local Vercel Preparation Follow-Up
+
+The user confirmed connection of Vercel and authorized **local S1 preparation only**, authenticated read-only settings inspection and a proposed hosted-action review. Plugin discovery now reports Vercel installed. The current session still exposes no Vercel management tools, and there is no authenticated local CLI. No authenticated project-settings request could be issued; project IDs, Git integration, Production Branch, effective build overrides, environment/integration/shared scopes, deploy hooks, protection settings and production-secret inaccessibility remain unverified. Do not describe this as an unsuccessful project API response or as the user failing to connect the plugin.
+
+Local changes extend existing shared implementations:
+
+- Both Vite entrypoints pass provider metadata to the existing build validator. Missing Git/environment metadata and conflicting target scope fail closed on Vercel. `staging` cannot build under Production even with an internally consistent inherited production profile; it must use Preview and the verified staging ref. Normal explicit production/main and local profiles retain their existing contracts.
+- The existing runtime origin guard also covers staging, denying connected clients on production, immutable or arbitrary origins outside the configured app pair. No new Auth/login protocol was introduced.
+- `prepare:staging` derives ignored header candidates from the existing configs and never edits active configs or contacts Vercel. Its bootstrap mode produces two candidates using one dependency-free static builder. That builder refuses wrong scope/branch/missing identity and recognized privileged credentials before output. It serves no application or backend code. Actual Vercel overrides still require inspection before deployment.
+- Two ignored `.env.staging.local` profiles contain only the verified public staging backend settings and intentionally empty app/extension origins. Existing local/hosted production profiles were not overwritten. Missing origins prevent staging builds; no application artifact is prepared for publication with guessed origins.
+
+Validation on this follow-up:
+
+| Check | Actual Result |
+|---|---|
+| Targeted environment/config/reader-connection/ConnectReader Vitest suite | 5 files / **26 tests passed** after bootstrap coverage was added. |
+| `npm run test:integration:config` | **13 tests passed**; no hosted target or data used. |
+| `npm run lint` | Passed after the final code changes. |
+| `npx tsc -b` / `npx tsc --noEmit --project reader/tsconfig.json` | Both passed on final sources. |
+| Full organizer and reader `npm run build -- --mode staging --outDir <temporary-directory>` | Both passed using verified staging public settings, complete simulated Preview/staging metadata and synthetic `vercel.app` branch-origin fixtures. All output files passed known production credential, privileged key/JWT and server-canary scans. These are local fixture artifacts, not a hosted release. |
+| Both Vite build boundaries with four deliberate invalid profiles | Each rejected consistent Production promotion, missing provider metadata, privileged browser key and empty actual-origin profile. |
+| `prepare:staging -- --bootstrap` / no-origin invocation | Generated only ignored bootstrap review candidates; missing real-origin invocation refused without generating application candidates. Neither active `vercel.json` was changed. |
+| Static bootstrap smoke checks at both app roots | Passed with simulated Preview metadata; wrong scope, branch, missing provider identity and synthetic privileged key each refused before output. Removed only the test-created page/directories. |
+| `npx playwright test --config playwright.connected-login.config.ts` | **12 desktop/mobile synthetic tests passed**. Initial sandbox run could not bind a local port; an approved local-only retry passed. No production backend/account used. |
+
+The [Vercel Preview runbook](LOCAL_AND_STAGING.md#vercel-staging-preview-proposal) contains the current artifacts, exact public configuration fields and staged approval requests. Bootstrap candidates, application profiles and source changes are uncommitted. No push, merge, hosted settings mutation, data access, deployment, promotion, migration or new dependency occurred. No provider credential-isolation assurance or live Preview/Auth/header test is claimed.
 
 The list includes the approved, previously uncommitted S0 documentation carried forward on this branch. Ignored local profile metadata changes are described above; no credential file is tracked.
 

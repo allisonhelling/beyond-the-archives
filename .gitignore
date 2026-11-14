@@ -18,3 +18,5 @@ supabase/.branches/
 .Rhistory
 
 artifacts/performance/
+artifacts/staging/
+.staging-bootstrap/

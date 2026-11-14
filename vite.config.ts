@@ -11,7 +11,7 @@ import { brandName, brandTagline } from './src/lib/brand'
 
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
-  validateBrowserEnv(env, mode !== 'test' && !(command === 'serve' && env.VITE_SAMPLE_DATA === 'true'), process.env.VERCEL_ENV, command === 'build')
+  validateBrowserEnv(env, mode !== 'test' && !(command === 'serve' && env.VITE_SAMPLE_DATA === 'true'), process.env, command === 'build')
   const manifest = JSON.stringify({ name: brandName, short_name: brandName, start_url: '/', display: 'standalone', background_color: '#faf8f4', theme_color: '#faf8f4' })
   return {
     plugins: [sampleData(env.VITE_SAMPLE_DATA === 'true'), react(), tailwindcss(), svgr(), offlineShell('organizer', ['/manifest.webmanifest']), {
