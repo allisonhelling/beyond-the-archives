@@ -2,7 +2,7 @@
 
 ## Scope And Review Gates
 
-S0 is conditionally approved as an audit deliverable. S1 implements local tooling and prepares staging. S2 roles/RLS are separate. The existing hosted project is production with personal data; never copy its database, Auth users, backups or EPUBs into local/staging. Do not interpret these instructions as hosted approval.
+S0 is conditionally approved as an audit deliverable. S1 implements local tooling and prepares staging. S2 roles/RLS are separate. The existing hosted project is production with personal data; never copy its database, Auth users, backups or EPUBs into local/staging. The user approved staging backend changes on 16 November 2026; the current verification step inspects that backend read-only. That approval does not cover production, a hosted reset, new paid services, or a replacement production release path.
 
 The S1 working-tree CI definition has no production deployment job and no production credential references. Ordinary pushes/PRs run checks only. This does not change the existing hosted workflow until an explicitly approved push; GitHub environment protections, Vercel Git releases, Supabase integrations and existing in-flight jobs remain outside this local change. No replacement production runner is supplied in S1. A production release requires a separate reviewed request for exact artifact/target/actions and a hosted enforced approval gate.
 
@@ -76,11 +76,77 @@ Changing `vercel.json` origins/CSP, hosted Auth allowlists or deployed function 
 
 The local drill generates its own two accounts, AO3/universal library entries and EPUB bytes using the existing ZIP utility. It checks caller-owned preview/safety-copy restore, version-2 source preservation, unchanged second-account data, reader annotation/original hash recovery, retained organizer association and denied cross-account access. It never takes a production file or account ID as input. Its safety copy uses a trusted local Storage upload to exercise the database's restore boundary; full `save-backup` Edge retention is covered separately by existing integration tests.
 
-The drill is scoped recovery, not whole-project disaster recovery. It keeps the same synthetic Auth identities and does not recreate SMTP, secrets, provider project configuration, every reader manifestation or cron jobs. Actual full-service execution is blocked while Docker is unavailable. Existing SQL backup/reader tests and a generated fixture are not evidence that real blob/Auth/config recovery has succeeded. RTO/RPO remain undecided; the drill does not establish production objectives or approve access to personal backups.
+The drill is scoped recovery, not whole-project disaster recovery. It keeps the same synthetic Auth identities and does not recreate SMTP, secrets, provider project configuration, every reader manifestation or cron jobs. The synthetic full-service drill passed on 16 November 2026; it remains dependent on a running local Docker stack. Existing SQL backup/reader tests and a generated fixture are not evidence that real blob/Auth/config recovery has succeeded. RTO/RPO remain undecided; the drill does not establish production objectives or approve access to personal backups.
+
+## Local Service Verification
+
+After the guarded local setup above, keep `npm run db:serve` running and execute:
+
+```sh
+npm run db:lint
+npm run test:integration
+npm run test:services:local
+npm run test:restore:local
+```
+
+The existing integration runner checks real Auth/PostgREST/Storage with generated accounts. `test:services:local` reuses the same target guard, account fixtures and validated Edge origins to exercise authenticated account verification, untrusted-origin rejection, preflight, connected-login code issuance/redemption with independent sessions, replay denial, and the retired worker's HTTP 410. The restore drill verifies organizer data plus separately reconstructed reader EPUB/annotation assets. These checks clean up only their own synthetic accounts and do not accept external identities, files or target flags. The local public profiles must be regenerated with `db:configure` when stack keys change.
+
+The installed local gateway was observed returning `Access-Control-Allow-Origin: *` even when a function specifies its caller origin. The service check reports this explicitly and separately verifies handler-level origin rejection; a passing local run does not establish hosted effective-header/CORS behavior. The [upstream CLI change](https://github.com/supabase/cli/pull/7472) documents the gateway distinction; no CLI/dependency upgrade or gateway patch is included here.
+
+A fresh local start and a reset of the newly created disposable stack replayed all 129 migrations successfully. The migration-up command also passed with no pending files. A populated incremental upgrade from an older release remains a separate acceptance case; these results do not claim it was exercised.
+
+## Read-Only Staging Backend Inventory
+
+Run `npm run inventory:staging` from the repository root. The fixed-target reader independently verifies the known staging project name/ref/region/health before inspecting it. It ignores the production CLI link and ambient `SUPABASE_ACCESS_TOKEN`, uses `SUPABASE_STAGING_ACCESS_TOKEN` or the authenticated CLI's macOS keychain credential in memory, rejects target overrides, and exposes no mutation action. SQL requests use Supabase's [dedicated read-only query endpoint](https://supabase.com/docs/reference/api/v1-read-only-query).
+
+The command saves a timestamped, non-overwriting report under ignored `artifacts/staging/backend-inventory-*.json`. It records migration filenames/checksum/history/gaps, table/RLS metadata and aggregate counts, bucket settings, policy metadata, function versions, secret names, Auth configuration flags and whether the configured public key matches. It does not save user records, emails, stored file paths/content, secret values, key values or SQL response errors. Reports are local verification artifacts; they are not public application data.
+
+The 16 November inventory found zero Auth users, no public application tables, zero buckets/objects, no deployed functions/secrets and zero applied migrations. All 129 repository migrations are pending, with chain SHA-256 `f9480e6e7772eb935b90caff5897a0347daef2f46bc991bb686301d13b7e9fbe`; no unknown history was found. The public staging key matched, and pg_cron was absent. SMTP and the before-user-created hook were not configured; default email signup was enabled with confirmation required. These are observations, not successful hosted application acceptance. The backend remains unchanged by this inventory.
+
+## Staging Deployment Guard
+
+`scripts/staging-target.mjs` now shares the fixed-target Management API transport between the existing read-only inventory and `stagingDeploymentClient`. Preparing a client makes no network requests. A version-1 plan must name the verified staging ref, explicit staging organizer/reader origins and unique operations. `stagingOperation` fingerprints each operation ID, action and exact JSON payload; preparing the client verifies those fingerprints and snapshots the request bytes. Later edits to the caller's plan cannot alter a prepared write. The fingerprint identifies reviewed bytes; it is not a substitute for the user's authorization.
+
+Supported actions are `configureAuth`, `setOrigins`, `applyMigration`, `createFunction` and `updateFunction`. Their HTTP methods and project paths are fixed internally. Function names and JWT-verification settings come from the existing `supabase/config.toml`. Auth updates use a shared field allowlist, keep email confirmation and disallow anonymous access, constrain callbacks to the two planned `/auth/callback` URLs and constrain the signup hook to the existing beta function. Origin secret writes accept only the matching `APP_ORIGIN` and `READER_ORIGIN` pair. Arbitrary secrets, reset/delete/rollback endpoints, raw query endpoints, CLI commands, extra targets and passthrough flags are rejected.
+
+For example, preparation for an authorized signup lock can use:
+
+```js
+import { stagingDeploymentClient, stagingManagementToken, stagingOperation, stagingProjectRef } from './scripts/staging-target.mjs'
+
+const plan = {
+ version: 1, projectRef: stagingProjectRef,
+ organizerUrl: verifiedOrganizerOrigin, readerUrl: verifiedReaderOrigin,
+ operations: [stagingOperation('auth-lock', 'configureAuth', { disable_signup: true })],
+}
+const deploy = stagingDeploymentClient({ plan, token: stagingManagementToken() })
+// Invoking await deploy('auth-lock') performs the guarded write.
+```
+
+Immediately before **each** operation, the same credential must read the live project identity and match its ref/ID, name, region and healthy status. Conflicting ref/ID responses fail closed. Writes are serialized, each operation can complete only once, redirects are rejected and failures halt queued operations. There is no automatic retry after an ambiguous timeout or partial response: re-inventory before preparing another plan. Returned receipts contain only project ref, operation ID/action and HTTP status; request secrets and remote bodies are not logged or returned. Keep SMTP-bearing plans in memory rather than persisting them to review artifacts.
+
+Run `npm run test:integration:config` for the inventory/local guard and deployment guard tests. They use synthetic HTTP responses; no hosted writes are needed to test the negative paths. A successful read-only live inventory verifies the shared transport without changing staging. This is the write boundary, not the complete release coordinator: migration ordering/source checksums/original-version history reconciliation, correct function bundles, post-write acceptance and a release record still need to be assembled for the 129-migration rollout. Provider access controls remain necessary; the guard cannot prevent an infrastructure operator from invoking a separate raw tool.
+
+### Staging Email Delivery
+
+Staging uses the user-selected **Mailtrap Email Sandbox** inbox as Supabase custom SMTP. It captures test mail without delivering to real recipients or requiring domain verification. Use that inbox's Integration credentials and label the sender **Beyond the Archives — Staging**. See [Mailtrap Sandbox](https://docs.mailtrap.io/getting-started/email-sandbox) and [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
+
+Use separate staging SMTP credentials through the `configureAuth` operation and retain confirmation, exact callback URLs, and the migrated private-beta signup hook. Keep registration closed until those prerequisites and synthetic delivery tests pass. Reuse the existing callback-aware templates. Verify signup confirmation, password recovery, invitations and email changes by opening the captured messages and following their staging links. Keep sandbox forwarding disabled. This verifies the app/email flow; delivery to real mailboxes and domain reputation require a separate later check with a staging-only sending account.
+
+
+On **16 November 2026**, the authorized `configureAuth` operation `mailtrap-staging-email` returned HTTP 200 after the guard verified project `vzqrpjzfwcuuiqxanyoy` / `beyond-the-archives-staging`, region `us-east-1`, status `ACTIVE_HEALTHY`. A subsequent Auth configuration read matched all nonsecret requested fields:
+
+- SMTP: `sandbox.smtp.mailtrap.io`, port `587`; credentials supplied directly to the in-memory operation and excluded from repository files and verification output.
+- Sender: `no-reply@staging.beyond-the-archives.test`, display name **Beyond the Archives — Staging**.
+- Site URL: `https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app`.
+- Redirect allowlist: exactly that organizer origin and `https://archives-unfolded-git-staging-allisonhellings-projects.vercel.app`, each with `/auth/callback`.
+- Registration closed (`disable_signup=true`); email confirmation retained. Existing email/anonymous provider and signup-hook settings were preserved. The pending beta-hook migration remains required before opening registration.
+
+Direct SMTP verification passed certificate-validated STARTTLS authentication and accepted one synthetic message to `smtp-check@staging.beyond-the-archives.test`, subject **Staging SMTP Delivery Check**. This proves SMTP acceptance, not inspection of the captured message or Supabase signup/recovery/invitation/email-change completion. Those Auth flows await the backend rollout; sandbox forwarding settings were not inspected. The existing configuration/isolation suite passed **36/36** tests. No application code, migrations, functions, production settings or provider plan was changed.
 
 ## Staging Preparation And Approval Gate
 
-**No hosted staging is approved or provisioned by this work. Stop before each hosted step.** Prepare a review request identifying the proposed project/region/cost, owner, staging aliases, credential scopes and synthetic seed/restore procedure. After explicit approval, the operator must:
+**Current Scope:** staging frontend releases are already recorded below, and staging backend changes are approved as of 16 November 2026. The completed backend inventory is read-only. The tested staging mutation guard is documented above. Before applying the approved backend work, finish the exact artifact plan and rollout coordinator, including migration-history reconciliation and function bundles. Reuse the following sequence; no raw CLI workaround, production action or hosted reset is authorized:
 
 1. Inventory actual project identity through authenticated settings/management metadata and correlate ref, URL and project-bound keys. Do not treat an environment label or configured ref as proof. Record redacted evidence, never credentials or library content.
 2. Create/identify a separate staging Supabase project with no production data branching/cloning. Use separate Auth users, Storage, queues, throttles, jobs, SMTP and API/service credentials. Keep production secrets inaccessible to staging/preview/PR processes through provider access controls.
@@ -93,7 +159,7 @@ The drill is scoped recovery, not whole-project disaster recovery. It keeps the 
 9. Prove wrong-production-target fault injection is denied by both credential/provider access restrictions and application guards: URL/ref/public key, service credential, CLI link, redirect, queue/webhook and artifact settings. Local guard tests alone do not prove hosted staging cannot obtain production credentials.
 10. Execute fresh/upgrade migrations, SQL/RLS/Storage cross-account checks, full synthetic Auth/Edge/browser and recovery tests. Record exact artifact/target and results. Stage data resets must have their own explicit verified staging-only guard; none is enabled by the current local reset wrapper.
 
-**Approval required:** hosted project creation/costs, GitHub protection/secret settings, Vercel variables/auto-deploy/CSP/aliases, Supabase migrations/functions/Auth/Storage/jobs, credential provisioning/rotation and any push/merge/release. A later approved staging setup is not production release approval. S2 remains separate until S1 isolation evidence is reviewed; production authorization/schema rollout additionally requires hosted staging verification.
+**Scope Boundary:** the existing staging-backend approval covers its reviewed migrations/functions/Auth/Storage setup; record exact artifacts and results when applying it. New paid resources, provider/SMTP choices, GitHub protection changes, unrelated Vercel changes, jobs, credential rotation, pushes/merges and production releases remain separate decisions. A later approved staging setup is not production release approval. S2 remains separate until S1 isolation evidence is reviewed; production authorization/schema rollout additionally requires hosted staging verification.
 
 ## Vercel Staging Preview Proposal
 
@@ -329,6 +395,8 @@ Rollback is limited to the approved Preview resources: retain pre-change redacte
 
 ## Remaining Verification Gaps
 
+The following intake is the historical 13 November preparation record. The [16 November read-only inventory](#read-only-staging-backend-inventory) supersedes its unknown database/history/configuration state, and current user approval supersedes its missing staging-backend authorization. The backend is still undeployed. The staging write guard is now implemented and tested; the exact rollout coordinator, hosted runtime/privacy/recovery checks and provider credential-access evidence remain open.
+
 ### Hosted Staging Intake — 13 November 2026
 
 This is a preparation plan, not hosted mutation approval. Authenticated read-only `supabase projects list --output json` independently verified the following identity. Read-only project API-key inventory matched the supplied publishable key in memory; no key values were logged or written to repository files.
@@ -344,7 +412,7 @@ Project/key identity and both Vercel project/branch-alias identities are verifie
 
 #### Missing Inputs And Dashboard Configuration Plan
 
-The Vercel audit now identifies both actual HTTPS branch origins and project IDs; no user-supplied or guessed application origin is needed. Remaining inputs are a controlled SMTP/test-mail destination with synthetic recipients and the missing provider settings evidence listed above. Do not paste SMTP passwords, database passwords or service-role keys into documentation or chat. Confirm the staging Supabase project owner/billing arrangement; incremental compute, email, Storage and Vercel usage costs have not been established. No plan or billing change is proposed by this intake.
+The Vercel audit now identifies both actual HTTPS branch origins and project IDs; no user-supplied or guessed application origin is needed. The controlled SMTP/test-mail destination is now configured as recorded in [Staging Email Delivery](#staging-email-delivery); the missing provider settings evidence listed above remains open. Do not paste SMTP passwords, database passwords or service-role keys into documentation or chat. Confirm the staging Supabase project owner/billing arrangement; incremental compute, email, Storage and Vercel usage costs have not been established. No plan or billing change is proposed by this intake.
 
 After migration and explicit Auth approval, configure these settings in the **staging** Supabase Dashboard:
 

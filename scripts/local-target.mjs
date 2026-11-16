@@ -28,8 +28,8 @@ export async function readLocalTarget() {
  return target
 }
 
-// Hosted mutations intentionally have no S1 runner. A matching environment label
-// cannot authorize them. Production release tooling is a separate reviewed gate.
+// Local entrypoints never accept hosted targets. Staging uses its separate
+// fixed-target Management API guard; production release tooling remains separate.
 export async function verifiedLocalTarget({ url, secret } = {}, readTarget = readLocalTarget) {
  if (url) assertLocalEndpoint(url)
  const target = await readTarget()
@@ -46,4 +46,5 @@ export function validateLocalEdgeSettings(text) {
   try { url=new URL(settings[key]) } catch { throw new Error('Explicit local Edge app origins are required.') }
   if (!['127.0.0.1','localhost','[::1]'].includes(url.hostname) || !['http:','https:'].includes(url.protocol) || url.username || url.password || url.pathname!=='/' || url.search || url.hash) throw new Error('Local Edge app origins must be loopback origins.')
  }
+ return settings
 }

@@ -1,8 +1,34 @@
 # S1 — Local Isolation And Staging Preparation
 
-**Status:** Local implementation prepared; full local service and hosted staging verification remain blocked. S1 isolation is not fully verified and S2 is not started. **Branch:** `infra/01-local-staging-isolation`. **Base:** refreshed reviewed `main` / `origin/main` at `4d225ab9f064495bf195be7b8408805e16fc4a2a`. **Date:** 13 November 2026.
+**Status:** Local service verification and read-only staging backend inventory completed on 16 November 2026. Hosted backend deployment and acceptance, provider credential-isolation proof, populated incremental-upgrade verification and full disaster-recovery objectives remain open; S1 is not complete and S2 has not started. Original implementation branch: `infra/01-local-staging-isolation`, based on `4d225ab9f064495bf195be7b8408805e16fc4a2a`.
 
 The user conditionally approved S0 as an audit deliverable and explicitly authorized S1 preparation/local implementation. The approved S0 report and two doc edits were still uncommitted; they were preserved on this new branch without stashing, discarding, committing or merging. No push, hosted resource creation/configuration, production migration, deployment, credential rotation or production data copy occurred. No S2 role/RLS work was added.
+
+## Local Services And Staging Inventory — 16 November 2026
+
+This follow-up supersedes the original Docker/CLI availability blocker and unknown staging database state. The user authorized local verification, a read-only staging inventory, and future hosted backend changes. This run used Docker 29.8.2, the existing CLI/dependencies, and only the named synthetic stack. The production CLI link and older project volumes were preserved. No hosted mutation, push, merge, dependency upgrade or migration-file edit was performed.
+
+| Check | Actual Result |
+|---|---|
+| Guarded local start, configure, seed and lint | Passed; both app profiles use current local public settings. |
+| Fresh local migration replay and disposable reset | Passed; all 129 applied versions exactly match repository filenames. |
+| `npm run db:migrate` | Passed with no pending migrations; this is not a populated older-release upgrade test. |
+| `npm run test:integration` | 30 real Auth/PostgREST/Storage checks passed, including two-account denials, imports, backups and beta signup. |
+| `npm run test:restore:local` | Passed synthetic account/library/reader original/annotation/association recovery and cross-account denials; no personal backup imported. |
+| `npm run test:services:local` | Passed real Edge authentication/origin checks, connected-login issue/redeem with independent sessions and replay denial, and the HTTP 410 retired-worker response. |
+| `npm run inventory:staging` | Verified healthy staging identity and matching public key. Zero Auth users, public application tables, buckets/objects, functions/secrets and applied migrations; all 129 migrations pending, no unknown history. No SMTP or signup hook configured; confirmation required and default signup enabled. |
+
+The local gateway returned wildcard CORS headers. This is explicitly reported by the service check; handler-level origin rejection passed, while hosted effective-header acceptance remains open. The new inventory reader is fixed to the known staging target and dedicated read-only SQL endpoint; target/auth/redaction/history tests extend the existing isolation suite. The report lives under ignored `artifacts/staging/` and contains only allowlisted metadata and counts. Commands, exact inventory scope and current approval boundaries are maintained in the [runbook](LOCAL_AND_STAGING.md#local-service-verification).
+
+The original review/checklists below remain historical evidence. The staging mutation guard is now implemented as recorded below; next backend work needs the exact deployment plan and rollout coordinator; the user's existing backend approval is recorded and must not be requested again for that authorized scope. Provider access proof, hosted synthetic acceptance and full recovery objectives remain unresolved. S2 remains separate.
+
+## Staging Deployment Guard — 16 November 2026
+
+The shared staging target module now provides a reviewed-plan write client alongside the read-only inventory. It pins every resource URL to staging, rejects production/foreign targets and runtime overrides, fingerprints/snapshots payloads, and independently verifies live project ref/ID/name/region/health immediately before each serialized write. Failures stop queued work without retries. Each operation can complete only once. Action-specific validation constrains Auth/callback/origin settings and preserves each configured function's JWT handling. Only redacted receipts leave the write client.
+
+The existing isolation suite now includes production/fake-identity denial, credential failures, changed health between writes, reviewed-payload tampering, attempted secret/redirect/reset/CLI bypasses, queue stopping and response/exception redaction. All tests use synthetic transports. The shared read transport is also checked with the authorized read-only staging inventory. Validation passed: 36 isolation/configuration tests, ESLint, and the live read-only inventory; staging still has zero applied migrations and no deployed functions. No hosted write, deployment, migration, Auth update or provider account creation occurs in this guard implementation.
+
+The [deployment guard runbook](LOCAL_AND_STAGING.md#staging-deployment-guard) owns the plan contract, usage, supported operations and limitations. A release coordinator must still reconcile original migration versions and exact function bundles; the guard itself is not a completed backend rollout. The user-selected Mailtrap Email Sandbox is now configured through the guard; settings readback and direct STARTTLS message acceptance passed. Exact staging callbacks and confirmation are configured, and registration is closed pending backend acceptance. See the [staging email record](LOCAL_AND_STAGING.md#staging-email-delivery); complete Auth email flows remain unverified. The user's staging-backend approval remains valid for its authorized scope.
 
 ## Implemented Scope And Reuse
 
@@ -28,7 +54,7 @@ New local tooling provides public-only configuration of both apps, generated syn
 
 The ignored existing local app profiles gained only explicit local identity/origin fields, preserving their public keys and other values. Their credential configuration has not been refreshed from a new running stack because Docker is unavailable; `db:configure` is the supported next step. No hosted profile or server credential file was modified or copied. The new configurator refuses to overwrite another backend's profile, parses duplicate/exported env assignments and writes only public values. No secret was printed or committed.
 
-## S1 Checklist And Evidence Boundary
+## Original S1 Checklist And Evidence Boundary
 
 | Requirement | Result At This Review |
 |---|---|
@@ -74,7 +100,7 @@ Staging intake update, 13 November 2026: authenticated read-only Supabase invent
 
 No hosted staging changes are authorized. Before executing any, present a concrete request identifying resource/project/cost/region, aliases, owners, actual verified ref/keys, origin/redirect/CSP settings, CI secret access scopes, synthetic fixtures and rollback/cleanup plan. The runbook lists the required Supabase Auth hook/callbacks, private buckets, Edge artifacts, queues/schedules, reader associations, companion identities and Vercel Preview scope. Those prepared instructions are not a claim of hosted configuration.
 
-Remaining blockers:
+Original blockers at the 13 November review (superseded where the 16 November evidence above applies):
 
 1. Start Docker and complete the guarded local fresh/upgrade, lint, seed and real Auth/PostgREST/Storage/Edge integration/recovery checks. The current managed CLI also attempts a telemetry-file write outside writable roots; resolve local execution permissions without substituting hosted credentials. Do not reset old personal-data volumes.
 2. Independently verify hosted GitHub protections/secret scopes, Vercel production/preview/shared variables and Git/deploy hooks, Supabase integrations and current migration/settings drift. There is no Vercel/Supabase management connector in this session. A working-tree CI edit cannot retroactively stop a remote in-flight job or an independent auto-deploy.

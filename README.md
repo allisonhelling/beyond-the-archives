@@ -94,6 +94,10 @@ Start Docker Desktop, then run `npm run db:start`. Run these in separate termina
 
 The app, reader and extension must use the same local backend and exact configured origins, including ports and `127.0.0.1` versus `localhost`. Extension connection confirms authentication; successful metadata uploads also require the local function runtime. If imports return 503, check terminal 3 and reconnect in Settings. `npm run db:stop` stops only this synthetic stack; Docker is left running.
 
+### Verify Local Services
+
+With the synthetic stack and `npm run db:serve` running, use `npm run test:integration`, `npm run test:services:local`, and `npm run test:restore:local` to check real authentication, library/storage isolation, Edge login exchange, and synthetic recovery. The checks create and clean up their own test accounts. See the [local verification guide](docs/security-foundation/LOCAL_AND_STAGING.md#local-service-verification) for scope and limitations.
+
 ### Build and Connect the Local Browser Extension
 
 With `.env.local` pointing to local Supabase, build into the local directory so the hosted extension build is preserved:

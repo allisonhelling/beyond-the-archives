@@ -31,7 +31,7 @@
     "metadata:fandoms": "node --experimental-strip-types server/refresh-fandoms.mjs",
     "invite": "node server/invite-user.mjs",
     "test:integration": "node scripts/test-supabase.mjs",
-    "test:integration:config": "node --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs",
+    "test:integration:config": "node --experimental-strip-types --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs scripts/tests/staging-isolation.mjs",
     "perf:db": "node scripts/performance-library.mjs",
     "perf:backup": "node scripts/performance-backups.mjs",
     "perf:hosted": "node scripts/performance-hosted.mjs",
@@ -42,7 +42,9 @@
     "db:seed": "node scripts/seed-local.mjs",
     "test:restore:local": "node --experimental-strip-types scripts/local-restore-drill.mjs",
     "db:configure": "node --experimental-strip-types scripts/configure-local.mjs",
-    "prepare:staging": "node --experimental-strip-types scripts/prepare-staging-vercel.ts"
+    "prepare:staging": "node --experimental-strip-types scripts/prepare-staging-vercel.ts",
+    "inventory:staging": "node --experimental-strip-types scripts/staging-inventory.mjs",
+    "test:services:local": "node scripts/local-service-checks.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",
