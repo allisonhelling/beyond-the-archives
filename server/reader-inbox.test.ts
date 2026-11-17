@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { createClient } from '@supabase/supabase-js'
 import { createHash } from 'node:crypto'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { readerInboxHandler } from './reader-inbox'
 const token='ab'.repeat(32), owner='30000000-0000-0000-0000-000000000001', id='30000000-0000-0000-0000-000000000002'
-function fixture() {
+function fixture(uploadFailure?: string) {
  let revoked=false,access=true,uploads=0
  const rows: Record<string,unknown>[]=[]
  const client=createClient('https://backend.example','service-key',{auth:{persistSession:false},global:{fetch:async(input,init)=>{
@@ -18,7 +18,7 @@ function fixture() {
    if(request.method==='POST') {rows.push(await request.json());return new Response(null,{status:201})}
    return Response.json(request.headers.get('accept')?.includes('vnd.pgrst.object') ? rows[0] : rows)
   }
-  if(url.pathname.includes('/storage/v1/object/reader-epubs/')) {uploads++;return Response.json({Key:'stored'})}
+  if(url.pathname.includes('/storage/v1/object/reader-epubs/')) {if(uploadFailure)throw new Error(uploadFailure);uploads++;return Response.json({Key:'stored'})}
   throw new Error(`Unexpected request ${url.pathname}`)
  }}})
  return {handler:readerInboxHandler(client),rows,get uploads(){return uploads},revoke:()=>{revoked=true},deny:()=>{access=false}}
@@ -42,4 +42,16 @@ it('checks uploaded hashes and retries the same receipt without replacing files 
  expect(state.uploads).toBe(1)
  expect((await state.handler(request('different EPUB'))).status).toBe(409)
  expect(state.uploads).toBe(1)
+})
+it('withholds storage error details from responses and operational logs',async()=>{
+ const privateDetail='synthetic-private-filename.epub signed-fixture-credential'
+ const log=vi.spyOn(console,'error').mockImplementation(()=>{})
+ try {
+  const state=fixture(privateDetail)
+  const response=await state.handler(request())
+  expect(response.status).toBe(500)
+  expect(await response.json()).toEqual({error:'Inbox request failed. Retry this destination.'})
+  expect(JSON.stringify(log.mock.calls)).not.toContain(privateDetail)
+  expect(log).toHaveBeenCalledWith('Reader inbox request failed')
+ }finally{log.mockRestore()}
 })

@@ -43,5 +43,5 @@ export function readerInboxHandler(client: SupabaseClient) { return async (reque
   if(saved.error) throw saved.error
   if(saved.data.hash !== hash) return json({error:'Transfer ID already used for another file'},409)
   return json({status:'queued',message:'Delivered; waiting for a reader to import.'},202)
- } catch(error) { console.error('Reader inbox request failed', error instanceof Error ? error.message : 'Unknown failure'); return json({error:'Inbox request failed. Retry this destination.'},500) }
+ } catch { console.error('Reader inbox request failed'); return json({error:'Inbox request failed. Retry this destination.'},500) }
 } }

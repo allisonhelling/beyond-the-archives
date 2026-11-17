@@ -100,6 +100,8 @@ With the synthetic stack and `npm run db:serve` running, use `npm run test:integ
 
 `npm run test:rbac:local` checks application roles and real TOTP authorization against the local stack without requiring Edge Functions. Run it before choosing a lasting application Owner; it refuses an already bootstrapped stack and removes its temporary accounts. Administration currently has a backend API only; there is no admin or MFA enrollment screen. See the [application role guide](docs/security-foundation/S2_APPLICATION_RBAC.md) for scope and prerequisites.
 
+`npm run test:privacy:local` uses the same unbootstrapped synthetic stack plus `npm run db:serve` to verify User A/User B/Admin/Owner library, reader, Storage and Edge isolation. Run role/privacy checks sequentially; both remove their temporary accounts. See the [privacy matrix](docs/security-foundation/S3_OWNER_ONLY_PRIVACY.md) for coverage and limitations.
+
 ### Build and Connect the Local Browser Extension
 
 With `.env.local` pointing to local Supabase, build into the local directory so the hosted extension build is preserved:

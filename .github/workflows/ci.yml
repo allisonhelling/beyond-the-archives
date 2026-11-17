@@ -105,6 +105,15 @@ jobs:
       - run: npm run db:lint
       - run: npm run test:integration
       - run: npm run test:rbac:local
+      - run: npm run db:configure
+      - name: Verify Local Privacy And Edge Boundaries
+        run: |
+          npm run db:serve > "$RUNNER_TEMP/bta-local-edge.log" 2>&1 &
+          local_edge_pid=$!
+          trap 'kill "$local_edge_pid" 2>/dev/null || true' EXIT
+          npm run test:privacy:local
+          npm run test:services:local
+          npm run test:restore:local
       - run: npm run db:stop
         if: always()
   # Production releases require a separately approved workflow and hosted gate.

@@ -11,6 +11,15 @@ export function checked(result) {
  if (result.error) throw new Error('Synthetic local fixture operation failed. Inspect local schema/services; response details are withheld.')
  return result.data
 }
+export async function syntheticEpub() {
+ const { createZip }=await import('../src/lib/zip.ts')
+ return new Uint8Array(await createZip([
+  {name:'mimetype',content:'application/epub+zip'},
+  {name:'META-INF/container.xml',content:'<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'},
+  {name:'book.opf',content:'<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">synthetic-privacy</dc:identifier><dc:title>Synthetic Privacy Fixture</dc:title><dc:language>en</dc:language></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>'},
+  {name:'chapter.xhtml',content:'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Synthetic fixture. No personal content.</p></body></html>'},
+ ]).arrayBuffer())
+}
 export async function createSyntheticAccounts(clients, count=2) {
  const accounts=[]
  try {

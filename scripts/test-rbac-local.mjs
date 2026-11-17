@@ -1,43 +1,11 @@
 // Real GoTrue/PostgREST/MFA and concurrent authorization checks. Local only;
 // refuse an existing owner so operator-managed role state is never replaced.
 import assert from 'node:assert/strict'
-import { createHmac, randomUUID } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
-import { localClients, createSyntheticAccounts, removeSyntheticAccounts, checked } from './local-fixtures.mjs'
-import { localProjectId } from './local-target.mjs'
+import { randomUUID } from 'node:crypto'
+import { localClients, createSyntheticAccounts, checked } from './local-fixtures.mjs'
+import { localSql as sql, sqlUuid as uuid, enrollSyntheticMfa, assertNoApplicationOwner, removeSyntheticRoleAccounts } from './local-role-fixtures.mjs'
 
-function sql(query) {
- const result=spawnSync('docker',['exec','-i',`supabase_db_${localProjectId}`,'psql','-X','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1','-At'],{input:query,encoding:'utf8',timeout:30000})
- if(result.status!==0) throw new Error('Local RBAC SQL fixture operation failed; database output withheld.')
- return result.stdout.trim()
-}
-function totp(secret) {
- const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
- const bits=[...secret.toUpperCase().replace(/=+$/,'')].map(char=>{
-  const index=alphabet.indexOf(char)
-  if(index<0)throw new Error('Invalid synthetic MFA secret.')
-  return index.toString(2).padStart(5,'0')
- }).join('')
- const key=Buffer.from(bits.match(/.{8}/g).map(byte=>parseInt(byte,2)))
- const counter=Buffer.alloc(8)
- counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)))
- const digest=createHmac('sha1',key).update(counter).digest()
- return String((digest.readUInt32BE(digest[19]&15)&0x7fffffff)%1000000).padStart(6,'0')
-}
-async function mfa(account) {
- const result=(response,step)=>{
-  if(response.error) {
-   const code=/^[a-z_]+$/.test(response.error.code)?response.error.code:'unknown'
-   stage=`${step} (Auth code ${code}, status ${Number(response.error.status)||0})`
-  }
-  return checked(response)
- }
- const enrolled=result(await account.client.auth.mfa.enroll({factorType:'totp',friendlyName:'Synthetic S2 Test'}),'enrolling synthetic TOTP')
- const challenge=result(await account.client.auth.mfa.challenge({factorId:enrolled.id}),'challenging synthetic TOTP')
- result(await account.client.auth.mfa.verify({factorId:enrolled.id,challengeId:challenge.id,code:totp(enrolled.totp.secret)}),'verifying synthetic TOTP')
- return checked(await account.client.auth.getSession()).session.access_token
-}
-const uuid=value=>{if(!/^[0-9a-f-]{36}$/.test(value))throw new Error('Invalid synthetic fixture ID.');return `'${value}'`}
+const mfa=account=>enrollSyntheticMfa(account,value=>{stage=value})
 let stage='verifying the isolated local stack',clients,accounts=[]
 const requests=[]
 try {
@@ -53,8 +21,7 @@ try {
    where n.nspname='public' and p.proname in ('initialize_app_role','protect_admin_audit','check_app_owner','protect_app_owner_identity','app_actor','app_owner_maintenance')
     and has_function_privilege(a.role_name,p.oid,'EXECUTE'))) `))
  assert.deepEqual(catalog,{definers:7,private_tables:5,internal_execute_grants:0})
- const initial=JSON.parse(sql("select json_build_object('owners',(select count(*) from public.user_roles where role_id='owner'),'bootstrap',(select count(*) from public.admin_audit_logs where action='bootstrap_owner' and outcome='succeeded'))"))
- assert.deepEqual(initial,{owners:0,bootstrap:0},'Run before operator bootstrap; existing owner state must be preserved.')
+ assertNoApplicationOwner()
  accounts=await createSyntheticAccounts(clients,5)
  const [user,other,admin,owner,successor]=accounts
  stage='enrolling and verifying real synthetic TOTP factors'
@@ -151,14 +118,7 @@ try {
 } finally {
  if(accounts.length) {
   try {
-   // Infrastructure-only teardown of these synthetic fixtures. Never a public
-   // recovery path: triggers are bypassed solely on the verified local stack.
-   const accountIds=accounts.map(account=>uuid(account.id)).join(',')
-   const requestIds=[...new Set(requests)].map(uuid).join(',')
-   sql(`begin;set local session_replication_role=replica;
-    ${requestIds?`delete from public.admin_audit_logs where request_id in (${requestIds}) and (actor_id in (${accountIds}) or actor_id is null and target_id in (${accountIds}));`:''}
-    delete from public.user_roles where user_id in (${accountIds});commit;`)
-   await removeSyntheticAccounts(clients,accounts)
+   await removeSyntheticRoleAccounts(clients,accounts,requests)
    console.log('PASS synthetic S2 fixtures removed; no lasting owner was bootstrapped')
   } catch {
    console.error('Local S2 fixture cleanup failed; inspect the synthetic stack before rerunning.')

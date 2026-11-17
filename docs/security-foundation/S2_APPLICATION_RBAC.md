@@ -89,7 +89,7 @@ Verification on 16 November 2026:
 - Embedded S2 authorization tests: **19 passed**, including API/table/sequence grants, metadata forgery, allowed and forbidden transitions, fresh/stale/revoked MFA, stale role claims, replay, audit scope/tampering, atomic audit failure, last-owner protection and factor-loss/deleted-owner recovery. The focused S2/foundation run passed **73 tests**.
 - Real local S2 checks: passed TOTP, anonymous and forged-token denial, direct role-write/operator-procedure denial including `service_role`, stale grants/permissions, User A/User B/Admin/Owner private-library isolation, redacted audit, replay, concurrent transfers, last-owner safety and scoped fixture cleanup.
 - Local migration and database lint passed; existing live Auth/PostgREST/RLS integration suite passed **30 checks**. Configuration/isolation tests passed **37**; organizer and reader TypeScript/build, ESLint and `check:security` passed. The full `npm test` regression suite passed **2,132 tests across 187 files**. Existing Node local-storage and jsdom scroll warnings did not fail the suite; the build retained its existing large-chunk warning.
-- No protected hosted-browser, staging or production acceptance is claimed. S3's broader Storage/reader/companion/Edge/background-job role matrix and independent security review remain separate.
+- No protected hosted-browser, staging or production acceptance is claimed. The subsequent [S3 local privacy matrix](S3_OWNER_ONLY_PRIVACY.md) now covers Storage/reader/Edge and worker-denial boundaries; hosted/native acceptance and independent security review remain separate.
 
 ## Controlled Owner Bootstrap
 

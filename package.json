@@ -45,7 +45,8 @@
     "prepare:staging": "node --experimental-strip-types scripts/prepare-staging-vercel.ts",
     "inventory:staging": "node --experimental-strip-types scripts/staging-inventory.mjs",
     "test:services:local": "node scripts/local-service-checks.mjs",
-    "test:rbac:local": "node scripts/test-rbac-local.mjs"
+    "test:rbac:local": "node scripts/test-rbac-local.mjs",
+    "test:privacy:local": "node --experimental-strip-types scripts/test-privacy-local.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",

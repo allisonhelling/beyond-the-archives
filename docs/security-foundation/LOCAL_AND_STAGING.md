@@ -2,6 +2,8 @@
 
 ## Scope And Review Gates
 
+The subsequent [S3 owner-only privacy matrix](S3_OWNER_ONLY_PRIVACY.md) is implemented and tested locally with a narrow reader-inbox log redaction fix. Its hosted validation/release remains separate; no S3 deployment or push is authorized.
+
 S0 is conditionally approved as an audit deliverable. S1 implements local tooling and prepares staging. The separately authorized [S2 application-role implementation](S2_APPLICATION_RBAC.md) is tested locally; S2 staging execution requires explicit approval and the preceding S1 backend rollout. The existing hosted project is production with personal data; never copy its database, Auth users, backups or EPUBs into local/staging. The user approved staging backend changes on 16 November 2026; the current verification step inspects that backend read-only. That approval does not cover production, a hosted reset, new paid services, or a replacement production release path.
 
 The S1 working-tree CI definition has no production deployment job and no production credential references. Ordinary pushes/PRs run checks only. This does not change the existing hosted workflow until an explicitly approved push; GitHub environment protections, Vercel Git releases, Supabase integrations and existing in-flight jobs remain outside this local change. No replacement production runner is supplied in S1. A production release requires a separate reviewed request for exact artifact/target/actions and a hosted enforced approval gate.
