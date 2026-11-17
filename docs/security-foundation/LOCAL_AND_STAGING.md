@@ -12,7 +12,7 @@ The S1 working-tree CI definition has no production deployment job and no produc
 
 ## Reproducible Local Setup
 
-Use Node 22.13+ on the supported 22.x line or Node 24+, installed repository dependencies, Docker Desktop and the existing Supabase CLI dependency. Run from repository root:
+Use Node 24.x, installed repository dependencies, Docker Desktop and the existing Supabase CLI dependency. Run from repository root:
 
 ```sh
 npm ci
@@ -57,6 +57,22 @@ Do not deploy these local-only operator entrypoints as a replacement for an exis
 
 Target checks bind CLI operations to the repository's named synthetic stack, actual CLI status and loopback API, use fixed argument lists and remove ambient management credentials. Supplying a production service key beside a loopback URL fails before any request. Hosted mutations have no S1 override flag. These wrappers cannot stop an infrastructure administrator from manually running an arbitrary CLI/SQL command; provider credential restrictions and approvals remain necessary.
 
+### Startup Failures
+
+Local command failures retain a nonzero exit status and report only a fixed explanation, validated process exit/signal and, for SQL errors, the SQLSTATE plus an actual checked-in migration filename. CLI stdout/stderr, spawn-error messages, credentials, connection URLs and raw SQL remain withheld. Preflight rejection remains separate and never starts the CLI. The wrapper does not add retries, accept remote flags or ignore unhealthy services.
+
+| Diagnostic | Next Local Check |
+|---|---|
+| Docker unavailable | Verify Docker CLI is on PATH, start Docker Desktop/Engine and check that `docker info` works for the current user |
+| Port occupied | Inspect local container port bindings; preserve other projects/volumes and resolve the conflict without a database reset |
+| Registry pull/rate limit | Check access to the required container registry/image; retry deliberately after fixing connectivity/quota |
+| SQLSTATE / source migration | Review the named source migration and local schema/privileges; do not silently repair history, skip migrations or use a hosted target |
+| Missing source/configuration | Confirm checkout completeness and run `npm ci` to restore the locked CLI |
+| Health check / timeout / process signal | Inspect local service health and Docker resources; a running database alone does not establish Auth/API readiness |
+| Unclassified CLI failure | The original cause is still unknown. Retain the safe exit/signal, installed CLI version and runner platform for diagnosis; do not print raw startup output or treat a retry as a verified fix |
+
+CI runs produced before these diagnostics discarded the underlying CLI failure text; their generic message alone cannot distinguish a guard rejection, image pull, migration, health or process failure. A clean local reproduction is separate evidence from a successful GitHub-hosted run.
+
 ## Application And Companion Configuration
 
 One shared environment validator extends the existing public-key parser. Connected organizer/reader builds require all six variables:
@@ -80,7 +96,7 @@ Changing `vercel.json` origins/CSP, hosted Auth allowlists or deployed function 
 
 The local drill generates its own two accounts, AO3/universal library entries and EPUB bytes using the existing ZIP utility. It checks caller-owned preview/safety-copy restore, version-2 source preservation, unchanged second-account data, reader annotation/original hash recovery, retained organizer association and denied cross-account access. It never takes a production file or account ID as input. Its safety copy uses a trusted local Storage upload to exercise the database's restore boundary; full `save-backup` Edge retention is covered separately by existing integration tests.
 
-The drill is scoped recovery, not whole-project disaster recovery. It keeps the same synthetic Auth identities and does not recreate SMTP, secrets, provider project configuration, every reader manifestation or cron jobs. The synthetic full-service drill passed on 16 November 2026; it remains dependent on a running local Docker stack. Existing SQL backup/reader tests and a generated fixture are not evidence that real blob/Auth/config recovery has succeeded. RTO/RPO remain undecided; the drill does not establish production objectives or approve access to personal backups.
+The drill is scoped recovery, not whole-project disaster recovery. It keeps the same synthetic Auth identities and does not recreate SMTP, secrets, provider project configuration, every reader manifestation or cron jobs. The synthetic full-service drill passed on 16 November 2026; it remains dependent on a running local Docker stack. Existing SQL backup/reader tests and a generated fixture are not evidence that real blob/Auth/config recovery has succeeded. The [Recovery And Staging Acceptance guide](RECOVERY_AND_STAGING_ACCEPTANCE.md) records the subsequently approved 24-hour RTO/RPO and retention/custody policy, independent encrypted bundle tooling and real staging session/large-restore commands. Full provider recovery remains unproven; the local drill grants no access to personal backups.
 
 ## Local Service Verification
 

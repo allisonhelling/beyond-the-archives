@@ -30,7 +30,7 @@ A shared loading icon and short explanation appear while the app loads data, pro
 
 In sample mode, **Update Sample Data** saves your current library into the project as the default for fresh browsers and **Reset Sample Data**. Share the resulting project file change to give other checkouts the same default. It captures library data, including reading progress, notes, collections, and series; display settings stay in your browser.
 
-Requires Node **22.13+ (22.x) or 24+** and npm. From `beyond-the-archives/`:
+Requires Node **24.x** and npm. From `beyond-the-archives/`:
 
 ```sh
 npm ci
@@ -57,13 +57,13 @@ npm run test:e2e:ci -- --shard=2/4      # choose 1/4, 2/4, 3/4, or 4/4
 npm run test:e2e:ci -- --shard=1/1      # all functional browser tests
 ```
 
-This uses your current files, including uncommitted edits, with the same Node 22 Linux environment as GitHub’s organizer browser shards. Docker installs dependencies and Chromium; no host `npm ci` or browser installation is required for this command. Tests run headlessly with `CI=true`, two workers, and both desktop/mobile projects, excluding `@performance`. Failure traces remain in `test-results/e2e/<run-id>/`. Keep source files unchanged while a run is active.
+This uses your current files, including uncommitted edits, with the same Node 24 Linux environment as GitHub’s organizer browser shards. Docker installs dependencies and Chromium; no host `npm ci` or browser installation is required for this command. Tests run headlessly with `CI=true`, two workers, and both desktop/mobile projects, excluding `@performance`. Failure traces remain in `test-results/e2e/<run-id>/`. Keep source files unchanged while a run is active.
 
 The container is limited to two CPUs and 7 GiB of memory. For comparable capacity, give Docker Desktop at least those resources. On an 8 GB Mac, keep Docker at 4 GiB and stop local Supabase first with `npm run db:stop`; these browser tests use mocked data. The 7 GiB limit is a ceiling, not reserved memory, and a smaller Docker allocation cannot reproduce CI’s available memory. The first run downloads and builds the image; later runs reuse cached layers, rebuilding dependencies when the lockfile changes. Apple Silicon uses Linux amd64 emulation to match GitHub’s architecture, so timing can still differ. See the [verification reference](docs/IMPLEMENTATION.md#verify) for environment details.
 
 ## Run Locally
 
-Run commands from `beyond-the-archives/`. Requires Node **22.13+ (22.x) or 24+**, npm, Docker Desktop running, and the Supabase CLI. The `npm run db:*` scripts expect `supabase` on your PATH; the equivalent `npx supabase ...` commands below also work without a global CLI install.
+Run commands from `beyond-the-archives/`. Requires Node **24.x**, npm and Docker Desktop running. `npm ci` installs the locked Supabase CLI; the guarded `npm run db:*` scripts invoke it through `npx`, without a global CLI installation.
 
 ### First-Time Setup And Database Upgrades
 
@@ -77,6 +77,8 @@ npm run db:seed
 ```
 
 Run each command after the previous one succeeds. The isolated stack is named `beyond-the-archives-local-synthetic`. Existing local volumes and hosted profiles are preserved; no personal data is copied. If another local stack occupies the ports, preserve its data and stop that known local stack first. Do not reset an established database to solve a port conflict.
+
+If startup fails, its message reports a safe failure category and process exit/signal; migration failures can include a SQLSTATE and checked-in migration filename. Raw CLI output and credentials stay hidden. See [Startup Failures](docs/security-foundation/LOCAL_AND_STAGING.md#startup-failures) for next steps; do not substitute hosted credentials or ignore health checks.
 
 `db:configure` writes verified local **public** configuration to both apps without logging server keys or overwriting a different backend profile. `.env.example` lists all required variables, including explicit environment/ref and organizer/reader origins. Keep service-role credentials out of browser variables. Connected builds reject missing configuration; the reader has no production fallback. Hosted clients run only on their configured organizer/reader origins. Restart Vite after configuration changes.
 

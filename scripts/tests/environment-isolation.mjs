@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {test} from 'node:test'
 import {readFile} from 'node:fs/promises'
 import {verifiedLocalTarget,localCliEnvironment,validateLocalEdgeSettings} from '../local-target.mjs'
-import {localCommand,runLocalCommand} from '../local-supabase.mjs'
+import {localCommand,localCommandFailure,runLocalCommand} from '../local-supabase.mjs'
 const target={url:'http://127.0.0.1:54321',secretKey:'synthetic-local-service',publicKey:'synthetic-local-public'}
 test('hosted targets are rejected before reading CLI credentials or constructing a client',async()=>{
  let read=false
@@ -39,6 +39,49 @@ test('CLI child processes receive no ambient production or management credential
  const env={PATH:'synthetic-path',SUPABASE_ACCESS_TOKEN:'synthetic-token',SUPABASE_DB_PASSWORD:'synthetic-password',SUPABASE_PROJECT_REF:'production',SUPABASE_URL:'https://production.example',SUPABASE_SERVICE_ROLE_KEY:'synthetic-service',SUPABASE_DB_URL:'synthetic-db-url'}
  assert.deepEqual(localCliEnvironment(env),{PATH:'synthetic-path'})
  assert.equal(env.SUPABASE_PROJECT_REF,'production')
+})
+
+test('local CLI diagnostics explain failures without exposing credentials or raw provider errors',()=>{
+ const secret='synthetic-private-value-never-log'
+ const cases=[
+  [{error:{code:'ETIMEDOUT'}},'timeout'],
+  [{error:{code:'ENOBUFS'}},'capture limit'],
+  [{error:{code:'ENOENT'}},'could not be launched'],
+  [{stderr:'Bind for 0.0.0.0:54321 failed: port is already allocated'},'port is already occupied'],
+  [{stderr:'Cannot connect to the Docker daemon'},'Docker is unavailable'],
+  [{stderr:'docker: command not found (podman also not found)'},'Docker is unavailable'],
+  [{stderr:'toomanyrequests: registry quota'},'rate limited'],
+  [{stderr:'failed to pull image'},'could not be pulled'],
+  [{stderr:'container auth is unhealthy'},'health check'],
+  [{stderr:'failed to read file: no such file or directory'},'file is missing'],
+  [{signal:'SIGILL'},'SIGILL'],
+  [{stderr:'unexpected provider response'},'CLI failed'],
+ ]
+ for(const [input,expected] of cases) {
+  const error=localCommandFailure('start',{status:1,...input,stdout:`SUPABASE_SECRET_KEY=${secret}`,error:{...input.error,message:secret}})
+  assert.match(error.message,new RegExp(expected))
+  assert.match(error.message,/exit 1/)
+  assert.ok(!error.message.includes(secret))
+  assert.ok(!error.message.includes('unexpected provider response'))
+ }
+})
+test('migration failure diagnostics include only a SQLSTATE and an actual source filename',()=>{
+ const migration='20261116000100_application_rbac.sql'
+ const result={status:1,stderr:`Applying migration ${migration}...\nERROR: private SQL values (SQLSTATE 42501)`}
+ assert.match(localCommandFailure('start',result,[migration]).message,/SQLSTATE 42501; 20261116000100_application_rbac.sql/)
+ assert.ok(!localCommandFailure('start',result,[migration]).message.includes('private SQL values'))
+ assert.ok(!localCommandFailure('start',result,[]).message.includes(migration))
+})
+test('the guarded startup propagates only safe CLI failure diagnostics',async()=>{
+ let invoked=false
+ await assert.rejects(runLocalCommand(['start'],(program,args,options)=>{
+  invoked=true
+  assert.equal(program,'npx')
+  assert.deepEqual(args,['supabase','start'])
+  assert.equal(options.env.SUPABASE_ACCESS_TOKEN,undefined)
+  return {status:1,stderr:'Cannot connect to the Docker daemon; private-startup-value',stdout:'private-startup-value'}
+ }),error=>error.message.includes('Docker is unavailable')&&!error.message.includes('private-startup-value'))
+ assert.ok(invoked)
 })
 
 test('Edge env parsing rejects exported or duplicate production overrides before serving',()=>{

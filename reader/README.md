@@ -4,7 +4,7 @@ An independent, browser-based EPUB reader in the same repository as the organize
 
 ## Run Locally
 
-Requires Node.js 22.13+ (22.x) or 24+ and the full repository checkout. From this folder:
+Requires Node.js 24.x and the full repository checkout. From this folder:
 
 ```sh
 npm ci --prefix ..

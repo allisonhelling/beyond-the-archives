@@ -31,7 +31,7 @@
     "metadata:fandoms": "node --experimental-strip-types server/refresh-fandoms.mjs",
     "invite": "node server/invite-user.mjs",
     "test:integration": "node scripts/test-supabase.mjs",
-    "test:integration:config": "node --experimental-strip-types --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs scripts/tests/staging-isolation.mjs",
+    "test:integration:config": "node --experimental-strip-types --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs scripts/tests/staging-isolation.mjs scripts/tests/release-operations.mjs",
     "perf:db": "node scripts/performance-library.mjs",
     "perf:backup": "node scripts/performance-backups.mjs",
     "perf:hosted": "node scripts/performance-hosted.mjs",
@@ -47,7 +47,11 @@
     "test:services:local": "node scripts/local-service-checks.mjs",
     "test:rbac:local": "node scripts/test-rbac-local.mjs",
     "test:privacy:local": "node --experimental-strip-types scripts/test-privacy-local.mjs",
-    "prepare:release": "node --experimental-strip-types scripts/prepare-release.mjs"
+    "prepare:release": "node --experimental-strip-types scripts/prepare-release.mjs",
+    "test:privacy:staging": "node --experimental-strip-types scripts/test-privacy-staging.mjs",
+    "perf:restore:staging": "node --experimental-strip-types scripts/performance-restore-staging.mjs",
+    "prepare:production": "node --experimental-strip-types scripts/production-configuration.mjs",
+    "recovery:bundle": "node scripts/recovery-bundle.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",
@@ -86,6 +90,6 @@
     "minimatch": "^11.0.1"
   },
   "engines": {
-    "node": "^22.13.0 || >=24.0.0"
+    "node": "24.x"
   }
 }
