@@ -21,6 +21,59 @@ export type Database = {
         Relationships: [
         ]
       }
+      admin_audit_logs: {
+        Row: {
+          id: number
+          request_id: string
+          actor_id: string | null
+          actor_role: string
+          target_id: string | null
+          action: string
+          outcome: string
+          code: string
+          previous_role: string | null
+          next_role: string | null
+          permission_id: string | null
+          permission_enabled: boolean | null
+          operator_reference: string | null
+          occurred_at: string
+        }
+        Insert: {
+          id?: number
+          request_id: string
+          actor_id?: string | null
+          actor_role: string
+          target_id?: string | null
+          action: string
+          outcome: string
+          code: string
+          previous_role?: string | null
+          next_role?: string | null
+          permission_id?: string | null
+          permission_enabled?: boolean | null
+          operator_reference?: string | null
+          occurred_at?: string
+        }
+        Update: {
+          id?: number
+          request_id?: string
+          actor_id?: string | null
+          actor_role?: string
+          target_id?: string | null
+          action?: string
+          outcome?: string
+          code?: string
+          previous_role?: string | null
+          next_role?: string | null
+          permission_id?: string | null
+          permission_enabled?: boolean | null
+          operator_reference?: string | null
+          occurred_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'admin_audit_logs_permission_id_fkey'; columns: ['permission_id']; isOneToOne: false; referencedRelation: 'app_permissions'; referencedColumns: ['id'] },
+        ]
+      }
       ao3_fandom_profiles: {
         Row: {
           name: string
@@ -134,6 +187,32 @@ export type Database = {
           target_origin?: string
           expires_at?: string
           user_requested?: boolean
+        }
+        Relationships: [
+        ]
+      }
+      app_permissions: {
+        Row: {
+          id: string
+        }
+        Insert: {
+          id: string
+        }
+        Update: {
+          id?: string
+        }
+        Relationships: [
+        ]
+      }
+      app_roles: {
+        Row: {
+          id: string
+        }
+        Insert: {
+          id: string
+        }
+        Update: {
+          id?: string
         }
         Relationships: [
         ]
@@ -1001,9 +1080,9 @@ export type Database = {
           bookmark_import?: Json | null
         }
         Relationships: [
+          { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
           { foreignKeyName: 'metadata_jobs_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
           { foreignKeyName: 'metadata_jobs_batch_id_user_id_fkey'; columns: ['batch_id', 'user_id']; isOneToOne: false; referencedRelation: 'import_batches'; referencedColumns: ['id', 'user_id'] },
-          { foreignKeyName: 'metadata_jobs_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
         ]
       }
       metadata_preferences: {
@@ -1393,6 +1472,24 @@ export type Database = {
         Relationships: [
         ]
       }
+      role_permissions: {
+        Row: {
+          role_id: string
+          permission_id: string
+        }
+        Insert: {
+          role_id: string
+          permission_id: string
+        }
+        Update: {
+          role_id?: string
+          permission_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'role_permissions_role_id_fkey'; columns: ['role_id']; isOneToOne: false; referencedRelation: 'app_roles'; referencedColumns: ['id'] },
+          { foreignKeyName: 'role_permissions_permission_id_fkey'; columns: ['permission_id']; isOneToOne: false; referencedRelation: 'app_permissions'; referencedColumns: ['id'] },
+        ]
+      }
       tags: {
         Row: {
           id: string
@@ -1416,6 +1513,23 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+        ]
+      }
+      user_roles: {
+        Row: {
+          user_id: string
+          role_id: string
+        }
+        Insert: {
+          user_id: string
+          role_id?: string
+        }
+        Update: {
+          user_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'user_roles_role_id_fkey'; columns: ['role_id']; isOneToOne: false; referencedRelation: 'app_roles'; referencedColumns: ['id'] },
         ]
       }
       userscript_devices: {
@@ -1585,6 +1699,9 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      app_access: { Args: Record<string, never>; Returns: Json }
+      admin_access: { Args: { p_request_id: string; p_action: string; p_target?: string; p_permission?: string; p_enabled?: boolean }; Returns: Json }
+      app_owner_maintenance: { Args: { p_request_id: string; p_action: string; p_target: string; p_operator_reference: string }; Returns: Json }
       reader_organizer_connection: { Args: { p_action: string; p_installation?: string; p_secret?: string }; Returns: Json }
       consume_app_login_handoff: { Args: { p_hash: string; p_challenge: string; p_origin: string }; Returns: string | null }
       account_has_password: { Args: Record<PropertyKey, never>; Returns: boolean }

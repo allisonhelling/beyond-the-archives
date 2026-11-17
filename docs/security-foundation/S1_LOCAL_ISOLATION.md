@@ -1,6 +1,6 @@
 # S1 — Local Isolation And Staging Preparation
 
-**Status:** Local service verification and read-only staging backend inventory completed on 16 November 2026. Hosted backend deployment and acceptance, provider credential-isolation proof, populated incremental-upgrade verification and full disaster-recovery objectives remain open; S1 is not complete and S2 has not started. Original implementation branch: `infra/01-local-staging-isolation`, based on `4d225ab9f064495bf195be7b8408805e16fc4a2a`.
+**Status:** Local service verification and read-only staging backend inventory completed on 16 November 2026. Hosted backend deployment and acceptance, provider credential-isolation proof, populated incremental-upgrade verification and full disaster-recovery objectives remain open; S1 is not complete. The later user-authorized [S2 local implementation](S2_APPLICATION_RBAC.md) is now tested; S2 staging execution awaits explicit approval. Original implementation branch: `infra/01-local-staging-isolation`, based on `4d225ab9f064495bf195be7b8408805e16fc4a2a`.
 
 The user conditionally approved S0 as an audit deliverable and explicitly authorized S1 preparation/local implementation. The approved S0 report and two doc edits were still uncommitted; they were preserved on this new branch without stashing, discarding, committing or merging. No push, hosted resource creation/configuration, production migration, deployment, credential rotation or production data copy occurred. No S2 role/RLS work was added.
 

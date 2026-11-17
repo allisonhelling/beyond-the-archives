@@ -33,6 +33,18 @@ test('authentication ignores ambient production tokens and does not log credenti
  assert.ok(read)
  assert.throws(() => stagingManagementToken({}, () => ({ status: 1, stderr: 'sensitive-response' })), error => !error.message.includes('sensitive-response'))
 })
+test('staging Auth plans can enable TOTP but cannot disable privileged MFA prerequisites', async () => {
+ const payload = { mfa_totp_enroll_enabled: true, mfa_totp_verify_enabled: true }
+ const candidate = plan([stagingOperation('enable-mfa', 'configureAuth', payload)])
+ const calls = []
+ const deploy = stagingDeploymentClient({ plan: candidate, token: 'synthetic-token', fetchImpl: async (url, options) => {
+  calls.push({ url, options })
+  return new Response(JSON.stringify(options.method === 'GET' ? project : {}), { status: 200 })
+ } })
+ await deploy('enable-mfa')
+ assert.deepEqual(JSON.parse(calls[1].options.body), payload)
+ for (const key of Object.keys(payload)) assert.throws(() => stagingDeploymentClient({ plan: plan([stagingOperation('disable-mfa','configureAuth',{ [key]: false })]), token: 'synthetic-token' }))
+})
 test('inventory reports counts and configuration while excluding remote secrets and identities', async () => {
  const responses = { project, auth: { site_url: 'https://staging.example', smtp_host: 'private-provider', smtp_admin_email: 'private@example.test', smtp_pass: 'sensitive-password', jwt_secret: 'sensitive-jwt' }, migrations: [], functions: [{ slug: 'account-status', status: 'ACTIVE', body: 'sensitive-code' }], secrets: [{ name: 'APP_ORIGIN', value: 'sensitive-secret', digest: 'sensitive-digest' }], keys: [{ api_key: 'sensitive-key' }] }
  const queries = []

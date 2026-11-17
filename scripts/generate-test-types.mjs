@@ -3,7 +3,7 @@ import { createTestDatabase } from './test-database.mjs'
 
 const db = await createTestDatabase()
 try {
-  const { rows: columns } = await db.query(`select table_name, column_name, udt_name, is_nullable, column_default
+  const { rows: columns } = await db.query(`select table_name, column_name, udt_name, is_nullable, column_default, is_identity
     from information_schema.columns where table_schema = 'public' order by table_name, ordinal_position`)
   const { rows: enums } = await db.query(`select t.typname as name, e.enumlabel as value from pg_enum e
     join pg_type t on t.oid = e.enumtypid order by e.enumsortorder`)
@@ -15,7 +15,7 @@ try {
     const fieldType = c => (types[c.udt_name] ?? (enumNames.has(c.udt_name) ? `Database['public']['Enums']['${c.udt_name}']` : 'never')) + (c.is_nullable === 'YES' ? ' | null' : '')
     output += `      ${table}: {\n        Row: {\n${fields.map(c => `          ${c.column_name}: ${fieldType(c)}`).join('\n')}\n        }\n`
     for (const mode of ['Insert', 'Update']) {
-      output += `        ${mode}: {\n${fields.map(c => `          ${c.column_name}${mode === 'Update' || c.column_default || c.is_nullable === 'YES' ? '?' : ''}: ${fieldType(c)}`).join('\n')}\n        }\n`
+      output += `        ${mode}: {\n${fields.map(c => `          ${c.column_name}${mode === 'Update' || c.column_default || c.is_nullable === 'YES' || c.is_identity === 'YES' ? '?' : ''}: ${fieldType(c)}`).join('\n')}\n        }\n`
     }
     const { rows: relations } = await db.query(`select c.conname as name, a.attname as col, ft.relname as target, fa.attname as target_col
       from pg_constraint c join pg_class t on t.oid = c.conrelid join pg_namespace n on n.oid=t.relnamespace
@@ -34,6 +34,9 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      app_access: { Args: Record<string, never>; Returns: Json }
+      admin_access: { Args: { p_request_id: string; p_action: string; p_target?: string; p_permission?: string; p_enabled?: boolean }; Returns: Json }
+      app_owner_maintenance: { Args: { p_request_id: string; p_action: string; p_target: string; p_operator_reference: string }; Returns: Json }
       reader_organizer_connection: { Args: { p_action: string; p_installation?: string; p_secret?: string }; Returns: Json }
       consume_app_login_handoff: { Args: { p_hash: string; p_challenge: string; p_origin: string }; Returns: string | null }
       account_has_password: { Args: Record<PropertyKey, never>; Returns: boolean }

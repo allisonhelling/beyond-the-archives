@@ -98,6 +98,8 @@ The app, reader and extension must use the same local backend and exact configur
 
 With the synthetic stack and `npm run db:serve` running, use `npm run test:integration`, `npm run test:services:local`, and `npm run test:restore:local` to check real authentication, library/storage isolation, Edge login exchange, and synthetic recovery. The checks create and clean up their own test accounts. See the [local verification guide](docs/security-foundation/LOCAL_AND_STAGING.md#local-service-verification) for scope and limitations.
 
+`npm run test:rbac:local` checks application roles and real TOTP authorization against the local stack without requiring Edge Functions. Run it before choosing a lasting application Owner; it refuses an already bootstrapped stack and removes its temporary accounts. Administration currently has a backend API only; there is no admin or MFA enrollment screen. See the [application role guide](docs/security-foundation/S2_APPLICATION_RBAC.md) for scope and prerequisites.
+
 ### Build and Connect the Local Browser Extension
 
 With `.env.local` pointing to local Supabase, build into the local directory so the hosted extension build is preserved:

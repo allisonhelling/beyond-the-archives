@@ -104,6 +104,7 @@ jobs:
       - run: npm run db:reset
       - run: npm run db:lint
       - run: npm run test:integration
+      - run: npm run test:rbac:local
       - run: npm run db:stop
         if: always()
   # Production releases require a separately approved workflow and hosted gate.

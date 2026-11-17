@@ -50,6 +50,11 @@ secure_password_change = true
 [auth.email.notification.email_changed]
 enabled = true
 
+[auth.mfa.totp]
+# Application administration requires a verified TOTP factor and fresh AAL2 session.
+enroll_enabled = true
+verify_enabled = true
+
 [functions.account-status]
 # Handler verifies every bearer token with Supabase Auth; supports modern signing keys.
 verify_jwt = false

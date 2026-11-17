@@ -7,7 +7,7 @@ export { stagingProjectRef }
 const projectName = 'beyond-the-archives-staging'
 const region = 'us-east-1'
 const routes = { project: '', auth: '/config/auth', storage: '/config/storage', functions: '/functions', secrets: '/secrets', migrations: '/database/migrations', keys: '/api-keys', query: '/database/query/read-only' }
-export const stagingAuthFields = Object.freeze(['site_url', 'uri_allow_list', 'disable_signup', 'external_email_enabled', 'external_anonymous_users_enabled', 'mailer_autoconfirm', 'mailer_secure_email_change_enabled', 'mailer_notifications_email_changed_enabled', 'security_update_password_require_reauthentication', 'password_min_length', 'password_required_characters', 'hook_before_user_created_enabled', 'hook_before_user_created_uri'])
+export const stagingAuthFields = Object.freeze(['site_url', 'uri_allow_list', 'disable_signup', 'external_email_enabled', 'external_anonymous_users_enabled', 'mailer_autoconfirm', 'mailer_secure_email_change_enabled', 'mailer_notifications_email_changed_enabled', 'security_update_password_require_reauthentication', 'password_min_length', 'password_required_characters', 'mfa_totp_enroll_enabled', 'mfa_totp_verify_enabled', 'hook_before_user_created_enabled', 'hook_before_user_created_uri'])
 const smtpFields = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_admin_email', 'smtp_sender_name']
 const functionConfig = readFileSync(new URL('../supabase/config.toml', import.meta.url), 'utf8')
 const functionJwt = new Map([...functionConfig.matchAll(/^\[functions\.([a-z0-9-]+)\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/gm)].flatMap(match => {
@@ -93,6 +93,7 @@ function deploymentOperations(plan) {
     const callbacks = payload.uri_allow_list?.split(',')
     if (payload.site_url !== undefined && payload.site_url !== organizer
      || callbacks && (callbacks.length !== 2 || ![`${organizer}/auth/callback`, `${reader}/auth/callback`].every(url => callbacks.includes(url)))
+     || payload.mfa_totp_enroll_enabled === false || payload.mfa_totp_verify_enabled === false
      || payload.mailer_autoconfirm === true || payload.external_anonymous_users_enabled === true || payload.hook_before_user_created_enabled === false
      || payload.hook_before_user_created_uri !== undefined && payload.hook_before_user_created_uri !== 'pg-functions://postgres/public/before_user_created') invalidPlan()
     path = routes.auth; method = 'PATCH'; break
