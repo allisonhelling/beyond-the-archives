@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { CollectionColorPicker } from '../collections/CollectionColorPicker'
 import { MetadataTags } from '../MetadataTags'
-import { tagColors, type TagAppearance, type TagCategory } from './display-settings'
+import { defaultAllTagColor, tagColors, type TagAppearance, type TagCategory } from './display-settings'
 import './tag-colors.css'
 
 export function TagColorSettings({ appearance, onChange: change, disabled = false }: { appearance: TagAppearance; onChange: (value: TagAppearance) => void; disabled?: boolean }) {
-  const [allColor, setAllColor] = useState<string>(tagColors.tags.color)
+  const [allColor, setAllColor] = useState<string>(defaultAllTagColor)
   const [undoColors, setUndoColors] = useState<TagAppearance['colors'] | null>(null)
   return (
     <fieldset className="display-tag-colors settings-subsection" disabled={disabled}><legend>Tag Colors</legend><div className="display-tag-color-grid">{(Object.keys(tagColors) as TagCategory[]).map(category => <div key={category} role="group" aria-label={`${tagColors[category].label} Color`}><span className="field-help">{tagColors[category].label}:</span><CollectionColorPicker disabled={disabled} showHex value={appearance.colors[category] ?? tagColors[category].color} onChange={color => change({ ...appearance, colors: { ...appearance.colors, [category]: color } })} /><span className="display-tag-example"><span>Ex.</span><MetadataTags values={[tagColors[category].example]} category={category} appearance={appearance} /></span></div>)}</div>

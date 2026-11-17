@@ -246,7 +246,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
  await card.getByRole('link',{name:'Layout Order Story',exact:true}).click()
  // Exercise the fallback font used when Avenir Next and Segoe UI are unavailable.
  if(mobile) await page.addStyleTag({content:':root { --font-sans: Arial, sans-serif; }'})
- const read=page.getByRole('link',{name:'Unfolded',exact:true}),wayback=page.getByRole('link',{name:'Open in Wayback Machine',exact:true})
+ const read=page.getByRole('link',{name:'Unfolded',exact:true}),wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true})
  await expect(read).toBeVisible()
  if(mobile) {
   for(const width of [390,320]) {
@@ -370,7 +370,7 @@ test('exports one work in either format and shows Unfolded beside Wayback only f
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
  available=true
  await page.reload()
- const wayback=page.getByRole('link',{name:'Open in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
+ const wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
  await expect(wayback).toHaveText('Wayback')
  await expect(read).toHaveAttribute('href','https://reader.example/?work=99001')
  expect((await read.boundingBox())!.x).toBeGreaterThan((await wayback.boundingBox())!.x)

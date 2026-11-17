@@ -11,3 +11,8 @@
 
 .summary-content[data-collapsed="true"] { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .summary-disclosure > .text-button { display: block; border: 0; background: transparent; color: var(--color-brand); padding: 4px 0; min-height: 32px; }
+
+.summary-format-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.summary-format-option { padding: 16px; border: 1px solid var(--color-border); background: var(--color-surface); }
+.summary-format-option[data-selected="true"] { border-color: var(--color-brand); }
+.summary-format-option .story-summary { font-size: var(--minimum-text-size); line-height: 1.7; white-space: pre-wrap; margin-top: 12px; }

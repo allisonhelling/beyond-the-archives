@@ -16,7 +16,7 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 .toolbar strong, .toolbar button, .toolbar .library-link { white-space: nowrap; }
 .toolbar > .library-link { justify-self: start; }
 .toolbar-progress, .reading-summary, .bottom-bar { justify-content: center; }
-.toolbar-progress, .bottom-section { text-align: center; }
+.toolbar-progress, .bottom-section, .toolbar-notification { text-align: center; }
 .environment-label { font-size: .8em; font-weight: 600; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
 .toolbar-actions { justify-content: flex-end; }
 .toolbar-disconnected { grid-template-columns: max-content minmax(0, 1fr) max-content; overflow-x: visible; }
@@ -28,12 +28,6 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
  .reading-summary { flex-wrap: wrap; min-width: 0; }
  .toolbar:has(.reading-summary) > .toolbar-actions { grid-column: 1 / -1; flex-wrap: wrap; justify-content: center; }
 }
-.status-bullet { color: var(--color-brand); }
-.status-bullet[data-status="reading"] { color: var(--status-read); }
-.status-bullet[data-status="finished"] { color: var(--color-brand); }
-.status-bullet[data-status="paused_reading"], .status-bullet[data-status="waiting_for_updates"] { color: var(--status-waiting); }
-.status-bullet[data-status="re_reading"] { color: var(--status-rereading); }
-.status-bullet[data-status="to_read"] { color: var(--status-to-read); }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--control-gap); }
 .reading-actions { flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; }
 .reading-actions > * { flex-shrink: 0; }
@@ -54,8 +48,8 @@ section { padding: var(--field-gap); margin: var(--bar-space-before, var(--field
 button, input, select, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: var(--control-padding); min-height: var(--control-size); }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
-.undo-read { color: var(--accent); border-color: var(--accent); min-height: max(44px, var(--control-size)); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
-.undo-read:hover { background: var(--color-brand-soft); }
+.undo-read { color: var(--accent); border: 0; background: transparent; min-height: max(44px, var(--control-size)); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.undo-read:hover { border-color: transparent; background: var(--color-brand-soft); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .6; cursor: default; }
 .brand-icon { display: grid; place-items: center; color: var(--color-brand); }

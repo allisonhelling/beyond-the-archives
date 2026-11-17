@@ -32,7 +32,7 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
 .search-suggestions .suggestion-heading { display: block; color: var(--color-link); padding: 5px 7px; text-transform: uppercase; font-weight: 400; }
 .suggestion-options button { font-size: inherit; display: block; width: 100%; padding: 9px 7px; border: 0; border-radius: 4px; text-align: left; background: transparent; overflow-wrap: anywhere; }
 .search-suggestions p { padding: 7px; color: #756363; font-size: 13px; }
-.suggestion-options button:hover, .suggestion-options button:focus-visible { background: #970000; color: #fff; }
+.suggestion-options button:hover, .suggestion-options button:focus-visible { background: var(--color-brand-soft); }
 .reading-filters { padding: 24px; background: var(--color-surface); border: 1px solid var(--color-filter-border); border-radius: var(--radius-filter-panel); margin-bottom: 24px; }
 .filter-grid { --filter-grid-gap: 14px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--filter-grid-gap); align-items: start; }
 .filter-grid > * { min-width: 0; grid-column: span 2; }
@@ -142,7 +142,7 @@ select, .reading-toolbar input, .reading-toolbar select, .reading-filters input:
 .reading-toolbar { padding: 12px 10px; gap: 8px; grid-template-columns: max-content minmax(130px, 1.2fr) minmax(110px, .8fr) max-content max-content max-content; }
 .reading-toolbar .toolbar-actions > .button { grid-column: auto; grid-row: auto; align-self: start; }
 .reading-toolbar .toolbar-actions > .apply-filters { white-space: nowrap; }
-.reading-toolbar .toolbar-actions > .button, .reading-filters .button, .tag-group-editor .button, .filter-toggle, .reading-toolbar .dropdown-compact .button, .reading-filters .dropdown-compact .button, .pagination-trailing .dropdown-compact .button { border-radius: var(--radius-compact-control); min-height: 36px; height: 36px; padding: 7px 10px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); line-height: 20px; }
+.reading-toolbar .toolbar-actions > .button, .reading-filters .button, .tag-group-editor .button, .filter-toggle, .reading-toolbar .dropdown-compact .button, .reading-filters .dropdown-compact .button, .pagination-trailing .dropdown-compact .button, .pagination-controls .button { border-radius: var(--radius-compact-control); min-height: 36px; height: 36px; padding: 7px 10px; font-size: max(var(--work-tile-min-font-size, 0px), 14px); line-height: 20px; }
 .reading-toolbar[data-mode="reading"] { grid-template-columns: max-content minmax(130px, 1.2fr) minmax(110px, .8fr) max-content max-content; }
 .reading-toolbar .dropdown-compact .dropdown-trigger, .reading-toolbar .toolbar-actions > .series-toggle, .pagination-trailing .dropdown-compact .dropdown-trigger { padding-inline: 6px; gap: 6px; }
 .reading-toolbar .suggestion-search > .unlabeled-filter { grid-template-columns: minmax(0, 1fr); }

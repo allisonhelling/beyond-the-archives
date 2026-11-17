@@ -48,7 +48,7 @@ it.each(['safari', 'chrome'].flatMap(browser => Object.keys(statuses).map(status
  expect(entry).toMatchObject({ status, progress, notes: 'Keep notes', rating: 4, tags: ['Mine'] })
  for (const surface of [root, bottomRoot]) {
   expect(surface.querySelector('.reading-summary strong')).toHaveTextContent(status === 'waiting_for_updates' && browser === 'safari' ? /^Waiting$/ : status === 'reading' && browser === 'chrome' ? 'Currently Reading' : statuses[status])
-  expect(surface.querySelector('.status-bullet')).toHaveAttribute('data-status', status)
+  expect(surface.querySelector('.status-bullet')).toBeNull()
   expect(surface.querySelector('.chapter-progress')).toHaveTextContent(`Ch. ${progress} / 10`)
   const actions = surface.querySelector('.reading-actions')
   expect(actions.firstElementChild).toHaveClass('chapter-progress')
@@ -88,12 +88,12 @@ it.each(['safari', 'chrome'])('captures an explicit chapter-finished editor save
 it.each(['safari', 'chrome'].flatMap(browser => [false, true].map(fromBottom => ({ browser, fromBottom }))))('prefills the mid-story chapter on $browser (bottom bar: $fromBottom)', async ({ browser, fromBottom }) => {
  await mountLibrary(document, 'https://archiveofourown.org/works/123/chapters/104', { browser })
  fireEvent.click(within(fromBottom ? bottomRoot : root).getByRole('button', { name: 'Add to Library' }))
- const chapter = await within(root).findByLabelText('Current Chapter')
+ const chapter = await within(fromBottom ? bottomRoot : root).findByLabelText('Current Chapter')
  expect(chapter).toBeVisible()
  expect(chapter).toHaveValue(4)
- expect(within(root).getByLabelText('Reading Status')).toHaveValue('reading')
- expect(within(root).getByLabelText('This Chapter Is Finished')).not.toBeChecked()
- await waitFor(() => expect(findButton('Cancel')).toBeEnabled())
+ expect(within(fromBottom ? bottomRoot : root).getByLabelText('Reading Status')).toHaveValue('reading')
+ expect(within(fromBottom ? bottomRoot : root).getByLabelText('This Chapter Is Finished')).not.toBeChecked()
+ await waitFor(() => expect(within(fromBottom ? bottomRoot : root).getByRole('button', {name:'Cancel'})).toBeEnabled())
 })
 
 it.each(['safari', 'chrome'].flatMap(browser => ['finished', 'waiting_for_updates'].flatMap(status => [1, 4, 10].flatMap(chapter => [false, true].map(fromBottom => ({ browser, status, chapter, fromBottom }))))))('starts a reread from $status at chapter $chapter on $browser (bottom bar: $fromBottom)', async ({ browser, status, chapter, fromBottom }) => {
@@ -389,7 +389,7 @@ it.each([false, true])('keeps one logo in the main bar when panels open (saved e
    expect(surface.querySelector('.chapter-progress')).toHaveAttribute('aria-label', 'Edit Chapters Read')
    expect(within(surface).queryByLabelText('About chapters read')).not.toBeInTheDocument()
   }
-  expect(summary.querySelector('.status-bullet')).toHaveAttribute('aria-hidden', 'true')
+  expect(summary.querySelector('.status-bullet')).toBeNull()
   expect(summary.querySelector('.reading-actions')).toContainElement(findButton('Read'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Edit'))
   expect(root.querySelector('.toolbar-actions')).toContainElement(findButton('Connection'))
@@ -472,7 +472,7 @@ it('mirrors the top bar for unsaved works and omits completion actions for ambig
  expect(document.getElementById('ao3-library-progress')).not.toHaveAttribute('hidden')
  expect(bottomRoot.querySelector('.toolbar').textContent).toBe(root.querySelector('.toolbar').textContent)
  fireEvent.click(within(bottomRoot).getByRole('button',{name:'Add to Library'}))
- await within(root).findByLabelText('Private Notes')
+ await within(bottomRoot).findByLabelText('Private Notes')
  await waitFor(()=>expect(within(bottomRoot).getByRole('button',{name:'Add to Library'})).toHaveAttribute('aria-expanded','true'))
  document.getElementById('ao3-library-companion').remove()
  entry = { version: 'v1', status: 'reading', progress: 2, notes: '', rating: null, tags: [], collections: [] }
@@ -1123,10 +1123,10 @@ it.each(['safari', 'chrome'])('opens the shared add editor at the selected full-
  entireWork()
  await mountLibrary(document, entireWorkUrl, { browser })
  fireEvent.click(within(chapterSurfaces()[1]).getByRole('button', { name: 'Add to Library' }))
- expect(await within(root).findByLabelText('Current Chapter')).toHaveValue(2)
- expect(within(root).getByLabelText('Reading Status')).toHaveValue('reading')
- expect(within(root).getByLabelText('This Chapter Is Finished')).not.toBeChecked()
- await waitFor(() => expect(findButton('Cancel')).toBeEnabled())
+ expect(await within(chapterSurfaces()[1]).findByLabelText('Current Chapter')).toHaveValue(2)
+ expect(within(chapterSurfaces()[1]).getByLabelText('Reading Status')).toHaveValue('reading')
+ expect(within(chapterSurfaces()[1]).getByLabelText('This Chapter Is Finished')).not.toBeChecked()
+ await waitFor(() => expect(within(chapterSurfaces()[1]).getByRole('button', {name:'Cancel'})).toBeEnabled())
 })
 
 const readingActionCases = [

@@ -24,7 +24,8 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check --config supabase/functions/deno.json supabase/functions/*/index.ts
-      - run: npm audit --audit-level=moderate
+      - run: node --test scripts/tests/audit-dependencies.mjs
+      - run: node scripts/audit-dependencies.mjs
   browser:
     name: Browser Tests (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
@@ -72,6 +73,8 @@ jobs:
             reader/package-lock.json
       - run: npm ci
       - run: npm ci --prefix reader
+      - run: node ../scripts/audit-dependencies.mjs
+        working-directory: reader
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test tests/browser/calibre.spec.ts tests/browser/cloud.spec.ts
         working-directory: reader

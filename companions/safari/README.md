@@ -81,3 +81,5 @@ Automated tests cover defaults, credential boundaries, ownership, revocation/exp
 ## Mobile Website Imports
 
 The mobile website does not start automatic metadata jobs, CSV imports or library scans. To save one work with metadata, open it on AO3 and use this companion's existing Add/Collect metadata controls. Website library browsing, notes, collections, reading actions, manual metadata editing and Import History remain available. Desktop website retrieval requires the compatible Chrome/Edge companion.
+
+Panels open beside the bar that invoked them, including the bottom bar. The companion follows AO3 chapter DOM replacements and foreground navigation, inherits the summary text size, and uses centered notices without a reading-status bullet. Global logout in either app also revokes paired AO3 bars.

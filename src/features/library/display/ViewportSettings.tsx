@@ -28,9 +28,9 @@ export function ViewportSizeFields({ value, onChange, label, unit: selectedUnit,
 }
 export function ViewportSettings() {
  const [sizes, setSizes] = useState(previewViewports), [message, setMessage] = useState(''), [error, setError] = useState('')
- return <form className="story-form settings-subsection" onSubmit={event => { event.preventDefault(); try { savePreviewViewports(sizes); setMessage('Preview sizes saved.'); setError('') } catch (failure) { setError((failure as Error).message) } }}>
-  <h3>Preview Screen Sizes</h3><p className="field-help">Choose a device or enter dimensions in inches or millimeters. Measurements use CSS units (1 in = 25.4 mm = 96 CSS pixels) for the preview canvas. These sizes control tile and information-page previews; live layouts follow your browser width.</p>
+ return <form className="story-form" onSubmit={event => { event.preventDefault(); try { savePreviewViewports(sizes); setMessage('Preview sizes saved.'); setError('') } catch (failure) { setError((failure as Error).message) } }}>
+  <fieldset className="settings-subsection"><legend>Preview Screen Sizes</legend><p className="field-help">Choose a device or enter dimensions in inches or millimeters. Measurements use CSS units (1 in = 25.4 mm = 96 CSS pixels) for the preview canvas. These sizes control tile and information-page previews; live layouts follow your browser width.</p>
   <div className="viewport-settings-grid">{(['mobile', 'desktop'] as DisplayLayout[]).map(layout => <ViewportSizeFields key={layout} label={layout === 'mobile' ? 'Mobile Preview' : 'Desktop Preview'} value={sizes[layout]} onChange={size => { setSizes(current => ({ ...current, [layout]: size })); setMessage('') }} />)}</div>
-  <div className="form-actions"><button className="button secondary">Save Preview Sizes</button></div>{message && <p role="status">{message}</p>}{error && <p role="alert" className="error-message">{error}</p>}
- </form>
+  <div className="form-actions"><button type="button" className="button secondary" onClick={() => setSizes(current => ({ ...current, desktop: { width: Math.max(280, Math.min(3840, window.innerWidth)), height: Math.max(320, Math.min(3840, window.innerHeight)) } }))}>Use This Desktop Size</button><button className="button secondary">Save Preview Sizes</button></div>{message && <p role="status">{message}</p>}{error && <p role="alert" className="error-message">{error}</p>}
+ </fieldset></form>
 }

@@ -81,6 +81,7 @@ function AuthGate() {
   if (!online || location.pathname === '/offline' && (loading || !authenticated) || loading && authTimedOut) return <>{location.pathname !== '/offline' && <Navigate to="/offline" replace />}<OfflinePage standalone /></>
   if (!loading && !authenticated && location.pathname !== '/offline') return <><p className="field-help"><NavLink to="/offline">Open Retained Offline Hub</NavLink></p><AuthScreen /></>
 
+  if (!loading && authenticated && new URLSearchParams(location.search).get('auth') === 'recovery') return <Navigate to="/settings#account" replace />
   if (sampleMode && authenticated) return <LibraryProvider><LibrarySyncProvider><PersonalRatingProvider><SamplePreview /><Shell /></PersonalRatingProvider></LibrarySyncProvider></LibraryProvider>
   if (loading) return <div className="loading-state" role="status"><LoadingIcon /><p>Opening your reading space…</p></div>
   if (!authenticated || !session || needsPassword) return <AuthScreen />

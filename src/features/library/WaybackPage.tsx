@@ -8,8 +8,8 @@ import { parseWorkUrl } from '../imports/urls'
 
 export function WaybackLink({ url, menu = false }: { url: string; menu?: boolean }) {
  try { parseWorkUrl(url) } catch { return null }
- const link = (descriptionId?: string) => <Link className={menu ? 'menu-item' : 'button secondary'} aria-label={menu ? 'Open in Wayback' : 'Open in Wayback Machine'} aria-describedby={descriptionId} to={`/wayback?${new URLSearchParams({ url })}`} target="_blank" rel="noreferrer"><Landmark size={16} aria-hidden="true" />{menu ? 'Open in Wayback' : 'Wayback'}</Link>
- return menu ? link() : <Tooltip description="Open in Wayback Machine">{link}</Tooltip>
+ const link = (descriptionId?: string) => <Link className={menu ? 'menu-item' : 'button secondary'} aria-label={menu ? 'Search in Wayback' : 'Search in Wayback Machine'} aria-describedby={descriptionId} to={`/wayback?${new URLSearchParams({ url })}`} target="_blank" rel="noreferrer"><Landmark size={16} aria-hidden="true" />{menu ? 'Search in Wayback' : 'Wayback'}</Link>
+ return menu ? link() : <Tooltip description="Search in Wayback Machine">{link}</Tooltip>
 }
 export function WaybackPage() {
  const [params] = useSearchParams(), input = params.get('url') ?? ''

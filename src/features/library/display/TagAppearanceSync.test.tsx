@@ -12,7 +12,7 @@ beforeEach(() => {
  mocks.rpc.mockReset().mockImplementation(async (_name: string, args?: {p_input?: {tagAppearance: TagAppearance; base: TagAppearance | null}}) => {
   if (args?.p_input) remote = args.p_input.tagAppearance
   // PostgreSQL object key ordering need not match the browser's serialization.
-  return { data: {tagAppearance: remote ? {colors: remote.colors, shape: remote.shape} : null}, error: null }
+  return { data: {tagAppearance: remote ? {colors: remote.colors, shape: remote.shape, ...(remote.textColor ? {textColor: remote.textColor} : {})} : null}, error: null }
  })
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -56,4 +56,14 @@ it('does not write browser display settings when the account already matches the
  act(() => window.dispatchEvent(new Event('focus')))
  await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(3))
  expect(localStorage.getItem(displaySettingsKey)).toBeNull()
+})
+
+it('publishes and receives an explicit tag text color', async () => {
+ render(<TagAppearanceSync userId="alice" />)
+ await waitFor(() => expect(remote?.shape).toBe('bullets'))
+ act(() => saveTagAppearance({shape:'pill', colors:{}, textColor:'black'}))
+ await waitFor(() => expect(remote?.textColor).toBe('black'))
+ remote = {shape:'sharp', colors:{}, textColor:'colored'}
+ act(() => window.dispatchEvent(new Event('focus')))
+ await waitFor(() => expect(tagAppearance(displaySnapshot()).textColor).toBe('colored'))
 })

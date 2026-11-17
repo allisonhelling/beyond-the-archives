@@ -1,5 +1,5 @@
-.work-fandoms { min-width: 0; overflow-wrap: anywhere; font: 650 var(--work-tile-label-size)/1.6 var(--font-sans); letter-spacing: 1px; color: var(--color-brand); }
-.work-card :is(.authors, .display-fact-value, .display-grouped-line) { color: var(--color-muted); }
+.work-fandoms { min-width: 0; overflow-wrap: anywhere; font: 650 max(var(--work-tile-min-font-size, 0px), 14px)/1.6 var(--font-sans); letter-spacing: 1px; color: var(--color-brand); }
+.work-card :is(.authors, .byline, .display-fact-value, .display-grouped-line) { color: var(--color-muted); }
 .story-card :is(.metadata-tags, .expandable-metadata-tags) { --personal-control-font-size: var(--work-tile-label-size); font-size: var(--work-tile-label-size); }
 
 :is(.series-link, .author-link, .metadata-link) { text-decoration: none; text-underline-offset: .15em; }
@@ -12,3 +12,16 @@
  :is(.story-card-title > .story-quick-actions, .card-top > .card-top-actions) { position: absolute; inset: 0 0 auto auto; }
  :is(.story-card-title, .card-top) h2 > .action-tooltip:first-of-type { position: absolute; inset: 0 auto auto 0; display: inline-flex; align-items: center; height: 36px; }
 }
+
+.story-card h2 { margin: 6px 0 5px; font-size: var(--story-title-size, 22px); overflow-wrap: anywhere; }
+.story-card :is(.authors, .byline) { font-size: max(var(--work-tile-min-font-size, 0px), 14px); margin: 0; }
+.work-card .work-fandoms { margin: 0; }
+@media (min-width: 1101px) {
+ .work-card { --work-tile-min-font-size: var(--work-summary-text-size); --minimum-text-size: var(--work-summary-text-size); --personal-control-font-size: var(--work-summary-text-size); font-size: var(--work-summary-text-size); }
+}
+
+@media (max-width: 650px) { .story-card { --story-title-size: 20px; } }
+
+.story-summary { font-size: var(--minimum-text-size); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.story-facts { font-size: max(var(--work-tile-min-font-size, 0px), 14px); margin-bottom: 10px; }
+.story-summary-divider { width: 48px; margin: 2px 0 12px; border: 0; border-top: 1px solid var(--color-brand); }

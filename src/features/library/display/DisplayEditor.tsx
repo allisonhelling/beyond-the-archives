@@ -98,16 +98,16 @@ export function DisplayEditor({ title, groups, state, children, showTitle = true
           return <button key={direction} className="button secondary" type="button" disabled={!destination} aria-label={`Move ${selection.length > 1 ? 'Selected Elements' : label(selected)} ${direction < 0 ? 'Up' : 'Down'}`} onClick={() => { if (destination) move(selected, { group: selected.group, field: destination }, true) }}>{direction < 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}{direction < 0 ? 'Move Up' : 'Move Down'}</button>
         })}
       </div>}
-      {managing && <div className="display-available">{[false, true].map(hidden => <section key={String(hidden)} aria-label={hidden ? 'Available Information' : 'Shown Information'}>
-        <h4>{hidden ? 'Available Information' : 'Shown Information'}</h4>
+      {managing && <div className="display-available">{[false, true].map(hidden => <details open key={String(hidden)} aria-label={hidden ? 'Available Information' : 'Shown Information'}>
+        <summary>{hidden ? 'Available Information' : 'Shown Information'}</summary>
         {managementSections.map(({ group, fields }) => {
           const items = fields.filter(field => isHidden(field) === hidden)
-          return items.length > 0 && <details key={group} className="details-disclosure" open>
-            <summary>{displayGroups[group].title}</summary>
+          return items.length > 0 && <section key={group}>
+            <h4>{displayGroups[group].title}</h4>
             <ul>{items.map(item => <li key={item.field}><button className="button secondary" type="button" onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : 'Select'} {label(item)}</button></li>)}</ul>
-          </details>
+          </section>
         })}
-      </section>)}</div>}
+      </details>)}</div>}
 
     </div>
       <ViewportFrame viewport={viewport} title={`${title} Viewport`} tile={groups.length === 1}><div ref={surface} tabIndex={-1} className="display-edit-surface" data-hide-information={managing} aria-label={`${title} Preview`} onMouseDownCapture={event => event.preventDefault()} onDragStartCapture={event => event.preventDefault()} onClickCapture={event => {

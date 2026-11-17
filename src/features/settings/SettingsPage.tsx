@@ -10,7 +10,7 @@ import { browsingSettingsSection } from '../library/browsing/settings-sections'
 import { backupSettingsSection, csvExportSettingsSection } from '../backups/settings-sections'
 import { ao3UsernameSettingsSection, metadataSettingsSection, seriesImportSettingsSection } from '../imports/settings-sections'
 import { accountSettingsSection, browserBarSettingsSection, personalRatingSettingsSection } from './settings-sections'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Ao3UsernameSettings } from '../imports/Ao3UsernameSettings'
 import { MetadataSettings } from '../imports/MetadataSettings'
@@ -38,7 +38,7 @@ const settingsSections: { id: string; title: string; description: string; compon
 ]
 
 const settingsGroups = [
-  { id: 'account', title: 'Account', description: 'Sign-in details and account security.', sections: [accountSettingsSection.id] },
+  { id: 'account', title: 'Account & Security', description: 'Sign-in details and account security.', sections: [accountSettingsSection.id] },
   { id: 'design', title: 'Design', description: 'Tile layouts, tag appearance, and display preferences.', sections: [displaySettingsSection.id] },
   { id: 'library', title: 'Library & Reading', description: 'Browsing, ratings, reading statistics, and cleanup.', sections: [browsingSettingsSection.id, personalRatingSettingsSection.id, readingStatsSettingsSection.id, dnfCleanupSettingsSection.id] },
   { id: 'imports', title: 'Imports & Connections', description: 'AO3 account, metadata, series imports, and browser tools.', sections: [ao3UsernameSettingsSection.id, seriesImportSettingsSection.id, metadataSettingsSection.id, browserBarSettingsSection.id] },
@@ -47,6 +47,7 @@ const settingsGroups = [
 
 export function SettingsPage() {
   const location = useLocation()
+  const [outlineOpen, setOutlineOpen] = useState(true)
   const section = settingsSections.find(({ id, aliases }) => location.hash === `#${id}` || aliases?.includes(location.hash))
   const group = settingsGroups.find(group => location.hash === `#${group.id}` || section && group.sections.includes(section.id))
   const previousGroup = useRef(group?.id)
@@ -58,8 +59,8 @@ export function SettingsPage() {
     if (section) target?.scrollIntoView?.({ block: 'start' })
     else window.scrollTo(0, 0)
   }, [group, section])
-  return <div className="settings-page" data-section-open={Boolean(group)}>
-    <aside className="settings-outline"><nav aria-label="Settings Categories"><h2><Link to="/settings" aria-current={!group ? 'page' : undefined}>Settings Categories</Link></h2><ul>{settingsGroups.map(({ id, title, description }) => <li key={id}><Link aria-label={title} aria-describedby={`outline-description-${id}`} to={`/settings#${id}`} aria-current={group?.id === id ? 'location' : undefined}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></Link></li>)}</ul></nav></aside>
+  return <div className="settings-page" data-section-open={Boolean(group)} data-outline-open={outlineOpen}>
+    <aside className="settings-outline" hidden={!group}><button type="button" className="button secondary settings-outline-toggle" aria-label={outlineOpen ? 'Collapse Settings Navigation' : 'Expand Settings Navigation'} aria-expanded={outlineOpen} aria-controls="settings-category-navigation" onClick={() => setOutlineOpen(open => !open)}>{outlineOpen ? '◂' : '▸'}</button><nav id="settings-category-navigation" hidden={!outlineOpen} aria-label="Settings Categories"><h2><Link to="/settings" aria-current={!group ? 'page' : undefined}>Settings Categories</Link></h2><ul>{settingsGroups.map(({ id, title, description }) => <li key={id}><Link aria-label={title} aria-describedby={`outline-description-${id}`} to={`/settings#${id}`} aria-current={group?.id === id ? 'location' : undefined}><SettingsSectionLabel title={title} description={description} descriptionId={`outline-description-${id}`} /></Link></li>)}</ul></nav></aside>
     <div className="settings-content">
       <div className="page-heading settings-index-heading"><h1>Settings</h1></div>
       <SettingsCategoryList sections={settingsGroups} renderLink={({ id, title }, contents, descriptionId) => <Link aria-label={title} aria-describedby={descriptionId} id={`open-${id}`} to={`/settings#${id}`}>{contents}</Link>} />

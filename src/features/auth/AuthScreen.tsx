@@ -14,7 +14,7 @@ import { brandName } from '../../lib/brand'
 
 export function AuthScreen() {
   const { error: sessionError, needsPassword, passwordSaved, signIn } = useAuth()
-  const [mode, setMode] = useState<AccountMode>('login')
+  const [mode, setMode] = useState<AccountMode>(() => new URLSearchParams(location.search).get('auth') === 'recovery' ? 'reset' : 'login')
   const [email, setEmail] = useState(sampleMode ? 'Sample' : '')
   const [password, setPassword] = useState(''), [username, setUsername] = useState('')
   const [remember, setRemember] = useState(() => remembersSession('organizer'))

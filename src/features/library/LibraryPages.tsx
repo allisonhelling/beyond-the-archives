@@ -177,11 +177,11 @@ function BookSpineFooter({ story, editProgress, caughtUp, readAction, readerBook
       </div>
     </div>
     <Tooltip description={readingLabel(story) ?? statuses[story.reading_status]}>{descriptionId => <span className="spine-status" role="img" tabIndex={0} aria-label={readingLabel(story) ?? statuses[story.reading_status]} aria-describedby={descriptionId}><StatusIcon size={18} aria-hidden="true" /></span>}</Tooltip>
-    <ReadOffline story={story} bookId={readerBookId} />
+    {caughtUp}
     <span className="spine-divider" aria-hidden="true"><SpineOrnament /></span>
     <div className="spine-actions">
       {readAction ?? <Tooltip description={readLabel}>{descriptionId => <a className="spine-action" href={readingUrl(story)} target="_blank" rel="noreferrer" aria-label={readLabel} aria-describedby={descriptionId}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>}
-      {caughtUp}
+      <ReadOffline story={story} bookId={readerBookId} />
       <BookFusionButton value={story.metadata.bookfusion_link} />
     </div>
   </footer>

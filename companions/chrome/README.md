@@ -160,3 +160,5 @@ Version 0.7.8 advertises the `metadata-retrieval-v1` capability to the configure
 ## Explicit Environment Builds
 
 Configure all variables from the root `.env.example` for local or `.env.staging.example` for approved staging. `build:extension:local` includes only loopback permissions and settings. Hosted builds require explicit staging/production identity and a matching `EXTENSION_APP_ORIGIN`; they no longer bundle the other local/hosted profile. Existing installed artifacts are unchanged until rebuilt/reloaded. Preserve production installations and obtain separate approval before any release. [S1 setup and gates](../../docs/security-foundation/LOCAL_AND_STAGING.md) owns staging instructions.
+
+Panels open beside the bar that invoked them, including the bottom bar. The companion follows AO3 chapter DOM replacements and foreground navigation, inherits the summary text size, and uses centered notices without a reading-status bullet. Global logout in either app also revokes paired AO3 bars.

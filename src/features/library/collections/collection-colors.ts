@@ -9,3 +9,23 @@ export const collectionColors = [
 ] as const
 
 export const collectionColorPattern = '^#[0-9a-fA-F]{6}$'
+
+const savedColorsKey = 'bta-saved-custom-colors-v1'
+const savedColorsEvent = 'bta-saved-custom-colors-changed'
+export function savedColorSnapshot() {
+ try { return window.localStorage.getItem(savedColorsKey) ?? '[]' } catch { return '[]' }
+}
+export function savedCustomColors(raw = savedColorSnapshot()): string[] {
+ try {
+  const colors: unknown = JSON.parse(raw)
+  return Array.isArray(colors) ? [...new Set(colors.filter((color): color is string => typeof color === 'string' && new RegExp(collectionColorPattern).test(color)).map(color => color.toLowerCase()))] : []
+ } catch { return [] }
+}
+export function subscribeSavedColors(listener: () => void) {
+ window.addEventListener('storage', listener); window.addEventListener(savedColorsEvent, listener)
+ return () => { window.removeEventListener('storage', listener); window.removeEventListener(savedColorsEvent, listener) }
+}
+export function saveCustomColors(colors: string[]) {
+ window.localStorage.setItem(savedColorsKey, JSON.stringify(savedCustomColors(JSON.stringify(colors))))
+ window.dispatchEvent(new Event(savedColorsEvent))
+}

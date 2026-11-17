@@ -8,6 +8,6 @@ export function AuthorNames({ metadata, destination = 'library', onSelect }: { m
     if (onSelect) return <Fragment key={name}>{index > 0 && ', '}<button type="button" className="author-link" onClick={() => onSelect(name)}>{name}</button></Fragment>
     const url = authorPageUrl(metadata.author_links?.[name])
     if (destination === 'ao3') return <Fragment key={name}>{index > 0 && ', '}{url ? <a className="clickable-text" href={url} target="_blank" rel="noreferrer">{name}</a> : name}</Fragment>
-    return <Fragment key={name}>{index > 0 && ', '}<Link className="clickable-text" to={`/authors/${encodeURIComponent(name)}`}>{name}</Link>{url && <a className="clickable-text author-source-link" href={url} target="_blank" rel="noreferrer" aria-label={`View ${name} on AO3`} title={`View ${name} on AO3`}><ExternalLink size={14} aria-hidden="true" /></a>}</Fragment>
+    return <Fragment key={name}>{index > 0 && ', '}<Link className="clickable-text" to={`/authors/${encodeURIComponent(name)}`}>{name}</Link>{url && <a className="clickable-text author-source-link" href={url} target="_blank" rel="noreferrer" aria-label={`View ${name} on AO3`} title="Open author's AO3 page"><ExternalLink size={14} aria-hidden="true" /></a>}</Fragment>
   }) : 'Author unknown'
 }

@@ -33,7 +33,7 @@ test('custom collection removal preserves the work and menu actions follow readi
  tables.collection_works.push({collection_id:'custom-one',library_entry_id:'menu-rules-entry'},{collection_id:'custom-two',library_entry_id:'menu-rules-entry'})
  await page.goto('/library?shelf=custom-one');await login(page)
  await page.getByLabel('Story Actions for Menu Rules').click()
- await expect(page.getByRole('link',{name:'Open in Wayback',exact:true})).toBeVisible()
+ await expect(page.getByRole('link',{name:'Search in Wayback',exact:true})).toBeVisible()
  await expect(page.getByRole('button',{name:'Mark as Finished',exact:true})).toHaveCount(0)
  await expect(page.getByRole('button',{name:'Mark as Paused Reading',exact:true})).toHaveCount(0)
  await expect(page.getByRole('button',{name:'Change Status to On Hiatus',exact:true})).toBeVisible()

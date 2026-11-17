@@ -26,7 +26,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  host.dataset.browser = browser
  if (tile) host.dataset.workTile = 'true'
  let ao3FontSize
- if (browser === 'chrome') {
+ {
   const scope = tile?.element ?? doc.querySelector('#workskin') ?? doc.querySelector('#main') ?? doc.body
   const summary = scope.querySelector('.summary p') ?? scope.querySelector('.summary blockquote') ?? scope.querySelector('.summary') ?? scope
   ao3FontSize = doc.defaultView.getComputedStyle(summary).fontSize
@@ -68,7 +68,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  applyTheme()
  let entry = null, collections = [], loaded = false, busy = false, draft = null, activePanel = null, syncEditorProgress = null, personalControls = null, syncEditorDraft = null, disposeConflict = null, pendingConflict = null, savedWorks = [], seriesControls = []
  const toolbar = doc.createElement('div'); toolbar.className = 'toolbar'; section.append(toolbar)
- const message = doc.createElement('p'); message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite')
+ const message = doc.createElement('p'); message.className = 'toolbar-notification'; message.setAttribute('role', 'status'); message.setAttribute('aria-live', 'polite')
  const panel = doc.createElement('div'); section.append(message, panel)
  const editorPanel = doc.createElement('div'), connectionPanel = doc.createElement('div')
  editorPanel.id = 'library-editor'; connectionPanel.id = 'library-connection'
@@ -122,11 +122,13 @@ export async function mountLibrary(doc = document, href = location.href, options
  function resetPanels() { clearConflict(); showPanel(null); clearEditor(); connectionPanel.replaceChildren() }
  function panelButton(label, name, action, parent = toolbar) {
   const element = button(label, async () => {
+   const destination = progressBars.find(({ bar }) => bar.contains(element))
+   const moving = activePanel === name && panel.parentNode !== (destination ? destination.bar.parentNode : section)
+   if (moving) showPanel(null)
+   if (destination) destination.bar.after(panel)
+   else message.after(panel)
    await action()
-   if (progressBars.some(({ bar }) => bar.contains(element)) && activePanel === name) {
-    host.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
-    panel.querySelector('div:not([hidden]) input, div:not([hidden]) textarea')?.focus({ preventScroll: true })
-   }
+   if (activePanel === name) panel.querySelector('div:not([hidden]) input, div:not([hidden]) textarea')?.focus({ preventScroll: true })
   }, parent)
   element.setAttribute('aria-expanded', String(activePanel === name))
   element.setAttribute('aria-controls', name === 'editor' ? editorPanel.id : connectionPanel.id)
@@ -325,7 +327,6 @@ export async function mountLibrary(doc = document, href = location.href, options
  function renderProgress(parent, current = page.current, top = false) {
   const summary = node('div', '', parent); summary.className = 'row reading-summary'
   node('strong', entry.status === 'reading' ? readingLabel : readingStatuses[entry.status], summary)
-  const bullet = node('span', '•', summary); bullet.className = 'status-bullet'; bullet.dataset.status = entry.status; bullet.setAttribute('aria-hidden', 'true')
   const actions = node('div', '', summary); actions.className = 'row reading-actions'
   const chapterCount = `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`
   const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), actions); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
@@ -727,11 +728,49 @@ export async function mountLibrary(doc = document, href = location.href, options
   message.textContent = `Environment changed to ${label}. Reload AO3 to use it. Your draft is preserved for ${config?.label ?? 'this library'}.`
   root.querySelectorAll('.environment-label').forEach(node => { node.textContent = `${label} · reload AO3`; node.setAttribute('aria-label', `Library environment: ${label}; reload AO3`) })
  })
- doc.defaultView?.addEventListener('focus', () => {
+ const focus = () => {
   if (host.isConnected && connection && !busy) void run(async () => { acceptRatingInfo(await rpc('rating_get')) })
- })
+ }
+ doc.defaultView?.addEventListener('focus', focus)
  if (connection) await run(load)
  if (page.series) {
   for (const workTile of readWorkTiles(doc, href, page.series)) await mountLibrary(doc, workTile.url, { ...options, tile: workTile })
  }
+ return () => { doc.defaultView?.removeEventListener('focus', focus); clearEditor(); disposeConflict?.() }
+}
+
+/** AO3 skins can replace chapter content after the content script first runs. */
+export function observeLibrary(doc = document, options = {}) {
+ let stopped = false, timer, mounting = false, mountedSkin = null, mountedChapters = null, mountedUrl = '', dispose
+ const view = doc.defaultView
+ async function ensure() {
+  if (stopped || mounting) return
+  const skin = doc.querySelector('#workskin'), href = view.location.href
+  const host = doc.getElementById('ao3-library-companion'), chapters = doc.querySelector('#chapters')
+  if (host && mountedSkin === skin && mountedChapters === chapters && mountedUrl === href) return
+  const page = readPage(doc, href)
+  if (!page) {
+   mounting = true
+   try { for (const tile of readWorkTiles(doc, href)) { if (!tile.element.querySelector(':scope > [data-work-tile]')) await mountLibrary(doc, tile.url, { ...options, tile }) } } catch { /* Retry on the next page update. */ } finally { mounting = false }
+   return
+  }
+  if (!skin && !page.series) return
+  mounting = true
+  try {
+   dispose?.()
+   doc.querySelectorAll('[id^="ao3-library-progress"], #ao3-library-companion, [data-work-tile]').forEach(node => node.remove())
+   mountedSkin = skin; mountedChapters = chapters; mountedUrl = href
+   dispose = await mountLibrary(doc, href, options)
+   if (stopped) dispose?.()
+  } catch {
+   // Retry on the next AO3 content change, reconnect, or foreground navigation.
+   mountedSkin = null; mountedUrl = ''
+  } finally { mounting = false; if (!stopped && (skin !== doc.querySelector('#workskin') || href !== view.location.href)) schedule() }
+ }
+ function schedule() { if (stopped) return; clearTimeout(timer); timer = setTimeout(() => { void ensure() }, 50) }
+ const observer = new view.MutationObserver(schedule)
+ observer.observe(doc.documentElement, { childList: true, subtree: true })
+ view.addEventListener('pageshow', schedule); view.addEventListener('popstate', schedule)
+ schedule()
+ return () => { stopped = true; clearTimeout(timer); observer.disconnect(); dispose?.(); view.removeEventListener('pageshow', schedule); view.removeEventListener('popstate', schedule) }
 }

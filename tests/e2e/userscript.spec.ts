@@ -233,7 +233,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await verifyReadingActionOrder(surface)
    await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
    await expect(surface.getByLabel('About chapters read', { exact: true })).toHaveCount(0)
-   for (const element of await surface.locator('.toolbar *, .bottom-bar *').all()) await expect(element).toHaveCSS('font-size', '20px')
+   for (const element of await surface.locator('.toolbar *, .bottom-bar *').all()) await expect(element).toHaveCSS('font-size', notesFont)
   }
   for (const [surface, value] of [[bottom, '2'], [top, '3']] as const) {
    await surface.getByRole('button', { name: 'Edit Chapters Read' }).click()
@@ -256,17 +256,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(top.locator('.complete-chapter svg')).toHaveCSS('width', '26px')
   await expect(top.locator('.edit-button svg')).toHaveCSS('width', '26px')
   await expect(top.locator('.toolbar-progress').getByRole('button', { name: 'Edit Chapters Read' })).toHaveCount(1)
-  await expect(top.locator('.status-bullet')).toHaveText('•')
-  await expect(top.locator('.status-bullet')).toHaveCSS('color', 'rgb(38, 115, 68)')
-  for (const [status, color] of [
-   ['reading', 'rgb(38, 115, 68)'], ['paused_reading', 'rgb(165, 107, 18)'],
-   ['finished', 'rgb(151, 0, 0)'], ['to_read', 'rgb(50, 103, 168)'],
-   ['re_reading', 'rgb(178, 148, 214)'],
-  ]) {
-   await top.locator('.status-bullet').evaluate((element, status) => { (element as HTMLElement).dataset.status = status }, status)
-   await expect(top.locator('.status-bullet')).toHaveCSS('color', color)
-  }
-  await top.locator('.status-bullet').evaluate(element => { (element as HTMLElement).dataset.status = 'reading' })
+  await expect(top.locator('.status-bullet')).toHaveCount(0)
   await top.locator('.toolbar').evaluate(element => { element.scrollLeft = 0 })
   const barBounds = (await top.locator('.toolbar').boundingBox())!, linkBounds = (await top.locator('.library-link').boundingBox())!, actionsBoundsTop = (await top.locator('.toolbar-actions').boundingBox())!, centerBounds = (await top.locator('.toolbar-progress').boundingBox())!
   expect(Math.abs(linkBounds.x - barBounds.x)).toBeLessThan(1)

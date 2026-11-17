@@ -24,7 +24,7 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
     characters: () => <MetadataTags values={tagNames(metadata, 'character')} category="characters" />,
     tags: () => <MetadataTags values={tagNames(metadata, 'freeform')} />,
     warnings: () => <MetadataTags values={metadata.archive_warnings ?? []} category="warnings" />,
-    category: () => <MetadataTags values={metadata.categories ?? []} />,
+    category: () => <MetadataTags values={metadata.categories ?? []} category="categories" />,
     kudos: () => `${count(metadata.kudos)} kudos`, bookmarks: () => `${count(metadata.bookmark_count)} bookmarks`,
     comments: () => `${count(metadata.comment_count)} comments`, hits: () => `${count(metadata.hits)} hits`,
     published: () => ao3Date(work.ao3_published_at), updated: () => ao3Date(work.ao3_updated_at),

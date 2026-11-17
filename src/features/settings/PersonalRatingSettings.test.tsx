@@ -44,6 +44,6 @@ it('refreshes from another device without losing the local draft or overwriting 
  await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('changed on another device'))
  expect(saved).toBe('Changed on Safari')
  expect(input).toHaveValue('Unsaved local draft')
- fireEvent.click(screen.getByRole('button',{name:'Use Saved Explanation'}))
+ fireEvent.click(screen.getByRole('button',{name:'Revert Changes'}))
  expect(input).toHaveValue(saved)
 })

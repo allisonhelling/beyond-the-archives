@@ -28,6 +28,7 @@
   --radius-form-field: 7px;
   --radius-filter-panel: var(--radius-surface);
   --radius-work-card: var(--radius-surface);
+  --work-summary-text-size: 15px;
   --work-tile-label-size: 13px;
   --bullet-divider-spacing: 4px;
   --color-control-border: #dfcbc5;

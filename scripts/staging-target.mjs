@@ -7,7 +7,7 @@ export { stagingProjectRef }
 const projectName = 'beyond-the-archives-staging'
 const region = 'us-east-1'
 const routes = { project: '', auth: '/config/auth', storage: '/config/storage', functions: '/functions', secrets: '/secrets', migrations: '/database/migrations', keys: '/api-keys', query: '/database/query/read-only' }
-export const stagingAuthFields = Object.freeze(['site_url', 'uri_allow_list', 'disable_signup', 'external_email_enabled', 'external_anonymous_users_enabled', 'mailer_autoconfirm', 'mailer_secure_email_change_enabled', 'mailer_notifications_email_changed_enabled', 'security_update_password_require_reauthentication', 'password_min_length', 'password_required_characters', 'mfa_totp_enroll_enabled', 'mfa_totp_verify_enabled', 'hook_before_user_created_enabled', 'hook_before_user_created_uri'])
+export const stagingAuthFields = Object.freeze(['site_url', 'uri_allow_list', 'disable_signup', 'external_email_enabled', 'external_anonymous_users_enabled', 'mailer_autoconfirm', 'mailer_secure_email_change_enabled', 'mailer_notifications_email_changed_enabled', 'mailer_notifications_password_changed_enabled', 'security_update_password_require_reauthentication', 'password_min_length', 'password_required_characters', 'mfa_totp_enroll_enabled', 'mfa_totp_verify_enabled', 'hook_before_user_created_enabled', 'hook_before_user_created_uri'])
 const smtpFields = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_admin_email', 'smtp_sender_name']
 const functionConfig = readFileSync(new URL('../supabase/config.toml', import.meta.url), 'utf8')
 const functionJwt = new Map([...functionConfig.matchAll(/^\[functions\.([a-z0-9-]+)\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/gm)].flatMap(match => {

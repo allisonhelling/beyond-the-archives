@@ -1,3 +1,4 @@
+import { TabList } from '../../../components/TabList'
 import { SummarySettings } from '../summaries/SummarySettings'
 import { usePreviewViewports } from './useDisplayPreference'
 import { useLayout, type DisplayLayout } from '../../../lib/use-layout'
@@ -15,7 +16,7 @@ import { SeriesCard } from '../series/SeriesCollection'
 import { SeriesPage } from '../series/SeriesPage'
 import { DisplayEditorContext } from './display-editor-context'
 import { exampleSeries, exampleWork } from './display-examples'
-import { displayGroups, tagShapes, type TagShape, displayPreferences, type TagAppearance, saveDisplay, sameTagAppearance, subscribeDisplay, type DisplayGroup, type DisplayPreferences } from './display-settings'
+import { displayGroups, tagShapes, tagTextColor, type TagTextColor, type TagShape, displayPreferences, type TagAppearance, saveDisplay, sameTagAppearance, subscribeDisplay, type DisplayGroup, type DisplayPreferences } from './display-settings'
 
 const workTileGroups: DisplayGroup[] = ['workTile']
 const seriesTileGroups: DisplayGroup[] = ['seriesTile']
@@ -32,12 +33,10 @@ function useDisplayDraft(groups: DisplayGroup[], editTags = false, layout: Displ
   const dirtyRef = useRef(dirty)
   useLayoutEffect(() => { dirtyRef.current = dirty }, [dirty])
   useEffect(() => {
-    if (!editTags) return
     return subscribeDisplay(() => {
       if (dirtyRef.current) return
-      const appearance = displayPreferences(undefined, layout).tagAppearance
-      setBaseline(previous => ({ ...previous, tagAppearance: appearance }))
-      setDraft(previous => ({ ...previous, tagAppearance: appearance }))
+      const saved = displayPreferences(undefined, layout)
+      setBaseline(saved); setDraft(saved)
     })
   }, [editTags, layout])
   function change(next: DisplayPreferences) { setDraft(next); setMessage(''); setError('') }
@@ -52,19 +51,25 @@ function useDisplayDraft(groups: DisplayGroup[], editTags = false, layout: Displ
     commit(displayPreferences('{}', layout), 'Default settings restored.')
     setVersion(value => value + 1)
   }
-  function save() {
+  function save(applyBoth = false) {
     if (editTags && Object.values(draft.tagAppearance.colors).some(color => !/^#[a-fA-F0-9]{6}$/.test(color))) { setError('Enter a tag color as # followed by six hexadecimal digits before saving.'); return false }
     try {
-      commit(draft, 'Display settings saved.')
+      if (applyBoth) {
+        const otherLayout = layout === 'mobile' ? 'desktop' : 'mobile'
+        const other = displayPreferences(undefined, otherLayout)
+        for (const group of groups) other[group] = draft[group]
+        saveDisplay(other, otherLayout)
+      }
+      commit(draft, applyBoth ? 'Both layouts saved.' : 'Display settings saved.')
       return true
     } catch { setError('Could not save display settings. Check browser storage permissions and try again.'); return false }
   }
   return { draft, change, dirty, version, message, error, cancel, restoreDefaults, save }
 }
 type Draft = ReturnType<typeof useDisplayDraft>
-function SaveControls({ state, onCancel, onSave }: { state: Draft; onCancel?: () => void; onSave?: () => void }) {
+function SaveControls({ state, onCancel, onSave, applyBoth = false }: { state: Draft; applyBoth?: boolean; onCancel?: () => void; onSave?: () => void }) {
   const [confirmRestore, setConfirmRestore] = useState(false)
-  return <><div className="display-save-bar"><div className="form-actions"><button className="button primary" type="button" disabled={!state.dirty} onClick={() => { if (state.save()) onSave?.() }}>Save</button><button className="button secondary" type="button" disabled={!onCancel && !state.dirty} onClick={() => { state.cancel(); onCancel?.() }}>Cancel</button><button className="button secondary" type="button" onClick={() => setConfirmRestore(true)}>Restore to Default</button></div><p role="status" className="field-help">{state.message || (state.dirty ? 'Unsaved changes' : 'No unsaved changes')}</p>{state.error && <p role="alert" className="error-message">{state.error}</p>}</div>{confirmRestore && <ConfirmationDialog title="Restore to Default?" confirmLabel="Restore to Default" pendingLabel="Restoring…" onClose={() => setConfirmRestore(false)} onConfirm={async () => state.restoreDefaults()}><p>Reset this editor to its original defaults? This immediately replaces all saved customizations and discards unsaved changes.</p></ConfirmationDialog>}</>
+  return <><div className="display-save-bar"><div className="form-actions"><button className="button primary" type="button" disabled={!state.dirty && !applyBoth} onClick={() => { if (state.save(applyBoth)) onSave?.() }}>Save</button><button className="button secondary" type="button" disabled={!onCancel && !state.dirty} onClick={() => { state.cancel(); onCancel?.() }}>Cancel</button><button className="button secondary" type="button" onClick={() => setConfirmRestore(true)}>Restore to Default</button></div><p role="status" className="field-help">{state.message || (state.dirty ? 'Unsaved changes' : 'No unsaved changes')}</p>{state.error && <p role="alert" className="error-message">{state.error}</p>}</div>{confirmRestore && <ConfirmationDialog title="Restore to Default?" confirmLabel="Restore to Default" pendingLabel="Restoring…" onClose={() => setConfirmRestore(false)} onConfirm={async () => state.restoreDefaults()}><p>Reset this editor to its original defaults? This immediately replaces all saved customizations and discards unsaved changes.</p></ConfirmationDialog>}</>
 }
 
 
@@ -72,34 +77,37 @@ function TagAppearanceSettings({ state }: { state: Draft }) {
   const appearance = state.draft.tagAppearance
   function change(next: TagAppearance) { state.change({ ...state.draft, tagAppearance: next }) }
   return <DisplayEditorContext value={{ preferences: state.draft, groups: [], selected: null }}><section className="display-tag-appearance" aria-label="Site-Wide Tag Appearance"><p className="field-help">Tag shape, colors, and All Tags category order apply throughout the site and sync with your organizer account. Save applies your changes. Linked EPUB readers follow these settings; unlinked readers keep their own format.</p>
-    <fieldset className="display-tag-shapes settings-subsection"><legend>Tag Shape</legend><p className="field-help">Filled Chips uses one Additional Tags color for all tags. Other styles use category colors.</p><div className="display-tag-shape-options">{(Object.entries(tagShapes) as [TagShape, string][]).map(([shape, name]) => <button type="button" className="tag-shape-option" key={shape} aria-pressed={appearance.shape === shape} onClick={() => change({ ...appearance, shape })}><MetadataTags values={['Humor', 'Fluff']} shape={shape} /><span>{name}</span></button>)}</div></fieldset>
-    <TagOrderSettings appearance={appearance} onChange={change} />
+    <fieldset className="display-tag-shapes settings-subsection"><legend>Tag Shape</legend><p className="field-help">All styles use the category colors below. Use Change All Tags to apply one color to every category.</p><div className="display-tag-shape-options">{(Object.entries(tagShapes) as [TagShape, string][]).map(([shape, name]) => <button type="button" className="tag-shape-option" key={shape} aria-pressed={appearance.shape === shape} onClick={() => change({ ...appearance, shape })}><MetadataTags values={['Humor', 'Fluff']} shape={shape} /><span>{name}</span></button>)}</div></fieldset>
+    <label>Tag Text Color<select value={tagTextColor(appearance)} onChange={event => change({ ...appearance, textColor: event.target.value as TagTextColor })}><option value="colored">Colored Text</option><option value="black">Black Text</option></select></label>
     <TagColorSettings appearance={appearance} onChange={change} />
+    <TagOrderSettings appearance={appearance} onChange={change} />
   </section></DisplayEditorContext>
 }
 
 function TileLayoutEditor({ kind, layout, appearance }: { kind: 'work' | 'series'; layout: DisplayLayout; appearance: TagAppearance }) {
  const groups = kind === 'work' ? workTileGroups : seriesTileGroups
  const state = useDisplayDraft(groups, false, layout)
+ const [applyBoth, setApplyBoth] = useState(false)
  const sizes = usePreviewViewports()
  const title = `${kind === 'work' ? 'Work' : 'Series'} Tile`
  return <section className="display-device-editor" aria-label={`${layout === 'mobile' ? 'Mobile' : 'Desktop'} ${title} Layout`}>
   <h4>{layout === 'mobile' ? 'Mobile' : 'Desktop'} Layout</h4>
   <DisplayEditor key={state.version} title={title} showTitle={false} groups={groups} viewport={sizes[layout]} state={{ ...state, draft: { ...state.draft, tagAppearance: appearance } }}>{kind === 'work' ? <StoryCard story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor>
-  <SaveControls state={state} />
+  <label className="check-label"><input type="checkbox" checked={applyBoth} onChange={event => setApplyBoth(event.target.checked)} />Apply to Both Layouts</label><SaveControls state={state} applyBoth={applyBoth} />
  </section>
 }
 export function DisplaySettings() {
   const layout = useLayout()
   const tagState = useDisplayDraft([], true)
+  const [tileLayout, setTileLayout] = useState<DisplayLayout>(layout)
   const [expanded, setExpanded] = useState({ work: false, series: false, tags: false })
-  return <section id={displaySettingsSection.id} tabIndex={-1} className="settings-card display-settings"><h2>{displaySettingsSection.title}</h2><p className="muted">Arrange your tiles directly in the previews. Mobile and desktop arrangements are saved separately. Save applies only to the layout you are editing. Tag appearance applies to both layouts.</p>
-    <ViewportSettings /><SummarySettings />
-    <fieldset className="display-tag-format-section settings-subsection" aria-labelledby="display-tag-format-title"><legend className="display-tile-heading"><h3 id="display-tag-format-title">Tag Format</h3><button type="button" className="button secondary" aria-expanded={expanded.tags} aria-controls="display-tag-format" onClick={() => setExpanded(current => ({ ...current, tags: !current.tags }))}>Edit Tag Format</button></legend>
+  return <div id={displaySettingsSection.id} tabIndex={-1} className="display-settings"><section className="settings-card"><p className="muted">Arrange your tiles directly in the previews. Mobile and desktop arrangements are saved separately. Save applies to the active layout; select Apply to Both Layouts to use it for both. Tag appearance applies to both layouts.</p>
+    <ViewportSettings /><SummarySettings /></section>
+    <fieldset className="display-tag-format-section settings-subsection settings-card" aria-labelledby="display-tag-format-title"><legend className="display-tile-heading"><button type="button" aria-expanded={expanded.tags} aria-controls="display-tag-format" onClick={() => setExpanded(current => ({ ...current, tags: !current.tags }))}><span id="display-tag-format-title">Tag Format</span><span aria-hidden="true">{expanded.tags ? '▴' : '▾'}</span></button></legend>
     <div id="display-tag-format" hidden={!expanded.tags}><TagAppearanceSettings key={tagState.version} state={tagState} /><SaveControls state={tagState} /></div></fieldset>
-    <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><h3 id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</h3><button type="button" className="button secondary" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}>Edit {kind === 'work' ? 'Work' : 'Series'} Tiles</button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><div className="display-device-previews">{(layout === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(device => <TileLayoutEditor key={device} kind={kind} layout={device} appearance={tagState.draft.tagAppearance} />)}</div></div></fieldset>)}</div>
+    <section className="settings-card"><h2>{displaySettingsSection.title}</h2><div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><button type="button" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}><span id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</span><span aria-hidden="true">{expanded[kind] ? '▴' : '▾'}</span></button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><TabList tabs={[{ id: 'desktop', label: 'Desktop Layout' }, { id: 'mobile', label: 'Mobile Layout' }]} active={tileLayout} onChange={setTileLayout} label={`${kind === 'work' ? 'Work' : 'Series'} Tile Layout`} prefix={`tile-${kind}`} /><div className="display-device-previews">{(['desktop', 'mobile'] as const).map(device => <div key={device} role="tabpanel" id={`tile-${kind}-panel-${device}`} aria-labelledby={`tile-${kind}-tab-${device}`} hidden={tileLayout !== device}><TileLayoutEditor kind={kind} layout={device} appearance={tagState.draft.tagAppearance} /></div>)}</div></div></fieldset>)}</div>
     <fieldset className="display-page-links settings-subsection" aria-labelledby="display-info-pages-title"><legend><h3 id="display-info-pages-title">Information Pages</h3></legend><div className="form-actions"><Link className="button secondary" to="/settings/example-work">Edit Work Info Page</Link><Link className="button secondary" to="/settings/example-series">Edit Series Info Page</Link></div><p className="muted">Open an example page and switch between mobile and desktop layouts.</p></fieldset>
-  </section>
+  </section></div>
 }
 function ExampleLayoutEditor({ kind, layout, active }: { kind: 'work' | 'series'; layout: DisplayLayout; active: boolean }) {
  const state = useDisplayDraft(pageGroups(kind), false, layout), navigate = useNavigate(), sizes = usePreviewViewports()

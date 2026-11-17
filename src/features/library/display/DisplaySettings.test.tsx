@@ -373,7 +373,6 @@ it.each(['sharp', 'filled'] as const)('colors %s tile tags by category, excludes
   const tags = list.querySelector(`.metadata-tag[data-tag-category="${category}"]`)!
   expect(tags).toHaveStyle(`--tag-color: ${color}`)
   expect(tags.closest('.metadata-tags')).toHaveAttribute('data-tag-shape', shape)
-  expect(tags.closest('.metadata-tags')).toHaveStyle('--tag-filled-color: #789abc')
  }
  expect(list).not.toHaveTextContent('Batman')
  expect(list).not.toHaveTextContent('Fandom: Other')

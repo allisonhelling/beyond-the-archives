@@ -6,7 +6,7 @@ import { useLayout } from '../../lib/use-layout'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { useFilterDraft } from '../../components/useFilterDraft'
 import { ActiveFilters } from '../../components/ActiveFilters'
-import { Fragment, useId, useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { FileText, Heart, Layers3, SlidersHorizontal, Star } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
 import { saveFilterDefaults } from './browsing/filter-defaults'
@@ -124,6 +124,6 @@ export function ReadingFilterControls({ stories, filters: appliedFilters, onChan
     </div></div><div className="form-actions"><div className="filter-default-actions"><button type="button" className="button secondary" disabled={automaticCollection && !defaultScope} title={automaticCollection && !defaultScope ? 'Save the Collection First' : undefined} onClick={() => { try { saveDefault() } catch { setDefaultMessage('Could not save defaults. Check browser storage and retry.') } }}>Save as {defaultLabel} Default</button><button type="button" className="button secondary" onClick={() => setConfirmLibraryDefault(true)}>Save as Library Default</button></div><div className="filter-reset-actions"><button type="button" className="button secondary" onClick={clearFilters}>Clear All Filters</button>{filterToggle}</div></div>{defaultMessage && <p role="status">{defaultMessage}</p>}</section>}
     {draftError && <p role="alert">{draftError}</p>}
     {confirmLibraryDefault && <ConfirmationDialog title="Save as Library Default?" confirmLabel="Save as Library Default" pendingLabel="Saving…" onClose={() => setConfirmLibraryDefault(false)} onConfirm={async () => saveDefault(true)}><p>The current filters will become the default for all collections and categories, replacing any collection defaults saved on this browser.</p></ConfirmationDialog>}
-    {activeFilters.length > 0 && <ActiveFilters onClear={clearFilters}>{activeFilters.map((tag, index) => <Fragment key={tag.label}>{index > 0 && <span aria-hidden="true" className={`info-separator${tag.category && tag.category === activeFilters[index - 1].category ? ' filter-category-separator' : ' filter-category-boundary'}`} data-tag-category={tag.category}><MetadataTags values={['•']} category={tag.category ?? null} shape="bullets" /></span>}<MetadataTags values={[tag.label]} category={tag.category ?? null} removeLabel={label => `Remove Filter ${label}`} onRemove={() => { const next = removeReadingFilter(appliedFilters, tag); setDraft(next); onChange(next) }} /></Fragment>)}</ActiveFilters>}
+    {activeFilters.length > 0 && <ActiveFilters onClear={clearFilters}>{activeFilters.map(tag => <MetadataTags key={tag.label} values={[tag.label]} category={tag.category ?? null} removeLabel={label => `Remove Filter ${label}`} onRemove={() => { const next = removeReadingFilter(appliedFilters, tag); setDraft(next); onChange(next) }} />)}</ActiveFilters>}
   </>
 }

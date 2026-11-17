@@ -44,11 +44,18 @@ uri = "pg-functions://postgres/public/before_user_created"
 # Approved beta addresses use email/password signup with email confirmation.
 enable_signup = true
 enable_confirmations = true
-double_confirm_changes = false
+double_confirm_changes = true
 secure_password_change = true
 
 [auth.email.notification.email_changed]
 enabled = true
+subject = "Your Email Address Was Changed"
+content_path = "./supabase/templates/email_changed.html"
+
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Your Password Was Changed"
+content_path = "./supabase/templates/password_changed.html"
 
 [auth.mfa.totp]
 # Application administration requires a verified TOTP factor and fresh AAL2 session.

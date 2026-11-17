@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { CollectionColorPicker } from './CollectionColorPicker'
+
+beforeEach(() => { const colors = new Map<string, string>(); vi.stubGlobal('localStorage', { getItem: (key: string) => colors.get(key) ?? null, setItem: (key: string, value: string) => colors.set(key, value) }) })
+afterEach(() => vi.unstubAllGlobals())
 
 function Picker() {
   const [value, setValue] = useState('#ff0000')
@@ -62,4 +65,19 @@ it('closes on Escape without submitting or closing the enclosing form', async ()
 it('shows preset hex values when requested by the shared tag appearance settings', () => {
  render(<CollectionColorPicker value="#970000" onChange={vi.fn()} showHex />)
  expect(screen.getByRole('button',{name:'Custom Color'})).toHaveTextContent('#970000')
+})
+
+it('retains a custom color across pickers and removes it from the shared palette', async () => {
+ const user = userEvent.setup()
+ const first = render(<Picker />)
+ await user.click(screen.getByRole('button', { name: 'Custom Color' }))
+ await user.click(screen.getByRole('button', { name: 'Save Color' }))
+ expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+ expect(window.localStorage.getItem('bta-saved-custom-colors-v1')).toBe('["#ff0000"]')
+ first.unmount()
+ render(<Picker />)
+ await user.click(screen.getByRole('button', { name: 'Custom Color' }))
+ expect(screen.getByRole('button', { name: 'Use Saved Color #ff0000' })).toBeVisible()
+ await user.click(screen.getByRole('button', { name: 'Remove Saved Color #ff0000' }))
+ expect(screen.queryByRole('button', { name: 'Use Saved Color #ff0000' })).not.toBeInTheDocument()
 })

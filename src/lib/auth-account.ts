@@ -39,3 +39,22 @@ export async function signInWithLogin(client: SupabaseClient, login: string, pas
 export function confirmPassword(fields: FormData) {
  if (fields.get('password') !== fields.get('confirmPassword')) throw new Error('Passwords do not match.')
 }
+
+export async function verifyCurrentPassword(client: SupabaseClient, password: string) {
+ const { data, error } = await client.auth.getUser()
+ if (error || !data.user?.email) throw new Error('Sign in again before changing account details.')
+ const result = await client.auth.signInWithPassword({ email: data.user.email, password })
+ if (result.error || result.data.user?.id !== data.user.id) throw new Error('The current password is incorrect.')
+}
+
+export async function signOutEverywhere(client: SupabaseClient) {
+ // Paired AO3 bars have their own credentials, independent of Auth refresh tokens.
+ const devices = await client.rpc('manage_userscript_device', { p_action: 'list' })
+ if (devices.error || !Array.isArray(devices.data)) throw new Error('Could not load paired devices. Try again before signing out everywhere.')
+ for (const device of (devices.data ?? []) as { id: string }[]) {
+  const result = await client.rpc('manage_userscript_device', { p_action: 'revoke', p_id: device.id })
+  if (result.error) throw new Error('Could not disconnect all paired devices. Try again.')
+ }
+ const { error } = await client.auth.signOut({ scope: 'global' })
+ if (error) throw error
+}

@@ -27,7 +27,7 @@ it('shows connected devices without expiry and still allows manual disconnection
  const devices = [{ id: 'paired-device', name: 'My Browser', paired: true, expires_at: null }, { id: 'pending-device', name: 'New Browser', paired: false, expires_at: '2026-10-26T12:05:00Z' }]
  mocks.rpc.mockImplementation((_name: string, args: { p_action: string }) => Promise.resolve({ data: args.p_action === 'revoke' ? devices.slice(1) : devices, error: null }))
  render(<MemoryRouter><BrowserBarSettings /></MemoryRouter>)
- expect(await screen.findByText(/My Browser · Connected · Until disconnected/)).toBeVisible()
+ expect(await screen.findByText(/My Browser · Connected/)).toBeVisible()
  expect(screen.getByText(/New Browser · Awaiting pairing · expires/)).toBeVisible()
  fireEvent.click(screen.getByRole('button', { name: 'Disconnect My Browser' }))
  await waitFor(() => expect(screen.queryByRole('button', { name: 'Disconnect My Browser' })).not.toBeInTheDocument())

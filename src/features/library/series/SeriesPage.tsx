@@ -119,7 +119,7 @@ works: <>   <section aria-label="Works in Series"><h2>{basic ? 'Works in Your Li
 information: <>
   <section className="settings-card details-fic-panel" aria-label="Series Information"><dl className="metadata-list details-fic-fields">
 <DisplayInfo group="seriesInfo">{{
-category: <div><dt>Category</dt><dd><MetadataTags values={info.categories} /></dd></div>,
+category: <div><dt>Category</dt><dd><MetadataTags values={info.categories} category="categories" /></dd></div>,
 libraryCount: <div><dt>Works in Library</dt><dd>{series.savedStories.length}</dd></div>,
 words: <div><dt>Word Count</dt><dd>{series.wordCount?.toLocaleString() ?? '?'} words</dd></div>,
 relationships: <div><dt>Relationships</dt><dd><MetadataTags values={info.relationships} category="relationships" /></dd></div>,

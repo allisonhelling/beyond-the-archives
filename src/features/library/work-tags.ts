@@ -15,11 +15,11 @@ export function workTagGroups(metadata: Metadata, include: (value: string) => bo
     { label: 'AO3 Warnings', category: 'warnings' as const, values: unique(metadata.archive_warnings ?? []) },
     { label: 'Relationships', category: 'relationships' as const, values: unique(tagNames(metadata, 'relationship')) },
     { label: 'Characters', category: 'characters' as const, values: unique(tagNames(metadata, 'character')) },
-    { label: 'Categories', category: null, values: unique(metadata.categories ?? []) },
+    { label: 'Categories', category: 'categories' as const, values: unique(metadata.categories ?? []) },
     { label: 'Additional Tags', category: 'tags' as const, values: unique(tagNames(metadata, 'freeform')) },
   ]
   groups[groups.length - 1].values.push(...unique(metadata.ao3_tags))
-  const categories = { relationships: 'relationship', characters: 'character', tags: 'freeform', warnings: undefined } as const
+  const categories = { relationships: 'relationship', characters: 'character', tags: 'freeform', warnings: undefined, categories: undefined } as const
   const order = allTagOrder()
   return groups.sort((a,b) => order.indexOf(a.category??'categories') - order.indexOf(b.category??'categories')).filter(group => group.values.length).map(group => {
     const category = group.category && categories[group.category]

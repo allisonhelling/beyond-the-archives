@@ -4,7 +4,7 @@
 .display-tag-color-grid > div { display: grid; grid-template-columns: var(--tag-color-label-width) var(--tag-color-control-width) minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
 .display-tag-example { justify-self: start; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; font-size: 13px; white-space: normal; }
 .display-tag-color-grid .collection-custom-color { width: var(--tag-color-control-width); }
-.display-tag-color-grid .collection-color-picker[data-open] { position: absolute; z-index: 6; top: 100%; left: 0; width: min(220px, calc(100vw - 80px)); }
+.display-tag-colors .collection-color-picker[data-open] { position: absolute; z-index: 6; top: 100%; left: 0; width: min(220px, calc(100vw - 80px)); }
 
 .display-tag-colors .field-help { text-align: right; overflow-wrap: anywhere; }
 .display-tag-color-grid :is(.field-help, .collection-custom-color) { margin-top: 0; }

@@ -22,11 +22,13 @@ export type DisplayPreference = { order: string[]; hidden: string[]; lines?: Rec
 export function isDisplayFieldHidden(preference: DisplayPreference, field: string) {
  return preference.hidden.includes(field) || Object.entries(preference.lines ?? {}).some(([line, fields]) => fields.includes(field) && preference.hidden.includes(line))
 }
-export type TagAppearance = { shape: TagShape; colors: Partial<Record<TagCategory, string>>; order?: AllTagCategory[] }
+export type TagTextColor = 'colored' | 'black'
+export type TagAppearance = { shape: TagShape; textColor?: TagTextColor; colors: Partial<Record<TagCategory, string>>; order?: AllTagCategory[] }
 export type DisplayPreferences = Record<DisplayGroup, DisplayPreference> & { tagAppearance: TagAppearance }
 const defaultHidden: Partial<Record<DisplayGroup, string[]>> = { workTile: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'personalRating', 'collections', 'kudos', ...newWorkTileFields.filter(field => field !== 'allTags')], workInfo: [...newWorkInfoFields], seriesTile: ['reading', 'notes', 'category', 'creatorNotes', 'updated', 'begun', 'relationships', 'characters', 'tags', 'warnings', 'personalRating', 'collections', 'kudos'], seriesInfo: ['category', 'libraryCount', 'words', 'relationships', 'characters', 'tags', 'warnings', 'kudos'] }
+export const defaultAllTagColor = '#382b2b'
 export const tagColors = {
- relationships: { label: 'Relationships', color: '#6b3f70', example: 'Dick Grayson & Bruce Wayne' }, characters: { label: 'Characters', color: '#355c70', example: 'Bruce Wayne' }, tags: { label: 'Additional Tags', color: '#715443', example: 'Fluff' }, warnings: { label: 'AO3 Warnings', color: '#970000', example: 'No Archive Warnings Apply' }, collections: { label: 'Custom Collections', color: '#4e684c', example: 'Comfort Reads' }, personalTags: { label: 'Personal Tags', color: '#715443', example: 'Read Again' },
+ categories: { label: 'Categories', color: '#800020', example: 'Gen' }, relationships: { label: 'Relationships', color: '#6b3f70', example: 'Dick Grayson & Bruce Wayne' }, characters: { label: 'Characters', color: '#355c70', example: 'Bruce Wayne' }, tags: { label: 'Additional Tags', color: '#715443', example: 'Fluff' }, warnings: { label: 'AO3 Warnings', color: '#970000', example: 'No Archive Warnings Apply' }, collections: { label: 'Custom Collections', color: '#4e684c', example: 'Comfort Reads' }, personalTags: { label: 'Personal Tags', color: '#715443', example: 'Read Again' },
 } as const
 export type TagCategory = keyof typeof tagColors
 export const allTagCategories = { tags:'Additional Tags', relationships:'Relationships', characters:'Characters', categories:'Categories', warnings:'AO3 Warnings' } as const
@@ -36,8 +38,11 @@ export function allTagOrder(saved?:readonly unknown[]):AllTagCategory[] {
  return [...new Set([...(Array.isArray(saved)?saved:[]).filter((key):key is AllTagCategory=>typeof key==='string'&&Object.hasOwn(allTagCategories,key)),...defaultAllTagOrder])]
 }
 
-export const tagShapes = { filled: 'Filled Chips', pill: 'Rounded Pill', curved: 'Curved Rectangles', sharp: 'Sharp Rectangles', bullets: 'Text With Bullet Separators', commas: 'Text With Comma Separators' } as const
+export const tagShapes = { filled: 'Borderless', pill: 'Rounded Pill', curved: 'Curved Rectangles', sharp: 'Sharp Rectangles', bullets: 'Text With Bullet Separators', commas: 'Text With Comma Separators' } as const
 export type TagShape = keyof typeof tagShapes
+export function tagTextColor(appearance: TagAppearance, shape = appearance.shape): TagTextColor {
+ return appearance.textColor === 'colored' || appearance.textColor === 'black' ? appearance.textColor : shape === 'filled' ? 'black' : 'colored'
+}
 export const shortDisplayDivider = (key: string) => key.startsWith('divider:short-')
 
 let fallback = '{}'
@@ -81,7 +86,8 @@ export function previewViewports(raw = displaySnapshot()): Record<DisplayLayout,
  try { saved = JSON.parse(raw) ?? {} } catch { /* Use standard viewport sizes. */ }
  return Object.fromEntries((['mobile', 'desktop'] as const).map(layout => {
   const value = saved.previewViewports?.[layout]
-  const size = value && validViewport(value) ? value : viewportPresets[layout === 'mobile' ? 'iphone-16' : 'desktop']
+  const actual = { width: Math.max(280, Math.min(3840, window.innerWidth)), height: Math.max(320, Math.min(3840, window.innerHeight)) }
+  const size = value && validViewport(value) ? value : layout === 'mobile' ? viewportPresets['iphone-16'] : window.innerWidth > 1100 ? actual : viewportPresets.desktop
   return [layout, { width: size.width, height: size.height }]
  })) as Record<DisplayLayout, PreviewViewport>
 }
@@ -157,11 +163,11 @@ export function tagAppearance(raw: string): TagAppearance {
   const legacy = (Object.keys(displayGroups) as DisplayGroup[]).map(group => saved[group] as { colors?: TagAppearance['colors']; tagShape?: TagShape } | undefined).filter(Boolean)
   const shape = global ? global.shape : legacy.find(value => value?.tagShape && value.tagShape !== 'bullets')?.tagShape
   const colors = global ? global.colors : Object.assign({}, ...legacy.map(value => value?.colors ?? {}).reverse())
-  return { ...(Array.isArray(global?.order)?{order:allTagOrder(global.order)}:{}), shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
+  return { ...(global?.textColor === 'colored' || global?.textColor === 'black' ? { textColor: global.textColor } : {}), ...(Array.isArray(global?.order)?{order:allTagOrder(global.order)}:{}), shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
 }
 export function sameTagAppearance(a: TagAppearance | null | undefined, b: TagAppearance | null | undefined) {
  if (!a || !b) return a === b
- return a.shape === b.shape && JSON.stringify(allTagOrder(a.order)) === JSON.stringify(allTagOrder(b.order)) && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
+ return a.shape === b.shape && a.textColor === b.textColor && JSON.stringify(allTagOrder(a.order)) === JSON.stringify(allTagOrder(b.order)) && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
 }
 export function displayPreferences(raw = displaySnapshot(), layout: DisplayLayout = 'desktop'): DisplayPreferences {
   return { ...Object.fromEntries((Object.keys(displayGroups) as DisplayGroup[]).map(group => [group, displayPreference(group, raw, layout)])), tagAppearance: tagAppearance(raw) } as DisplayPreferences

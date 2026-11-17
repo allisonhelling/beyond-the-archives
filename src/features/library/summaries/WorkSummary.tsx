@@ -2,10 +2,11 @@ import { createElement, useId, useMemo, useState, type ReactNode } from 'react'
 import { load } from 'cheerio'
 import type { Metadata } from '../model'
 import { useSummaryMode } from '../display/useDisplayPreference'
+import type { SummaryMode } from '../display/display-settings'
 import { readSummary } from './summary'
 
-export function WorkSummary({ metadata, fallback = '', tile = false }: { tile?: boolean; metadata: Pick<Metadata, 'summary' | 'summary_html'>; fallback?: string }) {
- const mode = useSummaryMode(), id = useId()
+export function WorkSummary({ metadata, fallback = '', tile = false, mode: previewMode }: { mode?: SummaryMode; tile?: boolean; metadata: Pick<Metadata, 'summary' | 'summary_html'>; fallback?: string }) {
+ const savedMode = useSummaryMode(), mode = previewMode ?? savedMode, id = useId()
  const [disclosure, setDisclosure] = useState({ mode, expanded: mode !== 'collapsed' })
  const open = disclosure.mode === mode ? disclosure.expanded : mode !== 'collapsed'
  const formatted = useMemo(() => {

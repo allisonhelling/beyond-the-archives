@@ -1,5 +1,7 @@
 import { describeCloudValue, cloudFieldLabel } from './cloud-model'
 import { enableOrganizerSync } from '../../src/lib/reader-connection'
+import { AccountSecuritySettings } from '../../src/features/auth/AccountSecuritySettings'
+import { verifyCurrentPassword } from '../../src/lib/auth-account'
 import { UsernameSettings } from '../../src/features/auth/UsernameSettings'
 import { AccountModeSwitch, SignInFields, type AccountMode } from '../../src/features/auth/SignInFields'
 import { remembersSession, rememberSession } from '../../src/lib/auth-session-storage'
@@ -19,10 +21,9 @@ function ConflictDescription({ edit }: { edit: Pick<CloudEdit, 'key' | 'value'> 
  return <>{book&&<strong>{book.metadata.title}: </strong>}{describeCloudValue(edit.key,edit.value,book)}</>
 }
 export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts }: {cloudLibrary?:boolean; asPage?:boolean; onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
-  const [mode,setMode]=useState<AccountMode>('login'),[needsPassword,setNeedsPassword]=useState(readerAuthIntent==='invite'||readerAuthIntent==='recovery')
+  const [mode,setMode]=useState<AccountMode>(()=>new URLSearchParams(location.search).get('auth')==='recovery'?'reset':'login'),[needsPassword,setNeedsPassword]=useState(readerAuthIntent==='invite'||readerAuthIntent==='recovery')
   const [session,setSession]=useState<Session|null>(null), [busy,setBusy]=useState(false), [message,setMessage]=useState('')
   const [remember,setRemember]=useState(()=>remembersSession('reader'))
-  const [changingPassword,setChangingPassword]=useState(false),[editingEmail,setEditingEmail]=useState(false),[hasPassword,setHasPassword]=useState<boolean|null>(null)
   const [resolved,setResolved]=useState<Set<string>>(new Set())
   const [variants,setVariants]=useState<CloudEdit[]>([])
   useEffect(()=>{
@@ -39,19 +40,7 @@ export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefre
     void savedConflicts().then(setVariants)
     return ()=>data.subscription.unsubscribe()
   },[])
-  useEffect(()=>{
-    if(!session||needsPassword)return
-    const userId=session.user.id
-    let active=true
-    void Promise.resolve(readerCloud.rpc('account_has_password',{})).then(({data,error})=>{if(active&&userId){if(error)setMessage('Could not load password settings. Reopen your account to try again.');else setHasPassword(data)}}).catch(()=>{if(active)setMessage('Could not load password settings. Reopen your account to try again.')})
-    return ()=>{active=false}
-  },[session,needsPassword])
-  async function verifyPassword(password:string) {
-    const {data,error}=await readerCloud.auth.getUser()
-    if(error||!data.user?.email)throw new Error('Sign in again before changing account details.')
-    const result=await readerCloud.auth.signInWithPassword({email:data.user.email,password})
-    if(result.error||result.data.user?.id!==data.user.id)throw new Error('The current password is incorrect.')
-  }
+  const verifyPassword = (password:string) => verifyCurrentPassword(readerCloud,password)
   function changeMode(next:AccountMode) {setMode(next);setMessage('')}
   async function run(action:()=>Promise<unknown>) {
     setBusy(true)
@@ -65,19 +54,18 @@ export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefre
   return <ReaderSection page={asPage} title={cloudLibrary ? "Cloud Library" : "Reader Account"} busy={busy} onClose={onClose}>
     {!cloudLibrary && <><p>Guest reading stays on this device and works offline without an account. Sign in for cloud storage, cross-device reading state, and organizer connection.</p>
     <p>{readerOwner ? 'Saved Account Library' : 'Guest Library'} · {session?.user.email ?? 'Signed out'}</p>
-    {(!session || needsPassword || changingPassword) && <form className="account-auth-form" onSubmit={event=>{
+    {(!session || needsPassword ) && <form className="account-auth-form" onSubmit={event=>{
       event.preventDefault()
       const form=event.currentTarget,fields=new FormData(form),email=String(fields.get('email')??'').trim(),password=String(fields.get('password')??'')
       void run(async()=>{
-        if(needsPassword||changingPassword||mode==='signup')confirmPassword(fields)
-        if(mode==='signup'&&!needsPassword&&!changingPassword){
+        if(needsPassword||mode==='signup')confirmPassword(fields)
+        if(mode==='signup'&&!needsPassword){
           const session=await createAccount(readerCloud,email,password,String(fields.get('username')??''),`${location.origin}/auth/callback`)
           if(session)await enterAccount(session.user.id)
           else {for(const name of ['password','confirmPassword']){const input=form.elements.namedItem(name);if(input instanceof HTMLInputElement)input.value=''}setMessage(accountConfirmationMessage)}
-        } else if(needsPassword||changingPassword){
-          if(changingPassword&&hasPassword!==false)await verifyPassword(String(fields.get('oldPassword')??''))
-          const {error}=await readerCloud.auth.updateUser({password,...(changingPassword&&hasPassword!==false?{current_password:String(fields.get('oldPassword'))}:{})});if(error)throw error
-          setHasPassword(true);setChangingPassword(false);setNeedsPassword(false);clearReaderAuthIntent();history.replaceState(null,'','/');setMessage('Password saved. Use this email and password in either app.')
+        } else if(needsPassword){
+          const {error}=await readerCloud.auth.updateUser({password});if(error)throw error
+          setNeedsPassword(false);clearReaderAuthIntent();history.replaceState(null,'','/');setMessage('Password saved. Use this email and password in either app.')
         } else if(mode==='reset') {
           const {error}=await readerCloud.auth.resetPasswordForEmail(email,{redirectTo:`${location.origin}/auth/callback`});if(error)throw error
           setMessage('If this email has an account, a recovery link is on its way. Open it in this browser.')
@@ -87,31 +75,21 @@ export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefre
         }
       })
     }}>
-      {mode==='signup'&&!needsPassword&&!changingPassword&&<p className="field-help">Create one account for both apps, or continue with your existing organizer account.</p>}
-      {changingPassword&&hasPassword!==false&&<label className="account-auth-field"><input className="account-auth-input" name="oldPassword" type="password" aria-label="Old Password" placeholder="Old Password" autoComplete="current-password" required disabled={busy} /></label>}
-      <SignInFields mode={needsPassword||changingPassword?'password':mode} busy={busy} remember={remember} onRememberChange={value=>{setRemember(value);rememberSession('reader',value)}} onToggleMode={()=>changeMode('reset')} />
+      {mode==='signup'&&!needsPassword&&<p className="field-help">Create one account for both apps, or continue with your existing organizer account.</p>}
+
+      <SignInFields mode={needsPassword?'password':mode} busy={busy} remember={remember} onRememberChange={value=>{setRemember(value);rememberSession('reader',value)}} onToggleMode={()=>changeMode('reset')} />
       <div className="account-auth-actions">
-      {!needsPassword&&!changingPassword&&mode!=='reset'&&<button type="button" disabled={busy} onClick={()=>void run(async()=>{const ok=await connectedLogin(readerCloud,organizerAppUrl(),true);if(!ok){setMessage('Sign in to your connected organizer first, or use your email and password.');return}const {data}=await readerCloud.auth.getSession();if(data.session)await enterAccount(data.session.user.id)})}>Continue From Organizer</button>}
-      <button className="primary" disabled={busy}>{busy?'Please Wait…':needsPassword||changingPassword?'Save Password':mode==='reset'?'Send Recovery Link':mode==='signup'?'Create Account':'Sign In'}</button>
-      {(changingPassword||needsPassword&&session)&&<button type="button" disabled={busy} onClick={()=>{setChangingPassword(false);setNeedsPassword(false);clearReaderAuthIntent();setMessage('')}}>Cancel</button>}
+      {!needsPassword&&mode!=='reset'&&<button type="button" disabled={busy} onClick={()=>void run(async()=>{const ok=await connectedLogin(readerCloud,organizerAppUrl(),true);if(!ok){setMessage('Sign in to your connected organizer first, or use your email and password.');return}const {data}=await readerCloud.auth.getSession();if(data.session)await enterAccount(data.session.user.id)})}>Continue From Organizer</button>}
+      <button className="primary" disabled={busy}>{busy?'Please Wait…':needsPassword?'Save Password':mode==='reset'?'Send Recovery Link':mode==='signup'?'Create Account':'Sign In'}</button>
+      {(needsPassword&&session)&&<button type="button" disabled={busy} onClick={()=>{setNeedsPassword(false);clearReaderAuthIntent();setMessage('')}}>Cancel</button>}
       </div>
-      {!needsPassword&&!changingPassword&&<AccountModeSwitch mode={mode} busy={busy} onChange={changeMode} />}
+      {!needsPassword&&<AccountModeSwitch mode={mode} busy={busy} onChange={changeMode} />}
     </form>}
     {needsPassword && !session && <button disabled={busy} onClick={()=>{setNeedsPassword(false);setMode('reset')}}>Request a New Recovery Link</button>}
-    {session && !needsPassword && !changingPassword && <>
+    {session && !needsPassword && <>
       <UsernameSettings key={session.user.id} client={readerCloud} disabled={busy} verifyPassword={verifyPassword} />
-      <form className="story-form account-details-form" onSubmit={event=>{
-        event.preventDefault();const form=event.currentTarget,fields=new FormData(form)
-        void run(async()=>{
-          await verifyPassword(String(fields.get('currentPassword')??''))
-          const {error}=await readerCloud.auth.updateUser({email:String(fields.get('newEmail')).trim()},{emailRedirectTo:`${location.origin}/auth/callback`});if(error)throw error
-          form.reset();setEditingEmail(false);setMessage('Check your new email address and click the confirmation link to finish changing your email. A notification will be sent to your old address.')
-        })
-      }}><label>Account Email<input type="email" aria-label="Account Email" readOnly value={session.user.email??''} /></label>{!editingEmail&&<button type="button" disabled={busy} aria-label="Edit Email" onClick={()=>setEditingEmail(true)}>Edit</button>}
-        {editingEmail&&<><label>New Email Address<input name="newEmail" type="email" autoComplete="email" required disabled={busy} /></label><label>Current Password<input name="currentPassword" type="password" autoComplete="current-password" required disabled={busy} /></label></>}
-        {editingEmail&&<div className="form-actions"><button disabled={busy}>Save Email</button><button type="button" disabled={busy} onClick={()=>setEditingEmail(false)}>Cancel</button></div>}
-      </form>
-      <div className="account-details-form"><span>Password</span><button type="button" aria-label="Edit Password" disabled={busy||hasPassword===null} onClick={()=>{setChangingPassword(true);setMessage('')}}>Edit</button></div>
+      <p>Email: {session.user.email}</p>
+      <AccountSecuritySettings client={readerCloud} disabled={busy} redirectTo={`${location.origin}/auth/callback`} beforeSignOut={beforeSwitch} afterSignOut={async()=>{sessionStorage.setItem('connected-login-signed-out','1');await switchLibrary('');await onRefresh()}} />
     </>}
     </>}
     {cloudLibrary && !readerOwner && <p>Sign in to Reader Account to store your library in the cloud and sync across devices.</p>}

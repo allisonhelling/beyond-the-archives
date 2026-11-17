@@ -511,7 +511,7 @@ test('uses organizer publication symbols and tooltips and separates work facts w
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
     const textSize = await card.locator('.summary').evaluate(el => getComputedStyle(el).fontSize)
-    await expect(card.locator('.work-fandoms')).toHaveCSS('font-size', '13px')
+    await expect(card.locator('.work-fandoms')).toHaveCSS('font-size', await card.locator('.byline').evaluate(element => getComputedStyle(element).fontSize))
     await expect(card.locator('.metadata-tag').first()).toHaveCSS('font-size', '13px')
     await expect(card.locator('.work-fandoms')).toHaveCSS('font-weight', '650')
     expect(await page.getByRole('button', { name: 'Profile Menu', exact: true }).evaluate(el => el.parentElement?.lastElementChild === el)).toBe(true)
@@ -1110,7 +1110,7 @@ test('keeps automatic successful organizer sync quiet and shows manual reports',
   await expect(page.getByRole('status').filter({ hasText: 'Checked 0 identified EPUB versions; 0 versions linked.' })).toBeVisible()
 })
 
-test('saves independent category colors and uses one color only for Filled Chips', async ({ page }) => {
+test('saves independent category colors for Borderless and outlined tags', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'colors.epub', mimeType: 'application/epub+zip', buffer: await fixture(true) })
@@ -1139,7 +1139,8 @@ test('saves independent category colors and uses one color only for Filled Chips
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.reload()
   await expect(page.locator('.story-card .metadata-tag').first()).toBeVisible()
-  for (const chip of await page.locator('.story-card .metadata-tag').all()) await expect(chip).toHaveCSS('color', 'rgb(119, 136, 153)')
+  await expect(tags.locator('.metadata-tag[data-tag-category="relationships"]').first()).toHaveCSS('color', 'rgb(51, 68, 85)')
+  await expect(tags.locator('.metadata-tag[data-tag-category="characters"]').first()).toHaveCSS('color', 'rgb(85, 102, 119)')
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await expect(dialog.getByRole('group', { name: 'Relationships Color', exact: true }).getByRole('button', { name: 'Custom Color', exact: true })).toHaveText('#334455')

@@ -16,8 +16,8 @@
 .dropdown-panel .dropdown-check-option > span { min-width: 0; overflow-wrap: anywhere; }
 .dropdown-panel label.dropdown-check-option { display: flex; align-items: center; gap: 9px; margin: 0; cursor: pointer; }
 .dropdown-panel :is([role=option], .menu-item) > svg { flex-shrink: 0; }
-.dropdown-panel [aria-selected=true], .dropdown-panel .dropdown-check-option:not(:has(:disabled)):is(:hover, :focus-within), .fandom-options .check-label:is(:hover, :focus-within) { color: var(--color-brand); background: var(--color-brand-soft); }
-.dropdown-panel :is([role=option], .menu-item):not(:disabled):is(:hover, :focus-visible) { color: var(--color-surface); background: var(--color-brand); }
+.dropdown-panel [aria-selected=true], .dropdown-panel .dropdown-check-option:not(:has(:disabled)):is(:hover, :focus-within), .fandom-options .check-label:is(:hover, :focus-within) { background: var(--color-brand-soft); }
+.dropdown-panel :is([role=option], .menu-item):not(:disabled):is(:hover, :focus-visible) { background: var(--color-brand-soft); }
 .dropdown-panel [role=option]:disabled { opacity: .5; cursor: not-allowed; }
 .dropdown-panel :is([role=option], .menu-item) > span { min-width: 0; overflow-wrap: anywhere; }
 .dropdown-panel :is([role=option], .menu-item), .dropdown-panel .dropdown-check-option, .suggestion-options button { min-height: 36px; padding: 7px 10px; font-size: 14px; line-height: 20px; }
@@ -30,7 +30,7 @@
 
 .dropdown-text .dropdown-trigger { justify-content: center; width: 100%; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; font: inherit; color: inherit; }
 .dropdown-text:not(.dropdown-custom-value) .dropdown-trigger > span { text-decoration: underline; text-underline-offset: .15em; }
-.dropdown-text .dropdown-trigger:is(:hover, :focus-visible) { color: var(--color-brand); }
+
 .dropdown-panel[data-portal] { position: fixed; z-index: 40; top: var(--dropdown-top); left: var(--dropdown-left); width: var(--dropdown-width); max-height: var(--dropdown-max-height); margin: 0; }
 
 @media (max-width: 650px) {
@@ -38,5 +38,3 @@
   .dropdown-mobile-icon-only .dropdown-trigger > .dropdown-label { overflow: visible; }
   .dropdown-mobile-icon-only .dropdown-label-text, .dropdown-mobile-icon-only .dropdown-trigger > svg { display: none; }
 }
-
-select:is(:hover, :focus-visible):not(:disabled), .fandom-trigger:is(:hover, :focus-visible):not(:disabled), .dropdown-trigger:is(:hover, :focus-visible):not(:disabled) { border-color: var(--color-brand); background-color: var(--color-brand-soft); }

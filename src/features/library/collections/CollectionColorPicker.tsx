@@ -1,7 +1,7 @@
 import './color-picker.css'
-import { useId, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useId, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from 'react'
 import { useDismissible } from '../../../components/useDismissible'
-import { collectionColorPattern, collectionColors } from './collection-colors'
+import { collectionColorPattern, collectionColors, savedColorSnapshot, savedCustomColors, subscribeSavedColors, saveCustomColors } from './collection-colors'
 
 type Hsv = { h: number; s: number; v: number }
 const validHex = new RegExp(collectionColorPattern)
@@ -22,6 +22,9 @@ function toHex({ h, s, v }: Hsv) {
 }
 
 export function CollectionColorPicker({ value, onChange, disabled = false, showHex = false }: { value: string; onChange: (hex: string) => void; disabled?: boolean; showHex?: boolean }) {
+  const saved = savedCustomColors(useSyncExternalStore(subscribeSavedColors, savedColorSnapshot))
+  const [saveError, setSaveError] = useState('')
+  function retain(colors: string[]) { try { saveCustomColors(colors); setSaveError('') } catch { setSaveError('Could not save colors. Check browser storage permissions.') } }
   const [open, setOpen] = useState(false)
   const [hsv, setHsv] = useState(() => toHsv(value))
   const current = validHex.test(value) && toHex(hsv) !== value.toLowerCase() ? toHsv(value) : hsv
@@ -57,6 +60,9 @@ export function CollectionColorPicker({ value, onChange, disabled = false, showH
         <input className="collection-color-hue" type="range" aria-label="Hue" min="0" max="360" value={current.h} disabled={disabled} onChange={event => change({ ...current, h: Number(event.target.value) })} />
       </div>}
       <label className="collection-color-hex"><span className="sr-only">Custom Color (Hex)</span><input ref={hexInput} type="text" required pattern={collectionColorPattern} maxLength={7} placeholder="#970000" title="Enter # followed by six hexadecimal digits." autoCapitalize="none" spellCheck={false} value={value} disabled={disabled} onInvalid={event => { event.preventDefault(); setOpen(true); requestAnimationFrame(() => hexInput.current?.focus()) }} onChange={event => onChange(event.target.value)} /></label>
+      <button type="button" className="button secondary" disabled={disabled || !validHex.test(value) || saved.includes(value.toLowerCase())} onClick={() => retain([...saved, value])}>Save Color</button>
+      {saved.length > 0 && <div className="saved-custom-colors" role="group" aria-label="Saved Colors">{saved.map(color => <span key={color}><button type="button" className="collection-color-swatch" style={{ '--cover-color': color } as CSSProperties} aria-label={`Use Saved Color ${color}`} title={color} disabled={disabled} onClick={() => onChange(color)} /><button type="button" className="text-button" aria-label={`Remove Saved Color ${color}`} disabled={disabled} onClick={() => retain(saved.filter(item => item !== color))}>×</button></span>)}</div>}
+      {saveError && <p role="alert">{saveError}</p>}
     </div>
   </div>
 }

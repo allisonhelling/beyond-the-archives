@@ -1,6 +1,13 @@
 import { useSummaryMode } from '../display/useDisplayPreference'
 import { saveSummaryMode, type SummaryMode } from '../display/display-settings'
+import { exampleWork } from '../display/display-examples'
+import { WorkSummary } from './WorkSummary'
+const choices: { mode: SummaryMode; label: string }[] = [
+ { mode: 'full', label: 'Always Show Full Summary' },
+ { mode: 'expanded', label: 'Expanded by Default' },
+ { mode: 'collapsed', label: 'Truncated by Default' },
+]
 export function SummarySettings() {
  const mode = useSummaryMode()
- return <label>Work Tile Summaries<select aria-label="Work Tile Summaries" value={mode} onChange={event => saveSummaryMode(event.target.value as SummaryMode)}><option value="full">Always Show Full Summary</option><option value="expanded">Show More / Less · Expanded by Default</option><option value="collapsed">Show More / Less · Truncated by Default</option></select></label>
+ return <fieldset className="settings-subsection summary-settings"><legend>Work Tile Summaries</legend><div className="summary-format-options">{choices.map(choice => <div className="summary-format-option" key={choice.mode} data-selected={mode === choice.mode}><label className="check-label"><input type="radio" name="summary-format" value={choice.mode} checked={mode === choice.mode} onChange={() => saveSummaryMode(choice.mode)} />{choice.label}</label><div className="story-summary"><WorkSummary tile mode={choice.mode} metadata={exampleWork.metadata} /></div></div>)}</div></fieldset>
 }
