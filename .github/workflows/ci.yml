@@ -82,7 +82,7 @@ jobs:
           path: reader/test-results/
   checks:
     if: ${{ always() }}
-    needs: [quality, browser, performance, reader]
+    needs: [quality, browser, performance, reader, supabase, calibre-transfer]
     runs-on: ubuntu-latest
     steps:
       - name: Require All Checks to Pass
@@ -91,6 +91,8 @@ jobs:
           test "${{ needs.browser.result }}" = success
           test "${{ needs.performance.result }}" = success
           test "${{ needs.reader.result }}" = success
+          test "${{ needs.supabase.result }}" = success
+          test "${{ needs.calibre-transfer.result }}" = success
   supabase:
     runs-on: ubuntu-latest
     steps:

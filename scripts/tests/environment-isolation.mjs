@@ -28,6 +28,11 @@ test('ordinary CI contains no production mutation job or production credential r
  const text=await readFile(new URL('../../.github/workflows/ci.yml',import.meta.url),'utf8')
  assert.doesNotMatch(text,/deploy-database:|db push|functions deploy|secrets\.SUPABASE_|SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD/)
  assert.match(text,/npm run db:start/);assert.match(text,/VITE_APP_ENV: local/)
+ const jobs=[...text.matchAll(/^ {2}([\w-]+):\s*$/gm)].map(match=>match[1]).filter(job=>job!=='checks')
+ const checks=text.match(/^ {2}checks:\n([\s\S]*?)(?=^ {2}[\w-]+:|$(?![\s\S]))/m)?.[1]??''
+ const dependencies=checks.match(/needs: \[([^\]]+)\]/)?.[1].split(',').map(job=>job.trim())??[]
+ assert.deepEqual([...dependencies].sort(),[...jobs].sort(),'The aggregate gate must wait for every validation job, including live privacy and all Calibre platforms.')
+ for(const job of jobs)assert.ok(checks.includes('test "${{ needs.'+job+'.result }}" = success'),`The aggregate gate must require ${job} to succeed.`)
 })
 
 test('CLI child processes receive no ambient production or management credentials',()=>{

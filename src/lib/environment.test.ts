@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest'
 import {requireEnvironmentConfig,requireRuntimeEnvironmentConfig,productionProjectRef,stagingProjectRef} from './environment'
-import {stagingBootstrapConfig,stagingVercelConfig,validateBrowserEnv} from '../../scripts/build-env'
+import {productionVercelConfig,stagingBootstrapConfig,stagingVercelConfig,validateBrowserEnv} from '../../scripts/build-env'
 import organizerVercel from '../../vercel.json'
 import readerVercel from '../../reader/vercel.json'
 afterEach(()=>vi.unstubAllGlobals())
@@ -107,4 +107,28 @@ it('prepares dependency-free bootstrap candidates with no application entrypoint
   expect(prepared.headers[0].headers).toContainEqual({key:'Content-Security-Policy',value:"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"})
   expect(JSON.stringify(source)).toBe(original)
  }
+})
+it('derives production candidates from staging headers while preserving active files, routes and bridge protections',()=>{
+ const organizer='https://beyondthearchives.vercel.app',reader='https://archivesunfolded.vercel.app'
+ for(const [app,source,sibling] of [['organizer',organizerVercel,reader],['reader',readerVercel,organizer]] as const) {
+  const original=JSON.stringify(source)
+  const candidate=productionVercelConfig(source,organizer,reader,app)
+  expect(JSON.stringify(source)).toBe(original)
+  expect(candidate.rewrites).toEqual(source.rewrites)
+  expect(candidate.buildCommand).toBe(source.buildCommand)
+  expect(productionVercelConfig(candidate,organizer,reader,app)).toEqual(candidate)
+  const text=JSON.stringify(candidate.headers)
+  expect(text).toContain(`https://${productionProjectRef}.supabase.co`)
+  expect(text).not.toContain(stagingProjectRef)
+  expect(text).not.toContain('-git-staging-')
+  const bridge=candidate.headers.find(rule=>rule.source==='/auth/bridge')!
+  expect(bridge.headers).toContainEqual({key:'Cache-Control',value:'no-store'})
+  expect(bridge.headers).toContainEqual({key:'Referrer-Policy',value:'no-referrer'})
+  expect(bridge.headers.find(header=>header.key==='Content-Security-Policy')!.value).toContain(`frame-ancestors ${sibling}`)
+  expect(bridge.headers.some(header=>header.key==='X-Frame-Options')).toBe(false)
+ }
+ expect(()=>productionVercelConfig(organizerVercel,staging.VITE_ORGANIZER_URL,reader,'organizer')).toThrow('exact configured')
+ const foreign=structuredClone(organizerVercel)
+ foreign.headers[2].headers.push({key:'Content-Security-Policy',value:"connect-src 'self' https://foreign.supabase.co"})
+ expect(()=>productionVercelConfig(foreign,organizer,reader,'organizer')).toThrow('Foreign or wildcard')
 })

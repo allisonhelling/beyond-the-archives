@@ -20,4 +20,5 @@ supabase/.branches/
 artifacts/performance/
 artifacts/staging/
 artifacts/privacy/
+artifacts/release/
 .staging-bootstrap/

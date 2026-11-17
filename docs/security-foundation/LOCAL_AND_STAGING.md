@@ -2,6 +2,8 @@
 
 ## Scope And Review Gates
 
+The [S4 release preparation](S4_RELEASE_READINESS.md) and [production rollout runbook](PRODUCTION_ROLLOUT_RUNBOOK.md) now record offline artifacts, test evidence and outstanding release gates. S4 read-only discovery is now explicitly approved and completed for accessible metadata; its report supersedes overlapping historical inventories below. The agent made no hosted mutation. Further account/runtime tests, migrations, settings and deployments retain their separate approval gates.
+
 The subsequent [S3 owner-only privacy matrix](S3_OWNER_ONLY_PRIVACY.md) is implemented and tested locally with a narrow reader-inbox log redaction fix. Its hosted validation/release remains separate; no S3 deployment or push is authorized.
 
 S0 is conditionally approved as an audit deliverable. S1 implements local tooling and prepares staging. The separately authorized [S2 application-role implementation](S2_APPLICATION_RBAC.md) is tested locally; S2 staging execution requires explicit approval and the preceding S1 backend rollout. The existing hosted project is production with personal data; never copy its database, Auth users, backups or EPUBs into local/staging. The user approved staging backend changes on 16 November 2026; the current verification step inspects that backend read-only. That approval does not cover production, a hosted reset, new paid services, or a replacement production release path.
@@ -287,7 +289,7 @@ The returned project inventories expose no shared-variable linkage metadata. The
 - Authentication/password/IP protection settings are verified as reported above. No protected website was fetched, bypass token generated or protection setting changed. Effective callback/iframe access for a tester remains untested. Keep protection unchanged unless a concrete Preview-only adjustment is separately reviewed.
 - No role/promotion-permission or external CI credential audit was performed. Existing S1 build guards do not prove an infrastructure operator cannot manually promote or reassign domains.
 
-No additional hosted read approval is needed within this audit scope, but completing the missing items requires an authenticated interface that actually returns those settings, or a redacted Dashboard export of Production Branch, Git deploy hooks, build overrides and team/shared variable scopes. Do not request secret values. Release approval remains blocked on this evidence.
+At the time of this historical audit, continued hosted reads were authorized within its scope. S4 requires fresh explicit approval before any hosted action, including discovery; that earlier authorization does not extend to S4. Completing the missing items requires an authenticated interface that actually returns those settings, or a redacted Dashboard export of Production Branch, Git deploy hooks, build overrides and team/shared variable scopes. Do not request secret values. Release approval remains blocked on this evidence.
 
 #### Local Preparation And Failure Investigation Follow-Up
 
