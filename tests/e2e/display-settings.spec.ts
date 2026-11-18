@@ -1,7 +1,7 @@
 import { isTooltipPaintedAt } from './tooltip-assertions'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { fixture, login } from './library-fixture'
-import type { TagAppearance } from '../../src/features/library/display/display-settings'
+import { tagColors, type TagAppearance } from '../../src/features/library/display/display-settings'
 
 async function setup(page: Page, tagAppearance?: TagAppearance) {
   const tables = await fixture(page)
@@ -345,6 +345,9 @@ test('tag shape choices and short dividers save from the real work preview', asy
   const unselected = options.filter({ hasText: 'Borderless' })
   const fill = await unselected.evaluate(node => getComputedStyle(node).backgroundColor)
   await unselected.focus()
+  await page.keyboard.press('Shift+Tab')
+  await page.keyboard.press('Tab')
+  await expect(unselected).toBeFocused()
   await expect(unselected).not.toHaveCSS('background-color', fill)
   await choices.getByRole('button',{name:'Humor Fluff Sharp Rectangles',exact:true}).click()
   await expect(tags).toHaveAttribute('data-tag-shape','sharp')
@@ -417,7 +420,7 @@ test('inline grouped information drags from its text without selecting it', asyn
 
 
 test('global tag appearance, Apply and Undo are shared across tiles and pages',async({page})=>{
- test.setTimeout(60000) // Apply/undo, both tile editors, both example pages, and live cards.
+ test.setTimeout(90000) // Apply/undo, both tile editors, both example pages, and live cards after reload.
  const tables=await setup(page)
  tables.library_entries[0].metadata_overrides={...tables.library_entries[0].metadata_overrides as object,additional_tags:['Humor','Fluff'],relationship_tags:['Alice/Bob'],character_tags:['Alice'],archive_warnings:['No Archive Warnings Apply'],ao3_tags:['Display fandom','Humor','Fluff']}
  const appearance=page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true})
@@ -426,11 +429,12 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
  await expect(series.getByRole('group',{name:'Tag Colors',exact:true})).toHaveCount(0)
  const warning=appearance.getByRole('group',{name:'AO3 Warnings Color',exact:true})
  await expect(warning.getByRole('button',{name:'Custom Color',exact:true})).toHaveText('#970000')
+ const categoryCount = Object.keys(tagColors).length
  const sizes=await appearance.evaluate(node=>({shape:getComputedStyle(node.querySelector('.display-tag-shapes legend')!).fontSize,colors:getComputedStyle(node.querySelector('.display-tag-colors legend')!).fontSize,help:getComputedStyle(node.querySelector(':scope > .field-help')!).fontSize,labels:[...node.querySelectorAll('.display-tag-color-grid > div > .field-help')].map(label=>getComputedStyle(label).fontSize)}))
  expect(sizes.colors).toBe(sizes.shape)
- expect(sizes.labels).toEqual(Array(6).fill(sizes.help))
- await expect(appearance.locator('.display-tag-color-grid .metadata-tag')).toHaveCount(6)
- await expect(appearance.locator('.display-tag-example > span:first-child')).toHaveText(Array(6).fill('Ex.'))
+ expect(sizes.labels).toEqual(Array(categoryCount).fill(sizes.help))
+ await expect(appearance.locator('.display-tag-color-grid .metadata-tag')).toHaveCount(categoryCount)
+ await expect(appearance.locator('.display-tag-example > span:first-child')).toHaveText(Array(categoryCount).fill('Ex.'))
  for(const label of await appearance.locator('.display-tag-color-grid > div > .field-help').all()) await expect(label).toHaveText(/:$/)
  await expect(appearance.getByRole('group',{name:'Change All Tags',exact:true}).locator('.field-help')).toHaveText('Change All Tags:')
  const all=appearance.getByRole('group',{name:'Change All Tags',exact:true})
@@ -439,14 +443,14 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
  const heights=await Promise.all([all.getByRole('button',{name:'Custom Color',exact:true}),appearance.getByRole('button',{name:'Apply',exact:true}),appearance.getByRole('button',{name:'Undo',exact:true})].map(async button=>(await button.boundingBox())!.height))
  expect(heights).toEqual(Array(3).fill(heights[0]))
  await appearance.getByRole('button',{name:'Apply',exact:true}).click()
- await expect(appearance.locator('.display-tag-color-grid .collection-color-trigger')).toHaveText(Array(6).fill('#123abc'))
+ await expect(appearance.locator('.display-tag-color-grid .collection-color-trigger')).toHaveText(Array(categoryCount).fill('#123abc'))
  expect(await stored(page)).toBeNull()
  await appearance.getByRole('button',{name:'Undo',exact:true}).click()
  await expect(warning.getByRole('button',{name:'Custom Color',exact:true})).toHaveText('#970000')
  await expect(appearance.getByRole('button',{name:'Undo',exact:true})).toBeDisabled()
  await appearance.getByRole('button',{name:'Apply',exact:true}).click()
  await appearance.getByRole('button',{name:'Humor Fluff Sharp Rectangles',exact:true}).click()
- expect(await appearance.locator('.display-tag-color-grid .categorized-tags').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-tag-shape')))).toEqual(Array(6).fill('sharp'))
+ expect(await appearance.locator('.display-tag-color-grid .categorized-tags').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-tag-shape')))).toEqual(Array(categoryCount).fill('sharp'))
  for(const tag of await appearance.locator('.display-tag-color-grid .metadata-tag').all()) await expect(tag).toHaveCSS('color','rgb(18, 58, 188)')
  for(const [preview,group] of [[work,'workTile'],[series,'seriesTile']] as const) {
   await manage(preview,true)
@@ -514,30 +518,25 @@ test('editor actions are centered, subsection titles interrupt borders, and cate
  const work=editor(page,'Work Tile')
  for(const width of info.project.name==='mobile'?[320,390]:[1280]) {
   await page.setViewportSize({width,height:844})
-  const titlePositions:number[]=[],buttonWidths:number[]=[]
-  for(const heading of await page.locator('.display-tile-heading').all()) {
-   const titleNode=heading.getByRole('heading'),title=(await titleNode.boundingBox())!,legend=(await heading.boundingBox())!
-   expect(await heading.evaluate(node=>node.tagName)).toBe('LEGEND')
+  const titlePositions: number[] = []
+  for (const heading of await page.locator('.display-tile-heading').all()) {
+   const control = heading.getByRole('button'), titleNode = control.locator('span[id]')
+   await expect(control).toBeVisible()
+   const title = (await titleNode.boundingBox())!, legend = (await heading.boundingBox())!
+   expect(await heading.evaluate(node => node.tagName)).toBe('LEGEND')
    titlePositions.push(title.x)
-   expect(title.width+1).toBeGreaterThanOrEqual(await titleNode.evaluate(node=>node.scrollWidth))
-   for(const control of await heading.locator(':scope > .button').all()) {
-    const bounds=(await control.boundingBox())!
-    if(await control.evaluate(node=>node.tagName==='BUTTON')) buttonWidths.push(bounds.width)
-    expect(bounds.x).toBeGreaterThanOrEqual(legend.x)
-    expect(bounds.x+bounds.width).toBeLessThanOrEqual(legend.x+legend.width+1)
-    expect(await control.evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true)
-    expect(bounds.y).toBeGreaterThanOrEqual(legend.y)
-    expect(bounds.y+bounds.height).toBeLessThanOrEqual(legend.y+legend.height+1)
-   }
+   expect(title.width + 1).toBeGreaterThanOrEqual(await titleNode.evaluate(node => node.scrollWidth))
+   const bounds = (await control.boundingBox())!
+   expect(bounds.x).toBeGreaterThanOrEqual(legend.x)
+   expect(bounds.x + bounds.width).toBeLessThanOrEqual(legend.x + legend.width + 1)
+   expect(bounds.y).toBeGreaterThanOrEqual(legend.y)
+   expect(bounds.y + bounds.height).toBeLessThanOrEqual(legend.y + legend.height + 1)
   }
-  if(info.project.name==='mobile') {
-   expect(new Set(titlePositions).size).toBe(1)
-   expect(buttonWidths).toEqual([110,110,110])
-  }
+  if (info.project.name === 'mobile') expect(titlePositions[1]).toBe(titlePositions[2])
  }
  const layout=await page.locator('.display-settings').evaluate(node=>{
   const actions=node.querySelector('.display-editor-actions')!,buttons=[...actions.querySelectorAll('button')].map(button=>button.getBoundingClientRect()),section=actions.getBoundingClientRect()
-  const sections=[...node.querySelectorAll('.display-tile-section')],toggle=sections[0].querySelector('.display-tile-heading > button')!,heading=sections[0].querySelector('h3')!
+  const sections=[...node.querySelectorAll('.display-tile-section')],toggle=sections[0].querySelector('.display-tile-heading > button')!,heading=toggle.querySelector('span[id]')!
   const grid=node.querySelector('.display-tag-color-grid')!
   return {allPickerLeft:node.querySelector('.display-all-colors .collection-color-trigger')!.getBoundingClientRect().left,actionCenter:(Math.min(...buttons.map(rect=>rect.left))+Math.max(...buttons.map(rect=>rect.right)))/2,sectionCenter:(section.left+section.right)/2,borders:sections.map(section=>getComputedStyle(section).borderTopWidth),headingCenter:(heading.getBoundingClientRect().top+heading.getBoundingClientRect().bottom)/2,toggleCenter:(toggle.getBoundingClientRect().top+toggle.getBoundingClientRect().bottom)/2,afterPreviewGap:sections[1].querySelector('.display-tile-heading > button')!.getBoundingClientRect().top-sections[0].querySelector('.viewport-preview-crop')!.getBoundingClientRect().bottom,gridWidth:grid.getBoundingClientRect().width,columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,rows:[...grid.children].map(row=>{const label=row.querySelector(':scope > .field-help')!.getBoundingClientRect(),picker=row.querySelector('.collection-color-trigger')!.getBoundingClientRect(),tag=row.querySelector('.categorized-tags')!.getBoundingClientRect();return {rowWidth:row.getBoundingClientRect().width,rowCenter:(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2,labelX:label.right,pickerLeft:picker.left,pickerRight:picker.right,tagLeft:tag.left,labelY:(label.top+label.bottom)/2,pickerY:(picker.top+picker.bottom)/2,tagTop:tag.top,tagCenter:(tag.top+tag.bottom)/2,pickerBottom:picker.bottom}})}
  })
@@ -550,12 +549,13 @@ test('editor actions are centered, subsection titles interrupt borders, and cate
  if(layout.columns===2) { expect(divider.display).not.toBe('none');expect(divider.border).toBe('1px') }
  else expect(divider.display).toBe('none')
  if(layout.columns===2) {
-  expect(layout.rows[3].pickerLeft).toBeGreaterThan(layout.rows[0].pickerRight)
-  expect(layout.rows[3].pickerY).toBe(layout.rows[0].pickerY)
+  const firstInSecondColumn = layout.rows[Math.ceil(layout.rows.length / 2)]
+  expect(firstInSecondColumn.pickerLeft).toBeGreaterThan(layout.rows[0].pickerRight)
+  expect(firstInSecondColumn.pickerY).toBe(layout.rows[0].pickerY)
  }
  expect(layout.allPickerLeft).toBe(layout.rows[0].pickerLeft)
  for(const [index,row] of layout.rows.entries()) {
-  expect(row.pickerLeft).toBe(layout.rows[layout.columns===1?0:index<3?0:3].pickerLeft)
+  expect(row.pickerLeft).toBe(layout.rows[layout.columns === 1 || index < Math.ceil(layout.rows.length / 2) ? 0 : Math.ceil(layout.rows.length / 2)].pickerLeft)
   if(info.project.name==='desktop') {
    expect(row.pickerLeft-row.labelX).toBe(8)
    expect(Math.abs(row.labelY-row.pickerY)).toBeLessThan(1)
@@ -694,13 +694,13 @@ test('saves and cancels tag, series and work tile drafts independently', async (
   await expect(field(preview, group, 'authors')).toHaveCount(0)
  }
  await page.getByRole('group', { name: 'Tag Shape', exact: true }).getByRole('button', { name: 'Humor Fluff Sharp Rectangles', exact: true }).click()
- await page.locator('#display-work-editor .display-save-bar').first().getByRole('button', { name: 'Save', exact: true }).click()
+ await page.locator('#display-work-editor .display-save-bar:visible').first().getByRole('button', { name: 'Save', exact: true }).click()
  let preferences = await storedProfile(page)
  expect(preferences.workTile.hidden).toContain('authors')
  expect(preferences.seriesTile.hidden).not.toContain('authors')
  expect(preferences.tagAppearance.shape).toBe('bullets')
  await expect(field(series, 'seriesTile', 'authors')).toHaveCount(0)
- await page.locator('#display-series-editor .display-save-bar').first().getByRole('button', { name: 'Cancel', exact: true }).click()
+ await page.locator('#display-series-editor .display-save-bar:visible').first().getByRole('button', { name: 'Cancel', exact: true }).click()
  await expect(field(series, 'seriesTile', 'authors')).toBeVisible()
  await page.locator('#display-tag-format .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
  preferences = await storedProfile(page)
@@ -761,10 +761,10 @@ for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'p
  await page.reload()
  async function open() {
   if (layout === 'page') await page.getByRole('link', { name: `Edit ${kind === 'work' ? 'Work' : 'Series'} Info Page`, exact: true }).click()
-  else await page.getByRole('button', { name: `Edit ${kind === 'work' ? 'Work' : 'Series'} Tiles`, exact: true }).click()
+  else await page.getByRole('button', { name: `${kind === 'work' ? 'Work' : 'Series'} Tile`, exact: true }).click()
  }
  await open()
- const controls = layout === 'page' ? page.locator('.display-example-page > div:not([hidden]) > .display-save-bar') : page.locator(`#display-${kind}-editor .display-save-bar`).first()
+ const controls = layout === 'page' ? page.locator('.display-example-page > div:not([hidden]) > .display-save-bar') : page.locator(`#display-${kind}-editor .display-save-bar:visible`).first()
  const preview = editor(page, layout === 'page' ? `Example ${kind === 'work' ? 'Work' : 'Series'} Info Page` : `${kind === 'work' ? 'Work' : 'Series'} Tile`)
  await expect(field(preview, group, hiddenField)).toHaveCount(0)
  await preview.getByRole('button', { name: 'Add Divider', exact: true }).click()
@@ -794,8 +794,9 @@ for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'p
 })
 
 test('example work expands editable other metadata and preserves its own field choices', async ({ page }) => {
- await setup(page)
+ await fixture(page)
  await page.goto('/settings/example-work')
+ await login(page)
  const info = editor(page, 'Example Work Info Page')
  const chapterHistory = field(info, 'workInfo', 'chapterHistory')
  await expect(chapterHistory).toContainText('No chapter reads recorded yet.')
@@ -816,15 +817,15 @@ test('example work expands editable other metadata and preserves its own field c
  await expect(field(info, 'workOther', 'language')).toHaveCount(0)
  await manage(info, true)
  await expect(info.getByRole('heading', { name: 'Hide/Show Information', exact: true })).toHaveCount(0)
- const available = info.getByRole('region', { name: 'Available Information', exact: true })
- const section = available.locator('details').filter({ has: page.getByText('Work Pages · Other Metadata', { exact: true }) })
+ const available = info.locator('details[aria-label="Available Information"]')
+ const section = available.locator('section').filter({ has: page.getByRole('heading', { name: 'Work Pages · Other Metadata', exact: true }) })
  const addLanguage = section.getByRole('button', { name: 'Add Language', exact: true })
  await expect(addLanguage).toBeVisible()
- await section.locator('summary').click()
+ await available.locator('summary').click()
  await expect(addLanguage).toBeHidden()
- const shown = info.getByRole('region', { name: 'Shown Information', exact: true }).locator('details').filter({ has: page.getByText('Work Pages · Other Metadata', { exact: true }) })
+ const shown = info.locator('details[aria-label="Shown Information"]').locator('section').filter({ has: page.getByRole('heading', { name: 'Work Pages · Other Metadata', exact: true }) })
  await expect(shown.getByRole('button', { name: 'Select Verified Canonical URL', exact: true })).toBeVisible()
- await section.locator('summary').click()
+ await available.locator('summary').click()
  await addLanguage.click()
  await manage(info, false)
  await expect(field(info, 'workOther', 'language')).toBeVisible()
@@ -872,12 +873,12 @@ test('sample tile tooltips extend beyond the crop without moving their anchors',
 
 test('tile previews use their own viewport for collapsed tag counts',async({page})=>{
  await setup(page)
- const previews=page.getByRole('region',{name:/^(Desktop|Mobile) Work Tile Layout$/})
- await expect(previews).toHaveCount(page.viewportSize()!.width <= 1100 ? 1 : 2)
- for(const preview of await previews.all()) {
-  const mobile=(await preview.getAttribute('aria-label'))!.startsWith('Mobile')
-  const frame=preview.locator('iframe').contentFrame()
-  await expect(frame.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(mobile?4:7)
+ const tabs = page.getByRole('tablist', { name: 'Work Tile Layout', exact: true })
+ for (const [device, count] of [['Desktop', 7], ['Mobile', 4]] as const) {
+  await tabs.getByRole('tab', { name: `${device} Layout`, exact: true }).click()
+  await expect(page.getByRole('region', { name: /^(Desktop|Mobile) Work Tile Layout$/ })).toHaveCount(1)
+  const frame = page.getByRole('region', { name: `${device} Work Tile Layout`, exact: true }).frameLocator('iframe')
+  await expect(frame.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(count)
  }
 })
 

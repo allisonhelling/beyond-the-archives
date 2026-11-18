@@ -15,4 +15,4 @@ services:
       - /workspace/node_modules
     # Writable artifacts also remain removable by the host user on Linux.
     entrypoint: [sh, -c, 'umask 000; exec npm run test:e2e -- --grep-invert @performance "$@"', '--']
-    command: ['--shard=1/4']
+    command: ['--shard=1/6']

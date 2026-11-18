@@ -48,6 +48,7 @@ import { StarRating } from './StarRating'
 import { useDisplayPreference } from './display/useDisplayPreference'
 import { FavoriteButton, PersonalToggleButton } from './FavoriteButton'
 import { AuthorNames } from './AuthorNames'
+import { CompanionStoryForm } from './CompanionStoryForm'
 import { StoryForm } from './StoryForm'
 import { PersonalTagHelp, PersonalTagInput } from './PersonalTagInput'
 import { ImportLinkForm } from '../imports/ImportLinkForm'
@@ -228,7 +229,7 @@ export function AddStoryPage() {
   const importing = !['manual', 'epub'].includes(params.get('import') ?? '')
   return <><div className="page-heading"><div><h1>Add Story</h1><p>Import metadata from AO3 or an EPUB, or save a story from any public website with manual metadata and reading progress.</p></div></div><LibraryBoundary>
     <div className="library-toolbar"><button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', importing ? 'manual' : 'link'); return next })}>{importing ? 'Enter Manually' : 'Import from Link'}</button>{importing && <button type="button" className="button secondary" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set('import', 'epub'); return next })}>Import from EPUB</button>}</div>
-    {importing ? <ImportLinkForm /> : <StoryForm />}
+    {importing ? <ImportLinkForm /> : params.get('companion') ? <CompanionStoryForm key={params.get('companion')} id={params.get('companion')!} /> : <StoryForm />}
   </LibraryBoundary></>
 }
 function PersonalStoryField({ story }: { story: Story }) {

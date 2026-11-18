@@ -40,7 +40,7 @@ For each boundary, maintain a matrix of **producer version / consumer version / 
 
 - Responses should correlate to `requestId`, identify their schema version, and return either a validated result or a structured failure. Do not log raw page contents, authentication tokens, cookies, or private story data in diagnostics.
 - Treat a **breaking semantic or structural change** as a new contract revision. Additive optional fields can be tolerated only under a documented compatibility policy; never assume unknown fields mean support for an unknown feature.
-- Negotiate capabilities before invoking an operation. Preserve existing `metadata-retrieval-v1` behavior; proposed `generic-site-extraction-v1` and `visual-mapping-v1` are future capabilities until actually implemented.
+- Negotiate capabilities before invoking an operation. Preserve existing `metadata-retrieval-v1` behavior; `generic-site-extraction-v1` and `visual-mapping-v1` share the revision-1 handshake and require a correlated request ID. See [Phase 3 request and result contract](PHASE_3_EXTENSION_AND_MAPPING.md#request-and-result-contract).
 - Reject unsupported major contract versions or required capabilities with an actionable `CONTRACT_UNSUPPORTED` result. Do not guess how to interpret mismatched payloads.
 - Define behavior for absent version fields from legacy components, unknown optional fields, missing required fields, invalid enums, duplicate/stale requests, expired handoffs, and concurrent upgrades. Legacy interpretation must be **explicitly scoped to known legacy payloads**.
 - Version persisted interchange formats separately from live messaging contracts when their evolution differs. Define migration/restore paths for supported backup versions.

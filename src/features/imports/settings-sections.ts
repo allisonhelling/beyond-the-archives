@@ -11,3 +11,5 @@ export const metadataSettingsSection = {
 }
 
 export const seriesImportSettingsSection = { id: 'settings-series-imports', title: 'Series Imports', description: 'Choose whether to save all series works or select them each time' }
+
+export const siteMappingsSettingsSection = { id: 'settings-site-mappings', title: 'Site Mappings', description: 'Review and manage the rules your companion uses to find story metadata' }

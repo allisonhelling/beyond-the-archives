@@ -85,7 +85,7 @@ Verification above means the local automated baseline: pure/SQL/reader regressio
 - [x] Preserve unread `0/N` and Read Chapter 1 next action where navigation is available.
 - [x] Implement manual published chapter progress, source URL/location, and independent publication status.
 - [x] Implement status confidence/origin indicators and field-aware filters (including Needs Completion Verification).
-- [x] Increase total: preserve read progress; prompt for explicitly Finished stories whose new total exceeds progress, defaulting to keeping progress; allow deliberate 25/25 or Finished override.
+- [x] Increase total: preserve read progress; require an explicit choice for manual count edits to explicitly Finished stories, including direct owner updates; allow source-observation updates that preserve explicit status and progress.
 - [x] Decrease total: save normally if progress remains valid; if total falls below progress, block pending explicit review/confirmation.
 - [x] Preserve chapter-read history by default when adjusting current progress; separately warn before explicit history deletion.
 - [x] Distinguish automatically derived status from manual status; preserve manual Finished and Re-Reading decisions.
@@ -93,7 +93,7 @@ Verification above means the local automated baseline: pure/SQL/reader regressio
 
 Implementation record: [Phase 2 Delivery And Verification](PHASE_2_MANUAL_STORIES_PROGRESS.md), branch `universal-stories/02-manual-stories-progress` from reviewed `main` at `df19dcc`. Local SQL/unit and desktop/mobile sample gates passed. Manual Abandoned/Deleted declarations permit Finished for every source; observed unavailability alone does not. History deletion is not added to the count editor; its existing separate confirmation/Undo behavior is retained. Full local Supabase service integration, native Safari and hosted rollout remain unverified.
 
-**Exit criteria:** Unsupported-site manual tracking works end-to-end; no silent progress loss or unauthorized status change.
+**Exit criteria:** Unsupported-site manual tracking works end-to-end; no silent progress loss or unauthorized status change. The reproduced direct manual-update bypass is guarded by `20261117000200_guard_finished_chapter_increases.sql` and covered in embedded tests. Source-observation updates that preserve status and progress remain separate; broader Supabase integration, installed Safari, and hosted checks remain release dependencies.
 
 **Specs:** [Reading progress](06-reading-progress.md), [Imports](04-imports.md).
 
@@ -103,16 +103,18 @@ Implementation record: [Phase 2 Delivery And Verification](PHASE_2_MANUAL_STORIE
 
 **Goal:** Users can extract, preview, correct, and map story metadata from an active page.
 
-- [ ] Extend existing companion capability negotiation for generic extraction and visual mapping.
-- [ ] Build in-tab right-side save/edit panel showing **actual extracted values** and personal fields.
-- [ ] Support field-first and element-first inspect-style selection, Esc/Cancel, Pause Selection, and safe overlay teardown.
-- [ ] Keep mapping drafts separate from story drafts; preserve edits through extension/web handoff.
-- [ ] Offer Use Once, exact-URL, URL-pattern, and site-wide scopes; never silently promote one-page mapping.
-- [ ] Build selector validation, health status, fallback selectors, suggested repair with explicit review, and versioned JSON export/import.
-- [ ] Manage saved mappings under Settings → Imports & Connections → Site Mappings with contextual access.
-- [ ] Validate origin, user activation/permissions, account association, request IDs, expiry, and result payloads.
-- [ ] Support disconnected/unsupported/uninstalled extension manual-entry fallbacks.
-- [ ] Test changing DOM, failed extraction, permissions, and account isolation.
+- [x] Extend existing companion capability negotiation for generic extraction and visual mapping.
+- [x] Build in-tab right-side save/edit panel showing **actual extracted values** and personal fields.
+- [x] Support field-first and element-first inspect-style selection, Esc/Cancel, Pause Selection, and safe overlay teardown.
+- [x] Keep mapping drafts separate from story drafts; preserve edits through extension/web handoff.
+- [x] Offer Use Once, exact-URL, URL-pattern, and site-wide scopes; never silently promote one-page mapping.
+- [x] Build selector validation, health status, fallback selectors, suggested repair with explicit review, and versioned JSON export/import.
+- [x] Manage saved mappings under Settings → Imports & Connections → Site Mappings with contextual access.
+- [x] Validate origin, user activation/permissions, account association, request IDs, expiry, and result payloads.
+- [x] Support disconnected/unsupported/uninstalled extension manual-entry fallbacks.
+- [x] Test changing DOM, failed extraction, permissions, and account isolation.
+
+Implementation record: [Phase 3 Extension Extraction And Visual Mapping](PHASE_3_EXTENSION_AND_MAPPING.md). The local Chromium fixtures cover generic editing and both handoff directions. Installed Chrome/Edge toolbar permission, native Safari, and a real Supabase service rollout remain release checks.
 
 **Exit criteria:** Unknown-site active-page extraction and manual mapping work without silently altering other pages or saved rules.
 

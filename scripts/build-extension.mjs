@@ -34,7 +34,7 @@ if (selectedOrigin !== target.organizerUrl) throw new Error('Extension origin do
 const defaultId = values.local ? 'local' : 'hosted'
 const profiles = { [defaultId]: { label: target.environment, appOrigin: selectedOrigin, backend: new URL(target.url).origin, publicKey: target.key } }
 const { appOrigin, backend, publicKey } = profiles[defaultId]
-const version = '0.7.8'
+const version = '0.8.0'
 const define = {
  __EXTENSION_ENVIRONMENTS__: JSON.stringify(profiles), __DEFAULT_ENVIRONMENT__: JSON.stringify(defaultId),
  'process.env.NODE_ENV': JSON.stringify('production'),
@@ -42,29 +42,33 @@ const define = {
  __SCRIPT_VERSION__: JSON.stringify(version),
  __BRAND_ICON__: JSON.stringify(renderToStaticMarkup(createElement(BookOpen, { size: 23, strokeWidth: 1.6, 'aria-hidden': true }))),
 }
-await build({
- configFile: false, define,
- build: { outDir, emptyOutDir: true, minify: false, lib: { entry: 'companions/chrome/background.js', formats: ['es'], fileName: () => 'background.js' } },
-})
-await build({
- configFile: false, define,
- build: { outDir, emptyOutDir: false, minify: false, lib: { entry: 'companions/chrome/content.js', name: 'BeyondTheArchivesBar', formats: ['iife'], fileName: () => 'content.js' } },
-})
-await build({
- configFile: false, define,
- build: { outDir, emptyOutDir: false, minify: false, lib: { entry: 'companions/chrome/options.js', formats: ['es'], fileName: () => 'options.js' } },
-})
-for (const file of ['options.html', 'options.css']) await writeFile(join(outDir, file), await readFile(`companions/chrome/${file}`, 'utf8'))
+const bundles = [
+ { entry: 'background', format: 'es' },
+ { entry: 'content', format: 'iife', name: 'BeyondTheArchivesBar' },
+ { entry: 'options', format: 'es' },
+ { entry: 'site-content', format: 'iife', name: 'BeyondTheArchivesSite' },
+ { entry: 'site-panel', format: 'es' },
+]
+for (const { entry, format, name } of bundles) {
+ await build({
+  configFile: false, define,
+  build: { outDir, emptyOutDir: entry === 'background', minify: false, lib: {
+   entry: `companions/chrome/${entry}.js`, name, formats: [format], fileName: () => `${entry}.js`,
+  } },
+ })
+}
+for (const file of ['options.html', 'options.css', 'site-panel.html', 'site-panel.css']) await writeFile(join(outDir, file), await readFile(`companions/chrome/${file}`, 'utf8'))
 await writeFile(join(outDir, 'manifest.json'), JSON.stringify({
  ...(values.local ? { key: localExtensionKey } : {}),
  manifest_version: 3, name: `${brandName} Companion${values.local ? ' (Local)' : ''}`, version, minimum_chrome_version: '120',
- description: 'Save and edit works directly on AO3, import requested metadata, and scan lists from your connected library.',
- permissions: ['storage', 'unlimitedStorage', 'alarms', 'scripting', 'webNavigation'],
+ description: 'Save stories from the active page, import requested AO3 metadata, and scan AO3 lists.',
+ permissions: ['storage', 'unlimitedStorage', 'alarms', 'scripting', 'webNavigation', 'activeTab'],
  host_permissions: ['https://archiveofourown.org/*', 'https://web.archive.org/*', ...new Set(Object.values(profiles).map(profile => `${profile.backend}/*`))],
  externally_connectable: { matches: Object.values(profiles).map(profile => `${profile.appOrigin}/*`) },
  options_ui: { page: 'options.html', open_in_tab: true },
  background: { service_worker: 'background.js', type: 'module' },
  content_scripts: [{ matches: ['https://archiveofourown.org/*'], js: ['content.js'], run_at: 'document_end', all_frames: false }],
- action: { default_title: 'Choose Hosted or Local Library' },
+ web_accessible_resources: [{ resources: ['site-panel.html'], matches: ['http://*/*', 'https://*/*'], use_dynamic_url: false }],
+ action: { default_title: 'Save or Edit a Story' },
 }, null, 2) + '\n')
 console.log(`Extension built in ${outDir} for ${appOrigin}.${values.local ? ` Local extension ID: ${localExtensionId}` : ''}`)

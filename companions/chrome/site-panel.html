@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Story Editor</title><link rel="stylesheet" href="options.css"><link rel="stylesheet" href="site-panel.css"><script type="module" src="site-panel.js"></script></head>
+<body>
+<main>
+ <header><h1 id="heading">Story Editor</h1><button id="close" type="button">Close</button></header>
+ <p id="notice" role="status">Reading the source page…</p>
+ <div id="source" hidden><label>Source URL<input id="url" readonly></label></div>
+ <section id="mapping" aria-labelledby="mapping-heading" hidden></section>
+ <form id="editor" hidden>
+  <fieldset><legend>Story Metadata</legend><div id="fields"></div><label class="check"><input type="checkbox" name="manual">Manually Entered Chapter Count</label></fieldset>
+  <fieldset><legend>Personal Information</legend>
+   <label>Reading Status<select name="status"></select></label>
+   <label>Personal Rating<select name="rating"><option value="">Unrated</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+   <label>Notes<textarea name="notes" maxlength="10000" rows="3"></textarea></label>
+   <label>Personal Tags (One per Line)<textarea name="tags" rows="2" maxlength="10000"></textarea></label>
+   <div id="collections"></div>
+  </fieldset>
+  <div class="actions">
+   <button id="save" type="submit">Save Story</button>
+   <button id="return" type="button">Continue in App</button>
+   <button id="map" type="button">Map Page Elements</button>
+   <button id="recover" type="button" hidden>Restore Disconnected Draft</button>
+   <button id="settings" type="button">Site Mappings</button>
+   <button id="connect" type="button" hidden>Connect Library</button>
+  </div>
+ </form>
+</main>
+</body>
+</html>

@@ -22,7 +22,11 @@ export async function verifyReadUndo(top: Locator, bottom: Locator, readLabel: s
      const channel = Number(value) / 255
      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4
     }).reduce((total, value, index) => total + value * [.2126, .7152, .0722][index], 0)
-    const foreground = luminance(style.color), background = luminance(style.backgroundColor)
+    let backgroundColor = style.backgroundColor
+    for (let parent = element.parentElement; parent && backgroundColor === 'rgba(0, 0, 0, 0)'; parent = parent.parentElement) {
+     backgroundColor = getComputedStyle(parent).backgroundColor
+    }
+    const foreground = luminance(style.color), background = luminance(backgroundColor)
     return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05)
    })
    expect(contrast).toBeGreaterThanOrEqual(4.5)

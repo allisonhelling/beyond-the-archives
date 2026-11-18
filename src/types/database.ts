@@ -1490,6 +1490,28 @@ export type Database = {
           { foreignKeyName: 'role_permissions_permission_id_fkey'; columns: ['permission_id']; isOneToOne: false; referencedRelation: 'app_permissions'; referencedColumns: ['id'] },
         ]
       }
+      site_mappings: {
+        Row: {
+          user_id: string
+          id: string
+          version: number
+          rule: Json
+        }
+        Insert: {
+          user_id: string
+          id: string
+          version: number
+          rule: Json
+        }
+        Update: {
+          user_id?: string
+          id?: string
+          version?: number
+          rule?: Json
+        }
+        Relationships: [
+        ]
+      }
       tags: {
         Row: {
           id: string
@@ -1699,6 +1721,8 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      write_site_mapping: { Args: { p_rule?: Json; p_id?: string; p_version?: number; p_import?: Json }; Returns: boolean }
+      save_companion_story: { Args: { p_id: string | null; p_url: string; p_input: Json; p_base: Json; p_observations: Json }; Returns: string }
       app_access: { Args: Record<string, never>; Returns: Json }
       admin_access: { Args: { p_request_id: string; p_action: string; p_target?: string; p_permission?: string; p_enabled?: boolean }; Returns: Json }
       app_owner_maintenance: { Args: { p_request_id: string; p_action: string; p_target: string; p_operator_reference: string }; Returns: Json }

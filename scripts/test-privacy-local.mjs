@@ -92,6 +92,12 @@ try {
   checked(await clients.admin.from('metadata_preferences').upsert({user_id,retrieval_mode:'extension',retrieval_mode_mobile:'extension'}))
   stage=`seeding ${account.identity}: library_sync_reports`
   checked(await c.from('library_sync_reports').insert({id:randomUUID(),report:{synthetic:true}}))
+  stage=`seeding ${account.identity}: site_mappings`
+  const mappingId=randomUUID(),example='https://synthetic.example/story',title='Synthetic Story Title'
+  assert.equal(await rpc(account,'write_site_mapping',{p_id:mappingId,p_version:0,p_rule:{
+   id:mappingId,version:1,scope:'exact',example,field:'title',selectors:['h1'],previous:title,
+   validation:{when:new Date().toISOString(),example,health:'Working',current:title},
+  }}),true)
   account.batch=await rpc(account,'submit_import_urls',{p_urls:['https://archiveofourown.org/works/123']})
   account.job=await rpc(account,'claim_extension_job')
   assert.ok(account.job?.id)

@@ -70,7 +70,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(page.getByRole('button', { name: 'Reload Saved Entry' })).toHaveCount(0)
   const notesFont = await page.getByLabel('Reading Status', { exact: true }).evaluate(element => getComputedStyle(element.closest('label')!).fontSize)
   for (const selector of ['h3', 'label', 'button:not(.tag-insertion-point)', 'input', 'select', 'textarea', 'small', '.personal-rating legend', '.rating-value']) {
-   for (const element of await page.locator(`#ao3-library-companion :is(${selector}):not(.toolbar *)`).all()) await expect(element).toHaveCSS('font-size', notesFont)
+   for (const element of await bottom.locator(`#library-editor :is(${selector})`).all()) await expect(element).toHaveCSS('font-size', notesFont)
   }
   for (const title of ['reading status', 'current chapter']) {
    const help = page.locator(`summary[aria-label="About ${title}"]`)
@@ -145,8 +145,8 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    if (mobile) {
     await expect(chip).toHaveAttribute('aria-pressed', 'true')
     await expect(chip.locator('.tag-label')).toHaveCSS('mask-image', 'none')
-    await expect(chip.locator('.tag-remove-cap')).toHaveCSS('opacity', '0')
-    await expect(chip.locator('.tag-remove-cap')).toBeHidden()
+    await expect(chip.locator('.tag-remove-cap')).toHaveCSS('opacity', '1')
+    await expect(chip.locator('.tag-remove-cap')).toBeVisible()
     await expect(chip).toHaveCSS('background-color', 'rgb(255, 196, 202)')
    }
    await expect(chip).toHaveCSS('color', 'rgb(17, 17, 17)')
@@ -159,7 +159,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await removable.tap()
    await expect(removable).toHaveClass(/tag-selected/)
    await expect(removable.locator('.tag-label')).toHaveCSS('mask-image', 'none')
-   await expect(removable.locator('.tag-remove-cap')).toHaveCSS('opacity', '0')
+   await expect(removable.locator('.tag-remove-cap')).toHaveCSS('opacity', '1')
    await removable.tap()
    await expect(removable).toHaveCount(0)
   }
@@ -186,9 +186,12 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await page.getByRole('button', { name: /^(Add to Collection|Edit Collections)$/ }).click()
   await page.screenshot({ path: `test-results/userscript-editor-${page.viewportSize()!.width}.png`, fullPage: true })
   await page.getByLabel('Private Notes', { exact: true }).fill('Keep these notes after a network failure')
-  await top.getByRole('button', { name: 'Add to Library', exact: true }).click()
-  await expect(page.getByLabel('Private Notes', { exact: true })).toBeHidden()
+  const bottomEditor = bottom.getByRole('button', { name: 'Add to Library', exact: true })
+  await expect(bottomEditor).toHaveAttribute('aria-expanded', 'true')
   await expect(top.getByRole('button', { name: 'Add to Library', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await bottomEditor.click()
+  await expect(page.getByLabel('Private Notes', { exact: true })).toBeHidden()
+  await expect(bottomEditor).toHaveAttribute('aria-expanded', 'false')
   await top.getByRole('button', { name: 'Add to Library', exact: true }).click()
   await expect(page.getByLabel('Private Notes', { exact: true })).toHaveValue('Keep these notes after a network failure')
   await top.getByRole('button', { name: 'Connection', exact: true }).click()
@@ -367,11 +370,15 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await bottom.getByRole('button', { name: 'Read', exact: true }).click()
   await expect(top.getByRole('status')).toContainText('Marked As Read Through Chapter 4')
   for (const surface of [top, bottom]) await expect(surface.getByText('Ch. 4 / 10', { exact: true })).toBeVisible()
-  await page.evaluate(() => {
-   document.getElementById('ao3-library-companion')!.remove()
-   history.replaceState(null, '', '/works/123/chapters/110')
-  })
-  await page.addScriptTag({ content: script })
+  async function goToChapter(chapterId: number) {
+   const previousBar = await top.elementHandle()
+   await page.evaluate(id => {
+    history.replaceState(null, '', `/works/123/chapters/${id}`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+   }, chapterId)
+   await expect.poll(() => previousBar!.evaluate(bar => bar.isConnected)).toBe(false)
+  }
+  await goToChapter(110)
   await expect(bottom.getByRole('button', { name: 'Finish Fic', exact: true })).toBeVisible()
   await bottom.getByRole('button', { name: 'Finish Fic', exact: true }).click()
   await expect(top.getByRole('status')).toContainText('Marked As Read Through Chapter 10')
@@ -380,11 +387,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect(surface.getByText('Ch. 10 / 10', { exact: true })).toBeVisible()
    await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
   }
-  await page.evaluate(() => {
-   document.getElementById('ao3-library-companion')!.remove()
-   history.replaceState(null, '', '/works/123/chapters/104')
-  })
-  await page.addScriptTag({ content: script })
+  await goToChapter(104)
   for (const surface of [top, bottom]) {
    await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
    await expect(surface.getByRole('button', { name: /^(Read|Finish Fic)$/ })).toHaveCount(0)
@@ -482,8 +485,12 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(reloadText).toHaveCSS('background-color', 'rgb(241, 225, 209)')
   await reloadHelp.click()
   await top.screenshot({ path: `test-results/userscript-dark-editor-${page.viewportSize()!.width}.png` })
-  await page.evaluate(() => document.getElementById('ao3-library-companion')!.remove())
-  await page.addScriptTag({ content: script })
+  const previousBar = await top.elementHandle()
+  await page.evaluate(() => {
+   const workskin = document.getElementById('workskin')!
+   workskin.replaceWith(workskin.cloneNode(true))
+  })
+  await expect.poll(() => previousBar!.evaluate(bar => bar.isConnected)).toBe(false)
   await expect(top).toHaveAttribute('data-theme', 'dark')
   await expect(bottom).toHaveAttribute('data-theme', 'dark')
   await top.getByRole('button', { name: 'Connection', exact: true }).click()

@@ -1,3 +1,5 @@
+import { SitePreview } from '../imports/SitePreview'
+import { observationPatch, normalizedField, type Observations, type SiteDraft, type StoryField } from '../imports/site-mapping'
 import { sourceLocation, sourceIdentityKey, fieldConfidence, SourceDuplicateError, type SourceDuplicateCandidate } from './story-source'
 import { chapterReview, explicitReadingStatus, reviewedChapterProgress, type ChapterChoice } from './chapter-edit'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -7,7 +9,7 @@ import { useActivity } from '../../lib/use-activity'
 import { BookFusionFields } from './bookfusion/BookFusionFields'
 import { validateBookFusionLink } from './bookfusion/bookfusion'
 import { EditConflictReview } from './EditConflictReview'
-import { editSnapshot, EditConflict } from './edit-merge'
+import { editSnapshot, EditConflict, type EditValues } from './edit-merge'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { authorPageUrl, blankMetadata, changedMetadata, initialProgress, progressReadingStatus, isOneShot, parseLines, parseWorkUrl, ratingLabel, ratings, savedWorkUrl, statuses, tagNames, validateProgress, type Metadata, type Status, type Story } from './model'
@@ -19,18 +21,28 @@ import { CollectionChoices, NewCollectionButton } from './collections/Collection
 import { PersonalTagInput } from './PersonalTagInput'
 import { FilePicker } from '../../components/FilePicker'
 import { epubMaxBytes, readEpub } from '../imports/epub'
-export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story; onCancel?: () => void; section?: 'all' | 'metadata' | 'reading' }) {
+export function StoryForm({ story, onCancel, section = 'all', companion }: { story?: Story; onCancel?: () => void; section?: 'all' | 'metadata' | 'reading'; companion?: { url: string; draft: SiteDraft | null; observations: Observations; base?: EditValues } }) {
   const library = useLibrary(), navigate = useNavigate(), [params] = useSearchParams(), location = useLocation()
+  const draft = companion?.draft?.story
   const ensureCatalog = library.ensureCatalog
   useEffect(() => { if (!story && ensureCatalog) void ensureCatalog().catch(() => {}) }, [story, ensureCatalog])
   const [duplicates, setDuplicates] = useState<SourceDuplicateCandidate[]>([])
-  const [metadata, setMetadata] = useState<Metadata>(story?.metadata ?? { ...blankMetadata })
-  const [url, setUrl] = useState(story ? savedWorkUrl(story) : '')
-  const [status, setStatus] = useState<Status>(story?.reading_status ?? (params.get('mode') === 'finished' ? 'finished' : params.get('mode') === 'starting' ? 'reading' : 'to_read'))
-  const [statusTouched, setStatusTouched] = useState(Boolean(story) || params.has('mode'))
+  const [metadata, setMetadata] = useState<Metadata>(() => {
+    const fields: Observations = {}
+    for (const [key, value] of Object.entries(draft?.fields ?? {})) {
+      if (story && !draft?.changedFields.includes(key as StoryField)) continue
+      const normalized = normalizedField(key as StoryField, value)
+      if (normalized || value === '') fields[key as StoryField] = { text: normalized, via: 'Mapped Element' }
+    }
+    const patch = observationPatch(fields)
+    return { ...blankMetadata, ...story?.metadata, ...patch, ...(draft && { chapter_count_manual: draft.manual }) }
+  })
+  const [url, setUrl] = useState(story ? savedWorkUrl(story) : companion?.url ?? (typeof location.state?.manualStoryUrl === 'string' ? location.state.manualStoryUrl : ''))
+  const [status, setStatus] = useState<Status>((draft && Object.hasOwn(statuses, draft.status) ? draft.status as Status : undefined) ?? story?.reading_status ?? (params.get('mode') === 'finished' ? 'finished' : params.get('mode') === 'starting' ? 'reading' : 'to_read'))
+  const [statusTouched, setStatusTouched] = useState(Boolean(story || draft) || params.has('mode'))
   const [progress, setProgress] = useState(String(story?.last_read_chapter ?? 0))
   const [publicationConfirmed, setPublicationConfirmed] = useState(false)
-  const [statusChanged, setStatusChanged] = useState(false)
+  const [statusChanged, setStatusChanged] = useState(draft?.statusChanged ?? false)
   const [progressChanged, setProgressChanged] = useState(false)
   const initialFinishedProgress = !story && status === 'finished' && !progressChanged ? metadata.published_chapters ?? metadata.total_chapters : null
   const readProgress = initialFinishedProgress ?? Number(progress)
@@ -38,19 +50,19 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   const [reviewChoice, setReviewChoice] = useState<ChapterChoice>('keep_read')
   let universal = Boolean(story?.source_url)
   if (!story && url) try { universal = sourceLocation(url).identity.kind === 'url' } catch { /* Submission validates. */ }
-  const [notes, setNotes] = useState(story?.notes ?? '')
-  const [personalRating, setPersonalRating] = useState<number | null>(story?.personal_rating ?? null)
+  const [notes, setNotes] = useState(draft?.notes ?? story?.notes ?? '')
+  const [personalRating, setPersonalRating] = useState<number | null>(draft ? Number(draft.rating) || null : story?.personal_rating ?? null)
   const [rec, setRec] = useState(story?.is_rec ?? false)
   const [favorite, setFavorite] = useState(story?.is_favorite ?? false)
-  const [collections, setCollections] = useState(story?.collectionIds ?? [])
-  const [tags, setTags] = useState(story?.personalTags ?? [])
+  const [collections, setCollections] = useState(draft?.collections ?? story?.collectionIds ?? [])
+  const [tags, setTags] = useState(draft?.tags ?? story?.personalTags ?? [])
   const [authors, setAuthors] = useState(metadata.authors.join('\n')), [fandoms, setFandoms] = useState(metadata.fandoms.join('\n')), [otherTags, setOtherTags] = useState(metadata.ao3_tags.filter(tag => ![...tagNames(metadata, 'relationship'), ...tagNames(metadata, 'character'), ...tagNames(metadata, 'freeform')].includes(tag)).join('\n'))
   const [relationships, setRelationships] = useState(tagNames(metadata, 'relationship').join('\n'))
   const [characters, setCharacters] = useState(tagNames(metadata, 'character').join('\n'))
   const [additionalTags, setAdditionalTags] = useState(tagNames(metadata, 'freeform').join('\n'))
   const [series, setSeries] = useState(metadata.series?.join('\n') ?? '')
   const [initialMetadata] = useState(story?.metadata)
-  const [base] = useState(story ? editSnapshot(story) : undefined)
+  const [base] = useState(story ? companion?.base ?? editSnapshot(story) : undefined)
   const [conflict, setConflict] = useState<EditConflict | null>(null)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   useActivity(Boolean(busy), 'Processing your story…')
@@ -73,7 +85,16 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
   }
   function field<K extends keyof Metadata>(key: K, value: Metadata[K]) { setMetadata(m => ({ ...m, [key]: value })) }
   function editedMetadata(): Metadata {
-    return { ...metadata, ...(metadata.bookfusion_link !== undefined && { bookfusion_link: metadata.bookfusion_link?.url.trim() ? validateBookFusionLink(metadata.bookfusion_link) : null }), manual_url: url, ...(!story && { chapter_count_manual: metadata.chapter_count_manual ?? false }), title: metadata.title.trim(), authors: parseLines(authors), fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
+    return { ...metadata, ...(metadata.bookfusion_link !== undefined && { bookfusion_link: metadata.bookfusion_link?.url.trim() ? validateBookFusionLink(metadata.bookfusion_link) : null }), manual_url: url, ...(!story && { chapter_count_manual: metadata.chapter_count_manual ?? false }), title: metadata.title.trim(), ...(universal && { categories: parseLines(metadata.categories?.join('\n') ?? '') }), authors: parseLines(authors), fandoms: parseLines(fandoms), ao3_tags: [...new Set([...parseLines(otherTags), ...parseLines(relationships), ...parseLines(characters), ...parseLines(additionalTags)])], relationship_tags: parseLines(relationships), character_tags: parseLines(characters), additional_tags: parseLines(additionalTags), series: parseLines(series) }
+  }
+  function applyObservation(key: StoryField, value: string) {
+    const normalized = normalizedField(key, value)
+    if (!normalized) return
+    const patch = observationPatch({ [key]: { text: normalized, via: 'Mapped Element' } })
+    if (key === 'authors') setAuthors(normalized)
+    else if (key === 'fandoms') setFandoms(normalized)
+    else if (key === 'ao3_tags') setOtherTags(normalized)
+    else setMetadata(current => ({ ...current, ...patch, ...(key === 'published_chapters' && { chapter_count_manual: false }) }))
   }
   function urlDefaults() {
     if (story || statusTouched) return
@@ -146,6 +167,7 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     {epubMessage && <p role="status">{epubMessage}</p>}
     <label>Story URL<input required type="url" readOnly={Boolean(story?.source_url) || story?.work.ao3_work_id === null} value={url} onChange={e => { setUrl(e.target.value); setDuplicates([]) }} onBlur={urlDefaults} /></label>
     <p className="field-help">{story ? story.source_url ? 'The submitted source URL is preserved. Add a separate story for a different source; source identity is not verified.' : 'You can update the link for this work. The original submission is preserved separately; work identity cannot be changed.' : 'Chapter IDs are not chapter numbers. Unverified links do not set progress; enter chapters read below.'}</p>
+    {universal && <SitePreview url={url} initial={companion?.observations} onApply={applyObservation} />}
     <BookFusionFields value={metadata.bookfusion_link} onChange={value => field('bookfusion_link', value)} />
     <label>Title<input required value={metadata.title} onChange={e => field('title', e.target.value)} /></label>
     <div className="form-grid"><label>Authors (one per line)<textarea rows={3} value={authors} onChange={e => setAuthors(e.target.value)} /></label><label>Fandoms (one per line)<textarea rows={3} value={fandoms} onChange={e => setFandoms(e.target.value)} /></label></div>
@@ -162,7 +184,8 @@ export function StoryForm({ story, onCancel, section = 'all' }: { story?: Story;
     <InfoTooltip description="Automatically marked for complete one-chapter works or One-shot, One shot, or Oneshot tags. You can correct this label, including works with extra art or other chapters." label="One-Shot Help" size={14} /></div>
     <label>Series Names (one per line, manually entered)<textarea rows={2} value={series} onChange={e => setSeries(e.target.value)} /></label>
     <div className="form-grid"><label>Relationship Tags (one per line)<textarea rows={3} value={relationships} onChange={e => setRelationships(e.target.value)} /></label><label>Characters (one per line)<textarea rows={3} value={characters} onChange={e => setCharacters(e.target.value)} /></label><label>Additional Tags (one per line)<textarea rows={3} value={additionalTags} onChange={e => setAdditionalTags(e.target.value)} /></label></div>
-    {otherTags && <label>Other or Uncategorized AO3 Tags (one per line)<textarea rows={3} value={otherTags} onChange={e => setOtherTags(e.target.value)} /></label>}</fieldset>}
+    {universal && <label>Categories (One per Line)<textarea rows={2} value={metadata.categories?.join('\n') ?? ''} onChange={e => field('categories', e.target.value.split('\n'))} /></label>}
+    {(otherTags || universal) && <label>{universal ? 'Other Source Tags (One per Line)' : 'Other or Uncategorized AO3 Tags (one per line)'}<textarea rows={3} value={otherTags} onChange={e => setOtherTags(e.target.value)} /></label>}</fieldset>}
     {section !== 'metadata' && <fieldset disabled={busy || Boolean(conflict)}><legend>Your Reading & Organization</legend><div className="form-grid reading-progress-row"><label>Reading Status<select aria-label="Reading Status" value={status} onChange={e => { const next = e.target.value as Status; setStatus(next); setStatusTouched(true); setStatusChanged(true); if (next === 'finished') setProgress(String(metadata.published_chapters ?? metadata.total_chapters ?? readProgress)); if (next === 're_reading') setProgress('0') }}>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label>Last Fully Read Chapter<input type="number" required min="0" step="1" value={initialFinishedProgress ?? progress} onChange={e => { setProgress(e.target.value); setStatusTouched(true); setProgressChanged(true) }} /><small>of {metadata.published_chapters ?? '?'} published · {metadata.published_chapters !== null && readProgress === metadata.published_chapters ? 'all published chapters read' : `next unread: ${readProgress + 1}`}</small></label></div>
     <div className="rating-favorite-row"><StarRating value={personalRating} onChange={setPersonalRating} /><div className="favorite-choice"><FavoriteButton selected={favorite} disabled={busy || Boolean(conflict)} onChange={setFavorite} /><PersonalToggleButton kind="rec" selected={rec} disabled={busy || Boolean(conflict)} onChange={setRec} /></div></div>
     <label>Private Notes<textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)} /></label>

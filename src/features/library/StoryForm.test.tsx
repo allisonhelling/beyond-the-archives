@@ -4,7 +4,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { exampleWork } from './display/display-examples'
 import { StoryForm } from './StoryForm'
 import { epubBuffer, epubFiles } from '../../test/epub-fixture'
-const mocks = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn(), stories: [] as typeof exampleWork[] }))
+const mocks = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn(), stories: [] as typeof exampleWork[], beginSite: vi.fn(), readSite: vi.fn() }))
+vi.mock('../imports/extension', () => ({ beginSitePreview: mocks.beginSite, readSitePreview: mocks.readSite }))
 vi.mock('./repository', () => ({ saveStory: mocks.save }))
 vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ collections: [], stories: mocks.stories, refreshStory: mocks.refresh }) }))
 beforeEach(() => { vi.clearAllMocks(); mocks.stories = []; mocks.save.mockResolvedValue(exampleWork.id); mocks.refresh.mockResolvedValue(undefined) })
@@ -234,4 +235,24 @@ it('opens an explicit duplicate review returned by the server after a stale clie
  expect(await screen.findByRole('link',{name:'Newly Saved Elsewhere'})).toBeVisible()
  fireEvent.click(screen.getByRole('button',{name:'Save Separately'}))
  await waitFor(()=>expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({allowSeparate:true})))
+})
+
+
+it('returns a taught value to the same manually edited form and applies only the chosen field', async () => {
+ const url = 'https://fiction.example/stories/one'
+ mocks.beginSite.mockResolvedValue({ url, operation: 'teach' })
+ mocks.readSite.mockResolvedValue({ code: 'OK', observations: { title: { via: 'Mapped Element', text: 'Source Title' }, authors: { via: 'Mapped Element', text: 'Source Author' } } })
+ render(<MemoryRouter><StoryForm /></MemoryRouter>)
+ fireEvent.change(screen.getByLabelText('Story URL'), { target: { value: url } })
+ fireEvent.change(screen.getByLabelText('Title', { exact: true }), { target: { value: 'My Title' } })
+ fireEvent.change(screen.getByLabelText('Private Notes'), { target: { value: 'My Notes' } })
+ fireEvent.change(screen.getByLabelText('Teach Where to Find This Field'), { target: { value: 'authors' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Teach Selected Field' }))
+ fireEvent.click(await screen.findByRole('button', { name: 'Load Source Values' }))
+ fireEvent.click(await screen.findByRole('button', { name: 'Apply Authors' }))
+ expect(mocks.beginSite).toHaveBeenCalledWith(url, 'authors')
+ expect(screen.getByLabelText('Authors (one per line)')).toHaveValue('Source Author')
+ expect(screen.getByLabelText('Title', { exact: true })).toHaveValue('My Title')
+ expect(screen.getByLabelText('Private Notes')).toHaveValue('My Notes')
+ expect(mocks.save).not.toHaveBeenCalled()
 })

@@ -35,6 +35,8 @@ it('binds Vercel Preview to staging and Production to its explicit production co
 it('rejects privileged credentials and environment omissions in both app build boundaries',()=>{
  for(const value of ['sb_secret_synthetic',`x.${btoa(JSON.stringify({role:'service_role'}))}.x`])expect(()=>validateBrowserEnv({...staging,VITE_SUPABASE_PUBLISHABLE_KEY:value},true)).toThrow()
  expect(()=>validateBrowserEnv({},true)).toThrow()
+ expect(()=>validateBrowserEnv({...staging,VITE_ORGANIZER_URL:'',VITE_READER_URL:' '},true)).toThrow('VITE_ORGANIZER_URL and VITE_READER_URL')
+ expect(()=>validateBrowserEnv({...staging,VITE_READER_URL:''},true)).toThrow('Set VITE_READER_URL for')
 })
 it('rejects staging branch promotion even with internally consistent inherited Production variables',()=>{
  const production={...staging,VITE_APP_ENV:'production',VITE_SUPABASE_PROJECT_REF:productionProjectRef,VITE_SUPABASE_URL:`https://${productionProjectRef}.supabase.co`,VITE_ORGANIZER_URL:'https://beyondthearchives.vercel.app',VITE_READER_URL:'https://archivesunfolded.vercel.app'}

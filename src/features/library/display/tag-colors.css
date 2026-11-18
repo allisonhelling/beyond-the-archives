@@ -1,5 +1,5 @@
 .display-tag-colors { --tag-color-columns: 2; --tag-color-label-width: 115px; --tag-color-control-width: 100px; --tag-color-column-gap: 24px; margin-block: 16px; min-width: 0; }
-.display-tag-color-grid { position: relative; display: grid; grid-template-columns: repeat(var(--tag-color-columns), minmax(0, 1fr)); grid-template-rows: repeat(3, auto); grid-auto-flow: column; gap: 12px var(--tag-color-column-gap); }
+.display-tag-color-grid { position: relative; display: grid; grid-template-columns: repeat(var(--tag-color-columns), minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; gap: 12px var(--tag-color-column-gap); }
 .display-tag-color-grid::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 50%; border-inline-start: 1px solid var(--color-border); pointer-events: none; }
 .display-tag-color-grid > div { display: grid; grid-template-columns: var(--tag-color-label-width) var(--tag-color-control-width) minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
 .display-tag-example { justify-self: start; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; font-size: 13px; white-space: normal; }
@@ -21,6 +21,7 @@
  .display-tag-color-grid { grid-template-rows: none; grid-auto-flow: row; }
  .display-tag-color-grid::before { display: none; }
  .display-all-colors .field-help { white-space: normal; }
+ .display-all-colors .collection-color-picker[data-open] { position: static; }
 }
 @media (max-width: 600px) {
  .display-tag-color-grid > div, .display-all-colors > [role="group"] { grid-template-columns: var(--tag-color-control-width) minmax(0, 1fr); }

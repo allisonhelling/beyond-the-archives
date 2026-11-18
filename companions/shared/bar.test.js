@@ -474,6 +474,10 @@ it('mirrors the top bar for unsaved works and omits completion actions for ambig
  fireEvent.click(within(bottomRoot).getByRole('button',{name:'Add to Library'}))
  await within(bottomRoot).findByLabelText('Private Notes')
  await waitFor(()=>expect(within(bottomRoot).getByRole('button',{name:'Add to Library'})).toHaveAttribute('aria-expanded','true'))
+ expect(findButton('Add to Library')).toHaveAttribute('aria-expanded', 'false')
+ await toggle('Add to Library', true)
+ await within(root).findByLabelText('Private Notes')
+ expect(within(bottomRoot).getByRole('button', { name: 'Add to Library' })).toHaveAttribute('aria-expanded', 'false')
  document.getElementById('ao3-library-companion').remove()
  entry = { version: 'v1', status: 'reading', progress: 2, notes: '', rating: null, tags: [], collections: [] }
  await mountLibrary(document, 'https://archiveofourown.org/works/123?view_full_work=true')

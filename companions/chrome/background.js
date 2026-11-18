@@ -4,7 +4,9 @@ import { isLocalHostname } from '../../src/lib/local-app.ts'
 import { createLibrarySync } from './library-sync.js'
 import { installBarBridge } from './bar-background.js'
 import { configuredEnvironments, createEnvironmentManager } from './environments.js'
-import { companionContractVersion, metadataRetrievalCapability, validCapabilityRequest } from '../../src/features/imports/companion-contract.ts'
+import { companionContractVersion, genericSiteExtractionCapability, metadataRetrievalCapability, validCapabilityRequest, visualMappingCapability } from '../../src/features/imports/companion-contract.ts'
+
+import { createSiteController } from './site-background.js'
 
 const profiles = configuredEnvironments()
 const environments = profiles ? createEnvironmentManager(profiles, __DEFAULT_ENVIRONMENT__) : null
@@ -39,6 +41,23 @@ const librarySync = createLibrarySync({
  changed: () => { void librarySync.pump(); void pump() },
 })
 
+const site = createSiteController({
+ storage: { local: storage.local, session: storage.session },
+ getAuth: async () => {
+  if (switching) return null
+  const state = await storage.session.get(['auth', 'sampleAuth', 'syncSample'])
+  return state.syncSample ? state.sampleAuth : state.auth
+ },
+ api, ready, appOrigin: () => appOrigin, generation: () => connectionVersion,
+})
+
+async function clearConnection() {
+ if (!environments) return storage.session.clear()
+ // Keep capability requests and per-tab drafts available for an explicit
+ // same-account reconnect. The controller still checks account and generation.
+ await storage.session.clear(key => !key.startsWith('site-'))
+}
+
 async function api(auth, path, body) {
  await ready
  if (switching) throw new Error('Environment changed. Reload the library page.')
@@ -50,11 +69,19 @@ async function api(auth, path, body) {
  })
  if (response.status === 401 || response.status === 403) {
   const current = await storage.session.get('auth')
-  if (current.auth?.token === auth.token) await storage.session.clear()
+  if (current.auth?.token === auth.token) await clearConnection()
   await chrome.action.setBadgeText({ text: 'AUTH' })
   throw new Error('Reconnect in library Settings.')
  }
- if (!response.ok) throw new Error('Library request failed.')
+ if (!response.ok) {
+  if (path.endsWith('/save_companion_story')) {
+   const problem = await response.json().catch(() => ({}))
+   if (problem.code === '40001') throw new Error('The story changed on another device. Continue in the app and review the saved values.')
+   if (problem.code === '23505') throw new Error('A similar story URL is already saved. Continue in the app to review it.')
+   if (problem.code === '22023' && typeof problem.message === 'string') throw new Error(problem.message)
+  }
+  throw new Error('Library request failed.')
+ }
  return response.json()
 }
 function matchingWork(url, workId, sourceUrl) {
@@ -110,7 +137,7 @@ async function pump() {
   const auth = state.auth
   if (!auth) return
   if (auth.expiresAt * 1000 <= Date.now()) {
-   await storage.session.clear()
+   await clearConnection()
    await chrome.action.setBadgeText({ text: 'AUTH' })
    return
   }
@@ -238,7 +265,12 @@ function externalMessage(message, sender, respond) {
   if (!validCapabilityRequest(message)) {
    respond({ ok: false, code: 'CONTRACT_UNSUPPORTED', error: 'Update and reconnect compatible components, or enter metadata manually.' }); return
   }
-  respond({ ok: true, contractVersion: companionContractVersion, ...(message.requestId && { requestId: message.requestId }), capabilities: [metadataRetrievalCapability] }); return
+  respond({ ok: true, contractVersion: companionContractVersion, ...(message.requestId && { requestId: message.requestId }), capabilities: [metadataRetrievalCapability, genericSiteExtractionCapability, visualMappingCapability] }); return
+ }
+ if (message?.type === 'BTA_SITE_REQUEST' || message?.type === 'BTA_SITE_DRAFT') {
+  const action = message.type === 'BTA_SITE_REQUEST' ? site.external : site.appDraft
+  void action(message, sender).then(respond).catch(() => respond({ ok: false, code: 'EXTRACTION_FAILED', error: 'The companion could not open this draft. Continue with manual entry or retry.' }))
+  return true
  }
  if (message?.type === 'AO3_LIBRARY_SAMPLE_CONNECT') {
   if (!isLocalHostname(new URL(appOrigin).hostname)) { respond({ ok: false, error: 'Sample imports require the local extension.' }); return }
@@ -265,7 +297,7 @@ function externalMessage(message, sender, respond) {
  if (message?.type === 'AO3_LIBRARY_DISCONNECT') {
   connectionVersion += 1
   clearTimeout(nextJobTimer)
-  void storage.session.clear().then(() => chrome.action.setBadgeText({ text: '' })).then(() => respond({ ok: true }))
+  void clearConnection().then(() => chrome.action.setBadgeText({ text: '' })).then(() => respond({ ok: true }))
   return true
  }
  if (message?.type !== 'AO3_LIBRARY_CONNECT' || typeof message.token !== 'string' || !Number.isFinite(message.expiresAt)) return
@@ -276,7 +308,7 @@ function externalMessage(message, sender, respond) {
    const user = await api(auth, '/auth/v1/user')
    if (version !== connectionVersion) { respond({ ok: false }); return }
    const previous = await storage.session.get('auth')
-   if (previous.auth?.userId !== user.id) await storage.session.clear()
+   if (previous.auth?.userId !== user.id) await clearConnection()
    await storage.session.set({ syncSample: false, auth: { ...auth, userId: user.id } })
    await chrome.alarms.create('requested-imports', { periodInMinutes: 0.5 })
    respond({ ok: true })
@@ -296,6 +328,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
  return true
 })
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
+ if (message?.type === 'BTA_SITE_INTERNAL') {
+  void site.internal(message, sender).then(respond).catch(error => respond({ ok: false, code: 'EXTRACTION_FAILED', error: error.message }))
+  return true
+ }
  if (message?.type !== 'AO3_LIBRARY_ENVIRONMENT' || !environments || sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('options.html')) return
  void (async () => {
   await ready
@@ -331,7 +367,18 @@ chrome.webNavigation.onDOMContentLoaded.addListener(({ tabId, frameId }) => {
 chrome.tabs.onUpdated.addListener((tabId, change) => {
  if (change.status === 'complete') checkRequestedTab(tabId)
 })
-chrome.action.onClicked.addListener(() => { if (environments) void chrome.runtime.openOptionsPage(); else void chrome.tabs.create({ url: `${appOrigin}/settings` }) })
+chrome.tabs.onRemoved?.addListener(tabId => { void site.close(tabId) })
+chrome.action.onClicked.addListener(tab => {
+ void site.open(tab ?? {}).then(opened => {
+  if (opened) return
+  if (environments) return chrome.runtime.openOptionsPage()
+  return chrome.tabs.create({ url: `${appOrigin}/settings` })
+ }).catch(async () => {
+  if (tab?.id === undefined) return
+  await chrome.action.setBadgeText({ tabId: tab.id, text: '!' })
+  await chrome.action.setTitle?.({ tabId: tab.id, title: 'This page could not be opened. Check the connection, then retry or use manual entry.' })
+ })
+})
 // Recreate alarms if Chrome discarded them; credentials stay session-only.
 void chrome.alarms.create('requested-imports', { periodInMinutes: 0.5 })
 

@@ -101,22 +101,19 @@ test('features guide links to every current workflow on desktop and mobile', asy
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
-test('applied filter separators follow category colors and selected chips omit bullets', async ({ page }) => {
+test('applied and selected filter chips use category colors without separator bullets', async ({ page }) => {
  await fixture(page)
  const params = new URLSearchParams({ shelf: 'all', relationship: 'A/B, C/D', characters: 'Alice, Bob' })
  await page.goto(`/library?${params}`); await login(page)
  const active = page.getByLabel('Active Filters')
  await expect(active.getByText('Relationships: A/B', { exact: true })).toBeVisible()
- const separators = active.locator('.filter-chips > .info-separator')
- expect(await separators.count()).toBeGreaterThanOrEqual(3)
- for (const separator of await separators.all()) {
-  const text = separator.locator('.metadata-tag')
-  if ((await separator.getAttribute('class'))?.includes('filter-category-boundary')) await expect(text).toHaveCSS('color', 'rgb(0, 0, 0)')
-  else {
-   const category = await separator.getAttribute('data-tag-category')
-   const color = await active.locator(`.filter-chips > .categorized-tags[data-tag-category="${category}"]`).first().evaluate(element => getComputedStyle(element).color)
-   await expect(text).toHaveCSS('color', color)
-  }
+ await expect(active.locator('.info-separator')).toHaveCount(0)
+ await expect(active).not.toContainText('•')
+ const categories = { relationships: 'rgb(107, 63, 112)', characters: 'rgb(53, 92, 112)' }
+ for (const [category, color] of Object.entries(categories)) {
+  const chips = active.locator(`.categorized-tags[data-tag-category="${category}"] .metadata-tag`)
+  await expect(chips).toHaveCount(2)
+  for (const chip of await chips.all()) await expect(chip).toHaveCSS('color', color)
  }
  await page.getByRole('button', { name: 'Filters', exact: true }).click()
  const chips = page.getByLabel('Relationships Selected Filters')

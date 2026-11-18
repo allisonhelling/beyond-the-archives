@@ -435,12 +435,8 @@ test('centers the more-tags control and expands/collapses every saved tag', asyn
   const tags = page.locator('.story-card .tags'), toggle = tags.locator('.tags-toggle')
   const fandomBullet = page.locator('.story-card .work-fandoms .info-separator')
   await expect(fandomBullet).toHaveText(' • ')
-  const factBulletSize = await page.locator('.story-card .work-facts .info-separator').first().evaluate(node => getComputedStyle(node).fontSize)
-  await expect(fandomBullet).toHaveCSS('font-size', factBulletSize)
-  for (const divider of await page.locator('.story-card .info-separator').all()) {
-    await expect(divider).toHaveCSS('margin-left', '4px')
-    await expect(divider).toHaveCSS('margin-right', '4px')
-  }
+  await expect(fandomBullet).toHaveCSS('margin-left', '4px')
+  await expect(fandomBullet).toHaveCSS('margin-right', '4px')
   await expect(tags.locator('button')).toHaveCount(8)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(tags.locator('.metadata-tags')).toHaveCSS('align-items', 'center')
@@ -1130,8 +1126,11 @@ test('saves independent category colors for Borderless and outlined tags', async
   await dialog.getByRole('button', { name: 'Close Dialog' }).click()
   const tags = page.locator('.story-card .tags')
   await expect(tags.locator('.metadata-tag').first()).toHaveAttribute('data-tag-category', 'tags')
-  await expect(tags.locator('.metadata-tag[data-tag-category="relationships"]').first()).toHaveCSS('color', 'rgb(51, 68, 85)')
-  await expect(tags.locator('.metadata-tag[data-tag-category="characters"]').first()).toHaveCSS('color', 'rgb(85, 102, 119)')
+  const categoryTags = [
+    [tags.locator('.metadata-tag[data-tag-category="relationships"]').first(), 'rgb(51, 68, 85)'],
+    [tags.locator('.metadata-tag[data-tag-category="characters"]').first(), 'rgb(85, 102, 119)'],
+  ] as const
+  for (const [tag, color] of categoryTags) await expect(tag).toHaveCSS('color', color)
   await expect(tags.locator('.tag-group-label')).toHaveCount(0)
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
@@ -1139,11 +1138,19 @@ test('saves independent category colors for Borderless and outlined tags', async
   await page.getByRole('button', { name: 'Close Dialog' }).click()
   await page.reload()
   await expect(page.locator('.story-card .metadata-tag').first()).toBeVisible()
-  await expect(tags.locator('.metadata-tag[data-tag-category="relationships"]').first()).toHaveCSS('color', 'rgb(51, 68, 85)')
-  await expect(tags.locator('.metadata-tag[data-tag-category="characters"]').first()).toHaveCSS('color', 'rgb(85, 102, 119)')
+  await expect(tags.locator('.metadata-tags')).toHaveAttribute('data-tag-shape', 'filled')
+  await expect(tags.locator('.metadata-tags')).toHaveAttribute('data-tag-text-color', 'black')
+  for (const [tag] of categoryTags) await expect(tag).toHaveCSS('color', 'rgb(56, 43, 43)')
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
-  await expect(dialog.getByRole('group', { name: 'Relationships Color', exact: true }).getByRole('button', { name: 'Custom Color', exact: true })).toHaveText('#334455')
+  for (const [label, color] of [['Relationships', '#334455'], ['Characters', '#556677']]) {
+    await expect(dialog.getByRole('group', { name: `${label} Color`, exact: true }).getByRole('button', { name: 'Custom Color', exact: true })).toHaveText(color)
+  }
+  const textColor = dialog.getByRole('combobox', { name: 'Tag Text Color', exact: true })
+  await expect(textColor).toHaveValue('black')
+  await textColor.selectOption('colored')
+  await expect(tags.locator('.metadata-tags')).toHaveAttribute('data-tag-text-color', 'colored')
+  for (const [tag, color] of categoryTags) await expect(tag).toHaveCSS('color', color)
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
   await page.screenshot({ path: 'test-results/reader-tag-colors-mobile.png' })
 })

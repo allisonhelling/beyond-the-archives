@@ -412,7 +412,7 @@ test('manual library workflow persists through refresh and sign-out, on desktop 
   }
   await expect(readingSection.locator('.book-spine-footer')).toHaveCount(1)
   await expect(readingSection.getByRole('progressbar', { name: 'Chapters Read' })).toHaveAttribute('aria-valuetext', '3 of 6 chapters read')
-  await expect(readingSection.locator('.spine-actions').getByRole('button', { name: 'Mark as Caught Up', exact: true })).toBeVisible()
+  await expect(readingSection.getByRole('button', { name: 'Mark as Caught Up', exact: true })).toBeVisible()
   const summarySize = await page.locator('.story-details-summary').evaluate(el => getComputedStyle(el).fontSize)
   const noteSize = await page.locator('.note-panel .story-summary').evaluate(el => getComputedStyle(el).fontSize)
   expect(noteSize).toBe(metadataFontSize)
@@ -992,8 +992,8 @@ test('publication tiles exclude waiting and unknown works and update after chang
   await expect(page.getByRole('button', { name: 'Mark as Finished', exact: true })).toHaveCount(0)
   const detailsAction = page.getByRole('link', { name: 'View/Edit Details', exact: true })
   await detailsAction.hover()
-  await expect(detailsAction).toHaveCSS('background-color', 'rgb(151, 0, 0)')
-  await expect(detailsAction).toHaveCSS('color', 'rgb(255, 255, 255)')
+  await expect(detailsAction).toHaveCSS('background-color', 'rgb(241, 225, 209)')
+  await expect(detailsAction).toHaveCSS('color', 'rgb(151, 0, 0)')
   const finishFromDetails = async (returnToList = true) => {
     await detailsAction.click()
     await page.getByRole('combobox', { name: 'Reading Status for Unfinished read', exact: true }).selectOption('finished')
@@ -1115,7 +1115,8 @@ test('book-spine footer reflects saved progress and preserves chapter actions', 
   const footers = await Promise.all((await cards.locator('.book-spine-footer').all()).map(footer => footer.boundingBox()))
   if (info.project.name === 'desktop') expect(footers[0]!.y).toBe(footers[1]!.y)
   expect(footers[0]!.height).toBe(info.project.name === 'mobile' ? 44 : 48)
-  for (const button of await first.locator('.spine-actions .spine-action').all()) {
+  await expect(first.getByRole('button', { name: 'Read Offline', exact: true })).toBeDisabled()
+  for (const button of [first.getByRole('link', { name: 'Read Chapter 6', exact: true }), first.getByRole('button', { name: 'Mark as Caught Up', exact: true })]) {
     const bounds = await button.boundingBox()
     expect(bounds!.width).toBe(bounds!.height)
     expect(bounds!.width).toBe(32)
@@ -2506,10 +2507,10 @@ test('adds stories to custom collections from story actions and collection pages
     if (mobile) {
       await expect(chip).toHaveAttribute('aria-pressed', 'true')
       await expect(chip.locator('.tag-label')).toHaveCSS('mask-image', 'none')
-      await expect(chip.locator('.tag-remove-cap')).toBeHidden()
+      await expect(chip.locator('.tag-remove-cap')).toBeVisible()
     } else await expect(chip.locator('.tag-label')).not.toHaveCSS('mask-image', 'none')
     await expect(chip.locator('.tag-remove-cap')).toHaveCSS('position', 'absolute')
-    await expect(chip.locator('.tag-remove-cap')).toHaveCSS('opacity', mobile ? '0' : '1')
+    await expect(chip.locator('.tag-remove-cap')).toHaveCSS('opacity', '1')
     await expect(chip).toHaveCSS('color', 'rgb(17, 17, 17)')
     await expect(chip).toHaveCSS('background-color', 'rgb(255, 196, 202)')
     await expect(chip.locator('.tag-remove-cap')).toHaveCSS('background-color', 'rgb(255, 196, 202)')
@@ -3356,7 +3357,7 @@ test('work tiles enlarge text only on desktop and retain summary formatting at e
  await page.goto('/library'); await login(page)
  const tile = page.locator('.work-card')
  await expect(tile.getByText('Fandom Below Author', { exact: true })).toBeVisible()
- await expect(tile.locator('.work-fandoms')).toHaveCSS('font-size', '13px')
+ await expect(tile.locator('.work-fandoms')).toHaveCSS('font-size', page.viewportSize()!.width > 1100 ? '15px' : '14px')
  await expect(tile.locator('.work-fandoms')).toHaveCSS('font-weight', '650')
  await expect(tile.locator('.work-fandoms')).toHaveCSS('color', 'rgb(151, 0, 0)')
  await expect(tile.locator('.authors')).toHaveCSS('color', 'rgb(117, 99, 99)')

@@ -31,6 +31,9 @@ export function requireEnvironmentConfig(env: Record<string, unknown>, vercelEnv
   if (!/^[a-z0-9-]{3,63}$/.test(projectRef) || url.origin !== `https://${projectRef}.supabase.co` || (selected === 'production') !== (projectRef === productionProjectRef)) throw new Error('Backend project identity does not match the selected environment.')
  }
  if (vercelEnvironment && (vercelEnvironment === 'production' ? selected !== 'production' : vercelEnvironment === 'preview' ? selected !== 'staging' : selected !== 'local')) throw new Error('Vercel deployment scope does not match the application environment.')
+ const originKeys = ['VITE_ORGANIZER_URL', 'VITE_READER_URL'] as const
+ const missing = originKeys.filter(key => typeof env[key] !== 'string' || !env[key].trim())
+ if (missing.length) throw new Error(`Set ${missing.join(' and ')} for the selected application environment.`)
  return { ...config, environment: selected, projectRef,
   organizerUrl: environmentOrigin(env.VITE_ORGANIZER_URL, selected), readerUrl: environmentOrigin(env.VITE_READER_URL, selected) }
 }

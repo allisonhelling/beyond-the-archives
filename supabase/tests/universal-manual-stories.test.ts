@@ -70,6 +70,35 @@ it.each([['keep_read',20,'reading'],['read_all',25,'finished'],['keep_finished',
  await save({ metadata: { ...metadata,published_chapters:25 },status,progress,chapterChoice:choice },id)
  expect(await entry(id)).toMatchObject({reading_status:status,last_read_chapter:progress,metadata:{published_chapters:25}})
 })
+it.each([20,25])('rejects direct owner count increases without review at progress %s', async progress => {
+ const id = await create({ status:'finished',progress:20 })
+ await expect(user(alice, () => db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{published_chapters}','25'::jsonb), last_read_chapter=$2 where id=$1", [id,progress]))).rejects.toThrow(/Review Finished Status/)
+ expect(await entry(id)).toMatchObject({reading_status:'finished',last_read_chapter:20,metadata:{published_chapters:20}})
+ await user(bob, async () => {
+  const result = await db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{published_chapters}','25'::jsonb) where id=$1 returning id", [id])
+  expect(result.rows).toHaveLength(0)
+ })
+})
+it('rejects unreviewed changes from the older unguarded save RPC', async () => {
+ const id = await create({status:'finished',progress:20})
+ await expect(user(alice, () => db.query('select public.save_library_story($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', ['https://fiction.example/Story/123?edition=one#start', JSON.stringify({...metadata,published_chapters:25}), 'finished',25,'',null,false,[],[],id]))).rejects.toThrow(/Review Finished Status/)
+ expect(await entry(id)).toMatchObject({reading_status:'finished',last_read_chapter:20,metadata:{published_chapters:20}})
+})
+it('preserves explicit Finished progress when a source observation changes without a manual override', async () => {
+ const id = await create({metadata:{...metadata,published_chapters:20},status:'finished',progress:20})
+ // Set up an existing source observation without changing the effective count.
+ await db.query("update public.library_entries set metadata_overrides=metadata_overrides-'published_chapters', extension_metadata=jsonb_build_object('published_chapters',20) where id=$1",[id])
+ await db.exec('savepoint source_refresh')
+ await expect(db.query("update public.library_entries set extension_metadata=jsonb_build_object('published_chapters',25), last_read_chapter=25 where id=$1",[id])).rejects.toThrow(/Review Finished Status/)
+ await db.exec('rollback to savepoint source_refresh; release savepoint source_refresh')
+ await db.query("update public.library_entries set extension_metadata=jsonb_build_object('published_chapters',25) where id=$1",[id])
+ expect(await entry(id)).toMatchObject({reading_status:'finished',last_read_chapter:20,metadata:{published_chapters:25}})
+})
+it('allows a direct increase to recalculate an automatically derived Finished status without inventing progress', async () => {
+ const id = await create({metadata:{...metadata,publication_status:'complete'},status:'finished',progress:20,statusOrigin:'derived'})
+ await user(alice, () => db.query("update public.library_entries set metadata_overrides=jsonb_set(metadata_overrides,'{published_chapters}','25'::jsonb) where id=$1", [id]))
+ expect(await entry(id)).toMatchObject({reading_status:'reading',last_read_chapter:20,metadata:{published_chapters:25}})
+})
 it('preserves derived progress and recalculates Finished and Waiting after an increase', async () => {
  for (const publication of ['complete','in_progress']) {
   const id = await save({metadata:{...metadata,publication_status:publication},status:publication==='complete'?'finished':'waiting_for_updates',progress:20,statusOrigin:'derived'},null,`https://fiction.example/${publication}`)

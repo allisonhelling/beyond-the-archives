@@ -3,7 +3,9 @@ import { isLocalApp } from '../../lib/local-app'
 import { localExtensionId } from './extension-config'
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
-import { companionContractVersion, readCompanionPage, hasMetadataRetrievalCapability, validLibrarySyncReply } from './companion-contract'
+import { companionContractVersion, readCompanionPage, hasCompanionCapability, hasMetadataRetrievalCapability, validLibrarySyncReply } from './companion-contract'
+import { makeSiteRequest, readObservations, readSiteDraft, readSiteResult, sourcePage, type SiteRequest, type StoryField } from './site-mapping'
+import type { EditValues } from '../library/edit-merge'
 import { sourceFailure } from '../../lib/source-errors'
 
 type ExtensionReply = { state?: LibrarySyncState | null; rows?: Record<string, string>[]; ok?: boolean; page?: { url: string; html: string }; error?: string; capabilities?: string[]; contractVersion?: number }
@@ -107,5 +109,65 @@ export function librarySyncCommand(action: string, options: { readingStatusOrigi
     else resolve(reply)
    })
   } catch { clearTimeout(timer); reject(new Error('Could not contact the extension.')) }
+ })
+}
+
+
+async function siteMessage<T>(payload: object, read: (reply: ExtensionReply) => T): Promise<T> {
+ const api = runtime(), id = extensionId(), generation = connectionGeneration
+ if (!api?.sendMessage || !/^[a-p]{32}$/.test(id)) throw new Error('The desktop companion is unavailable. You can enter this story manually.')
+ return new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error('The companion did not respond. Your manual draft is still available.')), 15000)
+  try {
+   api.sendMessage(id, payload, reply => {
+    clearTimeout(timer)
+    if (generation !== connectionGeneration) reject(new Error('The connection changed. Reconnect to resume this draft.'))
+    else if (api.lastError || !reply?.ok) reject(new Error(reply?.error ?? 'The desktop companion is unavailable. You can enter this story manually.'))
+    else try { resolve(read(reply)) } catch (error) { reject(error) }
+   })
+  } catch (error) { clearTimeout(timer); reject(error) }
+ })
+}
+
+async function siteAccount() {
+ return sampleMode ? 'local-sample-reader' : (await supabase?.auth.getSession())?.data.session?.user.id
+}
+
+function requestSiteResult(request: SiteRequest, action: 'begin' | 'read') {
+ return siteMessage({ type: 'BTA_SITE_REQUEST', action, request }, reply => {
+  const result = readSiteResult((reply as ExtensionReply & { result?: unknown }).result, request)
+  if (!result) throw new Error('This response did not match your draft. Open the source page again.')
+  return result
+ })
+}
+
+export async function beginSitePreview(url: string, field?: StoryField) {
+ const requestId = crypto.randomUUID(), account = await siteAccount()
+ if (!account) throw new Error('Sign in to connect the companion or continue with manual entry.')
+ const request = makeSiteRequest(account, url, field ? 'teach' : 'extract', crypto.randomUUID(), field)
+ if (!await message({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: companionContractVersion, requestId }, reply => hasCompanionCapability(reply, request.capability, requestId))) {
+  throw new Error('Install or update the Chrome/Edge companion to inspect this page. You can continue entering the story manually.')
+ }
+ if (!await connectExtension()) throw new Error('Reconnect the desktop companion in Settings. Your draft is still available.')
+ await requestSiteResult(request, 'begin')
+ return request
+}
+
+export async function readSitePreview(request: SiteRequest) {
+ if (await siteAccount() !== request.account) throw new Error('Reconnect the original library account to resume this draft.')
+ try { return await requestSiteResult(request, 'read') }
+ catch (error) {
+  if (!await connectExtension()) throw error
+  return requestSiteResult(request, 'read')
+ }
+}
+
+export async function loadCompanionDraft(id: string) {
+ if (!await connectExtension()) throw new Error('Reconnect your library account to restore this draft.')
+ return siteMessage({ type: 'BTA_SITE_DRAFT', id }, reply => {
+  const value = reply as ExtensionReply & { url?: unknown; draft?: unknown; observations?: unknown; base?: EditValues | null }
+  const url = sourcePage(value.url)
+  if (!url) throw new Error('The source URL is unavailable. You can continue with manual entry.')
+  return { url, draft: readSiteDraft(value.draft), observations: readObservations(value.observations), base: value.base ?? undefined }
  })
 }

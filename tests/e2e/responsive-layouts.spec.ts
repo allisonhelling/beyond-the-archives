@@ -58,7 +58,7 @@ test('screen presets and custom sizes apply to tile, info-page and local develop
  await expect(tooltip).toBeVisible()
  const iconBox = (await ratingInfo.boundingBox())!, helpBox = (await tooltip.boundingBox())!
  expect(helpBox.y).toBeGreaterThanOrEqual(iconBox.y + iconBox.height)
- await page.getByRole('button', { name: 'Desktop View', exact: true }).isVisible().then(async visible => { if (visible) { await page.getByRole('button', { name: 'Desktop View', exact: true }).click(); await expect.poll(() => page.locator('.display-example-page > div:not([hidden]) iframe').contentFrame().locator('body').evaluate(node => node.ownerDocument.defaultView!.innerWidth)).toBe(1440) } })
+ await page.getByRole('button', { name: 'Desktop View', exact: true }).isVisible().then(async visible => { if (visible) { await page.getByRole('button', { name: 'Desktop View', exact: true }).click(); await expect.poll(() => page.locator('.display-example-page > div:not([hidden]) iframe').contentFrame().locator('body').evaluate(node => node.ownerDocument.defaultView!.innerWidth)).toBe(page.viewportSize()!.width) } })
  const toolbar = page.getByRole('complementary', { name: 'Local Viewport Preview', exact: true })
  await toolbar.getByText('Preview Size', { exact: true }).click()
  await toolbar.getByRole('combobox', { name: 'Units', exact: true }).selectOption('mm')

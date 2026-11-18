@@ -1,4 +1,5 @@
 import { chapterState } from './chapter-edit'
+import { sourceLocation } from './story-source'
 import type { Json } from '../../types/database'
 import type { Story, StoryInput } from './model'
 
@@ -67,4 +68,10 @@ export function storyEdits(input: StoryInput): EditValues {
 }
 export function applyStoryEdits(input: StoryInput, values: EditValues, base: EditValues): StoryInput {
   return { ...input, base, status: values.status as StoryInput['status'], progress: values.progress as number, notes: values.notes as string, personalRating: values.rating as number | null, favorite: values.favorite as boolean, ...(values.rec !== undefined && { rec: values.rec as boolean }), collections: values.collections as string[], tags: values.tags as string[], metadata: { ...input.metadata, ...(values.metadata as object) }, metadataChanges: values.metadata as StoryInput['metadataChanges'] }
+}
+
+export function checkedStorySave(input: Pick<StoryInput, 'id' | 'url'>, values: EditValues, base: EditValues | null) {
+ const location = input.id && input.url.includes('/bookmarks/') ? null : sourceLocation(input.url)
+ const generic = location?.identity.kind === 'url'
+ return { p_id: input.id ?? null, p_url: generic ? location.normalizedUrl : input.url, p_input: { ...values, ...(generic && { submittedUrl: input.url }) }, p_base: base }
 }

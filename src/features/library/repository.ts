@@ -1,10 +1,10 @@
-import { sourceLocation, sourceDuplicateFromError } from './story-source'
+import { sourceDuplicateFromError } from './story-source'
 import { readReadingHistory } from './reading-history'
 import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './collections/automatic-collections'
 import type { Json } from '../../types/database'
 import { parseSearch, filterReading } from './reading-search'
 import type { SeriesRecord } from './series/series'
-import { conflictFromError, editSnapshot, storyEdits, type EditValues } from './edit-merge'
+import { checkedStorySave, conflictFromError, editSnapshot, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
 import type { Collection, Entry, Story, StoryInput, Work } from './model'
 import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork, savedWorkUrl } from './model'
@@ -89,9 +89,7 @@ export async function saveStory(input: StoryInput) {
   if (sampleMode) return (await import('./sample/repository')).saveSampleStory(input)
   const edits = storyEdits(input)
   async function save(values: EditValues, base: EditValues | null): Promise<string> {
-    const location = input.id && input.url.includes('/bookmarks/') ? null : sourceLocation(input.url)
-    const generic = location?.identity.kind === 'url'
-    const { data, error } = await client().rpc('save_library_story_checked', { p_id: input.id ?? null, p_url: generic ? location.normalizedUrl : input.url, p_input: { ...values, ...(generic && { submittedUrl: input.url }) }, p_base: base })
+    const { data, error } = await client().rpc('save_library_story_checked', checkedStorySave(input, values, base))
     const conflict = conflictFromError(error, save)
     if (conflict) throw conflict
     const duplicate = sourceDuplicateFromError(error)

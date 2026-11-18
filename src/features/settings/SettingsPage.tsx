@@ -8,11 +8,12 @@ import { SeriesImportSettings } from '../imports/SeriesImportOptions'
 import { displaySettingsSection } from '../library/display/settings-sections'
 import { browsingSettingsSection } from '../library/browsing/settings-sections'
 import { backupSettingsSection, csvExportSettingsSection } from '../backups/settings-sections'
-import { ao3UsernameSettingsSection, metadataSettingsSection, seriesImportSettingsSection } from '../imports/settings-sections'
+import { ao3UsernameSettingsSection, metadataSettingsSection, seriesImportSettingsSection, siteMappingsSettingsSection } from '../imports/settings-sections'
 import { accountSettingsSection, browserBarSettingsSection, personalRatingSettingsSection } from './settings-sections'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Ao3UsernameSettings } from '../imports/Ao3UsernameSettings'
+import { SiteMappingsSettings } from '../imports/SiteMappingsSettings'
 import { MetadataSettings } from '../imports/MetadataSettings'
 import { BackupSettings } from '../backups/BackupSettings'
 import { CsvExportSettings } from '../backups/CsvExportSettings'
@@ -32,6 +33,7 @@ const settingsSections: { id: string; title: string; description: string; compon
   { ...ao3UsernameSettingsSection, component: Ao3UsernameSettings },
   { ...seriesImportSettingsSection, component: SeriesImportSettings },
   { ...metadataSettingsSection, component: MetadataSettings },
+  { ...siteMappingsSettingsSection, component: SiteMappingsSettings },
   { ...browserBarSettingsSection, component: BrowserBarSettings },
   { ...backupSettingsSection, component: BackupSettings },
   { ...csvExportSettingsSection, component: CsvExportSettings },
@@ -41,7 +43,7 @@ const settingsGroups = [
   { id: 'account', title: 'Account & Security', description: 'Sign-in details and account security.', sections: [accountSettingsSection.id] },
   { id: 'design', title: 'Design', description: 'Tile layouts, tag appearance, and display preferences.', sections: [displaySettingsSection.id] },
   { id: 'library', title: 'Library & Reading', description: 'Browsing, ratings, reading statistics, and cleanup.', sections: [browsingSettingsSection.id, personalRatingSettingsSection.id, readingStatsSettingsSection.id, dnfCleanupSettingsSection.id] },
-  { id: 'imports', title: 'Imports & Connections', description: 'AO3 account, metadata, series imports, and browser tools.', sections: [ao3UsernameSettingsSection.id, seriesImportSettingsSection.id, metadataSettingsSection.id, browserBarSettingsSection.id] },
+  { id: 'imports', title: 'Imports & Connections', description: 'AO3 account, metadata, series imports, and browser tools.', sections: [ao3UsernameSettingsSection.id, seriesImportSettingsSection.id, metadataSettingsSection.id, siteMappingsSettingsSection.id, browserBarSettingsSection.id] },
   { id: 'backups', title: 'Data & Backups', description: 'Back up, restore, and export your library.', sections: [backupSettingsSection.id, csvExportSettingsSection.id] },
 ]
 

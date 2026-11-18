@@ -3,6 +3,8 @@ import { parseSeriesUrl, parseWorkUrl, waybackSnapshot } from './urls.ts'
 /** Optional handshake revision; independent of extension release and feature support. */
 export const companionContractVersion = 1
 export const metadataRetrievalCapability = 'metadata-retrieval-v1'
+export const genericSiteExtractionCapability = 'generic-site-extraction-v1'
+export const visualMappingCapability = 'visual-mapping-v1'
 export type CapabilityRequest = { type: 'AO3_LIBRARY_CAPABILITIES' } & (
  { contractVersion?: undefined; requestId?: string } | { contractVersion: 1; requestId: string }
 )
@@ -15,12 +17,15 @@ export function validCapabilityRequest(value: unknown): value is CapabilityReque
   || request.contractVersion === companionContractVersion && typeof request.requestId === 'string' && request.requestId.length > 0 && request.requestId.length <= 128)
 }
 export function hasMetadataRetrievalCapability(reply: unknown, requestId?: string): reply is CapabilityReply {
+ return hasCompanionCapability(reply, metadataRetrievalCapability, requestId)
+}
+export function hasCompanionCapability(reply: unknown, capability: string, requestId?: string): reply is CapabilityReply {
  if (!reply || typeof reply !== 'object') return false
  const value = reply as Record<string, unknown>
  return value.ok === true && (value.contractVersion === undefined || value.contractVersion === companionContractVersion)
   && (value.contractVersion === undefined || requestId === undefined || value.requestId === requestId)
   && Array.isArray(value.capabilities) && value.capabilities.every(capability => typeof capability === 'string')
-  && value.capabilities.includes(metadataRetrievalCapability)
+  && value.capabilities.includes(capability) && (capability === metadataRetrievalCapability || value.contractVersion === companionContractVersion)
 }
 
 /** Keep legacy optional scan extensions readable; validate the core before rendering. */

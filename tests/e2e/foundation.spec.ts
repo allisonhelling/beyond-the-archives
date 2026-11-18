@@ -39,6 +39,7 @@ test('private deep links require sign-in and the form works with a keyboard', as
 })
 
 test('responsive navigation, persistence, and sign-out', async ({ page }, testInfo) => {
+  test.setTimeout(60000) // Sign in, reload the settings route, and reload again after sign-out.
   await page.goto('/')
   await signIn(page)
   const mobile = testInfo.project.name === 'mobile'
@@ -58,7 +59,7 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await expect(page.locator('.profile-identity').getByText('Name', { exact: true })).toHaveCount(0)
   if (mobile) await expect(page.getByRole('region', { name: 'Profile Menu', exact: true }).getByRole('link', { name: 'Stats', exact: true })).toBeVisible()
   await page.getByRole('region', { name: 'Profile Menu', exact: true }).getByRole('link', { name: 'Settings', exact: true }).click()
-  await page.getByRole('navigation', { name: 'Settings Sections', exact: true }).getByRole('link', { name: 'Account', exact: true }).click()
+  await page.getByRole('link', { name: 'Account & Security', exact: true }).click()
   await expect(page.getByText('reader@example.com')).toBeVisible()
   await page.reload()
   await expect(page.getByText('reader@example.com')).toBeVisible()
@@ -297,6 +298,7 @@ test('lets users create their login username in Account settings',async({page})=
  await expect(input).toHaveAttribute('readonly')
  await input.locator('..').locator('..').getByRole('button',{name:'Edit',exact:true}).click()
  await page.getByLabel('New Username',{exact:true}).fill('MyReader')
+ await page.getByLabel('Current Password',{exact:true}).fill('Test-password-123!')
  await input.locator('..').locator('..').getByRole('button',{name:'Save Username',exact:true}).click()
  await expect(page.getByRole('status').filter({hasText:'Username saved.'})).toBeVisible()
  expect(username).toBe('MyReader')

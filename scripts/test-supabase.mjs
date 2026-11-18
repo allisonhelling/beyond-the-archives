@@ -131,6 +131,25 @@ try {
     assert.ok(!(await alice.client.from('library_entries').delete().eq('id', created.data)).error)
     assert.equal((await alice.client.from('library_entries').select('*').eq('id', created.data)).data.length, 0)
   })
+  await check('universal Finished count review rejects direct writes and preserves owner isolation', async () => {
+    const [alice, bob] = users
+    const storyUrl = `https://fiction.example/${randomUUID()}`
+    const metadata = { title: 'Synthetic Count Review', published_chapters: 20, total_chapters: 30, chapter_count_manual: true, publication_status: 'unknown' }
+    const input = { metadata, status: 'finished', progress: 20, notes: '', rating: null, favorite: false, collections: [], tags: [], statusOrigin: 'explicit' }
+    const created = await alice.client.rpc('save_library_story_checked', { p_id: null, p_url: storyUrl, p_input: input, p_base: null })
+    assert.equal(created.error, null)
+    const owned = await alice.client.from('library_entries').select('work_id').eq('id', created.data).single()
+    assert.equal(owned.error, null); cleanup.works.push(owned.data.work_id)
+    const direct = await alice.client.from('library_entries').update({ metadata_overrides: { ...metadata, published_chapters: 25 }, last_read_chapter: 25 }).eq('id', created.data)
+    assert.match(direct.error?.message ?? '', /Review Finished Status/)
+    const foreign = await bob.client.from('library_entries').select('id').eq('id', created.data)
+    assert.equal(foreign.error, null); assert.deepEqual(foreign.data, [])
+    const base = { chapterState: { published_chapters: 20, total_chapters: 30, publication_status: 'unknown' }, status: 'finished', progress: 20, notes: '', rating: null, favorite: false, rec: false, tags: [], collections: [], metadata }
+    const reviewed = await alice.client.rpc('save_library_story_checked', { p_id: created.data, p_url: storyUrl, p_input: { ...input, metadata: { ...metadata, published_chapters: 25 }, status: 'reading', progress: 20, statusOrigin: 'preserve', chapterChoice: 'keep_read' }, p_base: base })
+    assert.equal(reviewed.error, null)
+    const saved = await alice.client.from('library_entries').select('reading_status,last_read_chapter').eq('id', created.data).single()
+    assert.equal(saved.error, null); assert.deepEqual(saved.data, { reading_status: 'reading', last_read_chapter: 20 })
+  })
   await check('extension-only bulk imports, real concurrent claims, account isolation and fenced cancellation', async () => {
     const [alice, bob] = users
     const active = await admin.from('metadata_jobs').select('id').in('user_id', users.map(user => user.id)).in('status', ['pending', 'processing'])

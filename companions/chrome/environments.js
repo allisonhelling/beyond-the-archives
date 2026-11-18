@@ -23,11 +23,11 @@ export function createEnvironmentManager(profiles, defaultId = 'hosted', storage
    const scope = prefix()
    return source.remove((Array.isArray(keys) ? keys : [keys]).map(key => `${scope}${key}`))
   },
-  async clear() {
+  async clear(include = () => true) {
    await ready
    const scope = prefix(), result = await source.get(null)
    const keys = Object.keys(result).filter(key => scope ? key.startsWith(scope) : !key.startsWith('environment:') && key !== 'ao3-environment')
-   return source.remove(keys)
+   return source.remove(keys.filter(key => include(key.slice(scope.length))))
   },
  })
  return {

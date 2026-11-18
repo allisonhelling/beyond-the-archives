@@ -27,18 +27,18 @@ jobs:
       - run: node --test scripts/tests/audit-dependencies.mjs
       - run: node scripts/audit-dependencies.mjs
   browser:
-    name: Browser Tests (${{ matrix.shard }}/4)
+    name: Browser Tests (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: npm run test:e2e:ci -- --shard=${{ matrix.shard }}/4
+      - run: npm run test:e2e:ci -- --shard=${{ matrix.shard }}/6
       - uses: actions/upload-artifact@v7
         if: failure() && hashFiles('test-results/**') != ''
         with:

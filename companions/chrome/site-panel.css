@@ -1,0 +1,25 @@
+:root {
+ --page-padding: 0;
+ --surface-margin: 0 auto;
+ --surface-padding: 1rem;
+ --surface-border: 0;
+ --surface-radius: 0;
+ --heading-margin: 0;
+ --heading-size: 1.35rem;
+}
+header, .actions, .field-heading { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+header, .field-heading { justify-content: space-between; }
+h2 { font-size: 1.1rem; }
+fieldset, section { margin: 1rem 0; min-width: 0; }
+fieldset { border: 1px solid GrayText; border-radius: .4rem; }
+label { display: block; margin-block: .55rem; }
+input:not([type=checkbox]), textarea, select { display: block; }
+textarea { resize: vertical; }
+label.check { display: flex; align-items: baseline; gap: .4rem; }
+label.check input { width: auto; }
+small, output { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
+small { margin-block: .35rem .7rem; }
+button { margin: 0; }
+#mapping { background: Canvas; border: 1px solid GrayText; border-radius: .4rem; padding: .75rem; }
+#notice { overflow-wrap: anywhere; }
+[hidden] { display: none !important; }

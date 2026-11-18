@@ -157,6 +157,14 @@ The app requests the archived tab explicitly and captures only AO3 metadata. His
 
 Version 0.7.8 advertises the `metadata-retrieval-v1` capability to the configured website origin. Rebuild and reload the existing companion, then reconnect in website Settings → AO3 Metadata Retrieval. Website automatic retrieval and bulk workflows require this handshake and an authenticated app connection, including in narrow windows. Old retrieval preferences cannot enable hosted fetching. Disconnected jobs and existing scan checkpoints remain saved; reconnect the same account to recover. Mobile users save individual works through the on-AO3 companion. [Cutover operations](../../docs/REMOVE_DIRECT_RETRIEVAL.md) are maintained separately.
 
+## Story Editor And Site Mappings
+
+With companion 0.8.0, open a public story page and click the Beyond the Archives toolbar icon. The editor opens along the right side. Review the extracted fields, adjust them, and save through your connected library. Select **Map Page Elements** or a field’s **Teach Where to Find** action. Pick a field before or after clicking an element. **Pause Selection** lets you use page controls. Press Esc to exit selection or close the editor.
+
+Use **Use Once** to apply a value in this draft. Choose an exact URL or confirm a broader scope to save a separate reusable rule. Manage rules under **Settings → Imports & Connections → Site Mappings**. The toolbar click grants access to the current page. If the browser blocks the editor or the companion is unavailable, use **Add Story → Enter Manually**.
+
+From the web form, **Preview Source Page** and **Teach Selected Field** open the story page. Click the toolbar icon there, then choose **Return to Draft**. Back in the app, choose **Load Source Values** and apply the fields you want to use. See the [Phase 3 guide](../../docs/universal-stories/PHASE_3_EXTENSION_AND_MAPPING.md) for rollout and available scopes.
+
 ## Explicit Environment Builds
 
 Configure all variables from the root `.env.example` for local or `.env.staging.example` for approved staging. `build:extension:local` includes only loopback permissions and settings. Hosted builds require explicit staging/production identity and a matching `EXTENSION_APP_ORIGIN`; they no longer bundle the other local/hosted profile. Existing installed artifacts are unchanged until rebuilt/reloaded. Preserve production installations and obtain separate approval before any release. [S1 setup and gates](../../docs/security-foundation/LOCAL_AND_STAGING.md) owns staging instructions.

@@ -121,16 +121,16 @@ export async function mountLibrary(doc = document, href = location.href, options
  function clearEditor() { seriesControls.forEach(control => control.unmount()); seriesControls = []; personalControls?.unmount(); personalControls = null; syncEditorProgress = null; syncEditorDraft = null; editorPanel.replaceChildren() }
  function resetPanels() { clearConflict(); showPanel(null); clearEditor(); connectionPanel.replaceChildren() }
  function panelButton(label, name, action, parent = toolbar) {
+  const destination = progressBars.find(({ bar }) => bar.contains(parent))
+  const anchor = destination?.bar ?? message
+  const expanded = () => activePanel === name && panel.parentNode === anchor.parentNode
   const element = button(label, async () => {
-   const destination = progressBars.find(({ bar }) => bar.contains(element))
-   const moving = activePanel === name && panel.parentNode !== (destination ? destination.bar.parentNode : section)
-   if (moving) showPanel(null)
-   if (destination) destination.bar.after(panel)
-   else message.after(panel)
+   if (activePanel === name && !expanded()) showPanel(null)
+   anchor.after(panel)
    await action()
    if (activePanel === name) panel.querySelector('div:not([hidden]) input, div:not([hidden]) textarea')?.focus({ preventScroll: true })
   }, parent)
-  element.setAttribute('aria-expanded', String(activePanel === name))
+  element.setAttribute('aria-expanded', String(expanded()))
   element.setAttribute('aria-controls', name === 'editor' ? editorPanel.id : connectionPanel.id)
   return element
  }
