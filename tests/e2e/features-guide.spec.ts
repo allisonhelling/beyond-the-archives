@@ -378,7 +378,7 @@ test('mass import tabs preserve link drafts and show Previous Batches in every s
  await fixture(page)
  await page.goto('/imports');await login(page)
  await page.getByLabel('AO3 URLs',{exact:true}).fill('https://archiveofourown.org/works/123')
- for(const name of ['AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
+ for(const name of ['Website Links','AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
   await page.getByRole('tab',{name,exact:true}).click()
   const panel=page.getByRole('tabpanel',{name,exact:true})
   await expect(panel.getByRole('heading',{name:'Previous Batches',exact:true})).toBeVisible()
@@ -386,6 +386,10 @@ test('mass import tabs preserve link drafts and show Previous Batches in every s
  }
  await expect(page.getByRole('textbox',{name:'AO3 URLs',exact:true})).toHaveValue('https://archiveofourown.org/works/123')
  await page.getByRole('tab',{name:'Work or Series Links',exact:true}).press('ArrowRight')
+ const websiteTab=page.getByRole('tab',{name:'Website Links',exact:true})
+ await expect(websiteTab).toBeFocused()
+ await expect(page.getByRole('tabpanel',{name:'Website Links',exact:true})).toBeVisible()
+ await websiteTab.press('ArrowRight')
  await expect(page.getByRole('tab',{name:'AO3 Library Sync',exact:true})).toBeFocused()
  await expect(page.getByRole('tabpanel',{name:'AO3 Library Sync',exact:true})).toBeVisible()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)

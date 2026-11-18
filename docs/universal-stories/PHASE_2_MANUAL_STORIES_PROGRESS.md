@@ -26,6 +26,10 @@ The existing account restore engine retains caller-derived ownership, reference 
 
 Apply reviewed migrations before deploying the organizer and rebuilt companions. Do not reset established data. Keep additive identity/provenance fields and user data when rolling back frontend code; older UI cannot author these workflows and older backup readers reject version 2. The projection refresh has not been benchmarked on a large hosted library. No hosted migration/Auth/PostgREST/Storage or installed mixed-version rollout is claimed.
 
+The chapter-review upgrade refreshes existing search documents in UUID order in batches of up to 500 through `refresh_library_documents`. The backfill has a 10-minute statement timeout inside the migration transaction. The original timeout is restored before the backup-function change. The migration commits the triggers and projections together, so a failed backfill rolls both back. Schedule the upgrade in a quiet window because the trigger changes can hold locks against library writes until commit. Staging has already applied this migration version with the equivalent unbatched refresh. The execution change is for fresh databases and production, where the version is still pending.
+
+A local embedded PostgreSQL comparison refreshed all 10,000 synthetic library entries in both versions. The original migration took 31.8 seconds and the batched migration took 32.3 seconds. Production catalog statistics estimated about 5,570 entries. Fixture setup dominated the local process memory peak, so this comparison does not establish a hosted memory or runtime budget.
+
 ## Verification Record
 
 Final commands and results are recorded below after completion. Earlier attempts exposed and corrected migration signature/quoting mistakes, stale test-only snapshot/key expectations, overbroad AO3 stale-count validation, provenance edge cases, and pre-existing browser selectors that assumed the footer lacked the new Read Offline shortcut. Failing attempts are not counted as acceptance evidence.

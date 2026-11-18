@@ -277,7 +277,7 @@ it.each([false,true])('keeps sample pasted-work related-series discovery optiona
 it('keeps drafts across import tabs and places the shared history last in every panel', async () => {
  show()
  fireEvent.change(screen.getByLabelText('AO3 URLs'),{target:{value:'https://archiveofourown.org/works/123'}})
- for (const name of ['AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
+ for (const name of ['Website Links','AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
   fireEvent.click(screen.getByRole('tab',{name}))
   const panel=screen.getByRole('tabpanel',{name})
   expect(within(panel).getByRole('heading',{name:'Previous Batches'})).toBeVisible()

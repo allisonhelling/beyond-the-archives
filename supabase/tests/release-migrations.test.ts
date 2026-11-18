@@ -5,6 +5,8 @@ import { readFile, readdir } from 'node:fs/promises'
 import type { PGlite } from '@electric-sql/pglite'
 // @ts-expect-error Existing embedded PostgreSQL migration harness.
 import { createTestDatabase } from '../../scripts/test-database.mjs'
+// @ts-expect-error Shared synthetic library fixture.
+import { seedLargeLibraries } from '../../scripts/performance-library.mjs'
 // @ts-expect-error Shared source/live metadata inventory.
 import { privacyCatalog } from '../../scripts/privacy-catalog.mjs'
 
@@ -89,16 +91,43 @@ it('upgrades the populated observed production prefix through both Universal dep
  const firstPending='20261112000300_chapter_total_review.sql'
  const db:PGlite=await createTestDatabase({beforeMigration:firstPending})
  try {
+  await seedLargeLibraries(db,501,2)
   await seedExistingAccount(db)
+  await db.exec(`
+   delete from public.library_search_documents where id=(select id from public.library_entries order by id desc limit 1);
+   create temporary table chapter_review_batches(updated integer);
+   create function pg_temp.record_chapter_review_batch() returns trigger language plpgsql as $$
+   begin
+    insert into chapter_review_batches select count(*)::integer from updated_documents;
+    return null;
+   end $$;
+   create trigger record_chapter_review_batch after update on public.library_search_documents
+    referencing new table as updated_documents for each statement execute function pg_temp.record_chapter_review_batch();
+  `)
   const prior=await snapshot(db)
   const backup=async()=>user(db,async()=>(await db.query<{backup:{version:number}}>('select public.export_library_backup() backup')).rows[0].backup)
   expect((await backup()).version).toBe(1)
   const pending=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')&&name>=firstPending).sort()
   expect(pending).toEqual([firstPending,'20261112000400_universal_backup_compatibility.sql',releaseMigration,'20261117000100_tag_text_color.sql','20261117000200_guard_finished_chapter_increases.sql','20261117000300_site_mappings.sql','20261117000400_tag_classification_rules.sql','20261117000500_site_bulk_import.sql'])
-  for(const name of pending)await db.exec(await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8'))
+  await db.exec("set statement_timeout='45s'")
+  await db.exec(await readFile(new URL(`../migrations/${firstPending}`,import.meta.url),'utf8'))
+  expect((await db.query('show statement_timeout')).rows).toEqual([{statement_timeout:'45s'}])
+  expect((await db.query('select updated from chapter_review_batches order by updated desc')).rows)
+   .toEqual([{updated:500},{updated:500},{updated:4}])
+  await db.exec('drop trigger record_chapter_review_batch on public.library_search_documents')
+  for(const name of pending.slice(1))await db.exec(await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8'))
+  const {rows}=await db.query(`
+   select count(*)::integer as entries,
+    count(*) filter (where d.story->'metadataConfidence'=jsonb_build_object(
+     'published_chapters',public.story_field_confidence(d.story,'published_chapters'),
+     'publication_status',public.story_field_confidence(d.story,'publication_status')
+    ))::integer as refreshed
+   from public.library_entries e left join public.library_search_documents d on d.id=e.id
+  `)
+  expect(rows).toEqual([{entries:1005,refreshed:1005}])
   expect(await snapshot(db)).toEqual(prior)
   expect((await backup()).version).toBe(2)
   expect((await db.query<{role_id:string}>('select role_id from public.user_roles where user_id=$1',[account])).rows[0].role_id).toBe('user')
   expect((await db.query("select * from public.user_roles where role_id='owner'")).rows).toEqual([])
  }finally{await db.close()}
-},30000)
+},60000)

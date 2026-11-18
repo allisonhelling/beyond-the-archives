@@ -196,7 +196,28 @@ do $$ declare definition text; updated text; begin
  updated:=replace(definition,$old$set work_status='deleted' where id=p_entry$old$, $new$set work_status='deleted',metadata_overrides=metadata_overrides||jsonb_build_object('publication_status','deleted') where id=p_entry$new$);
  execute updated;
 end $$;
-select public.refresh_library_documents(array(select id from public.library_entries));
+-- The refresh is atomic with the trigger changes, but each projection upsert
+-- receives a bounded set of IDs. The timeout applies only to this backfill.
+select set_config('app.chapter_review_previous_timeout',current_setting('statement_timeout'),true);
+set local statement_timeout='10min';
+do $backfill$
+declare
+ last_id uuid;
+ entry_ids uuid[];
+begin
+ loop
+  entry_ids:=array(
+   select id from public.library_entries
+   where last_id is null or id>last_id
+   order by id limit 500
+  );
+  exit when cardinality(entry_ids)=0;
+  perform public.refresh_library_documents(entry_ids);
+  last_id:=entry_ids[cardinality(entry_ids)];
+ end loop;
+end
+$backfill$;
+select set_config('statement_timeout',current_setting('app.chapter_review_previous_timeout'),true);
 do $$ declare definition text; updated text; begin
  select pg_get_functiondef('public.restore_library_backup_internal(jsonb,uuid,boolean,boolean)'::regprocedure) into definition;
  updated:=replace(definition,'if t=''library_entries'' then', $new$if t='library_entries' then
