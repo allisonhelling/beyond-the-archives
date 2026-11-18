@@ -1,5 +1,7 @@
 # 09 — Compatibility Contracts, Source Errors, And Cross-Layer Tests
 
+See the [Phase 4 delivery record](PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md) for the implemented classification, bulk retrieval, review contracts, and verification.
+
 **Status:** Accepted pre-implementation architectural safeguards (12 November 2026). This document specifies desired behavior and test coverage; it does **not** assert that the repository already implements these contracts. Inspect current code, migrations, and deployed protocols before selecting concrete schemas.
 
 **Phase 0 implementation:** The [current baseline](PHASE_0_BASELINE.md) records actual boundaries, schema-1 capability negotiation, known legacy decoders, source-error mappings, the cross-layer fixture manifest, rollout and remaining gaps. The requirements below also cover later features; unchecked future scenarios are not represented as working functionality. Existing retrieval, reader, Safari, SQL and backup envelopes are preserved through narrow adapters rather than replaced with the illustrative envelope below.

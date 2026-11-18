@@ -10,9 +10,9 @@ export const hasTagFilters = (filters?: { relationship?: string; characters?: st
 export const hasTagRules = (rules: unknown) => hasTagFilters((rules as { filters?: Parameters<typeof hasTagFilters>[0] } | null)?.filters)
 export const tagResolutionEvent = 'ao3-tag-resolutions-updated'
 export { normalizeTag }
-function verifiedTags(records: TagResolution[]) {
+export function verifiedTags<C extends Ao3TagCategory | 'fandom'>(records: TagResolution<C>[]) {
  const roots = new Map(records.map(record => [`${record.category}:${record.name}`, record.status]))
- return records.filter((record): record is TagResolution & { canonical_name: string } => Boolean(record.canonical_name && ['canonical','synonym'].includes(record.status)
+ return records.filter((record): record is TagResolution<C> & { canonical_name: string } => Boolean(record.canonical_name && ['canonical','synonym'].includes(record.status)
   && roots.get(`${record.category}:${record.canonical_name}`) === 'canonical'))
 }
 export function tagAliasIndex(records: TagResolution[]): TagAliases {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { beginSitePreview, readSitePreview } from './extension'
 import { sourcePage, storyFields, type Observations, type SiteRequest, type StoryField } from './site-mapping'
 
-export function SitePreview({ url, initial, onApply }: { url: string; initial?: Observations; onApply: (field: StoryField, value: string) => void }) {
+export function SitePreview({ url, initial, onApply, onCaptured, onClassify }: { url: string; initial?: Observations; onApply: (field: StoryField, value: string) => void; onCaptured: (value: Observations) => void; onClassify?: (value: Observations) => Promise<void> }) {
  const [result, setResult] = useState({ url, observations: initial ?? {} })
  const [request, setRequest] = useState<SiteRequest>()
  const [field, setField] = useState<StoryField>('title')
@@ -28,7 +28,9 @@ export function SitePreview({ url, initial, onApply }: { url: string; initial?: 
    const reply = await readSitePreview(waiting)
    if (reply.code === 'OK') {
     setRequest(undefined)
-    setResult(previous => ({ url: waiting.url, observations: { ...(previous.url === waiting.url && previous.observations), ...reply.observations } }))
+    const observations = { ...(result.url === waiting.url && result.observations), ...reply.observations }
+    setResult({ url: waiting.url, observations })
+    onCaptured(observations)
     setMessage(Object.keys(reply.observations ?? {}).length ? 'Review the source values below and apply the fields you want to use.' : 'No source metadata was returned. You can fill in the form manually.')
    } else setMessage('Waiting for the source tab. Open the companion there, then select Return to Draft.')
   } catch (error) { setMessage((error as Error).message) }
@@ -47,6 +49,10 @@ export function SitePreview({ url, initial, onApply }: { url: string; initial?: 
    {waiting && <button className="button secondary" type="button" disabled={busy} onClick={() => void resume()}>Load Source Values</button>}
   </div>
   {message && <p role="status">{message}</p>}
+  {result.url === page && onClassify && (['ao3_tags','fandoms','relationship_tags','character_tags','additional_tags'] as const).some(key => result.observations[key]) && <button className="button secondary" type="button" disabled={busy} onClick={() => {
+   setBusy(true); setMessage('')
+   void onClassify(result.observations).then(() => setMessage('Classified tags applied. You can edit their categories in the form.')).catch(error => setMessage(error.message)).finally(() => setBusy(false))
+  }}>Apply Classified Tags</button>}
   {result.url === page && Object.entries(result.observations).map(([key, evidence]) => <div key={key}>
    <strong>{storyFields[key as StoryField]} · {evidence.via}</strong>
    <p>{evidence.text}</p>

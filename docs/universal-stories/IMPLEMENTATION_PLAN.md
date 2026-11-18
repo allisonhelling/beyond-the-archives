@@ -126,15 +126,17 @@ Implementation record: [Phase 3 Extension Extraction And Visual Mapping](PHASE_3
 
 **Goal:** Classify tags predictably and process many story URLs without blocking on incomplete metadata.
 
-- [ ] Preserve raw tags, source-provided categories, and AO3 canonical verification boundaries.
-- [ ] Implement deterministic classification and user correction scopes (story, site+fandom, site, fandom, global).
-- [ ] Implement site-only above fandom-only default, adjustable explicit priority, and equal-priority conflict review.
-- [ ] Add Tag Explorer, classification explanations, and My Classification Rules.
-- [ ] Add recognized-only and all-links bulk import modes with preview/deduplication.
-- [ ] Queue unknown published counts as nullable, resumable reviews, not zero or failed imports.
-- [ ] Default missing-count review to 25/page with 10/25/50 options; allow filtering for active reading.
-- [ ] Add review retry, checkpoint persistence, batch failure isolation, and regression tests.
-- [ ] Keep ML disabled; deterministic system must stand alone.
+- [x] Preserve raw tags, source-provided categories, and AO3 canonical verification boundaries.
+- [x] Implement deterministic classification and user correction scopes (story, site+fandom, site, fandom, global).
+- [x] Implement site-only above fandom-only default, adjustable explicit priority, and equal-priority conflict review.
+- [x] Add Tag Explorer, classification explanations, and My Classification Rules.
+- [x] Add recognized-only and all-links bulk import modes with preview/deduplication.
+- [x] Queue unknown published counts as nullable, resumable reviews, not zero or failed imports.
+- [x] Default missing-count review to 25/page with 10/25/50 options; allow filtering for active reading.
+- [x] Add review retry, checkpoint persistence, batch failure isolation, and regression tests.
+- [x] Keep ML disabled; deterministic system must stand alone.
+
+Implementation record: [Phase 4 Classification And Bulk Imports](PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md). The record distinguishes browser fixtures, embedded database tests, and remaining release checks.
 
 **Exit criteria:** Unresolved tag/count cases remain reviewable without losing imported stories or inventing categories.
 

@@ -3,7 +3,7 @@ import { isLocalApp } from '../../lib/local-app'
 import { localExtensionId } from './extension-config'
 import { supabase } from '../../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
-import { companionContractVersion, readCompanionPage, hasCompanionCapability, hasMetadataRetrievalCapability, validLibrarySyncReply } from './companion-contract'
+import { companionContractVersion, readCompanionPage, hasCompanionCapability, hasMetadataRetrievalCapability, siteBulkImportCapability, validLibrarySyncReply } from './companion-contract'
 import { makeSiteRequest, readObservations, readSiteDraft, readSiteResult, sourcePage, type SiteRequest, type StoryField } from './site-mapping'
 import type { EditValues } from '../library/edit-merge'
 import { sourceFailure } from '../../lib/source-errors'
@@ -142,9 +142,17 @@ function requestSiteResult(request: SiteRequest, action: 'begin' | 'read') {
 }
 
 export async function beginSitePreview(url: string, field?: StoryField) {
+ return beginSiteRequest(url, field ? 'teach' : 'extract', field)
+}
+
+export async function beginPageLinkDiscovery(url: string) {
+ return beginSiteRequest(url, 'discover')
+}
+
+async function beginSiteRequest(url: string, operation: SiteRequest['operation'], field?: StoryField) {
  const requestId = crypto.randomUUID(), account = await siteAccount()
  if (!account) throw new Error('Sign in to connect the companion or continue with manual entry.')
- const request = makeSiteRequest(account, url, field ? 'teach' : 'extract', crypto.randomUUID(), field)
+ const request = makeSiteRequest(account, url, operation, crypto.randomUUID(), field)
  if (!await message({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: companionContractVersion, requestId }, reply => hasCompanionCapability(reply, request.capability, requestId))) {
   throw new Error('Install or update the Chrome/Edge companion to inspect this page. You can continue entering the story manually.')
  }
@@ -170,4 +178,13 @@ export async function loadCompanionDraft(id: string) {
   if (!url) throw new Error('The source URL is unavailable. You can continue with manual entry.')
   return { url, draft: readSiteDraft(value.draft), observations: readObservations(value.observations), base: value.base ?? undefined }
  })
+}
+
+export async function openSiteImportSource(batch: string, url: string) {
+ const requestId = crypto.randomUUID()
+ if (!await message({ type: 'AO3_LIBRARY_CAPABILITIES', contractVersion: companionContractVersion, requestId }, reply => hasCompanionCapability(reply, siteBulkImportCapability, requestId))) {
+  throw new Error('Update the Chrome/Edge companion to retrieve this batch.')
+ }
+ if (!await connectExtension()) throw new Error('Reconnect the desktop companion in Settings to retrieve this batch.')
+ await siteMessage({ type: 'BTA_SITE_BULK', batch, url }, () => undefined)
 }

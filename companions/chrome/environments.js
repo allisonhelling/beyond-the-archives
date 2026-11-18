@@ -9,7 +9,12 @@ export function createEnvironmentManager(profiles, defaultId = 'hosted', storage
  const area = source => ({
   async get(keys) {
    await ready
-   const names = Array.isArray(keys) ? keys : [keys], scope = prefix()
+   const scope = prefix()
+   if (keys === null) {
+    const saved = await source.get(null)
+    return Object.fromEntries(Object.entries(saved).filter(([key]) => scope ? key.startsWith(scope) : !key.startsWith('environment:') && key !== 'ao3-environment').map(([key, value]) => [key.slice(scope.length), value]))
+   }
+   const names = Array.isArray(keys) ? keys : [keys]
    const result = await source.get(names.map(key => `${scope}${key}`))
    return Object.fromEntries(names.map(key => [key, result[`${scope}${key}`]]))
   },

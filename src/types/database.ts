@@ -572,6 +572,7 @@ export type Database = {
           cancelled_at: string | null
           sync_id: string | null
           source_url: string | null
+          site_import: boolean
         }
         Insert: {
           id?: string
@@ -580,6 +581,7 @@ export type Database = {
           cancelled_at?: string | null
           sync_id?: string | null
           source_url?: string | null
+          site_import?: boolean
         }
         Update: {
           id?: string
@@ -588,6 +590,7 @@ export type Database = {
           cancelled_at?: string | null
           sync_id?: string | null
           source_url?: string | null
+          site_import?: boolean
         }
         Relationships: [
         ]
@@ -611,6 +614,11 @@ export type Database = {
           verified_position: number | null
           last_attempt_at: string | null
           completed_at: string | null
+          source_url: string | null
+          site_recognized: boolean | null
+          site_lease: string | null
+          site_lease_until: string | null
+          site_attempts: number
         }
         Insert: {
           id?: string
@@ -630,6 +638,11 @@ export type Database = {
           verified_position?: number | null
           last_attempt_at?: string | null
           completed_at?: string | null
+          source_url?: string | null
+          site_recognized?: boolean | null
+          site_lease?: string | null
+          site_lease_until?: string | null
+          site_attempts?: number
         }
         Update: {
           id?: string
@@ -649,6 +662,11 @@ export type Database = {
           verified_position?: number | null
           last_attempt_at?: string | null
           completed_at?: string | null
+          source_url?: string | null
+          site_recognized?: boolean | null
+          site_lease?: string | null
+          site_lease_until?: string | null
+          site_attempts?: number
         }
         Relationships: [
           { foreignKeyName: 'import_items_entry_id_fkey'; columns: ['entry_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id'] },
@@ -1512,6 +1530,56 @@ export type Database = {
         Relationships: [
         ]
       }
+      tag_classification_rules: {
+        Row: {
+          user_id: string
+          id: string
+          version: number
+          label: string
+          category: string
+          scope: string
+          site: string | null
+          fandom: string | null
+          story_id: string | null
+          priority: number | null
+          enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          id: string
+          version: number
+          label: string
+          category: string
+          scope: string
+          site?: string | null
+          fandom?: string | null
+          story_id?: string | null
+          priority?: number | null
+          enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          id?: string
+          version?: number
+          label?: string
+          category?: string
+          scope?: string
+          site?: string | null
+          fandom?: string | null
+          story_id?: string | null
+          priority?: number | null
+          enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'tag_classification_rules_story_id_user_id_fkey'; columns: ['story_id', 'user_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
       tags: {
         Row: {
           id: string
@@ -1721,6 +1789,14 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      write_tag_classification_rule: { Args: { p_id: string; p_version: number; p_rule?: Json }; Returns: boolean }
+      tag_classification_revision: { Args: Record<string, never>; Returns: string }
+      reset_tag_classification_rules: { Args: { p_revision: string }; Returns: boolean }
+      story_tag_evidence: { Args: { p_story: string }; Returns: Json }
+      submit_site_import: { Args: { p_batch: string; p_items: Json }; Returns: string }
+      retry_site_import: { Args: { p_batch: string; p_item?: string }; Returns: undefined }
+      site_import_origins: { Args: { p_batch: string }; Returns: Json }
+      review_import_counts: { Args: { p_batch: string; p_page?: number; p_size?: number; p_progress?: boolean; p_edits?: Json }; Returns: Json }
       write_site_mapping: { Args: { p_rule?: Json; p_id?: string; p_version?: number; p_import?: Json }; Returns: boolean }
       save_companion_story: { Args: { p_id: string | null; p_url: string; p_input: Json; p_base: Json; p_observations: Json }; Returns: string }
       app_access: { Args: Record<string, never>; Returns: Json }

@@ -1,0 +1,31 @@
+# Phase 4 — Classification And Bulk Imports
+
+## Source Tags And Personal Rules
+
+Tag Explorer reads raw source labels directly from existing AO3 work links, browser capture, or generic observations. Order uses the source position when available and the position within each source field for generic observations. Legacy labels whose position or category was unavailable keep that field unset. Stored source observations and saved metadata values are independent. Generic capture recognizes explicit field groupings without treating compatible markup as AO3 provenance.
+
+The version-1 deterministic classifier uses exact NFC, case-insensitive labels with whitespace normalization. It keeps punctuation and diacritics meaningful. Story corrections take precedence. The reusable defaults are site and fandom (40), site (30), fandom (20), and global (10). A rule can override its default priority. Conflicting highest-priority rules or conflicting applicable fandoms at the winning fandom scope produce Unknown with Needs Review. Users can resolve a conflict with a more specific rule or a story correction. With no applicable rule, the classifier evaluates declared category, verified source-qualified evidence, and context-qualified structural rules. Generic labels without sufficient evidence remain Unknown. ML is off.
+
+Rules are owner-private, and writes check each rule's revision. The companion invalidates its classification-rule snapshot when the account's rule revision changes. Tag Explorer applies current rules to its selected story and shows disagreement with the original category. Bulk imports save classified category fields that the library already uses for viewing and filtering. The single-story source preview offers **Apply Classified Tags** before save. Rule edits update the active classification and affect future imports. Saved library metadata can be changed through its explicit editor. My Classification Rules supports portable JSON export, disable and re-enable, edit, delete, and confirmed reset. Account backup snapshots currently retain saved stories and observations, with rules exported through their settings control.
+
+## Queue And Review
+
+Website Links uses the existing import batches, import items, polling, paging, progress display, and AO3 series picker. Eligible pasted or scanned URLs are previewed before confirmation. Only an exact or matching-page URL rule qualifies a custom link as recognized. Site-wide extraction defaults alone leave a URL as a candidate. Candidate extraction can save a story with structured Book, Novel, or ShortStory evidence and a title, or with a matching saved story pattern. Non-story and extraction failures appear in the batch report. Duplicate normalized source identities reuse existing stories without overwriting metadata, notes, tags, collections, or progress.
+
+The companion advertises `site-bulk-import-v1` through the current revision-1 handshake. Page discovery uses the existing account- and document-bound `BTA_SITE_REQUEST` exchange with operation `discover`. It returns at most 2,000 sanitized links after a toolbar click. Restricted destinations are represented by a placeholder. Pasting links and previewing recognized patterns remain available without discovery. Retrieval uses `BTA_SITE_BULK` to open a pending origin from the selected batch. A toolbar click enables one dedicated tab to process the remaining jobs at that origin. Different origins and closed tabs require a new grant. The companion waits between operations and validates the expected URL and document before accepting evidence. Queues remain in the database after tab or service-worker interruption. A cancelled or expired lease cannot commit. Account backups preserve generic batch checkpoints without the live lease. Older backups restore with AO3-compatible defaults. Older companions continue to handle AO3 imports and prompt for an update before generic retrieval.
+
+A successful story with unresolved published chapters saves a null count. Each batch's review derives unresolved entries from the existing imported story IDs. Page size defaults to 25 and supports 10 and 50. Users can enter counts and confirm manual provenance, filter to positive reading progress, and batch-save a page. The browser preserves page, filters, and per-entry drafts by account and batch. The database checks each revision and validates 1–100,000, retains explicit progress safeguards, and reports individual errors. Counts that need a progress or Finished-status decision can continue through the regular story editor.
+
+## Rollout And Verification
+
+Apply the two Phase 4 migrations, update the organizer, and rebuild and reload the Chrome/Edge companion. Existing AO3 capture retains its prior capability and queue. Generic retrieval is available after the new capability is available. Additive database records can remain if rolling back the organizer and companion.
+
+| Check | Evidence |
+| --- | --- |
+| Embedded migration replay and Phase 4 SQL tests | The complete 135-migration chain replayed. The populated upgrade preserved prior records and export shape. Tests exercised owner isolation, raw observations, rule revisions, cancelled and expired leases, duplicate imports, a 2,000-link checkpoint, missing counts, filtering, and stale or invalid edits. |
+| Focused regression suite | 245 tests passed for import history, series selection, library scans, Chrome companion capabilities, private SQL policies, and AO3 import persistence. |
+| Desktop and mobile Playwright | Both viewport projects passed Website Links preview, count thresholds and pagination, resume after reload, Tag Explorer evidence, and rule disable. Installed Chromium passed source discovery and consent-gated retrieval with a fixture host grant and a synthetic backend. |
+| Existing AO3 browser workflows | Desktop fixtures passed large AO3 batch reporting, series selection, hosted and local companion capture, automatic collections, tag filters, and tag formatting. |
+| Integration configuration and security | All 45 configuration tests and the repository security gate passed. |
+
+Browser fixtures use synthetic account and source data. Native Safari, the physical Chrome/Edge toolbar prompt, and a live Supabase rollout remain release checks.

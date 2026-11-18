@@ -7,11 +7,12 @@ import { supabase } from '../../lib/supabase'
 import { addStoriesToCollections, allRows } from '../library/repository'
 import { classifyUrl, extractUrls, mergeSeriesPreviews, parseSeriesUrl, seriesPageUrl, type SeriesPreview } from './urls'
 import { requireDesktopExtension, previewSeriesWithExtension } from './extension'
-function client() { if(!supabase) throw new Error('Connect Supabase and apply the Phase 3 migration to use persistent imports.'); return supabase }
+export { client as importClient }
+function client() { if(!supabase) throw new Error('Connect Supabase and apply the latest migrations to use persistent imports.'); return supabase }
 type Row<K extends keyof Database['public']['Tables']> = Database['public']['Tables'][K]['Row']
 export type ImportHistory = { selectedBatch?: string; batches: Row<'import_batches'>[]; items: (Row<'import_items'> & { work_info?: { title: string; authors: string[]; author_links?: Record<string, string> } | null })[]; jobs: Row<'metadata_jobs'>[];
  changes?: Pick<Row<'metadata_jobs'>,'id'|'entry_id'|'status'|'completed_at'|'last_attempt_at'>[];
- summary?: { total: number; filtered: number; page: number; pages: number; historyTotal: number; historyPages: number; active: boolean; counts: Record<string,number>; imported: number; alreadySaved: number; completed: number } }
+ summary?: { total: number; filtered: number; page: number; pages: number; historyTotal: number; historyPages: number; active: boolean; counts: Record<string,number>; imported: number; alreadySaved: number; completed: number; siteBatch?: boolean; reviewNeeded?: number } }
 export async function importHistory(batchId?: string, options?: { historyPage: number; resultPage: number; status: string }): Promise<ImportHistory> {
  if (options) {
   const { data, error } = await client().rpc('paged_import_history', { ...(batchId && { p_batch: batchId }), p_history_page: options.historyPage, p_result_page: options.resultPage, p_status: options.status })

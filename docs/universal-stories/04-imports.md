@@ -1,5 +1,7 @@
 # Universal Story Imports
 
+See the [Phase 4 delivery record](PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md) for the implemented classification, bulk retrieval, review contracts, and verification.
+
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 

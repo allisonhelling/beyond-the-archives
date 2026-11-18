@@ -89,7 +89,10 @@ export async function saveStory(input: StoryInput) {
   if (sampleMode) return (await import('./sample/repository')).saveSampleStory(input)
   const edits = storyEdits(input)
   async function save(values: EditValues, base: EditValues | null): Promise<string> {
-    const { data, error } = await client().rpc('save_library_story_checked', checkedStorySave(input, values, base))
+    const checked = checkedStorySave(input, values, base)
+    const { data, error } = input.sourceObservations
+      ? await client().rpc('save_companion_story', { ...checked, p_observations: input.sourceObservations as Json })
+      : await client().rpc('save_library_story_checked', checked)
     const conflict = conflictFromError(error, save)
     if (conflict) throw conflict
     const duplicate = sourceDuplicateFromError(error)

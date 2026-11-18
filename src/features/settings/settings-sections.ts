@@ -28,3 +28,6 @@ export const readingStatsSettingsSection = {
  title: 'Reading Statistics',
  description: 'Reading speed for estimated reading time',
 }
+
+export const tagExplorerSection = { id: 'tag-explorer', title: 'Tag Explorer', description: 'Inspect raw tags, source evidence, and personal corrections.' }
+export const classificationRulesSection = { id: 'classification-rules', title: 'My Classification Rules', description: 'Manage private classification rules.' }

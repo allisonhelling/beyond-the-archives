@@ -165,6 +165,10 @@ Use **Use Once** to apply a value in this draft. Choose an exact URL or confirm 
 
 From the web form, **Preview Source Page** and **Teach Selected Field** open the story page. Click the toolbar icon there, then choose **Return to Draft**. Back in the app, choose **Load Source Values** and apply the fields you want to use. See the [Phase 3 guide](../../docs/universal-stories/PHASE_3_EXTENSION_AND_MAPPING.md) for rollout and available scopes.
 
+## Website Link Discovery And Retrieval
+
+In the organizer, open **Import → Website Links**. Paste links or open a source page and click the companion icon to scan its links. Review the recognized links, unverified candidates, and rejected links before queueing. In batch history, select **Show Pending Sources**, open a source, and click the companion icon in that tab. Keep the source tab open during retrieval. Repeat for other origins. Resume a previously closed or cancelled run from the same batch. Missing chapter counts can be reviewed later. [Phase 4 permission and verification details](../../docs/universal-stories/PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md)
+
 ## Explicit Environment Builds
 
 Configure all variables from the root `.env.example` for local or `.env.staging.example` for approved staging. `build:extension:local` includes only loopback permissions and settings. Hosted builds require explicit staging/production identity and a matching `EXTENSION_APP_ORIGIN`; they no longer bundle the other local/hosted profile. Existing installed artifacts are unchanged until rebuilt/reloaded. Preserve production installations and obtain separate approval before any release. [S1 setup and gates](../../docs/security-foundation/LOCAL_AND_STAGING.md) owns staging instructions.

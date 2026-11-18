@@ -1,11 +1,25 @@
-import { isStoryField, validSelector } from '../../src/features/imports/site-mapping.ts'
+import { isStoryField, maxDiscoveredLinks, safeScannedLink, validSelector } from '../../src/features/imports/site-mapping.ts'
 import { extractStory, readSelected, selectable, selectorFor } from './site-extraction'
 
 if (!globalThis.__btaSiteEditorInstalled) {
  globalThis.__btaSiteEditorInstalled = true
  let teardown
  chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (sender.id !== chrome.runtime.id || message?.type !== 'BTA_SITE_OPEN') return
+  if (sender.id !== chrome.runtime.id) return
+  if (message?.type === 'BTA_SITE_DISCOVER') {
+   if (message.url !== location.href) { respond({ ok: false }); return }
+   const anchors = document.links
+   if (anchors.length > maxDiscoveredLinks) { respond({ ok: false }); return }
+   respond({ ok: true, links: Array.from(anchors, anchor => safeScannedLink(anchor.href)) })
+   return
+  }
+  if (message?.type === 'BTA_SITE_BULK_CAPTURE') {
+   if (message.url !== location.href) { respond({ ok: false }); return }
+   try { respond({ ok: true, ...extractStory(document, message.url, message.rules) }) }
+   catch { respond({ ok: false }) }
+   return
+  }
+  if (message?.type !== 'BTA_SITE_OPEN') return
   teardown?.()
   if (message.url !== location.href) { respond({ ok: false }); return }
   teardown = mountEditor(message)

@@ -6,16 +6,11 @@ import { formatDateTime } from '../../lib/dates'
 import { sampleMode } from '../../lib/sample-mode'
 import { supabase } from '../../lib/supabase'
 import type { Database, Json } from '../../types/database'
-import { exportMappings, importMappings, readMapping, storyFields, type MappingRule } from './site-mapping'
+import { exportMappings, importMappings, storyFields, type MappingRule } from './site-mapping'
+import { loadSiteMappings } from './site-bulk-repository'
 import { siteMappingsSettingsSection } from './settings-sections'
 
 const scopeLabels = { exact: 'Exact URL', matching: 'Matching Story Pages', site: 'Site-Wide Defaults' }
-async function loadMappings() {
- if (!supabase || sampleMode) return []
- const { data, error } = await supabase.from('site_mappings').select('rule').order('id').limit(1000)
- if (error) throw new Error('Could not load site mappings. Check your connection and that the mapping migration has been applied.')
- return data.flatMap(({ rule }) => { const mapping = readMapping(rule); return mapping ? [mapping] : [] })
-}
 
 export function SiteMappingsSettings() {
  const [rules, setRules] = useState<MappingRule[] | null>(null)
@@ -50,7 +45,7 @@ export function SiteMappingsSettings() {
   <p>Open a story page and click the Chrome/Edge companion to create a mapping or review a repair. Reusable rules are private to your account.</p>
   {sampleMode ? <p>Sign in to save and manage reusable rules. You can map a field for one use in the local companion.</p> : <>
    <div className="form-actions">
-    <button type="button" className="button secondary" disabled={busy} onClick={() => void run(async () => setRules(await loadMappings()))}>{rules ? 'Reload Site Mappings' : 'Load Site Mappings'}</button>
+    <button type="button" className="button secondary" disabled={busy} onClick={() => void run(async () => setRules(await loadSiteMappings()))}>{rules ? 'Reload Site Mappings' : 'Load Site Mappings'}</button>
     {Boolean(rules?.length) && <button type="button" className="button secondary" disabled={busy} onClick={() => downloadFile(new Blob([exportMappings(rules ?? [])], { type: 'application/json' }), 'site-mappings.json')}>Export Site Mappings</button>}
     <FilePicker label="Import Site Mappings" accept=".json,application/json" disabled={busy} onChange={files => void run(() => preview(files[0]))} />
    </div>
@@ -71,7 +66,7 @@ export function SiteMappingsSettings() {
      <button type="button" className="button primary" disabled={busy || hasBroad && !confirmed} onClick={() => void run(async () => {
       await write({ p_import: pending as unknown as Json })
       setPending([]); setMessage('Site mappings imported.')
-      setRules(await loadMappings())
+      setRules(await loadSiteMappings())
      })}>Import Reviewed Mappings</button>
      <button type="button" className="button secondary" disabled={busy} onClick={() => setPending([])}>Cancel</button>
     </div>

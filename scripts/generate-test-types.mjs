@@ -34,6 +34,14 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      write_tag_classification_rule: { Args: { p_id: string; p_version: number; p_rule?: Json }; Returns: boolean }
+      tag_classification_revision: { Args: Record<string, never>; Returns: string }
+      reset_tag_classification_rules: { Args: { p_revision: string }; Returns: boolean }
+      story_tag_evidence: { Args: { p_story: string }; Returns: Json }
+      submit_site_import: { Args: { p_batch: string; p_items: Json }; Returns: string }
+      retry_site_import: { Args: { p_batch: string; p_item?: string }; Returns: undefined }
+      site_import_origins: { Args: { p_batch: string }; Returns: Json }
+      review_import_counts: { Args: { p_batch: string; p_page?: number; p_size?: number; p_progress?: boolean; p_edits?: Json }; Returns: Json }
       write_site_mapping: { Args: { p_rule?: Json; p_id?: string; p_version?: number; p_import?: Json }; Returns: boolean }
       save_companion_story: { Args: { p_id: string | null; p_url: string; p_input: Json; p_base: Json; p_observations: Json }; Returns: string }
       app_access: { Args: Record<string, never>; Returns: Json }

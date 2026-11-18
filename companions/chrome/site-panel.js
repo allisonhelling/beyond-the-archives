@@ -1,4 +1,4 @@
-import { normalizedField, readObservations, storyFields } from '../../src/features/imports/site-mapping.ts'
+import { listStoryFields, normalizedField, readObservations, storyFields } from '../../src/features/imports/site-mapping.ts'
 import { parseLines, statuses } from '../../src/features/library/model'
 
 const get = id => document.getElementById(id)
@@ -234,7 +234,7 @@ void send('initialize').then(async reply => {
  get('url').value = request.url; get('source').hidden = false
  for (const [field, text] of Object.entries(storyFields)) {
   const control = field === 'publication_status' ? element('select', undefined, { name: field })
-   : element(['authors', 'fandoms', 'ao3_tags', 'categories', 'summary'].includes(field) ? 'textarea' : 'input', undefined, { name: field, maxLength: field === 'summary' ? 4000 : 500 })
+   : element((listStoryFields.has(field) || field === 'summary') ? 'textarea' : 'input', undefined, { name: field, maxLength: field === 'summary' ? 4000 : 500 })
   if (field === 'publication_status') control.append(...Object.entries({ unknown: 'Unknown', in_progress: 'In Progress', complete: 'Complete', hiatus: 'Hiatus', abandoned: 'Abandoned', deleted: 'Deleted' }).map(([value, text]) => option(value, text)))
   const saved = original?.metadata[field]
   control.value = previous?.fields?.[field] ?? (Array.isArray(saved) ? saved.join('\n') : saved ?? (original ? '' : observed[field]?.text ?? (field === 'publication_status' ? 'unknown' : '')))

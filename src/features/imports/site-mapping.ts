@@ -1,12 +1,15 @@
+import { classifyUrl } from './urls.ts'
+import { genericSiteExtractionCapability, siteBulkImportCapability, visualMappingCapability } from './companion-contract.ts'
 import { sourceLocation } from '../library/story-source'
 
 export const storyFields = {
  title: 'Title', authors: 'Authors', fandoms: 'Fandoms', summary: 'Summary', ao3_tags: 'Tags',
+ relationship_tags: 'Relationships', character_tags: 'Characters', additional_tags: 'Additional Tags',
  categories: 'Categories', published_chapters: 'Published Chapters', total_chapters: 'Planned Chapters',
  publication_status: 'Publication Status',
 } as const
 export type StoryField = keyof typeof storyFields
-export type Evidence = { text: string; via: string }
+export type Evidence = { text: string; via: string; rawText?: string }
 export type Observations = Partial<Record<StoryField, Evidence>>
 export type MappingScope = 'exact' | 'matching' | 'site'
 export type MappingRule = {
@@ -14,6 +17,9 @@ export type MappingRule = {
  selectors: string[]; strip?: string; previous: string; validation: { when: string; example: string; health: 'Working' | 'Needs Review' | 'Broken'; current: string };
 }
 export const isStoryField = (value: unknown): value is StoryField => typeof value === 'string' && Object.hasOwn(storyFields, value)
+export const sourceTagFields = { fandom: 'fandoms', relationship: 'relationship_tags', character: 'character_tags', freeform: 'additional_tags' } as const
+export const tagObservationFields = new Set<StoryField>([...Object.values(sourceTagFields), 'ao3_tags'])
+export const listStoryFields = new Set<StoryField>(['authors', ...tagObservationFields, 'categories'])
 export const fieldLimit = (field: StoryField) => field === 'summary' ? 4000 : 500
 export function sourcePage(url: unknown) {
  if (typeof url !== 'string') return null
@@ -94,16 +100,44 @@ export function readObservations(value: unknown): Observations {
    || typeof evidence.via !== 'string' || !['Site Adapter', 'Structured Data', 'Page Metadata', 'Page Element', 'Saved Mapping', 'Mapped Element'].includes(evidence.via)) continue
   if (/<\/?[a-z][^>]*>/i.test(evidence.text)) continue
   const text = normalizedField(field, evidence.text)
-  if (text) result[field] = { text, via: evidence.via }
+  const rawText = tagObservationFields.has(field) && typeof evidence.rawText === 'string' && evidence.rawText.length <= fieldLimit(field)
+   && !/<\/?[a-z][^>]*>/i.test(evidence.rawText) ? evidence.rawText : undefined
+  if (text) result[field] = { text, via: evidence.via, ...(rawText && rawText !== text && { rawText }) }
  }
  return result
 }
+export const maxDiscoveredLinks = 2000
+export const restrictedLink = 'about:invalid'
+export function safeScannedLink(value: string) {
+ if (value.length > 8192) return restrictedLink
+ try {
+  const parsed = new URL(value)
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return restrictedLink
+ } catch { return restrictedLink }
+ const known = classifyUrl(value)
+ if (known.kind === 'valid' || known.kind === 'series') return value.split(/[?#]/)[0]
+ if (known.kind === 'unsupported') return value.split(/[?#]/)[0]
+ return sourcePage(value) ?? restrictedLink
+}
+export function readScannedLinks(value: unknown) {
+ if (!Array.isArray(value) || value.length > maxDiscoveredLinks) return null
+ let length = 0
+ const links: string[] = []
+ for (const link of value) {
+  if (typeof link !== 'string' || (length += link.length) > 4_000_000) return null
+  links.push(safeScannedLink(link))
+ }
+ return links
+}
+const operationCapabilities = {
+ extract: genericSiteExtractionCapability, save: genericSiteExtractionCapability, teach: visualMappingCapability, discover: siteBulkImportCapability,
+} as const
 export type SiteRequest = {
- requestId: string; account: string; url: string; origin: string; operation: 'extract' | 'teach' | 'save';
- capability: 'generic-site-extraction-v1' | 'visual-mapping-v1'; version: 1; createdAt: number; expiresAt: number;
+ requestId: string; account: string; url: string; origin: string; operation: keyof typeof operationCapabilities;
+ capability: typeof operationCapabilities[keyof typeof operationCapabilities]; version: 1; createdAt: number; expiresAt: number;
  draftId?: string; field?: StoryField;
 }
-export type SiteResult = SiteRequest & { tabId: number; code: 'OK' | 'PERMISSION_REQUIRED' | 'DISCONNECTED' | 'STALE' | 'EXTRACTION_FAILED'; observations?: Observations }
+export type SiteResult = SiteRequest & { tabId: number; code: 'OK' | 'PERMISSION_REQUIRED' | 'DISCONNECTED' | 'STALE' | 'EXTRACTION_FAILED'; observations?: Observations; links?: string[] }
 export const requestLifetime = 30 * 60 * 1000
 export const validRequestId = (value: unknown): value is string => typeof value === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(value)
 export function readSiteRequest(value: unknown, now = Date.now()): SiteRequest | null {
@@ -114,8 +148,9 @@ export function readSiteRequest(value: unknown, now = Date.now()): SiteRequest |
   || !Number.isSafeInteger(request.createdAt) || !Number.isSafeInteger(request.expiresAt)
   || request.createdAt > now + 5000 || request.expiresAt <= now || request.expiresAt - request.createdAt > requestLifetime
   || request.expiresAt <= request.createdAt || (request.draftId !== undefined && !validRequestId(request.draftId))) return null
- if (request.operation === 'teach' ? !isStoryField(request.field) || request.capability !== 'visual-mapping-v1'
-  : !['extract', 'save'].includes(String(request.operation)) || request.capability !== 'generic-site-extraction-v1') return null
+ const operation = request.operation as SiteRequest['operation']
+ if (!Object.hasOwn(operationCapabilities, operation) || request.capability !== operationCapabilities[operation]
+  || operation === 'teach' && !isStoryField(request.field)) return null
  return {
   requestId: request.requestId, account: request.account, url, origin: request.origin, version: 1,
   operation: request.operation, capability: request.capability, createdAt: request.createdAt, expiresAt: request.expiresAt,
@@ -127,7 +162,7 @@ export function makeSiteRequest(account: string, url: string, operation: SiteReq
  const request = readSiteRequest({
   account, url, origin: new URL(url).origin, operation, requestId: crypto.randomUUID(), draftId, field,
   version: 1, createdAt, expiresAt: createdAt + requestLifetime,
-  capability: operation === 'teach' ? 'visual-mapping-v1' : 'generic-site-extraction-v1',
+  capability: operationCapabilities[operation],
  }, createdAt)
  if (!request) throw new Error('Enter a valid story URL to open it in the companion.')
  return request
@@ -150,7 +185,7 @@ export function importMappings(json: string): MappingRule[] {
 
 export function observationPatch(observations: Observations) {
  const patch = Object.fromEntries(Object.entries(observations).map(([field, value]) => [
-  field, ['authors', 'fandoms', 'ao3_tags', 'categories'].includes(field) ? value.text.split(/\n/).map(part => part.trim()).filter(Boolean)
+  field, listStoryFields.has(field as StoryField) ? value.text.split(/\n/).map(part => part.trim()).filter(Boolean)
    : field === 'published_chapters' || field === 'total_chapters' ? value.text === '' ? null : Number(value.text) : value.text,
  ]))
  return patch
@@ -192,5 +227,7 @@ export function readSiteResult(value: unknown, original: SiteRequest): SiteResul
  const response = record(value), request = readSiteRequest(response)
  if (!response || !request || Object.entries(original).some(([key, expected]) => request[key as keyof SiteRequest] !== expected)
   || !Number.isInteger(response.tabId) || Number(response.tabId) < 0 || !['OK', 'PERMISSION_REQUIRED', 'DISCONNECTED', 'STALE', 'EXTRACTION_FAILED'].includes(String(response.code))) return null
- return { ...request, tabId: Number(response.tabId), code: response.code as SiteResult['code'], observations: readObservations(response.observations) }
+ const links = request.operation === 'discover' && response.code === 'OK' ? readScannedLinks(response.links) : undefined
+ if (links === null) return null
+ return { ...request, ...(links && { links }), tabId: Number(response.tabId), code: response.code as SiteResult['code'], observations: readObservations(response.observations) }
 }

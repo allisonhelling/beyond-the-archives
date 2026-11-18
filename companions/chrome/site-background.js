@@ -1,4 +1,4 @@
-import { makeSiteRequest, mappingMatches, normalizedField, observationPatch, readMapping, readObservations, readSiteDraft, readSiteRequest, sourcePage, storyFields, validRequestId } from '../../src/features/imports/site-mapping.ts'
+import { listStoryFields, makeSiteRequest, mappingMatches, normalizedField, observationPatch, readMapping, readObservations, readScannedLinks, readSiteDraft, readSiteRequest, sourcePage, storyFields, validRequestId } from '../../src/features/imports/site-mapping.ts'
 import { blankMetadata, statuses, validateProgress } from '../../src/features/library/model'
 import { checkedStorySave, editSnapshot, storyEdits } from '../../src/features/library/edit-merge'
 import { chapterReview } from '../../src/features/library/chapter-edit'
@@ -71,7 +71,7 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
   for (const key of Object.keys(storyFields)) {
    if (saved && !changed.includes(key)) continue
    if (Object.hasOwn(patch, key)) metadataChanges[key] = patch[key]
-   else if (changed.includes(key)) metadataChanges[key] = ['authors', 'fandoms', 'ao3_tags', 'categories'].includes(key) ? [] : ['published_chapters', 'total_chapters'].includes(key) ? null : key === 'publication_status' ? 'unknown' : ''
+   else if (changed.includes(key)) metadataChanges[key] = listStoryFields.has(key) ? [] : ['published_chapters', 'total_chapters'].includes(key) ? null : key === 'publication_status' ? 'unknown' : ''
   }
   if (!saved || changed.includes('published_chapters') || data.manual !== saved.metadata.chapter_count_manual) metadataChanges.chapter_count_manual = data.manual === true
   Object.assign(metadata, metadataChanges)
@@ -152,6 +152,15 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
     previous = { ...previous, offlineDraft: previous.draft, request: { ...previous.request, account: auth.userId } }
    }
    const request = previous?.request ?? makeSiteRequest(auth?.userId ?? 'disconnected', url, 'save')
+   if (request.operation === 'discover') {
+    const [target] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['site-content.js'], world: 'ISOLATED' })
+    if (!target?.documentId) return false
+    const reply = await chrome.tabs.sendMessage(tab.id, { type: 'BTA_SITE_DISCOVER', url }, { documentId: target.documentId })
+    if (connection !== generation()) return false
+    const links = reply?.ok ? readScannedLinks(reply.links) : null
+    await put(tab.id, { ...previous, result: { ...request, tabId: tab.id, code: links ? 'OK' : 'EXTRACTION_FAILED', ...(links && { links }) } })
+    return true
+   }
    const [mapped, data] = await Promise.all([
     rules(auth).catch(() => null),
     story(auth, url).catch(() => ({ story: null, collections: [], unavailable: true })),
@@ -291,5 +300,5 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
    return { ok: true, url: link.url, draft: link.draft, base: link.base, observations: link.observations }
   })
  }
- return { open, external, internal, appDraft, close: tabId => storage.session.remove(pendingKey(tabId)) }
+ return { open, external, internal, appDraft, rules, close: tabId => storage.session.remove(pendingKey(tabId)) }
 }

@@ -12,6 +12,10 @@ The checked editor records explicit/derived status origin in existing `reading_p
 
 Deploy reviewed migrations first, then organizer and companions. Backups containing general-source entries export version 2 so older readers reject them instead of dropping source identity. Current restore supports versions 1 and 2, with owner/fingerprint/safety-copy guards and source validation. AO3-only exports remain version 1. Phase 2 required no new Edge Function or hosted scraper. Leave additive columns and written identities in place when rolling back the frontend. See [Phase 2 delivery](universal-stories/PHASE_2_MANUAL_STORIES_PROGRESS.md) for exact checks, limits and handoff; [Backups](BACKUPS.md) owns restore procedures.
 
+## Tag Classification And Website Batches
+
+Phase 4 adds versioned, owner-only rules and a deterministic classifier shared by Tag Explorer and generic import previews and retrieval. Apply `20261117000400_tag_classification_rules.sql` and `20261117000500_site_bulk_import.sql` before deploying the organizer and rebuilding the Chrome/Edge companion. The existing import batches and reports expose generic retrieval checkpoints and deferred chapter reviews. See the [Phase 4 delivery record](universal-stories/PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md) for contracts, permission flow, and verification.
+
 ## Extension Story Editor And Site Mappings
 
 Companion 0.8.0 adds generic site extraction and visual mapping over the existing revision-1 handshake. The [Phase 3 contract and verification guide](universal-stories/PHASE_3_EXTENSION_AND_MAPPING.md) owns the message schema, source-tab permission flow, rule storage and rollout order.

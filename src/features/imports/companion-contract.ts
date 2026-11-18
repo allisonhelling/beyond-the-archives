@@ -4,6 +4,7 @@ import { parseSeriesUrl, parseWorkUrl, waybackSnapshot } from './urls.ts'
 export const companionContractVersion = 1
 export const metadataRetrievalCapability = 'metadata-retrieval-v1'
 export const genericSiteExtractionCapability = 'generic-site-extraction-v1'
+export const siteBulkImportCapability = 'site-bulk-import-v1'
 export const visualMappingCapability = 'visual-mapping-v1'
 export type CapabilityRequest = { type: 'AO3_LIBRARY_CAPABILITIES' } & (
  { contractVersion?: undefined; requestId?: string } | { contractVersion: 1; requestId: string }

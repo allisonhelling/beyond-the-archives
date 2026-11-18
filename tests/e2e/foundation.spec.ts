@@ -336,3 +336,95 @@ test('reuses a reader account from organizer Create Account without signing up a
  await expect(page.getByRole('heading',{name:'Currently Reading',exact:true})).toBeVisible()
  expect(signups).toBe(0)
 })
+
+test('website bulk preview and count review preserve explicit mode and deferred drafts', async ({ page }) => {
+ let batchId = ''
+ const rows = Array.from({ length: 27 }, (_, n) => ({ id: `row-${n}`, title: `Website Story ${n + 1}`, revision: 'revision-1', progress: n === 3 ? 2 : 0 }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/submit_site_import`, async route => {
+  const args = route.request().postDataJSON()
+  batchId = args.p_batch
+  expect(args.p_items).toEqual([{ url: 'https://fiction.example/story/start', recognized: false }])
+  await route.fulfill({ json: batchId })
+ })
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/paged_import_history`, route => route.fulfill({ json: {
+  batches: batchId ? [{ id: batchId, created_at: '2026-11-17', site_import: true }] : [], items: [], jobs: [],
+  ...(batchId && { selectedBatch: batchId, summary: { siteBatch: true, reviewNeeded: rows.length, total: 27, filtered: 0, page: 1, pages: 1, active: false, imported: 27, counts: {}, completed: 27 } }),
+ } }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/review_import_counts`, route => {
+  const { p_page: page, p_size: size, p_progress: progress, p_edits: edits } = route.request().postDataJSON()
+  if (edits) {
+   expect(edits).toEqual([{ id: 'row-3', revision: 'revision-1', count: '100000', manual: true }])
+   rows.splice(3, 1)
+  }
+  const filtered = rows.filter(row => !progress || row.progress > 0)
+  return route.fulfill({ json: { page, total: filtered.length, pages: Math.max(1, Math.ceil(filtered.length / size)), rows: filtered.slice((page - 1) * size, page * size), saved: edits ? 1 : 0, issues: {} } })
+ })
+ await page.goto('/')
+ await signIn(page)
+ await page.goto('/imports?tab=site-links')
+ await page.getByLabel('Links', { exact: true }).fill('https://fiction.example/story/start\nhttps://fiction.example/story/start\nfile:///private')
+ await page.getByRole('button', { name: 'Preview Links' }).click()
+ await expect(page.getByRole('status').filter({ hasText: 'Unverified Candidate: 1' })).toContainText('Duplicate: 1 · Invalid or Unsafe: 1')
+ await expect(page.getByRole('button', { name: 'Queue 0 Website Links' })).toBeDisabled()
+ await page.getByLabel('Bulk Mode').selectOption('candidates')
+ await page.getByRole('button', { name: 'Queue 1 Website Link' }).click()
+ await page.getByRole('button', { name: 'Review Missing Chapter Counts' }).click()
+ let review = page.getByRole('region', { name: 'Missing Chapter Counts' })
+ await expect(review.getByRole('group')).toHaveCount(25)
+ await review.getByRole('button', { name: 'Next' }).click()
+ await expect(review.getByRole('group')).toHaveCount(2)
+ await review.getByLabel('Stories per Page').selectOption('10')
+ await expect(review.getByRole('group')).toHaveCount(10)
+ await review.getByLabel('Stories per Page').selectOption('50')
+ await expect(review.getByRole('group')).toHaveCount(27)
+ await review.getByLabel('Only Review Stories with Reading Progress').check()
+ await expect(review.getByRole('group')).toHaveCount(1)
+ await review.getByLabel('Published Chapter Count', { exact: true }).fill('100001')
+ await review.getByLabel('Manually Entered Chapter Count').check()
+ await expect(review.getByRole('button', { name: 'Save Page Counts' })).toBeDisabled()
+ await review.getByLabel('Published Chapter Count', { exact: true }).fill('100000')
+ await review.getByRole('button', { name: 'Resume Later' }).click()
+ await page.reload()
+ await page.getByRole('button', { name: 'Review Missing Chapter Counts' }).click()
+ review = page.getByRole('region', { name: 'Missing Chapter Counts' })
+ await expect(review.getByLabel('Stories per Page')).toHaveValue('50')
+ await expect(review.getByLabel('Only Review Stories with Reading Progress')).toBeChecked()
+ await expect(review.getByLabel('Published Chapter Count', { exact: true })).toHaveValue('100000')
+ await review.getByRole('button', { name: 'Save Page Counts' }).click()
+ await expect(review.getByRole('status').filter({ hasText: '1 saved.' })).toBeVisible()
+})
+
+test('Tag Explorer retains raw evidence and exposes disabled private story corrections', async ({ page }) => {
+ const story = '40000000-0000-4000-8000-000000000001'
+ const evidence = { site: 'https://fiction.example', tags: [{ label: 'Example Tag', sourceCategory: 'freeform', position: 2 }] }
+ const catalogRow = { id: story, source_url: 'https://fiction.example/story/example', work: { id: 'work', ao3_work_id: null }, metadata: { title: 'Example Story', authors: [], fandoms: [] } }
+ let rules: Record<string, unknown>[] = []
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/library_search_documents?*`, route => route.fulfill({ json: [{ catalog_story: catalogRow, automatic_memberships: [] }] }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/story_tag_evidence`, route => route.fulfill({ json: evidence }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/tag_classification_revision`, route => route.fulfill({ json: '0:' }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/tag_classification_rules?*`, route => route.fulfill({ json: rules }))
+ await page.route(`${browserTestEnv.VITE_SUPABASE_URL}/rest/v1/rpc/write_tag_classification_rule`, route => {
+  const { p_rule: rule, p_version: version } = route.request().postDataJSON()
+  expect(rule).toMatchObject({ label: 'Example Tag', category: 'character', scope: 'story', story_id: story })
+  rules = [{ ...rule, version: version + 1 }]
+  return route.fulfill({ json: true })
+ })
+ await page.goto('/')
+ await signIn(page)
+ await page.goto('/settings#tags')
+ await page.getByRole('button', { name: 'Load Classification Tools' }).click()
+ await page.getByRole('button', { name: 'Load Stories' }).click()
+ await page.getByRole('combobox', { name: 'Story', exact: true }).selectOption(story)
+ await page.getByRole('button', { name: 'Correct Example Tag' }).click()
+ const form = page.locator('#tag-explorer form')
+ await form.getByRole('combobox', { name: 'Category', exact: true }).selectOption('character')
+ await form.getByRole('button', { name: 'Save Rule' }).click()
+ await expect(page.locator('#tag-explorer')).toContainText('Example Tag · Character · Source Disagrees')
+ await page.getByText('Why This Classification?').click()
+ await expect(page.getByText(/Source category Additional Tag · Source position 2/)).toBeVisible()
+ await page.getByRole('button', { name: 'Edit Rule' }).click()
+ const rulesForm = page.locator('#classification-rules form')
+ await rulesForm.getByLabel('Enabled', { exact: true }).uncheck()
+ await rulesForm.getByRole('button', { name: 'Save Rule' }).click()
+ await expect(page.locator('#tag-explorer')).toContainText('Example Tag · Additional Tag')
+})

@@ -4,8 +4,9 @@ import { isLocalHostname } from '../../src/lib/local-app.ts'
 import { createLibrarySync } from './library-sync.js'
 import { installBarBridge } from './bar-background.js'
 import { configuredEnvironments, createEnvironmentManager } from './environments.js'
-import { companionContractVersion, genericSiteExtractionCapability, metadataRetrievalCapability, validCapabilityRequest, visualMappingCapability } from '../../src/features/imports/companion-contract.ts'
+import { companionContractVersion, genericSiteExtractionCapability, metadataRetrievalCapability, siteBulkImportCapability, validCapabilityRequest, visualMappingCapability } from '../../src/features/imports/companion-contract.ts'
 
+import { createSiteBulk } from './site-bulk.js'
 import { createSiteController } from './site-background.js'
 
 const profiles = configuredEnvironments()
@@ -49,6 +50,11 @@ const site = createSiteController({
   return state.syncSample ? state.sampleAuth : state.auth
  },
  api, ready, appOrigin: () => appOrigin, generation: () => connectionVersion,
+})
+
+const siteBulk = createSiteBulk({
+ storage: storage.session, api, loadMappings: site.rules, generation: () => connectionVersion, appOrigin: () => appOrigin,
+ getAuth: async () => { await ready; return switching ? null : (await storage.session.get('auth')).auth },
 })
 
 async function clearConnection() {
@@ -265,7 +271,11 @@ function externalMessage(message, sender, respond) {
   if (!validCapabilityRequest(message)) {
    respond({ ok: false, code: 'CONTRACT_UNSUPPORTED', error: 'Update and reconnect compatible components, or enter metadata manually.' }); return
   }
-  respond({ ok: true, contractVersion: companionContractVersion, ...(message.requestId && { requestId: message.requestId }), capabilities: [metadataRetrievalCapability, genericSiteExtractionCapability, visualMappingCapability] }); return
+  respond({ ok: true, contractVersion: companionContractVersion, ...(message.requestId && { requestId: message.requestId }), capabilities: [metadataRetrievalCapability, genericSiteExtractionCapability, visualMappingCapability, siteBulkImportCapability] }); return
+ }
+ if (message?.type === 'BTA_SITE_BULK') {
+  void siteBulk.begin(message, sender).then(respond).catch(() => respond({ ok: false, error: 'Could not open a pending source for this batch. Reconnect, refresh, and retry.' }))
+  return true
  }
  if (message?.type === 'BTA_SITE_REQUEST' || message?.type === 'BTA_SITE_DRAFT') {
   const action = message.type === 'BTA_SITE_REQUEST' ? site.external : site.appDraft
@@ -339,7 +349,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
    if (switching) throw new Error('An environment switch is already in progress.')
    switching = true
    try {
-    if (running || previewRunning || externalRequests || bar.busy() || librarySync.busy() || (await storage.session.get('active')).active) throw new Error('Finish the current import, preview, or save before switching. Then retry.')
+    if (running || previewRunning || externalRequests || bar.busy() || librarySync.busy() || siteBulk.busy() || (await storage.session.get('active')).active) throw new Error('Finish the current import, preview, or save before switching. Then retry.')
     // Check the scan directly: auth() intentionally returns null during a switch.
     const scan = await storage.local.get(['librarySync', 'sampleLibrarySync'])
     if ([scan.librarySync, scan.sampleLibrarySync].some(state => state?.status === 'running')) throw new Error('Pause the running scan before switching. Then retry.')
@@ -356,7 +366,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
  })().catch(error => respond({ ok: false, error: error.message }))
  return true
 })
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'requested-imports') { void librarySync.pump(); void pump() } })
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'requested-imports') { void librarySync.pump(); void pump(); void siteBulk.resume() } })
 function checkRequestedTab(tabId) {
  void librarySync.pump()
  void storage.session.get('active').then(({ active }) => { if (active?.tabId === tabId) void pump() })
@@ -367,9 +377,9 @@ chrome.webNavigation.onDOMContentLoaded.addListener(({ tabId, frameId }) => {
 chrome.tabs.onUpdated.addListener((tabId, change) => {
  if (change.status === 'complete') checkRequestedTab(tabId)
 })
-chrome.tabs.onRemoved?.addListener(tabId => { void site.close(tabId) })
+chrome.tabs.onRemoved?.addListener(tabId => { void site.close(tabId); void siteBulk.close(tabId) })
 chrome.action.onClicked.addListener(tab => {
- void site.open(tab ?? {}).then(opened => {
+ void siteBulk.authorize(tab ?? {}).then(opened => opened || site.open(tab ?? {})).then(opened => {
   if (opened) return
   if (environments) return chrome.runtime.openOptionsPage()
   return chrome.tabs.create({ url: `${appOrigin}/settings` })

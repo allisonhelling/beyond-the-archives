@@ -11,10 +11,14 @@ import { makeSiteRequest } from '../../src/features/imports/site-mapping'
 
 test('the installed companion gates extraction, edits an unknown story and tears down on a same-document route change', async ({ browserName }, info) => {
  test.skip(info.project.name !== 'desktop' || browserName !== 'chromium', 'Unpacked desktop Chromium companion.')
- test.setTimeout(90000)
+ test.setTimeout(120000)
  const profile = await mkdtemp(join(tmpdir(), 'bta-site-editor-'))
  const sourceUrl = 'https://fiction.example/stories/one'
  const owner = '82a00000-0000-4000-8000-000000000001', entry = '82a00000-0000-4000-8000-000000000002'
+ const bulkUrl = 'https://fiction.example/stories/bulk', indexUrl = 'https://fiction.example/catalog'
+ const bulkBatch = '82a00000-0000-4000-8000-000000000003'
+ const bulkWrites: Record<string, unknown>[] = []
+ let claimed = false
  const writes: Record<string, unknown>[] = []
  const mappings: { rule: unknown }[] = []
  const server = createServer(async (request, response) => {
@@ -28,6 +32,18 @@ test('the installed companion gates extraction, edits an unknown story and tears
   let body: unknown
   if (path === '/auth/v1/user') body = { id: owner }
   else if (path === '/rest/v1/rpc/claim_extension_job') body = null
+  else if (path === '/rest/v1/rpc/site_import_origins') body = [{ url: bulkUrl }]
+  else if (path === '/rest/v1/rpc/claim_site_import') {
+   body = claimed ? null : { id: 'item', token: 'lease', url: bulkUrl, recognized: false, expiresAt: new Date(Date.now() + 90000).toISOString() }
+   claimed = true
+  } else if (path === '/rest/v1/rpc/finish_site_import') {
+   let data = ''
+   for await (const part of request) data += part
+   bulkWrites.push(JSON.parse(data)); body = true
+  } else if (path === '/rest/v1/rpc/tag_classification_revision') body = '1:fixture'
+  else if (path === '/rest/v1/tag_classification_rules') body = [{
+   id: 'rule', label: 'Fixture Tag', scope: 'site', site: 'https://fiction.example', category: 'character', enabled: true, priority: null,
+  }]
   else if (path === '/rest/v1/site_mappings') body = mappings
   else if (path === '/rest/v1/collections') body = []
   else if (path === '/rest/v1/library_entries') body = writes.length ? [{ id: entry }] : []
@@ -61,18 +77,22 @@ test('the installed companion gates extraction, edits an unknown story and tears
   // Headless Chromium cannot click browser chrome. Invoke the same controller
   // using a fixture host grant and keep a second fixture without a grant.
   expect(background).toContain('chrome.action.onClicked.addListener')
-  await writeFile(backgroundPath, background.replace('chrome.action.onClicked.addListener', 'globalThis.testSiteOpen = (tab) => site.open(tab);\nchrome.action.onClicked.addListener'))
+  await writeFile(backgroundPath, background.replace('chrome.action.onClicked.addListener', 'globalThis.testSiteOpen = (tab) => site.open(tab); globalThis.testBulkAuthorize = (tab) => siteBulk.authorize(tab);\nchrome.action.onClicked.addListener'))
   const manifest = JSON.parse((await readFile(manifestPath, 'utf8')).replaceAll(browserTestEnv.VITE_SUPABASE_URL, appOrigin))
   expect(manifest.permissions).toContain('activeTab')
   expect(manifest.host_permissions).not.toContain('https://*/*')
   manifest.host_permissions.push('https://fiction.example/*')
   await writeFile(manifestPath, JSON.stringify(manifest))
   context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--no-proxy-server'] })
-  context.setDefaultTimeout(10000)
-  await context.route('https://*.example/**', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><title>Unknown Story</title>
+  context.setDefaultTimeout(20000)
+  await context.route('https://*.example/**', route => {
+   if (route.request().url() === indexUrl) return route.fulfill({ contentType: 'text/html', body: '<a href="/stories/bulk">Bulk</a><a href="javascript:void(0)">Restricted</a>' })
+   if (route.request().url() === bulkUrl) return route.fulfill({ contentType: 'text/html', body: '<main><h1>Bulk Story</h1><script type="application/ld+json">{"@type":"Novel","name":"Bulk Story","keywords":"Fixture Tag"}</script></main>' })
+   return route.fulfill({ contentType: 'text/html', body: `<!doctype html><title>Unknown Story</title>
    <main style="width:350px"><h1 itemprop="headline">Actual Story</h1><p class="byline">Written by: A. Writer</p>
     <p class="fandom">Original Work</p><p class="chapters" data-published-chapters>12</p><button id="page-control" onclick="this.textContent='Expanded'">Expand</button>
-    <p id="old-summary">An actual summary.</p></main>` }))
+    <p id="old-summary">An actual summary.</p></main>` })
+  })
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
   const app = await context.newPage()
   await app.goto(`${appOrigin}/extension-fixture`)
@@ -148,6 +168,7 @@ test('the installed companion gates extraction, edits an unknown story and tears
   await source.evaluate(() => history.pushState(null, '', '/stories/two'))
   await expect.poll(() => source.frames().filter(frame => frame.url().includes('site-panel')).length).toBe(0)
   await source.close()
+  await app.bringToFront()
   const request = makeSiteRequest(owner, sourceUrl, 'extract', crypto.randomUUID())
   const [requested, result] = await Promise.all([
    context.waitForEvent('page'),
@@ -201,6 +222,37 @@ test('the installed companion gates extraction, edits an unknown story and tears
   await restoredEditor.getByRole('button', { name: 'Restore Disconnected Draft' }).press('Enter')
   await expect(restoredEditor.getByLabel('Title', { exact: true })).toHaveValue('A Disconnected Correction')
   await expect(restoredEditor.getByLabel('Notes', { exact: true })).toHaveValue('Edited in the panel')
+  await app.bringToFront()
+  const discovery = makeSiteRequest(owner, indexUrl, 'discover')
+  const [listing, started] = await Promise.all([
+   context.waitForEvent('page'),
+   message({ type: 'BTA_SITE_REQUEST', action: 'begin', request: discovery }),
+  ])
+  expect(started).toMatchObject({ ok: true, result: { code: 'PERMISSION_REQUIRED' } })
+  await listing.waitForURL(indexUrl)
+  await listing.bringToFront()
+  expect(await open(indexUrl)).toBe('opened')
+  expect(await message({ type: 'BTA_SITE_REQUEST', action: 'read', request: discovery })).toMatchObject({
+   ok: true, result: { code: 'OK', links: [bulkUrl, 'about:invalid'] },
+  })
+  await app.bringToFront()
+  const [bulkTab, opened] = await Promise.all([
+   context.waitForEvent('page'), message({ type: 'BTA_SITE_BULK', batch: bulkBatch, url: bulkUrl }),
+  ])
+  expect(opened).toEqual({ ok: true })
+  await bulkTab.waitForURL(bulkUrl)
+  await bulkTab.bringToFront()
+  expect(bulkWrites).toHaveLength(0)
+  expect(await worker.evaluate(async () => {
+   const extension = globalThis as unknown as { chrome: { tabs: { query(query: object): Promise<object[]> } }; testBulkAuthorize(tab: object): Promise<boolean> }
+   const [tab] = await extension.chrome.tabs.query({ active: true, lastFocusedWindow: true })
+   return extension.testBulkAuthorize(tab)
+  })).toBe(true)
+  await expect.poll(() => bulkWrites).toEqual([expect.objectContaining({
+   p_batch: bulkBatch, p_item: 'item', p_token: 'lease',
+   p_metadata: expect.objectContaining({ title: 'Bulk Story', character_tags: ['Fixture Tag'] }),
+   p_observations: expect.objectContaining({ ao3_tags: { text: 'Fixture Tag', via: 'Structured Data' } }),
+  })])
  } finally {
   await context?.close()
   server.closeAllConnections()

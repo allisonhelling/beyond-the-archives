@@ -1,3 +1,6 @@
+import { classifyObservations } from '../imports/classify-observations'
+import { loadClassificationRules } from './tags/classification-repository'
+import { sampleMode } from '../../lib/sample-mode'
 import { SitePreview } from '../imports/SitePreview'
 import { observationPatch, normalizedField, type Observations, type SiteDraft, type StoryField } from '../imports/site-mapping'
 import { sourceLocation, sourceIdentityKey, fieldConfidence, SourceDuplicateError, type SourceDuplicateCandidate } from './story-source'
@@ -26,6 +29,7 @@ export function StoryForm({ story, onCancel, section = 'all', companion }: { sto
   const draft = companion?.draft?.story
   const ensureCatalog = library.ensureCatalog
   useEffect(() => { if (!story && ensureCatalog) void ensureCatalog().catch(() => {}) }, [story, ensureCatalog])
+  const [sourceCapture, setSourceCapture] = useState(companion && { url: companion.url, observations: companion.observations })
   const [duplicates, setDuplicates] = useState<SourceDuplicateCandidate[]>([])
   const [metadata, setMetadata] = useState<Metadata>(() => {
     const fields: Observations = {}
@@ -94,7 +98,17 @@ export function StoryForm({ story, onCancel, section = 'all', companion }: { sto
     if (key === 'authors') setAuthors(normalized)
     else if (key === 'fandoms') setFandoms(normalized)
     else if (key === 'ao3_tags') setOtherTags(normalized)
+    else if (key === 'relationship_tags') setRelationships(normalized)
+    else if (key === 'character_tags') setCharacters(normalized)
+    else if (key === 'additional_tags') setAdditionalTags(normalized)
     else setMetadata(current => ({ ...current, ...patch, ...(key === 'published_chapters' && { chapter_count_manual: false }) }))
+  }
+  async function applyClassifiedTags(observations: Observations) {
+    const rules = sampleMode || !library.userId ? [] : await loadClassificationRules(library.userId)
+    const patch = classifyObservations(observations, url, rules)
+    const lines = (field: string) => (patch[field] as string[] | undefined)?.join('\n') ?? ''
+    setFandoms(lines('fandoms')); setRelationships(lines('relationship_tags')); setCharacters(lines('character_tags'))
+    setAdditionalTags(lines('additional_tags')); setOtherTags(lines('ao3_tags'))
   }
   function urlDefaults() {
     if (story || statusTouched) return
@@ -156,7 +170,7 @@ export function StoryForm({ story, onCancel, section = 'all', companion }: { sto
       }
       setBusy(true)
       const nextMetadata: Metadata = section === 'reading' && story ? story.metadata : { ...editedMetadata(), author_links: authorLinks }
-      const id = await saveStory({ allowSeparate: saveSeparately, id: story?.id, base, url, metadata: nextMetadata, statusOrigin: statusChanged || choice === 'read_all' || choice === 'keep_finished' ? 'explicit' : choice === 'reduce' && story && explicitReadingStatus(story) && nextReading.status === story.reading_status ? 'preserve' : choice || progressChanged || nextReading.status !== status || story && !explicitReadingStatus(story) ? 'derived' : 'preserve', ...(choice && { chapterChoice: choice }), metadataChanges: story ? { ...changedMetadata(initialMetadata!, nextMetadata), ...(publicationConfirmed && { publication_status: metadata.publication_status }) } : undefined, status: nextReading.status, progress: nextReading.progress, notes, personalRating, favorite, rec, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
+      const id = await saveStory({ ...(!story && universal && sourceCapture && sourceCapture.url === url && { sourceObservations: sourceCapture.observations }), allowSeparate: saveSeparately, id: story?.id, base, url, metadata: nextMetadata, statusOrigin: statusChanged || choice === 'read_all' || choice === 'keep_finished' ? 'explicit' : choice === 'reduce' && story && explicitReadingStatus(story) && nextReading.status === story.reading_status ? 'preserve' : choice || progressChanged || nextReading.status !== status || story && !explicitReadingStatus(story) ? 'derived' : 'preserve', ...(choice && { chapterChoice: choice }), metadataChanges: story ? { ...changedMetadata(initialMetadata!, nextMetadata), ...(publicationConfirmed && { publication_status: metadata.publication_status }) } : undefined, status: nextReading.status, progress: nextReading.progress, notes, personalRating, favorite, rec, collections, tags: section === 'metadata' && base ? base.tags as string[] : tags })
       await saved(id)
     } catch (e) { failed(e) }
     finally { setBusy(false) }
@@ -167,7 +181,7 @@ export function StoryForm({ story, onCancel, section = 'all', companion }: { sto
     {epubMessage && <p role="status">{epubMessage}</p>}
     <label>Story URL<input required type="url" readOnly={Boolean(story?.source_url) || story?.work.ao3_work_id === null} value={url} onChange={e => { setUrl(e.target.value); setDuplicates([]) }} onBlur={urlDefaults} /></label>
     <p className="field-help">{story ? story.source_url ? 'The submitted source URL is preserved. Add a separate story for a different source; source identity is not verified.' : 'You can update the link for this work. The original submission is preserved separately; work identity cannot be changed.' : 'Chapter IDs are not chapter numbers. Unverified links do not set progress; enter chapters read below.'}</p>
-    {universal && <SitePreview url={url} initial={companion?.observations} onApply={applyObservation} />}
+    {universal && <SitePreview onClassify={story ? undefined : applyClassifiedTags} onCaptured={capture => setSourceCapture({ url, observations: capture })} url={url} initial={companion?.observations} onApply={applyObservation} />}
     <BookFusionFields value={metadata.bookfusion_link} onChange={value => field('bookfusion_link', value)} />
     <label>Title<input required value={metadata.title} onChange={e => field('title', e.target.value)} /></label>
     <div className="form-grid"><label>Authors (one per line)<textarea rows={3} value={authors} onChange={e => setAuthors(e.target.value)} /></label><label>Fandoms (one per line)<textarea rows={3} value={fandoms} onChange={e => setFandoms(e.target.value)} /></label></div>
