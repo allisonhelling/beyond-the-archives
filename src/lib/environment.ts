@@ -18,10 +18,15 @@ export function environmentOrigin(value: unknown, environment: AppEnvironment) {
 }
 
 export function requireEnvironmentConfig(env: Record<string, unknown>, vercelEnvironment?: string): EnvironmentConfig {
+ const isMissing = (key: string) => { const value = env[key]; return typeof value !== 'string' || !value.trim() }
+ const required = ['VITE_APP_ENV', 'VITE_SUPABASE_PROJECT_REF', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY'] as const
+ const missingBackend = required.filter(isMissing)
+ if (missingBackend.length) throw new Error(`Set ${missingBackend.join(', ')} for the selected application environment.`)
  const config = readPublicConfig(env)
  const environment = env.VITE_APP_ENV
  const projectRef = env.VITE_SUPABASE_PROJECT_REF
- if (!config || !['local','staging','production'].includes(String(environment)) || typeof projectRef !== 'string') throw new Error('Set explicit environment, project reference, backend and public key configuration.')
+ if (!['local','staging','production'].includes(String(environment)) || typeof projectRef !== 'string') throw new Error('Set VITE_APP_ENV to local, staging, or production.')
+ if (!config) throw new Error('Invalid public Supabase configuration. Supply a project URL and publishable key (or legacy anon key).')
  const selected = environment as AppEnvironment
  const url = new URL(config.url)
  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Configure a backend origin without credentials or paths.')
@@ -32,7 +37,7 @@ export function requireEnvironmentConfig(env: Record<string, unknown>, vercelEnv
  }
  if (vercelEnvironment && (vercelEnvironment === 'production' ? selected !== 'production' : vercelEnvironment === 'preview' ? selected !== 'staging' : selected !== 'local')) throw new Error('Vercel deployment scope does not match the application environment.')
  const originKeys = ['VITE_ORGANIZER_URL', 'VITE_READER_URL'] as const
- const missing = originKeys.filter(key => typeof env[key] !== 'string' || !env[key].trim())
+ const missing = originKeys.filter(isMissing)
  if (missing.length) throw new Error(`Set ${missing.join(' and ')} for the selected application environment.`)
  return { ...config, environment: selected, projectRef,
   organizerUrl: environmentOrigin(env.VITE_ORGANIZER_URL, selected), readerUrl: environmentOrigin(env.VITE_READER_URL, selected) }

@@ -47,15 +47,16 @@ enable_confirmations = true
 double_confirm_changes = true
 secure_password_change = true
 
+# Notification paths are relative to supabase/config.toml in Supabase Branching.
 [auth.email.notification.email_changed]
 enabled = true
 subject = "Your Email Address Was Changed"
-content_path = "./supabase/templates/email_changed.html"
+content_path = "./templates/email_changed.html"
 
 [auth.email.notification.password_changed]
 enabled = true
 subject = "Your Password Was Changed"
-content_path = "./supabase/templates/password_changed.html"
+content_path = "./templates/password_changed.html"
 
 [auth.mfa.totp]
 # Application administration requires a verified TOTP factor and fresh AAL2 session.

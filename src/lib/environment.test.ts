@@ -134,3 +134,9 @@ it('derives production candidates from staging headers while preserving active f
  foreign.headers[2].headers.push({key:'Content-Security-Policy',value:"connect-src 'self' https://foreign.supabase.co"})
  expect(()=>productionVercelConfig(foreign,organizer,reader,'organizer')).toThrow('Foreign or wildcard')
 })
+
+it('identifies missing reader build inputs without printing supplied values', () => {
+ const provider = { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main' }
+ expect(() => validateBrowserEnv({}, true, provider)).toThrow('VITE_APP_ENV, VITE_SUPABASE_PROJECT_REF, VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY')
+ expect(() => validateBrowserEnv({ VITE_SUPABASE_URL: 'https://example.invalid' }, true, provider)).toThrow('VITE_APP_ENV, VITE_SUPABASE_PROJECT_REF, VITE_SUPABASE_PUBLISHABLE_KEY')
+})

@@ -14,7 +14,7 @@ export function validateBrowserEnv(env: Record<string, string>, requireEnvironme
       if (error instanceof Error && error.message === 'Privileged JWT') throw new Error('A privileged JWT was supplied to browser configuration. Use a publishable key.')
     }
   }
-  if ((env.VITE_SUPABASE_URL || env.VITE_SUPABASE_PUBLISHABLE_KEY) && !readPublicConfig(env)) {
+  if (!requireEnvironment && (env.VITE_SUPABASE_URL || env.VITE_SUPABASE_PUBLISHABLE_KEY) && !readPublicConfig(env)) {
     throw new Error('Invalid public Supabase configuration. Supply a project URL and publishable key (or legacy anon key).')
   }
   if (requireEnvironment) {

@@ -89,3 +89,14 @@ test('Edge env parsing rejects exported or duplicate production overrides before
  assert.doesNotThrow(()=>validateLocalEdgeSettings(local))
  for(const text of [local+'export SUPABASE_URL=https://production.example\n',local+'SUPABASE_SERVICE_ROLE_KEY=synthetic-secret\n',local+'APP_ORIGIN=https://beyondthearchives.vercel.app\n',local+'READER_ORIGIN=http://user:secret@127.0.0.1:5174\n'])assert.throws(()=>validateLocalEdgeSettings(text))
 })
+
+test('Auth notification templates resolve relative to the Supabase configuration', async () => {
+ const config = new URL('../../supabase/config.toml', import.meta.url)
+ const source = await readFile(config, 'utf8')
+ for (const name of ['email_changed', 'password_changed']) {
+  const section = source.split(`[auth.email.notification.${name}]\n`)[1]?.split('\n[')[0] ?? ''
+  const path = section.match(/^content_path\s*=\s*"([^"]+)"$/m)?.[1]
+  assert.ok(path?.startsWith('./templates/'), `Expected a config-relative notification template for ${name}`)
+  assert.match(await readFile(new URL(path, config), 'utf8'), /<h2>/i)
+ }
+})

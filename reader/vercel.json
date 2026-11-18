@@ -38,7 +38,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "frame-src 'self' https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+          "value": "frame-src 'self' https://beyondthearchives.vercel.app; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
         }
       ]
     },
@@ -55,7 +55,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://vzqrpjzfwcuuiqxanyoy.supabase.co wss://vzqrpjzfwcuuiqxanyoy.supabase.co; frame-ancestors https://beyond-the-archives-git-staging-allisonhellings-projects.vercel.app; base-uri 'self'; form-action 'none'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://pnrdztfydurupcqwumvr.supabase.co wss://pnrdztfydurupcqwumvr.supabase.co; frame-ancestors https://beyondthearchives.vercel.app; base-uri 'self'; form-action 'none'; object-src 'none'"
         }
       ]
     },
