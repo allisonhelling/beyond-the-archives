@@ -88,6 +88,15 @@ try {
   checked(await c.from('collections').insert({user_id,name:'Synthetic Automatic Shelf',automatic_rules:{filters:{favorites:true},terms:[]}}))
   stage=`seeding ${account.identity}: library_entries`
   checked(await c.from('library_entries').update({is_favorite:true}).eq('id',account.entries[0]))
+  stage=`seeding ${account.identity}: crosspost organization`
+  const [entry,alternate]=account.entries
+  const reviewed=await rpc(account,'story_versions',{p_entry:entry})
+  const {versions:[target]}=await rpc(account,'story_versions',{p_entry:alternate})
+  const organization=story=>({favorite:story.is_favorite,rating:story.personal_rating,notes:story.notes,tags:story.personalTags,collections:story.collectionIds})
+  await rpc(account,'write_story_versions',{
+   p_entry:entry,p_target:target.id,p_action:'link',p_revision:reviewed.revision,p_target_updated_at:target.updated_at,
+   p_organization:organization(reviewed.versions[0]),p_target_organization:organization(target),
+  })
   stage=`seeding ${account.identity}: metadata_preferences`
   checked(await clients.admin.from('metadata_preferences').upsert({user_id,retrieval_mode:'extension',retrieval_mode_mobile:'extension'}))
   stage=`seeding ${account.identity}: library_sync_reports`

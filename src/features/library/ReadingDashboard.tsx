@@ -15,8 +15,8 @@ import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing/b
 import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
 import { Pagination } from './browsing/Pagination'
 import { pageSize, pageSizes } from './browsing/page-size'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useLocation, useNavigationType, useSearchParams } from 'react-router-dom'
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link, UNSAFE_NavigationContext, useLocation, useNavigationType, useSearchParams, type Location, type Navigator } from 'react-router-dom'
 import { Bell, RotateCcw, Pause, Bookmark, Clock, Library, ListTree, ArrowDownWideNarrow } from 'lucide-react'
 import { publicationStatuses } from './publication-status'
 import type { Story } from './model'
@@ -59,6 +59,13 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
   const displayedSections = mobile ? [...sections].sort((a, b) => (mobileSectionOrder[a[0]] ?? sections.indexOf(a)) - (mobileSectionOrder[b[0]] ?? sections.indexOf(b))) : sections
   const [params, setParams] = useSearchParams()
   const { key: entryKey } = useLocation()
+  const { navigator } = useContext(UNSAFE_NavigationContext)
+  const replaceBrowsing = useCallback((next: URLSearchParams) => {
+    // History changes before Router commits the new location. An automatic
+    // replacement from the previous render must yield to that navigation.
+    const currentEntry = (navigator as Navigator & { location?: Location }).location
+    if (!currentEntry || currentEntry.key === entryKey) setParams(next, { replace: true })
+  }, [entryKey, navigator, setParams])
   const navigationType = useNavigationType()
   const [filterNavigation, setFilterNavigation] = useState({ entryKey, revision: 0 })
   if (filterNavigation.entryKey !== entryKey) setFilterNavigation({ entryKey, revision: filterNavigation.revision + (navigationType === 'POP' ? 1 : 0) })
@@ -116,8 +123,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
     normalized.current = input
     const next = writeBrowsing(params, filters, urlSize, page)
     if (!next.has('shelf')) next.set('shelf', mode === 'reading' ? 'view_all' : 'all')
-    if (next.toString() !== params.toString()) setParams(next, { replace: true })
-  }, [params, setParams, filters, urlSize, page, mode, draft])
+    if (next.toString() !== params.toString()) replaceBrowsing(next)
+  }, [params, replaceBrowsing, filters, urlSize, page, mode, draft])
   const pool = useMemo(() => {
     const works = author !== undefined ? stories.filter(story => story.metadata.authors.includes(author)) : stories
     return mode === 'reading' ? tracked(works) : works
@@ -140,8 +147,8 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
   const [confirmRefresh, setConfirmRefresh] = useState(false)
   const refreshButton = <MetadataRefreshButton {...metadataRefresh} unavailable={metadataRefresh.unavailable || remote.loading || Boolean(error || remote.error)} onRefresh={() => mobile ? setConfirmRefresh(true) : void metadataRefresh.refresh()} variant="icon" label="Mass Refresh All Stories on Page" description="Mass Refresh All Stories on Page" />
   useLayoutEffect(() => {
-    if ((localResults || remote.result) && page !== currentPage) setParams(writeBrowsing(params, filters, urlSize, currentPage), { replace: true })
-  }, [page, currentPage, remote.result, params, filters, urlSize, setParams, localResults])
+    if ((localResults || remote.result) && page !== currentPage) replaceBrowsing(writeBrowsing(params, filters, urlSize, currentPage))
+  }, [page, currentPage, remote.result, params, filters, urlSize, replaceBrowsing, localResults])
   function changePage(value: number) { setParams(writeBrowsing(params, filters, urlSize, value)) }
   error ||= remote.error ?? ''
   const sortControl = <SortSelect value={filters.sort} onChange={sort => change('sort', sort)} />

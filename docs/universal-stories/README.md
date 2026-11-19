@@ -2,7 +2,7 @@
 
 **Status:** Accepted future-feature specification, organized on 12 November 2026. The project's architecture has already been prepared for future multi-site support; that does **not** mean the proposed site integrations, mapping interface, or crosspost features are already implemented. Build on the existing foundations, with a compatibility audit rather than assuming a wholesale refactor is required.
 
-Phase 2 implements single-source manual stories and safe chapter-total editing; see the [delivery and verification record](PHASE_2_MANUAL_STORIES_PROGRESS.md). Extraction, mapping and linked crossposts remain later phases.
+Phase 2 implements single-source manual stories and safe chapter-total editing. Phase 3 adds active-tab extraction and mappings. The [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) describes linked versions, chapter correspondence, and remaining work.
 
 ## Purpose
 

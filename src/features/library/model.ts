@@ -7,10 +7,12 @@ export const ratings = ['General Audiences', 'Teen And Up Audiences', 'Mature', 
 export function ratingLabel(rating: string): string { return /^teen and up audiences$/i.test(rating) ? 'Teen and Up' : rating }
 export type Metadata = { chapter_count_manual?: boolean;  bookfusion_link?: { url: string; kind: 'book' | 'bookmark' } | null; language?: string; kudos?: number | null; bookmark_count?: number | null; comment_count?: number | null; hits?: number | null; one_shot?: boolean; manual_url?: string; author_links?: Record<string, string>; series?: string[]; series_memberships?: { id: number; name: string; url: string; position: number | null }[]; archive_warnings?: string[]; categories?: string[]; relationship_tags?: string[]; character_tags?: string[]; additional_tags?: string[]; title: string; authors: string[]; fandoms: string[]; ao3_tags: string[]; summary: string; summary_html?: string; rating: string; publication_status: 'unknown' | 'in_progress' | 'complete' | 'hiatus' | 'abandoned' | 'deleted'; published_chapters: number | null; total_chapters: number | null; word_count: number | null }
 type EntryRow = Database['public']['Tables']['library_entries']['Row']
-export type Entry = Omit<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance' | 'source_url' | 'metadata_confirmation_times'> & Partial<Pick<EntryRow, 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance' | 'source_url' | 'metadata_confirmation_times'>>
+type OptionalEntryFields = 'work_status' | 'source_bookmark' | 'dnf_since' | 'reading_provenance' | 'source_url' | 'metadata_confirmation_times' | 'crosspost_group_id' | 'crosspost_order'
+export type Entry = Omit<EntryRow, OptionalEntryFields> & Partial<Pick<EntryRow, OptionalEntryFields>>
 export type Work = Database['public']['Tables']['works']['Row']
 export type Collection = Omit<Database['public']['Tables']['collections']['Row'], 'automatic_rules'> & { automatic_rules?: Json | null }
-export type Story = Omit<Entry, 'reading_history'> & CrossoverProjection & { metadataConfidence?: Partial<Record<'published_chapters' | 'publication_status', import('./story-source').MetadataConfidence>>; reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
+export type StoryOrganization = { notes: string; rating: number | null; favorite: boolean; collections: string[]; tags: string[] }
+export type Story = Omit<Entry, 'reading_history'> & CrossoverProjection & { organizationGroup?: string | null; sourceOrganization?: StoryOrganization; metadataConfidence?: Partial<Record<'published_chapters' | 'publication_status', import('./story-source').MetadataConfidence>>; reading_history?: import('./reading-history').ReadingEvent[]; automaticCollectionIds?: string[]; personalRatings?: (number | null)[]; detailsLoaded?: boolean; work: Work; metadata: Metadata; collectionIds: string[]; personalTags: string[] }
 /** Overlay account-specific source data before resolving manual corrections. */
 export function effectiveWork(sharedWork: Work, entry: Pick<Entry, 'extension_metadata' | 'extension_chapters' | 'source_bookmark' | 'work_status' | 'source_url'>): Work {
   const browser = entry.extension_metadata && typeof entry.extension_metadata === 'object' && !Array.isArray(entry.extension_metadata) ? entry.extension_metadata : {}
@@ -142,4 +144,12 @@ export function savedWorkIdentity(book: { workId: string | null; metadata: Metad
   if (link) try { return String(parseWorkUrl(link).workId) } catch { /* Unidentified and merged EPUBs stay unlinked. */ }
  }
  return null
+}
+
+export function storyOrganization(story: Story): StoryOrganization {
+  return { notes: story.notes, rating: story.personal_rating, favorite: story.is_favorite, collections: story.collectionIds, tags: story.personalTags }
+}
+
+export function organizationFields(organization: StoryOrganization) {
+  return { notes: organization.notes, personal_rating: organization.rating, is_favorite: organization.favorite, collectionIds: organization.collections, personalTags: organization.tags }
 }

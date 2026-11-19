@@ -1,13 +1,13 @@
 import { chapterState } from './chapter-edit'
 import { sourceLocation } from './story-source'
 import type { Json } from '../../types/database'
-import type { Story, StoryInput } from './model'
+import { storyOrganization, type Story, type StoryInput } from './model'
 
 export type EditValues = Record<string, Json | undefined>
 export type FieldConflict = { field: string; base: Json; local: Json; saved: Json }
 export type MergeResult = { merged: EditValues; conflicts: FieldConflict[] }
 export function editSnapshot(story: Story): EditValues {
-  return { chapterState: chapterState(story.metadata), status: story.reading_status, progress: story.last_read_chapter, notes: story.notes, rating: story.personal_rating, favorite: story.is_favorite, rec: story.is_rec, tags: story.personalTags, collections: story.collectionIds, metadata: story.metadata_overrides }
+  return { chapterState: chapterState(story.metadata), status: story.reading_status, progress: story.last_read_chapter, ...storyOrganization(story), organizationGroup: story.organizationGroup ?? null, rec: story.is_rec, metadata: story.metadata_overrides }
 }
 function equal(a: Json | undefined, b: Json | undefined, set = false): boolean {
   if (set && Array.isArray(a) && Array.isArray(b)) return equal([...new Set(a)].sort(), [...new Set(b)].sort())

@@ -16,7 +16,7 @@ export async function fixture(page: Page, { backend = browserTestEnv.VITE_SUPABA
     return route.fulfill({ json: path.endsWith('/token') ? { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } : path.endsWith('/user') ? user : {} })
   })
   type Row = Record<string, unknown>
-  const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], reading_records: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
+  const tables: Record<string, Row[]> = { library_entries: [], library_series: [], collection_series: [], metadata_preferences: [], reading_records: [], import_batches: [], import_items: [], works: [], collections: [], collection_works: [], crosspost_organization: [], personal_tags: [], library_entry_tags: [], tags: [], work_tags: [], authors: [], work_authors: [], fandoms: [], work_fandoms: [], metadata_jobs: [] }
   await page.route(`${backend}/functions/v1/tag-resolution`, route => route.fulfill({ json: { records: tables.ao3_tag_resolutions ?? [], retryAfterMs: null } }))
   const snapshot = (entry: Row): EditValues => ({ status: entry.reading_status as string, progress: entry.last_read_chapter as number, notes: entry.notes as string, rating: entry.personal_rating as number | null, favorite: entry.is_favorite as boolean, rec: (entry.is_rec ?? false) as boolean, metadata: entry.metadata_overrides as EditValues, tags: tables.library_entry_tags.filter(link => link.library_entry_id === entry.id).map(link => String(tables.personal_tags.find(tag => tag.id === link.personal_tag_id)?.name)), collections: tables.collection_works.filter(link => link.library_entry_id === entry.id).map(link => String(link.collection_id)) })
   await page.route(`${backend}/rest/v1/**`, async route => {
@@ -121,6 +121,15 @@ export async function fixture(page: Page, { backend = browserTestEnv.VITE_SUPABA
       for (const [position, id] of (body.p_ids as string[]).entries()) Object.assign(tables.collections.find(collection => collection.id === id)!, { sort_position: position })
       return route.fulfill({ status: 204 })
     }
+    if (table === 'add_stories_to_collections' && body) {
+      for (const library_entry_id of body.p_entries as string[]) for (const collection_id of body.p_collections as string[]) {
+        if (!tables.collection_works.some(row => row.collection_id === collection_id && row.library_entry_id === library_entry_id)) {
+          tables.collection_works.push({ collection_id, library_entry_id, created_at: now })
+          Object.assign(tables.collections.find(collection => collection.id === collection_id)!, { last_story_added_at: now })
+        }
+      }
+      return route.fulfill({ status: 204 })
+    }
     const rows = tables[table]
     if (!rows) return route.fulfill({ status: 404, json: {} })
     const id = url.searchParams.get('id')?.replace('eq.', '')
@@ -128,13 +137,6 @@ export async function fixture(page: Page, { backend = browserTestEnv.VITE_SUPABA
       const existing = rows.find(row => row.user_id === body.user_id)
       if (existing) Object.assign(existing, body)
       else rows.push({ ...body })
-      return route.fulfill({ status: 201, json: null })
-    }
-    if (request.method() === 'POST' && table === 'collection_works' && Array.isArray(body)) {
-      for (const membership of body) if (!rows.some(row => row.collection_id === membership.collection_id && row.library_entry_id === membership.library_entry_id)) {
-        rows.push({ ...membership, created_at: now })
-        Object.assign(tables.collections.find(collection => collection.id === membership.collection_id)!, { last_story_added_at: now })
-      }
       return route.fulfill({ status: 201, json: null })
     }
     if (request.method() === 'POST' && body) { const row = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...body, default_key: null }; rows.push(row); return route.fulfill({ status: 201, json: request.headers().accept?.includes('object') ? row : null }) }

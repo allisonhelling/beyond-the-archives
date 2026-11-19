@@ -34,6 +34,14 @@ try {
   output += `    }
     Views: { [_ in never]: never }
     Functions: {
+      story_versions: { Args: { p_entry: string; p_search?: string; p_linked_urls?: string[] }; Returns: Json | null }
+      write_story_versions: { Args: { p_entry: string; p_target: string; p_action: string; p_revision: string; p_target_updated_at?: string; p_organization?: Json; p_target_organization?: Json }; Returns: string }
+      add_stories_to_collections: { Args: { p_entries: string[]; p_collections: string[] }; Returns: undefined }
+      story_chapter_groups: { Args: { p_left: string; p_right: string }; Returns: Json }
+      write_story_chapter_group: { Args: { p_left: string; p_right: string; p_id: string; p_version: number; p_left_chapters?: string[]; p_right_chapters?: string[]; p_state?: string; p_review?: Json }; Returns: boolean }
+      mark_corresponding_chapters_read: { Args: { p_source: string; p_target: string; p_revision: string; p_groups: Json; p_apply?: boolean }; Returns: number }
+      story_completion: { Args: { p_entry: string }; Returns: Json | null }
+      write_story_completion: { Args: { p_entry: string; p_status: Database['public']['Enums']['reading_status'] | null; p_expected: Json; p_review?: string }; Returns: undefined }
       write_tag_classification_rule: { Args: { p_id: string; p_version: number; p_rule?: Json }; Returns: boolean }
       tag_classification_revision: { Args: Record<string, never>; Returns: string }
       reset_tag_classification_rules: { Args: { p_revision: string }; Returns: boolean }

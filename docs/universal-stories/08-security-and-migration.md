@@ -2,6 +2,8 @@
 
 See the [Phase 4 delivery record](PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md) for the implemented classification, bulk retrieval, review contracts, and verification.
 
+The [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) describes the owner-scoped linked-version writes, additive migrations, and version 3 backup format.
+
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 

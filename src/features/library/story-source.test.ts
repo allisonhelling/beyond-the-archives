@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { exampleWork } from './display/display-examples'
-import { nativeSourceIdentity, sourceIdentityKey, sourceLocation, storySourceVersion } from './story-source'
+import { capturedStoryLinks, nativeSourceIdentity, sourceIdentityKey, sourceLocation, storySourceVersion } from './story-source'
 import { effectiveMetadata, effectiveWork, type Story } from './model'
 
 it('keeps native namespaces, opaque IDs and URL candidates distinct without enabling imports', () => {
@@ -33,6 +33,12 @@ function observedStory(manual: Story['metadata_overrides'] = {}): Story {
  const work = effectiveWork(entry.work, entry)
  return { ...entry, work, metadata: effectiveMetadata(work, manual) }
 }
+
+it('uses captured summary links for possible matches while ignoring private and unsafe links', () => {
+ const story = observedStory({ summary_html: '<a href="https://unrelated.example/owner-edit">Private edit</a>' })
+ story.work.automatic_metadata = { summary_html: '<a href="/works/123/chapters/99">Edition</a><a href="https://fiction.example/Edition/one">Crosspost</a><a href="http://127.0.0.1/story">Local</a><a href="javascript:void(0)">Unsafe</a>' }
+ expect(capturedStoryLinks(story)).toEqual(['https://archiveofourown.org/works/123','https://fiction.example/Edition/one'])
+})
 
 it('protects private manual precedence and keeps publication, confidence and reading status independent', () => {
  const entry = observedStory({ published_chapters: 20, publication_status: 'hiatus',

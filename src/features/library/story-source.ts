@@ -1,5 +1,7 @@
 import { parseWorkUrl, waybackSnapshot } from '../imports/urls'
 import type { Metadata, Story } from './model'
+import { load } from 'cheerio'
+import { readSummary } from './summaries/summary'
 
 /** A source key is separate from work UUID, private entry UUID and EPUB hash. */
 export type SourceIdentity =
@@ -12,7 +14,7 @@ export type FieldObservation<T> = {
 }
 export type StorySourceVersion = {
  contractVersion: 1;
- // The current one-source entry serves both roles. Linking is a later additive feature.
+ // Unlinked entries supply both IDs. Linking supplies a separate group ID.
  storyId: string; sourceVersionId: string; workId: string; ownerId: string;
  identity: SourceIdentity | null; originalUrl: string; normalizedUrl: string | null;
  canonicalUrl: string | null; canonicalVerifiedAt: string | null;
@@ -85,11 +87,25 @@ export function storySourceVersion(story: Story): StorySourceVersion {
  }
  const count = story.metadata.published_chapters
  const published = typeof count === 'number' && Number.isInteger(count) && count >= 0 && count <= 2147483647 ? count : null
- return { contractVersion: 1, storyId: story.id, sourceVersionId: story.id, workId: work.id, ownerId: story.user_id,
+ return { contractVersion: 1, storyId: story.crosspost_group_id ?? story.id, sourceVersionId: story.id, workId: work.id, ownerId: story.user_id,
   identity, originalUrl: story.original_url, normalizedUrl, canonicalUrl, canonicalVerifiedAt,
   publishedChapters: observation(story, 'published_chapters', published),
   publicationStatus: observation(story, 'publication_status', story.metadata.publication_status),
   progress: { status: story.reading_status, chaptersRead: story.last_read_chapter } }
+}
+
+/** Captured outbound links are possible-match evidence, never chapter equivalence. */
+export function capturedStoryLinks(story: Story) {
+ const html = record(story.work.automatic_metadata).summary_html
+ if (typeof html !== 'string' || html.length > 100_000 || waybackSnapshot(story.original_url)) return []
+ const $ = load(readSummary(html).summary_html, undefined, false)
+ const links = new Set<string>()
+ for (const node of $('a[href]').toArray()) {
+  const href = $(node).attr('href')
+  try { if (href && !waybackSnapshot(href)) links.add(sourceLocation(href).normalizedUrl) } catch { /* Unrecognized destinations provide no evidence. */ }
+  if (links.size === 10) break
+ }
+ return [...links]
 }
 
 export type MetadataConfidence = 'any' | 'verified' | 'automatic' | 'manual' | 'unknown'

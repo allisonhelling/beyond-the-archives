@@ -19,7 +19,7 @@ afterAll(async()=>{await db?.close()})
 it('forces RLS on every table and preserves invoker security on all private views',()=>{
  expect(catalog.relations.filter(table=>table.kind==='r').every(table=>table.rls&&table.force_rls)).toBe(true)
  const views=catalog.relations.filter(table=>table.kind==='v')
- expect(views.map(view=>view.name).sort()).toEqual(['library_collection_documents','library_story_documents','reading_activity'])
+ expect(views.map(view=>view.name).sort()).toEqual(['effective_collection_works','library_collection_documents','library_story_documents','reading_activity'])
  expect(views.every(view=>view.user_owned&&view.reloptions?.includes('security_invoker=true'))).toBe(true)
 })
 it('has no application-role exception in personal-data or Storage policies',()=>{
@@ -43,7 +43,7 @@ it('restricts anonymous definer calls to the existing paired capability and trig
  }
 })
 it('keeps infrastructure, restoration and cross-account helper functions unavailable to application sessions',()=>{
- for(const signature of ['restore_library_backup(jsonb,uuid,boolean)','restore_library_backup_internal(jsonb,uuid,boolean,boolean)','backup_storage_files(uuid)','finish_metadata_job(uuid,uuid,jsonb,jsonb,text,text,boolean,integer)','store_tag_resolutions(uuid,jsonb)','reader_write_work_field(uuid,text,text,jsonb,text)','reader_reconcile_account(uuid)','app_owner_maintenance(uuid,text,uuid,text)']) {
+ for(const signature of ['restore_library_backup(jsonb,uuid,boolean)','restore_library_backup_internal(jsonb,uuid,boolean,boolean)','backup_storage_files(uuid)','finish_metadata_job(uuid,uuid,jsonb,jsonb,text,text,boolean,integer)','store_tag_resolutions(uuid,jsonb)','reader_write_work_field(uuid,text,text,jsonb,text)','reader_reconcile_account(uuid)','app_owner_maintenance(uuid,text,uuid,text)','write_story_versions_internal(uuid,uuid,text,text,timestamp with time zone)']) {
   const fn=catalog.definers.find(fn=>fn.signature===signature)
   expect(fn,signature).toBeDefined()
   expect(fn?.authenticated_execute,signature).toBe(false)

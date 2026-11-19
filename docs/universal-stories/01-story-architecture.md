@@ -3,7 +3,7 @@
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
-**Phase 1 status:** [Foundation contracts](PHASE_1_FOUNDATION.md) now provide a used typed source-version/provenance adapter and the editable/deletable Original Works starter. Existing AO3 UUID/native identity and private progress remain unchanged. Phase 2 adds owner-private single-source URL/manual persistence and reading progress; see the [delivery record](PHASE_2_MANUAL_STORIES_PROGRESS.md). Shared multi-version tiles and crosspost linking below remain later-phase requirements.
+The [Phase 1 foundation](PHASE_1_FOUNDATION.md) provides the source-version and provenance adapter. [Phase 2](PHASE_2_MANUAL_STORIES_PROGRESS.md) adds private manual sources and reading progress. The [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) describes optional grouping of those existing source entries and the remaining shared-organization requirements.
 
 ## 9. Story Identity, Source Versions, And Crossposting
 

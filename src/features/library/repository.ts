@@ -1,4 +1,4 @@
-import { sourceDuplicateFromError } from './story-source'
+import { capturedStoryLinks, sourceDuplicateFromError } from './story-source'
 import { readReadingHistory } from './reading-history'
 import { applyAutomaticCollections, automaticCollectionRules, type AutomaticCollectionRules } from './collections/automatic-collections'
 import type { Json } from '../../types/database'
@@ -6,8 +6,8 @@ import { parseSearch, filterReading } from './reading-search'
 import type { SeriesRecord } from './series/series'
 import { checkedStorySave, conflictFromError, editSnapshot, storyEdits, type EditValues } from './edit-merge'
 import { supabase } from '../../lib/supabase'
-import type { Collection, Entry, Story, StoryInput, Work } from './model'
-import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork, savedWorkUrl } from './model'
+import type { Collection, Entry, Status, Story, StoryInput, StoryOrganization, Work } from './model'
+import { blankMetadata, bookmarkRec, effectiveMetadata, effectiveWork, organizationFields, savedWorkUrl, storyOrganization } from './model'
 import { compareCollections, normalizeCollectionChanges, type CollectionAppearance } from './collections/collection-appearance'
 import { sampleMode } from '../../lib/sample-mode'
 function client() { if (!supabase) throw new Error('Database is not configured.'); return supabase }
@@ -46,7 +46,7 @@ function orderedRelations<T extends { id: string }, L extends { work_id: string 
 export async function loadLibrary(): Promise<{ stories: Story[]; collections: Collection[]; series: SeriesRecord[] }> {
   if (sampleMode) return (await import('./sample/repository')).loadSampleLibrary()
   const db = client()
-  const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms, series, seriesMemberships, crossoverDocuments] = await Promise.all([
+  const [entries, works, collections, memberships, tags, links, ao3Tags, workTags, authors, workAuthors, fandoms, workFandoms, series, seriesMemberships, crossoverDocuments, organizations] = await Promise.all([
     allRows((from, to) => db.from('library_entries').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('works').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collections').select('*').order('created_at').order('id').range(from, to)),
@@ -62,8 +62,10 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     allRows((from, to) => db.from('library_series').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collection_series').select('*').order('library_series_id').order('collection_id').range(from, to)),
     allRows((from, to) => db.from('library_search_documents').select('id,catalog_story').order('id').range(from, to)),
+    allRows((from, to) => db.from('crosspost_organization').select('group_id,settings').order('group_id').range(from, to)),
   ])
   const projections = new Map(crossoverDocuments.map(row=>[row.id,row.catalog_story as unknown as Partial<Story>]))
+  const settingsByGroup = new Map(organizations.map(row => [row.group_id, row.settings as StoryOrganization]))
   const worksById = new Map(works.map(work => [work.id, work]))
   const personalTagsById = new Map(tags.map(tag => [tag.id, tag.name]))
   const membershipsByEntry = groupLinks(memberships, link => link.library_entry_id, link => link.collection_id)
@@ -82,7 +84,9 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     const sharedWork = worksById.get(entry.work_id)
     if (!sharedWork) throw new Error('Story metadata is unavailable. Please reload.')
     const work = effectiveWork(sharedWork, entry)
-    return { ...projections.get(entry.id), ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id), entry.work_status), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
+    const source = { ...projections.get(entry.id), ...entry, reading_history: readReadingHistory(entry.reading_history), work, metadata: effectiveMetadata(work, entry.metadata_overrides, tagsByWork.get(work.id), authorsByWork.get(work.id), fandomsByWork.get(work.id), entry.work_status), collectionIds: membershipsByEntry.get(entry.id) ?? [], personalTags: personalTagsByEntry.get(entry.id) ?? [] }
+    const shared = entry.crosspost_group_id && settingsByGroup.get(entry.crosspost_group_id)
+    return shared ? { ...source, ...organizationFields(shared), organizationGroup: entry.crosspost_group_id, sourceOrganization: storyOrganization(source) } : source
   }), collections) }
 }
 export async function saveStory(input: StoryInput) {
@@ -114,8 +118,7 @@ export async function saveStoryCollections(story: Story, collections: string[], 
 export async function addStoriesToCollections(storyIds: string[], collectionIds: string[]) {
   if (!storyIds.length || !collectionIds.length) return
   if (sampleMode) return (await import('./sample/repository')).addSampleStoriesToCollections(storyIds, collectionIds)
-  const rows = [...new Set(storyIds)].flatMap(library_entry_id => [...new Set(collectionIds)].map(collection_id => ({ library_entry_id, collection_id })))
-  const { error } = await client().from('collection_works').upsert(rows, { onConflict: 'collection_id,library_entry_id', ignoreDuplicates: true })
+  const { error } = await client().rpc('add_stories_to_collections', { p_entries: [...new Set(storyIds)], p_collections: [...new Set(collectionIds)] })
   failure(error)
 }
 export async function updateEntry(id: string, changes: EntryUpdate, base: EditValues, statusOrigin: 'explicit' | 'derived' | 'preserve' = 'explicit') {
@@ -141,10 +144,14 @@ export async function deleteStory(id: string) {
 }
 export async function restoreStory(story: Story) {
   if (sampleMode) return (await import('./sample/repository')).restoreSampleStory(story)
-  const { work: _work, metadata: _metadata, detailsLoaded: _detailsLoaded, collectionIds, personalTags, ...entry } = story
+  const { work: _work, metadata: _metadata, detailsLoaded: _detailsLoaded, sourceOrganization, organizationGroup: _group, collectionIds: _collections, personalTags: _tags, ...entry } = story
   // Restore only the private entry; shared work metadata never changes during Undo.
-  void _work; void _metadata; void _detailsLoaded
-  const { error } = await client().rpc('restore_library_story', { p_entry: entry, p_collections: collectionIds, p_tags: personalTags })
+  void _work; void _metadata; void _detailsLoaded; void _group; void _collections; void _tags
+  const { notes, rating, favorite, collections, tags } = sourceOrganization ?? storyOrganization(story)
+  const { error } = await client().rpc('restore_library_story', {
+    p_entry: { ...entry, notes, personal_rating: rating, is_favorite: favorite },
+    p_collections: collections, p_tags: tags,
+  })
   failure(error)
 }
 export async function saveCollection(name: string, id?: string, appearance?: CollectionAppearance, description?: string, rules?: AutomaticCollectionRules | null) {
@@ -210,6 +217,55 @@ export async function loadStories(ids: string[]): Promise<Story[]> {
   if (error) throw new Error('Could not reload the affected works. Check your connection.')
   return ((data ?? []) as unknown as Story[]).map(story => ({ ...story, detailsLoaded: true }))
 }
+export type StoryVersions = { versions: Story[]; revision: string; candidates: Story[] }
+export async function loadStoryVersions(entry: Story, search?: string) {
+  const links = capturedStoryLinks(entry)
+  const { data, error } = await client().rpc('story_versions', { p_entry: entry.id, p_search: search, p_linked_urls: links.length ? links : undefined })
+  if (error || !data) throw new Error('Could not load saved story versions.')
+  return data as unknown as StoryVersions
+}
+export async function writeStoryVersions(entry: string, target: Story, action: 'link' | 'unlink' | 'prefer' | 'reconcile', revision: string, organization?: StoryOrganization) {
+  const { error } = await client().rpc('write_story_versions', {
+    p_entry: entry, p_target: target.id, p_action: action, p_revision: revision,
+    p_target_updated_at: action === 'link' ? target.updated_at : undefined,
+    p_target_organization: action === 'link' ? storyOrganization(target) : undefined,
+    p_organization: organization,
+  })
+  failure(error)
+}
+export type ChapterGroup = { id: string; version: number; state: 'confirmed' | 'unmatched' | 'unknown'; left_chapters: string[]; right_chapters: string[]; current: boolean }
+export async function loadStoryChapterGroups(left: string, right: string) {
+  const { data, error } = await client().rpc('story_chapter_groups', { p_left: left, p_right: right })
+  if (error || !data) throw new Error('Could not load chapter correspondence.')
+  return data as ChapterGroup[]
+}
+export async function writeStoryChapterGroup(left: Story, right: Story, group: Pick<ChapterGroup,'id' | 'version'>, changes?: Pick<ChapterGroup,'state' | 'left_chapters' | 'right_chapters'>) {
+  const { data, error } = await client().rpc('write_story_chapter_group', {
+    p_left: left.id, p_right: right.id, p_id: group.id, p_version: group.version,
+    p_left_chapters: changes?.left_chapters, p_right_chapters: changes?.right_chapters, p_state: changes?.state,
+    p_review: changes ? [left.work.verified_chapters, left.metadata.published_chapters, right.work.verified_chapters, right.metadata.published_chapters] : undefined,
+  })
+  failure(error)
+  if (data !== true) throw new Error('This chapter group changed. Reload the comparison before editing.')
+}
+export async function correspondingChapterProgress(source: string, target: string, revision: string, groups: ChapterGroup[], apply = false) {
+  const { data, error } = await client().rpc('mark_corresponding_chapters_read', {
+    p_source: source, p_target: target, p_revision: revision, p_groups: groups, p_apply: apply,
+  })
+  failure(error)
+  if (data === null) throw new Error('Could not calculate corresponding chapters.')
+  return data
+}
+export type StoryCompletion = { status: Status | null; override: Status | null; prompt: string | null }
+export async function loadStoryCompletion(entry: string) {
+  const { data, error } = await client().rpc('story_completion', { p_entry: entry })
+  if (error) throw new Error('Could not load linked story completion.')
+  return data as StoryCompletion | null
+}
+export async function writeStoryCompletion(entry: string, status: Status | null, expected: StoryCompletion, review?: string) {
+  const { error } = await client().rpc('write_story_completion', { p_entry: entry, p_status: status, p_expected: expected, p_review: review })
+  failure(error)
+}
 export type LibraryQuery = { availability?: 'unfolded' | 'bookfusion'; reader?: string; mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
 export type LibraryResults = { revision?: number; suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export type LibraryFacets = Pick<LibraryResults, 'suggestions' | 'fandoms'> & { total: number }
@@ -268,7 +324,9 @@ export async function loadSeriesRecord(seriesId: number): Promise<SeriesRecord |
 }
 
 export function storyCatalogEntry(story: Story): Story {
-  return { ...story, detailsLoaded: false,
+  const { sourceOrganization: _sourceOrganization, ...catalog } = story
+  void _sourceOrganization
+  return { ...catalog, detailsLoaded: false,
     metadata: { ...blankMetadata, title: story.metadata.title, authors: story.metadata.authors, fandoms: story.metadata.fandoms, series: story.metadata.series, series_memberships: story.metadata.series_memberships, publication_status: story.metadata.publication_status },
     work: { id: story.work.id, ao3_work_id: story.work.ao3_work_id } as Work,
     source_bookmark: { rec: bookmarkRec(story) }, metadata_overrides: {}, extension_metadata: {}, extension_chapters: {}, notes: '', personalTags: [] }

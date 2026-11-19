@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util'
 import { gunzipSync } from 'node:zlib'
 import { createClient } from '@supabase/supabase-js'
 import { verifiedLocalTarget } from '../scripts/local-target.mjs'
+import { isLibraryBackupVersion } from '../src/types/backups.ts'
 
 export function parseBackup(file) {
   return JSON.parse((file[0] === 0x1f && file[1] === 0x8b ? gunzipSync(file) : file).toString('utf8'))
@@ -13,7 +14,7 @@ export function parseBackup(file) {
 export async function restoreBackup({ backup, userId, replace = false, url, secret }, clientFactory = createClient, readTarget) {
   if (!userId) throw new Error('--user <Auth UUID> is required.')
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) throw new Error('--user must be an Auth UUID.')
-  if (backup?.format !== 'between-chapters-backup' || ![1, 2].includes(backup.version) || !backup.tables) throw new Error('Unsupported backup format.')
+  if (backup?.format !== 'between-chapters-backup' || !isLibraryBackupVersion(backup.version) || !backup.tables) throw new Error('Unsupported backup format.')
   const target = await verifiedLocalTarget({ url, secret }, readTarget)
   const client = clientFactory(target.url, target.secretKey, { auth: { persistSession: false, autoRefreshToken: false } })
   const { data: identities, error } = await client.rpc('restore_library_backup', { p_backup: backup, p_user: userId, p_replace: replace })

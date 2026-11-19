@@ -3,6 +3,8 @@
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
+See the [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) for the implemented reviewed transfer and shared completion behavior.
+
 ## 10. Reading Progress And Chapter Navigation
 
 ### 10.1 Universal Basic Tracking

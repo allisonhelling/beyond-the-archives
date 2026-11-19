@@ -148,16 +148,19 @@ Implementation record: [Phase 4 Classification And Bulk Imports](PHASE_4_CLASSIF
 
 **Goal:** Link source versions under one story while preserving independent source progress and history.
 
-- [ ] Implement suggested possible matches vs user-confirmed same-story links; reversible unlink.
-- [ ] Preserve per-source URLs, chapter counts, publication state, tags, notes where applicable, and progress.
-- [ ] Build source switcher and Compare Versions UI; defer final tile source-indicator appearance.
-- [ ] Support 1:1, 1:many, many:1, unmatched, and unknown chapter correspondence.
-- [ ] Require verified correspondence for chapter-level progress sync; do not use larger chapter number as conflict resolution.
-- [ ] Keep source progress independent by default; add explicit sync/conflict review.
-- [ ] Handle source caught-up vs shared-story Finished using publication evidence and user intent.
-- [ ] Show completion prompt only for linked, divergent versions with meaningful evidence; avoid repeat prompting for the same state.
-- [ ] Preserve manually Finished states on newly observed chapters and show new-content notices.
+- [x] Implement suggested possible matches vs user-confirmed same-story links; reversible unlink.
+- [x] Preserve per-source URLs, chapter counts, publication state, tags, notes where applicable, and progress.
+- [x] Build source switcher and Compare Versions UI; defer final tile source-indicator appearance.
+- [x] Reconcile favorites, manual collections, personal ratings, personal tags, and private notes into group-owned settings.
+- [x] Support 1:1, 1:many, many:1, unmatched, and unknown chapter correspondence.
+- [x] Require verified correspondence for chapter-level progress sync; do not use larger chapter number as conflict resolution.
+- [x] Keep source progress independent by default; add explicit sync/conflict review.
+- [x] Handle source caught-up vs shared-story Finished using publication evidence and user intent.
+- [x] Show completion prompt only for linked, divergent versions with meaningful evidence; avoid repeat prompting for the same state.
+- [x] Preserve manually Finished states on newly observed chapters and show new-content notices.
 - [ ] Test divergent editions, split chapters, cross-account isolation, unlink, backup/restore, and reader compatibility.
+
+Implementation record: [Phase 5 Crossposts And Version-Aware Reading](PHASE_5_CROSSPOSTS.md). The unchecked items include remaining compatibility validation and broader source evidence capture.
 
 **Exit criteria:** Crosspost linkage cannot erase progress or fabricate chapter equivalence.
 

@@ -150,6 +150,29 @@ try {
     const saved = await alice.client.from('library_entries').select('reading_status,last_read_chapter').eq('id', created.data).single()
     assert.equal(saved.error, null); assert.deepEqual(saved.data, { reading_status: 'reading', last_read_chapter: 20 })
   })
+  await check('Phase 5 links owned versions without sharing source progress', async () => {
+    const [alice, bob] = users
+    const own = await alice.client.from('library_entries').select('id,last_read_chapter,updated_at').order('created_at')
+    assert.equal(own.error, null)
+    const [anchor, alternate] = own.data
+    const versions = entry => alice.client.rpc('story_versions', { p_entry: entry.id })
+    const initial = await versions(anchor)
+    assert.equal(initial.error, null)
+    assert.equal(initial.data.versions.length, 1)
+    const reviewed = (await versions(alternate)).data.versions[0]
+    const organization = { favorite: reviewed.is_favorite, rating: reviewed.personal_rating, notes: reviewed.notes, tags: reviewed.personalTags, collections: reviewed.collectionIds }
+    const action = { p_organization: organization, p_target_organization: organization, p_entry: anchor.id, p_target: alternate.id, p_action: 'link', p_revision: initial.data.revision, p_target_updated_at: alternate.updated_at }
+    assert.equal((await bob.client.rpc('story_versions', { p_entry: anchor.id })).data, null)
+    assert.equal((await bob.client.rpc('write_story_versions', action)).error?.code, '42501')
+    assert.equal((await alice.client.rpc('write_story_versions', action)).error, null)
+    const linked = await versions(anchor)
+    assert.equal(linked.error, null)
+    assert.deepEqual(linked.data.versions.map(version => [version.id, version.last_read_chapter]), [
+      [anchor.id, anchor.last_read_chapter], [alternate.id, alternate.last_read_chapter],
+    ])
+    assert.equal((await alice.client.rpc('write_story_versions', { ...action, p_action: 'unlink', p_revision: linked.data.revision })).error, null)
+    assert.equal((await versions(anchor)).data.versions.length, 1)
+  })
   await check('extension-only bulk imports, real concurrent claims, account isolation and fenced cancellation', async () => {
     const [alice, bob] = users
     const active = await admin.from('metadata_jobs').select('id').in('user_id', users.map(user => user.id)).in('status', ['pending', 'processing'])

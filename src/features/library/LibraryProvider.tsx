@@ -192,19 +192,22 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
     return () => window.removeEventListener(tagResolutionEvent, changed)
   }, [userId, invalidateQueries])
   const refresh = useCallback(async (ids?: string[]) => {
-    const unique = ids ? [...new Set(ids)].sort() : undefined
     const life = lifecycle.current
     const task = queue.current.catch(() => {}).then(async () => {
       if (life !== lifecycle.current) return
       const version = ++generation.current
       try {
-        if (unique) {
+        if (ids) {
+          const wanted = new Set(ids)
+          const groups = new Set(dataRef.current.stories.filter(story => wanted.has(story.id) && story.crosspost_group_id).map(story => story.crosspost_group_id))
+          for (const story of dataRef.current.stories) if (groups.has(story.crosspost_group_id)) wanted.add(story.id)
+          const unique = [...wanted].sort()
           const before = dataRef.current.stories.filter(story => unique.includes(story.id))
           const next = await loadStories(unique)
           invalidate(before.length === unique.length ? before : undefined, next)
           const collections = await loadAffectedCollections([...new Set(next.flatMap(story => story.collectionIds))])
           if (version !== generation.current) return
-          const wanted = new Set(unique), index = new Map(next.map(story => [story.id, story])), collectionIndex = new Map(collections.map(collection => [collection.id, collection]))
+          const index = new Map(next.map(story => [story.id, story])), collectionIndex = new Map(collections.map(collection => [collection.id, collection]))
           setData(previous => {
             const stories = [...previous.stories.filter(story => !wanted.has(story.id)), ...index.values()]
             return { ...previous, collections: previous.collections.map(collection => collectionIndex.get(collection.id) ?? collection), stories: boundDetails(stories) }

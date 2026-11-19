@@ -84,6 +84,16 @@ it.each([
  expect(JSON.parse(localStorage.getItem(readingPreferencesKey)!)).toMatchObject({ groupBy: 'author' })
 })
 
+it('does not replace a newer navigation with browsing defaults or a clamped page', () => {
+ const replace = vi.fn()
+ const library = { pathname: '/library', search: '?page=2', hash: '', key: 'library', state: null }
+ const navigator = { createHref: () => '', go: vi.fn(), push: vi.fn(), replace, location: { ...library, pathname: '/add', key: 'add' } }
+ render(<Router location={library} navigator={navigator}>
+  <ReadingDashboard localOnly stories={[]} mode="library" showActions={false} renderStory={() => null} />
+ </Router>)
+ expect(replace).not.toHaveBeenCalled()
+})
+
 it('keeps the bottom page-size control mounted while replacement results load', () => {
  const result = { stories: [], series: [], total: 60, page: 1, pages: 3, sections: {}, fandoms: [] }
  const retry = vi.fn()

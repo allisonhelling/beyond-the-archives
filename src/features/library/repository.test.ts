@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { blankMetadata } from './model'
 import { defaultReadingFilters } from './reading-search'
-const state = vi.hoisted(() => ({ data: {} as Record<string, Record<string, unknown>[]>, calls: [] as string[], fail: false, upsert: vi.fn(), rpc: vi.fn(), response: vi.fn() }))
-vi.mock('../../lib/supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string) => ({ upsert: state.upsert, select: () => {
+const state = vi.hoisted(() => ({ data: {} as Record<string, Record<string, unknown>[]>, calls: [] as string[], fail: false, rpc: vi.fn(), response: vi.fn() }))
+vi.mock('../../lib/supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string) => ({ select: () => {
   const query = { order: () => query, range: async (from: number, to: number) => {
     state.calls.push(`${table}:${from}`)
     return { data: (state.data[table] ?? []).slice(from, to + 1), error: state.fail ? { code: 'offline' } : null }
@@ -68,12 +68,9 @@ it('loads AO3 tag categories per work and preserves private category overrides',
 })
 
 it('adds only memberships and ignores duplicate pairs without rewriting stories', async () => {
-  state.upsert.mockResolvedValue({ error: null })
+  state.rpc.mockResolvedValueOnce({ error: null })
   await addStoriesToCollections(['first', 'second', 'first'], ['night', 'weekend', 'night'])
-  expect(state.upsert).toHaveBeenCalledWith([
-    { library_entry_id: 'first', collection_id: 'night' }, { library_entry_id: 'first', collection_id: 'weekend' },
-    { library_entry_id: 'second', collection_id: 'night' }, { library_entry_id: 'second', collection_id: 'weekend' },
-  ], { onConflict: 'collection_id,library_entry_id', ignoreDuplicates: true })
-  state.upsert.mockResolvedValueOnce({ error: { code: 'offline' } })
+  expect(state.rpc).toHaveBeenCalledWith('add_stories_to_collections', { p_entries: ['first', 'second'], p_collections: ['night', 'weekend'] })
+  state.rpc.mockResolvedValueOnce({ error: { code: 'offline' } })
   await expect(addStoriesToCollections(['first'], ['night'])).rejects.toThrow('Could not save')
 })

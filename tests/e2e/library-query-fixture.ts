@@ -1,6 +1,6 @@
 import { tagAliasIndex, type TagResolution } from '../../src/features/library/tags/tag-resolution'
 import { applyAutomaticCollections } from '../../src/features/library/collections/automatic-collections'
-import { effectiveMetadata, type Collection, type Story, type Work } from '../../src/features/library/model'
+import { effectiveMetadata, organizationFields, storyOrganization, type Collection, type Story, type StoryOrganization, type Work } from '../../src/features/library/model'
 import { safeBookFusionLink } from '../../src/features/library/bookfusion/bookfusion'
 import { defaultReadingFilters, filterReading, inReadingSection, tracked } from '../../src/features/library/reading-search'
 import { librarySeries, seriesReadingStatus, type SeriesRecord } from '../../src/features/library/series/series'
@@ -15,6 +15,7 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
  if (name==='library_navigation_snapshot') return {revision:0,counts:libraryQueryFixture('library_navigation',body,tables)}
  const rows = (name: string) => tables[name] ?? []
  const worksById = new Map(rows('works').map(work => [work.id, work]))
+ const crosspostSettings = new Map(rows('crosspost_organization').map(group => [group.group_id, group.settings as StoryOrganization]))
  const stories = applyAutomaticCollections(rows('library_entries').map(entry => {
   const shared = worksById.get(entry.work_id)
   if (!shared) return null
@@ -22,7 +23,9 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
   const work = { ...shared, ...Object.fromEntries(Object.entries(browser).filter(([key]) => ['title','summary','rating','word_count','published_chapters','total_chapters','is_complete','ao3_published_at','ao3_updated_at','last_metadata_check','last_metadata_success'].includes(key))), automatic_metadata: { ...shared.automatic_metadata as Row, ...browser }, verified_chapters: entry.extension_chapters && Object.keys(entry.extension_chapters).length ? entry.extension_chapters : shared.verified_chapters ?? {} } as Work
   const tags = rows('work_tags').filter(link => link.work_id === work.id).sort((a,b) => Number(a.source_position ?? Infinity)-Number(b.source_position ?? Infinity)).flatMap(link => rows('tags').filter(tag=>tag.id===link.tag_id))
   const related = (table:string, links:string, key:string) => rows(table).filter(item=>rows(links).some(link=>link.work_id===work.id&&link[key]===item.id)).sort((a,b)=>String(a.id).localeCompare(String(b.id)))
-  return { ...entry, is_rec: entry.is_rec ?? false, work, detailsLoaded:true, metadata:effectiveMetadata(work,entry.metadata_overrides as never,tags as never,related('authors','work_authors','author_id') as never,related('fandoms','work_fandoms','fandom_id') as never, entry.work_status as Story['work_status']), collectionIds:rows('collection_works').filter(link=>link.library_entry_id===entry.id).map(link=>link.collection_id),personalTags:rows('library_entry_tags').filter(link=>link.library_entry_id===entry.id).map(link=>rows('personal_tags').find(tag=>tag.id===link.personal_tag_id)?.name??'') } as Story
+  const source = { ...entry, is_rec: entry.is_rec ?? false, work, detailsLoaded:true, metadata:effectiveMetadata(work,entry.metadata_overrides as never,tags as never,related('authors','work_authors','author_id') as never,related('fandoms','work_fandoms','fandom_id') as never, entry.work_status as Story['work_status']), collectionIds:rows('collection_works').filter(link=>link.library_entry_id===entry.id).map(link=>link.collection_id),personalTags:rows('library_entry_tags').filter(link=>link.library_entry_id===entry.id).map(link=>rows('personal_tags').find(tag=>tag.id===link.personal_tag_id)?.name??'') } as Story
+  const organization = crosspostSettings.get(entry.crosspost_group_id)
+  return organization ? { ...source, ...organizationFields(organization), organizationGroup: source.crosspost_group_id, sourceOrganization: storyOrganization(source) } : source
  }).filter((story):story is Story=>story!==null), rows('collections') as unknown as Collection[])
  const records = rows('library_series').map(record=>({...record,collectionIds:rows('collection_series').filter(link=>link.library_series_id===record.id).map(link=>link.collection_id)})) as SeriesRecord[]
  if (name==='reading_stats_works') {

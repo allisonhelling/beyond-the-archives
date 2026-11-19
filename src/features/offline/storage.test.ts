@@ -17,11 +17,15 @@ it('shows reader cloud works without download reports or organizer entries', () 
  expect(stories).toHaveLength(1)
  expect(stories[0]).toMatchObject({ metadata: { title: 'Saved in Cloud' }, work: { ao3_work_id: 81234 }, last_read_chapter: 2, reading_status: 'reading', notes: 'Reader note' })
 })
-it('deduplicates versions and keeps organizer metadata when a work is also saved there', () => {
+it.each([
+ { source: 'the saved work ID', cloudBook: book },
+ { source: 'a Calibre work link', cloudBook: { ...book, workId: null, metadata: { ...book.metadata, calibre_work_link: 'https://archiveofourown.org/works/81234/chapters/12' } } },
+])('deduplicates versions and keeps organizer metadata when matching by $source', ({ cloudBook }) => {
  const linked = { ...exampleWork, work: { ...exampleWork.work, ao3_work_id: 81234 } }
- const result = offlineStories({ ...snapshot, stories: [linked], cloudBooks: [book, { ...book, id: 'b'.repeat(64) }] })
+ const cloudBooks = [cloudBook, { ...cloudBook, id: 'b'.repeat(64) }]
+ const result = offlineStories({ ...snapshot, stories: [linked], cloudBooks })
  expect(result).toEqual([linked])
- expect(offlineStories({ ...snapshot, cloudBooks: [book, { ...book, id: 'b'.repeat(64) }] })).toHaveLength(1)
+ expect(offlineStories({ ...snapshot, cloudBooks })).toHaveLength(1)
 })
 it('retains installation-only tiles and excludes unrelated organizer works', () => {
  expect(offlineStories({ ...snapshot, cloudBooks: [], stories: [exampleWork] })).toEqual([])

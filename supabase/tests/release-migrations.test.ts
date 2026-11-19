@@ -54,12 +54,12 @@ afterAll(async()=>{await clean?.close();await upgrade?.close()})
 
 it('replays the entire ordered migration chain on a fresh embedded PostgreSQL database',async()=>{
  const names=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')).sort()
- expect(names).toHaveLength(135)
+ expect(names).toHaveLength(138)
  expect(new Set(names.map(name=>name.split('_')[0])).size).toBe(names.length)
- expect(names.at(-1)).toBe('20261117000500_site_bulk_import.sql')
+ expect(names.at(-1)).toBe('20261118000300_crosspost_organization.sql')
  const catalog=await privacyCatalog(async(sql:string)=>(await clean.query(sql)).rows)
- expect(catalog.relations.filter((table:{kind:string})=>table.kind==='r')).toHaveLength(54)
- expect(catalog.relations.filter((table:{kind:string})=>table.kind==='v')).toHaveLength(3)
+ expect(catalog.relations.filter((table:{kind:string})=>table.kind==='r')).toHaveLength(57)
+ expect(catalog.relations.filter((table:{kind:string})=>table.kind==='v')).toHaveLength(4)
  expect((await clean.query('select * from public.user_roles')).rows).toEqual([])
  expect((await clean.query('select * from public.admin_audit_logs')).rows).toEqual([])
 })
@@ -108,7 +108,19 @@ it('upgrades the populated observed production prefix through both Universal dep
   const backup=async()=>user(db,async()=>(await db.query<{backup:{version:number}}>('select public.export_library_backup() backup')).rows[0].backup)
   expect((await backup()).version).toBe(1)
   const pending=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')&&name>=firstPending).sort()
-  expect(pending).toEqual([firstPending,'20261112000400_universal_backup_compatibility.sql',releaseMigration,'20261117000100_tag_text_color.sql','20261117000200_guard_finished_chapter_increases.sql','20261117000300_site_mappings.sql','20261117000400_tag_classification_rules.sql','20261117000500_site_bulk_import.sql'])
+  expect(pending).toEqual([
+   firstPending,
+   '20261112000400_universal_backup_compatibility.sql',
+   releaseMigration,
+   '20261117000100_tag_text_color.sql',
+   '20261117000200_guard_finished_chapter_increases.sql',
+   '20261117000300_site_mappings.sql',
+   '20261117000400_tag_classification_rules.sql',
+   '20261117000500_site_bulk_import.sql',
+   '20261118000100_crosspost_stories.sql',
+   '20261118000200_crosspost_chapter_groups.sql',
+   '20261118000300_crosspost_organization.sql',
+  ])
   await db.exec("set statement_timeout='45s'")
   await db.exec(await readFile(new URL(`../migrations/${firstPending}`,import.meta.url),'utf8'))
   expect((await db.query('show statement_timeout')).rows).toEqual([{statement_timeout:'45s'}])

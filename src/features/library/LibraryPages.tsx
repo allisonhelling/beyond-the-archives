@@ -22,6 +22,7 @@ import { CustomCollectionNames } from './collections/CustomCollectionNames'
 import { DisplayInfo } from './display/DisplayInfo'
 import { formatDateTime } from '../../lib/dates'
 import { useStorySnapshot } from './useStorySnapshot'
+import { StoryVersions } from './StoryVersions'
 import { browsingReturnTo } from './browsing/browsing'
 import { CompletedImportSeriesNotice } from '../imports/ImportedSeriesNotice'
 import { PersonalNote } from './PersonalNote'
@@ -159,7 +160,7 @@ function StoryControls({ story, children, readOnly = false, onMarking, details =
   return <>{children({ actions, favorite, rec, readingStatus, caughtUp, editProgress, collectionsField: details ? <EditCollectionsButton onRefresh={() => refreshStory(story.id)} variant="field" disabled={blocked} automaticIds={story.automaticCollectionIds} selectedIds={story.collectionIds} description={`Choose collections for “${story.metadata.title}”.`} onSave={(collections, baseline) => saveStoryCollections(story, collections, baseline).then(() => {})} /> : null, rating: details ? <StarRating headingClassName="details-control-heading" value={story.personal_rating} disabled={blocked} onEdit={() => { editBase.current = editSnapshot(story) }} onSave={value => change({ personal_rating: value }, editBase.current)} /> : null })}
     {conflict && <EditConflictReview key={JSON.stringify(conflict.review)} conflict={conflict} onError={failed} onSaved={async () => { setConflict(null); await refreshStory(story.id) }} onCancel={() => setConflict(null)} />}
     {collectionOpen && <CollectionMembershipDialog story={story} onClose={() => { setCollectionOpen(false); menuRef.current?.querySelector('summary')?.focus() }} />}
-    {removeOpen && <ConfirmationDialog title="Remove from Library?" confirmLabel="Remove from Library" onConfirm={remove} onClose={closeRemoval}><p>Remove “{story.metadata.title}” from your library?</p><p>You can undo this for two minutes.</p></ConfirmationDialog>}
+    {removeOpen && <ConfirmationDialog title="Remove from Library?" confirmLabel="Remove from Library" onConfirm={remove} onClose={closeRemoval}><p>Remove “{story.metadata.title}” from your library?</p><p>You can undo this for two minutes.</p>{story.organizationGroup && <p>If this leaves only one version, the group’s shared settings are discarded. The remaining source returns to its saved settings.</p>}</ConfirmationDialog>}
     {error && <p className="error-message" role="alert">{error}</p>}
   </>
 }
@@ -304,6 +305,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
     {typeof location.state?.importBatchId === 'string' && <CompletedImportSeriesNotice reviewRelatedSeries={location.state.reviewRelatedSeries === true} key={location.state.importBatchId} batchId={location.state.importBatchId} initialBehavior={location.state.seriesImportBehavior === 'all' || location.state.seriesImportBehavior === 'choose' ? location.state.seriesImportBehavior : undefined} />}
     {!editing && <p className="field-help" aria-label="Metadata Provenance">Chapter count: {confidenceLabels[fieldConfidence(story, 'published_chapters')]}; publication status: {confidenceLabels[fieldConfidence(story, 'publication_status')]}. {storySourceVersion(story).publishedChapters.observedAt && `Count last entered ${formatDateTime(storySourceVersion(story).publishedChapters.observedAt!)}.`} {story.source_url && 'Source identity and completion have not been verified automatically.'}</p>}
     {editing ? <StoryForm key={`${story.id}-${editing}`} story={story} section={editing} onCancel={() => editSection(null)} /> : <>
+    {!example && <StoryVersions story={story} onChanged={library.refresh} />}
 <DisplayInfo group="workPage">{{
       progress: <>       <section className="settings-card details-progress-panel" aria-label="Reading and Organization">
         <div className="story-section-heading"><h2>Reading and Organization</h2></div>
@@ -311,7 +313,7 @@ export function StoryDetailsPage({ example }: { example?: Story } = {}) {
         <div className="details-reading-controls progress-sections">{readingStatus}<div className="progress-rating">{rating}</div>{collectionsField}</div>
       </section> </>,
       notes: <>
-      <section className="details-private-notes" aria-label="Private Notes"><PersonalNote key={story.id} notes={story.notes} onSave={(notes, base) => updateEntry(story.id, { notes }, { notes: base })} onRefresh={() => library.refreshStory(story.id)} /></section> </>,
+      <section className="details-private-notes" aria-label="Private Notes"><PersonalNote key={`${story.id}:${story.organizationGroup ?? 'source'}`} notes={story.notes} onSave={(notes, base) => updateEntry(story.id, { notes }, { notes: base, organizationGroup: story.organizationGroup ?? null })} onRefresh={() => library.refreshStory(story.id)} /></section> </>,
       information: <>
       <section className="settings-card details-fic-panel" aria-label="Story Information">
         <dl className="metadata-list details-fic-fields">

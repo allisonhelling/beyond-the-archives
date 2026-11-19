@@ -1,6 +1,6 @@
 # Crossposts And Chapter Correspondence
 
-> **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
+> **Status:** The [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) identifies the implemented workflows and remaining requirements. This document contains the accepted product specification.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
 ## Crosspost-Specific Reading Rules (From The Accepted Specification)

@@ -417,6 +417,108 @@ export type Database = {
         Relationships: [
         ]
       }
+      crosspost_chapter_groups: {
+        Row: {
+          id: string
+          user_id: string
+          left_entry: string
+          right_entry: string
+          left_chapters: string[]
+          right_chapters: string[]
+          left_structure: string
+          right_structure: string
+          state: string
+          version: number
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          left_entry: string
+          right_entry: string
+          left_chapters: string[]
+          right_chapters: string[]
+          left_structure: string
+          right_structure: string
+          state: string
+          version: number
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          left_entry?: string
+          right_entry?: string
+          left_chapters?: string[]
+          right_chapters?: string[]
+          left_structure?: string
+          right_structure?: string
+          state?: string
+          version?: number
+        }
+        Relationships: [
+          { foreignKeyName: 'crosspost_chapter_groups_left_entry_user_id_fkey'; columns: ['left_entry', 'user_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id', 'user_id'] },
+          { foreignKeyName: 'crosspost_chapter_groups_right_entry_user_id_fkey'; columns: ['right_entry', 'user_id']; isOneToOne: false; referencedRelation: 'library_entries'; referencedColumns: ['id', 'user_id'] },
+        ]
+      }
+      crosspost_organization: {
+        Row: {
+          user_id: string
+          group_id: string
+          settings: Json
+        }
+        Insert: {
+          user_id: string
+          group_id: string
+          settings: Json
+        }
+        Update: {
+          user_id?: string
+          group_id?: string
+          settings?: Json
+        }
+        Relationships: [
+        ]
+      }
+      crosspost_story_states: {
+        Row: {
+          user_id: string
+          group_id: string
+          status: Database['public']['Enums']['reading_status'] | null
+          dismissed_state: string | null
+        }
+        Insert: {
+          user_id: string
+          group_id: string
+          status?: Database['public']['Enums']['reading_status'] | null
+          dismissed_state?: string | null
+        }
+        Update: {
+          user_id?: string
+          group_id?: string
+          status?: Database['public']['Enums']['reading_status'] | null
+          dismissed_state?: string | null
+        }
+        Relationships: [
+        ]
+      }
+      effective_collection_works: {
+        Row: {
+          user_id: string | null
+          collection_id: string | null
+          library_entry_id: string | null
+        }
+        Insert: {
+          user_id?: string | null
+          collection_id?: string | null
+          library_entry_id?: string | null
+        }
+        Update: {
+          user_id?: string | null
+          collection_id?: string | null
+          library_entry_id?: string | null
+        }
+        Relationships: [
+        ]
+      }
       external_fandom_mappings: {
         Row: {
           source_site: string
@@ -733,6 +835,8 @@ export type Database = {
           reading_provenance: Json
           source_url: string | null
           metadata_confirmation_times: Json
+          crosspost_group_id: string | null
+          crosspost_order: number | null
         }
         Insert: {
           id?: string
@@ -761,6 +865,8 @@ export type Database = {
           reading_provenance?: Json
           source_url?: string | null
           metadata_confirmation_times?: Json
+          crosspost_group_id?: string | null
+          crosspost_order?: number | null
         }
         Update: {
           id?: string
@@ -789,6 +895,8 @@ export type Database = {
           reading_provenance?: Json
           source_url?: string | null
           metadata_confirmation_times?: Json
+          crosspost_group_id?: string | null
+          crosspost_order?: number | null
         }
         Relationships: [
           { foreignKeyName: 'library_entries_work_id_fkey'; columns: ['work_id']; isOneToOne: false; referencedRelation: 'works'; referencedColumns: ['id'] },
@@ -1789,6 +1897,14 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      story_versions: { Args: { p_entry: string; p_search?: string; p_linked_urls?: string[] }; Returns: Json | null }
+      write_story_versions: { Args: { p_entry: string; p_target: string; p_action: string; p_revision: string; p_target_updated_at?: string; p_organization?: Json; p_target_organization?: Json }; Returns: string }
+      add_stories_to_collections: { Args: { p_entries: string[]; p_collections: string[] }; Returns: undefined }
+      story_chapter_groups: { Args: { p_left: string; p_right: string }; Returns: Json }
+      write_story_chapter_group: { Args: { p_left: string; p_right: string; p_id: string; p_version: number; p_left_chapters?: string[]; p_right_chapters?: string[]; p_state?: string; p_review?: Json }; Returns: boolean }
+      mark_corresponding_chapters_read: { Args: { p_source: string; p_target: string; p_revision: string; p_groups: Json; p_apply?: boolean }; Returns: number }
+      story_completion: { Args: { p_entry: string }; Returns: Json | null }
+      write_story_completion: { Args: { p_entry: string; p_status: Database['public']['Enums']['reading_status'] | null; p_expected: Json; p_review?: string }; Returns: undefined }
       write_tag_classification_rule: { Args: { p_id: string; p_version: number; p_rule?: Json }; Returns: boolean }
       tag_classification_revision: { Args: Record<string, never>; Returns: string }
       reset_tag_classification_rules: { Args: { p_revision: string }; Returns: boolean }
