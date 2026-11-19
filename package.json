@@ -31,7 +31,7 @@
     "metadata:fandoms": "node --experimental-strip-types server/refresh-fandoms.mjs",
     "invite": "node server/invite-user.mjs",
     "test:integration": "node scripts/test-supabase.mjs",
-    "test:integration:config": "node --experimental-strip-types --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs scripts/tests/staging-isolation.mjs scripts/tests/release-operations.mjs",
+    "test:integration:config": "node --experimental-strip-types --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs scripts/tests/staging-isolation.mjs scripts/tests/release-operations.mjs scripts/tests/preview-origins.mjs",
     "perf:db": "node scripts/performance-library.mjs",
     "perf:sites": "node scripts/performance-sites.mjs",
     "perf:backup": "node scripts/performance-backups.mjs",

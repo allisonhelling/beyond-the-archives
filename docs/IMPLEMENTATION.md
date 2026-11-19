@@ -38,6 +38,8 @@ S4 implementation/release preparation is local; separately approved read-only ho
 
 ## Current Upgrade Requirements
 
+Feature-branch builds can use the repository’s [automatic Preview origin setup](security-foundation/LOCAL_AND_STAGING.md#automatic-preview-origins). It binds the organizer and reader aliases to each Preview branch and queues rebuilds when those bindings change.
+
 The [Recovery And Staging Acceptance guide](security-foundation/RECOVERY_AND_STAGING_ACCEPTANCE.md) owns the approved recovery policy, encrypted independent file bundles, real-session staging fixture commands, generated 10,000-work HTTP/Storage restore benchmark, and current evidence limits. `npm run prepare:production` performs fixed-target read-only public-key/configuration verification and derives both production CSP candidates; it does not change live settings. Both app packages, CI and the browser container target Node 24. Staging fixtures require an installed backend and controlled persistent Owner; they preserve accounts, assignments and audit history.
 
 Latest approved-read metadata shows both staging frontends READY at S3 commit `e94db86`; production assignments remain at `4d225ab`. See the [S4 inventory](security-foundation/S4_RELEASE_READINESS.md#authorized-hosted-discovery--16-november-2026) for current evidence; earlier frontend release records are historical. The [release record](security-foundation/LOCAL_AND_STAGING.md#successful-staging-frontend-release) owns the exact targets and evidence. Supabase configuration/deployment and live backend/privacy acceptance remain separately gated; frontend READY status is not full S1 acceptance.

@@ -1,0 +1,38 @@
+name: Configure Preview Origins
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [in_progress]
+    branches-ignore: [main]
+  delete:
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.head_branch != 'main') ||
+       (github.event_name == 'delete' &&
+        github.event.ref_type == 'branch' &&
+        github.event.ref != 'main'))
+    concurrency:
+      group: preview-origins-${{ github.event.workflow_run.head_branch || github.event.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: preview-automation
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Sync Branch Preview Origins
+        run: node scripts/configure-preview-origins.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_PREVIEW_TOKEN: ${{ secrets.VERCEL_PREVIEW_TOKEN }}

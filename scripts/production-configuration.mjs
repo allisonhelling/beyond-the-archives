@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { productionProjectRef } from '../src/lib/environment.ts'
 import { productionVercelConfig, validateBrowserEnv } from './build-env.ts'
 import { stagingManagementToken } from './staging-target.mjs'
+import { vercelProjects, vercelTeamId } from './vercel-projects.mjs'
 
 export async function productionConfiguration(read) {
  const project = await read('')
@@ -21,7 +22,7 @@ export async function productionConfiguration(read) {
  validateBrowserEnv(env, true, { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main' })
  const auth = await read('/config/auth'), secrets = await read('/secrets')
  const desiredAuth = { site_url: organizer, uri_allow_list: `${organizer}/auth/callback,${reader}/auth/callback`, external_anonymous_users_enabled: false, mailer_autoconfirm: false, mailer_secure_email_change_enabled: true, mailer_notifications_email_changed_enabled: true, mailer_notifications_password_changed_enabled: true, security_update_password_require_reauthentication: true, mfa_totp_enroll_enabled: true, mfa_totp_verify_enabled: true, hook_before_user_created_enabled: true, hook_before_user_created_uri: 'pg-functions://postgres/public/before_user_created' }
- return { env, vercelBindings: ['prj_Rb584lKdVjCt7wikZSF1bTCWAujo', 'prj_EoxUyrPPjVqvdZvsir6OeITXbYWM'].map(projectId => ({ teamId: 'team_mB5Tjb4FpnSFh8QCEAgvtRJV', projectId, environment: 'production', gitBranch: null, values: env })), extension: { EXTENSION_APP_ORIGIN: organizer }, desiredAuth, desiredOrigins: { APP_ORIGIN: organizer, READER_ORIGIN: reader }, runtime: '24.x', verifiedAt: new Date().toISOString(), backendPublicKeyVerified: true,
+ return { env, vercelBindings: vercelProjects.map(({ id: projectId }) => ({ teamId: vercelTeamId, projectId, environment: 'production', gitBranch: null, values: env })), extension: { EXTENSION_APP_ORIGIN: organizer }, desiredAuth, desiredOrigins: { APP_ORIGIN: organizer, READER_ORIGIN: reader }, runtime: '24.x', verifiedAt: new Date().toISOString(), backendPublicKeyVerified: true,
   authMatches: Object.fromEntries(Object.entries(desiredAuth).map(([name, value]) => [name, auth[name] === value])),
   originNamesPresent: Object.fromEntries(['APP_ORIGIN', 'READER_ORIGIN'].map(name => [name, secrets.some(secret => secret.name === name)])),
   limitations: ['Public key identity verified with Supabase; Vercel effective Production scopes, deployed values, origin secret values and Auth email templates require independent post-application verification.', 'No settings, deployment, SMTP, credentials, signup opening or alias changes are performed.'],
