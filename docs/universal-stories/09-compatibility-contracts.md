@@ -1,5 +1,7 @@
 # 09 — Compatibility Contracts, Source Errors, And Cross-Layer Tests
 
+The [Phase 6 compatibility matrix](PHASE_6_RELEASE_READINESS.md#browser-and-mixed-version-compatibility) covers the adapter update on the existing revision-1 protocol.
+
 See the [Phase 4 delivery record](PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md) for import and classification contracts and the [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) for linked-source identity and backup v3.
 
 **Status:** Accepted pre-implementation architectural safeguards (12 November 2026). This document specifies desired behavior and test coverage; it does **not** assert that the repository already implements these contracts. Inspect current code, migrations, and deployed protocols before selecting concrete schemas.

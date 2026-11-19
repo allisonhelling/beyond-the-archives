@@ -34,7 +34,7 @@ if (selectedOrigin !== target.organizerUrl) throw new Error('Extension origin do
 const defaultId = values.local ? 'local' : 'hosted'
 const profiles = { [defaultId]: { label: target.environment, appOrigin: selectedOrigin, backend: new URL(target.url).origin, publicKey: target.key } }
 const { appOrigin, backend, publicKey } = profiles[defaultId]
-const version = '0.8.0'
+const version = '0.8.1'
 const define = {
  __EXTENSION_ENVIRONMENTS__: JSON.stringify(profiles), __DEFAULT_ENVIRONMENT__: JSON.stringify(defaultId),
  'process.env.NODE_ENV': JSON.stringify('production'),

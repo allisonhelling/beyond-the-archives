@@ -1,5 +1,7 @@
 # Reader Implementation Contract
 
+The website adapters run in the organizer companion. Reader builds continue to use the existing EPUB, metadata and account-state contracts. The [Phase 6 compatibility matrix](../../docs/universal-stories/PHASE_6_RELEASE_READINESS.md#browser-and-mixed-version-compatibility) covers mixed versions and staging tests.
+
 Local development on loopback hosts reuses the organizer’s `LocalViewportPreview` through a lazy import in `main.tsx`. Login bridges, production builds, and iframe children bypass the wrapper. The shared preview stylesheet defines the toolbar’s organizer typography (13 px title/buttons, 14 px help, 16 px summary), 38 px compact buttons, and shared palette. It also defines organizer typography and control colors for the size panel with a 1 px fieldset border matching the outer panel’s line weight. The reader’s outer preview border uses the same brand-color token as its work tiles. Reader-specific layout fits the panel to Width, Height, and Units on one row, preserving dimension-field widths from the previous 420 px layout while the native Units select sizes to its longest option, adds 8 px of padding before each option label, tightens the readout’s bottom spacing, and places Apply Preview Size 8 px below the inner box without reserving extra panel height. The shared toolbar owns device presets, saved custom viewport sizes, selected-unit button labels, and the persistent preview iframe; the reader keeps its existing guest/account storage and application initialization.
 
 ## Architecture And Reuse

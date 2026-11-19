@@ -121,6 +121,7 @@ test('applied and selected filter chips use category colors without separator bu
 })
 
 test('work reader shortcuts replace the BookFusion section and plain note actions underline on hover', async ({ page }) => {
+ await page.emulateMedia({ reducedMotion: 'reduce' })
  const tables = await fixture(page)
  tables.works.push({ id: 'hover-work', ao3_work_id: 12001, verified_chapters: {} })
  tables.library_entries.push({ id: 'hover-entry', work_id: 'hover-work', original_url: 'https://archiveofourown.org/works/12001', reading_status: 'to_read', last_read_chapter: 0, notes: '', metadata_overrides: { title: 'Hover States', authors: ['Author'], published_chapters: 1, total_chapters: 1, publication_status: 'complete' } })
@@ -134,7 +135,7 @@ test('work reader shortcuts replace the BookFusion section and plain note action
  await cancel.hover()
  await expect(cancel).toHaveCSS('text-decoration-line', 'underline')
  const panel = page.getByRole('region', { name: 'Reading and Organization' })
- const button = panel.locator('.button.secondary').first()
+ const button = panel.getByRole('button', { name: 'Add to Collection', exact: true })
  await button.hover()
  const fill = await panel.evaluate(element => getComputedStyle(element).backgroundColor)
  await expect(button).not.toHaveCSS('background-color', fill)

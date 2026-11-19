@@ -1,5 +1,7 @@
 # archives unfolded
 
+Use the organizer for website link previews, site mappings, and linking crossposts. The reader continues to open EPUBs and exchanges supported reading state through the existing organizer connection. [Organizer and reader compatibility](../docs/universal-stories/PHASE_6_RELEASE_READINESS.md)
+
 An independent, browser-based EPUB reader in the same repository as the organizer. No organizer account is required. The organizer web interface is unchanged.
 
 ## Run Locally

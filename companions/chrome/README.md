@@ -159,9 +159,9 @@ Version 0.7.8 advertises the `metadata-retrieval-v1` capability to the configure
 
 ## Story Editor And Site Mappings
 
-With companion 0.8.0, open a public story page and click the Beyond the Archives toolbar icon. The editor opens along the right side. Review the extracted fields, adjust them, and save through your connected library. Select **Map Page Elements** or a field’s **Teach Where to Find** action. Pick a field before or after clicking an element. **Pause Selection** lets you use page controls. Press Esc to exit selection or close the editor.
+Open a public story page and click the Beyond the Archives toolbar icon. In companion 0.8.1, recognizable FanFiction.net desktop story headers provide the title, author, and optional summary. Recognizable AO3-compatible work pages can provide local categorized tags. Enter missing fields manually. Select **Map Page Elements** or a field’s **Teach Where to Find** action to review a specific element. **Pause Selection** lets you use page controls. Press Esc to exit selection or close the editor.
 
-Use **Use Once** to apply a value in this draft. Choose an exact URL or confirm a broader scope to save a separate reusable rule. Manage rules under **Settings → Imports & Connections → Site Mappings**. The toolbar click grants access to the current page. If the browser blocks the editor or the companion is unavailable, use **Add Story → Enter Manually**.
+Use **Use Once** to apply a value in this draft. Choose an exact URL or confirm a broader scope to save a separate reusable rule. For a broader rule, open a second matching story and use **Review Repair** to review the selector and confirm its scope before it becomes Working. Manage rules under **Settings → Imports & Connections → Site Mappings**. The toolbar click grants access to the current page. If the browser blocks the editor or the companion is unavailable, use **Add Story → Enter Manually**.
 
 From the web form, **Preview Source Page** and **Teach Selected Field** open the story page. Click the toolbar icon there, then choose **Return to Draft**. Back in the app, choose **Load Source Values** and apply the fields you want to use. See the [Phase 3 guide](../../docs/universal-stories/PHASE_3_EXTENSION_AND_MAPPING.md) for rollout and available scopes.
 

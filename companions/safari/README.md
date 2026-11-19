@@ -76,6 +76,8 @@ While a panel is open, the footer displays the installed version and links to Se
 
 Automated tests cover defaults, credential boundaries, ownership, revocation/expiry, atomic saves, stale-write rejection and failure recovery. Actual iOS Safari and the App Store Userscripts runtime still require a device check after deployment.
 
+For FanFiction.net, AO3-compatible forks, and other websites on Safari, use **Add Story → Enter Manually** in the organizer. The active-tab story editor, visual mappings and website-link queue are Chrome/Edge companion features. [Browser and source compatibility](../../docs/universal-stories/PHASE_6_RELEASE_READINESS.md)
+
 - Series pages show the same connected library toolbar. Add the series alone or select installments and set individual progress, notes, ratings, tags, and collections. Already saved works retain their details. For paginated series, save each listing page; saved series installments are combined across pages.
 
 ## Mobile Website Imports

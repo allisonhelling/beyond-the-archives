@@ -14,7 +14,7 @@ Use **one reviewable feature branch per phase**. Branch names are recommendation
 | 3 — Extension extraction and visual mapping | `phase/03-extension-visual-mapping` |
 | 4 — Classification and bulk imports | `phase/04-tags-bulk-imports` |
 | 5 — Crossposts and version-aware reading | `phase/05-crossposts-reading` |
-| 6 — Hardening and broader site support | `phase/06-hardening-site-support` |
+| 6 — Hardening and broader site support | `universal-stories/06-hardening-site-support` |
 
 Before creating a branch, run `git status --short` and `git branch --show-current`; protect existing uncommitted changes. Example, after confirming a clean working tree and updating the intended base branch: `git switch -c phase/00-compatibility-contracts`. Never force-switch, reset, push, merge, or deploy automatically. Keep each phase's migrations, contract fixtures, tests, and documentation together in its own review.
 
@@ -168,12 +168,12 @@ Implementation record: [Phase 5 Crossposts And Version-Aware Reading](PHASE_5_CR
 
 ## Phase 6 — Hardening And Broader Site Support
 
-**Suggested Git branch:** `phase/06-hardening-site-support` (create from the current reviewed integration branch after the previous phase is merged).
+**Review branch:** `universal-stories/06-hardening-site-support`.
 
 **Goal:** Release stable multi-site workflows and selectively extend adapter coverage.
 
-- [ ] Add structural AO3-compatible fork detection without assuming shared AO3 canonical tag authority.
-- [ ] Implement and test prioritized developer-maintained site adapters (FF.net; Wattpad only if chosen).
+- [x] Add structural AO3-compatible fork detection with origin-scoped categorized tags.
+- [x] Add a limited FanFiction.net desktop header adapter and fixture tests. Live browser acceptance is pending, and Wattpad remains conditional.
 - [ ] Harden mapping repair, import/export, permission scoping, security, accessibility, and performance.
 - [ ] Verify companion release compatibility, migrations, rollout/rollback, and user documentation.
 - [ ] Run end-to-end regression suites for AO3, generic sites, Safari/manual fallback, and archives unfolded.
@@ -181,6 +181,8 @@ Implementation record: [Phase 5 Crossposts And Version-Aware Reading](PHASE_5_CR
 - [ ] Revisit source indicator visual design and optional top-level mapping navigation only if usage warrants.
 
 **Exit criteria:** Supported site workflows pass release checks; optional ML and source-indicator aesthetics remain independently deferrable.
+
+[Phase 6 readiness report](PHASE_6_RELEASE_READINESS.md)
 
 **Specs:** [Site integrations](02-site-integrations.md), [Tag classification](05-tag-classification.md), [Security](08-security-and-migration.md).
 

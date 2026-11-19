@@ -33,6 +33,7 @@
     "test:integration": "node scripts/test-supabase.mjs",
     "test:integration:config": "node --experimental-strip-types --test scripts/tests/supabase-status.mjs scripts/tests/environment-isolation.mjs scripts/tests/staging-isolation.mjs scripts/tests/release-operations.mjs",
     "perf:db": "node scripts/performance-library.mjs",
+    "perf:sites": "node scripts/performance-sites.mjs",
     "perf:backup": "node scripts/performance-backups.mjs",
     "perf:hosted": "node scripts/performance-hosted.mjs",
     "perf:browser": "playwright test performance.spec.ts --workers=1",

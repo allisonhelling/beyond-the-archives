@@ -1,5 +1,6 @@
 import { classifyUrl } from './urls.ts'
 import { mappingMatches, sourcePage, type MappingRule } from './site-mapping.ts'
+import { isFanFictionStoryUrl } from './site-adapters.ts'
 
 export const bulkModes = { recognized: 'Recognized Story Links Only', candidates: 'All Links as Candidates' } as const
 export type BulkMode = keyof typeof bulkModes
@@ -7,6 +8,14 @@ export type BulkLink = { url: string; candidate?: string; kind: 'ao3' | 'series'
 
 export function previewBulkLinks(values: string[], rules: MappingRule[]): BulkLink[] {
  const seen = new Set<string>()
+ const rulesByOrigin = new Map<string, MappingRule[]>()
+ for (const rule of rules) {
+  if (rule.scope === 'site') continue
+  const origin = new URL(rule.example).origin
+  const group = rulesByOrigin.get(origin) ?? []
+  group.push(rule)
+  rulesByOrigin.set(origin, group)
+ }
  return values.map(value => {
   const url = value.trim()
   const known = classifyUrl(url)
@@ -17,7 +26,9 @@ export function previewBulkLinks(values: string[], rules: MappingRule[]): BulkLi
   seen.add(key)
   if (known.kind === 'valid') return { url, kind: 'ao3' }
   if (known.kind === 'series') return { url, kind: 'series' }
-  return { url, candidate: source!, kind: rules.some(rule => rule.scope !== 'site' && mappingMatches(rule, source!)) ? 'recognized' : 'candidate' }
+  const page = new URL(source!)
+  const recognized = isFanFictionStoryUrl(page) || rulesByOrigin.get(page.origin)?.some(rule => mappingMatches(rule, source!))
+  return { url, candidate: source!, kind: recognized ? 'recognized' : 'candidate' }
  })
 }
 

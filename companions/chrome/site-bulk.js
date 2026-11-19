@@ -93,7 +93,7 @@ export function createSiteBulk({ storage, getAuth, api, generation, appOrigin, l
     }, { documentId: target.documentId })
    } catch { /* The browser may revoke tab access or block injection. */ }
    const observations = readObservations(result?.observations)
-   const recognized = mapped.some(rule => filter(rule) && rule.scope !== 'site')
+   const recognized = result?.validations?.some(check => check.health === 'Working' && check.scope !== 'site')
    const hasStoryEvidence = recognized || result?.storyEvidence === true
    await finish(result?.ok && hasStoryEvidence && observations.title ? {
     p_metadata: classifyObservations(observations, task.expected, labels), p_observations: observations,

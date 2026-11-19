@@ -1,4 +1,4 @@
-import { listStoryFields, normalizedField, readObservations, storyFields } from '../../src/features/imports/site-mapping.ts'
+import { exactMappingUrl, listStoryFields, normalizedField, readObservations, storyFields } from '../../src/features/imports/site-mapping.ts'
 import { parseLines, statuses } from '../../src/features/library/model'
 
 const get = id => document.getElementById(id)
@@ -14,10 +14,17 @@ const notice = text => { notices.textContent = text }
 function handle(action) { return () => void Promise.resolve().then(action).catch(error => notice(error.message)) }
 function element(tag, text, props = {}) { return Object.assign(document.createElement(tag), props, text === undefined ? {} : { textContent: text }) }
 function button(text, action) { const control = element('button', text, { type: 'button' }); control.onclick = handle(action); return control }
-function label(text, control) { const wrapper = element('label', text); wrapper.append(control); return wrapper }
+function label(text, control) {
+ const wrapper = element('label', text)
+ if (control.type === 'checkbox') {
+  wrapper.className = 'check'
+  wrapper.prepend(control)
+ } else wrapper.append(control)
+ return wrapper
+}
 function option(value, text = value) { return element('option', text, { value }) }
 const changed = new Set(), used = {}
-let request, original, observed, validations, isConnected, statusChanged = false, timer, inProgress = false, recovered = false
+let request, original, observed, validations, isConnected, previewSelection, statusChanged = false, timer, inProgress = false, recovered = false
 const mappingDraft = { field: '', selectors: [], strip: '', paused: false }
 function useFields() {
  const values = {}
@@ -71,7 +78,7 @@ function renderMapping() {
  const prefix = element('input', undefined, { value: repair?.prefix ?? new URL(request.url).pathname.replace(/[^/]*$/, '') })
  const path = label('Story Path Prefix', prefix), approve = element('input', undefined, { type: 'checkbox' })
  const confirm = label('Apply This Rule to Other Pages on This Site', approve)
- confirm.className = 'check'; path.hidden = scope.value !== 'matching'; confirm.hidden = ['once', 'exact'].includes(scope.value)
+ path.hidden = scope.value !== 'matching'; confirm.hidden = ['once', 'exact'].includes(scope.value)
  const live = element('output'); live.setAttribute('aria-live', 'polite')
  const save = button(scope.selectedOptions[0].text, async () => {
   if (!mappingDraft.field || !mappingDraft.text || !mappingDraft.selectors.length) return
@@ -80,14 +87,17 @@ function renderMapping() {
    if (!isConnected) throw new Error('Connect a library account to save a reusable rule.')
    if (!approve.checked && scope.value !== 'exact') throw new Error('Confirm the broader URL scope before saving.')
    const old = validations.find(item => item.field === field && item.repair && item.scope === scope.value)
+   const testedElsewhere = old?.ruleExample && old.prefix === (scope.value === 'matching' ? prefix.value.trim() : undefined)
+    && exactMappingUrl(old.ruleExample) !== exactMappingUrl(request.url)
+   const health = scope.value === 'exact' || testedElsewhere ? 'Working' : 'Needs Review'
    const rule = {
     id: old?.id ?? crypto.randomUUID(), version: (old?.version ?? 0) + 1, scope: scope.value, example: request.url,
     ...(scope.value === 'matching' && { prefix: prefix.value.trim() }), field, selectors: mappingDraft.selectors, strip: strip.value,
-    previous: text, validation: { when: new Date().toISOString(), example: request.url, current: text, health: scope.value === 'exact' ? 'Working' : 'Needs Review' },
+    previous: text, validation: { when: new Date().toISOString(), example: request.url, current: text, health },
    }
    await send('rule', { rule, expected: old?.version ?? 0, confirm: approve.checked })
    await leaveMapping()
-   notice('Mapping saved. Your story draft is available separately.')
+   notice(health === 'Working' ? 'Mapping saved. Your story draft is available separately.' : 'Mapping saved for review. Open a different matching story and use Review Repair to confirm it.')
    return
   }
   used[field] = { text, via }
@@ -100,16 +110,17 @@ function renderMapping() {
   notice(original || changed.has(field) ? 'Mapped value previewed. Use it explicitly if you want to replace your story field.' : 'Mapped value added to the draft.')
  })
  const preview = handle(async () => {
-  const selectedField = mappingDraft.field, selectedStrip = mappingDraft.strip
+  const selectedField = mappingDraft.field, selectedStrip = mappingDraft.strip, selectors = mappingDraft.selectors
   mappingDraft.text = ''
   save.disabled = true
-  if (!selectedField || !mappingDraft.selectors.length) return
+  if (!selectedField || !selectors.length) return
   const reply = await send('preview', { field: selectedField, strip: selectedStrip })
-  if (mappingDraft.field !== selectedField || mappingDraft.strip !== selectedStrip) return
+  if (mappingDraft.field !== selectedField || mappingDraft.strip !== selectedStrip || mappingDraft.selectors !== selectors) return
   mappingDraft.text = reply.text
   live.textContent = reply.text ? `Extracted Value\n${reply.text}` : 'No valid value was found for this field.'
   save.disabled = !reply.text
  })
+ previewSelection = preview
  field.onchange = () => { mappingDraft.field = field.value; queueDraft(); preview() }
  strip.oninput = () => { mappingDraft.strip = strip.value; queueDraft(); preview() }
  scope.onchange = () => { path.hidden = scope.value !== 'matching'; confirm.hidden = ['once', 'exact'].includes(scope.value); approve.checked = false; save.textContent = scope.selectedOptions[0].text }
@@ -117,13 +128,15 @@ function renderMapping() {
   element('p', 'Choose a field before or after selecting a page element. Use Tab and Enter to select a focusable element, or click it.'),
   label('Map Field', field), label('Remove Text Prefix', strip), live, label('Mapping Scope', scope), path, confirm,
   element('div', undefined, { className: 'actions' }))
- mapping.lastChild.append(button(mappingDraft.paused ? 'Resume Selection' : 'Pause Selection', async () => {
+ const pause = button(mappingDraft.paused ? 'Resume Selection' : 'Pause Selection', async () => {
   mappingDraft.paused = !mappingDraft.paused
   mappingDraft.selectors = []
   await send('select', { paused: mappingDraft.paused })
-  renderMapping()
+  pause.textContent = mappingDraft.paused ? 'Resume Selection' : 'Pause Selection'
+  preview()
   queueDraft()
- }), save, button('Cancel', leaveMapping))
+ })
+ mapping.lastChild.append(pause, save, button('Cancel', leaveMapping))
  preview()
 }
 function renderEvidence() {
@@ -160,7 +173,6 @@ get('return').onclick = handle(async () => {
   await send('return', { draft: draft(), observations })
   notice(request.operation === 'save' ? 'Draft opened in the app.' : 'Returned to your draft in the app.')
   form.inert = true
-  await send('close')
  } finally { inProgress = false }
 })
 form.onsubmit = async event => {
@@ -197,8 +209,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
  if (sender.id !== chrome.runtime.id || message?.type !== 'BTA_SITE_SELECTION' || message.nonce !== nonce) return
  if (!message.selection) { handle(leaveMapping)(); return }
  if (!message.selection.found) { notice('Choose a smaller or more specific text element.'); return }
+ if (mapping.hidden) return
  mappingDraft.selectors = message.selection.selectors
- renderMapping()
+ previewSelection()
  mapping.querySelector('select').focus()
  queueDraft()
 })
@@ -253,10 +266,8 @@ void send('initialize').then(async reply => {
  inputs.notes.value = previous?.notes ?? original?.notes ?? ''
  inputs.tags.value = (previous?.tags ?? original?.personalTags ?? []).join('\n')
  inputs.manual.checked = previous?.manual ?? original?.metadata.chapter_count_manual ?? false
- if (reply.collections?.length) get('collections').append(element('h2', 'Collections'), ...reply.collections.map(({ name, id }) => {
-  const check = label(name, element('input', undefined, { type: 'checkbox', value: id, checked: (previous?.collections ?? original?.collectionIds ?? []).includes(id) }))
-  check.className = 'check'; return check
- }))
+ if (reply.collections?.length) get('collections').append(element('h2', 'Collections'), ...reply.collections.map(({ name, id }) =>
+  label(name, element('input', undefined, { type: 'checkbox', value: id, checked: (previous?.collections ?? original?.collectionIds ?? []).includes(id) }))))
  renderEvidence()
  get('save').hidden = request.operation !== 'save' || !isConnected || Boolean(reply.unavailable)
  get('return').textContent = request.operation === 'save' ? 'Continue in App' : 'Return to Draft'

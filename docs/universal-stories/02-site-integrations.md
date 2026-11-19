@@ -1,6 +1,6 @@
 # Site Integrations And Mapping
 
-> **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
+> **Status:** Accepted product requirements. The [Phase 6 capability matrix](PHASE_6_RELEASE_READINESS.md) lists the implemented adapters and limits.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 
 ## 2. Integration Tiers And Capability Model
@@ -9,7 +9,8 @@
 
 | Tier | Description | Expected behavior |
 |---|---|---|
-| **Fully supported** | Developer-maintained adapters, initially AO3; planned FanFiction.net and possibly Wattpad | Reliable site-aware metadata, tag handling, story URL recognition, and advanced chapter support as implemented |
+| **Developer-maintained** | AO3 and the limited FanFiction.net desktop adapter | Fields and chapter capabilities vary by site |
+| **Structurally compatible** | A work page that matches the AO3-compatible structure and supplies same-origin categorized tag links | Categorized tags and optional header metadata use that site's origin |
 | **Custom site** | User-configured URL patterns and visual extraction rules | Reusable metadata/tag extraction; eventually reusable chapter-index and chapter-link extraction |
 | **Other website** | Any URL not covered by the above | Best-effort metadata extraction, editable review, manual entry, manual chapter tracking, optional one-page mapping |
 

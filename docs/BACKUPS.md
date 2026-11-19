@@ -10,6 +10,8 @@ Excluded: Auth accounts/passwords/sessions/MFA, application role assignments and
 
 Unlinked AO3-only libraries export version 1. Libraries with universal manual stories export version 2, and libraries with linked versions export version 3. Current restore accepts all three versions. Linked backups include confirmed chapter correspondence, shared reading status, and reconciled organization alongside original source data. Upgrade the database, organizer, and infrastructure restore script before restoring linked backups.
 
+Export site mappings separately from **Settings → Imports & Connections → Site Mappings**. The portable file can be imported for review. **Classification Rules → Export Rules** downloads rules for reference. Both rule types sit outside the account backup and restore payload.
+
 The approved production recovery policy, encrypted bundle tooling, independent retention/custody and full Auth/Storage/configuration recovery ceremony are maintained in [Recovery And Staging Acceptance](security-foundation/RECOVERY_AND_STAGING_ACCEPTANCE.md). The [production rollout runbook](security-foundation/PRODUCTION_ROLLOUT_RUNBOOK.md#backup-coverage-and-restore-boundaries) governs action approvals. A successful account restore does not establish whole-project recovery or authorize any hosted action.
 
 ## Restore Your Own Account in the App

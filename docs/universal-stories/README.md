@@ -1,5 +1,7 @@
 # Beyond The Archives — Universal Story Tracking
 
+See [Phase 6 Release Readiness](PHASE_6_RELEASE_READINESS.md) for the current capability matrix, verification, and release gates.
+
 **Status:** Accepted future-feature specification, organized on 12 November 2026. The project's architecture has already been prepared for future multi-site support; that does **not** mean the proposed site integrations, mapping interface, or crosspost features are already implemented. Build on the existing foundations, with a compatibility audit rather than assuming a wholesale refactor is required.
 
 Phase 2 implements single-source manual stories and safe chapter-total editing. Phase 3 adds active-tab extraction and mappings. The [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) describes linked versions, chapter correspondence, and remaining work.

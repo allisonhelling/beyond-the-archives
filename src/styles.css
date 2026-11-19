@@ -75,7 +75,8 @@ input::placeholder { color: #897373; }
 .button { border: 1px solid transparent; border-radius: var(--radius-control); padding: 12px 18px; font-size: max(var(--work-tile-min-font-size, 0px), 13px); font-weight: 550; display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; transition: background .15s; }
 .primary { background: #970000; color: #ffffff; }.primary:hover:not(:disabled):not(.icon-button) { background: var(--color-brand-hover); }
 form .primary { width: 100%; }
-.secondary { border-color: #dfcbc5; background: var(--color-surface); color: #970000; }.secondary:is(:hover, :focus-visible):not(:disabled):not(.dropdown-trigger, .fandom-trigger) { background: var(--color-brand-soft); }
+.secondary { border-color: #dfcbc5; background: var(--color-surface); color: #970000; }
+.secondary:is(:hover, :focus-visible):not(:disabled):not(.dropdown-trigger, .fandom-trigger) { background: var(--secondary-hover-background, var(--color-brand-soft)); }
 .text-button { background: transparent; border: 0; padding: 12px 6px; color: #970000; font-size: max(var(--work-tile-min-font-size, 0px), 13px); min-height: 44px; }
 form > .text-button { display: block; margin: 9px auto 17px; }
 .invite-note { border-top: 1px solid #ecddd8; padding: 21px 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: #756363; font-size: 13px; margin-top: 20px; }
@@ -165,7 +166,12 @@ form > .text-button { display: block; margin: 9px auto 17px; }
 .details-updated-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .details-updated-action .reader-work-actions, .story-metadata-actions .reader-work-actions { display: contents; }
 .details-updated > .details-updated-action { grid-column: 2; grid-row: 1 / span 2; }
-.details-progress-panel { padding-block: 16px; background: var(--color-brand-soft); border-left: 4px solid var(--color-brand); }
+.details-progress-panel {
+  --secondary-hover-background: color-mix(in srgb, var(--color-surface-secondary), var(--color-brand) 8%);
+  padding-block: 16px;
+  background: var(--color-brand-soft);
+  border-left: 4px solid var(--color-brand);
+}
 .details-progress-panel h2, .details-progress-panel .details-control-heading, .note-heading > span:first-child { font-weight: 400; font-family: var(--font-serif); font-size: 14px; text-transform: uppercase; letter-spacing: .08em; }
 .details-fic-panel .details-fic-fields { margin-top: 0; }
 .details-fic-fields > div:first-child { margin-top: 0; padding-top: 0; }

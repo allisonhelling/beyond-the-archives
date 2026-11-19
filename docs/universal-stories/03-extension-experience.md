@@ -1,5 +1,7 @@
 # Extension Experience And Handoff
 
+For implemented browser capabilities and second-page mapping confirmation in companion 0.8.1, see [Phase 6 Release Readiness](PHASE_6_RELEASE_READINESS.md).
+
 > **Status:** Accepted product requirements; future implementation. The existing architecture is prepared for multi-site support, but the features described here are not necessarily implemented.
 > **Source:** the supplied consolidated specification (workspace planning source). [Index](README.md) · [Implementation plan](IMPLEMENTATION_PLAN.md).
 

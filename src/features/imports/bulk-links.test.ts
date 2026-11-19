@@ -23,3 +23,9 @@ it('keeps identity-bearing query parameters and requires more than a site-wide m
  const links = previewBulkLinks(['https://fiction.example/?id=a', 'https://fiction.example/?id=b', 'https://FICTION.EXAMPLE:443/?id=a'], [{ ...rule, scope: 'site' }])
  expect(links.map(link => link.kind)).toEqual(['candidate', 'candidate', 'duplicate'])
 })
+it('recognizes desktop FanFiction.net story candidates and preserves the submitted chapter URL', () => {
+ const source = 'https://www.fanfiction.net/s/100/3/Fixture?view=text'
+ const links = previewBulkLinks([source, 'https://fanfiction.net/u/100', 'https://fanfiction.net.example/s/100', 'https://archive.example/works/100', 'https://www.wattpad.com/story/100'], [])
+ expect(links.map(link => link.kind)).toEqual(['recognized', 'candidate', 'candidate', 'candidate', 'candidate'])
+ expect(links[0].candidate).toBe(source)
+})

@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { browserTestEnv } from '../../scripts/playwright-env'
 import { localExtensionId } from '../../src/features/imports/extension-config'
 import { blankMetadata } from '../../src/features/library/model'
-import { makeSiteRequest } from '../../src/features/imports/site-mapping'
+import { makeSiteRequest, type MappingRule } from '../../src/features/imports/site-mapping'
 
 test('the installed companion gates extraction, edits an unknown story and tears down on a same-document route change', async ({ browserName }, info) => {
  test.skip(info.project.name !== 'desktop' || browserName !== 'chromium', 'Unpacked desktop Chromium companion.')
@@ -20,7 +20,7 @@ test('the installed companion gates extraction, edits an unknown story and tears
  const bulkWrites: Record<string, unknown>[] = []
  let claimed = false
  const writes: Record<string, unknown>[] = []
- const mappings: { rule: unknown }[] = []
+ const mappings: { rule: MappingRule }[] = []
  const server = createServer(async (request, response) => {
   const path = new URL(request.url!, 'http://127.0.0.1').pathname
   // Serve the handoff directly because Chromium can navigate an extension-created tab before Playwright attaches its routes.
@@ -55,7 +55,13 @@ test('the installed companion gates extraction, edits an unknown story and tears
   else if (path === '/rest/v1/rpc/write_site_mapping') {
    let data = ''
    for await (const part of request) data += part
-   mappings.push({ rule: JSON.parse(data).p_rule }); body = true
+   const { p_rule: rule, p_version: expected } = JSON.parse(data)
+   const previous = mappings.findIndex(item => item.rule.id === rule.id)
+   body = expected === (mappings[previous]?.rule.version ?? 0) && rule.version === expected + 1
+   if (body) {
+    if (previous < 0) mappings.push({ rule })
+    else mappings[previous] = { rule }
+   }
   } else if (path === '/rest/v1/rpc/save_companion_story') {
    let data = ''
    for await (const part of request) data += part
@@ -83,7 +89,7 @@ test('the installed companion gates extraction, edits an unknown story and tears
   expect(manifest.host_permissions).not.toContain('https://*/*')
   manifest.host_permissions.push('https://fiction.example/*')
   await writeFile(manifestPath, JSON.stringify(manifest))
-  context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--no-proxy-server'] })
+  context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, reducedMotion: 'reduce', args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--no-proxy-server'] })
   context.setDefaultTimeout(20000)
   await context.route('https://*.example/**', route => {
    if (route.request().url() === indexUrl) return route.fulfill({ contentType: 'text/html', body: '<a href="/stories/bulk">Bulk</a><a href="javascript:void(0)">Restricted</a>' })
@@ -115,6 +121,7 @@ test('the installed companion gates extraction, edits an unknown story and tears
   await source.bringToFront()
   expect(await open('https://ungranted.example/stories/one')).toBe('denied')
   await source.goto(sourceUrl)
+  expect(await source.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true)
   expect(await open(sourceUrl)).toBe('opened')
   let editor = await panel()
   await expect(editor.getByRole('button', { name: 'Connect Library' })).toBeVisible()
@@ -130,7 +137,7 @@ test('the installed companion gates extraction, edits an unknown story and tears
   await editor.getByRole('button', { name: 'Teach Where to Find Authors' }).press('Enter')
   await expect(editor.getByLabel('Map Field')).toBeFocused()
   await editor.getByRole('button', { name: 'Pause Selection' }).click()
-  await expect(editor.getByRole('button', { name: 'Resume Selection' })).toBeVisible()
+  await expect(editor.getByRole('button', { name: 'Resume Selection' })).toBeFocused()
   await source.getByRole('button', { name: 'Expand' }).click()
   await expect(source.getByRole('button', { name: 'Expanded' })).toBeVisible()
   await editor.getByRole('button', { name: 'Resume Selection' }).click()
@@ -248,11 +255,38 @@ test('the installed companion gates extraction, edits an unknown story and tears
    const [tab] = await extension.chrome.tabs.query({ active: true, lastFocusedWindow: true })
    return extension.testBulkAuthorize(tab)
   })).toBe(true)
-  await expect.poll(() => bulkWrites).toEqual([expect.objectContaining({
+  await expect.poll(() => bulkWrites, { timeout: 20_000 }).toEqual([expect.objectContaining({
    p_batch: bulkBatch, p_item: 'item', p_token: 'lease',
    p_metadata: expect.objectContaining({ title: 'Bulk Story', character_tags: ['Fixture Tag'] }),
    p_observations: expect.objectContaining({ ao3_tags: { text: 'Fixture Tag', via: 'Structured Data' } }),
   })])
+  await requested.bringToFront()
+  await restoredEditor.getByRole('button', { name: 'Teach Where to Find Summary' }).click()
+  await requested.getByText('An actual summary.').click()
+  await expect(restoredEditor.locator('output')).toContainText('An actual summary.')
+  await restoredEditor.getByLabel('Mapping Scope').selectOption('matching')
+  const initialApproval = restoredEditor.getByLabel('Apply This Rule to Other Pages on This Site')
+  // Scroll inside the editor. The iframe's closed shadow root hides its viewport clipping from Playwright.
+  await initialApproval.evaluate(control => control.scrollIntoView({ block: 'center' }))
+  await initialApproval.check()
+  await restoredEditor.getByRole('button', { name: 'Save for Matching Story Pages' }).click()
+  await expect(restoredEditor.locator('#notice')).toContainText('Mapping saved for review.')
+
+  const secondUrl = new URL('/stories/second', sourceUrl).href
+  await requested.goto(secondUrl)
+  expect(await open(secondUrl)).toBe('opened')
+  const secondEditor = await panel(requested)
+  await expect(secondEditor.getByRole('button', { name: 'Review Repair' })).toBeVisible()
+  expect(mappings[1].rule.validation.health).toBe('Needs Review')
+  await secondEditor.getByRole('button', { name: 'Review Repair' }).press('Enter')
+  await requested.getByText('An actual summary.').click()
+  await expect(secondEditor.locator('output')).toContainText('An actual summary.')
+  const approval = secondEditor.getByLabel('Apply This Rule to Other Pages on This Site')
+  await approval.press('Space')
+  await expect(approval).toBeChecked()
+  await secondEditor.getByRole('button', { name: 'Save for Matching Story Pages' }).press('Enter')
+  await expect(secondEditor.locator('#notice')).toContainText('Mapping saved.')
+  expect(mappings[1].rule).toMatchObject({ example: secondUrl, validation: { health: 'Working' } })
  } finally {
   await context?.close()
   server.closeAllConnections()

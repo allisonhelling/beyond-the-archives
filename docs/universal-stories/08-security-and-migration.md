@@ -1,5 +1,7 @@
 # Security, Provenance, And Migration
 
+The [Phase 6 security and rollout review](PHASE_6_RELEASE_READINESS.md#ownership-privacy-and-retention) supplements the original reconciliation below with current source, account, mapping, queue and backup boundaries.
+
 See the [Phase 4 delivery record](PHASE_4_CLASSIFICATION_AND_BULK_IMPORTS.md) for the implemented classification, bulk retrieval, review contracts, and verification.
 
 The [Phase 5 delivery record](PHASE_5_CROSSPOSTS.md) describes the owner-scoped linked-version writes, additive migrations, and version 3 backup format.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { localClients, checked, syntheticEpub } from './local-fixtures.mjs'
-import { localSql, sqlUuid, createSyntheticRoleAccounts, removeSyntheticRoleAccounts } from './local-role-fixtures.mjs'
+import { localSql, sqlUuid, createSyntheticRoleAccounts, removeSyntheticRoleAccounts, verifySyntheticMfa } from './local-role-fixtures.mjs'
 import { privacyCatalog } from './privacy-catalog.mjs'
 import { validateLocalEdgeSettings } from './local-target.mjs'
 
@@ -239,6 +239,8 @@ try {
    assert.equal(await rpc(account,'reader_has_access'),true)
   })
   await check('administrative metadata',account.identity,'role-independent redacted audit fields',async()=>{
+   // Fixture setup and the preceding account checks can exceed the five-minute MFA window.
+   if(index>=2)await verifySyntheticMfa(account)
    const request=randomUUID();fixture.requests.push(request)
    const audit=await rpc(account,'admin_access',{p_request_id:request,p_action:'read_audit'})
    if(index<2)assert.equal(audit.code,'forbidden')

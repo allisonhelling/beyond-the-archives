@@ -1,4 +1,4 @@
-import { listStoryFields, makeSiteRequest, mappingMatches, normalizedField, observationPatch, readMapping, readObservations, readScannedLinks, readSiteDraft, readSiteRequest, sourcePage, storyFields, validRequestId } from '../../src/features/imports/site-mapping.ts'
+import { exactMappingUrl, listStoryFields, makeSiteRequest, mappingMatches, normalizedField, observationPatch, readMapping, readObservations, readScannedLinks, readSiteDraft, readSiteRequest, sourcePage, storyFields, validRequestId } from '../../src/features/imports/site-mapping.ts'
 import { blankMetadata, statuses, validateProgress } from '../../src/features/library/model'
 import { checkedStorySave, editSnapshot, storyEdits } from '../../src/features/library/edit-merge'
 import { chapterReview } from '../../src/features/library/chapter-edit'
@@ -17,6 +17,9 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
   const next = previous.catch(() => {}).then(action)
   lanes.set(key, next)
   return next.finally(() => { if (lanes.get(key) === next) lanes.delete(key) })
+ }
+ function topOrganizer(sender) {
+  return Number.isInteger(sender.tab?.id) && sender.frameId === 0 && sender.documentId && sender.origin === appOrigin()
  }
  async function get(area, key) { return (await area.get(key))[key] }
  async function state(tabId) { return get(storage.session, pendingKey(tabId)) }
@@ -101,10 +104,10 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
   return id
  }
  async function external(message, sender) {
-  const top = sender.tab && Number.isInteger(sender.tab.id) && sender.frameId === 0 && sender.documentId
-  if (!top || sender.origin && sender.origin !== appOrigin()) return fail('Open the library in its own tab.', 'STALE')
+  if (!topOrganizer(sender)) return fail('Open the library in its own tab.', 'STALE')
   const request = readSiteRequest(message.request)
   if (!request) return fail('This request expired. Start again from your draft.', 'STALE')
+  if (request.origin === appOrigin()) return fail('Open a public source page from your draft.', 'STALE')
   const auth = await connected()
   if (!auth || auth.userId !== request.account) return fail('Reconnect the same library account to resume.', 'DISCONNECTED')
   if (message.action === 'begin') return exclusive(appKey(request.requestId), async () => {
@@ -202,10 +205,20 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
    }
    if (!fromPanel || session.panelDocumentId && session.panelDocumentId !== sender.documentId) return fail('Reopen the editor.', 'STALE')
    const send = data => chrome.tabs.sendMessage(id, { ...data, type: 'BTA_SITE_COMMAND', nonce: session.nonce }, { documentId: session.documentId })
+   const closePanel = async () => {
+    const result = await send({ action: 'close' })
+    if (result?.ok) {
+     session.panelDocumentId = null
+     session.nonce = null
+     await put(id, session)
+    }
+    return result
+   }
    if (message.action === 'initialize') {
     session.panelDocumentId = sender.documentId
     await put(id, session)
     const capture = await send({ action: 'capture' })
+    if (!capture?.ok) return fail('The source page changed or the browser blocked extraction. Reopen the editor or continue with manual entry.', 'STALE')
     session.observations = readObservations(capture.observations)
     const validations = await Promise.all((capture.validations ?? []).map(async check => {
      const rule = session.rules.find(rule => rule.id === check.id && rule.version === check.version)
@@ -215,6 +228,7 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
      if (Object.entries(validated.validation).every(([key, value]) => key === 'when' || value === rule.validation[key])) return check
      try {
       await writeRule(auth, validated, rule.id, rule.version)
+      session.rules[session.rules.indexOf(rule)] = validated
       return { ...check, version: validated.version }
      } catch { return check }
     }))
@@ -222,7 +236,9 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
     session.base = session.story ? (draft?.storyId === session.story.id ? draft.base : undefined) ?? editSnapshot(session.story) : null
     await put(id, session)
     return { ok: true, request, story: session.story, collections: session.collections, unavailable: session.unavailable,
-     mappingUnavailable: session.mappingUnavailable, observations: session.observations, validations: validations.filter(Boolean), draft: readSiteDraft(draft), offlineDraft: readSiteDraft(session.offlineDraft) }
+     mappingUnavailable: session.mappingUnavailable, observations: session.observations,
+     validations: validations.filter(Boolean).map(check => ({ ...check, ruleExample: session.rules.find(rule => rule.id === check.id)?.example })),
+     draft: readSiteDraft(draft), offlineDraft: readSiteDraft(session.offlineDraft) }
    }
    if (message.action === 'select' || message.action === 'preview' || message.action === 'highlight') return send({ action: message.action, field: message.field, paused: message.paused, strip: message.strip, selectors: message.selectors })
    if (message.action === 'draft') {
@@ -239,6 +255,11 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
     if (!rule || rule.example !== request.url || !mappingMatches(rule, request.url) || rule.scope !== 'exact' && message.confirm !== true) return fail('Confirm the rule’s URL scope before saving.')
     const expected = message.expected ?? 0
     if (rule.version !== expected + 1) return fail('Reload this mapping before saving.')
+    if (rule.scope !== 'exact' && rule.validation.health === 'Working') {
+     const prior = session.rules.find(item => item.id === rule.id && item.version === expected)
+     if (!prior || prior.scope !== rule.scope || prior.prefix !== rule.prefix || prior.field !== rule.field
+      || exactMappingUrl(prior.example) === exactMappingUrl(request.url)) return fail('Review the rule on a different matching story before confirming it.')
+    }
     await writeRule(auth, rule, rule.id, expected)
     return { ok: true }
    }
@@ -255,19 +276,22 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
     if (session.result) return fail('This request already has a result.', 'STALE')
     const observations = readObservations(message.observations)
     session.result = { ...request, tabId: id, code: 'OK', observations }
-    if (session.appTabId !== undefined) {
-     await storage.session.set({ [appKey(request.requestId)]: { tabId: id, appTabId: session.appTabId, appDocumentId: session.appDocumentId, result: session.result } })
-     await put(id, session)
-     await chrome.tabs.update(session.appTabId, { active: true })
+    let destination = session.appTabId
+    if (destination !== undefined) {
+     await storage.session.set({ [appKey(request.requestId)]: { tabId: id, appTabId: destination, appDocumentId: session.appDocumentId, result: session.result } })
     } else {
      const handoff = crypto.randomUUID()
-     const tab = await chrome.tabs.create({ url: `${appOrigin()}/add?import=manual&companion=${handoff}` })
+     const tab = await chrome.tabs.create({ url: `${appOrigin()}/add?import=manual&companion=${handoff}`, active: false })
+     destination = tab.id
      await storage.session.set({ [appKey(handoff)]: {
-      appTabId: tab.id, url: request.url, account: auth?.userId, expiresAt: request.expiresAt,
+      appTabId: destination, url: request.url, account: auth?.userId, expiresAt: request.expiresAt,
       draft: readSiteDraft(message.draft), observations, base: session.base,
      } })
-     await put(id, session)
     }
+    await put(id, session)
+    // Close from the background before focus moves and the source frame can be suspended.
+    await closePanel().catch(() => {})
+    await chrome.tabs.update(destination, { active: true })
     return { ok: true }
    }
    if (message.action === 'settings') {
@@ -282,18 +306,12 @@ export function createSiteController({ storage, getAuth, api, ready, appOrigin, 
     await chrome.tabs.create({ url: `${appOrigin()}/settings#settings-metadata` })
     return { ok: true }
    }
-   if (message.action === 'close') {
-    const result = await send({ action: 'close' })
-    session.panelDocumentId = null
-    session.nonce = null
-    await put(id, session)
-    return result
-   }
+   if (message.action === 'close') return closePanel()
    return fail('Unknown editor action.')
   })
  }
  async function appDraft(message, sender) {
-  if (!validRequestId(message.id) || !sender.tab || sender.frameId > 0 || new URL(sender.url).searchParams.get('companion') !== message.id) return fail('This draft belongs to another tab.', 'STALE')
+  if (!topOrganizer(sender) || !validRequestId(message.id) || new URL(sender.url).searchParams.get('companion') !== message.id) return fail('This draft belongs to another tab.', 'STALE')
   return exclusive(appKey(message.id), async () => {
    const link = await get(storage.session, appKey(message.id)), auth = await connected()
    if (!auth || !link?.account || link.account !== auth.userId || link.appTabId !== sender.tab.id || link.expiresAt <= Date.now()) return fail('Reconnect the original account to load this draft.', 'DISCONNECTED')

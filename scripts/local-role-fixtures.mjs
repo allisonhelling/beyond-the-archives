@@ -23,18 +23,25 @@ function totp(secret) {
  const digest=createHmac('sha1',key).update(counter).digest()
  return String((digest.readUInt32BE(digest[19]&15)&0x7fffffff)%1000000).padStart(6,'0')
 }
-export async function enrollSyntheticMfa(account, onFailure = () => {}) {
- const result=(response,step)=>{
-  if(response.error) {
-   const code=/^[a-z_]+$/.test(response.error.code)?response.error.code:'unknown'
-   onFailure(`${step} (Auth code ${code}, status ${Number(response.error.status)||0})`)
-  }
-  return checked(response)
+const syntheticFactors=new WeakMap()
+function mfaResult(response,step,onFailure) {
+ if(response.error) {
+  const code=/^[a-z_]+$/.test(response.error.code)?response.error.code:'unknown'
+  onFailure(`${step} (Auth code ${code}, status ${Number(response.error.status)||0})`)
  }
- const enrolled=result(await account.client.auth.mfa.enroll({factorType:'totp',friendlyName:'Synthetic S2 Test'}),'enrolling synthetic TOTP')
- const challenge=result(await account.client.auth.mfa.challenge({factorId:enrolled.id}),'challenging synthetic TOTP')
- result(await account.client.auth.mfa.verify({factorId:enrolled.id,challengeId:challenge.id,code:totp(enrolled.totp.secret)}),'verifying synthetic TOTP')
+ return checked(response)
+}
+export async function verifySyntheticMfa(account, onFailure = () => {}) {
+ const factor=syntheticFactors.get(account)
+ if(!factor)throw new Error('Synthetic TOTP factor unavailable.')
+ const challenge=mfaResult(await account.client.auth.mfa.challenge({factorId:factor.id}),'challenging synthetic TOTP',onFailure)
+ mfaResult(await account.client.auth.mfa.verify({factorId:factor.id,challengeId:challenge.id,code:totp(factor.secret)}),'verifying synthetic TOTP',onFailure)
  return checked(await account.client.auth.getSession()).session.access_token
+}
+export async function enrollSyntheticMfa(account, onFailure = () => {}) {
+ const enrolled=mfaResult(await account.client.auth.mfa.enroll({factorType:'totp',friendlyName:'Synthetic S2 Test'}),'enrolling synthetic TOTP',onFailure)
+ syntheticFactors.set(account,{id:enrolled.id,secret:enrolled.totp.secret})
+ return verifySyntheticMfa(account,onFailure)
 }
 export const sqlUuid=value=>{if(!/^[0-9a-f-]{36}$/.test(value))throw new Error('Invalid synthetic fixture ID.');return `'${value}'`}
 
