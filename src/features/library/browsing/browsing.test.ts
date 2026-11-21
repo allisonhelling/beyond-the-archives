@@ -8,6 +8,10 @@ it('keeps filter edits distinct from pagination, shelf changes and detail naviga
  const filtered = '/library?shelf=all&page=1&personalNotes=true'
  expect(isFilterNavigation(original, filtered)).toBe(true)
  expect(isFilterNavigation(filtered, original)).toBe(true)
+ const offline = '/library?shelf=all&page=1&personalNotes=false&availability=any-offline'
+ expect(isFilterNavigation(original, offline)).toBe(true)
+ expect(isFilterNavigation(offline, original)).toBe(true)
+ expect(isFilterNavigation('/library?shelf=all&reader=old-installation', offline)).toBe(true)
  expect(isFilterNavigation(original, '/library?shelf=all&page=4&personalNotes=false')).toBe(false)
  expect(isFilterNavigation(original, '/library?shelf=recs&personalNotes=true')).toBe(false)
  expect(isFilterNavigation('/stories/1', filtered)).toBe(false)

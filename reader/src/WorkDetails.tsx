@@ -1,3 +1,5 @@
+import { FandomTags } from '../../src/features/library/FandomTags'
+import { countNoun } from '../../src/lib/count-noun'
 import { WorkSummary } from '../../src/features/library/summaries/WorkSummary'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
 import { Dialog } from '../../src/components/Dialog'
@@ -38,15 +40,15 @@ export function WorkDetails({ book, onClose, onReview, onOpenWork, onCheckLinks,
       const href = linked ? new URL(`/stories/${encodeURIComponent(linked.id)}`, organizerAppUrl()).href : undefined
       const add = new URL('/add', organizerAppUrl())
       if (work.workId) { add.searchParams.set('import', 'link'); add.searchParams.set('url', `https://archiveofourown.org/works/${work.workId}`) }
-      return <li key={work.key}><strong>{work.title}</strong> · {chapters.filter(chapter => book.completed.includes(chapter.id)).length} of {chapters.length} chapters read
+      return <li key={work.key}><strong>{work.title}</strong> · {chapters.filter(chapter => book.completed.includes(chapter.id)).length} of {chapters.length} {countNoun(chapters.length, 'chapter')} read
         <p>{!work.workId ? 'AO3 work link needed.' : linked ? 'Organizer Linked' : checked ? 'Not in Organizer' : organizerAccount ? 'Organizer link not checked.' : 'Connect your organizer account to check this work.'}</p>
-        <div className="form-actions">{href && <a href={href} target="_blank" rel="noopener noreferrer">View in Organizer</a>}{checked && !linked && work.workId && <a href={add.href} target="_blank" rel="noopener noreferrer">Add to Organizer</a>}{!work.workId && onReview && <button onClick={onReview}>Review Anthology Contents</button>}{work.workId && onOpenWork && <button onClick={() => onOpenWork(work.workId!)}>Read This Fic</button>}{work.workId && <a href={`https://archiveofourown.org/works/${work.workId}`} target="_blank" rel="noopener noreferrer">Open Work on AO3</a>}</div>
+        <div className="form-actions">{href && <a href={href} target="_blank" rel="noopener noreferrer">View in Organizer</a>}{checked && !linked && work.workId && <a href={add.href} target="_blank" rel="noopener noreferrer">Add to Organizer</a>}{!work.workId && onReview && <button onClick={onReview}>Review Anthology Contents</button>}{work.workId && onOpenWork && <button onClick={() => onOpenWork(work.workId!)}>Read This Story</button>}{work.workId && <a href={`https://archiveofourown.org/works/${work.workId}`} target="_blank" rel="noopener noreferrer">Open Work on AO3</a>}</div>
       </li>
     })}</ol></section>}
     {isAnthology(book) && organizerAccount && onCheckLinks && <button onClick={onCheckLinks}>Refresh Organizer Links</button>}
     {onReview && <button onClick={onReview}>Review Anthology Contents</button>}
     {book.workId && /^[1-9]\d*$/.test(book.workId) && <p><a href={`https://archiveofourown.org/works/${book.workId}`} target="_blank" rel="noopener noreferrer">Open Work on AO3</a> · Work {book.workId}</p>}
-    <dl className="work-details-list">{rows.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{label === 'Summary' ? <WorkSummary metadata={metadata} fallback="Unknown / Not Saved" /> : Array.isArray(value) ? value.length ? <ul>{value.map((item, index) => <li key={index}>{item}</li>)}</ul> : 'Unknown / Not Saved' : savedValue(value)}</dd></div>)}</dl>
+    <dl className="work-details-list">{rows.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{label === 'Summary' ? <WorkSummary metadata={metadata} fallback="Unknown / Not Saved" /> : label === 'Fandoms' && metadata.fandoms.length ? <FandomTags values={metadata.fandoms} appearance={appearance} /> : Array.isArray(value) ? value.length ? <ul>{value.map((item, index) => <li key={index}>{item}</li>)}</ul> : 'Unknown / Not Saved' : savedValue(value)}</dd></div>)}</dl>
     <h4>All Tags</h4>{workTags(metadata).length ? <WorkTags metadata={metadata} limit={Infinity} appearance={appearance} /> : <p>Unknown / Not Saved</p>}
     <h4>Your Reading Information</h4><dl className="work-details-list">{[
       { label: 'Reading Status', value: statuses[book.status] },

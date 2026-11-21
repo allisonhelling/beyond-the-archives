@@ -2,7 +2,8 @@ import { brandName } from '../../src/lib/brand'
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
-import { active, caughtUpReadingStatus, parseLines, statuses, validateProgress } from '../../src/features/library/model'
+import { active, caughtUpReadingStatus, parseLines, progressReadingStatus, statuses, validateProgress } from '../../src/features/library/model'
+import { browserBarSettingsSection } from '../../src/features/settings/settings-sections'
 import { collectChapterRead, collectWorkPage, readPage, readWorkTiles, readChapterSections, chapterDefaults } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
@@ -13,6 +14,8 @@ export async function mountLibrary(doc = document, href = location.href, options
  const readingLabel = browser === 'safari' ? 'Reading' : 'Currently Reading'
  const readingStatuses = { ...statuses, ...(browser === 'safari' ? { waiting_for_updates: 'Waiting' } : {}) }
  const backendUrl = config?.backend ?? __SUPABASE_URL__, appOrigin = config?.appOrigin ?? __APP_ORIGIN__, publicKey = config?.publicKey ?? __SUPABASE_KEY__
+ const settingsUrl = `${appOrigin}/settings`
+ const [browserBarHash] = browserBarSettingsSection.aliases
  const page = tile?.page ?? readPage(doc, href)
  if (!page) {
   for (const workTile of readWorkTiles(doc, href)) await mountLibrary(doc, workTile.url, { ...options, tile: workTile })
@@ -75,13 +78,14 @@ export async function mountLibrary(doc = document, href = location.href, options
  panel.append(editorPanel, connectionPanel)
  const conflictPanel = doc.createElement('div'); section.append(conflictPanel)
  const footer = doc.createElement('small'); footer.textContent = `${brandName} v${__SCRIPT_VERSION__} · `
- const update = doc.createElement('a'); update.href = `${appOrigin}/settings#${browser === 'chrome' ? 'ao3-browser-bar' : 'ios-safari-userscript'}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & Update Instructions'
+ const update = doc.createElement('a'); update.href = `${settingsUrl}${browser === 'chrome' ? browserBarHash : `#${browserBarSettingsSection.id}`}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & Update Instructions'
  footer.append(update); section.append(footer)
  showPanel(null)
  const draftKey = () => `draft:${backendUrl}:${connection.userId}:${page.series ? 'series:' : ''}${page.work}`
  function node(tag, text, parent) { const element = doc.createElement(tag); if (text) element.textContent = text; parent?.append(element); return element }
  function button(label, action, parent = toolbar) {
   const element = node('button', label, parent); element.type = 'button'; element.disabled = busy || Boolean(pendingConflict)
+  if (label && parent.closest('.toolbar, .bottom-bar')) element.title = label
   element.addEventListener('click', () => { void run(action) }); return element
  }
  function showPanel(name) {
@@ -96,12 +100,58 @@ export async function mountLibrary(doc = document, href = location.href, options
   for (const d of paths) { const path = doc.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path) }
   parent.append(svg); return svg
  }
+ let helpSequence = 0
  function infoHelp(parent, title, description) {
   const info = node('details', '', parent); info.className = 'field-info'
   const summary = node('summary', '', info); summary.setAttribute('aria-label', `About ${title}`)
   const infoIcon = icon(['M12 11v6', 'M12 7h.01'], summary)
   const circle = doc.createElementNS(infoIcon.namespaceURI, 'circle'); circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '10'); infoIcon.prepend(circle)
-  node('span', description, info)
+  const text = node('span', description, info)
+  text.id = `${hostId}-help-${++helpSequence}`
+  text.setAttribute('role', 'tooltip')
+  summary.setAttribute('aria-describedby', text.id)
+ }
+ for (const surface of surfaces) {
+  const helpTrigger = event => event.target.closest?.('.field-info > summary')
+  const showHelp = (info, open) => {
+   info.open = open
+   if (!open) return
+   const text = info.querySelector('[role="tooltip"]')
+   text.style.removeProperty('--info-shift')
+   const { left, right } = text.getBoundingClientRect()
+   const viewWidth = doc.documentElement.clientWidth || doc.defaultView.innerWidth
+   text.style.setProperty('--info-shift', `${Math.max(8 - left, Math.min(0, viewWidth - 8 - right))}px`)
+  }
+  const dismissHelp = info => {
+   for (const attribute of ['data-pinned', 'data-hovered', 'data-focused']) info.removeAttribute(attribute)
+   showHelp(info, false)
+  }
+  const updateHelp = (event, attribute, shown) => {
+   const trigger = helpTrigger(event)
+   if (!trigger || event.relatedTarget instanceof doc.defaultView.Node && trigger.contains(event.relatedTarget)) return
+   const info = trigger.parentElement
+   info.toggleAttribute(attribute, shown)
+   showHelp(info, info.hasAttribute('data-pinned') || info.hasAttribute('data-hovered') || info.hasAttribute('data-focused'))
+  }
+  surface.addEventListener('mouseover', event => updateHelp(event, 'data-hovered', true))
+  surface.addEventListener('mouseout', event => updateHelp(event, 'data-hovered', false))
+  surface.addEventListener('focusin', event => updateHelp(event, 'data-focused', true))
+  surface.addEventListener('focusout', event => updateHelp(event, 'data-focused', false))
+  surface.addEventListener('click', event => {
+   const trigger = helpTrigger(event)
+   if (!trigger) return
+   event.preventDefault()
+   const info = trigger.parentElement
+   if (info.hasAttribute('data-pinned')) dismissHelp(info)
+   else { info.setAttribute('data-pinned', ''); showHelp(info, true) }
+  })
+  surface.addEventListener('keydown', event => {
+   const info = event.key === 'Escape' ? helpTrigger(event)?.parentElement : null
+   if (!info?.open) return
+   event.preventDefault()
+   event.stopPropagation()
+   dismissHelp(info)
+  })
  }
  function clearConflict() {
   pendingConflict = null; disposeConflict?.(); disposeConflict = null; conflictPanel.replaceChildren()
@@ -168,6 +218,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    if (conflict) { conflict.action = action; throw conflict }
    if (data.code === '40001' && action === 'rating_save') throw new Error('This rating explanation changed on another device. Close and reopen Rating Info to load it before saving again. Your text is kept here.')
    if (data.code === '40001') throw new Error('This entry changed elsewhere. Reload Saved Entry, review your draft, then save again.')
+   if (action === 'delete_entry') throw new Error('Could not delete this entry. Check your connection or update your library backend, then retry. Your draft is preserved.')
    throw new Error('Could not save or load. Check your connection and chapter count, then retry. Your draft is preserved.')
   }
   return data
@@ -256,7 +307,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  function openProgressEditor(surface) {
   progressSurface = surface
   if (!progressEditor) {
-   const dialog = node('dialog', '', section); dialog.className = 'progress-dialog'; dialog.setAttribute('aria-label', 'Edit Chapter Progress')
+   const dialog = node('dialog', '', section); dialog.className = 'library-dialog progress-dialog'; dialog.setAttribute('aria-label', 'Edit Chapter Progress')
    const form = node('form', '', dialog), fieldset = node('fieldset', '', form)
    node('h3', 'Edit Chapter Progress', fieldset)
    const label = node('label', 'Chapters Read', fieldset), input = node('input', '', label)
@@ -279,8 +330,8 @@ export async function mountLibrary(doc = document, href = location.href, options
      error.textContent = ''; fieldset.disabled = true; dialog.setAttribute('aria-busy', 'true')
      try {
       if (!input.value.trim()) throw new Error('Enter chapters read.')
-      const value = validateProgress(Number(input.value), page.metadata)
-      const status = (entry.status === 'to_read' && value > 0) || (entry.status === 'finished' && value < entry.progress) ? 'reading' : entry.status
+      const value = Number(input.value)
+      const status = ['paused_reading', 'did_not_finish'].includes(entry.status) ? entry.status : progressReadingStatus(value, page.metadata, entry.status)
       await progress(value, status, false, page.current, 'derived')
       closeProgressEditor()
      } catch (failure) {
@@ -330,10 +381,12 @@ export async function mountLibrary(doc = document, href = location.href, options
   const actions = node('div', '', summary); actions.className = 'row reading-actions'
   const chapterCount = `Ch. ${entry.progress} / ${page.metadata.published_chapters ?? '?'}`
   const count = button(chapterCount, () => openProgressEditor(summary.getRootNode()), actions); count.className = 'chapter-progress'; count.setAttribute('aria-label', 'Edit Chapters Read'); count.setAttribute('aria-haspopup', 'dialog')
+  count.title = 'Edit Chapters Read'
   if (!current) { renderReadingToggle(actions, current, top); return }
   if (['finished', 'waiting_for_updates'].includes(entry.status)) {
    const reread = button('Re-Read', () => progress(current - 1, 're_reading'), actions)
    reread.className = 'complete-chapter'
+   reread.title = 'Start Re-Reading at This Chapter'
    reread.prepend(icon(['M3 11a9 9 0 1 1 2.7 6.4', 'M3 4v7h7'], reread))
    return
   }
@@ -347,18 +400,19 @@ export async function mountLibrary(doc = document, href = location.href, options
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
    node('span', 'Read', indicator)
   } else if (!(entry.status === 'paused_reading' && top && current === entry.progress + 1)) {
-   const final = isFinalChapter(current)
    const starting = ['to_read', 'paused_reading'].includes(entry.status)
-   const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
+   const finish = !starting && isFinalChapter(current)
+   const label = finish ? 'Finish Story' : !starting && active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
    const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
-   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current, label === 'Finish Fic' ? 'explicit' : 'derived'), actions)
+   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current, finish ? 'explicit' : 'derived'), actions)
    complete.className = 'complete-chapter'
+   complete.title = finish ? 'Finish Story' : 'Mark Chapter as Read'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
   renderReadingToggle(actions, current, top)
  }
  function libraryLink(parent) {
-  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.setAttribute('aria-label', `View in ${brandName}`)
+  const logo = node('a', '', parent); logo.className = 'library-link'; logo.href = entry?.id ? page.series ? `${appOrigin}/series/${page.work}` : `${appOrigin}/stories/${encodeURIComponent(entry.id)}` : `${appOrigin}/library`; logo.target = '_blank'; logo.rel = 'noopener noreferrer'; logo.title = `View in ${brandName}`; logo.setAttribute('aria-label', logo.title)
   // Trusted, build-time Lucide logo markup; no page or user content is injected.
   const mark = node('span', '', logo); mark.className = 'brand-icon'; mark.innerHTML = __BRAND_ICON__
  }
@@ -382,7 +436,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   libraryLink(parent)
   const center = node('div', '', parent); center.className = 'row toolbar-progress'
   const actions = node('div', '', parent); actions.className = 'row toolbar-actions'
-  if (config?.label) { const label = node('span', config.label, actions); label.className = 'environment-label'; label.setAttribute('aria-label', `Library environment: ${config.label}`) }
+  if (config?.id === 'local') { const label = node('span', config.label, actions); label.className = 'environment-label'; label.setAttribute('aria-label', `Library environment: ${config.label}`) }
   if (!connection) { panelButton('Connect Library', 'connection', showConnection, actions); return }
   if (!loaded) button('Load Saved Entry', load, center)
   else if (!entry) {
@@ -392,7 +446,10 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (tile || top && current === 1) button('To Read', () => saveUnsaved('to_read', current), center)
     if (!tile && current) {
      if (top && current === 1) button('Reading', () => saveUnsaved('reading', current), center)
-     else button(!top && isFinalChapter(current) ? 'Finish Fic' : 'Mark Read', () => saveUnsaved('reading', current, true, !top && isFinalChapter(current) ? 'explicit' : 'derived'), center)
+     else {
+      const finish = !top && isFinalChapter(current)
+      button(finish ? 'Finish Story' : 'Mark Read', () => saveUnsaved('reading', current, true, finish ? 'explicit' : 'derived'), center)
+     }
     }
    }
   }
@@ -400,6 +457,7 @@ export async function mountLibrary(doc = document, href = location.href, options
    if (page.series) node('span', 'Series saved', center)
    else renderProgress(center, current, parent === toolbar)
    const edit = panelButton('Edit', 'editor', openEditor, actions); edit.className = 'edit-button'
+   edit.title = page.series ? 'Edit Saved Series' : 'Edit Library Entry'
    edit.prepend(icon(['m16 3 5 5-12 12-6 1 1-6Z', 'm14 5 5 5'], edit))
   }
   const settings = panelButton('', 'connection', showConnection, actions)
@@ -420,6 +478,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   themeToggle.className = 'theme-toggle'
   function renderThemeToggle() {
    themeToggle.replaceChildren()
+   themeToggle.title = theme === 'light' ? 'Toggle Dark Mode' : 'Toggle Light Mode'
    icon(theme === 'light' ? ['M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z'] : ['M16 12a4 4 0 1 1-8 0 4 4 0 1 1 8 0', 'M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42'], themeToggle)
    node('span', theme === 'light' ? 'Dark Mode' : 'Light Mode', themeToggle)
   }
@@ -451,8 +510,8 @@ export async function mountLibrary(doc = document, href = location.href, options
   button('Cancel', () => { ratingText.value = ratingInfo; ratingEditor.hidden = true; ratingToggle.setAttribute('aria-expanded', 'false'); ratingToggle.focus() }, ratingActions)
   const libraryLink = node('a', `Library Settings (${appOrigin})`, connectionPanel)
   libraryLink.className = 'library-settings-link'
-  libraryLink.href = `${appOrigin}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
-  node('p', 'In Library Settings → AO3 Browser Bar, create a pairing code. Paste it here within 5 minutes. This connects the device until you disconnect it here or remove it in Library Settings.', connectionPanel)
+  libraryLink.href = `${settingsUrl}${browserBarHash}`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
+  node('p', `In Library Settings → ${browserBarSettingsSection.title}, create a pairing code. Paste it here within 5 minutes. This connects the device until you disconnect it here or remove it in Library Settings.`, connectionPanel)
   const label = node('label', 'One-Time Pairing Code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false
   const actions = node('div', '', connectionPanel); actions.className = 'row'
@@ -598,6 +657,37 @@ export async function mountLibrary(doc = document, href = location.href, options
    clearEditor(); draft = null; showPanel(null); await api.deleteValue(draftKey()); message.textContent = 'Saved'
   }) })
  }
+ function confirmEntryDeletion(trigger) {
+  const { id, version } = entry
+  const dialog = node('dialog', '', editorPanel)
+  dialog.className = 'library-dialog'
+  dialog.setAttribute('aria-label', 'Delete from Library')
+  node('h3', 'Delete from Library?', dialog)
+  node('p', `Remove “${page.metadata.title}” and its saved reading progress and private details from your library?`, dialog)
+  const error = node('p', '', dialog); error.setAttribute('role', 'alert')
+  const actions = node('div', '', dialog); actions.className = 'row'
+  const close = () => { dialog.close(); dialog.remove(); requestAnimationFrame(() => trigger.focus()) }
+  const cancel = button('Cancel', close, actions)
+  const confirm = button('Delete from Library', async () => {
+   error.textContent = ''
+   try {
+    accept(await rpc('delete_entry', { id, version }))
+   } catch (failure) {
+    error.textContent = failure.message
+    throw failure
+   }
+   const bar = progressBars.find(surface => surface.root === dialog.getRootNode())?.bar ?? toolbar
+   dialog.close()
+   clearEditor(); draft = null; showPanel(null)
+   message.textContent = 'Deleted from your library.'
+   await api.deleteValue(draftKey()).catch(() => { message.textContent = 'Deleted from your library. Could not clear the local draft.' })
+   requestAnimationFrame(() => bar.querySelector('[aria-controls="library-editor"]')?.focus())
+  }, actions)
+  confirm.className = 'delete-entry'
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!busy) close() })
+  dialog.showModal()
+  requestAnimationFrame(() => { if (dialog.open) cancel.focus() })
+ }
  async function openEditor(current = page.current) {
   if (activePanel === 'editor') { showPanel(null); return }
   if (editorPanel.childNodes.length) { showPanel('editor'); return }
@@ -633,7 +723,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   const status = field('Reading Status', 'select', 'status')
   for (const [key, title] of Object.entries(readingStatuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
   status.value = draft.status
-  help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
+  help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the story as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current Chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
   if (page.metadata.published_chapters) chapter.max = String(page.metadata.published_chapters)
   help(chapter, 'current chapter', 'Current Chapter − 1 counts as completed; check finished to include this chapter.')
@@ -717,16 +807,19 @@ export async function mountLibrary(doc = document, href = location.href, options
    infoHelp(recollect, 'collect metadata', 'Recollect metadata from this AO3 page. Reload AO3 first for the latest changes.')
   }
   if (entry) {
-   const reload = node('span', '', actions); reload.className = 'field-control reload-entry'
+   const savedActions = node('div', '', actions); savedActions.className = 'row saved-entry-actions'
+   const remove = button('Delete from Library', () => confirmEntryDeletion(remove), savedActions)
+   remove.className = 'delete-entry'
+   remove.setAttribute('aria-haspopup', 'dialog')
+   const reload = node('span', '', savedActions); reload.className = 'field-control reload-entry'
    button('Reload Saved Entry', async () => { await load(); await reconcileDraft(); message.textContent = 'Saved entry reloaded. Unchanged fields were updated; your local edits are retained.' }, reload)
-   infoHelp(reload, 'reload saved entry', 'Loads this fic’s latest saved information from your hosted library. Newer saved notes and other fields update only fields you have not edited here. Your local edits are kept, and changes to different fields merge automatically. If both devices edited the same field, choose a version or combine notes before saving. Reloading does not save your draft or refresh AO3 metadata.')
+   infoHelp(reload, 'reload saved entry', 'Loads this story’s latest saved information from your hosted library. Newer saved notes and other fields update only fields you have not edited here. Your local edits are kept, and changes to different fields merge automatically. If both devices edited the same field, choose a version or combine notes before saving. Reloading does not save your draft or refresh AO3 metadata.')
   }
   status.focus()
  }
  renderToolbar()
  api.onEnvironmentChange?.(label => {
   message.textContent = `Environment changed to ${label}. Reload AO3 to use it. Your draft is preserved for ${config?.label ?? 'this library'}.`
-  root.querySelectorAll('.environment-label').forEach(node => { node.textContent = `${label} · reload AO3`; node.setAttribute('aria-label', `Library environment: ${label}; reload AO3`) })
  })
  const focus = () => {
   if (host.isConnected && connection && !busy) void run(async () => { acceptRatingInfo(await rpc('rating_get')) })

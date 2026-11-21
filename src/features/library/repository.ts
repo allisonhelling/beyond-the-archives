@@ -121,6 +121,13 @@ export async function addStoriesToCollections(storyIds: string[], collectionIds:
   const { error } = await client().rpc('add_stories_to_collections', { p_entries: [...new Set(storyIds)], p_collections: [...new Set(collectionIds)] })
   failure(error)
 }
+export async function removeStoriesFromCollection(storyIds: string[], collectionId: string) {
+  if (!storyIds.length) return
+  if (sampleMode) return (await import('./sample/repository')).removeSampleStoriesFromCollection(storyIds, collectionId)
+  const { error } = await client().rpc('remove_stories_from_collection', { p_entries: [...new Set(storyIds)], p_collection: collectionId })
+  failure(error)
+}
+
 export async function updateEntry(id: string, changes: EntryUpdate, base: EditValues, statusOrigin: 'explicit' | 'derived' | 'preserve' = 'explicit') {
   const keys = { reading_status: 'status', last_read_chapter: 'progress', notes: 'notes', personal_rating: 'rating', is_favorite: 'favorite', is_rec: 'rec' } as const
   const edits: EditValues = { ...((changes.reading_status !== undefined || changes.last_read_chapter !== undefined) && { statusOrigin }), ...Object.fromEntries(Object.entries(changes).map(([key, value]) => [keys[key as keyof EntryUpdate], value])) }
@@ -266,7 +273,7 @@ export async function writeStoryCompletion(entry: string, status: Status | null,
   const { error } = await client().rpc('write_story_completion', { p_entry: entry, p_status: status, p_expected: expected, p_review: review })
   failure(error)
 }
-export type LibraryQuery = { availability?: 'unfolded' | 'bookfusion'; reader?: string; mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
+export type LibraryQuery = { availability?: import('../offline/availability-filter').LibraryAvailability; reader?: string; mode: 'reading' | 'library' | 'series'; shelf: string; author?: string; filters: import('./reading-search').ReadingFilters }
 export type LibraryResults = { revision?: number; suggestions?: { relationships: string[]; characters: string[]; tags: string[]; personalTags?: string[] }; stories: Story[]; series: import('./series/series').LibrarySeries[]; total: number; page: number; pages: number; sections: Record<string, number>; fandoms: { name: string; count: number }[] }
 export type LibraryFacets = Pick<LibraryResults, 'suggestions' | 'fandoms'> & { total: number }
 export type LibraryNavigation = Record<string, { works: number; series: number; updated_at: string | null }>
@@ -304,6 +311,15 @@ export async function loadLibraryNavigation(signal?: AbortSignal): Promise<{ cou
   if (signal?.aborted) throw new DOMException('Library request cancelled', 'AbortError')
   if (error || !data) throw new Error('Could not load collection counts. Retry loading.')
   return data as unknown as { counts: LibraryNavigation; revision: number }
+}
+export type CollectionWorkTarget = Pick<Story, 'id' | 'organizationGroup'>
+export async function loadCollectionWorksForSelection(shelf: string, signal: AbortSignal): Promise<CollectionWorkTarget[]> {
+  const { data, error, status } = await client().rpc('library_collection_work_ids', { p_shelf: shelf }).abortSignal(signal)
+  if (error || !data) throw libraryLoadError('works in this collection', error, status)
+  if (!Array.isArray(data) || !data.every((work): work is CollectionWorkTarget =>
+    Boolean(work && typeof work === 'object' && 'id' in work && typeof work.id === 'string' && (!('organizationGroup' in work) || work.organizationGroup === null || typeof work.organizationGroup === 'string'))
+  )) throw new Error('Could not load works in this collection.')
+  return data
 }
 export async function queryLibrary(query: LibraryQuery, page: number, size: number, signal: AbortSignal): Promise<LibraryResults> {
   // Run the same parser/validation before either transport. Literal substring

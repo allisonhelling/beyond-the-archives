@@ -2,15 +2,42 @@ import { readSummary } from '../../src/features/library/summaries/summary'
 import { isCalendarDate } from '../../src/lib/dates'
 import { parseSeriesUrl, parseWorkUrl } from '../../src/features/imports/urls'
 import type { ReaderMetadata } from './model'
+import { sourceLocation, sourceSiteName } from '../../src/features/library/story-source'
 
 /** Present the AO3 publisher consistently, including existing imported snapshots. */
 export function publisherName(value: string | undefined) {
-  return value && /^(?:https?:\/\/)?(?:www\.)?archiveofourown\.org\/?$/i.test(value.trim()) ? 'AO3' : value
+  return value && /^(?:archive of our own|(?:https?:\/\/)?(?:www\.)?archiveofourown\.org\/?)$/i.test(value.trim()) ? 'AO3' : value
 }
-export function seriesNames(metadata:ReaderMetadata):string[] {
-  return [...new Set([...(metadata.series??[]),...(metadata.series_memberships??[]).map(series=>series.name)].map(name=>name.trim()).filter(Boolean))]
+export function readerSourceSite({ workId, metadata }: { workId: string | null; metadata: ReaderMetadata }) {
+  const publisher = publisherName(metadata.publisher)?.trim()
+  if (publisher) return publisher
+  if (workId) return 'AO3'
+  for (const link of [metadata.calibre_work_link, metadata.manual_url]) {
+    if (!link) continue
+    try {
+      const site = sourceSiteName(sourceLocation(link).identity)
+      if (site) return site
+    } catch { /* Try the next saved source link. */ }
+  }
 }
-export const metadataVersion = 5
+
+export function readerSeries(metadata: Pick<ReaderMetadata, 'series' | 'series_positions' | 'series_memberships'>) {
+  const positions = new Map(Object.entries(metadata.series_positions ?? {}))
+  const linkedNames = new Set((metadata.series_memberships ?? []).map(item => item.name.trim()))
+  const names = (metadata.series ?? []).map(value => {
+    if (linkedNames.has(value.trim())) return value
+    const indexed = /^(.+?)\s+\[(\d+(?:\.\d+)?)\]$/.exec(value.trim())
+    if (!indexed || !Number.isFinite(Number(indexed[2]))) return value
+    const name = indexed[1].trim()
+    if (!positions.has(name)) positions.set(name, Number(indexed[2]))
+    return name
+  })
+  return { series: unique([...names, ...linkedNames]), series_positions: Object.fromEntries(positions) }
+}
+export function seriesNames(metadata: ReaderMetadata): string[] {
+  return readerSeries(metadata).series
+}
+export const metadataVersion = 6
 const unique = (values: string[]) => [...new Set(values.map(value => value.trim()).filter(Boolean))]
 const keyOf = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
 export function metadataDate(value: string): string | undefined {
@@ -79,12 +106,14 @@ function applyField(metadata: Partial<ReaderMetadata>, label: string, value: str
   }
 }
 function finish(metadata: Partial<ReaderMetadata>) {
+  if (metadata.series?.length) Object.assign(metadata, readerSeries(metadata))
   metadata.ao3_tags = unique([...(metadata.ao3_tags ?? []), ...(metadata.archive_warnings ?? []), ...(metadata.categories ?? []), ...(metadata.character_tags ?? []), ...(metadata.relationship_tags ?? []), ...(metadata.additional_tags ?? [])])
   return metadata
 }
 export function packageMetadata(opf: Document): Partial<ReaderMetadata> {
   const metadata: Partial<ReaderMetadata> = {}, node = opf.getElementsByTagNameNS('*', 'metadata')[0]
   if (!node) return metadata
+  let calibreSeries = '', calibreIndex: number | undefined
   for (const el of node.children) {
     if (el.localName === 'description') Object.assign(metadata, readSummary(el.children.length ? el.innerHTML : el.textContent ?? '', 'auto'))
     if (el.localName === 'publisher') metadata.publisher = el.textContent?.trim()
@@ -98,6 +127,8 @@ export function packageMetadata(opf: Document): Partial<ReaderMetadata> {
     if (el.localName !== 'meta') continue
     const name = el.getAttribute('name') ?? el.getAttribute('property') ?? ''
     let value: unknown = el.getAttribute('content') ?? el.textContent ?? ''
+    if (name === 'calibre:series') calibreSeries = String(value).trim()
+    if (name === 'calibre:series_index' && /^\d+(?:\.\d+)?$/.test(String(value).trim())) calibreIndex = Number(value)
     if (name.startsWith('calibre:user_metadata:')) {
       try { const json = JSON.parse(String(value)); value = json['#value#'] } catch { continue }
     }
@@ -105,6 +136,7 @@ export function packageMetadata(opf: Document): Partial<ReaderMetadata> {
     if (Array.isArray(value)) applyField(metadata, label, value.map(String).join('\n'), value.map(String))
     else if (typeof value === 'string' || typeof value === 'number') applyField(metadata, label, String(value), keyOf(label) === 'series' ? [String(value)] : undefined)
   }
+  if (calibreSeries && calibreIndex !== undefined && Number.isFinite(calibreIndex)) metadata.series_positions = { [calibreSeries]: calibreIndex }
   return finish(metadata)
 }
 export function frontMatterMetadata(doc: Document, path = ''): { metadata: Partial<ReaderMetadata>; urls: string[] } {

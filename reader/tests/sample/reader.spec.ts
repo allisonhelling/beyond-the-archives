@@ -36,7 +36,9 @@ test('sample reader isolates account data, saves current defaults, resets and su
  await page.getByRole('button',{name:'Save Personal Notes',exact:true}).click()
  await expect(page.getByText('Personal notes saved.',{exact:true})).toBeVisible()
  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
  await page.getByRole('button',{name:'Toggle Dark Mode',exact:true}).click()
+ await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
  await page.getByRole('button',{name:'Update Sample Data',exact:true}).click()
  await expect(page.getByRole('status').filter({hasText:'Current library saved'})).toBeVisible()
  const snapshot=JSON.parse(await readFile(target,'utf8'))
@@ -61,13 +63,44 @@ test('sample reader isolates account data, saves current defaults, resets and su
  await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
  await page.getByRole('button',{name:'Reader Account',exact:true}).click()
  await page.getByRole('button',{name:'Log Out',exact:true}).click()
- await expect(page.getByRole('heading',{name:'Sample Reader Sign-In'})).toBeVisible()
+ await expect(page.locator('.reader-account-state')).toHaveText('Guest · Local Only')
+ await expect(page.getByLabel('Local Sample Preview')).toHaveCount(0)
+ await expect(page.getByRole('heading',{name:'Sample Imported Work'})).toBeVisible()
  await page.reload()
- await expect(page.getByRole('heading',{name:'Sample Reader Sign-In'})).toBeVisible()
+ await expect(page.locator('.reader-account-state')).toHaveText('Guest · Local Only')
+ await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
+ await expect(page.locator('.profile-identity')).toContainText('Guest Library')
+ await page.getByRole('button',{name:'Cloud Library',exact:true}).click()
+ await expect(page.getByText('Sign in to Reader Account to store your library in the cloud and sync across devices.')).toBeVisible()
+ await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ if (testInfo.project.name === 'desktop') {
+  await page.getByRole('button',{name:'Calibre',exact:true}).click()
+  await expect(page.getByRole('dialog',{name:'Calibre Transfers'})).toContainText('Destination: This guest library')
+  await page.getByRole('button',{name:'Pair Calibre',exact:true}).click()
+  await expect(page.getByText('Calibre pairing is available in the regular Reader.')).toBeVisible()
+  await page.getByRole('button',{name:'Close Dialog',exact:true}).click()
+ }
+ if (testInfo.project.name === 'mobile') {
+  await page.goto('/#settings/account')
+  await expect(page.getByRole('heading',{name:'Reader Account',exact:true})).toBeVisible()
+ } else {
+  await page.getByRole('button',{name:'Profile Menu',exact:true}).click()
+  await page.getByRole('button',{name:'Organizer & Sync',exact:true}).click()
+  await expect(page.getByRole('dialog',{name:'Reader Account'})).toBeVisible()
+ }
+ await expect(page.getByText('Guest Library · Signed out',{exact:true})).toBeVisible()
+ await expect(page.getByRole('checkbox',{name:'Remember Me'})).toBeChecked()
+ await page.getByRole('button',{name:'Create Account',exact:true}).click()
+ await expect(page.getByLabel('Confirm Password',{exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Back to Sign In',exact:true}).click()
+ await page.getByRole('button',{name:'Continue From Organizer',exact:true}).click()
+ await expect(page.getByText('Organizer sign-in is available in the regular Reader.')).toBeVisible()
  await page.getByLabel('Username or Email',{exact:true}).fill('Sample')
  await page.getByLabel('Password',{exact:true}).fill('123')
  await page.getByRole('button',{name:'Sign In',exact:true}).click()
+ if (testInfo.project.name === 'mobile') await page.getByRole('button',{name:'Bookshelf',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Sample Imported Work'})).toBeVisible()
+ await expect(page.locator('.reader-account-state')).toHaveText('Sample · Local Only')
  expect(await page.evaluate(()=>localStorage.getItem('reader-cloud-owner'))).toBe('real-reader-owner')
  expect(await page.evaluate(()=>localStorage.getItem('reader-cloud-auth'))).toContain('do-not-use')
  expect(backendRequests).toEqual([])
@@ -91,4 +124,46 @@ test('keeps failed writes and invalid snapshots from replacing defaults and supp
  await expect(page.getByRole('status').filter({hasText:'Current library saved'})).toBeVisible()
  const fresh=await browser.newContext()
  try{const next=await fresh.newPage();await next.goto('http://127.0.0.1:4194/');await expect(next.getByRole('heading',{name:'The Bookshelf',exact:true})).toBeVisible();await expect(next.locator('.story-card')).toHaveCount(0)}finally{await fresh.close()}
+})
+
+test('keeps reader search at 14 px and colored tags legible in dark mode', async ({ page }, testInfo) => {
+ await page.goto('/')
+ const search = page.getByRole('searchbox', { name: 'Search', exact: true })
+ await expect(search).toHaveCSS('font-size', '14px')
+ await search.focus()
+ await expect(search).toBeFocused()
+ await expect(search).toHaveCSS('outline-style', 'none')
+ await expect(search).toHaveCSS('box-shadow', 'none')
+
+ if (testInfo.project.name === 'mobile') {
+  await page.goto('/#settings/tags')
+ } else {
+  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
+  await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
+ }
+ await page.getByLabel('Tag Text Color').selectOption('colored')
+ if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
+ else await page.getByRole('button', { name: 'Close Dialog', exact: true }).click()
+ await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
+ await page.getByRole('button', { name: 'Toggle Dark Mode', exact: true }).click()
+ await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
+ const tag = page.locator('.story-card .metadata-tag').first()
+ await expect(tag).toHaveCSS('font-size', '16px')
+ await expect(tag.locator('..')).toHaveAttribute('data-tag-text-color', 'colored')
+ await expect.poll(() => tag.evaluate(element => {
+  const style = getComputedStyle(element)
+  const canvas = document.createElement('canvas').getContext('2d')!
+  function luminance(color: string) {
+   canvas.clearRect(0, 0, 1, 1)
+   canvas.fillStyle = color
+   canvas.fillRect(0, 0, 1, 1)
+   const [red, green, blue] = canvas.getImageData(0, 0, 1, 1).data
+   return [red, green, blue].reduce((total, channel, index) => {
+    const value = channel / 255
+    const linear = value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4
+    return total + linear * [.2126, .7152, .0722][index]
+   }, 0)
+  }
+  return (luminance(style.color) + .05) / (luminance(style.backgroundColor) + .05)
+ })).toBeGreaterThanOrEqual(4.5)
 })

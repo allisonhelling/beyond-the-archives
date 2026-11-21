@@ -13,22 +13,28 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
     shelfRef.current?.querySelector<HTMLButtonElement>(`[data-collection-id="${CSS.escape(keyboardFocus.id)}"] .collection-spine`)?.focus()
     restoredFocus.current = keyboardFocus
   }, [enabled, keyboardFocus, shelfRef])
-  useEffect(() => { handlers.current = { onMove, selection } }, [onMove, selection])
+  useLayoutEffect(() => { handlers.current = { onMove, selection } }, [onMove, selection])
   useEffect(() => {
     const shelf = shelfRef.current
     if (!shelf || !enabled) return
-    let pending: { id: string; pointerId: number; slot: HTMLElement; startX: number; startY: number; grabX: number; grabY: number; active: boolean; selecting: boolean; deselecting: boolean; initialSelection: string[]; lastSelection: string[]; ids: string[] } | null = null
+    let pending: { id: string; pointerId: number; slot: HTMLElement; startX: number; startY: number; grabX: number; grabY: number; active: boolean; panning: boolean; selecting: boolean; deselecting: boolean; initialSelection: string[]; lastSelection: string[]; ids: string[] } | null = null
     let pointer = { x: 0, y: 0 }, target: string | null = null
     let hold: ReturnType<typeof setTimeout> | undefined, frame = 0
+
+    const inCarousel = () => !shelf.closest('.collection-shelves-expanded')
 
     function update() {
       if (!pending?.active) return
       const bounds = shelf!.getBoundingClientRect()
+      const carousel = inCarousel()
       let nearest: HTMLElement | null = null, distance = Infinity
-      if (pointer.x >= bounds.left && pointer.x <= bounds.right && pointer.y >= bounds.top && pointer.y <= bounds.bottom) {
+      // The selection controls can change the shelf's vertical position mid-gesture.
+      // A single-row selection depends only on the spines' horizontal positions.
+      if (pointer.x >= bounds.left && pointer.x <= bounds.right && (carousel && pending.selecting || pointer.y >= bounds.top && pointer.y <= bounds.bottom)) {
         for (const slot of shelf!.querySelectorAll<HTMLElement>('.collection-shelf-row > *')) {
           const rect = slot.getBoundingClientRect()
-          const gap = Math.hypot(pointer.x - Math.max(rect.left, Math.min(pointer.x, rect.right)), pointer.y - Math.max(rect.top, Math.min(pointer.y, rect.bottom)))
+          const x = Math.abs(pointer.x - Math.max(rect.left, Math.min(pointer.x, rect.right)))
+          const gap = carousel ? x : Math.hypot(x, pointer.y - Math.max(rect.top, Math.min(pointer.y, rect.bottom)))
           if (gap < distance) { distance = gap; nearest = slot }
         }
       }
@@ -54,6 +60,15 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       const edge = 64
       const delta = pointer.y < edge ? -Math.min(14, (edge - pointer.y) / 4) : pointer.y > innerHeight - edge ? Math.min(14, (pointer.y - innerHeight + edge) / 4) : 0
       if (delta) window.scrollBy(0, delta)
+      if (inCarousel()) {
+        const bounds = shelf!.getBoundingClientRect()
+        if (pending.selecting || pointer.y >= bounds.top && pointer.y <= bounds.bottom) {
+          const edge = 24
+          const horizontal = pointer.x < bounds.left + edge ? -Math.min(14, (bounds.left + edge - pointer.x) / 3)
+            : pointer.x > bounds.right - edge ? Math.min(14, (pointer.x - bounds.right + edge) / 3) : 0
+          if (horizontal) shelf!.scrollLeft += horizontal
+        }
+      }
       update()
       frame = requestAnimationFrame(scroll)
     }
@@ -66,12 +81,14 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
     function finish(commit: boolean, notify = true) {
       clearTimeout(hold); cancelAnimationFrame(frame)
       if (!pending) return
-      const { id, active, pointerId, selecting, initialSelection } = pending
+      const { id, active, panning, pointerId, selecting, initialSelection } = pending
       pending = null
       if (shelf!.hasPointerCapture(pointerId)) shelf!.releasePointerCapture(pointerId)
-      if (active) {
+      if (active || panning) {
         suppressClick.current = true
         setTimeout(() => { suppressClick.current = false }, 0)
+      }
+      if (active) {
         setDrag(null)
         if (selecting) {
           if (!commit && notify) handlers.current.selection?.onChange(initialSelection)
@@ -89,13 +106,26 @@ export function useCollectionDrag(shelfRef: RefObject<HTMLDivElement | null>, en
       const initialSelection = handlers.current.selection?.selectedIds ?? []
       const orderedIds = [...shelf!.querySelectorAll<HTMLElement>('[data-collection-id]')].map(slot => slot.dataset.collectionId!)
       const ids = initialSelection.includes(slot.dataset.collectionId!) ? orderedIds.filter(id => initialSelection.includes(id)) : [slot.dataset.collectionId!]
-      pending = { selecting: event.shiftKey, deselecting: initialSelection.includes(slot.dataset.collectionId!), initialSelection, lastSelection: initialSelection, ids, id: slot.dataset.collectionId!, pointerId: event.pointerId, slot, startX: pointer.x, startY: pointer.y, grabX: pointer.x - rect.left, grabY: pointer.y - rect.top, active: false }
+      pending = { selecting: event.shiftKey, deselecting: initialSelection.includes(slot.dataset.collectionId!), initialSelection, lastSelection: initialSelection, ids, id: slot.dataset.collectionId!, pointerId: event.pointerId, slot, panning: false, startX: pointer.x, startY: pointer.y, grabX: pointer.x - rect.left, grabY: pointer.y - rect.top, active: false }
       if (!pending.selecting) hold = setTimeout(activate, 180)
     }
     function move(event: PointerEvent) {
       if (!pending || event.pointerId !== pending.pointerId) return
+      const lastX = pointer.x
       pointer = { x: event.clientX, y: event.clientY }
-      if (Math.hypot(pointer.x - pending.startX, pointer.y - pending.startY) > 6) activate()
+      const x = Math.abs(pointer.x - pending.startX), y = Math.abs(pointer.y - pending.startY)
+      if (!pending.active && event.pointerType === 'touch' && inCarousel()) {
+        if (!pending.panning && x > 6 && x >= y) {
+          clearTimeout(hold)
+          pending.panning = true
+        }
+        if (pending.panning) {
+          shelf!.scrollLeft += lastX - pointer.x
+          event.preventDefault()
+        }
+        return
+      }
+      if (Math.hypot(x, y) > 6) activate()
       update()
       if (pending.active) event.preventDefault()
     }

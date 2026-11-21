@@ -1,3 +1,4 @@
+import { expressionTags, matchesTagExpression, type TagExpression } from '../../src/features/library/tags/tag-expressions'
 import { normalizeSearchText as normalize } from '../../src/lib/search-text'
 import type { Book, CatalogBook } from './model'
 import { publisherName, seriesNames } from './metadata'
@@ -25,7 +26,7 @@ export const facets = [
   { key: 'warning', label: 'Archive Warning', values: (b: FilterBook) => b.metadata.archive_warnings ?? [] },
   { key: 'relationship', label: 'Relationships', values: (b: FilterBook) => b.metadata.relationship_tags ?? [] },
   { key: 'character', label: 'Characters', values: (b: FilterBook) => b.metadata.character_tags ?? [] },
-  { key: 'freeform', label: 'Freeform Tags', values: (b: FilterBook) => b.metadata.additional_tags ?? [] },
+  { key: 'freeform', label: 'Additional Tags', values: (b: FilterBook) => b.metadata.additional_tags ?? [] },
   { key: 'series', label: 'Series', values: (b: FilterBook) => seriesNames(b.metadata) },
   { key: 'version', label: 'EPUB Version', values: (b: FilterBook) => [b.active ? 'Active Version' : 'Retained Version'] },
   // EPUB metadata has no organizer hierarchy evidence. Keep the existing saved
@@ -49,8 +50,15 @@ export const dateFields = [
 export type FacetKey = typeof facets[number]['key']
 export type NumericKey = typeof numericFields[number]['key']
 export type DateKey = typeof dateFields[number]['key']
-export type Filters = { selections: Partial<Record<FacetKey, string[]>>; excluded: Partial<Record<FacetKey, string[]>>; modes: Partial<Record<FacetKey, 'any' | 'all'>>; ranges: Partial<Record<NumericKey | DateKey, { min: string; max: string }>> }
+export type Filters = { tagExpressions?: Partial<Record<FacetKey, TagExpression>>; selections: Partial<Record<FacetKey, string[]>>; excluded: Partial<Record<FacetKey, string[]>>; modes: Partial<Record<FacetKey, 'any' | 'all'>>; ranges: Partial<Record<NumericKey | DateKey, { min: string; max: string }>> }
 export const emptyFilters = (): Filters => ({ selections: {}, excluded: {}, modes: {}, ranges: {} })
+export function readerTagExpression(filters: Filters, key: FacetKey): TagExpression {
+  return filters.tagExpressions?.[key] ?? { mode: filters.modes[key] ?? (key === 'fandom' || key === 'language' ? 'any' : 'all'), tags: filters.selections[key] ?? [] }
+}
+export function setReaderTagExpression(filters: Filters, key: FacetKey, expression: TagExpression): Filters {
+  return { ...filters, selections: { ...filters.selections, [key]: expressionTags(expression) }, tagExpressions: { ...filters.tagExpressions, [key]: expression } }
+}
+
 export function facetOptions(books: FilterBook[], facet: typeof facets[number]) {
   const counts = new Map<string, { value: string; count: number }>()
   for (const book of books) for (const value of new Set(facet.values(book).map(value => value.trim()).filter(Boolean).map(value => normalize(value)))) {
@@ -72,10 +80,9 @@ export function filterErrors(filters: Filters) {
 export function matchesBook(book: Book | CatalogBook, filters: Filters, query: string): boolean {
   if (filterErrors(filters).length) return false
   for (const facet of facets) {
-    const values = facet.values(book), selected = filters.selections[facet.key], excluded = filters.excluded[facet.key]
+    const values = facet.values(book), excluded = filters.excluded[facet.key]
     const matches = (choice: string) => choice === unknownValue ? values.length === 0 : values.some(value => normalize(value.trim()) === normalize(choice.trim()))
-    const mode = filters.modes[facet.key] ?? (['fandom','language'].includes(facet.key) ? 'any' : 'all')
-    if (selected?.length && !(mode === 'any' ? selected.some(matches) : selected.every(matches)) || excluded?.some(matches)) return false
+    if (!matchesTagExpression(readerTagExpression(filters, facet.key), matches) || excluded?.some(matches)) return false
   }
   for (const field of numericFields) {
     const range = filters.ranges[field.key]
@@ -101,9 +108,23 @@ export function appliedFilterTags(filters: Filters, query: string) {
   const tags: { id: string; label: string; clear: () => { filters: Filters; query: string } }[] = []
   if (query) tags.push({ id: 'query', label: `Search: ${query}`, clear: () => ({ filters, query: '' }) })
   for (const group of ['selections', 'excluded'] as const) for (const facet of facets) {
+    const expression = readerTagExpression(filters, facet.key)
+    if (group === 'selections' && expression.mode === 'custom') {
+      expression.groups.forEach((matches, index) => tags.push({
+        id: `custom:${facet.key}:${index}`,
+        label: `${facet.label} (Group ${index + 1}): ${matches.map(value => value === unknownValue ? 'Unknown / Not Saved' : value).join(' AND ')}`,
+        clear: () => ({ filters: setReaderTagExpression(filters, facet.key, { mode: 'custom', groups: expression.groups.filter((_, group) => group !== index) }), query }),
+      }))
+      continue
+    }
     const values = filters[group][facet.key] ?? []
-    const mode = filters.modes[facet.key] ?? (['fandom', 'language'].includes(facet.key) ? 'any' : 'all')
-    for (const value of values) tags.push({ id: `${group}:${facet.key}:${value}`, label: `${group === 'excluded' ? 'Exclude ' : ''}${facet.label}${group === 'selections' && values.length > 1 ? ` (${mode === 'all' ? 'All' : 'Any'})` : ''}: ${value === unknownValue ? 'Unknown / Not Saved' : value}`, clear: () => ({ filters: { ...filters, [group]: { ...filters[group], [facet.key]: values.filter(item => item !== value) } }, query }) })
+    for (const value of values) tags.push({ id: `${group}:${facet.key}:${value}`, label: `${group === 'excluded' ? 'Exclude ' : ''}${facet.label}${group === 'selections' && values.length > 1 ? ` (${expression.mode === 'all' ? 'All' : 'Any'})` : ''}: ${value === unknownValue ? 'Unknown / Not Saved' : value}`, clear: () => {
+      const remaining = values.filter(item => item !== value)
+      return {
+        filters: group === 'selections' && filters.tagExpressions?.[facet.key] ? setReaderTagExpression(filters, facet.key, { mode: expression.mode === 'all' ? 'all' : 'any', tags: remaining }) : { ...filters, [group]: { ...filters[group], [facet.key]: remaining } },
+        query,
+      }
+    } })
   }
   for (const field of [...numericFields, ...dateFields]) for (const bound of ['min', 'max'] as const) {
     const value = filters.ranges[field.key]?.[bound]

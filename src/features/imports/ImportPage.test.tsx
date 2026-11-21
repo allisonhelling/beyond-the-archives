@@ -75,7 +75,7 @@ it('filters batch results by status, keeps totals, and resets when selecting ano
  expect(within(table).getByText('https://archiveofourown.org/works/99')).toBeVisible()
  fireEvent.click(results.getByRole('button',{name:'failed: 0'}))
  expect(within(table).getByText('No failed results in this batch.')).toBeVisible()
- expect(results.getByRole('status')).toHaveTextContent('Showing 0 of 1 results · failed')
+ expect(results.getByRole('status')).toHaveTextContent('Showing 0 of 1 result · failed')
 })
 
 it('automatically shows review results on completion without overriding later manual filters',async()=>{
@@ -238,7 +238,7 @@ it('restores the same pasted work and series form in sample mode and saves witho
  await waitFor(()=>expect(mocks.refresh).toHaveBeenCalled())
  expect(mocks.history).not.toHaveBeenCalled()
  expect(screen.getByRole('heading', { name: 'Previous Batches' })).toBeVisible()
- fireEvent.click(screen.getByRole('tab',{name:'CSV (Bookmarks or Marked for Later)'}))
+ fireEvent.click(screen.getByRole('tab',{name:'CSV List'}))
  expect(screen.getByRole('heading', { name: 'Import from CSV (Bookmarks or Marked for Later)' })).toBeVisible()
  expect(screen.getByText('CSV imports are available in the connected library. Local sample mode does not save CSV import batches.')).toBeVisible()
  expect(screen.getByText('Batch history is available in the connected library. Local sample imports do not create account batches.')).toBeVisible()
@@ -277,7 +277,7 @@ it.each([false,true])('keeps sample pasted-work related-series discovery optiona
 it('keeps drafts across import tabs and places the shared history last in every panel', async () => {
  show()
  fireEvent.change(screen.getByLabelText('AO3 URLs'),{target:{value:'https://archiveofourown.org/works/123'}})
- for (const name of ['Website Links','AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
+ for (const name of ['Website Links','AO3 Library Sync','CSV List','Calibre (Bookfusion)','Work or Series Links']) {
   fireEvent.click(screen.getByRole('tab',{name}))
   const panel=screen.getByRole('tabpanel',{name})
   expect(within(panel).getByRole('heading',{name:'Previous Batches'})).toBeVisible()

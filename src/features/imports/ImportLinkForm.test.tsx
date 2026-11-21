@@ -81,7 +81,7 @@ it('keeps checking until the saved entry is available', async () => {
 it('shows an unsuccessful import without a saved entry', async () => {
   mocks.history.mockResolvedValue({ items: [{ entry_id: null, status: 'failed', error_message: 'Invalid work.' }] })
   show(); await submit()
-  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No saved fic was available'))
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No saved story was available for this import.'))
   expect(screen.getByText('Invalid work.')).toBeVisible()
 })
 

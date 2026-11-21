@@ -1,3 +1,4 @@
+import { countNoun } from '../../src/lib/count-noun'
 import { savedWorkIdentity } from './metadata'
 import { requireRuntimeEnvironmentConfig } from '../../src/lib/environment'
 import { reportSyncStatus, reportSyncFailure } from './sync-status'
@@ -159,7 +160,7 @@ async function performSync(connection: Connection, force: boolean) {
   if ((await all<Pending>('pending')).some(event => event.account === connection.account && !events.some(old => old.id === event.id))) return performSync(connection, force)
   const available = await reportAvailability(connection)
   const linked = (await listCatalog()).filter(book => book.account === connection.account && book.workId && book.organizerEntryId).length
-  return `Reading updates are synced. Catalog: ${catalog.length} EPUB versions. Checked ${checked} identified EPUB versions; ${linked} versions linked. ${unidentified} checked version${unidentified === 1 ? ' needs' : 's need'} an AO3 work link.${waitingCount ? ` ${waitingCount} versions have pending reading changes.` : ''}${unreadable ? ` ${unreadable} downloaded EPUBs could not be read for identity recovery.` : ''}${catalog.length > candidates.length ? ` ${catalog.length - candidates.length} versions belong to another organizer connection and were left unchanged.` : ''} ${available} downloaded works reported for Offline.${!force && candidates.length > batch.length ? ' More catalog versions will be checked on a later sync; Sync Now checks the full catalog.' : ''} Cloud-only EPUBs are not downloaded by sync.`
+  return `Reading updates are synced. Catalog: ${catalog.length} ${countNoun(catalog.length, 'EPUB version')}. Checked ${checked} ${countNoun(checked, 'identified EPUB version')}; ${linked} ${countNoun(linked, 'version')} linked. ${unidentified} checked version${unidentified === 1 ? ' needs' : 's need'} an AO3 work link.${waitingCount ? ` ${waitingCount} ${countNoun(waitingCount, 'version has', 'versions have')} pending reading changes.` : ''}${unreadable ? ` ${unreadable} downloaded ${countNoun(unreadable, 'EPUB')} could not be read for identity recovery.` : ''}${catalog.length > candidates.length ? ` ${catalog.length - candidates.length} ${countNoun(catalog.length - candidates.length, 'version belongs', 'versions belong')} to another organizer connection and were left unchanged.` : ''} ${available} downloaded ${countNoun(available, 'work')} reported for Offline.${!force && candidates.length > batch.length ? ' More catalog versions will be checked on a later sync; Sync Now checks the full catalog.' : ''} Cloud-only EPUBs are not downloaded by sync.`
 }
 
 // Resolve files from IndexedDB on this installation before reporting availability.

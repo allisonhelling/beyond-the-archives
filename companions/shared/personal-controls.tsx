@@ -1,6 +1,6 @@
 import { EditConflictReview } from '../../src/features/library/EditConflictReview'
 import type { EditConflict } from '../../src/features/library/edit-merge'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Info } from 'lucide-react'
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
@@ -12,9 +12,10 @@ type Draft = { tags: string; rating: number | '' }
 
 function PersonalControls({ draft, onChange, ratingInfo }: { draft: Draft; onChange: () => void; ratingInfo: string }) {
   const [tags, setTags] = useState(parseLines(draft.tags)), [rating, setRating] = useState<number | null>(draft.rating === '' ? null : Number(draft.rating))
+  const ratingHelpId = useId()
   return <div className="companion-personal-controls">
     <div className="personal-tags-field"><p>Personal Tags</p><PersonalTagInput inlineHelp value={tags} onChange={value => { setTags(value); draft.tags = value.join('\n'); onChange() }} /></div>
-    <StarRating clearLabel="Clear Rating" value={rating} info={ratingInfo.trim() ? <details className="field-info rating-info"><summary role="button" aria-label="Personal Rating Info"><Info aria-hidden="true" /></summary><span>{ratingInfo}</span></details> : null} onChange={value => { setRating(value); draft.rating = value ?? ''; onChange() }} />
+    <StarRating clearLabel="Clear Rating" value={rating} info={ratingInfo.trim() ? <details className="field-info rating-info"><summary role="button" aria-label="Personal Rating Info" aria-describedby={ratingHelpId}><Info aria-hidden="true" /></summary><span role="tooltip" id={ratingHelpId}>{ratingInfo}</span></details> : null} onChange={value => { setRating(value); draft.rating = value ?? ''; onChange() }} />
   </div>
 }
 

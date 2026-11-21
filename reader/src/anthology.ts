@@ -1,3 +1,4 @@
+import { countNoun } from '../../src/lib/count-noun'
 import { parseWorkUrl } from '../../src/features/imports/urls'
 import { blankMetadata, bookDetails, chapterNumber, completionStatus, isAnthology, withOrganizerProgress, type AnthologyWork, type Book, type BookDetails, type ChapterSummary, type Remote } from './model'
 import { progressReadingStatus } from '../../src/features/library/model'
@@ -12,7 +13,7 @@ export function hasWorkOrder(book: Contents & Pick<BookDetails, 'contentsReviewe
     && chapters.every((chapter, index) => (!chapter.sourceWorkId || chapter.sourceWorkId === work.workId) && chapterNumber(chapter, chapters) === index + 1)
 }
 export function anthologyLabel(book: Pick<BookDetails, 'works' | 'metadata'>) {
-  return isAnthology(book) ? `Anthology · ${book.works!.length} Works · ${book.metadata.published_chapters ?? 0} Chapters` : undefined
+  return isAnthology(book) ? `Anthology · ${book.works!.length} ${countNoun(book.works!.length, 'Work')} · ${book.metadata.published_chapters ?? 0} ${countNoun(book.metadata.published_chapters ?? 0, 'Chapter')}` : undefined
 }
 export function progressMetadata<T extends Pick<BookDetails, 'works' | 'metadata'>>(book: T) {
   return isAnthology(book) ? { ...book.metadata, publication_status: 'complete' as const } : book.metadata

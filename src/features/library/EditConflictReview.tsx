@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useId, useRef, useState } from 'react'
 import { EditConflict, type EditValues } from './edit-merge'
@@ -6,7 +7,7 @@ import type { Json } from '../../types/database'
 
 const labels: Record<string, string> = { reading: 'Reading Progress', notes: 'Private Notes', status: 'Reading Status', progress: 'Chapters Read', rating: 'Personal Rating', favorite: 'Favorite', rec: 'Rec', tags: 'Personal Tags', collections: 'Custom Collections' }
 function display(field: string, value: Json) {
-  if (field === 'reading' && value && typeof value === 'object' && !Array.isArray(value)) return `${statuses[value.status as keyof typeof statuses] ?? value.status} · ${value.progress} chapters read`
+  if (field === 'reading' && value && typeof value === 'object' && !Array.isArray(value)) return `${statuses[value.status as keyof typeof statuses] ?? value.status} · ${value.progress} ${countNoun(Number(value.progress), 'chapter')} read`
   if (field === 'metadata.rating' && typeof value === 'string') return ratingLabel(value)
   if (field === 'status' && typeof value === 'string') return statuses[value as keyof typeof statuses] ?? value
   if (value === null || value === '') return '(empty)'

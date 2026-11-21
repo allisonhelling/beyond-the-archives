@@ -218,7 +218,7 @@ test('removes only the selected download while preserving its state and other bo
   page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Remove Download', exact: true }).click()
   await expect(page.locator('.story-card')).toHaveCount(2)
-  await expect(page.locator('.story-card .availability').filter({ hasText: 'Available In Cloud' })).toHaveCount(1)
+  await expect(page.locator('.story-card .availability').filter({ hasText: 'In Cloud' })).toHaveCount(1)
   expect((await calls(page))['contents.get'] ?? 0).toBe(0)
   const removed = await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('bta-reader'); request.onsuccess = () => resolve(request.result) })

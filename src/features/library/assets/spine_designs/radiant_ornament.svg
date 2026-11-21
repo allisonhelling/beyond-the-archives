@@ -1,25 +1,76 @@
-<svg xmlns="http://www.w3.org/2000/svg"
-     viewBox="0 0 150 360"
-     preserveAspectRatio="none"
-     width="100%"
-     height="100%"
-     fill="none"
-     stroke="currentColor"
-     stroke-width="1.9"
-     stroke-linecap="round"
-     stroke-linejoin="round"
-     vector-effect="non-scaling-stroke"
-     aria-hidden="true">
-  <g>
-    <g transform="translate(75 38)">
-      <path d="M-48 0H-13M13 0H48" />
-      <path d="M0 -10Q1 -2 8 0Q1 2 0 10Q-1 2 -8 0Q-1 -2 0 -10Z" />
-      <path d="M-12 5L-25 10M-8 11L-12 16M0 14V27M8 11L12 16M12 5L25 10" />
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 150 360"
+   preserveAspectRatio="none"
+   width="100%"
+   height="100%"
+   fill="none"
+   stroke="currentColor"
+   stroke-width="1.9"
+   stroke-linecap="round"
+   stroke-linejoin="round"
+   vector-effect="non-scaling-stroke"
+   aria-hidden="true"
+   version="1.1"
+   id="svg6"
+   sodipodi:docname="radiant_ornament.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs6" />
+  <sodipodi:namedview
+     id="namedview6"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.6678988"
+     inkscape:cx="-5.0962325"
+     inkscape:cy="181.96548"
+     inkscape:window-width="1440"
+     inkscape:window-height="872"
+     inkscape:window-x="0"
+     inkscape:window-y="28"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg6" />
+  <g
+     id="g6"
+     style="stroke:#e3b66d;stroke-opacity:1">
+    <g
+       transform="translate(75 38)"
+       id="g3"
+       style="stroke:#e3b66d;stroke-opacity:1">
+      <path
+         d="M-48 0H-13M13 0H48"
+         id="path1"
+         style="stroke:#e3b66d;stroke-opacity:1" />
+      <path
+         d="M0 -10Q1 -2 8 0Q1 2 0 10Q-1 2 -8 0Q-1 -2 0 -10Z"
+         id="path2"
+         style="stroke:#e3b66d;stroke-opacity:1" />
+      <path
+         d="M-12 5L-25 10M-8 11L-12 16M0 14V27M8 11L12 16M12 5L25 10"
+         id="path3"
+         style="stroke:#e3b66d;stroke-opacity:1" />
     </g>
-
-    <g transform="translate(75 322)">
-      <path d="M-48 0H-13M13 0H48" />
-      <path d="M0 -10Q1 -2 8 0Q1 2 0 10Q-1 2 -8 0Q-1 -2 0 -10Z" />
+    <g
+       transform="translate(75 322)"
+       id="g5"
+       style="stroke:#e3b66d;stroke-opacity:1">
+      <path
+         d="M-48 0H-13M13 0H48"
+         id="path4"
+         style="stroke:#e3b66d;stroke-opacity:1" />
+      <path
+         d="M0 -10Q1 -2 8 0Q1 2 0 10Q-1 2 -8 0Q-1 -2 0 -10Z"
+         id="path5"
+         style="stroke:#e3b66d;stroke-opacity:1" />
     </g>
   </g>
 </svg>

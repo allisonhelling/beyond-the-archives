@@ -49,6 +49,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
       state.entry = { ...body.p_input, id: 'fic-entry', version: 'v1' }
      }
      if (body.p_action === 'progress') state.entry = { ...state.entry, ...body.p_input, version: 'v2', ...((body.p_input.chapter_read || body.p_input.undo_read) && { readingHistory: body.p_input.undo_read ? [] : [{ action: 'chapter_read', id: 'fixture-read', chapter: body.p_input.progress, undo: {} }] }) }
+     if (body.p_action === 'delete_entry') state.entry = null
      return { status: 200, responseText: JSON.stringify({ entry: state.entry, ratingInfo: state.ratingInfo, collections: [{ id: 'weekend', name: 'Weekend reads' }, { id: 'night', name: 'Night reads' }] }) }
     },
    } })
@@ -84,7 +85,15 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(page.locator('.rating-star svg').first()).toHaveCSS('width', '34px')
   await expect(page.locator('.personal-tag-help > span')).toBeHidden()
 
-  await page.locator('summary[aria-label="About reading status"]').click()
+  const readingHelp = page.locator('summary[aria-label="About reading status"]')
+  if (!test.info().project.use.isMobile) {
+   await readingHelp.hover()
+   await expect(page.getByRole('tooltip').filter({ hasText: 'To Read marks no chapters as read.' })).toBeVisible()
+   await expect(readingHelp).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+   await page.getByLabel('Reading Status', { exact: true }).hover()
+   await expect(page.getByRole('tooltip')).toHaveCount(0)
+  }
+  await readingHelp.click()
   await expect(page.getByText('To Read marks no chapters as read.', { exact: false })).toBeVisible()
   await expect(page.locator('.field-info[open] > span')).toHaveCSS('font-size', notesFont)
   await page.locator('summary[aria-label="About reading status"]').click()
@@ -234,7 +243,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   for (const surface of [top, bottom]) {
    await expect(surface.locator('button.chapter-progress')).toHaveText('Ch. 3 / 10')
    await verifyReadingActionOrder(surface)
-   await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
+   await expect(surface.locator('.chapter-progress')).toHaveAttribute('title', 'Edit Chapters Read')
    await expect(surface.getByLabel('About chapters read', { exact: true })).toHaveCount(0)
    for (const element of await surface.locator('.toolbar *, .bottom-bar *').all()) await expect(element).toHaveCSS('font-size', notesFont)
   }
@@ -348,7 +357,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   const reloadButtonBounds = (await reloadEntry.boundingBox())!, reloadHelpBounds = (await reloadHelp.boundingBox())!
   expect(reloadHelpBounds.x).toBeGreaterThanOrEqual(reloadButtonBounds.x + reloadButtonBounds.width)
   await reloadHelp.click()
-  await expect(page.getByText('Loads this fic’s latest saved information from your hosted library', { exact: false })).toBeVisible()
+  await expect(page.getByText('Loads this story’s latest saved information from your hosted library', { exact: false })).toBeVisible()
   await reloadHelp.click()
   const actionsBounds = await page.locator('.editor-actions').boundingBox()
   const reloadBounds = await page.locator('.reload-entry').boundingBox()
@@ -359,7 +368,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   const pairing = page.locator('#library-connection')
   await expect(pairing.getByRole('button')).toHaveCount(5)
   await expect(pairing.locator('.library-settings-link')).toHaveCSS('padding-top', '28px')
-  await expect(pairing.getByRole('button', { name: /chapter|Finish Fic|Reread/ })).toHaveCount(0)
+  await expect(pairing.getByRole('button', { name: /chapter|Finish Story|Reread/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await expect(page.getByLabel('Private Notes', { exact: true })).toHaveValue('Unsaved notes stay while changing chapters')
   await page.getByLabel('Reading Status', { exact: true }).selectOption('re_reading')
@@ -379,8 +388,8 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect.poll(() => previousBar!.evaluate(bar => bar.isConnected)).toBe(false)
   }
   await goToChapter(110)
-  await expect(bottom.getByRole('button', { name: 'Finish Fic', exact: true })).toBeVisible()
-  await bottom.getByRole('button', { name: 'Finish Fic', exact: true }).click()
+  await expect(bottom.getByRole('button', { name: 'Finish Story', exact: true })).toBeVisible()
+  await bottom.getByRole('button', { name: 'Finish Story', exact: true }).click()
   await expect(top.getByRole('status')).toContainText('Marked As Read Through Chapter 10')
   await expect(top.getByText('Finished', { exact: true })).toBeVisible()
   for (const surface of [top, bottom]) {
@@ -390,7 +399,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await goToChapter(104)
   for (const surface of [top, bottom]) {
    await expect(surface.getByRole('button', { name: 'Re-Read', exact: true })).toBeVisible()
-   await expect(surface.getByRole('button', { name: /^(Read|Finish Fic)$/ })).toHaveCount(0)
+   await expect(surface.getByRole('button', { name: /^(Read|Finish Story)$/ })).toHaveCount(0)
   }
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await page.getByLabel('Private Notes', { exact: true }).fill('Keep this unsaved draft during recollection')
@@ -464,9 +473,9 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(ratingExplanation).toBeVisible()
   await expect(ratingExplanation).toHaveText(customRatingInfo)
   await expect(ratingExplanation).toHaveCSS('white-space', 'pre-wrap')
-  await expect(ratingExplanation).toHaveCSS('background-color', 'rgb(241, 225, 209)')
-  await expect(ratingExplanation).toHaveCSS('border-top-color', 'rgb(151, 0, 0)')
-  await expect(page.locator('.rating-info summary')).toHaveCSS('color', 'rgb(151, 0, 0)')
+  await expect(ratingExplanation).toHaveCSS('background-color', 'rgb(64, 43, 46)')
+  await expect(ratingExplanation).toHaveCSS('border-top-color', 'rgb(255, 180, 171)')
+  await expect(page.locator('.rating-info summary')).toHaveCSS('color', 'rgb(255, 180, 171)')
   const explanationBox = (await ratingExplanation.boundingBox())!
   const ratingControlsBox = (await page.locator('.rating-controls').boundingBox())!
   expect(explanationBox.width).toBeCloseTo(Math.min(420, ratingControlsBox.width), 0)
@@ -482,7 +491,7 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
   await expect(reloadText).toBeVisible()
   await expect(reloadText).toContainText('Newer saved notes and other fields update only fields you have not edited here.')
   await expect(reloadText).toContainText('Reloading does not save your draft or refresh AO3 metadata.')
-  await expect(reloadText).toHaveCSS('background-color', 'rgb(241, 225, 209)')
+  await expect(reloadText).toHaveCSS('background-color', 'rgb(64, 43, 46)')
   await reloadHelp.click()
   await top.screenshot({ path: `test-results/userscript-dark-editor-${page.viewportSize()!.width}.png` })
   const previousBar = await top.elementHandle()
@@ -508,6 +517,16 @@ test('built userscript keeps chapter controls, editor fields, and collapsible pa
    await expect(surface).toHaveAttribute('data-theme', 'light')
    await expect(surface.locator('section').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)')
   }
+  await top.getByRole('button', { name: 'Edit', exact: true }).click()
+  await expect(top.getByRole('button', { name: 'Edit', exact: true })).toHaveAttribute('title', 'Edit Library Entry')
+  const savedActions = top.locator('.saved-entry-actions')
+  await expect(savedActions.locator(':scope > button')).toHaveText('Delete from Library')
+  await savedActions.getByRole('button', { name: 'Delete from Library', exact: true }).click()
+  const deleteDialog = top.getByRole('dialog', { name: 'Delete from Library', exact: true })
+  await expect(deleteDialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
+  await deleteDialog.getByRole('button', { name: 'Delete from Library', exact: true }).click()
+  for (const surface of [top, bottom]) await expect(surface.getByRole('button', { name: 'Add to Library', exact: true })).toBeVisible()
+  await expect(top.getByRole('status')).toHaveText('Deleted from your library.')
   // Entire Work reuses the progress bar after each chapter, including its notes.
   const fullUrl = 'https://archiveofourown.org/works/123?view_full_work=true'
   await page.route(fullUrl, route => route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="main"><div id="workskin"><h2 class="title">Entire Work</h2><dl class="work meta"><dd class="chapters">3/?</dd></dl><div id="chapters">${[1, 2, 3].map(number => `<div class="chapter" id="chapter-${number}"><h3 class="title"><a href="/works/123/chapters/${100 + number}">Chapter ${number}</a></h3><div class="userstuff">${'Word '.repeat(number)}</div><div class="notes">Private author notes</div></div>`).join('')}</div></div><div id="kudos">Kudos</div></main></body></html>` }))
@@ -611,7 +630,7 @@ test('built userscript saves unsaved works through first-chapter and completion 
    { chapter: 1, bottom: false, label: 'Reading', status: 'reading', progress: 0 },
    { chapter: 1, bottom: true, label: 'Mark Read', status: 'reading', progress: 1 },
    { chapter: 2, bottom: false, label: 'Mark Read', status: 'reading', progress: 2 },
-   { chapter: 3, bottom: true, label: 'Finish Fic', status: 'finished', progress: 3 },
+   { chapter: 3, bottom: true, label: 'Finish Story', status: 'finished', progress: 3 },
   ]) {
    await page.goto(`https://archiveofourown.org/works/123/chapters/${100 + action.chapter}`)
    await page.evaluate(() => {

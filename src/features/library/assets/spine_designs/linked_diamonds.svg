@@ -1,57 +1,121 @@
-
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="150" height="360"
-     viewBox="0 0 150 360">
-
-  <g fill="none"
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="150"
+   height="360"
+   viewBox="0 0 150 360"
+   version="1.1"
+   id="svg19"
+   sodipodi:docname="linked_diamonds.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs19" />
+  <sodipodi:namedview
+     id="namedview19"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="3.1150817"
+     inkscape:cx="47.029264"
+     inkscape:cy="289.71953"
+     inkscape:window-width="1440"
+     inkscape:window-height="872"
+     inkscape:window-x="0"
+     inkscape:window-y="28"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="g9" />
+  <g
+     fill="none"
      stroke="#d99b18"
      stroke-width="1.5"
      stroke-linecap="round"
-     stroke-linejoin="round">
-
-    <g transform="translate(0 -10)">
-    <!-- Top ornamental frame -->
-    <path d="M20 117V42H130V117"/>
-    <path d="M27 111V49H123V111"
-          stroke-width=".8" opacity=".75"/>
-
-    <!-- Top Art Deco corner detailing -->
-    <path d="M20 62L40 42M110 42L130 62"/>
-    <path d="M27 67L45 49M105 49L123 67"
-          stroke-width=".8"/>
-
-    <!-- Top horizontal diamond chain -->
-    <path d="M37 84H51M99 84H113"
-          stroke-width=".9"/>
-
-    <path d="M51 84L59 76L67 84L59 92Z"/>
-    <path d="M67 84L75 76L83 84L75 92Z"/>
-    <path d="M83 84L91 76L99 84L91 92Z"/>
-
-    <!-- Small central accent -->
-    <path d="M75 60L79 66L75 72L71 66Z"
-          stroke-width="1"/>
+     stroke-linejoin="round"
+     id="g19">
+    <g
+       transform="translate(0 -10)"
+       id="g9">
+      <!-- Top ornamental frame -->
+      <path
+         d="M20 117V42H130V117"
+         id="path1" />
+      <path
+         d="M27 111V49H123V111"
+         stroke-width=".8"
+         opacity=".75"
+         id="path2" />
+      <!-- Top Art Deco corner detailing -->
+      <path
+         d="M20 62L40 42M110 42L130 62"
+         id="path3" />
+      <path
+         d="M27 67L45 49M105 49L123 67"
+         stroke-width=".8"
+         id="path4" />
+      <!-- Top horizontal diamond chain -->
+      <path
+         d="M37 84H51M99 84H113"
+         stroke-width=".9"
+         id="path5" />
+      <path
+         d="M51 84L59 76L67 84L59 92Z"
+         id="path6" />
+      <path
+         d="M67 84L75 76L83 84L75 92Z"
+         id="path7" />
+      <path
+         d="M83 84L91 76L99 84L91 92Z"
+         id="path8" />
+      <!-- Small central accent -->
+      <path
+         d="m 75,80 4,4 -4,4 -4,-4 z"
+         stroke-width="1"
+         id="path9"
+         sodipodi:nodetypes="ccccc" />
     </g>
-
     <!-- Lower ornament -->
-    <g transform="translate(0 370) scale(1 -1)">
-      <path d="M20 117V42H130V117"/>
-      <path d="M27 111V49H123V111"
-            stroke-width=".8" opacity=".75"/>
-
-      <path d="M20 62L40 42M110 42L130 62"/>
-      <path d="M27 67L45 49M105 49L123 67"
-            stroke-width=".8"/>
-
-      <path d="M37 84H51M99 84H113"
-            stroke-width=".9"/>
-
-      <path d="M51 84L59 76L67 84L59 92Z"/>
-      <path d="M67 84L75 76L83 84L75 92Z"/>
-      <path d="M83 84L91 76L99 84L91 92Z"/>
-
-      <path d="M75 60L79 66L75 72L71 66Z"
-            stroke-width="1"/>
+    <g
+       transform="translate(0 370) scale(1 -1)"
+       id="g18">
+      <path
+         d="M20 117V42H130V117"
+         id="path10" />
+      <path
+         d="M27 111V49H123V111"
+         stroke-width=".8"
+         opacity=".75"
+         id="path11" />
+      <path
+         d="M20 62L40 42M110 42L130 62"
+         id="path12" />
+      <path
+         d="M27 67L45 49M105 49L123 67"
+         stroke-width=".8"
+         id="path13" />
+      <path
+         d="M37 84H51M99 84H113"
+         stroke-width=".9"
+         id="path14" />
+      <path
+         d="M51 84L59 76L67 84L59 92Z"
+         id="path15" />
+      <path
+         d="M67 84L75 76L83 84L75 92Z"
+         id="path16" />
+      <path
+         d="M83 84L91 76L99 84L91 92Z"
+         id="path17" />
+      <path
+         d="m 75,80 4,4 -4,4 -4,-4 z"
+         stroke-width="1"
+         id="path18"
+         sodipodi:nodetypes="ccccc" />
     </g>
   </g>
 </svg>

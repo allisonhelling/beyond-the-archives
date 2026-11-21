@@ -1,5 +1,6 @@
+import { countNoun } from '../../../lib/count-noun'
 import type { ReactNode } from 'react'
-import { BulletSeparated } from '../BulletSeparated'
+import { FandomTags } from '../FandomTags'
 import { ao3Date, ratingLabel, savedWorkUrl, tagNames, type Story } from '../model'
 import { AuthorNames } from '../AuthorNames'
 import { SeriesNames } from '../series/SeriesNames'
@@ -15,18 +16,18 @@ export function workMetadataFields(story: Pick<Story, 'metadata' | 'original_url
   const { metadata, work } = story
   const count = (value: number | null | undefined) => value?.toLocaleString() ?? '?'
   const values: Record<keyof typeof ao3MetadataLabels, () => ReactNode> = {
-    authors: () => <AuthorNames metadata={metadata} destination={layout === 'info' ? 'ao3' : 'library'} />, fandoms: () => metadata.fandoms.length ? <BulletSeparated values={metadata.fandoms} /> : 'Fandom unknown',
+    authors: () => <AuthorNames metadata={metadata} destination={layout === 'info' ? 'ao3' : 'library'} />, fandoms: () => metadata.fandoms.length ? <FandomTags values={metadata.fandoms} /> : 'Fandom unknown',
     series: () => metadata.series?.length ? <SeriesNames metadata={metadata} /> : 'None saved',
-    rating: () => ratingLabel(metadata.rating) || 'Rating unknown', words: () => `${count(metadata.word_count)} words`,
-    chapters: () => `${metadata.published_chapters ?? '?'} / ${metadata.total_chapters ?? '?'} chapters`,
+    rating: () => ratingLabel(metadata.rating) || 'Rating unknown', words: () => `${count(metadata.word_count)} ${countNoun(metadata.word_count, 'word')}`,
+    chapters: () => `${metadata.published_chapters ?? '?'} / ${metadata.total_chapters ?? '?'} ${countNoun(metadata.total_chapters, 'chapter')}`,
     summary: () => <WorkSummary tile={layout !== 'info'} metadata={metadata} fallback={layout === 'info' ? 'No summary saved.' : ''} />,
     relationships: () => <MetadataTags values={tagNames(metadata, 'relationship')} category="relationships" />,
     characters: () => <MetadataTags values={tagNames(metadata, 'character')} category="characters" />,
     tags: () => <MetadataTags values={tagNames(metadata, 'freeform')} />,
     warnings: () => <MetadataTags values={metadata.archive_warnings ?? []} category="warnings" />,
     category: () => <MetadataTags values={metadata.categories ?? []} category="categories" />,
-    kudos: () => `${count(metadata.kudos)} kudos`, bookmarks: () => `${count(metadata.bookmark_count)} bookmarks`,
-    comments: () => `${count(metadata.comment_count)} comments`, hits: () => `${count(metadata.hits)} hits`,
+    kudos: () => `${count(metadata.kudos)} kudos`, bookmarks: () => `${count(metadata.bookmark_count)} ${countNoun(metadata.bookmark_count, 'bookmark')}`,
+    comments: () => `${count(metadata.comment_count)} ${countNoun(metadata.comment_count, 'comment')}`, hits: () => `${count(metadata.hits)} ${countNoun(metadata.hits, 'hit')}`,
     published: () => ao3Date(work.ao3_published_at), updated: () => ao3Date(work.ao3_updated_at),
     language: () => metadata.language || work.language || 'Unknown', publication: () => publicationStatuses[metadata.publication_status].label,
     workId: () => work.ao3_work_id ?? 'Unknown', source: () => <a className="clickable-text" href={savedWorkUrl(story)} target="_blank" rel="noreferrer">View on AO3</a>,

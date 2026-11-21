@@ -54,7 +54,7 @@ export function SiteBulkForm({ onQueued, onAo3Links }: { onQueued: (batch: strin
    </div>
    <label>Links<textarea rows={8} maxLength={4_000_000} value={text} onChange={event => { setText(event.target.value); setPreview(undefined); setCheckpoint('') }} disabled={busy} /></label>
    <label>Bulk Mode<select value={mode} disabled={busy} onChange={event => { setMode(event.target.value as BulkMode); setCheckpoint(crypto.randomUUID()) }}>{Object.entries(bulkModes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-   <p>Recognized links match AO3, a FanFiction.net story URL, or a saved story URL pattern. Website imports require story evidence on the page. <Link to="/settings#settings-site-mappings">Manage Site Mappings</Link></p>
+   <p>Recognized links match AO3, a FanFiction.net story URL, or a saved story URL pattern. Website imports require story evidence on the page. <Link className="clickable-text" to="/settings#settings-site-mappings">Manage Site Mappings</Link></p>
    <div className="form-actions"><button className="button secondary" disabled={busy || !text.trim()}>Preview Links</button></div>
   </form>
   {preview && <>

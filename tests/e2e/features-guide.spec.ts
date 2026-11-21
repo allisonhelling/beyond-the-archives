@@ -38,18 +38,32 @@ test('removes an older installation report without disconnecting the reader or r
 test('platform availability filters saved works without offering organizer installation names',async({page})=>{
  const tables=await fixture(page)
  tables.reader_availability=[{works:['94001']},{works:['94002']}]
- for(const [index,title] of ['First Download','Second Download','BookFusion Only'].entries()) {
+ for(const [index,title] of ['First Download','Second Download','BookFusion Only','Online Story'].entries()) {
   tables.works.push({id:`platform-work-${index}`,ao3_work_id:94001+index,verified_chapters:{}})
   tables.library_entries.push({id:`platform-entry-${index}`,work_id:`platform-work-${index}`,reading_status:'to_read',last_read_chapter:0,original_url:`https://archiveofourown.org/works/${94001+index}`,metadata_overrides:{title,...(index===2?{bookfusion_link:{url:'https://www.bookfusion.com/reader/123',kind:'book'}}:{})}})
  }
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'organizer',name:'My Organizer',url:'https://reader.example/',reportedAt:'2026-11-04T00:00:00Z',works:['94001']}],stories:[]}}))
  await page.goto('/library');await login(page)
- await expect(page.locator('.work-card')).toHaveCount(3)
+ await expect(page.locator('.work-card')).toHaveCount(4)
  await page.getByRole('button',{name:'Filters',exact:true}).click()
- const selector=page.getByRole('button',{name:'Available In',exact:true})
+ const selector=page.getByRole('button',{name:'Available Offline',exact:true})
  await selector.click()
  await expect(page.getByRole('option',{name:'My Organizer',exact:true})).toHaveCount(0)
  for(const name of ['Apple Books','Kindle','PocketBook']) await expect(page.getByRole('option',{name,exact:true})).toBeDisabled()
+ await selector.evaluate(element => window.scrollBy(0, element.getBoundingClientRect().top - 120))
+ expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100)
+ await page.getByRole('option',{name:'Online Only',exact:true}).click()
+ await expect(page).toHaveURL(/availability=online-only/)
+ await expect(page.locator('.work-card')).toHaveCount(1)
+ await expect(page.getByRole('link',{name:'Online Story',exact:true})).toBeVisible()
+ expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100)
+ await expect(selector).toBeFocused()
+ await selector.click()
+ await page.getByRole('option',{name:'Any Offline Stories',exact:true}).click()
+ await expect(page).toHaveURL(/availability=any-offline/)
+ await expect(page.locator('.work-card')).toHaveCount(3)
+ await expect(page.getByRole('link',{name:'Online Story',exact:true})).toHaveCount(0)
+ await selector.click()
  await page.getByRole('option',{name:'Archives Unfolded',exact:true}).click()
  await expect(page).toHaveURL(/availability=unfolded/)
  await expect(page.locator('.work-card')).toHaveCount(2)
@@ -60,7 +74,7 @@ test('platform availability filters saved works without offering organizer insta
  await expect(page.locator('.work-card')).toHaveCount(1)
  await page.getByRole('button',{name:'Filters',exact:true}).click()
  await selector.click();await page.getByRole('option',{name:'All Works',exact:true}).click()
- await expect(page.locator('.work-card')).toHaveCount(3)
+ await expect(page.locator('.work-card')).toHaveCount(4)
 })
 
 test('suggestion retries preserve results and do not restart requests while idle',async({page})=>{
@@ -85,6 +99,33 @@ test('suggestion retries preserve results and do not restart requests while idle
  await expect(page.getByRole('link',{name:'Retained Results',exact:true})).toBeVisible()
 })
 
+test('organizer browser titles follow pages and loaded work, author, and series names', async ({ page }) => {
+ test.setTimeout(120000)
+ const tables = await fixture(page)
+ for (const [index, title] of ['Named Work', 'Other Work'].entries()) {
+  const workId = 70001 + index
+  tables.works.push({ id: `title-work-${index}`, ao3_work_id: workId, verified_chapters: {} })
+  tables.library_entries.push({ id: `title-entry-${index}`, work_id: `title-work-${index}`, reading_status: 'to_read', last_read_chapter: 0,
+   original_url: `https://archiveofourown.org/works/${workId}`, metadata_overrides: { title, authors: ['Named Author'],
+    series_memberships: [{ id: 123, name: 'Named Series', url: 'https://archiveofourown.org/series/123', position: index + 1 }] } })
+ }
+ await page.goto('/library')
+ await expect(page).toHaveTitle('Sign In · Beyond the Archives')
+ await login(page)
+ await expect(page).toHaveTitle('Library · Beyond the Archives')
+ for (const [url, title] of [
+  ['/reading', 'Currently Reading'], ['/offline', 'Offline'], ['/wayback', 'Wayback Machine'],
+  ['/imports', 'Mass Import from AO3'], ['/imports?tab=site-links', 'Mass Import'], ['/import-fic', 'Add Story'],
+  ['/stats', 'Reading Stats'], ['/features', 'Features'], ['/settings', 'Settings'], ['/settings#design', 'Design'],
+  ['/settings/example-work', 'Work Info Page Preview'], ['/settings/example-series', 'Series Info Page Preview'],
+  ['/authors/Named%20Author', 'Named Author'], ['/stories/title-entry-0', 'Named Work'],
+  ['/stories/title-entry-0?edit=metadata', 'Edit Metadata · Named Work'], ['/series/123', 'Named Series'],
+ ]) {
+  await page.goto(url)
+  await expect(page).toHaveTitle(`${title} · Beyond the Archives`, { timeout: 15000 })
+ }
+})
+
 test('features guide links to every current workflow on desktop and mobile', async ({ page }) => {
  await fixture(page)
  await page.goto('/features'); await login(page)
@@ -106,14 +147,31 @@ test('applied and selected filter chips use category colors without separator bu
  const params = new URLSearchParams({ shelf: 'all', relationship: 'A/B, C/D', characters: 'Alice, Bob' })
  await page.goto(`/library?${params}`); await login(page)
  const active = page.getByLabel('Active Filters')
- await expect(active.getByText('Relationships: A/B', { exact: true })).toBeVisible()
+ const relationship = active.getByRole('button', { name: 'Remove Filter Include (All): A/B', exact: true })
+ await expect(relationship).toBeVisible()
+ const lastWordOffset = await relationship.evaluate(chip => {
+  const range = document.createRange()
+  range.selectNodeContents(chip.firstChild!)
+  const labelTop = range.getBoundingClientRect().top
+  range.selectNodeContents(chip.querySelector('.tag-remove-tail')!.firstChild!)
+  return range.getBoundingClientRect().top - labelTop
+ })
+ expect(lastWordOffset).toBeCloseTo(0, 0)
  await expect(active.locator('.info-separator')).toHaveCount(0)
  await expect(active).not.toContainText('•')
- const categories = { relationships: 'rgb(107, 63, 112)', characters: 'rgb(53, 92, 112)' }
+ const categories = { relationships: [107, 63, 112, 255], characters: [53, 92, 112, 255] }
  for (const [category, color] of Object.entries(categories)) {
   const chips = active.locator(`.categorized-tags[data-tag-category="${category}"] .metadata-tag`)
   await expect(chips).toHaveCount(2)
-  for (const chip of await chips.all()) await expect(chip).toHaveCSS('color', color)
+  const renderedColors = await chips.evaluateAll(elements => {
+   const context = document.createElement('canvas').getContext('2d')!
+   return elements.map(element => {
+    context.fillStyle = getComputedStyle(element).color
+    context.fillRect(0, 0, 1, 1)
+    return Array.from(context.getImageData(0, 0, 1, 1).data)
+   })
+  })
+  expect(renderedColors).toEqual([color, color])
  }
  await page.getByRole('button', { name: 'Filters', exact: true }).click()
  const chips = page.getByLabel('Relationships Selected Filters')
@@ -164,28 +222,61 @@ test('collection transitions clear old tiles while destination requests are pend
   await expect(page.getByRole('link', { name: 'Previous Story', exact: true })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Destination Story', exact: true })).toHaveCount(0)
   await expect(page.locator('[data-results-loading="true"]')).toBeVisible()
+  await expect(page.locator('.loading-work-card').first()).toBeVisible()
   release()
   await expect(page.getByRole('link', { name: 'Destination Story', exact: true })).toBeVisible()
+  await expect(page.locator('.loading-work-card')).toHaveCount(0)
   await page.unroute('**/rest/v1/rpc/query_library')
  }
 })
 
-test('passive surfaces are square and progress sections are centered and divided', async ({ page }) => {
+test('direct work links show loading before declaring a work unavailable', async ({ page }) => {
+ await fixture(page)
+ let release!: () => void
+ const blocked = new Promise<void>(resolve => { release = resolve })
+ await page.route('**/rest/v1/rpc/library_story_details', async route => {
+  await blocked
+  await route.fulfill({ json: [] })
+ })
+ await page.goto('/stories/not-in-library')
+ await login(page)
+ try {
+  await expect(page.getByRole('status').filter({ hasText: 'Loading Work Details…' })).toBeVisible()
+  await expect(page.getByText('Story unavailable.', { exact: false })).toHaveCount(0)
+ } finally { release() }
+ await expect(page.getByText('Story unavailable.', { exact: false })).toBeVisible()
+})
+
+test('filter controls stay square and progress sections are centered and divided', async ({ page }) => {
  const tables = await fixture(page)
  tables.works.push({ id: 'layout-work', ao3_work_id: 22000, verified_chapters: {}, published_chapters: 3, is_complete: false })
- tables.library_entries.push({ id: 'layout-entry', work_id: 'layout-work', original_url: 'https://archiveofourown.org/works/22000', reading_status: 'reading', last_read_chapter: 1, notes: 'A note', metadata_overrides: { title: 'Layout Story', authors: [] } })
+ tables.library_entries.push({ id: 'layout-entry', work_id: 'layout-work', original_url: 'https://archiveofourown.org/works/22000', reading_status: 'reading', last_read_chapter: 1, notes: 'A note', metadata_overrides: { title: 'Layout Story', authors: [], additional_tags: ['Example Tag'] } })
+ tables.metadata_preferences.push({ user_id: '10000000-0000-0000-0000-000000000001', tag_appearance: { shape: 'pill', colors: {} } })
  await page.goto('/library'); await login(page)
  const card = page.locator('.work-card').first()
  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(247, 240, 227)')
  await expect(card).toHaveCSS('background-color', 'rgb(252, 247, 236)')
  await expect(card).toHaveCSS('border-radius', '0px')
  await expect(card.locator('.book-spine-footer')).toHaveCSS('border-radius', '0px')
+ await expect(card.locator('[data-tag-shape="pill"] .metadata-tag')).toHaveCSS('border-radius', '12px')
+ await expect(page.getByRole('button', { name: 'Profile Menu', exact: true })).toHaveCSS('border-radius', '50%')
+ if (page.viewportSize()!.width > 1100) {
+   await expect(page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true })).toHaveCSS('height', '44px')
+ }
  await expect(page.locator('.collection-spine').first()).toHaveCSS('border-radius', '7px')
  await expect(card.locator('.spine-action').first()).toHaveCSS('border-radius', '4px')
- for (const selector of await page.locator('.reading-toolbar .filter-input, .reading-toolbar input, .reading-toolbar .toolbar-actions > .button').all()) await expect(selector).toHaveCSS('border-radius', '4px')
+ for (const selector of await page.locator('.reading-toolbar .filter-input, .reading-toolbar input, .reading-toolbar .toolbar-actions > .button').all()) await expect(selector).toHaveCSS('border-radius', '0px')
  await page.getByRole('button', { name: 'Filters', exact: true }).click()
- for (const selector of await page.locator('.reading-filters .filter-input, .reading-filters input:not([type=checkbox]), .reading-filters .filter-grid > .button, .reading-filters .filter-choice-row > .button').all()) await expect(selector).toHaveCSS('border-radius', '4px')
- await expect(page.getByRole('region', { name: 'Library Toolbar' }).getByRole('button', { name: 'Hide', exact: true })).toHaveCSS('border-radius', '4px')
+ for (const selector of await page.locator('.reading-filters .filter-input, .reading-filters input:not([type=checkbox]), .reading-filters .filter-choice-row > .button').all()) await expect(selector).toHaveCSS('border-radius', '0px')
+ const toolbarHide = page.getByRole('region', { name: 'Library Toolbar' }).getByRole('button', { name: 'Hide', exact: true })
+ await expect(toolbarHide).toHaveCSS('border-radius', '0px')
+ await expect(toolbarHide).toHaveCSS('height', '36px')
+ await expect(toolbarHide.locator('svg.lucide-sliders-horizontal')).toBeVisible()
+ expect(await toolbarHide.evaluate(button => getComputedStyle(button, '::before').content)).toBe('none')
+ const footer = page.locator('.reading-filters .filter-reset-actions')
+ for (const name of ['Clear All Filters', 'Apply Filters from Filter Panel', 'Hide']) {
+   await expect(footer.getByRole('button', { name, exact: true })).toHaveCSS('height', '44px')
+ }
  await page.getByRole('link', { name: 'Layout Story', exact: true }).click()
  const panel = page.getByRole('region', { name: 'Reading and Organization' })
  await expect(panel).toHaveCSS('background-color', 'rgb(241, 225, 209)')
@@ -212,12 +303,23 @@ test('work tiles and phone organizer controls use the requested reading layout',
  await page.goto('/reading');await login(page)
  const card=page.locator('.work-card'),mobile=info.project.name==='mobile'
  await expect(card).toHaveCount(1)
+ const header = page.getByRole('banner')
+ const footer = page.getByRole('contentinfo')
+ await expect(header.locator('.brand-subtitle')).toHaveCount(0)
+ expect((await header.boundingBox())!.height).toBeLessThan(80)
+ await expect(footer).toHaveText('A PRIVATE AO3 ORGANIZER')
+ await expect(footer).toHaveCSS('border-top-color', 'rgb(236, 221, 216)')
  const authors=card.locator('.authors'),fandoms=card.locator('.work-fandoms')
  expect(await authors.evaluate((node,next)=>Boolean(node.compareDocumentPosition(next as Node)&Node.DOCUMENT_POSITION_FOLLOWING),await fandoms.elementHandle())).toBe(true)
  await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveCount(mobile?4:7)
- await card.getByRole('button',{name:/more$/}).click()
+ const toggle = card.locator('.tags-toggle')
+ const triangle = () => toggle.evaluate(button => getComputedStyle(button, '::before').content)
+ expect(await triangle()).toBe('none')
+ await toggle.click()
+ await expect(toggle).toHaveText('Show Less')
+ expect(await triangle()).toBe('none')
  await expect(card.locator('.expandable-metadata-tags .metadata-tag')).toHaveText(['Fluff','Hurt/Comfort','Slow Burn','Found Family','A/B','C/D','Alice','Bob','Gen','Warning'])
- await card.getByRole('button',{name:'Show Less',exact:true}).click()
+ await toggle.click()
  const toolbar=page.locator('.reading-toolbar')
  if(mobile) {
   for(const width of [390,320]) {
@@ -314,7 +416,7 @@ test('Read Offline follows availability and the saved priority in the shared boo
  await expect(footer.getByRole('button', { name: 'Read Offline', exact: true })).toBeDisabled()
 })
 
-test('exports one work in either format and shows Unfolded beside Wayback only for a connected EPUB', async ({page},info)=>{
+test('exports one work in either format and shows Unfolded only for a connected EPUB', async ({page},info)=>{
  const tables=await fixture(page)
  let available=false
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'export-reader',name:'My Reader',url:'https://reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]},{id:'second-reader',name:'Second Reader',url:'https://second-reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]}],stories:[]}}))
@@ -355,9 +457,10 @@ test('exports one work in either format and shows Unfolded beside Wayback only f
  await card.getByRole('link',{name:'Export Example',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Export Example',exact:true})).toBeVisible()
  await expect(page.getByRole('link',{name:'Unfolded',exact:true})).toHaveCount(0)
- const headerExport=page.locator('.story-metadata-actions').getByRole('button',{name:'Export Work Metadata',exact:true})
- const refresh=page.locator('.story-metadata-actions').getByRole('button',{name:'Retry / Update Metadata',exact:true})
- expect((await headerExport.boundingBox())!.x).toBeGreaterThan((await refresh.boundingBox())!.x)
+ const headerExport=page.locator('.work-details-actions').getByRole('button',{name:'Export Metadata',exact:true})
+ const refresh=page.locator('.work-details-actions').getByRole('button',{name:'Retry / Update Metadata',exact:true})
+ await expect(headerExport).toHaveText('Export Metadata')
+ await expect(refresh).toBeVisible()
  const metadataPanel=page.locator('.details-metadata-panel')
  const inlineRefresh=(await metadataPanel.getByRole('button',{name:'Retry / Update Metadata',exact:true}).boundingBox())!,inlineExport=(await metadataPanel.getByRole('button',{name:'Export Work Metadata',exact:true}).boundingBox())!
  expect(inlineExport.x).toBeGreaterThan(inlineRefresh.x)
@@ -371,7 +474,7 @@ test('exports one work in either format and shows Unfolded beside Wayback only f
  const wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
  await expect(wayback).toHaveText('Wayback')
  await expect(read).toHaveAttribute('href','https://reader.example/?work=99001')
- expect((await read.boundingBox())!.x).toBeGreaterThan((await wayback.boundingBox())!.x)
+ await expect(page.locator('.details-updated-action').getByRole('link',{name:'Unfolded',exact:true})).toBeVisible()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })
 
@@ -379,7 +482,7 @@ test('mass import tabs preserve link drafts and show Previous Batches in every s
  await fixture(page)
  await page.goto('/imports');await login(page)
  await page.getByLabel('AO3 URLs',{exact:true}).fill('https://archiveofourown.org/works/123')
- for(const name of ['Website Links','AO3 Library Sync','CSV (Bookmarks or Marked for Later)','Calibre (Bookfusion)','Work or Series Links']) {
+ for(const name of ['Website Links','AO3 Library Sync','CSV List','Calibre (Bookfusion)','Work or Series Links']) {
   await page.getByRole('tab',{name,exact:true}).click()
   const panel=page.getByRole('tabpanel',{name,exact:true})
   await expect(panel.getByRole('heading',{name:'Previous Batches',exact:true})).toBeVisible()

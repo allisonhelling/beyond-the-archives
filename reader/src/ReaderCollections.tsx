@@ -3,6 +3,7 @@ import { readerWorkIdentities } from '../../src/lib/reader-work-identities'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { LibraryProvider, useLibrary } from '../../src/features/library/LibraryProvider'
+import { useCollectionWorkSelection, type TileSelection } from '../../src/features/library/collections/useCollectionWorkSelection'
 import { CollectionBrowser } from '../../src/features/library/collections/CollectionBrowser'
 import { EditCollectionsButton } from '../../src/features/library/collections/EditCollectionsButton'
 import { LoadingIcon } from '../../src/components/ActivityIndicator'
@@ -14,20 +15,57 @@ import { readerCloud } from './cloud'
 import { loadSetting, setting, readerOwner } from './storage'
 import type { CatalogBook } from './model'
 
-const ConnectedCollections = createContext(false)
+function indexCollectionStories(stories: Story[]) {
+  const entries = new Map<string, Story>(), ao3 = new Map<string, Story>()
+  for (const story of stories) {
+    entries.set(story.id, story)
+    const id = story.work.ao3_work_id?.toString()
+    if (id && !ao3.has(id)) ao3.set(id, story)
+  }
+  return { entries, ao3 }
+}
+type StoryIndex = ReturnType<typeof indexCollectionStories>
+type ReaderWorkSelection = { toolbar: ReactNode; tile: (book: CatalogBook) => TileSelection | undefined }
 
-export function ReaderCollections({ books, account, onScope, onSync, children }: { books: CatalogBook[]; account?: string; onScope: (ids: string[] | null) => void; onSync: () => void; children: ReactNode }) {
-  useEffect(() => { if (!account) onScope(null) }, [account, onScope])
-  if (!account) return children
-  return <MemoryRouter><LibraryProvider key={account} userId={account} catalogWorksOnly navigationEnabled={false}><ConnectedCollections value={true}><ConnectedCollectionBrowser books={books} onScope={onScope} onSync={onSync}>{children}</ConnectedCollectionBrowser></ConnectedCollections></LibraryProvider></MemoryRouter>
+const ConnectedCollections = createContext<StoryIndex | null>(null)
+function collectionStoryForBook(book: CatalogBook, index: StoryIndex) {
+  return (book.organizerEntryId ? index.entries.get(book.organizerEntryId) : undefined) ?? (book.workId ? index.ao3.get(book.workId) : undefined)
 }
 
-function ConnectedCollectionBrowser({ books, onScope, onSync, children }: Omit<Parameters<typeof ReaderCollections>[0], 'account'>) {
+export function ReaderCollections({ books, pageBooks, account, onScope, onSync, children }: { books: CatalogBook[]; pageBooks: CatalogBook[]; account?: string; onScope: (ids: string[] | null) => void; onSync: () => void; children: (selection?: ReaderWorkSelection) => ReactNode }) {
+  useEffect(() => { if (!account) onScope(null) }, [account, onScope])
+  if (!account) return children()
+  return <MemoryRouter><LibraryProvider key={account} userId={account} catalogWorksOnly navigationEnabled={false}><ConnectedCollectionBrowser books={books} pageBooks={pageBooks} onScope={onScope} onSync={onSync}>{children}</ConnectedCollectionBrowser></LibraryProvider></MemoryRouter>
+}
+
+function ConnectedCollectionBrowser({ books, pageBooks, onScope, onSync, children }: Omit<Parameters<typeof ReaderCollections>[0], 'account'>) {
   const mobile = useLayout() === 'mobile'
   const [counts, setCounts] = useState<Story[] | null>(null)
-  return <CollectionBrowser compactHeader={mobile} title="Collections" countStories={counts}>{({ selected, renderHeader }) => <>
-    {renderHeader(null)}<CollectionScope books={books} selected={selected} onScope={onScope} onSync={onSync} onCounts={setCounts} />{children}
+  return <CollectionBrowser compactHeader={mobile} title="Collections" countStories={counts}>{({ selected, editingCollections, renderHeader }) => <>
+    {renderHeader(null)}<CollectionScope books={books} selected={selected} onScope={onScope} onSync={onSync} onCounts={setCounts} />
+    <ConnectedCollectionWorks books={books} pageBooks={pageBooks} selected={selected} editing={editingCollections}>{children}</ConnectedCollectionWorks>
   </>}</CollectionBrowser>
+}
+
+function ConnectedCollectionWorks({ books, pageBooks, selected, editing, children }: Pick<Parameters<typeof ReaderCollections>[0], 'books' | 'pageBooks' | 'children'> & { selected: string; editing: boolean }) {
+  const { stories, collections, catalogLoaded } = useLibrary()
+  const index = useMemo(() => indexCollectionStories(stories), [stories])
+  const shelfIds = useMemo(() => editing ? new Set(collectionStories(stories, selected).map(story => story.id)) : null, [editing, selected, stories])
+  function workTarget(book: CatalogBook) {
+    const story = collectionStoryForBook(book, index)
+    return story && shelfIds?.has(story.id) && !book.deleting ? story : undefined
+  }
+  const selection = useCollectionWorkSelection({
+    scope: editing ? selected : undefined,
+    pageWorks: pageBooks.flatMap(book => workTarget(book) ?? []),
+    loadAll: async () => books.flatMap(book => workTarget(book) ?? []),
+    blocked: !catalogLoaded,
+    manualCollection: collections.find(collection => collection.id === selected && !collection.default_key && !collection.automatic_rules),
+  })
+  return <ConnectedCollections value={index}>{children(selection && { toolbar: selection.toolbar, tile: book => {
+    const story = workTarget(book)
+    return story ? selection.tile(story) : undefined
+  } })}</ConnectedCollections>
 }
 
 function CollectionScope({ books, selected, onScope, onSync, onCounts }: { onCounts: (stories: Story[]) => void; books: CatalogBook[]; selected: string; onScope: (ids: string[] | null) => void; onSync: () => void }) {
@@ -88,12 +126,11 @@ function CollectionScope({ books, selected, onScope, onSync, onCounts }: { onCou
 }
 
 export function ReaderCollectionMembership({ book }: { book: CatalogBook }) {
-  const connected = useContext(ConnectedCollections)
-  return connected ? <Membership book={book} /> : null
+  const index = useContext(ConnectedCollections)
+  const story = index ? collectionStoryForBook(book, index) : undefined
+  return story ? <Membership story={story} /> : null
 }
-function Membership({ book }: { book: CatalogBook }) {
-  const { stories, refreshStory } = useLibrary()
-  const story = stories.find(story => story.id === book.organizerEntryId)
-  if (!story) return null
-  return <EditCollectionsButton selectedIds={story.collectionIds} automaticIds={story.automaticCollectionIds} onRefresh={() => refreshStory(story.id)} description={`Choose collections for “${story.metadata.title}”.`} onSave={(ids, base) => saveStoryCollections(story, ids, base).then(() => {})} />
+function Membership({ story }: { story: Story }) {
+  const { refreshStory } = useLibrary()
+  return <EditCollectionsButton label="Collections" selectedIds={story.collectionIds} automaticIds={story.automaticCollectionIds} onRefresh={() => refreshStory(story.id)} description={`Choose collections for “${story.metadata.title}”.`} onSave={(ids, base) => saveStoryCollections(story, ids, base).then(() => {})} />
 }

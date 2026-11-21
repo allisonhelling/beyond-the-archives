@@ -21,7 +21,7 @@ export function AnthologyReview({ book, onSave, onClose }: { book: BookDetails; 
       } catch (error) { setError(error instanceof Error ? error.message : 'Could not save anthology contents.') } finally { setSaving(false) }
     })()
   }}>
-    <p>Confirm where each work begins and which sections are chapters. Covers, title pages, notes, and other sections stay readable without increasing chapter totals. Work links identify individual fics for organizer sync.</p>
+    <p>Confirm where each work begins and which sections are chapters. Covers, title pages, notes, and other sections stay readable without increasing chapter totals. Work links identify individual stories for organizer sync.</p>
     <p role="status">{works} {works === 1 ? 'work' : 'works'} · {chapters} {chapters === 1 ? 'chapter' : 'chapters'}</p>
     <ol className="anthology-sections">{sections.map((section, index) => <li key={section.path}><fieldset><legend>{index + 1}. {book.chapters[index].title}</legend>
       <label>Section Type<select value={section.kind} onChange={event => change(index, { kind: event.target.value as ReviewedSection['kind'] })}><option value="chapter">Chapter</option><option value="title">Title Page</option><option value="notes">Author Notes</option><option value="other">Other Section</option></select></label>

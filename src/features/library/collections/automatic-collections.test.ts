@@ -29,7 +29,7 @@ it('validates empty, malformed search and reversed date rules before saving', ()
 
 it('describes the active automatic filters with the same labels used by the library', () => {
  const collection={automatic_rules:automaticCollectionRules({...defaultReadingFilters,query:'Writer',fandoms:['Batman'],rating:['Teen And Up Audiences'],publication:['in_progress'],oneShot:'only',inSeries:true,tags:'Fluff',favorites:true,updatedAfter:'2017-11-11'})} as unknown as Collection
- expect(automaticCollectionLabels(collection)).toEqual(expect.arrayContaining(['Author: Writer','Fandom: Batman','Tags: Fluff','Favorites Only','In a Series Only','One-Shot Only','Publication Status: In Progress on AO3',`Updated From: ${filterDateText('2017-11-11')}`]))
+ expect(automaticCollectionLabels(collection)).toEqual(expect.arrayContaining(['Author: Writer','Include (Any): Batman','Include (All): Fluff','Favorites Only','In a Series Only','One-Shot Only','Publication Status: In Progress on AO3',`Updated From: ${filterDateText('2017-11-11')}`]))
  expect(automaticCollectionLabels({...collection,automatic_rules:automaticCollectionRules({...defaultReadingFilters,oneShot:'exclude'})})).toEqual(['One-Shot Exclude'])
  expect(automaticCollectionLabels({automatic_rules:null})).toEqual([])
 })

@@ -1900,6 +1900,7 @@ export type Database = {
       story_versions: { Args: { p_entry: string; p_search?: string; p_linked_urls?: string[] }; Returns: Json | null }
       write_story_versions: { Args: { p_entry: string; p_target: string; p_action: string; p_revision: string; p_target_updated_at?: string; p_organization?: Json; p_target_organization?: Json }; Returns: string }
       add_stories_to_collections: { Args: { p_entries: string[]; p_collections: string[] }; Returns: undefined }
+      remove_stories_from_collection: { Args: { p_entries: string[]; p_collection: string }; Returns: undefined }
       story_chapter_groups: { Args: { p_left: string; p_right: string }; Returns: Json }
       write_story_chapter_group: { Args: { p_left: string; p_right: string; p_id: string; p_version: number; p_left_chapters?: string[]; p_right_chapters?: string[]; p_state?: string; p_review?: Json }; Returns: boolean }
       mark_corresponding_chapters_read: { Args: { p_source: string; p_target: string; p_revision: string; p_groups: Json; p_apply?: boolean }; Returns: number }
@@ -1940,6 +1941,7 @@ export type Database = {
       library_navigation_snapshot: { Args: Record<string, never>; Returns: Json }
       library_navigation: { Args: Record<string, never>; Returns: Json }
       library_query_facets: { Args: { p_query?: Json }; Returns: Json }
+      library_collection_work_ids: { Args: { p_shelf: string }; Returns: Json }
       library_catalog: { Args: Record<string, never>; Returns: Json }
       library_story_details: { Args: { p_ids: string[] }; Returns: Json }
       query_library: { Args: { p_query?: Json; p_page?: number; p_size?: number }; Returns: Json }

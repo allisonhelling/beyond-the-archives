@@ -6,7 +6,7 @@ export type TagResolution<C extends Ao3TagCategory | 'fandom' = Ao3TagCategory> 
 /** One owner's AO3 evidence, partitioned by AO3 category; never a global label ontology. */
 export type TagAliases = Partial<Record<Ao3TagCategory, Record<string, Record<string, true>>>>
 export function validAo3TagName(value: unknown): value is string { return typeof value === 'string' && Boolean(value.trim()) && value.length <= 10000 && !/\p{Cc}/u.test(value) }
-export const hasTagFilters = (filters?: { relationship?: string; characters?: string; tags?: string; tagExpressions?: Partial<Record<string, unknown>> }) => Boolean(filters?.relationship || filters?.characters || filters?.tags || Object.keys(filters?.tagExpressions ?? {}).some(key => key !== 'fandoms'))
+export const hasTagFilters = (filters?: { relationship?: string; characters?: string; tags?: string; tagExpressions?: Partial<Record<string, unknown>>; excludedTags?: Partial<Record<string, unknown>> }) => Boolean(filters?.relationship || filters?.characters || filters?.tags || Object.keys(filters?.excludedTags ?? {}).some(key => key !== 'personalTags') || Object.keys(filters?.tagExpressions ?? {}).some(key => key !== 'fandoms'))
 export const hasTagRules = (rules: unknown) => hasTagFilters((rules as { filters?: Parameters<typeof hasTagFilters>[0] } | null)?.filters)
 export const tagResolutionEvent = 'ao3-tag-resolutions-updated'
 export { normalizeTag }

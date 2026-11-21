@@ -45,8 +45,8 @@ export function ImportedSeriesNotice({ stories, onImported, initialBehavior, rev
  </Dialog>
 }
 
-/** Add Story opens a fic immediately; discover its series only after retrieval
- * finishes, including when the fic page is reloaded during the batch. */
+/** Add Story opens a story immediately; discover its series only after retrieval
+ * finishes, including when the story page is reloaded during the batch. */
 export function CompletedImportSeriesNotice({ batchId, workIds, initialBehavior, reviewRelatedSeries = false, reviewedSeriesIds = [] }: { batchId?: string; workIds?: number[]; initialBehavior?: SeriesImportBehavior; reviewRelatedSeries?: boolean; reviewedSeriesIds?: number[] }) {
  const { refresh, stories } = useLibrary({ catalog: reviewRelatedSeries }), [currentBatch, setCurrentBatch] = useState(batchId), [entries, setEntries] = useState<string[]>([]), [discover, setDiscover] = useState(true)
  const [finished, setFinished] = useState(!batchId)

@@ -54,9 +54,9 @@ afterAll(async()=>{await clean?.close();await upgrade?.close()})
 
 it('replays the entire ordered migration chain on a fresh embedded PostgreSQL database',async()=>{
  const names=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')).sort()
- expect(names).toHaveLength(138)
+ expect(names).toHaveLength(144)
  expect(new Set(names.map(name=>name.split('_')[0])).size).toBe(names.length)
- expect(names.at(-1)).toBe('20261118000300_crosspost_organization.sql')
+ expect(names.at(-1)).toBe('20261120000300_companion_delete_library_entry.sql')
  const catalog=await privacyCatalog(async(sql:string)=>(await clean.query(sql)).rows)
  expect(catalog.relations.filter((table:{kind:string})=>table.kind==='r')).toHaveLength(57)
  expect(catalog.relations.filter((table:{kind:string})=>table.kind==='v')).toHaveLength(4)
@@ -120,6 +120,12 @@ it('upgrades the populated observed production prefix through both Universal dep
    '20261118000100_crosspost_stories.sql',
    '20261118000200_crosspost_chapter_groups.sql',
    '20261118000300_crosspost_organization.sql',
+   '20261119000100_tag_color_mode_and_crosspost_title_search.sql',
+   '20261119000200_fandom_tag_appearance.sql',
+   '20261119000300_library_filter_ranges_and_exclusions.sql',
+   '20261120000100_bulk_collection_membership.sql',
+   '20261120000200_library_offline_availability.sql',
+   '20261120000300_companion_delete_library_entry.sql',
   ])
   await db.exec("set statement_timeout='45s'")
   await db.exec(await readFile(new URL(`../migrations/${firstPending}`,import.meta.url),'utf8'))

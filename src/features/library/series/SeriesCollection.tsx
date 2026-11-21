@@ -1,4 +1,5 @@
-import { BulletSeparated } from '../BulletSeparated'
+import { countNoun } from '../../../lib/count-noun'
+import { FandomTags } from '../FandomTags'
 import { WorkTileTags } from '../WorkTileTags'
 import { WorkSummary } from '../summaries/WorkSummary'
 import { MetadataTags } from '../MetadataTags'
@@ -47,16 +48,16 @@ export function SeriesCard({ series, linkId }: { series: LibrarySeries; linkId?:
 <DisplayInfo group="seriesTile">{{
 category: <div className="story-facts">Category: <MetadataTags values={info.categories} category="categories" /></div>,
 authors: <> <p className="authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> </>,
-fandoms: <>   <p className="work-fandoms">{series.fandoms.length ? <BulletSeparated values={series.fandoms} /> : 'Fandom unknown'}</p> </>,
+fandoms: <>   <p className="work-fandoms">{series.fandoms.length ? <FandomTags values={series.fandoms} /> : 'Fandom unknown'}</p> </>,
 reading: <span className="series-reading-status display-fact-value">{readingLabel === 'Finished' ? 'Finished Reading' : readingLabel}</span>,
-count: <span className="display-fact-value">{series.savedStories.length} works</span>,
-words: <span className="display-fact-value">{series.wordCount?.toLocaleString() ?? '?'} words</span>,
+count: <span className="display-fact-value">{series.savedStories.length} {countNoun(series.savedStories.length, 'work')}</span>,
+words: <span className="display-fact-value">{series.wordCount?.toLocaleString() ?? '?'} {countNoun(series.wordCount, 'word')}</span>,
 allTags: <WorkTileTags metadata={{...blankMetadata,relationship_tags:info.relationships,character_tags:info.characters,additional_tags:info.tags,archive_warnings:info.warnings,categories:info.categories}} />,
 relationships: <div className="story-facts"><MetadataTags values={info.relationships} category="relationships" /></div>,
 characters: <div className="story-facts"><MetadataTags values={info.characters} category="characters" /></div>,
 tags: <div className="story-facts"><MetadataTags values={info.tags} /></div>,
 warnings: <div className="story-facts"><MetadataTags values={info.warnings} category="warnings" /></div>,
-personalRating: <div className="tile-personal-rating"><StarRating value={info.personalRating} /><span>{info.personalRating === null ? 'Unrated' : `${Number(info.personalRating.toFixed(2))}/5 average · ${info.ratedWorks} rated works`}</span></div>,
+personalRating: <div className="tile-personal-rating"><StarRating value={info.personalRating} /><span>{info.personalRating === null ? 'Unrated' : `${Number(info.personalRating.toFixed(2))}/5 average · ${info.ratedWorks} rated ${countNoun(info.ratedWorks, 'work')}`}</span></div>,
 collections: <div className="story-facts"><CustomCollectionNames ids={series.record?.collectionIds ?? []} /></div>,
 kudos: <span className="display-fact-value">{seriesKudosLabel(info)}</span>,
 description: <> {series.description && <><hr className="story-summary-divider" /><p className="story-summary">{series.description}</p></>} </>,

@@ -27,5 +27,5 @@ export function WorkSummary({ metadata, fallback = '', tile = false, mode: previ
  }, [metadata.summary, metadata.summary_html])
  const content = formatted ? <div className="formatted-summary">{formatted}</div> : <>{metadata.summary || fallback}</>
  if (!tile || mode === 'full' || !metadata.summary) return content
- return <div className="summary-disclosure"><div id={id} className="summary-content" data-collapsed={!open}>{content}</div><button type="button" className="text-button" aria-expanded={open} aria-controls={id} onClick={() => setDisclosure({ mode, expanded: !open })}>{open ? 'Show Less' : 'Show More'}</button></div>
+ return <div className="summary-disclosure"><div id={id} className="summary-content" data-collapsed={!open}>{content}</div><button type="button" className="text-button disclosure-toggle" data-summary-toggle aria-expanded={open} aria-controls={id} onClick={() => setDisclosure({ mode, expanded: !open })}>{open ? 'Show Less' : 'Show More'}</button></div>
 }

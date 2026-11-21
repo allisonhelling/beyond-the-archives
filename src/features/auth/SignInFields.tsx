@@ -17,6 +17,7 @@ export function SignInFields({ mode, busy, email, password, username, onUsername
  </>
 }
 
-export function AccountModeSwitch({ mode, busy, onChange }: { mode: AccountMode; busy: boolean; onChange: (mode: AccountMode) => void }) {
- return <button type="button" className="account-auth-help account-auth-back" disabled={busy} onClick={() => onChange(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'Create Account' : 'Back to Sign In'}</button>
+export function AccountModeSwitch({ mode, busy, onChange, signupPrompt }: { mode: AccountMode; busy: boolean; signupPrompt?: string; onChange: (mode: AccountMode) => void }) {
+ const button = <button type="button" className="account-auth-help account-auth-back" disabled={busy} onClick={() => onChange(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'Create Account' : 'Back to Sign In'}</button>
+ return signupPrompt && mode === 'login' ? <div className="account-signup-prompt"><span>{signupPrompt}</span>{button}</div> : button
 }

@@ -88,6 +88,29 @@ it('preserves the parser, scope, unicode normalization and every stable sort',as
  expect((await query({within:'private',scope:'notes'})).total).toBe(50)
  expect((await query({within:'private',scope:'summary'})).total).toBe(0)
 })
+it('filters statistics and tag exclusions before paging and in automatic collections', async () => {
+ await db.exec('begin')
+ try {
+  const [first, second] = await documents()
+  await db.exec('reset role')
+  await db.query("update public.works set word_count=100,ao3_published_at='2026-10-21T00:00:00Z' where id=any($1::uuid[])", [[first.work_id, second.work_id]])
+  await db.query(`update public.library_entries set metadata_overrides='{"character_tags":["Aang","Katara"],"kudos":10}' where id=$1`, [first.id])
+  await db.query(`update public.library_entries set metadata_overrides='{"character_tags":["Aang"],"kudos":10}' where id=$1`, [second.id])
+  await db.exec(`set role authenticated; set request.jwt.claim.sub='${alice}';`)
+  const filters = { ...defaultReadingFilters,
+   ranges: { word_count: { min: '100', max: '100' }, kudos: { min: '10' }, published: { max: '2026-10-21' } },
+   excludedTags: { characters: { mode: 'all' as const, tags: ['Aang', 'Katara'] } },
+  }
+  const result = await query(filters)
+  expect(result.total).toBe(1)
+  const expected = filterReading(await documents(), filters).map(story => story.id)
+  expect(expected).toEqual([second.id])
+  expect(result.stories.map(story => story.id)).toEqual(expected)
+  const collection = (await db.query<{ id: string }>('insert into public.collections(name,automatic_rules) values ($1,$2) returning id',
+   ['Stats and Exclusions', { filters, terms: [] }])).rows[0].id
+  expect((await query({},1,25,collection)).stories.map(story => story.id)).toEqual(expected)
+ } finally { await db.exec('rollback') }
+})
 it('updates only affected projections and keeps shared, browser and manual metadata precedence',async()=>{
  const all=await documents(),id=all[0].id,other=all[1]
  await db.exec('reset role')

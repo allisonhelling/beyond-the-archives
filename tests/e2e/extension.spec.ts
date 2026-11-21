@@ -166,7 +166,7 @@ test(`built ${local ? 'local' : 'hosted'} extension captures requested metadata 
    await expect(surface.locator('.reading-summary strong')).toHaveCSS('font-size', summaryFont)
    await expect(surface.locator('button.chapter-progress')).toHaveText('Ch. 0 / 6')
    await verifyReadingActionOrder(surface)
-   await expect(surface.locator('.chapter-progress')).not.toHaveAttribute('title')
+   await expect(surface.locator('.chapter-progress')).toHaveAttribute('title', 'Edit Chapters Read')
    await expect(surface.getByLabel('About chapters read', { exact: true })).toHaveCount(0)
   }
   await expect(bar.getByRole('button', { name: 'Edit', exact: true })).toHaveCSS('font-size', summaryFont)

@@ -19,7 +19,7 @@ it('shows unknown progress without claiming a confirmed zero and changes nothing
  fireEvent.click(screen.getByRole('button',{name:'Accept Selected Corrections'}))
  await waitFor(()=>expect(rpc).toHaveBeenLastCalledWith(['a'],'accept',1,undefined))
  await waitFor(()=>expect(changed).toHaveBeenCalledTimes(1))
- expect(screen.getByText('1 corrections accepted.')).toBeVisible()
+ expect(screen.getByText('1 correction accepted.')).toBeVisible()
 })
 it('keeps all selected histories and surfaces review failures without claiming success',async()=>{
  render(<MemoryRouter><ImportReadingReview onChanged={vi.fn(async()=>{})} /></MemoryRouter>)

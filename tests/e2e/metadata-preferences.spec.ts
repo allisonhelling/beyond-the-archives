@@ -14,7 +14,7 @@ test('legacy preferences cannot restore hosted retrieval and unavailable compani
  await expect(page.getByRole('heading',{name:'Desktop Companion Required',exact:true})).toBeVisible()
  await expect(page.getByRole('textbox',{name:'AO3 URLs',exact:true})).toHaveCount(0)
  await expect(page.getByRole('heading',{name:'Previous Batches',exact:true})).toBeVisible()
- for(const tab of ['AO3 Library Sync','CSV (Bookmarks or Marked for Later)']) {
+ for(const tab of ['AO3 Library Sync','CSV List']) {
   await page.getByRole('tab',{name:tab,exact:true}).click()
   await expect(page.getByRole('heading',{name:'Desktop Companion Required',exact:true})).toBeVisible()
   await expect(page.getByRole('heading',{name:'Previous Batches',exact:true})).toBeVisible()

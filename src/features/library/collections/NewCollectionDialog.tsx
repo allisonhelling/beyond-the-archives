@@ -1,9 +1,9 @@
+import { countNoun } from '../../../lib/count-noun'
 import { useActivity } from '../../../lib/use-activity'
 import { automaticCollectionRules, collectionRules } from './automatic-collections'
 import { defaultReadingFilters, type ReadingFilters } from '../reading-search'
 import { ReadingFilterControls } from '../ReadingFilterControls'
 import { CollectionVisibilityButton } from './CollectionVisibility'
-import { ChevronDown } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { useDismissible } from '../../../components/useDismissible'
 import { ConfirmationDialog } from '../../../components/ConfirmationDialog'
@@ -24,7 +24,7 @@ function AppearanceOptions({ label, disabled, children }: { label: string; disab
     if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus() }
   }}>
     <legend>{label}</legend>
-    <button ref={trigger} type="button" className="button secondary collection-appearance-trigger" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>Choose {label}<ChevronDown size={16} /></button>
+    <button ref={trigger} type="button" className="button secondary collection-appearance-trigger disclosure-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>Choose {label}</button>
     <div className="collection-appearance-panel" id={id} data-open={open || undefined}>{children}</div>
   </fieldset>
 }
@@ -36,7 +36,7 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
   const targetIds = targets.map(item => item.id)
   const [automatic, setAutomatic] = useState(Boolean(collection?.automatic_rules))
   const [filters, setFilters] = useState<ReadingFilters>(() => ({ ...defaultReadingFilters, ...collectionRules(collection ?? {})?.filters }))
-  const [summary, setSummary] = useState(collection?.description ?? '')
+  const [description, setDescription] = useState(collection?.description ?? '')
   const [applyColor, setApplyColor] = useState(!bulk), [applySymbol, setApplySymbol] = useState(!bulk)
   const colors = getCollectionColors(collections)
   const [name, setName] = useState(collection?.name ?? ''), [color, setColor] = useState<string>(targets[0]?.color ?? collectionColors[0].value)
@@ -66,7 +66,7 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
           const changes: Partial<CollectionAppearance> = { ...(applyColor && { color }), ...(applySymbol && { symbol }) }
           await updateCollections(targetIds, changes)
           id = targets[0].id
-        } else id = await saveCollection(name, collection?.id, { color, symbol }, summary, ...(automatic ? [automaticCollectionRules(filters)] as const : collection?.automatic_rules ? [null] as const : [] as const))
+        } else id = await saveCollection(name, collection?.id, { color, symbol }, description, ...(automatic ? [automaticCollectionRules(filters)] as const : collection?.automatic_rules ? [null] as const : [] as const))
         setCreatedId(id)
       }
       await refresh()
@@ -79,18 +79,18 @@ export function NewCollectionDialog({ onClose, onCreated, collection, selectedCo
   function closeEditor() { if (removed) onDeleted?.(); onClose() }
   function requestDelete() { setError(''); return deletion.requestDelete() }
   const fieldsDisabled = busy || createdId !== null || removed
-  return <><Dialog title={bulk ? `Edit ${targets.length} Collections` : collection ? 'Edit Collection' : 'New Collection'} className="collection-dialog" titleAction={collection && onVisibilityChange ? <CollectionVisibilityButton hidden={hidden} disabled={busy || createdId !== null} onClick={onVisibilityChange} /> : undefined} busy={busy} onClose={closeEditor} initialFocusRef={nameRef}>
+  return <><Dialog title={bulk ? `Edit ${targets.length} ${countNoun(targets.length, 'Collection')}` : collection ? 'Edit Collection' : 'New Collection'} className="collection-dialog" titleAction={collection && onVisibilityChange ? <CollectionVisibilityButton hidden={hidden} disabled={busy || createdId !== null} onClick={onVisibilityChange} /> : undefined} busy={busy} onClose={closeEditor} initialFocusRef={nameRef}>
     <form onSubmit={event => void create(event)}>
       <div className="collection-dialog-content">
         <fieldset className="collection-dialog-fields" disabled={fieldsDisabled}>
           {bulk ? <p>Choose which fields to change for the selected collections. Names stay unchanged.</p> : <label className="collection-name-field">Name<input ref={nameRef} name="name" required value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Comfort reads" /></label>}
-          {!bulk && <label className="collection-name-field">Summary<textarea name="summary" rows={3} value={summary} onChange={event => setSummary(event.target.value)} placeholder="What brings these stories together?" /></label>}
+          {!bulk && <label className="collection-name-field">Description<textarea name="description" rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder="What brings these stories together?" /></label>}
           {!bulk && <label className="check-label"><input type="checkbox" checked={automatic} onChange={event => { if (!event.target.checked && collection?.automatic_rules) setConfirmStopAutomatic(true); else setAutomatic(event.target.checked) }} />Automatic Collection</label>}
           {!bulk && !automatic && collection?.automatic_rules && <p className="field-help">Saving will keep the currently matching works in this collection, remove its filters, and stop automatic additions.</p>}
           {!bulk && automatic && <p className="field-help">Includes saved works that match all chosen filters. Matching works are included automatically as you add or update them.{collection && !collection.automatic_rules && ' Saving replaces the manually chosen works with matching works.'}</p>}
         </fieldset>
         {!bulk && automatic && <fieldset className="collection-rule-filters" disabled={fieldsDisabled}><legend>Collection Filters</legend><ReadingFilterControls defaultScope={collection?.id ? `library:${collection.id}` : undefined} stories={stories} filters={filters} onChange={setFilters} alwaysExpanded automaticCollection /></fieldset>}
-        <div className="collection-preview" aria-label="Collection Preview"><div className="collection-spine" data-spine-design={automatic ? 'lunar-phases' : undefined} style={{ '--cover-color': new RegExp(collectionColorPattern).test(color) ? color : collectionColors[0].value } as CSSProperties}><CollectionSpineLabel design={automatic ? 'lunar-phases' : undefined} name={bulk ? `${targets.length} Collections` : name.trim() || 'Your collection'} Icon={selectedSymbol.Icon} /></div></div>
+        <div className="collection-preview" aria-label="Collection Preview"><div className="collection-spine" data-spine-design={automatic ? 'lunar-phases' : undefined} style={{ '--cover-color': new RegExp(collectionColorPattern).test(color) ? color : collectionColors[0].value } as CSSProperties}><CollectionSpineLabel design={automatic ? 'lunar-phases' : undefined} name={bulk ? `${targets.length} ${countNoun(targets.length, 'Collection')}` : name.trim() || 'Your collection'} Icon={selectedSymbol.Icon} /></div></div>
         <fieldset className="collection-dialog-fields collection-dialog-appearance" disabled={fieldsDisabled}>
           {bulk && <label className="check-label"><input type="checkbox" checked={applyColor} onChange={event => setApplyColor(event.target.checked)} />Change Color</label>}
 

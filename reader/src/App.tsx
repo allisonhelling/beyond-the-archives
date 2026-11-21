@@ -1,3 +1,7 @@
+import { AppFooter } from '../../src/components/AppFooter'
+import { TextScalingControl } from '../../src/components/TextScalingControl'
+import { accessibilitySettingsSection } from '../../src/features/library/display/settings-sections'
+import { countNoun } from '../../src/lib/count-noun'
 import { sampleMode } from '../../src/lib/sample-mode'
 import { SampleDataControls } from '../../src/components/SampleDataControls'
 import { SampleReaderAccount } from './sample/Account'
@@ -9,6 +13,7 @@ import { EpubChoice } from './EpubChoice'
 import { openingPosition, openingPreferenceKey, preferredWorkVersion, requestedWork, workVersions, type WorkOpening } from './work-opening'
 import { AnthologyReview } from './AnthologyReview'
 import { anthologyLabel, chapterContent, hasWorkOrder, progressMetadata, workBook, workProgress } from './anthology'
+import { SelectableCollectionWork } from '../../src/features/library/collections/SelectableCollectionWork'
 import { ReaderCollections, ReaderCollectionMembership } from './ReaderCollections'
 import { progressReadingStatus } from '../../src/features/library/model'
 import { CalibreTransfers } from './CalibreTransfers'
@@ -25,16 +30,19 @@ import { useDismissible } from '../../src/components/useDismissible'
 import { useFilterDraft } from '../../src/components/useFilterDraft'
 import { TagSettings } from './TagSettings'
 import { useTagSettings } from './useTagSettings'
-import { readerBrandName } from '../../src/lib/brand'
+import { readerBrandName, readerBrandTagline } from '../../src/lib/brand'
+import { usePageTitle } from '../../src/lib/use-page-title'
 import { Pagination } from '../../src/features/library/browsing/Pagination'
 import { BookshelfFilters } from './BookshelfFilters'
 import { emptyFilters, matchesBook, numericFields, dateFields } from './filters'
 import { mergeMetadata, metadataVersion } from './metadata'
-import { ArrowDownWideNarrow, BookOpen, Copy, HardDrive, Import, LayoutGrid, ListTree, Moon, RefreshCw, Settings, Sun, Tags, UserRound } from 'lucide-react'
+import { ArrowDownWideNarrow, BookOpen, Copy, HardDrive, Import, LayoutGrid, ListTree, Moon, RefreshCw, Settings, Sun, Tags, Type, UserRound } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip } from '../../src/components/Tooltip'
 import { InfoTooltip } from '../../src/components/InfoTooltip'
 import { Dialog } from '../../src/components/Dialog'
+import { ActivityIndicator, LoadingWorkCards } from '../../src/components/ActivityIndicator'
+import { beginActivity } from '../../src/lib/activity'
 import { parseWorkUrl } from '../../src/features/imports/urls'
 import { digest, importEpub } from './epub'
 import { lastOpenBook, rememberOpenBook, all, getBook, getBookDetails, listCatalog, loadSetting, mutateBook, putBook, deleteEpub, removeDownload, saveBook, setting, transaction, readerInstallationId, readerOwner } from './storage'
@@ -50,14 +58,20 @@ import { reportSyncStatus, reportSyncFailure } from './sync-status'
 const shelfPageSize = 24
 function describeOrganizerValue(key: string, value: unknown) {
   if (key === 'status') return statuses[value as keyof typeof statuses] ?? 'No reading status saved.'
-  if (key === 'progress') return `${value ?? 0} chapters read`
+  if (key === 'progress') return `${value ?? 0} ${countNoun(Number(value ?? 0), 'chapter')} read`
   return String(value || 'No personal notes.')
 }
-export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
+export function App({ initialPairing, sampleAccount }: { initialPairing?: ReaderPairing; sampleAccount?: {
+  authenticated: boolean
+  signIn: (login: string, password: string) => Promise<void>
+  signOut: () => Promise<void>
+} }) {
+  const sampleSignedIn = sampleAccount?.authenticated ?? false
+
   const [profileOpen, setProfileOpen] = useState(false)
-  const [profileIdentity,setProfileIdentity]=useState({name:sampleMode?'Sample':'Reader',email:''})
+  const [profileIdentity,setProfileIdentity]=useState({name:'Reader',email:''})
   const profileRef = useDismissible<HTMLDivElement>(profileOpen, () => setProfileOpen(false))
-  function openProfileOption(option: 'connect' | 'sync' | 'tags' | 'tiles' | 'cloud' | 'account') {
+  function openProfileOption(option: 'connect' | 'sync' | 'tags' | 'tiles' | 'cloud' | 'account' | 'text-scaling') {
     if (option !== 'account' || readerOwner) cancelWorkOpening()
     setProfileOpen(false)
     profileRef.current?.querySelector('button')?.focus()
@@ -69,13 +83,16 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   useEffect(() => () => window.clearTimeout(copyTimer.current), [])
   const [storageFull, setStorageFull] = useState(false)
   const [pairing, setPairing] = useState(initialPairing)
-  const [books, setBooks] = useState<CatalogBook[]>([]), [selected, setSelected] = useState<string>(), [message, setMessage] = useState(''), [busy, setBusy] = useState(false)
-  const [preferences, setPreferences] = useState(defaultPreferences), [connection, setConnection] = useState<Connection>(), [modal, setModal] = useState<'connect' | 'sync' | 'manage' | 'details' | 'tags' | 'cloud' | 'account' | 'storage' | 'calibre' | 'tiles' | 'contents'>(), [managed, setManaged] = useState<string>()
+  const [books, setBooks] = useState<CatalogBook[]>([]), [selected, setSelected] = useState<string>(), [message, setMessage] = useState(''), [pendingOperations, setPendingOperations] = useState(0)
+  const [openingShelf, setOpeningShelf] = useState(true)
+  const busy = pendingOperations > 0
+  const [preferences, setPreferences] = useState(defaultPreferences), [connection, setConnection] = useState<Connection>(), [modal, setModal] = useState<'connect' | 'sync' | 'manage' | 'details' | 'tags' | 'cloud' | 'account' | 'storage' | 'calibre' | 'tiles' | 'contents' | 'text-scaling'>(), [managed, setManaged] = useState<string>()
   const mobile = useLayout() === 'mobile'
   const [settingsHash, setSettingsHash] = useState(location.hash)
   const previousSettingsHash = useRef(settingsHash)
   const settingsPage = mobile && settingsHash.startsWith('#settings')
-  const settingsSection = readerSettingsSections.find(section => settingsHash === `#settings/${section.id}`)?.id
+  const activeSettings = readerSettingsSections.find(section => settingsHash === `#settings/${section.id}`)
+  const settingsSection = activeSettings?.id
   const shelfScroll = useRef<number | undefined>(undefined)
   const shelfReturn = useRef(false)
   function navigateSettings(section?: ReaderSettingsSection) {
@@ -122,6 +139,10 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   const picker = useRef<HTMLInputElement>(null), connectionRef = useRef(connection), syncing = useRef(false), syncRequested = useRef<{force:boolean;quiet:boolean} | undefined>(undefined), saving = useRef(Promise.resolve())
   connectionRef.current = connection
   const [active, setActive] = useState<Book>(), [manage, setManage] = useState<BookDetails>(), [page, setPage] = useState(1)
+  const accountPage = location.pathname === '/auth/callback' && modal === 'account'
+  const readingTitle = active?.id === selected ? active?.metadata.title : undefined
+  usePageTitle(settingsPage ? activeSettings?.title ?? 'Settings' : accountPage ? 'Reader Account' :
+    selected ? readingTitle || 'Reading' : 'The Bookshelf', readerBrandName)
   const localTagAppearance = preferences.tagAppearance ?? defaultTagAppearance
   const tagsLinked = Boolean(connection && preferences.tagSyncAccount === connection.account)
   const tagSettings = useTagSettings(connection, tagsLinked, localTagAppearance)
@@ -143,7 +164,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   useEffect(() => {
     let cancelled = false
     setActive(undefined)
-    if (selected) void attempt(async () => {
+    if (selected) void attempt('Opening EPUB…', async () => {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
       await saving.current
       let book = await getBook(selected)
@@ -171,6 +192,15 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     }).catch(error => setMessage(String(error)))
     return () => { cancelled = true }
   }, [books, managed, modal, selected])
+  function openEpubPicker() {
+    if (settingsPage) {
+      location.hash = ''
+      setSettingsHash('')
+      setModal(undefined)
+    }
+    picker.current?.click()
+  }
+
   async function refreshMetadata(force = true) {
     let updated = 0, failed = 0
     for (const entry of await listCatalog()) {
@@ -184,7 +214,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       } catch (error) { if (isStorageFull(error)) throw error; failed++ }
     }
     if (updated) await refresh()
-    if (force || failed) setMessage(`${updated} EPUB metadata snapshots refreshed locally.${failed ? ` ${failed} files could not be refreshed; their existing metadata is retained.` : ''} Reading history and organizer data are unchanged.`)
+    if (force || failed) setMessage(`${updated} EPUB metadata ${countNoun(updated, 'snapshot')} refreshed locally.${failed ? ` ${failed} ${countNoun(failed, 'file')} could not be refreshed. Existing metadata was retained.` : ''} Reading history and organizer data are unchanged.`)
   }
   function reportError(error: unknown) {
     if (isStorageFull(error)) { setStorageFull(true); setModal('storage'); setMessage(storageFullMessage); void refreshStorage(); return }
@@ -203,7 +233,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   async function removeLocalDownload(target: CatalogBook | BookDetails | CatalogBook[]) {
     const targets=Array.isArray(target)?target:[target]
     if (!confirm(targets.length>1?`Remove ${targets.length} local EPUB downloads? Notes, reading history, and positions will be retained.`:'Remove this local EPUB? Reading history, notes, and position will be retained. Keep an original backup or verify a cloud copy first.')) return
-    await attempt(async () => {
+    await attempt('Removing Downloads…', async () => {
       await saving.current
       for(const book of targets){const details=await getBookDetails(book.id);if(details)await removeDownload(details)}
       await refresh(); void sync(); if (targets.some(book=>selected===book.id)) setSelected(undefined)
@@ -222,7 +252,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       requestedOpening.current = opening; setMissingWork(undefined); setSelected(book.id); setOpeningVersion(value => value + 1)
     }
     if (!book.hasFile && !readerOwner) { picker.current?.click(); return }
-    return attempt(async () => {
+    return attempt(book.hasFile ? 'Opening EPUB…' : 'Downloading EPUB…', async () => {
       if (!book.hasFile) await downloadCloud(book.id)
       if (intent !== openingIntent.current) { await refresh(); return }
       await mutateBook(book.id, current => ({ ...current, lastOpenedAt: new Date().toISOString() }))
@@ -245,19 +275,19 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     await readBook(book, opening)
   }
   async function downloadSelection(selectedBooks: CatalogBook[]) {
-    await attempt(async()=>{
+    await attempt('Downloading EPUBs…', async () => {
       let downloaded=0
       const failed:string[]=[]
       try {for(const book of selectedBooks){try{await downloadCloud(book.id);downloaded++}catch(error){if(isStorageFull(error))throw error;failed.push(`${book.metadata.title}: ${error instanceof Error?error.message:String(error)}`)}}}
       finally {await refresh()}
-      setMessage(`${downloaded} EPUB downloads completed.${failed.length?` ${failed.length} failed: ${failed.join('; ')}`:''}`)
+      setMessage(`${downloaded} ${countNoun(downloaded, 'EPUB download')} completed.${failed.length?` ${failed.length} failed: ${failed.join('; ')}`:''}`)
     })
   }
   async function deleteVersion(target: CatalogBook | BookDetails | CatalogBook[]) {
     const targets = Array.isArray(target) ? target : [target], book = targets[0]
     if (!book) return
     if (!confirm(`Permanently delete ${targets.length > 1 ? `${targets.length} selected EPUB versions` : `“${book.metadata.title}”`} from ${readerOwner ? 'this account’s library and cloud storage' : 'this guest library'}? This removes this EPUB version, personal notes, reading history, and position${readerOwner ? ' from other devices when they sync' : ''}. Other versions, original files outside the reader, and organizer data are kept. This cannot be undone.`)) return
-    await attempt(async () => {
+    await attempt('Deleting EPUBs…', async () => {
       try {
         await saving.current
         // Commit each placeholder and its tombstone before showing Deleting.
@@ -274,7 +304,16 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       void sync()
     })
   }
-  async function attempt(action: () => Promise<void>) { setBusy(true); try { await action() } catch (error) { reportError(error) } finally { setBusy(false) } }
+  async function attempt(label: string, action: () => Promise<void>) {
+    const endActivity = beginActivity(label)
+    setPendingOperations(count => count + 1)
+    try { await action() }
+    catch (error) { reportError(error) }
+    finally {
+      endActivity()
+      setPendingOperations(count => count - 1)
+    }
+  }
   async function sync(force = false, quiet = false) {
     if (!readerOwner) return
     if (!navigator.onLine) { if (!quiet) setMessage('Offline. Downloads remain available. Your saved reading changes will sync when you reconnect.'); return }
@@ -322,8 +361,8 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     }
   }
   useEffect(() => {
-    void attempt(async () => {
-      await refresh()
+    void attempt('Loading Bookshelf…', async () => {
+      await refresh().finally(() => setOpeningShelf(false))
       const prefs = await loadSetting<Preferences>('preferences'), linked = connectionRef.current
       if (!sampleMode) await readerInstallationId()
       if (prefs) setPreferences(prefs)
@@ -366,7 +405,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       if(event==='PASSWORD_RECOVERY')setModal('account')
     })
     const reconnect = () => { setOnline(navigator.onLine); if (navigator.onLine) void sync() }, foreground = () => { if (document.visibilityState === 'visible') void sync(true, true) }
-    const pairingChanged = () => { if (sampleMode) return; const incoming = consumeReaderPairing(); if (incoming) void attempt(() => receivePairing(incoming)) }
+    const pairingChanged = () => { if (sampleMode) return; const incoming = consumeReaderPairing(); if (incoming) void attempt('Connecting Organizer…', () => receivePairing(incoming)) }
     window.addEventListener('hashchange', pairingChanged)
     const cloudInterval = window.setInterval(() => { if (document.visibilityState === 'visible') void sync() }, 30000)
     window.addEventListener('focus', foreground); window.addEventListener('online', reconnect); window.addEventListener('offline', reconnect); document.addEventListener('visibilitychange', foreground)
@@ -399,7 +438,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     if (event) void sync()
   }
   async function updateMarking(id: string, field: 'favorite' | 'rec', value: boolean) {
-    await attempt(async () => {
+    await attempt('Saving Work Markings…', async () => {
       const book = await getBookDetails(id)
       if (!book) return
       await commit({ ...book, [field]: value })
@@ -447,7 +486,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     setMessage(reread ? 'New reread started. Previous history is retained.' : 'Reading progress saved.')
   }
   async function read(chapter: Chapter, through: boolean) {
-    await attempt(async () => {
+    await attempt('Saving Chapter Completion…', async () => {
       await saving.current
       let book = selected ? await getBookDetails(selected) : undefined
       if (!book) throw new Error('This download is no longer available.')
@@ -502,7 +541,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   }
   async function importFile(file: File) {
     openingIntent.current++
-    await attempt(async () => {
+    await attempt('Processing EPUB…', async () => {
       const { next, duplicate, previous: prior } = await prepareImport(file, replaceTarget)
       setReplaceTarget(undefined)
       if (duplicate?.hasFile) { await mutateBook(duplicate.id, current => ({ ...current, metadata: mergeMetadata(current.metadata, next.metadata), metadataVersion, lastOpenedAt: new Date().toISOString() })); rememberOpenBook(duplicate.id); await refresh(); setSelected(duplicate.id); setMessage('This exact file is already available. Opened the existing copy.'); return }
@@ -524,7 +563,7 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   }
   async function connect(form?: HTMLFormElement, incoming = pairing) {
     if (!readerOwner) { setModal('account'); setMessage('Sign in to connect an organizer. Guest reading stays local.'); return }
-    await attempt(async () => {
+    await attempt('Connecting Organizer…', async () => {
       const fields = form ? new FormData(form) : new FormData()
       const defaults = incoming ?? readerCloudConfig
       const config = readPublicConfig({ VITE_SUPABASE_URL: defaults.url, VITE_SUPABASE_PUBLISHABLE_KEY: defaults.key })
@@ -558,8 +597,8 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
     })
   }
   async function link(book: BookDetails, url: string) {
-    await attempt(async () => {
-      if (isAnthology(book)) throw new Error('Link each fic through Review Anthology Contents.')
+    await attempt('Linking Work…', async () => {
+      if (isAnthology(book)) throw new Error('Link each story through Review Anthology Contents.')
       const id = String(parseWorkUrl(url).workId)
       if (book.workId && book.workId !== id) throw new Error('This file already identifies another AO3 work.')
       if (!connection) { await commit({ ...book, workId: id }); setMessage('AO3 identity saved locally.'); return }
@@ -595,42 +634,67 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
   const handoffBooks = missingWork ? workVersions(books, missingWork) : []
   const handoffBook = handoffBooks[0]
   const choiceBooks = epubChoice ? workVersions(books, epubChoice.target) : []
-  const sortControl = <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly fitContent value={sort} onChange={value => { if (value === sort) setSortAscending(current => !current); else { setSort(value); setSortAscending(false) } }} options={[{ value: 'opened', label: 'Last Opened' }, { value: 'recent', label: 'Recently Imported' }, { value: 'title', label: 'Title' }, ...numericFields.map(field => ({ value: field.key, label: field.label })), ...dateFields.filter(field => field.key !== 'imported').map(field => ({ value: field.key, label: field.label }))].map(option => ({ ...option, label: `${option.label} ${option.value === sort ? sortAscending !== (sort === 'title') ? '↑' : '↓' : ''}`.trim() }))} />
+  const sortControl = <Dropdown label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly fitContent value={sort} onChange={value => { if (value === sort) setSortAscending(current => !current); else { setSort(value); setSortAscending(false) } }} options={[{ value: 'opened', label: 'Last Opened' }, { value: 'recent', label: 'Recently Imported' }, { value: 'title', label: 'Title' }, ...numericFields.map(field => ({ value: field.key, label: field.label })), ...dateFields.filter(field => field.key !== 'imported').map(field => ({ value: field.key, label: field.label }))].map(option => ({ ...option, sizingLabel: `${option.label} ↑`, label: `${option.label} ${option.value === sort ? sortAscending !== (sort === 'title') ? '↑' : '↓' : ''}`.trim() }))} />
   const groupControl = <Dropdown label="Group" icon={ListTree} compact mobileIconOnly value={groupBy} onChange={value => setGroupBy(value as GroupBy)} options={[{ value: 'none', label: 'None' }, { value: 'fandom', label: 'Fandom' }, { value: 'author', label: 'Author' }, { value: 'series', label: 'Series' }]} />
   return <>
-    {sampleMode && <SampleDataControls title="Sample Reader" description="Edits stay in this browser until you update the project’s sample data." onUpdate={async () => { await saving.current; await (await import('./sample/repository')).updateSampleReader() }} onReset={async () => { await saving.current; await (await import('./sample/repository')).resetSampleReader(); location.assign('/') }} />}
+    {sampleSignedIn && <SampleDataControls title="Sample Reader" description="Edits stay in this browser until you update the project’s sample data." onUpdate={async () => { await saving.current; await (await import('./sample/repository')).updateSampleReader() }} onReset={async () => { await saving.current; await (await import('./sample/repository')).resetSampleReader(); location.assign('/') }} />}
     {active?.file && active.id === selected && <ReadingView key={active.id} book={active} onProgress={progress => updateProgress(active.id, progress)} onViewDetails={() => viewDetails(active.id)} preferences={preferences} onPreferences={updatePreferences} onPosition={position} onRead={(c,t) => void read(c,t)} onClose={() => { openingIntent.current++; shelfReturn.current = true; rememberOpenBook(undefined); void saving.current.then(refresh); setSelected(undefined) }} />}
-    <div hidden={Boolean(selected)}>
-      <header className="app-header"><a className="brand" href="/">▤ <span>{readerBrandName}<small>AN EPUB READER, AVAILABLE ONLINE AND OFFLINE</small></span></a><nav><button className="desktop-reader-action" onClick={() => { cancelWorkOpening(); setStorageFull(false); setModal('storage') }}>Storage</button>{!mobile && !sampleMode && <button onClick={() => setModal('calibre')}>Calibre</button>}<button className="theme-toggle" aria-pressed={preferences.dark} aria-label="Toggle Dark Mode" onClick={() => updatePreferences({ ...preferences, dark: !preferences.dark })}>{preferences.dark ? <Sun size={20} strokeWidth={2.75} aria-hidden="true" /> : <Moon size={20} strokeWidth={2.75} aria-hidden="true" />}</button><div className="profile-wrapper" ref={profileRef} onKeyDown={event => { if (event.key === 'Escape') { setProfileOpen(false); profileRef.current?.querySelector('button')?.focus() } }}><button className="avatar profile-trigger" aria-label="Profile Menu" title="Profile Menu" aria-expanded={profileOpen} aria-controls="reader-profile-options" onClick={() => setProfileOpen(!profileOpen)}>{profileIdentity.name.slice(0,1).toUpperCase()}</button>{profileOpen && <section className="profile-menu menu-surface" id="reader-profile-options" aria-label="Profile Menu"><div className="profile-identity"><strong>{profileIdentity.name}</strong><p>{sampleMode ? 'Local Sample Account' : profileIdentity.email || (readerOwner?'Account Library':'Guest Library')}</p></div>{sampleMode ? <p>Sample · Local Only</p> : <ConnectionStatus online={online} connection={connection} pending={pending}/>}<button className="profile-action" onClick={() => openProfileOption('cloud')}><HardDrive size={17} aria-hidden="true" />Cloud Library</button><button className="profile-action" onClick={() => openProfileOption('account')}><UserRound size={17} aria-hidden="true" />Reader Account</button><button className="profile-action" onClick={() => openProfileOption('sync')}><RefreshCw size={17} aria-hidden="true" />Organizer & Sync</button><button className="profile-action" onClick={() => openProfileOption('tags')}><Tags size={17} aria-hidden="true" />Tag Format</button><button className="profile-action" onClick={() => openProfileOption('tiles')}><LayoutGrid size={17} aria-hidden="true" />Customize Tiles</button></section>}</div></nav></header>
-      <main className="bookshelf" hidden={settingsPage}><div className="shelf-intro"><div className="library-heading"><div><h1>The Bookshelf</h1><p className="muted">Import EPUBs, download stories for offline reading, and keep your reading progress across devices.</p></div><button className="primary" disabled={busy} onClick={() => picker.current?.click()}>＋ Import EPUB</button></div>
-      <div className="shelf-summary"><span className="download-count">{available.length} {available.length === 1 ? 'work' : 'works'} downloaded</span><span className="reader-status-line"><span>{offlineReady ? '✓ Reader prepared for offline use' : import.meta.env.DEV ? 'Development mode · Build to prepare offline use' : 'Preparing offline application…'}</span><span className="reader-account-state">{sampleMode ? 'Sample · Local Only' : readerOwner ? connection ? `${pending.length} pending reading updates` : 'Account Library' : 'Guest · Local Only'}</span></span><span className="storage-summary" aria-label="Storage Usage">{storage?.usage !== undefined ? <>{formatBytes(storage.usage)} used{storage.quota !== undefined && <> of {formatBytes(storage.quota)} browser allowance <InfoTooltip label="Browser Allowance Information" placement="bottom" description="If browser storage fills up, the reader opens Manage Local Storage so you can choose which downloaded EPUBs to remove. The reader does not delete downloads automatically. Browsers may clear unprotected site storage under storage pressure; Storage explains protection and backups. Removing a download keeps its bookshelf information, notes, reading history, completed chapters, reading position, and preferences saved in the reader. Existing cloud copies are also kept." /></>}</> : 'Storage estimate unavailable'}</span></div></div>
-      {missingWork && <div className="notice">{handoffBook ? <>{handoffBook.hasFile ? 'This work is downloaded in this reader.' : readerOwner ? 'This work is saved in your reader cloud. Download it while online to read it offline.' : 'Import this EPUB again to read it.'}<button disabled={busy || !online && !handoffBook.hasFile && Boolean(readerOwner)} onClick={() => void attempt(() => openWork(requestedWork(location.search)?.target === missingWork ? requestedWork(location.search)! : { target: missingWork }, books, false, true))}>{handoffBooks.length > 1 ? 'Choose EPUB' : handoffBook.hasFile ? 'Read EPUB' : readerOwner ? 'Download and Read' : 'Import EPUB'}</button></> : <>{/^\d+$/.test(missingWork) ? `AO3 work ${missingWork}` : 'This EPUB'} is not available in this reader installation. Import its EPUB to open it. No server lookup is required.</>}</div>}
-      <ReaderCollections books={books} account={connection?.account} onScope={setCollectionScope} onSync={() => void sync(true, true)}><BookshelfFilters groupControl={groupControl} sortControl={mobile ? sortControl : undefined} books={books} filters={draftFilters.filters} onChange={filters => setDraftFilters({ ...draftFilters, filters })} query={draftFilters.query} onQuery={setQuery} appliedFilters={filters} appliedQuery={query} onApply={next => { setDraftFilters(next); setAppliedFilters(next) }} onRefresh={() => void attempt(() => refreshMetadata())} busy={busy} appearance={tagSettings.appearance} />
-      <div className="results-toolbar"><span>{results.length} {results.length === 1 ? 'story' : 'stories'} on your shelf</span>{results.length > 0 && <Pagination inlinePage page={currentPage} pages={pages} total={results.length} size={shelfPageSize} onPage={setPage} />}{!mobile && sortControl}</div>
-      {results.length ? <>{readingGroups(visible, groupBy).map(([name, group, key]) => <section className="reading-group" key={key}>{name && <h2>{name}</h2>}<div className="story-grid">{group.map(book => <ReaderTile collectionAction={<ReaderCollectionMembership book={book} />} key={book.id} organizerAccount={connection?.account} book={book} onMarking={(field, value) => updateMarking(book.id, field, value)} onProgress={progress => updateProgress(book.id, progress)} preferences={preferences} appearance={tagSettings.appearance} busy={busy} onRead={() => readBook(book)} onManage={()=>{setManaged(book.id);setModal('manage')}} onDetails={()=>viewDetails(book.id)} onRemove={()=>void removeLocalDownload(book)} onDelete={()=>void deleteVersion(book)} onSearch={query => { const next = { ...appliedFilters, query }; setDraftFilters(next); setAppliedFilters(next) }} onSeries={name=>viewFacet('series',name)} onAuthor={name=>viewFacet('author',name)} />)}</div></section>)}</> : <div className="empty-state"><h2>{books.length ? 'No Matching Stories' : 'No Stories Here Yet'}</h2><p>{books.length ? 'Try another search or adjust your filters.' : 'Import an EPUB to begin your offline bookshelf.'}</p>{!books.length && <button className="primary" disabled={busy} onClick={() => picker.current?.click()}>Import Your First EPUB</button>}</div>}
-      </ReaderCollections><footer className="app-footer"><span>Every story, a place to return to.</span><span>Metadata search · Local EPUB storage · Independent reader</span></footer></main>
+    <div className="app-shell" hidden={Boolean(selected)}>
+      <header className="app-header">
+        <a className="brand" href="/">▤ <span>{readerBrandName}</span></a>
+        <nav aria-label="Main Navigation">
+          <button type="button" className="button secondary desktop-reader-action" onClick={() => { cancelWorkOpening(); setStorageFull(false); setModal('storage') }}>Storage</button>
+          <button type="button" className="button primary" disabled={busy} onClick={openEpubPicker}>＋ Import EPUB</button>
+          <button type="button" className="button secondary" title="Refresh Local Metadata" disabled={busy} onClick={() => void attempt('Refreshing Metadata…', () => refreshMetadata())}><RefreshCw size={17} aria-hidden="true" />Metadata</button>
+          {!mobile && !sampleSignedIn && <button type="button" className="button secondary" onClick={() => setModal('calibre')}>Calibre</button>}
+        </nav>
+        <div className="profile-wrapper" ref={profileRef} onKeyDown={event => { if (event.key === 'Escape') { setProfileOpen(false); profileRef.current?.querySelector('button')?.focus() } }}>
+          <button className="avatar profile-trigger" aria-label="Profile Menu" title="Profile Menu" aria-expanded={profileOpen} aria-controls="reader-profile-options" onClick={() => setProfileOpen(!profileOpen)}>{sampleSignedIn ? 'S' : profileIdentity.name.slice(0,1).toUpperCase()}</button>
+          {profileOpen && <section className="profile-menu menu-surface" id="reader-profile-options" aria-label="Profile Menu">
+            <div className="profile-identity"><strong>{sampleSignedIn ? 'Sample' : profileIdentity.name}</strong><p>{sampleSignedIn ? 'Local Sample Account' : profileIdentity.email || (readerOwner?'Account Library':'Guest Library')}</p></div>
+            {sampleSignedIn ? <p>Sample · Local Only</p> : <ConnectionStatus online={online} connection={connection} pending={pending}/>}
+            <button className="profile-action" onClick={() => openProfileOption('cloud')}><HardDrive size={17} aria-hidden="true" />Cloud Library</button>
+            <button className="profile-action" onClick={() => openProfileOption('account')}><UserRound size={17} aria-hidden="true" />Reader Account</button>
+            <button className="profile-action" onClick={() => openProfileOption('sync')}><RefreshCw size={17} aria-hidden="true" />Organizer & Sync</button>
+            <button type="button" className="profile-action" onClick={() => updatePreferences({ ...preferences, dark: !preferences.dark })}>{preferences.dark ? <><Sun size={17} aria-hidden="true" />Toggle Light Mode</> : <><Moon size={17} aria-hidden="true" />Toggle Dark Mode</>}</button>
+            <button className="profile-action" onClick={() => openProfileOption('text-scaling')}><Type size={17} aria-hidden="true" />{accessibilitySettingsSection.title}</button>
+            <button className="profile-action" onClick={() => openProfileOption('tags')}><Tags size={17} aria-hidden="true" />Tag Format</button>
+            <button className="profile-action" onClick={() => openProfileOption('tiles')}><LayoutGrid size={17} aria-hidden="true" />Customize Tiles</button>
+          </section>}
+        </div>
+      </header>
+      <main className="bookshelf" hidden={settingsPage}><div className="shelf-intro"><div className="library-heading"><h1>The Bookshelf</h1><p className="muted">Import EPUBs, download stories for offline reading, and keep your reading progress across devices.</p></div>
+      <div className="shelf-summary"><span className="download-count">{!openingShelf && <>{available.length} {available.length === 1 ? 'work' : 'works'} downloaded</>}</span><span className="reader-status-line"><span>{offlineReady ? '✓ Reader prepared for offline use' : import.meta.env.DEV ? 'Development mode · Build to prepare offline use' : 'Preparing offline application…'}</span><span className="reader-account-state">{sampleSignedIn ? 'Sample · Local Only' : readerOwner ? connection ? `${pending.length} pending reading updates` : 'Account Library' : 'Guest · Local Only'}</span></span><span className="storage-summary" aria-label="Storage Usage">{storage?.usage !== undefined ? <>{formatBytes(storage.usage)} used{storage.quota !== undefined && <> of {formatBytes(storage.quota)} browser allowance <InfoTooltip label="Browser Allowance Information" placement="bottom" description="If browser storage fills up, the reader opens Manage Local Storage so you can choose which downloaded EPUBs to remove. The reader does not delete downloads automatically. Browsers may clear unprotected site storage under storage pressure; Storage explains protection and backups. Removing a download keeps its bookshelf information, notes, reading history, completed chapters, reading position, and preferences saved in the reader. Existing cloud copies are also kept." /></>}</> : 'Storage estimate unavailable'}</span></div></div>
+      {missingWork && <div className="notice">{handoffBook ? <>{handoffBook.hasFile ? 'This work is downloaded in this reader.' : readerOwner ? 'This work is saved in your reader cloud. Download it while online to read it offline.' : 'Import this EPUB again to read it.'}<button disabled={busy || !online && !handoffBook.hasFile && Boolean(readerOwner)} onClick={() => void attempt('Opening EPUB…', () => openWork(requestedWork(location.search)?.target === missingWork ? requestedWork(location.search)! : { target: missingWork }, books, false, true))}>{handoffBooks.length > 1 ? 'Choose EPUB' : handoffBook.hasFile ? 'Read EPUB' : readerOwner ? 'Download and Read' : 'Import EPUB'}</button></> : <>{/^\d+$/.test(missingWork) ? `AO3 work ${missingWork}` : 'This EPUB'} is not available in this reader installation. Import its EPUB to open it. No server lookup is required.</>}</div>}
+      <ReaderCollections books={books} pageBooks={visible} account={connection?.account} onScope={setCollectionScope} onSync={() => void sync(true, true)}>{selection => <><BookshelfFilters groupControl={groupControl} sortControl={mobile ? sortControl : undefined} books={books} filters={draftFilters.filters} onChange={filters => setDraftFilters({ ...draftFilters, filters })} query={draftFilters.query} onQuery={setQuery} appliedFilters={filters} appliedQuery={query} onApply={next => { setDraftFilters(next); setAppliedFilters(next) }} appearance={tagSettings.appearance} />
+      {selection?.toolbar}
+      <div className="results-toolbar"><span>{!openingShelf && <>{results.length} {results.length === 1 ? 'story' : 'stories'} on your shelf</>}</span>{results.length > 0 && <Pagination inlinePage page={currentPage} pages={pages} total={results.length} size={shelfPageSize} onPage={setPage} />}{!mobile && sortControl}</div>
+      {openingShelf && !books.length ? <LoadingWorkCards>Loading Bookshelf…</LoadingWorkCards> : results.length ? <>{readingGroups(visible, groupBy).map(([name, group, key]) => <section className="reading-group" key={key}>{name && <h2>{name}</h2>}<div className="story-grid">{group.map(book => <SelectableCollectionWork key={book.id} title={book.metadata.title} selection={selection?.tile(book)}><ReaderTile collectionAction={<ReaderCollectionMembership book={book} />} organizerAccount={connection?.account} book={book} onMarking={(field, value) => updateMarking(book.id, field, value)} onProgress={progress => updateProgress(book.id, progress)} preferences={preferences} appearance={tagSettings.appearance} busy={busy} onRead={() => readBook(book)} onManage={()=>{setManaged(book.id);setModal('manage')}} onDetails={()=>viewDetails(book.id)} onRemove={()=>void removeLocalDownload(book)} onDelete={()=>void deleteVersion(book)} onSearch={query => { const next = { ...appliedFilters, query }; setDraftFilters(next); setAppliedFilters(next) }} onSeries={name=>viewFacet('series',name)} onAuthor={name=>viewFacet('author',name)} /></SelectableCollectionWork>)}</div></section>)}</> : <div className="empty-state"><h2>{books.length ? 'No Matching Stories' : 'No Stories Here Yet'}</h2><p>{books.length ? 'Try another search or adjust your filters.' : 'Import an EPUB to begin your offline bookshelf.'}</p>{!books.length && <button className="primary" disabled={busy} onClick={openEpubPicker}>Import Your First EPUB</button>}</div>}
+      </>}</ReaderCollections></main>
+      {!settingsPage && <AppFooter tagline={readerBrandTagline} />}
       {settingsPage && !settingsSection && <ReaderSettingsIndex />}
-      <nav className="mobile-nav reader-mobile-nav" aria-label="Mobile Navigation"><button className={!settingsPage ? 'active' : ''} aria-current={!settingsPage ? 'page' : undefined} onClick={() => { shelfReturn.current = true; location.hash = ''; setSettingsHash(''); setModal(undefined) }}><BookOpen size={21} aria-hidden="true" />Bookshelf</button><button disabled={busy} onClick={() => { location.hash = ''; setSettingsHash(''); setModal(undefined); picker.current?.click() }}><Import size={21} aria-hidden="true" />Import</button><button className={settingsSection === 'storage' ? 'active' : ''} aria-current={settingsSection === 'storage' ? 'page' : undefined} onClick={() => navigateSettings('storage')}><HardDrive size={21} aria-hidden="true" />Storage</button><button className={settingsPage && settingsSection !== 'storage' ? 'active' : ''} aria-current={settingsPage && settingsSection !== 'storage' ? 'page' : undefined} onClick={() => navigateSettings()}><Settings size={21} aria-hidden="true" />Settings</button></nav>
+      <nav className="mobile-nav reader-mobile-nav" aria-label="Mobile Navigation"><button className={!settingsPage ? 'active' : ''} aria-current={!settingsPage ? 'page' : undefined} onClick={() => { shelfReturn.current = true; location.hash = ''; setSettingsHash(''); setModal(undefined) }}><BookOpen size={21} aria-hidden="true" />Bookshelf</button><button disabled={busy} onClick={openEpubPicker}><Import size={21} aria-hidden="true" />Import</button><button className={settingsSection === 'storage' ? 'active' : ''} aria-current={settingsSection === 'storage' ? 'page' : undefined} onClick={() => navigateSettings('storage')}><HardDrive size={21} aria-hidden="true" />Storage</button><button className={settingsPage && settingsSection !== 'storage' ? 'active' : ''} aria-current={settingsPage && settingsSection !== 'storage' ? 'page' : undefined} onClick={() => navigateSettings()}><Settings size={21} aria-hidden="true" />Settings</button></nav>
     </div>
     <input hidden ref={picker} aria-label="Import EPUB File" type="file" accept=".epub,application/epub+zip" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = '' }} />
     {modal === 'calibre' && <CalibreTransfers onClose={() => setModal(undefined)} onRefresh={async()=>{await refresh();void sync()}} onError={reportError} />}
     {message && modal !== 'storage' && !(modal === 'details' && detailsFromStorage) && <div className="toast" role="status"><span>{message}</span><button aria-label="Dismiss Message" onClick={() => setMessage('')}>×</button></div>}
-    {active?.resumeRequired && <Dialog title="Choose Where to Resume" onClose={() => setSelected(undefined)}><p>The previous reading location could not be matched reliably. Your history is retained. Choose a section to continue.</p><form onSubmit={e => { e.preventDefault(); const chapter = String(new FormData(e.currentTarget).get('chapter')); void attempt(async () => { await commit({ ...active, resumeRequired: false, position: { chapter, fraction: 0 } }, undefined, false); setSelected(undefined); requestAnimationFrame(() => setSelected(active.id)) }) }}><label>Resume At<select name="chapter">{active.chapters.map((c,i) => <option key={i} value={c.id}>{c.title}</option>)}</select></label><button className="primary">Resume Reading</button></form></Dialog>}
-    {busy && <div className="busy-indicator" role="status">Saving…</div>}
-    {candidate && previous && <Dialog title="Another EPUB Version" busy={busy} onClose={() => { setCandidate(undefined); setPrevious(undefined) }}><p>Current EPUB: {previous.chapters.length} sections. New EPUB: {candidate.chapters.length} sections. {candidate.chapters.filter(c => !previous.chapters.some(old => old.id === c.id)).length} new or changed sections detected.</p><p>Reliable chapter matches retain progress. Unmatched chapters require a resume choice. Organizer notes and history are preserved.</p><div className="dialog-actions"><button className="primary" onClick={() => void attempt(() => acceptImport(candidate, previous, true))}>Replace Current EPUB</button><button onClick={() => void attempt(() => acceptImport(candidate, previous))}>Keep Both Versions</button><button onClick={() => { setCandidate(undefined); setPrevious(undefined) }}>Cancel</button></div></Dialog>}
+    {active?.resumeRequired && <Dialog title="Choose Where to Resume" onClose={() => setSelected(undefined)}><p>The previous reading location could not be matched reliably. Your history is retained. Choose a section to continue.</p><form onSubmit={e => { e.preventDefault(); const chapter = String(new FormData(e.currentTarget).get('chapter')); void attempt('Saving Reading Position…', async () => { await commit({ ...active, resumeRequired: false, position: { chapter, fraction: 0 } }, undefined, false); setSelected(undefined); requestAnimationFrame(() => setSelected(active.id)) }) }}><label>Resume At<select name="chapter">{active.chapters.map((c,i) => <option key={i} value={c.id}>{c.title}</option>)}</select></label><button className="primary">Resume Reading</button></form></Dialog>}
+    <ActivityIndicator />
+    {candidate && previous && <Dialog title="Another EPUB Version" busy={busy} onClose={() => { setCandidate(undefined); setPrevious(undefined) }}><p>Current EPUB: {previous.chapters.length} {countNoun(previous.chapters.length, 'section')}. New EPUB: {candidate.chapters.length} {countNoun(candidate.chapters.length, 'section')}. {candidate.chapters.filter(c => !previous.chapters.some(old => old.id === c.id)).length} new or changed sections detected.</p><p>Reliable chapter matches retain progress. Unmatched chapters require a resume choice. Organizer notes and history are preserved.</p><div className="dialog-actions"><button className="primary" onClick={() => void attempt('Replacing EPUB…', () => acceptImport(candidate, previous, true))}>Replace Current EPUB</button><button onClick={() => void attempt('Saving EPUB…', () => acceptImport(candidate, previous))}>Keep Both Versions</button><button onClick={() => { setCandidate(undefined); setPrevious(undefined) }}>Cancel</button></div></Dialog>}
     {modal === 'connect' && <Dialog title="Connect Organizer" busy={busy} onClose={() => { setPairing(undefined); setModal(undefined) }}><p>Organizer sync connects automatically after sign-in. Use this form only to repair an existing connection with a dedicated legacy pairing code. Connecting never creates organizer entries.</p><form onSubmit={e => { e.preventDefault(); void connect(e.currentTarget) }}><label>Pairing Code<input name="secret" type="password" required defaultValue={pairing?.code ?? ''} autoComplete="off" /></label><label>Device Name (Optional)<input name="name" maxLength={80} placeholder="My Reader" /></label><button className="primary" disabled={busy}>Connect Organizer</button></form></Dialog>}
-    {modal === 'sync' && !sampleMode && <ReaderSection page={settingsPage} title="Organizer & Sync" onClose={closeSettingsSection}><p>{connection ? 'Organizer sync is connected to your shared account.' : 'Organizer sync connects automatically when you are signed in and online.'}</p><p>{pending.filter(p => p.account === connection?.account).length} reading updates waiting. Your cloud library and reading progress sync automatically while the app is open, when you return, and when you reconnect. Sync Now checks your full library. Choose which EPUBs to download for offline reading; sync does not download them automatically.</p><details><summary>Advanced Troubleshooting</summary><p>Background organizer refreshes check up to 50 EPUB versions per run, at least one minute apart. Sync Now checks all eligible versions. Local reading changes remain queued if a connection fails.</p><button onClick={() => setModal('connect')}>Enter Legacy Pairing Code</button>{connection && <><p>Reader Connection Credential</p><p>This installation credential grants access to organizer companion operations. Keep it private; automatic account restoration normally handles reconnection.</p><div className="copy-field"><label htmlFor="paired-reader-secret">Paired Reader Secret</label><div className="copy-field-control"><input id="paired-reader-secret" readOnly type="password" value={connection.secret} /><Tooltip description={<span role="status">{copiedSecret === connection.secret ? 'Copied' : 'Copy Paired Reader Secret'}</span>}>{descriptionId => <button type="button" className="copy-field-button" aria-label="Copy Paired Reader Secret" aria-describedby={descriptionId} onClick={event => void copyReaderSecret(event.currentTarget)}><Copy size={18} aria-hidden="true" /></button>}</Tooltip></div></div></> }<button onClick={() => setModal('cloud')}>Repair Organizer Connection</button>{connection && <button onClick={() => void attempt(async () => { await setting('organizer-disabled-here', true); setConnection(undefined); connectionRef.current = undefined; setModal(undefined); setMessage('Organizer sync paused on this device. Use Repair Organizer Connection in advanced troubleshooting to resume. Saved reading changes are retained.') })}>Disconnect Organizer</button>}</details>{pending.filter(p => p.account === connection?.account).map(p => <div className="pending-item" key={p.id}><strong>{books.find(b => b.id === p.book)?.metadata.title}</strong><p>{p.error || 'Waiting to synchronize.'}</p><p>Local changes and the original baseline remain saved. Review the organizer before discarding a conflicting update.</p><button onClick={() => void attempt(async () => { const result = await rpc(connection!, 'get', p.work); if (!result.entry) throw new Error('The organizer entry no longer exists.'); setReview({ pending: p, remote: result.entry }) })}>Review Changes</button><button onClick={() => { if (confirm('Discard this queued organizer update? Local reading history stays saved.')) void attempt(async () => { await transaction(['pending'], tx => tx.objectStore('pending').delete(p.id)); await refresh() }) }}>Discard Queued Update</button></div>)}<div className="dialog-actions organizer-sync-actions"><button className="primary" onClick={() => void sync(true)}>Sync Now</button></div></ReaderSection>}
-    {review && <Dialog title="Review Reading Changes" busy={busy} onClose={() => setReview(undefined)}><p>Choose which update to send. Local reading history is retained with either choice. Later changes are checked again by the server.</p><dl>{Object.entries(review.pending.input).filter(([key]) => ['status','progress','notes'].includes(key)).map(([key,value]) => <div className="conflict-field" key={key}><dt>{{status:'Reading Status',progress:'Chapters Read',notes:'Personal Notes'}[key]}</dt><dd>Original: {describeOrganizerValue(key,review.pending.base[key as keyof typeof review.pending.base])}</dd><dd>Reader: {describeOrganizerValue(key,value)}</dd><dd>Organizer: {describeOrganizerValue(key,review.remote[key as keyof typeof review.remote])}</dd></div>)}</dl><div className="dialog-actions"><button onClick={() => void attempt(async () => { await transaction(['pending'], tx => tx.objectStore('pending').delete(review.pending.id)); await refresh(); setReview(undefined); void sync() })}>Use Organizer</button><button className="primary" onClick={() => void attempt(async () => { await transaction(['pending'], tx => tx.objectStore('pending').put({ ...review.pending, base: review.remote, input: { ...review.pending.input, version: review.remote.version, base: review.remote }, error: undefined })); setReview(undefined); void sync() })}>Use Reader</button></div></Dialog>}
-    {(modal === 'storage'||modal==='details'&&detailsFromStorage) && <LocalStorageDialog message={message} onDismissMessage={() => setMessage('')} asPage={settingsPage} cloud={Boolean(readerOwner)} books={books} storage={storage} full={storageFull} busy={busy} onClose={() => { setStorageFull(false); closeSettingsSection() }} online={online} preferences={preferences} onDetails={id=>viewDetails(id,true)} onColumns={storageColumns=>updatePreferences({...preferences,storageColumns})} onSort={storageSort=>updatePreferences({...preferences,storageSort})} onDelete={books=>void deleteVersion(books)} onDownload={books=>void downloadSelection(books)} onRemove={books => void removeLocalDownload(books)} onPersist={() => void attempt(async () => { const granted = await navigator.storage?.persist?.(); await refreshStorage(); setMessage(granted ? 'Persistent storage granted.' : 'Persistent storage was not granted by this browser. Keep EPUB backups or verified cloud copies.') })} />}
-    {sampleMode && (modal === 'account' || modal === 'cloud' || modal === 'sync') && <SampleReaderAccount title={modal === 'cloud' ? 'Cloud Library' : modal === 'sync' ? 'Organizer & Sync' : 'Reader Account'} asPage={settingsPage} onClose={closeSettingsSection} beforeSwitch={() => saving.current} />}
-    {!sampleMode && (modal === 'account' || modal === 'cloud') && <ReaderAccount key={modal} cloudLibrary={modal === 'cloud'} asPage={settingsPage} onSync={() => sync(true)} conflicts={cloudConflicts} onStorageFull={reportError} onClose={closeSettingsSection} beforeSwitch={() => saving.current} onRefresh={async () => { const prefs = await loadSetting<Preferences>('preferences'); if (prefs) setPreferences(prefs); return refresh() }} />}
-    {modal==='tiles'&&<TileSettings asPage={settingsPage} preferences={preferences} appearance={tagSettings.appearance} book={books[0]} onSave={async(layout,value)=>{const next={...preferences,tileLayouts:{...preferences.tileLayouts,[layout]:value}};await setting('preferences',next);setPreferences(next)}} onClose={closeSettingsSection} />}
-    {modal === 'tags' && <TagSettings asPage={settingsPage} appearance={tagSettings.appearance} connected={Boolean(connection)} linked={tagsLinked} loaded={tagSettings.loaded} error={tagSettings.error} onShape={shape => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, shape } })} onTextColor={textColor => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, textColor } })} onOrder={order => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, order } })} onColors={colors => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, colors } })} onLink={enabled => updatePreferences({ ...preferences, tagSyncAccount: enabled ? connection?.account : undefined })} onClose={closeSettingsSection} />}
+    {modal === 'sync' && !sampleSignedIn && <ReaderSection page={settingsPage} title="Organizer & Sync" onClose={closeSettingsSection}><p>{connection ? 'Organizer sync is connected to your shared account.' : 'Organizer sync connects automatically when you are signed in and online.'}</p><p>{pending.filter(p => p.account === connection?.account).length} reading updates waiting. Your cloud library and reading progress sync automatically while the app is open, when you return, and when you reconnect. Sync Now checks your full library. Choose which EPUBs to download for offline reading; sync does not download them automatically.</p><details><summary>Advanced Troubleshooting</summary><p>Background organizer refreshes check up to 50 EPUB versions per run, at least one minute apart. Sync Now checks all eligible versions. Local reading changes remain queued if a connection fails.</p><button onClick={() => setModal('connect')}>Enter Legacy Pairing Code</button>{connection && <><p>Reader Connection Credential</p><p>This installation credential grants access to organizer companion operations. Keep it private; automatic account restoration normally handles reconnection.</p><div className="copy-field"><label htmlFor="paired-reader-secret">Paired Reader Secret</label><div className="copy-field-control"><input id="paired-reader-secret" readOnly type="password" value={connection.secret} /><Tooltip description={<span role="status">{copiedSecret === connection.secret ? 'Copied' : 'Copy Paired Reader Secret'}</span>}>{descriptionId => <button type="button" className="copy-field-button" aria-label="Copy Paired Reader Secret" aria-describedby={descriptionId} onClick={event => void copyReaderSecret(event.currentTarget)}><Copy size={18} aria-hidden="true" /></button>}</Tooltip></div></div></> }<button onClick={() => setModal('cloud')}>Repair Organizer Connection</button>{connection && <button onClick={() => void attempt('Disconnecting Organizer…', async () => { await setting('organizer-disabled-here', true); setConnection(undefined); connectionRef.current = undefined; setModal(undefined); setMessage('Organizer sync paused on this device. Use Repair Organizer Connection in advanced troubleshooting to resume. Saved reading changes are retained.') })}>Disconnect Organizer</button>}</details>{pending.filter(p => p.account === connection?.account).map(p => <div className="pending-item" key={p.id}><strong>{books.find(b => b.id === p.book)?.metadata.title}</strong><p>{p.error || 'Waiting to synchronize.'}</p><p>Local changes and the original baseline remain saved. Review the organizer before discarding a conflicting update.</p><button onClick={() => void attempt('Loading Organizer Changes…', async () => { const result = await rpc(connection!, 'get', p.work); if (!result.entry) throw new Error('The organizer entry no longer exists.'); setReview({ pending: p, remote: result.entry }) })}>Review Changes</button><button onClick={() => { if (confirm('Discard this queued organizer update? Local reading history stays saved.')) void attempt('Discarding Queued Update…', async () => { await transaction(['pending'], tx => tx.objectStore('pending').delete(p.id)); await refresh() }) }}>Discard Queued Update</button></div>)}<div className="dialog-actions organizer-sync-actions"><button className="primary" onClick={() => void sync(true)}>Sync Now</button></div></ReaderSection>}
+    {review && <Dialog title="Review Reading Changes" busy={busy} onClose={() => setReview(undefined)}><p>Choose which update to send. Local reading history is retained with either choice. Later changes are checked again by the server.</p><dl>{Object.entries(review.pending.input).filter(([key]) => ['status','progress','notes'].includes(key)).map(([key,value]) => <div className="conflict-field" key={key}><dt>{{status:'Reading Status',progress:'Chapters Read',notes:'Personal Notes'}[key]}</dt><dd>Original: {describeOrganizerValue(key,review.pending.base[key as keyof typeof review.pending.base])}</dd><dd>Reader: {describeOrganizerValue(key,value)}</dd><dd>Organizer: {describeOrganizerValue(key,review.remote[key as keyof typeof review.remote])}</dd></div>)}</dl><div className="dialog-actions"><button onClick={() => void attempt('Saving Conflict Resolution…', async () => { await transaction(['pending'], tx => tx.objectStore('pending').delete(review.pending.id)); await refresh(); setReview(undefined); void sync() })}>Use Organizer</button><button className="primary" onClick={() => void attempt('Saving Conflict Resolution…', async () => { await transaction(['pending'], tx => tx.objectStore('pending').put({ ...review.pending, base: review.remote, input: { ...review.pending.input, version: review.remote.version, base: review.remote }, error: undefined })); setReview(undefined); void sync() })}>Use Reader</button></div></Dialog>}
+    {(modal === 'storage'||modal==='details'&&detailsFromStorage) && <LocalStorageDialog message={message} onDismissMessage={() => setMessage('')} asPage={settingsPage} cloud={Boolean(readerOwner)} books={books} storage={storage} full={storageFull} busy={busy} onClose={() => { setStorageFull(false); closeSettingsSection() }} online={online} preferences={preferences} onDetails={id=>viewDetails(id,true)} onColumns={storageColumns=>updatePreferences({...preferences,storageColumns})} onSort={storageSort=>updatePreferences({...preferences,storageSort})} onDelete={books=>void deleteVersion(books)} onDownload={books=>void downloadSelection(books)} onRemove={books => void removeLocalDownload(books)} onPersist={() => void attempt('Checking Storage Protection…', async () => { const granted = await navigator.storage?.persist?.(); await refreshStorage(); setMessage(granted ? 'Persistent storage granted.' : 'Persistent storage was not granted by this browser. Keep EPUB backups or verified cloud copies.') })} />}
+    {sampleAccount?.authenticated && (modal === 'account' || modal === 'cloud' || modal === 'sync') && <SampleReaderAccount title={modal === 'cloud' ? 'Cloud Library' : modal === 'sync' ? 'Organizer & Sync' : 'Reader Account'} asPage={settingsPage} onClose={closeSettingsSection} onSignOut={async () => { await saving.current; await sampleAccount.signOut(); closeSettingsSection() }} />}
+    {!sampleSignedIn && (modal === 'account' || modal === 'cloud') && <ReaderAccount key={modal} sampleSignIn={sampleAccount && (async (login, password) => { await sampleAccount.signIn(login, password); closeSettingsSection() })} cloudLibrary={modal === 'cloud'} asPage={settingsPage} onSync={() => sync(true)} conflicts={cloudConflicts} onStorageFull={reportError} onClose={closeSettingsSection} beforeSwitch={() => saving.current} onRefresh={async () => { const prefs = await loadSetting<Preferences>('preferences'); if (prefs) setPreferences(prefs); return refresh() }} />}
+    {modal === 'text-scaling' && <ReaderSection page={settingsPage} title={accessibilitySettingsSection.title} onClose={closeSettingsSection}><TextScalingControl /></ReaderSection>}
+    {modal==='tiles'&&<TileSettings asPage={settingsPage} preferences={preferences} appearance={tagSettings.appearance} book={books[0]} onSave={async(layout,value,applyBoth)=>{const tileLayouts=applyBoth ? {mobile:value,desktop:value} : {...preferences.tileLayouts,[layout]:value}; const next={...preferences,tileLayouts};await setting('preferences',next);setPreferences(next)}} onClose={closeSettingsSection} />}
+    {modal === 'tags' && <TagSettings asPage={settingsPage} appearance={tagSettings.appearance} connected={Boolean(connection)} linked={tagsLinked} loaded={tagSettings.loaded} error={tagSettings.error} onShape={shape => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, shape } })} onTextColor={textColor => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, textColor } })} onOrder={order => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, order } })} onColors={colors => updatePreferences({ ...preferences, tagAppearance: { ...localTagAppearance, ...colors } })} onLink={enabled => updatePreferences({ ...preferences, tagSyncAccount: enabled ? connection?.account : undefined })} onClose={closeSettingsSection} />}
     {epubChoice && choiceBooks.length > 0 && <EpubChoice key={epubChoice.target} books={choiceBooks} canDownload={online && Boolean(readerOwner)} onClose={() => setEpubChoice(undefined)} onOpen={async (book, remember) => {
       await setting(openingPreferenceKey(epubChoice.target), remember ? book.id : undefined)
       readBook(book, epubChoice); setEpubChoice(undefined)
     }} />}
-    {modal === 'details' && manage && <WorkDetails book={manage} organizerAccount={connection?.account} onCheckLinks={() => void sync(true)} onOpenWork={target => { setModal(undefined); void attempt(() => openWork({ target }, books, true)) }} onReview={() => setModal('contents')} appearance={tagSettings.appearance} onClose={() => {setModal(detailsFromStorage?'storage':undefined);setDetailsFromStorage(false)}} />}
+    {modal === 'details' && manage && <WorkDetails book={manage} organizerAccount={connection?.account} onCheckLinks={() => void sync(true)} onOpenWork={target => { setModal(undefined); void attempt('Opening EPUB…', () => openWork({ target }, books, true)) }} onReview={() => setModal('contents')} appearance={tagSettings.appearance} onClose={() => {setModal(detailsFromStorage?'storage':undefined);setDetailsFromStorage(false)}} />}
     {modal === 'contents' && manage && <AnthologyReview key={manage.id} book={manage} onClose={() => setModal('manage')} onSave={async next => {
       await saving.current
       if ((await all<Pending>('pending')).some(event => event.book === next.id)) throw new Error('Sync or resolve this EPUB’s queued organizer updates before changing its contents.')
@@ -641,6 +705,6 @@ export function App({ initialPairing }: { initialPairing?: ReaderPairing }) {
       setMessage('Anthology contents saved. Work and chapter counts were recalculated.')
       void sync()
     }} />}
-    {modal === 'manage' && manage && <Dialog title="Manage EPUB" busy={busy} onClose={() => setModal(undefined)}><h3>{manage.metadata.title}</h3>{anthologyLabel(manage) && <p>{anthologyLabel(manage)}</p>}<button onClick={() => setModal('contents')}>Review Anthology Contents</button><p>File version: {manage.id.slice(0,12)} · {manage.chapters.length} sections</p><p>Publication metadata saved {new Date(manage.metadataAt).toLocaleDateString()}. Offline completion uses this snapshot. Unknown or unmapped chapters never imply completion.</p><form onSubmit={e => { e.preventDefault(); const status = String(new FormData(e.currentTarget).get('status')) as Book['status']; void attempt(async () => { if (status === 're_reading' && manage.status !== 're_reading') { await updateProgress(manage.id, 0, true); return } const event = await queueUpdate(manage, { status }); await commit({ ...manage, status }, event); setMessage('Reading status saved.') }) }}><label>Reading Status<select key={manage.id + manage.status} name="status" defaultValue={manage.status}>{Object.entries(statuses).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label><button>Save Reading Status</button></form><p>Author Notes are included in the EPUB content. Personal Notes below are separate.</p><form onSubmit={e => { e.preventDefault(); const notes = String(new FormData(e.currentTarget).get('notes')); void attempt(async () => { const event = await queueUpdate(manage, { notes }); await commit({ ...manage, notes }, event); setMessage('Personal notes saved.') }) }}><label>Personal Notes<textarea key={manage.id + manage.notes} name="notes" defaultValue={manage.notes} rows={5} /></label><button disabled={busy}>Save Personal Notes</button></form>{!isAnthology(manage) && <form onSubmit={e => { e.preventDefault(); void link(manage, String(new FormData(e.currentTarget).get('url'))) }}><label>Link to Organizer Work<input name="url" type="url" required defaultValue={manage.workId ? `https://archiveofourown.org/works/${manage.workId}` : ''} placeholder="https://archiveofourown.org/works/123" /></label><button disabled={busy}>{manage.remote ? 'Refresh Organizer Link' : 'Confirm Work Link'}</button></form>}<div className="dialog-actions"><button onClick={() => { setReplaceTarget(manage.id); setModal(undefined); picker.current?.click() }}>Replace EPUB</button><button onClick={() => void attempt(async () => { await transaction(['books', 'catalog', 'settings'], tx => { for (const book of books.filter(b => b.workId && b.workId === manage.workId)) { const request = tx.objectStore('books').get(book.id); request.onsuccess = () => { if (request.result) putBook(tx, { ...request.result, active: book.id === manage.id }) } } }); await refresh(); void sync(); setMessage('Active version updated.') })}>Make Active Version</button><button onClick={() => void attempt(async () => { await updateProgress(manage.id, 0, true) })}>Begin Re-Reading</button><button className="danger" disabled={busy} onClick={() => void deleteVersion(manage)}>Delete EPUB</button>{manage.hasFile && <button className="danger" onClick={() => void removeLocalDownload(manage)}>Remove Download</button>}</div></Dialog>}
+    {modal === 'manage' && manage && <Dialog title="Manage EPUB" busy={busy} onClose={() => setModal(undefined)}><h3>{manage.metadata.title}</h3>{anthologyLabel(manage) && <p>{anthologyLabel(manage)}</p>}<button onClick={() => setModal('contents')}>Review Anthology Contents</button><p>File version: {manage.id.slice(0,12)} · {manage.chapters.length} sections</p><p>Publication metadata saved {new Date(manage.metadataAt).toLocaleDateString()}. Offline completion uses this snapshot. Unknown or unmapped chapters never imply completion.</p><form onSubmit={e => { e.preventDefault(); const status = String(new FormData(e.currentTarget).get('status')) as Book['status']; void attempt('Saving Reading Status…', async () => { if (status === 're_reading' && manage.status !== 're_reading') { await updateProgress(manage.id, 0, true); return } const event = await queueUpdate(manage, { status }); await commit({ ...manage, status }, event); setMessage('Reading status saved.') }) }}><label>Reading Status<select key={manage.id + manage.status} name="status" defaultValue={manage.status}>{Object.entries(statuses).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label><button>Save Reading Status</button></form><p>Author Notes are included in the EPUB content. Personal Notes below are separate.</p><form onSubmit={e => { e.preventDefault(); const notes = String(new FormData(e.currentTarget).get('notes')); void attempt('Saving Personal Notes…', async () => { const event = await queueUpdate(manage, { notes }); await commit({ ...manage, notes }, event); setMessage('Personal notes saved.') }) }}><label>Personal Notes<textarea key={manage.id + manage.notes} name="notes" defaultValue={manage.notes} rows={5} /></label><button disabled={busy}>Save Personal Notes</button></form>{!isAnthology(manage) && <form onSubmit={e => { e.preventDefault(); void link(manage, String(new FormData(e.currentTarget).get('url'))) }}><label>Link to Organizer Work<input name="url" type="url" required defaultValue={manage.workId ? `https://archiveofourown.org/works/${manage.workId}` : ''} placeholder="https://archiveofourown.org/works/123" /></label><button disabled={busy}>{manage.remote ? 'Refresh Organizer Link' : 'Confirm Work Link'}</button></form>}<div className="dialog-actions"><button onClick={() => { setReplaceTarget(manage.id); setModal(undefined); picker.current?.click() }}>Replace EPUB</button><button onClick={() => void attempt('Saving Active Version…', async () => { await transaction(['books', 'catalog', 'settings'], tx => { for (const book of books.filter(b => b.workId && b.workId === manage.workId)) { const request = tx.objectStore('books').get(book.id); request.onsuccess = () => { if (request.result) putBook(tx, { ...request.result, active: book.id === manage.id }) } } }); await refresh(); void sync(); setMessage('Active version updated.') })}>Make Active Version</button><button onClick={() => void attempt('Starting Re-Read…', async () => { await updateProgress(manage.id, 0, true) })}>Begin Re-Reading</button><button className="danger" disabled={busy} onClick={() => void deleteVersion(manage)}>Delete EPUB</button>{manage.hasFile && <button className="danger" onClick={() => void removeLocalDownload(manage)}>Remove Download</button>}</div></Dialog>}
   </>
 }

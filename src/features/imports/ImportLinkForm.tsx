@@ -64,7 +64,7 @@ export function ImportLinkForm() {
       const id = await submitImport(url.trim())
       if (!id) throw new Error('No AO3 work was found in that link.')
       setBatch(id)
-    } catch (error) { setError(error instanceof Error ? error.message : 'Could not import this fic.') }
+    } catch (error) { setError(error instanceof Error ? error.message : 'Could not import this story.') }
     finally { setBusy(false) }
   }
   async function importSelected(works: SeriesPreview['works'], readingStatus: Status, seriesIds: number[]) {
@@ -91,9 +91,9 @@ export function ImportLinkForm() {
       <SeriesImportOptions reviewRelatedSeries={seriesBehavior.reviewRelatedSeries} onReviewRelatedSeriesChange={seriesBehavior.setReviewRelatedSeries} defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy} />
       <button className="button primary" disabled={busy}>{busy ? 'Importing…' : source === 'wayback' ? 'Import from Wayback Machine' : 'Import from Link'}</button>
     </form> : multiple ? <section className="settings-card series-import-result" aria-label="Series Import Result"><h2>{finishedBatch ? 'Series Import Finished' : 'Importing Selected Works'}</h2><p className={finishedBatch ? 'series-import-finished' : undefined} role="status">{finishedBatch ? 'Your selected works have finished processing.' : 'Your selected works are saved. Retrieving their metadata…'}</p><ul>{entries.map(id => <li key={id}><Link className="clickable-text" to={`/stories/${id}`} state={{ importBatchId: batch }}>{library.stories?.find(story => story.id === id)?.metadata.title ?? 'View Saved Work'}</Link></li>)}</ul><div className="form-actions"><Link className="button secondary" to="/library?shelf=series">View Series Collection</Link><button className="button secondary" onClick={() => { setBatch(''); setMultiple(false); setItem(undefined); setEntries([]) }}>Add Another Story</button></div></section> : <>
-      {!complete ? <section className="settings-card"><p role="status">Retrieving metadata… Your fic is saved; this may take a few minutes. If using the extension, keep your browser running and complete any AO3 confirmation in its requested tab.</p><Link className="clickable-text" to="/imports">View Import History</Link></section> : <section className="settings-card" aria-label="Import Result">
+      {!complete ? <section className="settings-card"><p role="status">Retrieving metadata… Your story is saved; this may take a few minutes. If using the extension, keep your browser running and complete any AO3 confirmation in its requested tab.</p><Link className="clickable-text" to="/imports">View Import History</Link></section> : <section className="settings-card" aria-label="Import Result">
         <h2>Import Result</h2>
-        <p role="status">No saved fic was available for this import.</p>
+        <p role="status">No saved story was available for this import.</p>
         {item?.error_message && <p>{item.error_message}</p>}
         <Link className="clickable-text" to="/imports">View Import History</Link>
       </section>}

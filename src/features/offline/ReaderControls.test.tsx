@@ -26,7 +26,7 @@ function CurrentQuery() { return <output aria-label="Current Query">{useLocation
 it('offers platforms instead of installation names and leaves unsupported platforms disabled', () => {
  mocks.readers=[report('My Organizer',['123'])]
  render(<MemoryRouter initialEntries={['/library?reader=old-installation&page=3']}><ReaderControls /><CurrentQuery /></MemoryRouter>)
- const trigger=screen.getByRole('button',{name:'Available In'})
+ const trigger=screen.getByRole('button',{name:'Available Offline'})
  expect(trigger).toHaveTextContent('Archives Unfolded')
  fireEvent.click(trigger)
  expect(screen.queryByRole('option',{name:'My Organizer'})).not.toBeInTheDocument()

@@ -1,69 +1,214 @@
-
-<svg xmlns="http://www.w3.org/2000/svg" width="150" height="360" viewBox="0 0 150 360">
-  <g fill="none" stroke="#e3b66d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="150"
+   height="360"
+   viewBox="0 0 150 360"
+   version="1.1"
+   id="svg35"
+   sodipodi:docname="star_trails_cascading.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs35" />
+  <sodipodi:namedview
+     id="namedview35"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="4.2733294"
+     inkscape:cx="47.854958"
+     inkscape:cy="133.50246"
+     inkscape:window-width="1440"
+     inkscape:window-height="872"
+     inkscape:window-x="0"
+     inkscape:window-y="28"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="g34" />
+  <g
+     fill="none"
+     stroke="#e3b66d"
+     stroke-width="1.5"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     id="g35">
     <!-- Top constellation -->
-    <path d="M25 52H125" stroke-width=".8" opacity=".65"/>
-    <path d="M22 50L40 66L57 52L75 69L94 48L111 65L128 50"
-          stroke-width=".9"/>
-
-    <circle cx="22" cy="50" r="2"/>
-    <circle cx="40" cy="66" r="2"/>
-    <circle cx="57" cy="52" r="2.5"/>
-    <circle cx="75" cy="69" r="2"/>
-    <circle cx="94" cy="48" r="2.5"/>
-    <circle cx="111" cy="65" r="2"/>
-    <circle cx="128" cy="50" r="2"/>
-
+    <path
+       d="M25 52H125"
+       stroke-width=".8"
+       opacity=".65"
+       id="path1" />
+    <path
+       d="M22 50L40 66L57 52L75 69L94 48L111 65L128 50"
+       stroke-width=".9"
+       id="path2" />
+    <circle
+       cx="22"
+       cy="50"
+       r="2"
+       id="circle2" />
+    <circle
+       cx="40"
+       cy="66"
+       r="2"
+       id="circle3" />
+    <circle
+       cx="57"
+       cy="52"
+       r="2.5"
+       id="circle4" />
+    <circle
+       cx="75"
+       cy="69"
+       r="2"
+       id="circle5" />
+    <circle
+       cx="94"
+       cy="48"
+       r="2.5"
+       id="circle6" />
+    <circle
+       id="circle7"
+       r="2"
+       cy="65"
+       cx="111" />
+    <circle
+       cx="128"
+       cy="50"
+       r="2"
+       id="circle8" />
     <!-- Main four-pointed star -->
-    <path d="M75 29L78 39L88 42L78 45L75 55L72 45L62 42L72 39Z"/>
-
+    <path
+       d="M75 29L78 39L88 42L78 45L75 55L72 45L62 42L72 39Z"
+       id="path8" />
     <!-- Small celestial accents -->
-    <path d="M32 37V47M27 42H37" stroke-width=".8"/>
-    <path d="M113 31V43M107 37H119" stroke-width=".8"/>
-
+    <path
+       d="M32 37V47M27 42H37"
+       stroke-width=".8"
+       id="path9" />
+    <path
+       d="M113 31V43M107 37H119"
+       stroke-width=".8"
+       id="path10" />
     <!-- Hanging diamonds -->
-    <path d="M22 52V115M57 54V82M94 50V80M128 52V115"
-          stroke-width=".8"/>
-
-    <path d="M22 115L27 121L22 127L17 121Z"/>
-    <path d="M57 82L62 88L57 94L52 88Z"/>
-    <path d="M94 80L99 86L94 92L89 86Z"/>
-    <path d="M128 115L133 121L128 127L123 121Z"/>
-
+    <path
+       d="m 22,52 v 61 M 57,54 V 82 M 94,50 v 30 m 34,-28 v 61"
+       stroke-width="0.8"
+       id="path11"
+       sodipodi:nodetypes="cccccccc" />
+    <path
+       d="m 22,113 5,6 -5,6 -5,-6 z"
+       id="path12"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       d="M57 82L62 88L57 94L52 88Z"
+       id="path13" />
+    <path
+       d="M94 80L99 86L94 92L89 86Z"
+       id="path14" />
+    <path
+       d="m 128,113 5,6 -5,6 -5,-6 z"
+       id="path15"
+       sodipodi:nodetypes="ccccc" />
     <!-- Lower fine divider -->
-    <path d="M43 107H66M84 107H107" stroke-width=".8"/>
-    <path d="M75 100L81 107L75 114L69 107Z"/>
-
+    <path
+       d="M43 107H66M84 107H107"
+       stroke-width=".8"
+       id="path16" />
+    <path
+       d="M75 100L81 107L75 114L69 107Z"
+       id="path17" />
     <!-- Bottom mirrored constellation -->
-    <g transform="translate(0 360) scale(1 -1)">
-      <path d="M25 52H125" stroke-width=".8" opacity=".65"/>
-      <path d="M22 50L40 66L57 52L75 69L94 48L111 65L128 50"
-            stroke-width=".9"/>
-
-      <circle cx="22" cy="50" r="2"/>
-      <circle cx="40" cy="66" r="2"/>
-      <circle cx="57" cy="52" r="2.5"/>
-      <circle cx="75" cy="69" r="2"/>
-      <circle cx="94" cy="48" r="2.5"/>
-      <circle cx="111" cy="65" r="2"/>
-      <circle cx="128" cy="50" r="2"/>
-
-      <path d="M75 29L78 39L88 42L78 45L75 55L72 45L62 42L72 39Z"/>
-
-      <path d="M32 37V47M27 42H37" stroke-width=".8"/>
-      <path d="M113 31V43M107 37H119" stroke-width=".8"/>
-
-      <path d="M22 52V115M57 54V82M94 50V80M128 52V115"
-            stroke-width=".8"/>
-
-      <path d="M22 115L27 121L22 127L17 121Z"/>
-      <path d="M57 82L62 88L57 94L52 88Z"/>
-      <path d="M94 80L99 86L94 92L89 86Z"/>
-      <path d="M128 115L133 121L128 127L123 121Z"/>
-
-      <path d="M43 107H66M84 107H107" stroke-width=".8"/>
-      <path d="M75 100L81 107L75 114L69 107Z"/>
+    <g
+       transform="translate(0 360) scale(1 -1)"
+       id="g34">
+      <path
+         d="M25 52H125"
+         stroke-width=".8"
+         opacity=".65"
+         id="path18" />
+      <path
+         d="M22 50L40 66L57 52L75 69L94 48L111 65L128 50"
+         stroke-width=".9"
+         id="path19" />
+      <circle
+         cx="22"
+         cy="50"
+         r="2"
+         id="circle19" />
+      <circle
+         cx="40"
+         cy="66"
+         r="2"
+         id="circle20" />
+      <circle
+         cx="57"
+         cy="52"
+         r="2.5"
+         id="circle21" />
+      <circle
+         cx="75"
+         cy="69"
+         r="2"
+         id="circle22" />
+      <circle
+         cx="94"
+         cy="48"
+         r="2.5"
+         id="circle23" />
+      <circle
+         cx="111"
+         cy="65"
+         r="2"
+         id="circle24" />
+      <circle
+         cx="128"
+         cy="50"
+         r="2"
+         id="circle25" />
+      <path
+         d="M75 29L78 39L88 42L78 45L75 55L72 45L62 42L72 39Z"
+         id="path25" />
+      <path
+         d="M32 37V47M27 42H37"
+         stroke-width=".8"
+         id="path26" />
+      <path
+         d="M113 31V43M107 37H119"
+         stroke-width=".8"
+         id="path27" />
+      <path
+         d="m 22,52 v 61 M 57,54 V 82 M 94,50 v 30 m 34,-28 v 61"
+         stroke-width="0.8"
+         id="path28"
+         sodipodi:nodetypes="cccccccc" />
+      <path
+         d="m 22,113 5,6 -5,6 -5,-6 z"
+         id="path29"
+         sodipodi:nodetypes="ccccc" />
+      <path
+         d="M57 82L62 88L57 94L52 88Z"
+         id="path30" />
+      <path
+         d="M94 80L99 86L94 92L89 86Z"
+         id="path31" />
+      <path
+         d="m 128,113 5,6 -5,6 -5,-6 z"
+         id="path32"
+         sodipodi:nodetypes="ccccc" />
+      <path
+         d="M43 107H66M84 107H107"
+         stroke-width=".8"
+         id="path33" />
+      <path
+         d="M75 100L81 107L75 114L69 107Z"
+         id="path34" />
     </g>
   </g>
 </svg>

@@ -1,0 +1,32 @@
+:root { --app-divider-color: #ecddd8; }
+:root[data-theme="dark"] { --app-divider-color: var(--color-border); }
+
+.app-shell:not([hidden]) { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--app-header-inline-padding, var(--space-8));
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--app-divider-color);
+}
+.brand-subtitle {
+  display: block;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: var(--minimum-text-size);
+  line-height: 1.5;
+  letter-spacing: .04em;
+}
+.app-footer {
+  border-top: 1px solid var(--app-divider-color);
+  padding: var(--space-6) 42px;
+  text-align: end;
+}
+@media (max-width: 1100px) {
+  .app-header { padding-block: var(--space-2); }
+}
+@media (max-width: 650px) {
+  .app-footer { padding-inline: var(--space-5); }
+}

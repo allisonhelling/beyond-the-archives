@@ -75,11 +75,10 @@ test('filters expose crossover modes, removable chips, word count and consistent
  await page.getByRole('heading',{name:'Your Library',exact:true}).click()
  await page.getByRole('button',{name:'Filters',exact:true}).click()
  const filters=page.getByRole('region',{name:'Library Filters',exact:true})
- const hide=(await filters.getByRole('button',{name:'Hide',exact:true}).boundingBox())!
- for(const button of await filters.locator('.button:not(.filter-default-actions .button), .dropdown-trigger').all()) expect((await button.boundingBox())!.height).toBeCloseTo(hide.height,0)
- for (const button of await filters.locator('.filter-default-actions .button').all()) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48)
+ const hide=(await filters.getByRole('searchbox',{name:'Search Within Results',exact:true}).boundingBox())!
+ for(const button of await filters.locator('.filter-choice-row > .button, .dropdown-trigger').all()) expect((await button.boundingBox())!.height).toBeCloseTo(hide.height,0)
+ for (const button of await filters.locator('.filter-default-actions .button').all()) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(hide.height)
  await filters.getByRole('button',{name:'Crossovers',exact:true}).click()
- await page.getByRole('option',{name:'Only',exact:true}).click()
  await page.getByRole('button',{name:'Apply Filters',exact:true}).click()
  await expect(page.locator('.work-card')).toHaveCount(1)
  await expect(page.locator('.work-card h2 a')).toHaveText(['Filters cross'])

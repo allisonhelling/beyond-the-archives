@@ -55,7 +55,7 @@ test('reader reuses the tile editor and saves desktop and mobile layouts indepen
  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
  await page.getByRole('button',{name:'Customize Tiles',exact:true}).click()
  const dialog=page.getByRole('dialog',{name:'Customize Tiles',exact:true}),preview=dialog.frameLocator('iframe')
- await dialog.getByRole('button',{name:'Desktop',exact:true}).click()
+ await dialog.getByRole('tab',{name:'Desktop',exact:true}).click()
  await dialog.getByRole('button',{name:'Hide/Show Information',exact:true}).click()
  const summary = preview.getByLabel('Summary (Work Tiles)', { exact: true }).and(preview.locator('.story-summary'))
  await summary.click()
@@ -65,7 +65,7 @@ test('reader reuses the tile editor and saves desktop and mobile layouts indepen
  await expect(preview.locator('.display-short-divider')).toHaveCount(1)
  await dialog.getByRole('button',{name:'Save Layout',exact:true}).click()
  await expect(dialog.getByRole('status').last()).toContainText('Desktop tile layout saved.')
- await dialog.getByRole('button',{name:'Mobile',exact:true}).click()
+ await dialog.getByRole('tab',{name:'Mobile',exact:true}).click()
  await expect(summary).toBeVisible()
  await dialog.getByRole('button',{name:'Add Grouped Line',exact:true}).click()
  await expect(preview.locator('.display-line-placeholder')).toBeVisible()
@@ -80,7 +80,7 @@ test('reader reuses the tile editor and saves desktop and mobile layouts indepen
  await expect(page.locator('.story-card .display-short-divider')).toHaveCount(0)
  await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
  await page.getByRole('button',{name:'Customize Tiles',exact:true}).click()
- await dialog.getByRole('button',{name:'Desktop',exact:true}).click()
+ await dialog.getByRole('tab',{name:'Desktop',exact:true}).click()
  await dialog.getByRole('button',{name:'Restore to Default',exact:true}).click()
  await dialog.getByRole('button',{name:'Save Layout',exact:true}).click()
  await dialog.getByRole('button',{name:'Close Dialog',exact:true}).click()
@@ -91,11 +91,25 @@ test('reader reuses the tile editor and saves desktop and mobile layouts indepen
 test('profile menu keeps reader settings accessible on desktop and mobile', async ({page}) => {
  await page.goto('/')
  for (const dark of [false,true]) {
- if(dark)await page.getByRole('button',{name:'Toggle Dark Mode',exact:true}).click()
+ if(dark){
+  const trigger=page.getByRole('button',{name:'Profile Menu',exact:true})
+  await trigger.click()
+  await page.getByRole('button',{name:'Toggle Dark Mode',exact:true}).click()
+  await expect(page.getByRole('button',{name:'Toggle Light Mode',exact:true})).toBeVisible()
+  await trigger.click()
+ }
  for (const width of [1280,390]) {
   await page.setViewportSize({width,height:844})
-  if(width<1100)await expect(page.locator('.brand small')).toBeHidden()
-  else await expect(page.locator('.brand small')).toBeVisible()
+  const header = page.getByRole('banner')
+  const footer = page.getByRole('contentinfo')
+  await expect(header.locator('.brand')).toHaveText('▤ archives unfolded')
+  expect((await header.boundingBox())!.height).toBeLessThan(width < 1100 ? 120 : 80)
+  await expect(footer).toHaveText('AN EPUB READER, AVAILABLE ONLINE AND OFFLINE')
+  await expect(footer).toHaveCSS('border-top-color', dark ? 'rgb(89, 67, 70)' : 'rgb(236, 221, 216)')
+  expect(await footer.evaluate(element => {
+   const bounds = element.getBoundingClientRect()
+   return bounds.left === 0 && bounds.right === document.documentElement.clientWidth
+  })).toBe(true)
   const trigger=page.getByRole('button',{name:'Profile Menu',exact:true})
   const normal=await trigger.evaluate(element=>({color:getComputedStyle(element).color,background:getComputedStyle(element).backgroundColor}))
   await trigger.hover()
@@ -131,6 +145,10 @@ test('profile menu keeps reader settings accessible on desktop and mobile', asyn
   await page.getByRole('button',{name:'Tag Format',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Tag Format',exact:true})
   await expect(dialog).toBeVisible()
+  const title = dialog.getByRole('heading', { name: 'Tag Format', exact: true })
+  await expect(title).toHaveCSS('font-size', '23px')
+  await expect(title).toHaveCSS('color', dark ? 'rgb(255, 167, 163)' : 'rgb(151, 0, 0)')
+  await expect(dialog.locator('legend').first()).toHaveCSS('font-size', '18px')
   await dialog.getByRole('button',{name:'Close Dialog',exact:true}).click()
   await expect(trigger).toBeFocused()
  }

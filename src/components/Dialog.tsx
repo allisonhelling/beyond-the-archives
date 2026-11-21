@@ -15,9 +15,9 @@ function lockPageScroll() {
  return () => { if (--scrollLocks === 0) { restorePageScroll?.(); restorePageScroll = undefined } }
 }
 
-export function Dialog({ title, children, onClose, busy = false, initialFocusRef, className = '', describedBy, titleAction, topEdgeLabel }: {
+export function Dialog({ title, children, onClose, busy = false, initialFocusRef, className = '', describedBy, titleAction, topEdgeLabel, showActivity = true }: {
   title: string; children: ReactNode; onClose: () => void; busy?: boolean
-  initialFocusRef?: RefObject<HTMLElement | null>; className?: string; describedBy?: string; titleAction?: ReactNode; topEdgeLabel?: string
+  initialFocusRef?: RefObject<HTMLElement | null>; className?: string; describedBy?: string; titleAction?: ReactNode; topEdgeLabel?: string; showActivity?: boolean
 }) {
   const dialog = useRef<HTMLDialogElement>(null), titleId = useId()
   useEffect(() => {
@@ -31,7 +31,7 @@ export function Dialog({ title, children, onClose, busy = false, initialFocusRef
   return createPortal(<dialog ref={dialog} className={`confirmation-dialog ${className}`} aria-labelledby={titleId} aria-describedby={describedBy} aria-busy={busy} onCancel={event => { event.preventDefault(); if (!busy) close() }}>
     {topEdgeLabel && <button className="dialog-top-target" aria-label={topEdgeLabel} onClick={() => dialog.current?.scrollTo({ top: 0, behavior: 'instant' })} />}
     <div className="confirmation-heading"><div className="dialog-title"><h2 id={titleId}>{title}</h2>{titleAction}</div><button type="button" className="icon-button" aria-label="Close Dialog" disabled={busy} onClick={close}><X size={20} aria-hidden="true" /></button></div>
-    <ActivityIndicator inline busy={busy} />
+    {showActivity && <ActivityIndicator inline busy={busy} />}
     {children}
   </dialog>, document.body)
 }

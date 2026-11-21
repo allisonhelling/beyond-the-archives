@@ -369,7 +369,7 @@ export function LibraryProvider({ children, userId = 'sample', catalogWorksOnly 
   async function markAllRead(story: Story) {
     if (story.metadata.published_chapters === null) return
     const status = abandonedReadingStatus(caughtUpReadingStatus(story.reading_status, readingMetadata(story)), story.metadata.published_chapters, story.metadata)
-    await updateReadingWithUndo(story, status, story.metadata.published_chapters, `Marked all chapters of “${story.metadata.title}” as read${status === 'finished' ? ' and fic as finished.' : status === 'waiting_for_updates' ? '. Waiting for updates.' : '.'}`, 'derived')
+    await updateReadingWithUndo(story, status, story.metadata.published_chapters, `Marked all chapters of “${story.metadata.title}” as read${status === 'finished' ? ' and story as finished.' : status === 'waiting_for_updates' ? '. Waiting for updates.' : '.'}`, 'derived')
   }
   async function removeStory(story: Story) {
     const snapshot = (await loadStories([story.id]))[0] ?? story

@@ -3,7 +3,7 @@ import { CalendarDays } from 'lucide-react'
 import { datePlaceholder, filterDateText, isCalendarDate, parseDateText } from '../../lib/dates'
 
 /** Keep dates editable on mobile while retaining the native calendar picker. */
-export function DateFilterField({ label, value, onChange }: { label: string; value: string; onChange(value: string): void }) {
+export function DateFilterField({ label, accessibleLabel = label, value, onChange }: { label: string; accessibleLabel?: string; value: string; onChange(value: string): void }) {
  const id = useId()
- return <label htmlFor={id}><span className="filter-name">{label}</span><span className="date-filter-input"><input id={id} type="text" placeholder={datePlaceholder()} value={filterDateText(value)} aria-invalid={!!value && !isCalendarDate(value)} onChange={event => onChange(parseDateText(event.target.value))} /><span className="date-filter-calendar"><CalendarDays size={16} aria-hidden="true" /><input type="date" aria-label={`Choose ${label} Date`} title={`Choose ${label} Date`} value={isCalendarDate(value) ? value : ''} onChange={event => onChange(event.target.value)} /></span></span></label>
+ return <label htmlFor={id}><span className="filter-name">{label}</span><span className="date-filter-input"><input id={id} type="text" aria-label={accessibleLabel} placeholder={datePlaceholder()} value={filterDateText(value)} aria-invalid={!!value && !isCalendarDate(value)} onChange={event => onChange(parseDateText(event.target.value))} /><span className="date-filter-calendar"><CalendarDays size={16} aria-hidden="true" /><input type="date" aria-label={`Choose ${accessibleLabel} Date`} title={`Choose ${accessibleLabel} Date`} value={isCalendarDate(value) ? value : ''} onChange={event => onChange(event.target.value)} /></span></span></label>
 }

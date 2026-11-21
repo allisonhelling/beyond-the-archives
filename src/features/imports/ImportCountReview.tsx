@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { brandSlug } from '../../lib/brand'
@@ -73,7 +74,7 @@ export function ImportCountReview({ batch, owner, onSaved, onClose }: { batch: s
    {rows.map(row => {
     const draft = drafts[row.id], stale = draft && draft.revision !== row.revision
     return <fieldset key={row.id} disabled={busy}><legend>{row.title}</legend>
-     <p>{row.progress} chapters read</p>
+     <p>{row.progress} {countNoun(row.progress, 'chapter')} read</p>
      <div className="form-controls-row">
       <label>Published Chapter Count<input type="number" min={1} max={100000} step={1} value={draft?.count ?? ''} disabled={stale} onChange={event => edit(row, { count: event.target.value })} /></label>
       <label className="check-label"><input type="checkbox" checked={draft?.manual ?? false} disabled={stale} onChange={event => edit(row, { manual: event.target.checked })} />Manually Entered Chapter Count</label>

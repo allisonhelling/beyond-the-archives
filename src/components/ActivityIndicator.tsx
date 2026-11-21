@@ -19,3 +19,9 @@ export function LoadingStatus({ children }: { children: string }) {
  useActivity(true, children)
  return <p className="loading-status" role="status"><LoadingIcon />{children}</p>
 }
+
+export function LoadingWorkCards({ children }: { children: string }) {
+ return <><LoadingStatus>{children}</LoadingStatus><div className="story-grid loading-work-grid" aria-hidden="true">
+  {[0, 1].map(card => <div className="loading-work-card" key={card}><span /><span /><span /><span /></div>)}
+ </div></>
+}

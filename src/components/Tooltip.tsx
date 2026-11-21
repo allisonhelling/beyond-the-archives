@@ -62,8 +62,15 @@ export function Tooltip({ description, children, placement = 'top', pinOnClick =
     const windows = new Set<Window>([window])
     const previewWindow = anchor.current?.ownerDocument.defaultView
     if (previewWindow) windows.add(previewWindow)
-    position(); windows.forEach(view => { view.addEventListener('resize', position); view.addEventListener('scroll', position, true) })
-    return () => { windows.forEach(view => { view.removeEventListener('resize', position); view.removeEventListener('scroll', position, true) }) }
+    position()
+    const observer = new ResizeObserver(position)
+    if (anchor.current) observer.observe(anchor.current)
+    if (tooltip.current) observer.observe(tooltip.current)
+    windows.forEach(view => { view.addEventListener('resize', position); view.addEventListener('scroll', position, true) })
+    return () => {
+      observer.disconnect()
+      windows.forEach(view => { view.removeEventListener('resize', position); view.removeEventListener('scroll', position, true) })
+    }
   }, [open, description, placement, portal, previewFrame, info, anchor])
   const content = <span ref={tooltip} id={previewFrame ? `${id}-preview` : id} role="tooltip" data-pinned={pinned || undefined} data-plain-text={info && typeof description === 'string' || undefined} data-portal={portal || Boolean(previewFrame) || undefined} data-preview-portal={Boolean(previewFrame) || undefined} className={`action-tooltip-content${info ? ' info-tooltip-content' : ''}`} style={{ '--tooltip-shift': `${shift.x}px`, '--tooltip-y-shift': `${shift.y}px` } as CSSProperties} hidden={!open}>{description}</span>
   return <span ref={anchor} className={`action-tooltip${info ? ' info-tooltip' : ''}`} data-placement={resolvedPlacement} onClickCapture={touchPreview ? event => {

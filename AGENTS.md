@@ -4,6 +4,9 @@
 - Reuse first, extend second, and create new functionality only when necessary. Search for an existing solution before adding one.
 - Avoid duplicated logic, components, markup, CSS, and parallel implementations. Prefer shared components and small configurable variants when behavior actually overlaps.
 - Use the existing styling system, shared classes, and design tokens. Update original rules instead of appending conflicting overrides; preserve responsive, focus, and disabled states.
+- Use the shared `clickable-text` styling for maroon text actions without a button outline. Underline them on hover and keyboard focus.
+- Use the shared 14px button text size (`--button-text-size`) for standard and compact buttons in both apps.
+- Use the shared 14px filter type size (`--filter-control-font-size`) for filter search text and placeholders, Select Fandoms, field labels and inputs, dropdown values and options, expanded-panel footer buttons, and applied chips in both apps.
 - Use title case for all authored section and subsection headings, page and dialog titles, control titles, button labels (including pending states), and documentation headings. Apply this consistently to the app and both Chrome/Edge and Safari companions, including shared controls and accessible action names. Preserve explicitly all-caps text, acronyms, intentional brand styling, and user-provided or imported work titles, series names, collection names, and tags. Keep descriptive sentences in sentence case. Update affected tests whenever labels change; do not rely on CSS to mask incorrectly cased source text.
 - Make the smallest complete change. Preserve existing behavior, public contracts, design, and architecture. Do not refactor unrelated code or overwrite user changes.
 - Avoid speculative abstractions, unnecessary wrappers, and new dependencies when existing solutions suffice.

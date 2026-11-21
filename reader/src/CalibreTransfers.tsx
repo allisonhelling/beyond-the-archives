@@ -1,3 +1,4 @@
+import { sampleMode } from '../../src/lib/sample-mode'
 import { TabList } from '../../src/components/TabList'
 import { useEffect, useId, useState } from 'react'
 import { Pagination } from '../../src/features/library/browsing/Pagination'
@@ -36,7 +37,7 @@ export function CalibreTransfers({onClose,onRefresh,onError}:{onClose:()=>void;o
   return <Dialog title="Calibre Transfers" busy={busy} onClose={onClose}>
     <p>Destination: {readerOwner ? `Reader cloud account ${readerOwner}` : 'This guest library'}. Organizer connection does not affect this choice.</p>
     <p>Cloud delivery can reach other account devices. Local delivery requires Calibre and this reader on the same computer, with the reader open. Allow local network access if your browser requests it.</p>
-    {!pair ? <form onSubmit={event=>{event.preventDefault();const label=String(new FormData(event.currentTarget).get('label'));void run(async()=>{await pairCalibre(label);setMessage('Copy the pairing configuration into the Calibre plugin. It contains a private delivery credential.')})}}><label>Destination Name<input name="label" defaultValue="My Reader" maxLength={160} required /></label><button disabled={busy}>Pair Calibre</button></form> : <details><summary>Pairing Configuration</summary>
+    {!pair ? <form onSubmit={event=>{event.preventDefault();if (sampleMode) { setMessage('Calibre pairing is available in the regular Reader.'); return }const label=String(new FormData(event.currentTarget).get('label'));void run(async()=>{await pairCalibre(label);setMessage('Copy the pairing configuration into the Calibre plugin. It contains a private delivery credential.')})}}><label>Destination Name<input name="label" defaultValue="My Reader" maxLength={160} required /></label><button disabled={busy}>Pair Calibre</button></form> : <details><summary>Pairing Configuration</summary>
       <p>{pair.label} · Device {pair.device} · Automatic: {pair.cloud ? 'Cloud Inbox (queued by Calibre while offline)' : 'Local Reader'}</p>
       <label>Pairing Configuration<textarea readOnly rows={5} value={JSON.stringify(pair)} aria-label="Calibre Pairing Configuration" /></label>
       <div className="dialog-actions"><button disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(JSON.stringify(pair)))}>Copy Pairing Configuration</button><button disabled={busy} onClick={()=>void run(()=>revokeCalibre(pair))}>Revoke Pairing</button></div>

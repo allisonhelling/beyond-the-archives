@@ -51,7 +51,7 @@ export function resolveEdits(merged: EditValues, choices: EditValues) {
 }
 export class EditConflict<T = unknown> extends Error {
   constructor(public review: MergeResult & { base: EditValues }, public retry: (choices: EditValues) => Promise<T>) {
-    super('This fic changed on another device. Review the conflicting fields before saving.')
+    super('This story changed on another device. Review the conflicting fields before saving.')
   }
 }
 export function conflictFromError<T>(error: { code?: string; details?: string } | null, retry: (values: EditValues, base: EditValues) => Promise<T>): EditConflict<T> | null {

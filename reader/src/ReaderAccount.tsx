@@ -20,13 +20,15 @@ function ConflictDescription({ edit }: { edit: Pick<CloudEdit, 'key' | 'value'> 
  useEffect(()=>{let active=true;void getBookDetails(edit.key.split('/')[0]).then(book=>{if(active)setBook(book)});return()=>{active=false}},[edit.key])
  return <>{book&&<strong>{book.metadata.title}: </strong>}{describeCloudValue(edit.key,edit.value,book)}</>
 }
-export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts }: {cloudLibrary?:boolean; asPage?:boolean; onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
+export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefresh, beforeSwitch, onStorageFull, onSync, conflicts, sampleSignIn }: {cloudLibrary?:boolean; asPage?:boolean; sampleSignIn?: (login: string, password: string) => Promise<void>; onSync:()=>Promise<unknown>; conflicts:CloudConflict[]; onStorageFull:(error:unknown)=>void; onClose:()=>void; onRefresh:()=>Promise<unknown>; beforeSwitch:()=>Promise<unknown> }) {
+  const sampleGuest = Boolean(sampleSignIn)
   const [mode,setMode]=useState<AccountMode>(()=>new URLSearchParams(location.search).get('auth')==='recovery'?'reset':'login'),[needsPassword,setNeedsPassword]=useState(readerAuthIntent==='invite'||readerAuthIntent==='recovery')
   const [session,setSession]=useState<Session|null>(null), [busy,setBusy]=useState(false), [message,setMessage]=useState('')
-  const [remember,setRemember]=useState(()=>remembersSession('reader'))
+  const [remember,setRemember]=useState(() => sampleGuest || remembersSession('reader'))
   const [resolved,setResolved]=useState<Set<string>>(new Set())
   const [variants,setVariants]=useState<CloudEdit[]>([])
   useEffect(()=>{
+    if (sampleGuest) return
     void (async()=>{
       const params=new URLSearchParams(location.search),token=params.get('token_hash'),type=params.get('type')
       const completesSignup=type==='signup'||(location.pathname==='/auth/callback'&&readerAuthIntent!=='invite'&&readerAuthIntent!=='recovery')
@@ -39,12 +41,12 @@ export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefre
     const {data}=readerCloud.auth.onAuthStateChange((event,next)=>{setSession(next);if(event==='PASSWORD_RECOVERY')setNeedsPassword(true);if(event==='SIGNED_OUT')setNeedsPassword(false)})
     void savedConflicts().then(setVariants)
     return ()=>data.subscription.unsubscribe()
-  },[])
+  },[sampleGuest])
   const verifyPassword = (password:string) => verifyCurrentPassword(readerCloud,password)
   function changeMode(next:AccountMode) {setMode(next);setMessage('')}
   async function run(action:()=>Promise<unknown>) {
     setBusy(true)
-    try {await action();await onRefresh();setVariants(await savedConflicts())} catch(error){if(isStorageFull(error)) onStorageFull(error); else setMessage(error instanceof Error?error.message:String(error))} finally{setBusy(false)}
+    try {await action();if (!sampleGuest) {await onRefresh();setVariants(await savedConflicts())}} catch(error){if(isStorageFull(error)) onStorageFull(error); else setMessage(error instanceof Error?error.message:String(error))} finally{setBusy(false)}
   }
   async function enterAccount(owner:string) {
     sessionStorage.removeItem('connected-login-signed-out')
@@ -57,6 +59,11 @@ export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefre
     {(!session || needsPassword ) && <form className="account-auth-form" onSubmit={event=>{
       event.preventDefault()
       const form=event.currentTarget,fields=new FormData(form),email=String(fields.get('email')??'').trim(),password=String(fields.get('password')??'')
+      if (sampleSignIn) {
+        if (mode === 'login') void run(() => sampleSignIn(email, password))
+        else setMessage(mode === 'reset' ? 'Recovery email is available in the regular Reader.' : 'Account creation is available in the regular Reader.')
+        return
+      }
       void run(async()=>{
         if(needsPassword||mode==='signup')confirmPassword(fields)
         if(mode==='signup'&&!needsPassword){
@@ -77,9 +84,9 @@ export function ReaderAccount({cloudLibrary=false,asPage=false, onClose, onRefre
     }}>
       {mode==='signup'&&!needsPassword&&<p className="field-help">Create one account for both apps, or continue with your existing organizer account.</p>}
 
-      <SignInFields mode={needsPassword?'password':mode} busy={busy} remember={remember} onRememberChange={value=>{setRemember(value);rememberSession('reader',value)}} onToggleMode={()=>changeMode('reset')} />
+      <SignInFields mode={needsPassword?'password':mode} busy={busy} remember={remember} onRememberChange={value=>{setRemember(value);if (!sampleSignIn) rememberSession('reader',value)}} onToggleMode={()=>changeMode('reset')} />
       <div className="account-auth-actions">
-      {!needsPassword&&mode!=='reset'&&<button type="button" disabled={busy} onClick={()=>void run(async()=>{const ok=await connectedLogin(readerCloud,organizerAppUrl(),true);if(!ok){setMessage('Sign in to your connected organizer first, or use your email and password.');return}const {data}=await readerCloud.auth.getSession();if(data.session)await enterAccount(data.session.user.id)})}>Continue From Organizer</button>}
+      {!needsPassword&&mode!=='reset'&&<button type="button" disabled={busy} onClick={()=>void run(async()=>{if (sampleSignIn) { setMessage('Organizer sign-in is available in the regular Reader.'); return }const ok=await connectedLogin(readerCloud,organizerAppUrl(),true);if(!ok){setMessage('Sign in to your connected organizer first, or use your email and password.');return}const {data}=await readerCloud.auth.getSession();if(data.session)await enterAccount(data.session.user.id)})}>Continue From Organizer</button>}
       <button className="primary" disabled={busy}>{busy?'Please Wait…':needsPassword?'Save Password':mode==='reset'?'Send Recovery Link':mode==='signup'?'Create Account':'Sign In'}</button>
       {(needsPassword&&session)&&<button type="button" disabled={busy} onClick={()=>{setNeedsPassword(false);clearReaderAuthIntent();setMessage('')}}>Cancel</button>}
       </div>

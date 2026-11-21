@@ -11,5 +11,5 @@ export function SampleDataControls({ title, description, onUpdate, onReset }: { 
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not update sample data.') }
     finally { setBusy(null) }
   }
-  return <aside className="sample-preview" aria-label="Local Sample Preview"><span><strong>{title}</strong> · {description}</span><button className="button secondary compact" disabled={Boolean(busy)} onClick={() => void run('update')}>{busy === 'update' ? 'Updating…' : 'Update Sample Data'}</button><button className="button secondary compact" disabled={Boolean(busy)} onClick={() => void run('reset')}>{busy === 'reset' ? 'Resetting…' : 'Reset Sample Data'}</button>{message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}</aside>
+  return <aside className="sample-preview" aria-label="Local Sample Preview"><span><strong>{title}:</strong> {description}</span><button className="button secondary compact" disabled={Boolean(busy)} onClick={() => void run('update')}>{busy === 'update' ? 'Updating…' : 'Update Sample Data'}</button><button className="button secondary compact" disabled={Boolean(busy)} onClick={() => void run('reset')}>{busy === 'reset' ? 'Resetting…' : 'Reset Sample Data'}</button>{message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}</aside>
 }

@@ -1,6 +1,7 @@
+import { countNoun } from '../../../lib/count-noun'
 import { useDesktopCompanion } from '../../imports/useDesktopCompanion'
 import { desktopExtensionHelp } from '../../imports/extension'
-import { BulletSeparated } from '../BulletSeparated'
+import { FandomTags } from '../FandomTags'
 import { usePageMetadataRefresh } from '../../imports/usePageMetadataRefresh'
 import { useActivity } from '../../../lib/use-activity'
 import { useSeriesImportBehavior } from '../../imports/series-import-preferences'
@@ -11,6 +12,7 @@ import { formatDateTime, formatDate } from '../../../lib/dates'
 import { browsingReturnTo } from '../browsing/browsing'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
+import { usePageTitle } from '../../../lib/use-page-title'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { useLibrary } from '../LibraryProvider'
 import { LibraryBoundary, StoryCard } from '../LibraryPages'
@@ -54,6 +56,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
   if (!example && valid && record?.detailsLoaded === false) void refreshSeries(seriesId, false).catch(error => setError(error instanceof Error ? error.message : 'Could not load series details.'))
  }, [example, valid, record, refreshSeries, seriesId])
  const saved = example ?? librarySeries(library.stories, library.series ?? []).find(series => series.seriesId === seriesId)
+ usePageTitle(example ? undefined : saved?.title ?? metadata?.title ?? 'Series Details')
  const series: LibrarySeries = saved ?? { ...details, seriesId, normalizedUrl: `https://archiveofourown.org/series/${seriesId}`, title: metadata?.title ?? `Series ${seriesId}`, description: details?.description ?? '', works: details?.works ?? [], savedStories: [], fandoms: [...new Set(details?.works.flatMap(work => work.fandoms ?? []) ?? [])], detailsLoaded: Boolean(details), record }
  const workRefresh = usePageMetadataRefresh(example ? [] : series.savedStories, 'Series')
  const retained = example ? '' : series.savedStories.map(story => story.id).sort().join(',')
@@ -73,7 +76,7 @@ export function SeriesPage({ example }: { example?: LibrarySeries } = {}) {
    <Link className="story-return-link clickable-text" to={returnTo} aria-label="Back to Series"><ArrowLeft size={16} aria-hidden="true" />Series</Link>
    <div className="story-title-row"><h1><a className="series-link" href={series.normalizedUrl} target="_blank" rel="noreferrer">{series.title}</a></h1>
     <DisplayInfo group="seriesHeader" fields={['authors']}>{{ authors: <p className="story-details-authors">By <AuthorNames metadata={{ authors: series.creators ?? [], author_links: series.creatorLinks }} /></p> }}</DisplayInfo>
-    <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.length ? <BulletSeparated values={series.fandoms} /> : 'Fandom unknown'}</p> }}</DisplayInfo>
+    <DisplayInfo group="seriesHeader" fields={['fandoms']}>{{ fandoms: <p className="details-fandom-rating">{series.fandoms.length ? <FandomTags values={series.fandoms} /> : 'Fandom unknown'}</p> }}</DisplayInfo>
     <div className="story-title-toggles">{favorite}</div>
     <div className="story-metadata-actions"><Tooltip description="Refresh AO3 metadata for all works in this series that are in your library">{tooltipId => <button className="button secondary" aria-describedby={tooltipId} aria-busy={workRefresh.busy} disabled={busy || workRefresh.busy || !connected || workRefresh.unavailable || !library.catalogLoaded || sampleMode} onClick={() => void workRefresh.refresh()}><RefreshCw size={16} aria-hidden="true" />{workRefresh.busy ? 'Refreshing Works…' : 'Refresh Works'}</button>}</Tooltip><Tooltip description={basic ? 'Load full series from AO3' : 'Refresh series info from AO3'}>{tooltipId => <button className="button secondary" aria-describedby={tooltipId} disabled={busy || sampleMode || !connected} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{busy ? 'Loading Series…' : series.detailsLoaded ? 'Refresh' : 'Load'}</button>}</Tooltip>{!basic && <Tooltip description="Removes downloaded series details">{tooltipId => <button className="text-button clickable-text" aria-describedby={tooltipId} disabled={busy} onClick={async () => {
      setBusy(true); setError('')
@@ -121,7 +124,7 @@ information: <>
 <DisplayInfo group="seriesInfo">{{
 category: <div><dt>Category</dt><dd><MetadataTags values={info.categories} category="categories" /></dd></div>,
 libraryCount: <div><dt>Works in Library</dt><dd>{series.savedStories.length}</dd></div>,
-words: <div><dt>Word Count</dt><dd>{series.wordCount?.toLocaleString() ?? '?'} words</dd></div>,
+words: <div><dt>Word Count</dt><dd>{series.wordCount?.toLocaleString() ?? '?'} {countNoun(series.wordCount, 'word')}</dd></div>,
 relationships: <div><dt>Relationships</dt><dd><MetadataTags values={info.relationships} category="relationships" /></dd></div>,
 characters: <div><dt>Characters</dt><dd><MetadataTags values={info.characters} category="characters" /></dd></div>,
 tags: <div><dt>Additional Tags</dt><dd><MetadataTags values={info.tags} /></dd></div>,

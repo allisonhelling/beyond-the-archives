@@ -2,8 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import { epubBuffer, epubFiles } from '../../src/test/epub-fixture'
 import { importEpub } from '../src/epub'
-import { emptyFilters, facetOptions, facets, filterErrors, matchesBook, type FacetKey, type Filters } from '../src/filters'
-import { frontMatterMetadata, metadataDate, metadataVersion, packageMetadata, publisherName, seriesNames } from '../src/metadata'
+import { appliedFilterTags, setReaderTagExpression, emptyFilters, facetOptions, facets, filterErrors, matchesBook, type FacetKey, type Filters } from '../src/filters'
+import { frontMatterMetadata, metadataDate, metadataVersion, packageMetadata, publisherName, readerSeries, seriesNames } from '../src/metadata'
 import { blankMetadata, type Book } from '../src/model'
 beforeAll(() => { Object.defineProperty(globalThis, 'crypto', { value: webcrypto }) })
 const parse = (text: string) => new DOMParser().parseFromString(text, 'application/xml')
@@ -120,6 +120,17 @@ it('combines multi-selections with every other field, exclusions, search and ran
   expect(facets.some(f => String(f.key) === 'identity' || String(f.key) === 'tag')).toBe(false)
 })
 
+it('matches every tag within a reader group and any complete group', async () => {
+  const book = await fixtureBook()
+  book.metadata.fandoms = ['First', 'Second']
+  const filters = setReaderTagExpression(emptyFilters(), 'fandom', { mode: 'custom', groups: [['First', 'Second'], ['Third']] })
+  expect(matchesBook(book, filters, '')).toBe(true)
+  const filtered = appliedFilterTags(filters, '')[0].clear().filters
+  expect(matchesBook(book, filtered, '')).toBe(false)
+  expect(matchesBook({ ...book, metadata: { ...book.metadata, fandoms: ['Third'] } }, filtered, '')).toBe(true)
+  expect(matchesBook({ ...book, metadata: { ...book.metadata, fandoms: ['First'] } }, filters, '')).toBe(false)
+})
+
 it('omits publication-status chips without altering stored tags or similar freeform tags', async () => {
   const { workTags, publicationStatusFromText } = await import('../src/metadata')
   const book = await fixtureBook()
@@ -129,14 +140,13 @@ it('omits publication-status chips without altering stored tags or similar freef
   expect(publicationStatusFromText('Status: In Progress')).toBe('in_progress')
 })
 
-it('describes all active filter types and removes only the selected value or bound', async () => {
-  const { appliedFilterTags } = await import('../src/filters')
+it('describes all active filter types and removes only the selected value or bound', () => {
   const filters = emptyFilters()
   filters.selections = { character: ['Edward', 'Alphonse'], publisher: ['__reader_unknown__'] }
   filters.excluded = { freeform: ['Unwanted'] }
   filters.ranges = { words: {min:'0',max:'1000'}, updated:{min:'2020-01-01',max:''} }
   const chips = appliedFilterTags(filters, 'Some story')
-  expect(chips.map(chip => chip.label)).toEqual(expect.arrayContaining(['Search: Some story', 'Characters (All): Edward', 'Characters (All): Alphonse', 'Publisher: Unknown / Not Saved', 'Exclude Freeform Tags: Unwanted', 'Words From: 0', 'Words Through: 1000', 'Updated From: 2020-01-01']))
+  expect(chips.map(chip => chip.label)).toEqual(expect.arrayContaining(['Search: Some story', 'Characters (All): Edward', 'Characters (All): Alphonse', 'Publisher: Unknown / Not Saved', 'Exclude Additional Tags: Unwanted', 'Words From: 0', 'Words Through: 1000', 'Updated From: 2020-01-01']))
   expect(chips.find(chip => chip.label === 'Characters (All): Edward')!.clear().filters.selections.character).toEqual(['Alphonse'])
   const range = chips.find(chip => chip.label === 'Words Through: 1000')!.clear()
   expect(range.filters.ranges.words).toEqual({min:'0',max:''})
@@ -188,6 +198,7 @@ it.each(['ao3','fanficfare'] as const)('uses the first story summary in %s antho
 
 it.each(['archiveofourown.org',' www.archiveofourown.org ','https://archiveofourown.org/'])('displays %s as AO3 without rewriting saved metadata', value => {
  expect(publisherName(value)).toBe('AO3')
+ expect(publisherName('Archive of Our Own')).toBe('AO3')
  expect(publisherName('Other Publisher')).toBe('Other Publisher')
  expect(publisherName('archiveofourown.org.example.com')).toBe('archiveofourown.org.example.com')
  expect(publisherName(undefined)).toBeUndefined()
@@ -236,4 +247,11 @@ it('imports Coil-style source identity and metadata through the complete EPUB pa
  expect(book.metadata).toMatchObject({title:'Coil',authors:['Allegory_for_Hatred'],word_count:312047,publication_status:'complete',fandoms:['文豪ストレイドッグス | Bungou Stray Dogs','Harry Potter - J. K. Rowling']})
  expect(book.chapters[0].kind).toBe('frontmatter')
  expect(book.metadataVersion).toBe(metadataVersion)
+})
+
+it('groups Calibre series names and saves their installment numbers', () => {
+ const positions = packageMetadata(parse('<package><metadata><meta name="calibre:series" content="Chancerycraft"/><meta name="calibre:series_index" content="2"/><meta name="fanficfare:additionalseries" content="Side Stories [1.5]"/></metadata></package>'))
+ expect(positions).toMatchObject({ series: ['Chancerycraft', 'Side Stories'], series_positions: { Chancerycraft: 2, 'Side Stories': 1.5 } })
+ expect(readerSeries({ series: ['Chancerycraft [1]'] })).toEqual({ series: ['Chancerycraft'], series_positions: { Chancerycraft: 1 } })
+ expect(readerSeries({ series: ['Side Stories [1]'], series_memberships: [{ id: 9, name: 'Side Stories [1]', url: 'https://archiveofourown.org/series/9', position: 2 }] })).toEqual({ series: ['Side Stories [1]'], series_positions: {} })
 })

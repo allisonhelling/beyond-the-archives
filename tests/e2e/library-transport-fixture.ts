@@ -50,7 +50,7 @@ export async function fixture(page: Page, { backend = browserTestEnv.VITE_SUPABA
       const from=Number(url.searchParams.get('offset')??0),size=Number(url.searchParams.get('limit')??500)
       return route.fulfill({json:catalog.stories.sort((a,b)=>a.id.localeCompare(b.id)).slice(from,from+size).map(story=>({catalog_story:story,automatic_memberships:(story.automaticCollectionIds??[]).map(collection_id=>({collection_id}))}))})
     }
-    if (['reading_stats_works','review_import_reading','library_revision','library_navigation_snapshot','library_navigation','library_query_facets','library_catalog','library_story_details','query_library','paged_import_history'].includes(table)) return route.fulfill({ json: libraryQueryFixture(table,body??{},tables) })
+    if (['reading_stats_works','review_import_reading','library_revision','library_navigation_snapshot','library_navigation','library_query_facets','library_collection_work_ids','library_catalog','library_story_details','query_library','paged_import_history'].includes(table)) return route.fulfill({ json: libraryQueryFixture(table,body??{},tables) })
     if (table === 'ensure_library_series' && body) {
       if (!tables.library_series.some(series => series.ao3_series_id === body.p_series)) tables.library_series.push({id:crypto.randomUUID(),user_id:user.id,ao3_series_id:body.p_series,notes:'',is_favorite:false,reading_status:'to_read',created_at:now,updated_at:now,metadata:{seriesId:body.p_series,title:body.p_title,normalizedUrl:`https://archiveofourown.org/series/${body.p_series}`,description:'',works:[],basic:true}})
       return route.fulfill({status:204})
@@ -128,6 +128,11 @@ export async function fixture(page: Page, { backend = browserTestEnv.VITE_SUPABA
           Object.assign(tables.collections.find(collection => collection.id === collection_id)!, { last_story_added_at: now })
         }
       }
+      return route.fulfill({ status: 204 })
+    }
+    if (table === 'remove_stories_from_collection' && body) {
+      const entries = new Set(body.p_entries as string[])
+      tables.collection_works = tables.collection_works.filter(row => row.collection_id !== body.p_collection || !entries.has(String(row.library_entry_id)))
       return route.fulfill({ status: 204 })
     }
     const rows = tables[table]

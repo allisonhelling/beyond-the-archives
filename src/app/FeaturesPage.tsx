@@ -13,7 +13,7 @@ const sections = [
     <p>Re-read a saved work without creating another library entry. Chapter reading history and archived attempts preserve recorded reading activity. Settings also offers DNF cleanup: preview eligible works before archiving and removing them, with protections for favorites and other personal details. The browser companion can record chapter progress from AO3 when you mark chapters read; configure it for the browser where you read.</p>
   </> },
   { id: 'collections', title: 'Build Manual Collections and Automatic Filtered Shelves', content: <>
-    <p>Open <Link className="clickable-text" to="/library">Library</Link> to browse built-in shelves, favorites, and your own collections. Create a collection with a name, summary, color, and spine symbol. Edit collection membership from a work or series, and use collection management to organize your shelves.</p>
+    <p>Open <Link className="clickable-text" to="/library">Library</Link> to browse built-in shelves, favorites, and your own collections. Create a collection with a name, description, color, and spine symbol. Edit collection membership from a work or series, and use collection management to organize your shelves.</p>
     <p>Automatic collections save filter rules and update membership as matching works change. Use them for combinations such as fandom, reading status, tags, ratings, or favorites. Edit the collection’s rules to change what belongs there; manual collections let you choose membership yourself.</p>
     <p>Series favorites and collection memberships are independent of their individual works. Putting a series in a collection does not assign every installment to it. The Series collection displays series tiles only.</p>
   </> },
@@ -39,7 +39,7 @@ const sections = [
     <p>Totals depend on recorded chapter completions with known word counts. Editing a progress number or importing a finished date does not reconstruct historical chapter counts or exact reading times. Estimates use your configured speed; the app does not yet record timed reading sessions.</p>
   </> },
   { id: 'customize', title: 'Arrange Tiles and Information Pages for Desktop and Mobile', content: <>
-    <p>In <Link className="clickable-text" to="/settings">Settings</Link>, open the display controls to arrange and hide fields on work tiles, series tiles, and information pages. Group fields onto shared lines or separate them, add dividers, and preview your changes. Desktop and mobile layouts have independent preferences and configurable preview sizes.</p>
+    <p>In <Link className="clickable-text" to="/settings">Settings</Link>, open the display controls to arrange and hide fields on work tiles, series tiles, and information pages. Group fields onto shared lines or separate them, add dividers, and preview your changes. Desktop and mobile layouts have independent preferences. You can choose a preview size for mobile tiles.</p>
     <p>Choose tag colors and shapes, browsing defaults, date formatting, and personal rating settings. Configure desktop and mobile AO3 metadata retrieval separately; mobile can follow the desktop choice or use the hosted worker while desktop uses the browser extension.</p>
   </> },
   { id: 'backups', title: 'Export Your Library and Preview a Backup Restore', content: <>

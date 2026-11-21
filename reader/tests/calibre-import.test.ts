@@ -12,7 +12,7 @@ async function fixture(){const buffer=await epubBuffer();return {size:buffer.byt
 it('keeps anthology imports from being assigned one Calibre AO3 work link', async () => {
  const buffer = await epubBuffer(anthologyFiles())
  const book = await importEpub({size:buffer.byteLength,arrayBuffer:async()=>buffer} as File)
- await expect(prepareImportVersion(book,undefined,'calibre-anthology','https://archiveofourown.org/works/91001')).rejects.toThrow('Link each fic')
+ await expect(prepareImportVersion(book,undefined,'calibre-anthology','https://archiveofourown.org/works/91001')).rejects.toThrow('Link each story')
 })
 it('restores an exact removed download with its notes, history, active state, and position',async()=>{
  const next=await importEpub(await fixture()), previous=bookDetails(next)

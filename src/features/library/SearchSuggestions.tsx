@@ -7,10 +7,11 @@ import { MetadataTags } from './MetadataTags'
 import { type TagCategory } from './display/display-settings'
 
 export type SuggestionGroup = { label: string; values: string[] }
-export function SearchSuggestions({ label, placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help, tagCategory, matchingControl, matchingPanel }: {
-  label: string; placeholder: string; value: string; onChange: (value: string) => void;
+export function SearchSuggestions({ label, labelPrefix = '', placeholder, value, onChange, groups, multiple = false, keepOpen = false, hideHeadings = false, hideLabel = false, chips = false, help, tagCategory, matchingControl, matchingPanel }: {
+  label: string; labelPrefix?: string; placeholder: string; value: string; onChange: (value: string) => void;
   matchingControl?: ReactNode; matchingPanel?: { id: string; 'aria-labelledby': string }; groups: SuggestionGroup[]; multiple?: boolean; keepOpen?: boolean; hideHeadings?: boolean; hideLabel?: boolean; chips?: boolean; help?: string; tagCategory?: TagCategory
 }) {
+  const accessibleLabel = labelPrefix + label
   const [focused, setFocused] = useState(false), id = useId()
   const [appendSuggestion, setAppendSuggestion] = useState(false)
   const [draft, setDraft] = useState('')
@@ -43,8 +44,8 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
     setFocused(keepOpen)
   }
   return <div className="suggestion-search" ref={ref} onKeyDown={keyboard}>
-    <label className={hideLabel ? 'unlabeled-filter' : undefined}><span className={hideLabel ? 'sr-only' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
-    {focused && <div role={category ? 'region' : undefined} className="search-suggestions menu-surface" id={id} aria-label={`${label} Suggestions`}>
+    <label className={hideLabel ? 'unlabeled-filter' : undefined}>{labelPrefix && <span className="sr-only">{labelPrefix}</span>}<span className={hideLabel ? 'sr-only' : 'filter-name'}>{label}</span><input type="search" placeholder={placeholder} value={chips ? draft : value} aria-expanded={focused} aria-controls={focused ? id : undefined} onFocus={() => setFocused(true)} onClick={() => setFocused(true)} onChange={e => { if (chips) setDraft(e.target.value); else onChange(e.target.value); setAppendSuggestion(false); setFocused(true) }} /></label>
+    {focused && <div role={category ? 'region' : undefined} className="search-suggestions menu-surface" id={id} aria-label={`${accessibleLabel} Suggestions`}>
       {matchingControl}
       <div className="suggestion-options" {...matchingPanel} role={matchingPanel ? 'tabpanel' : undefined}>
       {category && unavailable && <p role="status">Tag verification is unavailable. Saved tags can still be searched.</p>}
@@ -53,6 +54,6 @@ export function SearchSuggestions({ label, placeholder, value, onChange, groups,
       </div>
     </div>}
     {help && <small className="suggestion-help">{help}</small>}
-    {selected.length > 0 && <div className="filter-chips" aria-label={`${label} Selected Filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${label} Filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
+    {selected.length > 0 && <div className="filter-chips" aria-label={`${accessibleLabel} Selected Filters`}><MetadataTags values={selected} category={tagCategory} removeLabel={text => `Remove ${accessibleLabel} Filter ${text}`} onRemove={text => onChange(selected.filter(item => item !== text).join(', '))} /></div>}
   </div>
 }

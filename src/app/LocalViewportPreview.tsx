@@ -1,3 +1,4 @@
+import { TabList } from '../components/TabList'
 import { usePreviewViewports } from '../features/library/display/useDisplayPreference'
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { ViewportSizeFields } from '../features/library/display/ViewportSettings'
@@ -19,14 +20,11 @@ export function LocalViewportPreview({ children, unitsAfterDimensions = false }:
   return <>
     <aside className="local-viewport-toolbar" aria-label="Local Viewport Preview">
       <strong>Local Preview</strong>
-      <div role="group" aria-label="Viewport">
-        <button className={`button ${view === 'mobile' ? 'secondary' : 'primary'} compact`} aria-pressed={view !== 'mobile'} onClick={() => setView(view === 'browser' ? 'browser' : 'desktop')}>Desktop</button>
-        <button className={`button ${view === 'mobile' ? 'primary' : 'secondary'} compact`} aria-pressed={view === 'mobile'} onClick={previewMobile}>Mobile · {viewportLength(sizes.mobile.width, unit)} {unit}</button>
-      </div>
+      <TabList tabs={[{ id: 'desktop', label: 'Desktop' }, { id: 'mobile', label: `Mobile · ${viewportLength(sizes.mobile.width, unit)} ${unit}` }]} active={view === 'mobile' ? 'mobile' : 'desktop'} onChange={next => { if (next === 'mobile') previewMobile(); else if (view !== 'browser') setView('desktop') }} label="Viewport" prefix="local-viewport" className="tab-bar compact-tab-bar" />
       <details><summary>Preview Size</summary><form className="story-form local-viewport-options" onSubmit={event => { event.preventDefault(); try { savePreviewViewports({ ...sizes, mobile: mobileSize }); setError('') } catch (failure) { setError((failure as Error).message) } }}><ViewportSizeFields unitsAfterDimensions={unitsAfterDimensions} unit={unit} onUnitChange={setUnit} value={mobileSize} onChange={setMobileSize} label="Mobile Preview Size" /><button className="button secondary">Apply Preview Size</button>{error && <p role="alert">{error}</p>}</form></details>
       <span className="muted">Entering mobile preview reloads the page. Save edits first.</span>
     </aside>
-    {view === 'browser' ? children : <div className="local-viewport-stage" data-view={view} style={{ '--local-preview-width': `${sizes.mobile.width}px`, '--local-preview-height': `${sizes.mobile.height}px` } as CSSProperties}>
+    {view === 'browser' ? <div className="local-viewport-browser" role="tabpanel" id="local-viewport-panel-desktop" aria-labelledby="local-viewport-tab-desktop">{children}</div> : <div className="local-viewport-stage" data-view={view} role="tabpanel" id={`local-viewport-panel-${view}`} aria-labelledby={`local-viewport-tab-${view}`} style={{ '--local-preview-width': `${sizes.mobile.width}px`, '--local-preview-height': `${sizes.mobile.height}px` } as CSSProperties}>
       <iframe className="local-viewport-frame" title="Local App Viewport" src={source} />
     </div>}
   </>

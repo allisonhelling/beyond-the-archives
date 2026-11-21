@@ -4,7 +4,7 @@ import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type Reac
 import { Check, ChevronDown, X, type LucideIcon } from 'lucide-react'
 import { useDismissible } from './useDismissible'
 
-export type DropdownOption = { value: string; label: string; disabled?: boolean }
+export type DropdownOption = { value: string; label: string; sizingLabel?: string; disabled?: boolean }
 type DropdownProps = {
   labelHelp?: ReactNode;
   label: string; options: DropdownOption[]; disabled?: boolean; closeOnSelect?: boolean; icon?: LucideIcon; compact?: boolean; mobileIconOnly?: boolean; fitContent?: boolean; searchable?: boolean; showSelections?: boolean; textTrigger?: boolean; portal?: boolean; renderValue?: (label: string) => ReactNode
@@ -46,11 +46,15 @@ export function Dropdown(props: DropdownProps) {
     if (!buttons?.length) return
     buttons[(index + buttons.length) % buttons.length].focus()
   }
+  function closeAndFocusTrigger() {
+    setOpen(false)
+    ref.current?.querySelector<HTMLButtonElement>('.dropdown-trigger')?.focus({ preventScroll: true })
+  }
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (disabled) return
     const buttons = [...(panelRef.current?.querySelectorAll<HTMLElement>(optionSelector) ?? [])]
     const index = buttons.indexOf(document.activeElement as HTMLElement)
-    if (event.key === 'Escape') { setOpen(false); ref.current?.querySelector<HTMLButtonElement>('.dropdown-trigger')?.focus() }
+    if (event.key === 'Escape') closeAndFocusTrigger()
     if (event.target instanceof HTMLInputElement && event.target.type === 'search' && ['Home','End'].includes(event.key)) return
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
@@ -60,7 +64,7 @@ export function Dropdown(props: DropdownProps) {
       } else focusOption(event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : index < 0 ? event.key === 'ArrowUp' ? buttons.length - 1 : 0 : index + (event.key === 'ArrowUp' ? -1 : 1))
     }
   }
-  const panel = open ? <div ref={panelRef} data-portal={portal || undefined} className="dropdown-panel menu-surface" id={id} role={props.multiple ? 'dialog' : 'listbox'} aria-labelledby={labelId}>
+  const panel = open ? <div ref={panelRef} data-portal={portal || undefined} data-stable-width={options.some(option => option.sizingLabel) || undefined} className="dropdown-panel menu-surface" id={id} role={props.multiple ? 'dialog' : 'listbox'} aria-labelledby={labelId}>
       {props.searchable && <input type="search" className="dropdown-search" aria-label={`Search ${label}`} placeholder={`Search ${label}`} autoFocus value={query} onChange={event => setQuery(event.target.value)} />}
       {!visibleOptions.length && <p className="dropdown-empty">No matching options.</p>}
       {props.multiple ? visibleOptions.map(option => <label key={option.value} className="check-label dropdown-check-option" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }}>
@@ -68,8 +72,8 @@ export function Dropdown(props: DropdownProps) {
         <span>{option.label}</span>
       </label>) : visibleOptions.map(option => <button type="button" role="option" disabled={disabled || option.disabled} key={option.value} aria-selected={value === option.value} onClick={() => {
         props.onChange(option.value)
-        if (closeOnSelect) { setOpen(false); ref.current?.querySelector<HTMLButtonElement>('.dropdown-trigger')?.focus() }
-      }}><span>{option.label}</span>{value === option.value && <Check size={16} />}</button>)}
+        if (closeOnSelect) closeAndFocusTrigger()
+      }}><span>{option.sizingLabel ? <><span>{option.label}</span><span className="dropdown-option-sizer" aria-hidden="true" data-label={option.sizingLabel} /></> : option.label}</span>{(value === option.value || option.sizingLabel) && <Check size={16} aria-hidden="true" visibility={value === option.value ? undefined : 'hidden'} />}</button>)}
     </div> : null
   return <div className={`custom-dropdown${props.renderValue ? ' dropdown-custom-value' : ''}${textTrigger ? ' dropdown-text' : ''}${compact ? ' dropdown-compact' : ''}${mobileIconOnly ? ' dropdown-mobile-icon-only' : ''}${fitContent ? ' dropdown-fit-content' : ''}`} ref={ref} onKeyDown={keyboard}>
     <span hidden={textTrigger} className={compact || textTrigger ? 'sr-only' : 'filter-label'} id={labelId}><span className="dropdown-label">{Icon && <Icon size={16} aria-hidden="true" />}{label}{props.labelHelp}</span></span>

@@ -8,7 +8,7 @@ import { defaultReadingFilters } from './reading-search'
 import { writeBrowsing, readingPreferencesKey } from './browsing/browsing'
 import { saveFilterDefaults } from './browsing/filter-defaults'
 
-vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ temporaryPageSizes: new Map(), checkRevision: vi.fn() }) }))
+vi.mock('./LibraryProvider', () => ({ useLibrary: () => ({ collections: [], temporaryPageSizes: new Map(), checkRevision: vi.fn() }) }))
 vi.mock('./useLibraryResults', () => ({ useLibraryResults: vi.fn(() => ({ loading: false })) }))
 vi.mock('../imports/usePageMetadataRefresh', () => ({ usePageMetadataRefresh: () => ({ unavailable: true }) }))
 vi.mock('./ReadingFilterControls', () => ({

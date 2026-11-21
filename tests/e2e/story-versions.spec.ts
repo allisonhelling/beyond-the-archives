@@ -48,7 +48,8 @@ test('reviews, links, switches and unlinks independently tracked versions', asyn
  await page.route('**/rest/v1/rpc/story_chapter_groups', route => route.fulfill({ json: [] }))
  await page.goto(`/stories/${anchor}`)
  await login(page)
- await page.getByRole('button', { name: 'Compare Versions', exact: true }).click()
+ await expect(page.getByRole('button', { name: 'Crossposted Sites', exact: true })).toHaveCount(0)
+ await page.getByRole('button', { name: 'Link Crosspost', exact: true }).click()
  const dialog = page.getByRole('dialog', { name: 'Compare Versions' })
  await dialog.getByRole('button', { name: 'Other Edition · fiction.example' }).click()
  await expect(dialog.getByRole('heading', { name: 'Review Selected Version' })).toBeVisible()
@@ -68,10 +69,40 @@ test('reviews, links, switches and unlinks independently tracked versions', asyn
  await dialog.getByRole('link', { name: 'View Version' }).click()
  await expect(page.getByRole('heading', { name: 'Other Edition', exact: true })).toBeVisible()
  await expect(page.getByText('A shared note', { exact: true })).toBeVisible()
+ const crossposted = page.getByRole('button', { name: 'Crossposted Sites', exact: true })
+ await crossposted.focus()
+ await expect(page.getByRole('tooltip', { name: 'Crossposted to AO3', exact: true })).toBeVisible()
  await page.getByRole('button', { name: 'Compare Versions', exact: true }).click()
  await dialog.getByRole('button', { name: 'Unlink fiction.example Version' }).click()
- await expect(dialog.getByRole('heading', { name: 'Original Edition · AO3' })).toHaveCount(0)
+ await expect(dialog.getByRole('heading', { name: 'Original Edition' })).toHaveCount(0)
  expect(linked).toBe(false)
  await dialog.getByRole('button', { name: 'Close Dialog' }).click()
+ await expect(crossposted).toHaveCount(0)
  await expect(page.getByText('Notes for Other Edition', { exact: true })).toBeVisible()
+})
+
+test('lists distinct linked sites beside Published On in natural language', async ({ page }) => {
+ const tables = await fixture(page)
+ const [anchor, ...alts] = ['https://archiveofourown.org/works/99023', 'https://fiction.example/one', 'https://fiction.example/two', 'https://stories.example/one', 'https://archive.example/one'].map((url, index) => {
+  const id = `55000000-0000-4000-8000-00000000000${index + 1}`
+  tables.works.push({ id: `work-${id}`, ao3_work_id: index === 0 ? 99023 : null, verified_chapters: {} })
+  tables.library_entries.push({ id, work_id: `work-${id}`, original_url: url, source_url: index ? url : null, crosspost_group_id: 'synthetic-group', reading_status: 'to_read', metadata_overrides: { title: `Edition ${index}` } })
+  return id
+ })
+ let versionCount = 3
+ await page.route('**/rest/v1/rpc/story_versions', route => route.fulfill({ json: {
+  versions: libraryQueryFixture('library_story_details', { p_ids: [anchor, ...alts.slice(0, versionCount)] }, tables),
+  revision: 'linked', candidates: [],
+ } }))
+ await page.route('**/rest/v1/rpc/story_completion', route => route.fulfill({ json: { status: null, override: null, prompt: null } }))
+ await page.goto(`/stories/${anchor}`)
+ await login(page)
+ const label = page.locator('.published-on-label').filter({ hasText: 'Published On' })
+ const badge = label.getByRole('button', { name: 'Crossposted Sites' })
+ await badge.focus()
+ await expect(page.getByRole('tooltip', { name: 'Crossposted to fiction.example and stories.example', exact: true })).toBeVisible()
+ versionCount = 4
+ await page.reload()
+ await badge.focus()
+ await expect(page.getByRole('tooltip', { name: 'Crossposted to fiction.example, stories.example, and archive.example', exact: true })).toBeVisible()
 })

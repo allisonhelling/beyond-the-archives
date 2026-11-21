@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { useActivity } from '../../../lib/use-activity'
 import { useLayout } from '../../../lib/use-layout'
 import { sampleMode } from '../../../lib/sample-mode'
@@ -58,9 +58,15 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
   const [addingToCollection, setAddingToCollection] = useState<Collection | null>(null)
   const addStoriesTrigger = useRef<HTMLButtonElement>(null)
-  const editTrigger = useRef<HTMLElement | null>(null)
+  const editTrigger = useRef<{ element: HTMLElement | null; fromTitle: boolean } | null>(null)
   const editButton = useRef<HTMLButtonElement>(null)
-  useEffect(() => { if (!editingCollection && editTrigger.current) { (editTrigger.current.isConnected ? editTrigger.current : editButton.current)?.focus(); editTrigger.current = null } }, [editingCollection])
+  useEffect(() => {
+    if (editingCollection || !editTrigger.current) return
+    const { element } = editTrigger.current
+    const trigger = element?.isConnected ? element : editButton.current
+    trigger?.focus()
+    editTrigger.current = null
+  }, [editingCollection])
   useEffect(() => {
     if (!editingCollections || editingCollection || bulkCollections || addingToCollection || visibilityTarget) return
     function escape(event: KeyboardEvent) {
@@ -121,11 +127,19 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
     setCollectionSort(previous => ({ ...previous, [field]: hidden ? [...new Set([...previous[field], id])] : previous[field].filter(key => key !== id) }))
     if (hidden && selected === id) setParams({ shelf: 'all' })
   }
+  function openCollectionEditor(item: Collection, element: HTMLElement | null, fromTitle = false) {
+    editTrigger.current = { element, fromTitle }
+    setEditingCollection(item)
+  }
+  function closeCollectionEditor() {
+    if (editTrigger.current?.fromTitle && editingCollections) toggleCollectionEditing()
+    setEditingCollection(null)
+  }
   function changeEditedCollectionVisibility() {
     if (!editingCollection) return
     if (collectionSort.hiddenCustom.includes(editingCollection.id)) {
       setCollectionHidden(editingCollection.id, false)
-      setEditingCollection(null)
+      closeCollectionEditor()
     } else requestVisibility(editingCollection.id, editingCollection.name)
   }
   function editCollection(id: string, appearance: CollectionAppearance, shiftKey: boolean, direct = false) {
@@ -146,16 +160,22 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
       selectionAnchor.current = id
       return
     }
-    editTrigger.current = document.activeElement as HTMLElement
-    setEditingCollection({ ...item, ...appearance })
+    openCollectionEditor({ ...item, ...appearance }, document.activeElement as HTMLElement)
   }
   async function moveCollection(id: string, targetId: string) {
     const ordered = moveCollectionIds(shelfItems.map(item => item.id), id, targetId, selectedCollectionIds)
     const customIds = ordered.filter(key => customCollections.some(item => item.id === key))
-    await collectionAction(() => reorderCollections(customIds))
-    setCollectionSort(previous => ({ ...previous, shelfOrder: ordered, automaticOrder: ordered.filter(key => shelves.some(([id]) => id === key)) }))
+    setBusy(true); setError('')
+    try {
+      await reorderCollections(customIds)
+      setCollectionSort(previous => ({ ...previous, shelfOrder: ordered, automaticOrder: ordered.filter(key => shelves.some(([id]) => id === key)) }))
+      await refresh()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not move collections.')
+    } finally {
+      setBusy(false)
+    }
   }
-  async function collectionAction(action: () => Promise<unknown>) { setBusy(true); setError(''); try { await action(); await refresh() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   const collectionsById = useMemo(() => new Map(collections.map(collection => [collection.id, collection])), [collections])
   const collection = collectionsById.get(selected)
   function storiesForShelf(key: string) {
@@ -193,25 +213,36 @@ export function CollectionBrowser({ children, title = 'Your Library', countStori
       return { ...item, count: !sampleMode && !navigation[item.id] ? undefined : works + seriesCount, countLabel: !sampleMode && !navigation[item.id] ? 'Loading collection count.' : seriesCount ? works ? `${works} ${works === 1 ? 'story' : 'stories'} and ${seriesCount} series` : `${seriesCount} series` : undefined }
     })
 
-  const addStoriesAction = !readOnly && !editingCollections && collection && !collection.default_key && !collection.automatic_rules && <Tooltip description="Add Stories to Collection">{id => <button ref={addStoriesTrigger} type="button" className="button secondary button-small" aria-describedby={id} onClick={() => setAddingToCollection(collection)}>Add Story</button>}</Tooltip>
+  const editableCollection = !readOnly && collection && !collection.default_key ? collection : null
   const hiddenButton = (descriptionId?: string) => <button aria-describedby={descriptionId} type="button" className="button secondary collection-hidden" aria-pressed={viewHidden} onClick={() => { clearCollectionSelection(); setViewHidden(!viewHidden) }}>{viewHidden ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}Hidden</button>
   const renderHeader = (actions: ReactNode, _total: number | undefined, selectShelf: (id: string) => void = id => setParams({ shelf: id })) => <><div className={`page-heading library-heading${compactHeader ? ' collection-heading-compact' : ''}`}><div><div className={`library-title-row${editingCollections ? ' library-editing' : ''}`}><h1>{title}</h1>
     <div className="library-heading-actions">
-      <button type="button" className="button secondary collection-hide-empty" aria-pressed={collectionSort.hideEmpty} onClick={() => setCollectionSort(previous => ({ ...previous, hideEmpty: !previous.hideEmpty }))}>Hide Empty</button>
     {editingCollections && <div className="collection-selection-toolbar" aria-label="Collection Selection">
       {selectingCollections && <span className="collection-selection-count" role="status">{selectedCollectionIds.length} selected</span>}
-      {selectingCollections && <button type="button" className="button secondary collection-bulk-edit" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit Selected</button>}
+      {selectingCollections && <button type="button" className="button secondary" disabled={!selectedCollectionIds.length} onClick={() => setBulkCollections(selectedCollections)}>Edit Selected</button>}
+      <button type="button" className="button secondary" aria-pressed={collectionSort.hideEmpty} onClick={() => setCollectionSort(previous => ({ ...previous, hideEmpty: !previous.hideEmpty }))}>Hide Empty</button>
       {layout === 'mobile' ? hiddenButton() : <Tooltip description="View Hidden">{hiddenButton}</Tooltip>}
-      <button type="button" className="button secondary collection-select" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
+      <button type="button" className="button secondary" aria-pressed={selectingCollections} onClick={() => selectingCollections ? clearCollectionSelection() : setSelectingCollections(true)}>{selectingCollections ? 'Cancel Selection' : 'Select Collections'}</button>
       <span className="collection-selection-trigger"><InfoTooltip description={collectionControlHelp} placement="bottom" label="Collection Controls" size={16} /></span>
     </div>}
       {!readOnly && <button ref={editButton} type="button" className="button secondary library-create-action" disabled={busy} aria-pressed={editingCollections} onClick={toggleCollectionEditing}>{editingCollections ? 'Done Editing' : compactHeader ? 'Edit' : 'Edit Collections'}</button>}
       {actions}
     </div></div></div></div>
     <CollectionShelf readOnly={readOnly} showHidden={viewHidden} onAutomaticEdit={readOnly ? undefined : id => { const item = shelfItems.find(item => item.id === id); if (item) requestVisibility(id, item.name) }} editing={editingCollections} selecting={selectingCollections} selectedIds={selectedCollectionIds} onSelectionChange={ids => { setSelectingCollections(true); setSelectedCollectionIds(ids); selectionAnchor.current = null }} onEdit={readOnly ? undefined : editCollection} onMove={moveCollection} items={collectionSort.hideEmpty ? shelfItems.filter(item => item.count !== 0) : shelfItems} selected={selected} disabled={busy || collectionDeletion.busy} onSelect={selectShelf} />
-    {collection && <div className="collection-heading"><div className="collection-title-row"><h2>{collection.name}</h2>{addStoriesAction}</div>{collection.automatic_rules && <p className="field-help">Automatic collection · Matching works are included as your library changes.</p>}{collection.description && <p className="collection-summary">{collection.description}</p>}{collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}</div>}
+    {collection && <div className="collection-shelf-heading">
+      <div className="collection-title-row">
+        <h2>{collection.name}</h2>
+        {collection.automatic_rules && <InfoTooltip label="Automatic Collection Information" description="Automatic collection: Matching works are included as your library changes." />}
+        {editableCollection && <div className="collection-title-actions">
+          {!editingCollections && !editableCollection.automatic_rules && <Tooltip description="Add Stories to Collection">{id => <button ref={addStoriesTrigger} type="button" className="button secondary" aria-describedby={id} aria-haspopup="dialog" onClick={() => setAddingToCollection(editableCollection)}>+ Add</button>}</Tooltip>}
+          <button type="button" className="button secondary" aria-label="Edit Collection" aria-haspopup="dialog" disabled={busy} onClick={event => openCollectionEditor(editableCollection, event.currentTarget, true)}><Pencil size={14} aria-hidden="true" />Edit</button>
+        </div>}
+      </div>
+      {collection.description && <p className="field-help collection-description">{collection.description}</p>}
+      {collection.automatic_rules && <ul className="automatic-collection-filters" aria-label="Automatic Collection Filters">{automaticCollectionLabels(collection).map(value => <li key={value}>{value}</li>)}</ul>}
+    </div>}
     {countStories === undefined && ((navigationError || revisionError) ? <p role="status" className="field-help">Couldn’t update counts. <button className="text-button" onClick={() => void retryCounts()}>Retry Counts</button></p> : navigationLoading && <p role="status" className="field-help">Updating counts…</p>)}
     {(error || collectionDeletion.error) && <p role="alert" className="error-message">{error || collectionDeletion.error}</p>}
 </>
-  return <>{children({ selected, editingCollections, renderHeader, shelfStories, shelfSeries })}{collectionDeletion.confirmation}{visibilityTarget && <CollectionVisibilityDialog collection={visibilityTarget} onClose={closeVisibility} onConfirm={async () => { setCollectionHidden(visibilityTarget.id, !visibilityTarget.hidden); setEditingCollection(null) }} />}{addingToCollection && <CollectionMembershipDialog collection={addingToCollection} onClose={() => { setAddingToCollection(null); addStoriesTrigger.current?.focus() }} />}{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} hidden={collectionSort.hiddenCustom.includes(editingCollection.id)} onVisibilityChange={changeEditedCollectionVisibility} onClose={() => setEditingCollection(null)} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
+  return <>{children({ selected, editingCollections, renderHeader, shelfStories, shelfSeries })}{collectionDeletion.confirmation}{visibilityTarget && <CollectionVisibilityDialog collection={visibilityTarget} onClose={closeVisibility} onConfirm={async () => { setCollectionHidden(visibilityTarget.id, !visibilityTarget.hidden); closeCollectionEditor() }} />}{addingToCollection && <CollectionMembershipDialog collection={addingToCollection} onClose={() => { setAddingToCollection(null); addStoriesTrigger.current?.focus() }} />}{bulkCollections && <NewCollectionDialog selectedCollections={bulkCollections} onClose={() => { setBulkCollections(null); clearCollectionSelection(); editButton.current?.focus() }} onDeleted={() => { if (bulkCollections.some(item => item.id === selected)) setParams({ shelf: 'all' }) }} />}{editingCollection && <NewCollectionDialog collection={editingCollection} hidden={collectionSort.hiddenCustom.includes(editingCollection.id)} onVisibilityChange={changeEditedCollectionVisibility} onClose={closeCollectionEditor} onDeleted={() => { if (selected === editingCollection.id) setParams({ shelf: 'all' }) }} />}</>
 }

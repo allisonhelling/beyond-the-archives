@@ -15,7 +15,7 @@ async function user(id: string, action: () => Promise<void>) {
 async function manage(action: string, name = 'iPhone', id: string | null = null) {
  return (await db.query<{ result: { code: string } }>('select public.manage_userscript_device($1,$2,$3::uuid) as result', [action, name, id])).rows[0].result
 }
-type Result = { secret: string; userId: string; entry: { version: string; progress: number; notes: string; status: string; tags: string[]; collections: string[]; publication: { metadata: Record<string, unknown>; at: string } } }
+type Result = { secret: string; userId: string; entry: { id: string; version: string; progress: number; notes: string; status: string; tags: string[]; collections: string[]; publication: { metadata: Record<string, unknown>; at: string } } }
 async function request(action: string, input: object = {}, token = secret, work = 123) {
  await db.exec('set role anon')
  try { return (await db.query<{ result: Result }>('select public.userscript_library($1,$2,$3,$4) as result', [token, action, work, JSON.stringify(input)])).rows[0].result }
@@ -170,4 +170,29 @@ it('saves and clears companion favorites and recommendations', async () => {
  expect(flags).toEqual({ is_favorite: true, is_rec: true })
  await request('save', { ...base, version: saved.entry.version, base: { ...base, favorite: true, rec: true }, favorite: false, rec: false }, token)
  expect((await request('get', {}, token)).entry).toMatchObject({ favorite: false, rec: false })
+})
+
+it('deletes only the paired owner’s current work entry and protects a replacement on retry', async () => {
+ let token = ''
+ await user(alice, async () => { token = (await request('claim', {}, (await manage('create')).code)).secret })
+ const work = 91001
+ const { id: workId } = (await db.query<{ id: string }>('insert into public.works(ao3_work_id) values ($1) returning id', [work])).rows[0]
+ async function addEntry(owner: string) {
+  return (await db.query<{ id: string }>(
+   'insert into public.library_entries(user_id,work_id,original_url) values ($1,$2,$3) returning id',
+   [owner, workId, `https://archiveofourown.org/works/${work}`],
+  )).rows[0].id
+ }
+ const aliceEntry = await addEntry(alice), bobEntry = await addEntry(bob)
+ const saved = (await request('get', {}, token, work)).entry
+ const removal = { id: saved.id, version: saved.version }
+ expect(saved.id).toBe(aliceEntry)
+ await expect(request('delete_entry', removal, 'x'.repeat(64), work)).rejects.toThrow(/Reconnect/)
+ await expect(request('delete_entry', { ...removal, version: 'stale' }, token, work)).rejects.toThrow(/Entry changed/)
+ expect((await request('delete_entry', removal, token, work)).entry).toBeNull()
+ expect((await request('delete_entry', removal, token, work)).entry).toBeNull()
+ const replacement = await addEntry(alice)
+ await expect(request('delete_entry', removal, token, work)).rejects.toThrow(/Entry changed/)
+ const { rows } = await db.query<{ id: string }>('select id from public.library_entries where work_id=$1', [workId])
+ expect(rows.map(row => row.id).sort()).toEqual([replacement, bobEntry].sort())
 })

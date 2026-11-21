@@ -1,3 +1,4 @@
+import { readerSeries } from './metadata'
 import { readerCloud, readerCloudConfig, syncCloud } from './cloud'
 import { digest } from './epub'
 import { importedVersion, prepareImport, prepareImportVersion, writeImport } from './import-books'
@@ -69,7 +70,7 @@ export function mappedMetadata(input: Record<string,unknown>): Partial<ReaderMet
   for (const key of ['authors','fandoms','additional_tags','series']) if(Array.isArray(input[key]) && input[key].length <= 500 && input[key].every((value:unknown)=>typeof value==='string' && value.length <= 1000)) result[key]=input[key]
   // A mapped plain summary must never inherit stale EPUB HTML.
   if ('summary' in result) result.summary_html = ''
-  return result
+  return Array.isArray(result.series) ? { ...result, ...readerSeries({ series: result.series as string[] }) } : result
 }
 function calibreIdentity(metadata: Record<string,unknown>) {
   const value = metadata._calibre_uuid
@@ -111,6 +112,7 @@ export async function processTransfers() {
       const {next,duplicate,previous,linked} = prepared
       if (cancelled) { await setting(jobKey(job.id),{...job,status:'cancelled',message:'Cancelled before save. Retry to resume.'}); continue }
       const metadata = { ...mappedMetadata(job.metadata), ...(linked && { calibre_work_link: next.metadata.calibre_work_link }) }
+      Object.assign(metadata, readerSeries({ ...next.metadata, ...metadata, series_positions: { ...next.metadata.series_positions, ...metadata.series_positions } }))
       next.metadata = {...next.metadata,...metadata}
       // Calibre updates replace the prior version using the shared reading-state mapper.
       const result: ImportJob = {...job,hasFile:false,releaseDownload:job.metadata._reader_download === false && !duplicate?.hasFile,status:duplicate?.hasFile ? 'duplicate' : 'imported',message:previous && previous.id !== next.id ? 'Updated existing EPUB; reading history preserved.' : duplicate?.hasFile ? 'Existing copy retained; Calibre metadata updated.' : 'Imported.'}

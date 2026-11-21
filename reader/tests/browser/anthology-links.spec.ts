@@ -43,10 +43,10 @@ test('anthology details link each matched fic and explicitly offer to add missin
   await page.getByRole('button', { name: 'Refresh Organizer Links', exact: true }).click()
   await expect(second.getByRole('link', { name: 'View in Organizer', exact: true })).toHaveAttribute('href', /\/stories\/organizer-91002$/)
   await expect(add).toHaveCount(0)
-  await first.getByRole('button', { name: 'Read This Fic', exact: true }).click()
+  await first.getByRole('button', { name: 'Read This Story', exact: true }).click()
   await expect(page.locator('.current-anthology-work')).toContainText('Fic 1 · Chapter 1 of 3')
   await page.locator('.reading-work-name').click()
-  await second.getByRole('button', { name: 'Read This Fic', exact: true }).click()
+  await second.getByRole('button', { name: 'Read This Story', exact: true }).click()
   await expect(page.locator('.current-anthology-work')).toContainText('Fic 2 · Chapter 1 of 1')
 })
 

@@ -65,5 +65,5 @@ export function TagAppearanceSync({ userId }: { userId: string }) {
   window.addEventListener('focus', focus); window.addEventListener('online', focus); document.addEventListener('visibilitychange', foreground)
   return () => { active = false; unsubscribe(); clearInterval(timer); window.removeEventListener('focus', focus); window.removeEventListener('online', focus); document.removeEventListener('visibilitychange', foreground) }
  }, [userId])
- return error ? <aside className="notice" role="alert">{error}{conflict && <div className="form-actions"><button onClick={() => resolve?.(false)}>Use Organizer Settings</button><button onClick={() => resolve?.(true)}>Keep This Device’s Settings</button></div>}</aside> : null
+ return error ? <aside className="notice tag-sync-error" role="alert">{error}{conflict && <div className="form-actions"><button onClick={() => resolve?.(false)}>Use Organizer Settings</button><button onClick={() => resolve?.(true)}>Keep This Device’s Settings</button></div>}</aside> : null
 }

@@ -1,5 +1,5 @@
 import { InfoTooltip } from '../../components/InfoTooltip'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { GripVertical, Info, X } from 'lucide-react'
 
 const mobileTagQuery = '(max-width: 650px), (pointer: coarse)'
@@ -7,6 +7,7 @@ const tagInstructions = 'Press Enter to add a tag. Use arrow keys to move betwee
 const mobileTagInstructions = 'Hold the grip beside the typing field, drag it between tags, and release to move the typing position. Tap a tag to select it, then tap it again to delete it.'
 
 export function PersonalTagHelp({ inline = false }: { inline?: boolean }) {
+  const helpId = useId()
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileTagQuery).matches ?? false)
   useEffect(() => {
     const query = window.matchMedia?.(mobileTagQuery)
@@ -16,7 +17,7 @@ export function PersonalTagHelp({ inline = false }: { inline?: boolean }) {
     return () => query.removeEventListener?.('change', update)
   }, [])
   const description = mobile ? mobileTagInstructions : tagInstructions
-  if (inline) return <details className="field-info personal-tag-help"><summary aria-label="Personal Tags Help" role="button"><Info aria-hidden="true" /></summary><span>{description}</span></details>
+  if (inline) return <details className="field-info personal-tag-help"><summary aria-label="Personal Tags Help" aria-describedby={helpId} role="button"><Info aria-hidden="true" /></summary><span role="tooltip" id={helpId}>{description}</span></details>
   return <InfoTooltip description={description} label="Personal Tags Help" size={12} buttonClassName="personal-tag-help-button" />
 }
 

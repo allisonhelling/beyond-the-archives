@@ -44,7 +44,7 @@ test('places Sort beside pagination on desktop and fandoms on phones with aligne
    await expect(menu).toBeVisible()
    const menuBounds = (await menu.boundingBox())!
    expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width)
-   for (const option of await menu.getByRole('option').all()) expect(await option.locator('span').evaluate(node => node.getBoundingClientRect().height <= parseFloat(getComputedStyle(node).lineHeight) + 1)).toBe(true)
+   for (const option of await menu.getByRole('option').all()) expect(await option.locator('span').first().evaluate(node => node.getBoundingClientRect().height <= parseFloat(getComputedStyle(node).lineHeight) + 1)).toBe(true)
    await sort.press('Escape')
    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }

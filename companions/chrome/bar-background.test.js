@@ -90,6 +90,13 @@ it('supports series controls and individual work controls on the same series pag
  expect(fetcher).toHaveBeenCalledTimes(3)
 })
 
+it('forwards companion deletion only for the work on an AO3 work page', async () => {
+ const removal = { ...input, p_action: 'delete_entry', p_input: { id: 'saved-entry', version: 'saved-version' } }
+ expect(await send({ action: 'rpc', input: removal })).toMatchObject({ ok: true })
+ expect(await send({ action: 'rpc', input: { ...removal, p_work: 456 } })).toMatchObject({ ok: false })
+ expect(fetcher).toHaveBeenCalledExactlyOnceWith(`${backend}/rest/v1/rpc/userscript_library`, expect.objectContaining({ body: JSON.stringify(removal) }))
+})
+
 it.each(['/tags/Naruto/works', '/users/alice/pseuds/alice', '/works/search', '/users/alice/bookmarks'])('supports individual work controls on listing page %s', async path => {
  const source = { ...sender, url: `https://archiveofourown.org${path}` }
  expect(await send({ action: 'configuration' }, source)).toMatchObject({ ok: true })
