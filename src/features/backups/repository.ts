@@ -26,6 +26,7 @@ async function createBackup() {
   // silently produce a backup missing part of the user's settings.
   const browser_preferences = Object.fromEntries(browserPreferenceKeys.map(key => [key, localStorage.getItem(key)]))
   const { data, error } = await backupClient().rpc('export_library_backup')
+  if (error?.code === '57014') throw new BackupRequestError('Supabase timed out while preparing your library backup. Please try again.')
   if (error || !data || typeof data !== 'object' || Array.isArray(data)
     || data.format !== 'between-chapters-backup' || !isLibraryBackupVersion(data.version) || !data.tables || typeof data.user_id !== 'string') {
     throw new Error('Backup snapshot unavailable.')

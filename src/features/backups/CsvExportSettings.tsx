@@ -4,6 +4,7 @@ import { csvExportSettingsSection } from './settings-sections'
 import { useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import { csvFiles, exportLibraryCsv, type CsvFile } from './csv-export'
+import { LibraryLoadError } from '../library/repository'
 
 export function CsvExportSettings() {
   const [selection, setSelection] = useState<CsvFile[]>(csvFiles.map(file => file.name))
@@ -14,7 +15,7 @@ export function CsvExportSettings() {
     if (pending.current || !selection.length) return
     pending.current = true; setBusy(true); setMessage(''); setError('')
     try { await exportLibraryCsv(selection); setMessage('Your ZIP download has started.') }
-    catch { setError('Could not export your library. Check your connection and try again.') }
+    catch (failure) { setError(failure instanceof LibraryLoadError ? failure.message : 'Could not export your library. Check your connection and try again.') }
     finally { pending.current = false; setBusy(false) }
   }
   return <section id={csvExportSettingsSection.id} tabIndex={-1} className="settings-card">

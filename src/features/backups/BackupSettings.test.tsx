@@ -69,6 +69,13 @@ it('disables export and Supabase backups in sample mode', () => {
   expect(mock.list).not.toHaveBeenCalled()
 })
 
+it('reports database timeouts for both backup actions before any upload', async () => {
+  mock.rpc.mockResolvedValue({ data: null, error: { code: '57014', message: 'database internals' } })
+  await expect(exportBackup()).rejects.toThrow('Supabase timed out')
+  await expect(saveBackup()).rejects.toThrow('Supabase timed out')
+  expect(mock.invoke).not.toHaveBeenCalled()
+})
+
 it('stores all 10,000 entries and browser preferences as an immutable compressed object in the account folder', async () => {
   vi.stubGlobal('Blob', NodeBlob)
   vi.stubGlobal('CompressionStream', NodeCompressionStream)

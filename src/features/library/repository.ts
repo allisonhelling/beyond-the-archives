@@ -15,16 +15,24 @@ function failure(error: { code?: string; message?: string } | null) {
   if (error) throw new Error(error.code === '22023' || error.code === '40001' ? error.message ?? 'Reload and review these changes before saving.' : error.code === '23505' ? 'This story is already in your library (or that collection name already exists).' : 'Could not save your changes. Check your connection and input, then try again.')
 }
 // PostgREST caps each response; fetch every page so memberships cannot be silently lost.
-export async function allRows<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; status?: number }>, subject = 'your library') {
+export async function allRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; status?: number }>,
+  subject = 'your library',
+  { pageSize = 500, minPageSize = pageSize }: { pageSize?: number; minPageSize?: number } = {},
+) {
   const data: T[] = []
-  for (let from = 0; ; from += 500) {
-    const result = await page(from, from + 499)
+  for (;;) {
+    const result = await page(data.length, data.length + pageSize - 1)
     if (result.error || !result.data) {
       const code = result.error && typeof result.error === 'object' && 'code' in result.error && typeof result.error.code === 'string' ? result.error.code : undefined
+      if (code === '57014' && pageSize > minPageSize) {
+        pageSize = Math.max(minPageSize, Math.floor(pageSize / 2))
+        continue
+      }
       throw libraryLoadError(subject, { code }, result.status ?? 500)
     }
     data.push(...result.data)
-    if (result.data.length < 500) return data
+    if (result.data.length < pageSize) return data
   }
 }
 export function groupLinks<T, V>(links: T[], key: (link: T) => string, value: (link: T) => V) {
@@ -61,7 +69,9 @@ export async function loadLibrary(): Promise<{ stories: Story[]; collections: Co
     allRows((from, to) => db.from('work_fandoms').select('*').order('work_id').order('fandom_id').range(from, to)),
     allRows((from, to) => db.from('library_series').select('*').order('id').range(from, to)),
     allRows((from, to) => db.from('collection_series').select('*').order('library_series_id').order('collection_id').range(from, to)),
-    allRows((from, to) => db.from('library_search_documents').select('id,catalog_story').order('id').range(from, to)),
+    // Large search documents are stored separately. Use the owner/ID index and
+    // a smaller page so this export does less work in each REST request.
+    allRows((from, to) => db.from('library_search_documents').select('id,catalog_story').order('user_id').order('id').range(from, to), 'story details for export', { pageSize: 100, minPageSize: 25 }),
     allRows((from, to) => db.from('crosspost_organization').select('group_id,settings').order('group_id').range(from, to)),
   ])
   const projections = new Map(crossoverDocuments.map(row=>[row.id,row.catalog_story as unknown as Partial<Story>]))
@@ -284,13 +294,14 @@ export function libraryQueryHasSeries(query: LibraryQuery) {
 export function libraryFacetScope(query: LibraryQuery) {
   return { ...(query.reader && { reader: query.reader }), ...(query.availability && { availability: query.availability }), mode: query.mode, shelf: query.mode === 'reading' ? 'view_all' : query.shelf, ...(query.author !== undefined && { author: query.author }), filters: { showSeries: query.filters.showSeries } }
 }
+export class LibraryLoadError extends Error {}
 function libraryLoadError(subject: string, error: { code?: string } | null, status: number) {
   const reason = error?.code === '57014' ? 'The request took too long. Please try again.'
     : status === 401 || error?.code === 'PGRST301' || error?.code === 'PGRST303' ? 'Your session has expired. Sign in again.'
     : ['PGRST200','PGRST202','PGRST204','42883','42703'].includes(error?.code ?? '') ? 'The library database needs an update. Apply the latest migrations, then retry.'
     : status === 0 ? 'Check your connection and retry.'
     : `Please try again. If this continues, report error ${error?.code || status}.`
-  return new Error(`Could not load ${subject}. ${reason}`, { cause: error })
+  return new LibraryLoadError(`Could not load ${subject}. ${reason}`, { cause: error })
 }
 export async function loadLibraryFacets(query: LibraryQuery, signal: AbortSignal): Promise<LibraryFacets> {
   const { data, error, status } = await client().rpc('library_query_facets', { p_query: libraryFacetScope(query) }).abortSignal(signal)

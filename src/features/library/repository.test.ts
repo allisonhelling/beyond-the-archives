@@ -8,7 +8,7 @@ vi.mock('../../lib/supabase', () => ({ supabase: { rpc: state.rpc, from: (table:
     return { data: (state.data[table] ?? []).slice(from, to + 1), error: state.fail ? { code: 'offline' } : null }
   } }; return query
 } }) } }))
-import { addStoriesToCollections, loadLibrary, loadLibraryFacets, queryLibrary } from './repository'
+import { addStoriesToCollections, allRows, loadLibrary, loadLibraryFacets, queryLibrary } from './repository'
 beforeEach(() => { state.data = {}; state.calls = []; state.fail = false; state.rpc.mockReturnValue({ abortSignal: state.response }) })
 it('loads beyond the API response cap without losing private tags and memberships', async () => {
   state.data.library_entries = Array.from({ length: 1001 }, (_, n) => ({ id: `entry-${n}`, work_id: `work-${n}`, metadata_overrides: { ...blankMetadata, title: `Story ${n}`, authors: ['Manual author'] } }))
@@ -25,6 +25,15 @@ it('loads beyond the API response cap without losing private tags and membership
 it('reports load failures instead of displaying an empty or partially loaded library', async () => {
   state.fail = true
   await expect(loadLibrary()).rejects.toThrow('Could not load your library')
+})
+
+it('retries a timed-out export page at the same offset with a smaller range', async () => {
+  const rows = Array.from({ length: 175 }, (_, id) => id)
+  const page = vi.fn(async (from: number, to: number) => from === 100 && to === 199
+    ? { data: null, error: { code: '57014' }, status: 500 }
+    : { data: rows.slice(from, to + 1), error: null })
+  await expect(allRows(page, 'story details for export', { pageSize: 100, minPageSize: 25 })).resolves.toEqual(rows)
+  expect(page.mock.calls).toEqual([[0, 99], [100, 199], [100, 149], [150, 199]])
 })
 
 it.each([

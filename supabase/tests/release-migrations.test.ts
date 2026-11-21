@@ -10,6 +10,7 @@ import { seedLargeLibraries } from '../../scripts/performance-library.mjs'
 // @ts-expect-error Shared source/live metadata inventory.
 import { privacyCatalog } from '../../scripts/privacy-catalog.mjs'
 
+const backupExportMigration='20261120000400_optimize_library_backup_export.sql'
 const releaseMigration='20261116000100_application_rbac.sql'
 const account='84000000-0000-0000-0000-000000000001'
 const laterAccount='84000000-0000-0000-0000-000000000002'
@@ -54,9 +55,9 @@ afterAll(async()=>{await clean?.close();await upgrade?.close()})
 
 it('replays the entire ordered migration chain on a fresh embedded PostgreSQL database',async()=>{
  const names=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')).sort()
- expect(names).toHaveLength(144)
+ expect(names).toHaveLength(145)
  expect(new Set(names.map(name=>name.split('_')[0])).size).toBe(names.length)
- expect(names.at(-1)).toBe('20261120000300_companion_delete_library_entry.sql')
+ expect(names.at(-1)).toBe(backupExportMigration)
  const catalog=await privacyCatalog(async(sql:string)=>(await clean.query(sql)).rows)
  expect(catalog.relations.filter((table:{kind:string})=>table.kind==='r')).toHaveLength(57)
  expect(catalog.relations.filter((table:{kind:string})=>table.kind==='v')).toHaveLength(4)
@@ -126,6 +127,7 @@ it('upgrades the populated observed production prefix through both Universal dep
    '20261120000100_bulk_collection_membership.sql',
    '20261120000200_library_offline_availability.sql',
    '20261120000300_companion_delete_library_entry.sql',
+   backupExportMigration,
   ])
   await db.exec("set statement_timeout='45s'")
   await db.exec(await readFile(new URL(`../migrations/${firstPending}`,import.meta.url),'utf8'))
