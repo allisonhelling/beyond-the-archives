@@ -1,1 +1,5 @@
 .publication-icon { display: inline-flex; vertical-align: middle; color: var(--color-brand); }
+.publication-icon > svg {
+  width: calc(18px + var(--text-size-increase));
+  height: calc(18px + var(--text-size-increase));
+}

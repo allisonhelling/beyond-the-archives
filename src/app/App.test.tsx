@@ -299,7 +299,7 @@ it('opens retained offline information without waiting for authentication', asyn
 })
 it('offers retained access after an expired online session', async () => {
   render(<App />)
-  await userEvent.click(await screen.findByRole('link', { name: 'Open Retained Offline Hub' }))
+  await userEvent.click(await screen.findByRole('link', { name: 'Open Saved Offline Hub' }))
   expect(await screen.findByRole('heading', { name: 'Offline' })).toBeVisible()
   expect(screen.getByText(/Account operations require an online sign-in/)).toBeVisible()
 })

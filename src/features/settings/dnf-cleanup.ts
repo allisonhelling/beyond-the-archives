@@ -14,7 +14,7 @@ export async function cleanupRequest(action: string, input?: object, page = 0): 
  if (!supabase) throw new Error('Sign in to manage DNF cleanup.')
  const { data, error } = await supabase.rpc('dnf_cleanup', { p_action: action, p_input: (input ?? {}) as Json, p_page: page })
  if (error) throw new Error(error.code === '40001'
-  ? 'Settings or a fic changed on another device. Reload saved settings and preview cleanup again.'
+  ? 'Settings or a story changed on another device. Reload saved settings and preview cleanup again.'
   : 'Could not complete DNF cleanup. Check your connection and try again.')
  const result = data as unknown as CleanupResult & ArchivedReading
  if (!result || (action === 'archive' ? !Array.isArray(result.records) : !result.settings || typeof result.settings.hours !== 'number')) {

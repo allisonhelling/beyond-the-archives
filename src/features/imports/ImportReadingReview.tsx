@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { useActivity } from '../../lib/use-activity'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -8,7 +9,7 @@ import { reviewImportReading, type ReadingReviews, type ReadingSnapshot } from '
 const readingReviewChangedEvent = 'between-chapters:reading-review-changed'
 
 function ReadingState({ state, known = true }: { state: ReadingSnapshot; known?: boolean }) {
- return <>{statuses[state.status]}<small>{known ? `${state.progress} chapters read` : 'Chapter progress unconfirmed'}</small><small>Finished: {formatDate(state.finishedAt)}</small></>
+ return <>{statuses[state.status]}<small>{known ? `${state.progress} ${countNoun(state.progress, 'chapter')} read` : 'Chapter progress unconfirmed'}</small><small>Finished: {formatDate(state.finishedAt)}</small></>
 }
 
 /** Reuse import conflict table, selection and pagination patterns for reading only. */
@@ -43,15 +44,15 @@ export function ImportReadingReview({ onChanged, actions, refreshKey, scopeIds }
    const result = await reviewImportReading(ids, action, nextPage, scope)
    setData(result); setPage(nextPage); setSelected([])
    if (!result.total) setOpen(false)
-   if (action !== 'list') { window.dispatchEvent(new Event(readingReviewChangedEvent)); setMessage(`${result.changed} corrections ${action === 'accept' ? 'accepted' : 'kept unchanged'}.${result.skipped ? ` ${result.skipped} entries changed since review and were skipped.` : ''}`); await onChanged() }
+   if (action !== 'list') { window.dispatchEvent(new Event(readingReviewChangedEvent)); setMessage(`${result.changed} ${countNoun(result.changed, 'correction')} ${action === 'accept' ? 'accepted' : 'kept unchanged'}.${result.skipped ? ` ${result.skipped} ${countNoun(result.skipped, 'entry', 'entries')} skipped after changes since review.` : ''}`); await onChanged() }
   } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not load reading corrections.') }
   finally { actionPending.current = false; setBusy(false) }
  }
  return <div className="story-form import-reading-review">
-  <div className="form-actions form-actions-fit">{actions}{Boolean(data?.total) && <button type="button" className="button secondary" aria-expanded={open} aria-controls={panelId} onClick={() => { setOpen(!open); if (!open) void load() }}>Review Reading Corrections</button>}</div>
+  <div className="form-actions form-actions-fit">{actions}{Boolean(data?.total) && <button type="button" className="button secondary disclosure-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { setOpen(!open); if (!open) void load() }}>Review Reading Corrections</button>}</div>
   <div id={panelId} hidden={!open}>
   {data && <>
-   <p>{data.total} possible reading-status corrections. AO3 metadata was repaired separately. Only accepting a correction changes your reading history.</p>
+   <p>{data.total} {countNoun(data.total, 'possible reading-status correction')}. AO3 metadata was repaired separately. Only accepting a correction changes your reading history.</p>
    <p className="field-help">Imported defaults and bookmark dates are suggestions. Entries without recorded provenance need your review. Explicit personal reading edits are preserved.</p>
    {data.reviews.length > 0 && <>
     <div className="form-actions"><button type="button" className="button secondary" disabled={busy} onClick={() => setSelected(data.reviews.map(review => review.id))}>Select All on This Page</button><button type="button" className="button primary" disabled={busy || !selected.length} onClick={() => void load(1, 'accept', selected)}>Accept Selected Corrections</button><button type="button" className="button secondary" disabled={busy || !selected.length} onClick={() => void load(1, 'keep', selected)}>Keep Selected Reading History</button></div>

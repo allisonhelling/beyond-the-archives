@@ -63,7 +63,7 @@ test('responsive navigation, persistence, and sign-out', async ({ page }, testIn
   await expect(page.getByText('reader@example.com')).toBeVisible()
   await page.reload()
   await expect(page.getByText('reader@example.com')).toBeVisible()
-  await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+  await page.getByRole('navigation', { name: mobile ? 'Mobile Navigation' : 'Main Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
   if (mobile) {
     const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
@@ -105,6 +105,8 @@ test('Add controls are available and layouts fit the viewport', async ({ page })
   } else {
     const add = page.locator('.app-header').getByRole('link', { name: 'Add Story', exact: true })
     await expect(add).toHaveAttribute('href', '/add?mode=finished')
+    await add.hover()
+    await expect(page.getByRole('tooltip', { name: 'Add Story to Library', exact: true })).toBeVisible()
     await add.click()
     await expect(page.getByRole('heading', { name: 'Add Story', exact: true })).toBeVisible()
     await expect(page.locator('.add-menu')).toHaveCount(0)

@@ -4,6 +4,8 @@ import { ViewportFrame } from '../../../components/ViewportFrame'
 import { DisplayEditorContext, type DisplayField } from './display-editor-context'
 import { displayGroups, displayDivider, displayFieldLabel, displayLine, moveDisplaySelection, deleteDisplaySelection, removeDisplayLine, separateDisplayField, type DisplayGroup, type DisplayPreferences, type PreviewViewport } from './display-settings'
 const same = (a: DisplayField | null, b: DisplayField | null) => a?.group === b?.group && a?.field === b?.field
+const summaryToggle = (target: EventTarget | null) => Boolean((target as Element | null)?.closest?.('[data-summary-toggle]'))
+const sectionTitle = (group: DisplayGroup) => displayGroups[group].title.replace(/^(Work|Series) Pages · /, '')
 const label = (item: DisplayField) => displayFieldLabel(item.group, item.field)
 
 /** Adds editing behavior around the site's actual tiles and information pages. */
@@ -78,13 +80,23 @@ export function DisplayEditor({ title, groups, state, children, showTitle = true
   }
   return <DisplayEditorContext value={{ preferences: state.draft, groups, selected: dragged ?? selected, selectedFields: moving, dropPreview }}><section className="display-editor" aria-label={`${title} Editor`}>
     <div className="display-editor-toolbar">{showTitle && <h3>{title}</h3>}<div className="form-actions display-editor-actions">
-      <button className="button secondary" type="button" aria-expanded={managing} onClick={() => { setManaging(!managing); setSelection([]) }}>Hide/Show Information</button>
+      <button className="button secondary disclosure-toggle" type="button" aria-expanded={managing} onClick={() => { setManaging(!managing); setSelection([]) }}>Hide/Show Information</button>
       <button className="button secondary" type="button" onClick={() => addEntry('line')}>Add Grouped Line</button>
       <button className="button secondary" type="button" onClick={() => addEntry('divider')}>Add Divider</button>
       <button className="button secondary" type="button" onClick={() => addEntry('short-divider')}>Add Short Divider</button>
-    </div>
-      {groups.length > 1 && <label className="display-group-area">Add Lines and Dividers To<select className="filter-input" value={selected?.group ?? lineGroup} onChange={event => { setLineGroup(event.target.value as DisplayGroup); setSelection([]) }}>{groups.map(group => <option key={group} value={group}>{displayGroups[group].title}</option>)}</select><span className="field-help">Choose the page area for new lines and dividers. Selected elements use their own area; information can move within that area.</span></label>}
+      {groups.length > 1 && <label className="display-group-area">Add Lines and Dividers To<select className="filter-input" value={selected?.group ?? lineGroup} onChange={event => { setLineGroup(event.target.value as DisplayGroup); setSelection([]) }}>{groups.map(group => <option key={group} value={group}>{sectionTitle(group)}</option>)}</select></label>}
+      </div>
       <p className="field-help" role="status">{selection.length > 1 ? `${selection.length} elements selected. Group, move, hide or delete them together.` : managing ? 'Add or hide information below, or select information in the preview and press Backspace to remove it. Shift-click to select multiple elements.' : selected ? `${label(selected)} selected. Shift-click to select more; click a destination to move. Delete hides information or removes lines and dividers.` : 'Drag information onto a grouped line or select a field and use Move to Own Line. Shift-click selects multiple elements. Save applies your changes.'}</p>
+      {managing && <div className="display-available">{[false, true].map(hidden => <details open key={String(hidden)} aria-label={hidden ? 'Hidden Information' : 'Shown Information'}>
+        <summary>{hidden ? 'Hidden Information' : 'Shown Information'}</summary>
+        {managementSections.map(({ group, fields }) => {
+          const items = fields.filter(field => isHidden(field) === hidden)
+          return items.length > 0 && <section key={group}>
+            {!group.endsWith('Tile') && <h4>{sectionTitle(group)}</h4>}
+            <ul>{items.map(item => <li key={item.field}><button className="button secondary" type="button" aria-pressed={hidden ? undefined : selection.some(selected => same(selected, item))} onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : 'Select'} {label(item)}</button></li>)}</ul>
+          </section>
+        })}
+      </details>)}</div>}
       {selected && <div className="form-actions" aria-label="Move Selected Information">
         <button className="button secondary" type="button" onClick={() => remove(selection)}>Hide/Delete Selected</button>
         {selection.some(item => Object.values(state.draft[item.group].lines ?? {}).some(fields => fields.includes(item.field))) && <button className="button secondary" type="button" onClick={() => apply(selection, (preference, fields) => [...fields].reverse().reduce((value, field) => separateDisplayField(value, field), preference))}>Move to Own Line</button>}
@@ -98,23 +110,15 @@ export function DisplayEditor({ title, groups, state, children, showTitle = true
           return <button key={direction} className="button secondary" type="button" disabled={!destination} aria-label={`Move ${selection.length > 1 ? 'Selected Elements' : label(selected)} ${direction < 0 ? 'Up' : 'Down'}`} onClick={() => { if (destination) move(selected, { group: selected.group, field: destination }, true) }}>{direction < 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}{direction < 0 ? 'Move Up' : 'Move Down'}</button>
         })}
       </div>}
-      {managing && <div className="display-available">{[false, true].map(hidden => <details open key={String(hidden)} aria-label={hidden ? 'Available Information' : 'Shown Information'}>
-        <summary>{hidden ? 'Available Information' : 'Shown Information'}</summary>
-        {managementSections.map(({ group, fields }) => {
-          const items = fields.filter(field => isHidden(field) === hidden)
-          return items.length > 0 && <section key={group}>
-            <h4>{displayGroups[group].title}</h4>
-            <ul>{items.map(item => <li key={item.field}><button className="button secondary" type="button" onClick={() => toggle(item, hidden)}>{hidden ? 'Add' : 'Select'} {label(item)}</button></li>)}</ul>
-          </section>
-        })}
-      </details>)}</div>}
 
     </div>
-      <ViewportFrame viewport={viewport} title={`${title} Viewport`} tile={groups.length === 1}><div ref={surface} tabIndex={-1} className="display-edit-surface" data-hide-information={managing} aria-label={`${title} Preview`} onMouseDownCapture={event => event.preventDefault()} onDragStartCapture={event => event.preventDefault()} onClickCapture={event => {
+      <ViewportFrame viewport={viewport} title={`${title} Viewport`} tile={groups.length === 1}><div ref={surface} tabIndex={-1} className="display-edit-surface" data-hide-information={managing} aria-label={`${title} Preview`} onMouseDownCapture={event => { if (!summaryToggle(event.target)) event.preventDefault() }} onDragStartCapture={event => event.preventDefault()} onClickCapture={event => {
+        if (summaryToggle(event.target)) return
         event.preventDefault(); event.stopPropagation()
         const field = fieldAt(event.target)
         if (field) { activate(field, event.shiftKey); surface.current?.focus({ preventScroll: true }) }
       }} onChangeCapture={event => { event.preventDefault(); event.stopPropagation() }} onSubmitCapture={event => { event.preventDefault(); event.stopPropagation() }} onKeyDownCapture={event => {
+        if (summaryToggle(event.target)) return
         if (event.key === 'Escape') { clearDrag(); setSelection([]); setManaging(false); return }
         if (event.key === 'Delete' || event.key === 'Backspace') { if (selection.length) { event.preventDefault(); event.stopPropagation(); remove(selection) }; return }
         const field = fieldAt(event.target) ?? selected
@@ -127,7 +131,7 @@ export function DisplayEditor({ title, groups, state, children, showTitle = true
           if (destination) move(field, { group: field.group, field: destination }, true)
         }
       }} onPointerDownCapture={event => {
-        if (event.button !== 0 || !event.isPrimary) return
+        if (event.button !== 0 || !event.isPrimary || summaryToggle(event.target)) return
         const field = fieldAt(event.target)
         if (!field) return
         event.preventDefault(); event.stopPropagation()

@@ -1,8 +1,10 @@
+import { countNoun } from '../../lib/count-noun'
 import { confidenceLabels } from './story-source'
-import { expressionTags, tagExpression, tagFilterConfig, withTagExpression, type TagFilterKey } from './tags/tag-expressions'
+import { expressionTags, normalizeExcludedTags, tagExpression, tagFilterConfig, withTagExpression, workTagFilters, workTagKeys, type WorkTagKey, type TagFilterKey } from './tags/tag-expressions'
 import { filterDateText, ratingLabel } from './model'
 import { publicationStatuses } from './publication-status'
 import { defaultReadingFilters, type ReadingFilters } from './reading-search'
+import { filterRangeFields, isDateRange, normalizeFilterRanges, rangeBoundLabel, rangeBounds, type RangeBound, type RangeField } from './filter-ranges'
 import type { TagCategory } from './display/display-settings'
 
 export function filterPublicationLabel(value: ReadingFilters['publication'][number], series = false) {
@@ -11,7 +13,7 @@ export function filterPublicationLabel(value: ReadingFilters['publication'][numb
     : value === 'in_progress' ? 'In Progress on AO3' : publicationStatuses[value].label
 }
 
-export type ReadingFilterTag = { label: string; category?: TagCategory; key: keyof ReadingFilters; value?: string }
+export type ReadingFilterTag = { label: string; category?: TagCategory; key: keyof ReadingFilters; value?: string; excludedCategory?: WorkTagKey; range?: { field: RangeField; bound: RangeBound } }
 
 /** Labels and removal share the same field identities, including individual tag terms. */
 export function readingFilterTags(filters: ReadingFilters, { authorOnly = false, series = false, seriesVisibility = false }: { authorOnly?: boolean; series?: boolean; seriesVisibility?: boolean } = {}): ReadingFilterTag[] {
@@ -20,13 +22,13 @@ export function readingFilterTags(filters: ReadingFilters, { authorOnly = false,
   if (filters.query) add('query', `${authorOnly ? 'Author' : 'Title / Author'}: ${filters.query}`)
   function addExpression(key: TagFilterKey, category?: TagCategory) {
     if (!filters.tagExpressions?.[key]) return false
-    const expression = tagExpression(filters, key), label = tagFilterConfig[key].label
+    const expression = tagExpression(filters, key), label = 'Include'
     if (expression.mode === 'custom') {
-      if (expression.groups.length) add(key, `${label}: Custom · ${expression.groups.length} Groups · ${expression.groups.map(group => group.join(' AND ')).join(' OR ')}`, undefined, category)
+      if (expression.groups.length) add(key, `${label}: Custom · ${expression.groups.length} ${countNoun(expression.groups.length, 'Group')} · ${expression.groups.map(group => group.join(' AND ')).join(' OR ')}`, undefined, category)
     } else expression.tags.forEach(value => add(key, `${label} (${expression.mode === 'any' ? 'Any' : 'All'}): ${value}`, value, category))
     return true
   }
-  if (!addExpression('fandoms')) filters.fandoms.forEach(value => add('fandoms', `Fandom: ${value}`, value))
+  if (!addExpression('fandoms')) filters.fandoms.forEach(value => add('fandoms', `Include (Any): ${value}`, value))
   filters.publication.forEach(value => add('publication', `Publication Status: ${filterPublicationLabel(value, series)}`, value))
   for (const [key, label] of [['oneShot', 'One-Shot'], ['crossovers', 'Crossovers']] as const) {
     if (filters[key] && filters[key] !== 'allowed') add(key, `${label} ${filters[key] === 'only' ? 'Only' : 'Exclude'}`)
@@ -37,18 +39,47 @@ export function readingFilterTags(filters: ReadingFilters, { authorOnly = false,
   if (!authorOnly && !series && (filters.showSeries || seriesVisibility)) add('showSeries', filters.showSeries ? 'Show Series' : 'Hide Series')
   if (filters.excludeLaterSeries) add('excludeLaterSeries', 'Exclude Later Series Works')
   filters.rating.forEach(value => add('rating', `Content Rating: ${ratingLabel(value)}`, value))
-  ;(filters.personalRating ?? []).forEach(value => add('personalRating', `Rating: ${value === 'unrated' ? 'Unrated' : `${value}/5`}`, value))
+  ;(filters.personalRating ?? []).forEach(value => add('personalRating', `Personal Rating: ${value === 'unrated' ? 'Unrated' : `${value}/5`}`, value))
   for (const [key, label] of [['favorites', 'Favorites Only'], ['personalNotes', 'Personal Notes Only'], ['recs', 'Recs Only']] as const) if (filters[key]) add(key, label)
-  for (const [key, label, category] of [['relationship', 'Relationships', 'relationships'], ['characters', 'Characters', 'characters'], ['tags', 'Tags', 'tags'], ['personalTags', 'Personal Tags', undefined]] as const) {
-    if (key !== 'personalTags' && addExpression(key, category)) continue
-    for (const value of (filters[key] ?? '').split(',').map(value => value.trim()).filter(Boolean)) add(key, `${label}: ${value}`, value, category)
+  const exclusions = normalizeExcludedTags(filters.excludedTags)
+  for (const key of workTagKeys) {
+    const { category } = workTagFilters[key]
+    if (key === 'personalTags' || !addExpression(key, category)) {
+      for (const value of (filters[key] ?? '').split(',').map(value => value.trim()).filter(Boolean)) add(key, `Include (All): ${value}`, value, category)
+    }
+    const expression = exclusions[key]
+    if (expression) for (const value of expression.tags) {
+      tags.push({ key: 'excludedTags', excludedCategory: key, category, value, label: `Exclude (${expression.mode === 'any' ? 'Any' : 'All'}): ${value}` })
+    }
   }
   if (filters.within) add('within', `Search ${filters.scope === 'any' ? 'All Information' : filters.scope === 'summary' ? 'Summary' : 'Notes'}: ${filters.within}`)
   for (const [key, label] of [['updatedAfter', 'Updated From'], ['updatedBefore', 'Updated Through']] as const) if (filters[key]) add(key, `${label}: ${filterDateText(filters[key])}`)
+  for (const [key, bounds] of Object.entries(normalizeFilterRanges(filters.ranges))) {
+    const field = key as RangeField
+    for (const bound of rangeBounds) {
+      const value = bounds[bound]
+      if (value) tags.push({ key: 'ranges', range: { field, bound }, label: `${filterRangeFields[field]} ${rangeBoundLabel(field, bound)}: ${isDateRange(field) ? filterDateText(value) : value}` })
+    }
+  }
   return tags
 }
 
-export function removeReadingFilter(filters: ReadingFilters, { key, value }: ReadingFilterTag): ReadingFilters {
+export function removeReadingFilter(filters: ReadingFilters, { key, value, excludedCategory, range }: ReadingFilterTag): ReadingFilters {
+  if (excludedCategory) {
+    const excludedTags = normalizeExcludedTags(filters.excludedTags)
+    const expression = excludedTags[excludedCategory]
+    if (expression) {
+      const tags = expression.tags.filter(tag => tag !== value)
+      if (tags.length) excludedTags[excludedCategory] = { ...expression, tags }
+      else delete excludedTags[excludedCategory]
+    }
+    return { ...filters, excludedTags }
+  }
+  if (range) {
+    const ranges = normalizeFilterRanges(filters.ranges)
+    delete ranges[range.field]?.[range.bound]
+    return { ...filters, ranges: normalizeFilterRanges(ranges) }
+  }
   if (key in tagFilterConfig && filters.tagExpressions?.[key as TagFilterKey]) {
     const category = key as TagFilterKey, expression = tagExpression(filters, category)
     return withTagExpression(filters, category, expression.mode === 'custom' ? { mode: tagFilterConfig[category].defaultMode, tags: [] } : { ...expression, tags: expressionTags(expression).filter(tag => tag !== value) })

@@ -4,7 +4,6 @@ import type { ComponentType, SVGProps } from 'react'
 import EmbossedFrame from '../assets/spine_designs/embossed_frame.svg?react'
 import RadiantOrnament from '../assets/spine_designs/radiant_ornament.svg?react'
 import ArtDeco from '../assets/spine_designs/art_deco.svg?react'
-import LibraryLabel from '../assets/spine_designs/library_label.svg?react'
 import Arched from '../assets/spine_designs/arched.svg?react'
 import RaisedBands from '../assets/spine_designs/raised_bands.svg?react'
 import SunburstFans from '../assets/spine_designs/sunburst_fans.svg?react'
@@ -52,7 +51,7 @@ const designs: Partial<
   'embossed-frame': EmbossedFrame,
   'radiant-ornament': RadiantOrnament,
   'art-deco': ArtDeco,
-  'library-label': LibraryLabel,
+  'library-label': LibraryDeco,
   'arched': Arched,
   'raised-bands': RaisedBands,
   'sunburst-fans': SunburstFans,

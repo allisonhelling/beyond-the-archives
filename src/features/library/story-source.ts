@@ -134,3 +134,11 @@ export function sourceDuplicateFromError(error: { code?: string; details?: strin
   return candidates.length ? new SourceDuplicateError(candidates) : null
  } catch { return null }
 }
+
+export function sourceSiteName(identity: SourceIdentity | null) {
+ return identity?.kind === 'native' && identity.platform === 'ao3' ? 'AO3' : identity?.kind === 'url' ? new URL(identity.origin).hostname.replace(/^www\./, '') : undefined
+}
+
+export function sourceLabel(story: Story) {
+ return sourceSiteName(storySourceVersion(story).identity) ?? 'Saved Source'
+}

@@ -66,7 +66,7 @@ export function PersonalRatingSettings() {
  const settings = useContext(SettingsContext)
  const [draft, setDraft] = useState<{ text: string; base: string | null } | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState('')
  useActivity(Boolean(busy), 'Saving rating settings…')
- return <section id={personalRatingSettingsSection.id} tabIndex={-1} className="settings-card"><h2>{personalRatingSettingsSection.title}</h2><p>Explain what each star means to you. Saved changes apply to your account in the app and paired Chrome and Safari bars. Leave blank to hide the info icon.</p><form className="story-form" onSubmit={event => {
+ return <section id={personalRatingSettingsSection.id} tabIndex={-1} className="settings-card"><h2>{personalRatingSettingsSection.title}</h2><p>Explain what each star means to you. Leave blank to hide the info icon.</p><form className="story-form" onSubmit={event => {
   event.preventDefault(); if (!settings || busy) return
   setBusy(true); setMessage('')
   void settings.save(draft?.text ?? settings.text, draft ? draft.base : settings.base).then(() => { setDraft(null); setMessage('Personal rating explanation saved.') }).catch(error => setMessage(error instanceof Error ? error.message : 'Could not save.')).finally(() => setBusy(false))

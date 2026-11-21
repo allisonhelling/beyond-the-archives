@@ -1,7 +1,7 @@
 import { tagAliasIndex, type TagResolution } from '../../src/features/library/tags/tag-resolution'
 import { applyAutomaticCollections } from '../../src/features/library/collections/automatic-collections'
 import { effectiveMetadata, organizationFields, storyOrganization, type Collection, type Story, type StoryOrganization, type Work } from '../../src/features/library/model'
-import { safeBookFusionLink } from '../../src/features/library/bookfusion/bookfusion'
+import { matchesLibraryAvailability, parseLibraryAvailability } from '../../src/features/offline/availability-filter'
 import { defaultReadingFilters, filterReading, inReadingSection, tracked } from '../../src/features/library/reading-search'
 import { librarySeries, seriesReadingStatus, type SeriesRecord } from '../../src/features/library/series/series'
 import { filterLibraryItems, seriesSearchStory } from '../../src/features/library/series/series-search'
@@ -44,15 +44,18 @@ export function libraryQueryFixture(name: string, body: Row, tables: Record<stri
    return [key,{works:key==='series'?0:workMatches.length,series:seriesMatches.length,updated_at:dates.at(-1)??null}]
   }))
  }
- if (name==='query_library'||name==='library_query_facets') {
-  const query=body.p_query as Row,mode=query.mode,shelf=String(query.shelf),filters={...defaultReadingFilters,...query.filters as Row,tagAliases:tagAliasIndex(rows('ao3_tag_resolutions') as unknown as TagResolution[])}
+ if (name==='query_library'||name==='library_query_facets'||name==='library_collection_work_ids') {
+  const query=name==='library_collection_work_ids'?{ mode:'library',shelf:body.p_shelf,filters:{} }:body.p_query as Row,mode=query.mode,shelf=String(query.shelf),filters={...defaultReadingFilters,...query.filters as Row,tagAliases:tagAliasIndex(rows('ao3_tag_resolutions') as unknown as TagResolution[])}
   const series=librarySeries(stories,records)
-  const availableStories=stories.filter(story=>query.availability==='bookfusion'?Boolean(safeBookFusionLink(story.metadata.bookfusion_link)):query.availability==='unfolded'?rows('reader_availability').some(report=>(report.works as string[]).includes(String(story.work.ao3_work_id))):true)
+  const availability = parseLibraryAvailability(query.availability)
+  const downloaded = new Set(rows('reader_availability').flatMap(report => report.works as string[]))
+  const availableStories = availability ? stories.filter(story => matchesLibraryAvailability(story, availability, downloaded)) : stories
   const seriesItems=series.filter(series=>!query.availability && query.author === undefined && (shelf==='all'||shelf==='series'||shelf==='favorites'&&series.record?.is_favorite||shelf==='currently_reading'&&seriesReadingStatus(series)==='reading'||['paused_reading','to_read','finished','did_not_finish'].includes(shelf)&&seriesReadingStatus(series)===shelf||series.record?.collectionIds?.includes(shelf)))
   const works=stories.filter(story=>(query.author === undefined || story.metadata.authors.includes(String(query.author))) && (shelf==='all'||shelf==='currently_reading'&&['reading','waiting_for_updates','re_reading'].includes(story.reading_status)||shelf==='finished'&&['finished','re_reading'].includes(story.reading_status)||shelf==='recs'&&story.is_rec||shelf==='favorites'&&story.is_favorite||story.reading_status===shelf||story.collectionIds.includes(shelf)||story.automaticCollectionIds?.includes(shelf)))
   const pool=mode==='reading'?tracked(availableStories):[...works.filter(story=>availableStories.includes(story)),...(mode==='series'||shelf==='series'||filters.showSeries?seriesItems.map(seriesSearchStory):[])]
   const filtered=mode==='reading'?filterReading(pool,filters):filterLibraryItems(pool,{...filters,showSeries:mode==='series'||shelf==='series'||filters.showSeries},seriesItems)
   const shown=filtered.filter(story=>mode!=='reading'||inReadingSection(story,shelf))
+  if(name==='library_collection_work_ids') return shown.map(({ id, organizationGroup }) => ({ id, organizationGroup }))
   const size=Number(body.p_size),pages=Math.max(1,Math.ceil(shown.length/size)),page=Math.min(Number(body.p_page),pages),slice=shown.slice((page-1)*size,page*size)
   const fandoms = new Map<string,number>();for(const s of pool) for(const name of new Set(s.metadata.fandoms)) fandoms.set(name,(fandoms.get(name)??0)+1)
   const facets={suggestions:{personalTags:[...new Set(pool.flatMap(s=>s.personalTags))],relationships:[...new Set(pool.flatMap(s=>s.metadata.relationship_tags??[]))],characters:[...new Set(pool.flatMap(s=>s.metadata.character_tags??[]))],tags:[...new Set(pool.flatMap(s=>s.metadata.additional_tags??[]))]},fandoms:[...fandoms].map(([name,count])=>({name,count}))}

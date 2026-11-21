@@ -1,7 +1,9 @@
 import { isTooltipPaintedAt } from './tooltip-assertions'
 import { expect, test, type Page, type Locator } from '@playwright/test'
 import { fixture, login } from './library-fixture'
-import { tagColors, type TagAppearance } from '../../src/features/library/display/display-settings'
+import { displaySettingsKey, tagColors, type TagAppearance } from '../../src/features/library/display/display-settings'
+
+import { exampleWork } from '../../src/features/library/display/display-examples'
 
 async function setup(page: Page, tagAppearance?: TagAppearance) {
   const tables = await fixture(page)
@@ -14,20 +16,14 @@ async function setup(page: Page, tagAppearance?: TagAppearance) {
   await login(page)
   await expect(page.getByRole('button', { name: 'Work Tile', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('#display-work-editor')).toBeHidden()
-  const tagFormat=page.getByRole('button',{name:'Tag Format',exact:true})
-  await expect(tagFormat).toHaveAttribute('aria-expanded','false')
-  await expect(page.locator('#display-tag-format')).toBeHidden()
-  await tagFormat.click()
+  await expect(page.getByRole('heading', { name: 'Tag Format', exact: true })).toBeVisible()
   await expect(page.locator('#display-tag-format')).toBeVisible()
-  await tagFormat.click()
-  await expect(page.locator('#display-tag-format')).toBeHidden()
-  await tagFormat.click()
   await page.getByRole('button', { name: 'Work Tile', exact: true }).click()
   await page.getByRole('button', { name: 'Series Tile', exact: true }).click()
   return tables
 }
 const editor = (page: Page, title: string) => page.locator(`[aria-label="${title} Editor"]:visible`).first()
-const field = (scope: Locator, group: string, key: string) => scope.frameLocator('iframe').locator(`[data-display-group="${group}"][data-display-field="${key}"]`).last()
+const field = (scope: Locator, group: string, key: string) => (group.endsWith('Tile') ? scope.frameLocator('iframe') : scope).locator(`[data-display-group="${group}"][data-display-field="${key}"]`).last()
 const storedProfile = (page: Page) => page.evaluate(() => { const saved = JSON.parse(localStorage.getItem('between-chapters:display:v1')!); return innerWidth <= 1100 ? { ...saved, ...saved.mobile } : saved })
 const stored = (page: Page) => page.evaluate(() => localStorage.getItem('between-chapters:display:v1'))
 async function manage(scope: Locator, open: boolean) {
@@ -70,6 +66,218 @@ async function dragInformation(page: Page, source: Locator, destination: Locator
   const placed = (await source.locator('xpath=ancestor-or-self::*[@data-display-field][1]').boundingBox())!
   expect(placed.y).toBeCloseTo(projected!.y, 0)
 }
+
+test('applies text scaling immediately, preserves page titles, and remembers the choice', async ({ page }) => {
+  await fixture(page)
+  await page.goto('/settings#settings-display')
+  await login(page)
+  const picker = page.getByRole('combobox', { name: 'Text Scaling' })
+  const outlineLink = page.getByRole('link', { name: 'Accessibility', exact: true })
+  const title = page.getByRole('heading', { name: 'Design', level: 1 })
+  await picker.waitFor()
+  await expect(picker).toHaveValue('standard')
+  const navLink = page.getByRole('navigation', { name: 'Main Navigation', exact: true }).getByRole('link', { name: 'Library', exact: true })
+  if (await navLink.isVisible()) await expect(navLink).toHaveCSS('font-size', '18px')
+  const titleSize = await title.evaluate(node => getComputedStyle(node).fontSize)
+  await page.getByRole('button', { name: 'Work Tile', exact: true }).click()
+  const preview = editor(page, 'Work Tile').frameLocator('iframe')
+  const favorite = preview.getByRole('button', { name: 'Unmark Favorite', exact: true }).locator('svg')
+  const rec = preview.getByRole('button', { name: 'Mark as Rec' }).locator('svg')
+  const publication = preview.getByRole('img', { name: 'Complete', exact: true }).locator('svg')
+  await expect(favorite).toHaveCSS('width', '20px')
+  await expect(rec).toHaveCSS('width', '20px')
+  await expect(publication).toHaveCSS('width', '18px')
+  for (const [scale, minimum, controlHeight] of [
+    ['large', '16px', '48px'],
+    ['extra-large', '18px', '52px'],
+    ['largest', '20px', '56px'],
+  ]) {
+    await picker.selectOption(scale)
+    await expect(picker).toHaveCSS('min-height', controlHeight)
+    await expect(outlineLink).toHaveCSS('font-size', minimum)
+    await expect(title).toHaveCSS('font-size', titleSize)
+  }
+  await expect(favorite).toHaveCSS('zoom', '1.3')
+  await expect(rec).toHaveCSS('zoom', '1.3')
+  await expect(publication).toHaveCSS('width', '24px')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-text-scale', 'largest')
+  await picker.waitFor()
+  await expect(picker).toHaveValue('largest')
+  await picker.selectOption('standard')
+  await expect(page.locator('html')).toHaveAttribute('data-text-scale', 'standard')
+})
+
+test('scales tooltip boxes and icon buttons on work details', async ({ page }) => {
+  const tables = await fixture(page)
+  tables.works.push({ ...exampleWork.work, id: 'scaled-work' })
+  tables.library_entries.push({ ...exampleWork, id: 'scaled-entry', work_id: 'scaled-work', metadata_overrides: exampleWork.metadata })
+  await page.goto('/stories/scaled-entry')
+  await login(page)
+
+  const refresh = page.getByRole('region', { name: 'Automatic Metadata' }).getByRole('button', { name: 'Retry / Update Metadata' })
+  const edit = page.getByRole('button', { name: 'Edit Personal Tags' })
+  const info = page.getByRole('button', { name: 'Chapter Count Source' })
+  await expect(refresh).not.toHaveAttribute('title')
+  for (const control of [refresh, edit, info]) {
+    await expect(control).toHaveCSS('width', '24px')
+    await expect(control.locator('svg')).toHaveCSS('zoom', '1')
+  }
+
+  const tooltipFor = async (control: Locator) => page.locator(`[id="${await control.getAttribute('aria-describedby')}"][role="tooltip"]`)
+  await refresh.hover()
+  const actionTooltip = await tooltipFor(refresh)
+  await expect(actionTooltip).toHaveCSS('font-size', '13px')
+  const actionWidth = (await actionTooltip.boundingBox())!.width
+
+  await page.evaluate(key => {
+    const oldValue = localStorage.getItem(key)
+    const newValue = JSON.stringify({ ...JSON.parse(oldValue ?? '{}'), textScale: 'largest' })
+    localStorage.setItem(key, newValue)
+    window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }))
+  }, displaySettingsKey)
+
+  await refresh.hover()
+  await expect(actionTooltip).toHaveCSS('font-size', '20px')
+  await expect.poll(async () => (await actionTooltip.boundingBox())!.width).toBeGreaterThan(actionWidth)
+  for (const control of [refresh, edit, info]) {
+    await expect(control).toHaveCSS('width', '30px')
+    await expect(control).toHaveCSS('height', '30px')
+    await expect(control.locator('svg')).toHaveCSS('zoom', '1.3')
+  }
+
+  await info.click()
+  const infoTooltip = await tooltipFor(info)
+  await expect(infoTooltip).toBeVisible()
+  await expect(infoTooltip).toHaveCSS('font-size', '20px')
+  await expect(infoTooltip).toHaveCSS('padding-inline-start', '22px')
+  const bounds = (await infoTooltip.boundingBox())!
+  expect(bounds.x).toBeGreaterThanOrEqual(0)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width)
+})
+
+test('work tiles put publication and origin beside the existing quick actions', async ({ page }) => {
+  const tables = await fixture(page)
+  const sourceUrl = 'https://fiction.example/story'
+  tables.works.push(
+    { ...exampleWork.work, id: 'tile-ao3-work' },
+    { ...exampleWork.work, id: 'tile-external-work', ao3_work_id: null, canonical_url: null },
+  )
+  tables.library_entries.push(
+    { ...exampleWork, id: 'tile-ao3', work_id: 'tile-ao3-work', metadata_overrides: { ...exampleWork.metadata, title: 'AO3 Fixture' } },
+    { ...exampleWork, id: 'tile-external', work_id: 'tile-external-work', source_url: sourceUrl, original_url: sourceUrl, metadata_overrides: { ...exampleWork.metadata, title: 'External Fixture' } },
+  )
+  await page.goto('/library')
+  await login(page)
+
+  for (const [id, site, title] of [['tile-ao3', 'AO3', 'AO3 Fixture'], ['tile-external', 'fiction.example', 'External Fixture']]) {
+    const card = page.locator(`[data-story-id="${id}"]`)
+    const bar = card.locator('.work-tile-bar')
+    const [cardBox, barBox] = await Promise.all([card.boundingBox(), bar.boundingBox()])
+    expect(barBox!.x - cardBox!.x).toBeCloseTo(1, 0)
+    expect(barBox!.y - cardBox!.y).toBeCloseTo(1, 0)
+    const spine = await card.locator('.book-spine-footer').evaluate(node => {
+      const style = getComputedStyle(node)
+      return { color: style.borderBottomColor, width: style.borderBottomWidth }
+    })
+    await expect(bar).toHaveCSS('border-top-color', spine.color)
+    await expect(bar).toHaveCSS('border-top-width', spine.width)
+    expect(cardBox!.width - barBox!.width).toBeCloseTo(2, 0)
+    const status = bar.getByRole('img', { name: 'Complete', exact: true })
+    await status.focus()
+    await expect(page.getByRole('tooltip', { name: 'Publication Status: Complete', exact: true })).toBeVisible()
+    const source = bar.getByText(site, { exact: true })
+    const summary = card.locator('.story-summary')
+    const summaryFontSize = await summary.evaluate(node => getComputedStyle(node).fontSize)
+    await expect(source).toHaveCSS('font-size', summaryFontSize)
+    await card.evaluate(node => node.style.setProperty('--work-summary-text-size', '24px'))
+    await expect(summary).toHaveCSS('font-size', '24px')
+    await expect(source).toHaveCSS('font-size', summaryFontSize)
+    await card.evaluate(node => node.style.removeProperty('--work-summary-text-size'))
+    await source.focus()
+    await expect(page.getByRole('tooltip', { name: `Published on ${site}`, exact: true })).toBeVisible()
+    const favorite = bar.getByRole('button', { name: 'Unmark Favorite', exact: true })
+    const rec = bar.getByRole('button', { name: 'Mark as Rec', exact: true })
+    const menu = bar.getByLabel(`Story Actions for ${title}`, { exact: true })
+    const [statusBox, sourceBox, favoriteBox, recBox, menuBox, headingBox] = await Promise.all(
+      [status, source, favorite, rec, menu, card.getByRole('heading', { name: title, exact: true })].map(locator => locator.boundingBox()),
+    )
+    expect(statusBox!.x + statusBox!.width).toBeLessThanOrEqual(sourceBox!.x)
+    expect(sourceBox!.x + sourceBox!.width).toBeLessThanOrEqual(favoriteBox!.x)
+    expect(favoriteBox!.x).toBeLessThan(recBox!.x)
+    expect(recBox!.x).toBeLessThan(menuBox!.x)
+    expect(menuBox!.y + menuBox!.height).toBeLessThan(headingBox!.y)
+    await menu.click()
+    await expect(bar.getByRole('link', { name: 'View/Edit Details', exact: true })).toBeVisible()
+    await menu.press('Escape')
+  }
+})
+
+test('work info uses the same content width as Your Library', async ({ page }) => {
+  const tables = await fixture(page)
+  tables.works.push({ ...exampleWork.work, id: 'wide-work' })
+  tables.library_entries.push({ ...exampleWork, id: 'wide-entry', work_id: 'wide-work', metadata_overrides: exampleWork.metadata })
+  await page.goto('/library')
+  await login(page)
+  await expect(page.getByRole('heading', { name: 'Your Library', exact: true })).toBeVisible()
+  const library = (await page.locator('.app-main').boundingBox())!
+
+  await page.goto('/stories/wide-entry')
+  const workInfo = page.locator('.story-details-page')
+  await expect(workInfo).toBeVisible()
+  const details = (await workInfo.boundingBox())!
+  expect(details.x).toBeCloseTo(library.x, 0)
+  expect(details.width).toBeCloseTo(library.width, 0)
+})
+
+test('keeps tag color labels and wrapping examples aligned as the picker grows', async ({ page }, info) => {
+  await fixture(page)
+  await page.goto('/settings#settings-display')
+  await login(page)
+  const scalePicker = page.getByRole('combobox', { name: 'Text Scaling' })
+  const row = page.getByRole('group', { name: 'Relationships Color', exact: true })
+  const colorPicker = row.getByRole('button', { name: 'Custom Color', exact: true })
+  await colorPicker.waitFor()
+  const standardPicker = (await colorPicker.boundingBox())!
+  let previousWidth = standardPicker.width
+  let prevSwatchSize = 18
+  for (const scale of ['large', 'extra-large', 'largest']) {
+    await scalePicker.selectOption(scale)
+    const bounds = await row.evaluate(node => {
+      function textLines(element: Element) {
+        const text = [...element.childNodes].find(child => child.nodeType === Node.TEXT_NODE)!
+        const range = document.createRange()
+        range.selectNodeContents(text)
+        return [...range.getClientRects()].map(rect => rect.toJSON() as DOMRect)
+      }
+      const button = node.querySelector('.collection-color-trigger')!
+      const swatch = button.querySelector('.collection-color-swatch')!.getBoundingClientRect()
+      const box = button.getBoundingClientRect()
+      const example = node.querySelector('.display-tag-example')!
+      return {
+        picker: box.toJSON() as DOMRect,
+        swatch: swatch.toJSON() as DOMRect,
+        labelLines: textLines(node.querySelector('.field-help')!),
+        prefix: textLines(example.firstElementChild!)[0],
+        exampleLines: textLines(example.querySelector('.metadata-tag')!),
+        hex: textLines(button)[0],
+      }
+    })
+    expect(bounds.labelLines).toHaveLength(1)
+    if (info.project.name === 'desktop') {
+      expect(bounds.picker.left).toBeGreaterThan(standardPicker.x)
+      expect(bounds.labelLines[0].right).toBeLessThan(bounds.picker.left)
+    }
+    expect(bounds.picker.width).toBeGreaterThan(previousWidth)
+    expect(bounds.swatch.width).toBeGreaterThan(prevSwatchSize)
+    expect(bounds.exampleLines.length).toBeGreaterThan(1)
+    expect(bounds.prefix.top).toBeCloseTo(bounds.exampleLines[0].top, 0)
+    if (scale === 'large') expect(bounds.swatch.right).toBeLessThan(bounds.hex.left)
+    else expect(bounds.swatch.bottom).toBeLessThan(bounds.hex.top)
+    previousWidth = bounds.picker.width
+    prevSwatchSize = bounds.swatch.width
+  }
+})
 
 test('tile editors keep readable widths below the fold and in short windows', async ({ page }) => {
   await setup(page)
@@ -155,14 +363,14 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
   await expect(page).toHaveURL(new RegExp(`/settings/example-${kind.toLowerCase()}$`))
   await expect(page.getByRole('heading', { name: `Example ${kind} Info Page`, exact: true })).toBeVisible()
   const preview = editor(page, `Example ${kind} Info Page`)
-  await expect(preview.frameLocator('iframe').locator('.story-details-page')).toBeVisible()
+  await expect(preview.locator('.story-details-page')).toBeVisible()
   const group = kind === 'Work' ? 'workInfo' : 'seriesDescription', key = kind === 'Work' ? 'summary' : 'description'
   await manage(preview, true)
   await field(preview, group, key).click()
   await page.keyboard.press('Backspace')
   await expect(field(preview, group, key)).toHaveCount(0)
   expect(await stored(page)).toBeNull()
-  await page.locator('.display-example-page > div:not([hidden]) > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.locator('.display-example-page > div:not([hidden]) .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page).toHaveURL(/\/settings#settings-display$/)
   await page.getByRole('link', { name: `Edit ${kind} Info Page`, exact: true }).click()
   await expect(field(preview, group, key)).toBeVisible()
@@ -171,12 +379,12 @@ for (const kind of ['Work', 'Series'] as const) test(`opens a full Example ${kin
   await page.keyboard.press('Backspace')
   const statistics = kind === 'Work' ? 'workStats' : 'seriesStats'
   await field(preview, statistics, 'words').press('Alt+ArrowDown')
-  await expect(preview.frameLocator('iframe').locator('.details-story-stats dt').first()).toHaveText(kind === 'Work' ? 'Published / Total Chapters' : 'Publication Status')
-  await page.locator('.display-example-page > div:not([hidden]) > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(preview.locator('.details-story-stats dt').first()).toHaveText('Publication Status')
+  await page.locator('.display-example-page > div:not([hidden]) .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page).toHaveURL(/\/settings#settings-display$/)
   const preferences = await storedProfile(page)
   expect(preferences[group].hidden).toContain(key)
-  expect(preferences[statistics].order[1]).toBe('words')
+  expect(preferences[statistics].order[kind === 'Work' ? 3 : 1]).toBe('words')
   await page.getByRole('link', { name: `Edit ${kind} Info Page`, exact: true }).click()
   await expect(field(preview, group, key)).toHaveCount(0)
   expect(requests).toEqual([])
@@ -237,7 +445,7 @@ for (const kind of ['Work', 'Series'] as const) test(`${kind} info page fields c
   await field(preview, group, 'updated').click()
   await field(preview, group, line).click({ position: { x: 3, y: 3 } })
   await expect(field(preview, group, line).locator('.display-line-item')).toHaveCount(2)
-  await page.locator('.display-example-page > div:not([hidden]) > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+  await page.locator('.display-example-page > div:not([hidden]) .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
   await page.goto(kind === 'Work' ? '/stories/display-entry' : '/series/77')
   const grouped = page.locator('.details-story-stats .display-grouped-line')
   await expect(grouped.locator('dt')).toHaveCount(2)
@@ -301,11 +509,10 @@ test('new tile metadata and category colors preview immediately and apply only a
     const colors = page.getByRole('group', { name: 'Additional Tags Color', exact: true })
     if (await colors.getByRole('button', { name: 'Custom Color', exact: true }).getAttribute('aria-expanded') !== 'true') await colors.getByRole('button', { name: 'Custom Color', exact: true }).click()
     await colors.getByRole('textbox', { name: 'Custom Color (Hex)', exact: true }).fill('#123abc')
-    await expect(page.locator('.tag-shape-option[aria-pressed="true"] .metadata-tag').first()).toHaveCSS('color', 'rgb(18, 58, 188)')
+    await expect(page.locator('.tag-shape-option[aria-pressed="true"] .metadata-tag').first()).toHaveCSS('--tag-color', '#123abc')
   }
   expect(await stored(page)).toBeNull()
   await page.reload()
-  await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await page.getByRole('button', { name: 'Work Tile', exact: true }).click()
   await page.getByRole('button', { name: 'Series Tile', exact: true }).click()
   const work = editor(page, 'Work Tile')
@@ -317,10 +524,9 @@ test('new tile metadata and category colors preview immediately and apply only a
   await colors.getByRole('textbox', { name: 'Custom Color (Hex)', exact: true }).fill('#123abc')
   await applyTileDrafts(page, 'Save')
   await page.reload()
-  await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
   await page.getByRole('button', { name: 'Work Tile', exact: true }).click()
   await page.getByRole('button', { name: 'Series Tile', exact: true }).click()
-  await expect(page.locator('.tag-shape-option[aria-pressed="true"] .metadata-tag').first()).toHaveCSS('color', 'rgb(18, 58, 188)')
+  await expect(page.locator('.tag-shape-option[aria-pressed="true"] .metadata-tag').first()).toHaveCSS('--tag-color', '#123abc')
 })
 
 test('tag shape choices and short dividers save from the real work preview', async ({ page }) => {
@@ -419,8 +625,8 @@ test('inline grouped information drags from its text without selecting it', asyn
 })
 
 
-test('global tag appearance, Apply and Undo are shared across tiles and pages',async({page})=>{
- test.setTimeout(90000) // Apply/undo, both tile editors, both example pages, and live cards after reload.
+test('mono tag color is shared across tiles and pages without changing category colors',async({page})=>{
+ test.setTimeout(90000) // Color mode, both tile editors, both example pages, and live cards after reload.
  const tables=await setup(page)
  tables.library_entries[0].metadata_overrides={...tables.library_entries[0].metadata_overrides as object,additional_tags:['Humor','Fluff'],relationship_tags:['Alice/Bob'],character_tags:['Alice'],archive_warnings:['No Archive Warnings Apply'],ao3_tags:['Display fandom','Humor','Fluff']}
  const appearance=page.getByRole('region',{name:'Site-Wide Tag Appearance',exact:true})
@@ -429,38 +635,35 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
  await expect(series.getByRole('group',{name:'Tag Colors',exact:true})).toHaveCount(0)
  const warning=appearance.getByRole('group',{name:'AO3 Warnings Color',exact:true})
  await expect(warning.getByRole('button',{name:'Custom Color',exact:true})).toHaveText('#970000')
- const categoryCount = Object.keys(tagColors).length
+ const categoryCount = Object.keys(tagColors).length + 1
  const sizes=await appearance.evaluate(node=>({shape:getComputedStyle(node.querySelector('.display-tag-shapes legend')!).fontSize,colors:getComputedStyle(node.querySelector('.display-tag-colors legend')!).fontSize,help:getComputedStyle(node.querySelector(':scope > .field-help')!).fontSize,labels:[...node.querySelectorAll('.display-tag-color-grid > div > .field-help')].map(label=>getComputedStyle(label).fontSize)}))
  expect(sizes.colors).toBe(sizes.shape)
  expect(sizes.labels).toEqual(Array(categoryCount).fill(sizes.help))
  await expect(appearance.locator('.display-tag-color-grid .metadata-tag')).toHaveCount(categoryCount)
- await expect(appearance.locator('.display-tag-example > span:first-child')).toHaveText(Array(categoryCount).fill('Ex.'))
+ await expect(appearance.locator('.display-tag-color-grid .display-tag-example > span:first-child')).toHaveText(Array(categoryCount).fill('Ex.'))
  for(const label of await appearance.locator('.display-tag-color-grid > div > .field-help').all()) await expect(label).toHaveText(/:$/)
- await expect(appearance.getByRole('group',{name:'Change All Tags',exact:true}).locator('.field-help')).toHaveText('Change All Tags:')
- const all=appearance.getByRole('group',{name:'Change All Tags',exact:true})
- await all.getByRole('button',{name:'Custom Color',exact:true}).click()
- await all.getByRole('textbox',{name:'Custom Color (Hex)',exact:true}).fill('#123abc')
- const heights=await Promise.all([all.getByRole('button',{name:'Custom Color',exact:true}),appearance.getByRole('button',{name:'Apply',exact:true}),appearance.getByRole('button',{name:'Undo',exact:true})].map(async button=>(await button.boundingBox())!.height))
- expect(heights).toEqual(Array(3).fill(heights[0]))
- await appearance.getByRole('button',{name:'Apply',exact:true}).click()
- await expect(appearance.locator('.display-tag-color-grid .collection-color-trigger')).toHaveText(Array(categoryCount).fill('#123abc'))
+ const mode = appearance.getByRole('combobox', { name: 'Tag Color Mode', exact: true })
+ const all = appearance.getByRole('group', { name: 'All Tags Color', exact: true })
+ await expect(all.getByRole('button', { name: 'Custom Color', exact: true })).toBeDisabled()
+ await mode.selectOption('mono')
+ await all.getByRole('button', { name: 'Custom Color', exact: true }).click()
+ const input = all.getByRole('textbox', { name: 'Custom Color (Hex)', exact: true })
+ await input.fill('#123abc')
+ await input.press('Enter')
+ await expect(warning.getByRole('button', { name: 'Custom Color', exact: true })).toHaveText('#970000')
  expect(await stored(page)).toBeNull()
- await appearance.getByRole('button',{name:'Undo',exact:true}).click()
- await expect(warning.getByRole('button',{name:'Custom Color',exact:true})).toHaveText('#970000')
- await expect(appearance.getByRole('button',{name:'Undo',exact:true})).toBeDisabled()
- await appearance.getByRole('button',{name:'Apply',exact:true}).click()
  await appearance.getByRole('button',{name:'Humor Fluff Sharp Rectangles',exact:true}).click()
  expect(await appearance.locator('.display-tag-color-grid .categorized-tags').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-tag-shape')))).toEqual(Array(categoryCount).fill('sharp'))
- for(const tag of await appearance.locator('.display-tag-color-grid .metadata-tag').all()) await expect(tag).toHaveCSS('color','rgb(18, 58, 188)')
+ for(const tag of await appearance.locator('.display-tag-color-grid .metadata-tag').all()) await expect(tag).toHaveCSS('--tag-color','#123abc')
  for(const [preview,group] of [[work,'workTile'],[series,'seriesTile']] as const) {
   await manage(preview,true)
   await preview.getByRole('button',{name:/^Add Additional Tags/}).click()
   await manage(preview,false)
   await expect(field(preview,group,'tags').locator('.categorized-tags')).toHaveAttribute('data-tag-shape','sharp')
-  await expect(field(preview,group,'tags').locator('.metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
+  await expect(field(preview,group,'tags').locator('.metadata-tag').first()).toHaveCSS('--tag-color','#123abc')
  }
  await applyTileDrafts(page, 'Save')
- expect(JSON.parse((await stored(page))!).tagAppearance).toMatchObject({shape:'sharp',colors:{warnings:'#123abc',tags:'#123abc'}})
+ expect(JSON.parse((await stored(page))!).tagAppearance).toMatchObject({shape:'sharp',colorMode:'mono',allColor:'#123abc'})
  for(const kind of ['Work','Series']) {
   await page.goto(`/settings/example-${kind.toLowerCase()}`)
   await expect(page.getByRole('group',{name:'Tag Shape',exact:true})).toHaveCount(0)
@@ -470,9 +673,9 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
    await preview.getByRole('button',{name:/^Add Additional Tags/}).click()
    await manage(preview,false)
   }
-  const tags=preview.frameLocator('iframe').locator('.categorized-tags[data-tag-category="tags"]').first()
+  const tags=preview.locator('.categorized-tags[data-tag-category="tags"]').first()
   await expect(tags).toHaveAttribute('data-tag-shape','sharp')
-  await expect(tags.locator('.metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
+  await expect(tags.locator('.metadata-tag').first()).toHaveCSS('--tag-color','#123abc')
  }
  await page.goto('/reading')
  const renderedTagGroups = page.locator('.work-card .categorized-tags')
@@ -490,7 +693,7 @@ test('global tag appearance, Apply and Undo are shared across tiles and pages',a
  if (page.viewportSize()!.width <= 650) await page.locator('.work-card .expandable-metadata-tags').getByRole('button',{name:/more$/}).click()
  await expect(page.locator('.work-card .expandable-metadata-tags .metadata-tag')).toHaveCount(5)
  for (const chip of await page.locator('.work-card .expandable-metadata-tags .metadata-tag').all()) await expect(chip).toBeVisible()
- await expect(page.locator('.work-card .metadata-tag').first()).toHaveCSS('color','rgb(18, 58, 188)')
+ await expect(page.locator('.work-card .metadata-tag').first()).toHaveCSS('--tag-color','#123abc')
 })
 
 test('preview tiles match live tile widths and grouped-line indentation',async({page})=>{
@@ -611,9 +814,17 @@ test('desktop settings categories open one grouped page and preserve legacy sect
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeFocused()
   await expect(outline.getByRole('link', { name: title, exact: true })).toHaveAttribute('aria-current', 'location')
  }
+ await expect(outline.locator('.settings-section-label')).toHaveCount(0)
+ for (const [title, anchor] of [['Tag Format', 'display-tag-format'], ['Tile and Page Information', 'display-tile-and-page'], ['Site Mappings', 'settings-site-mappings']] as const) {
+  const link = outline.getByRole('link', { name: title, exact: true })
+  await link.click()
+  await expect(page).toHaveURL(new RegExp(`#${anchor}$`))
+  await expect(page.locator(`#${anchor}`)).toBeFocused()
+  await expect(link).toHaveAttribute('aria-current', 'location')
+ }
  await page.goto('/settings#settings-display')
  await expect(page.locator('#settings-display')).toBeVisible()
- await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+ await page.getByRole('navigation', { name: 'Main Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
  await expect(page.getByRole('navigation', { name: 'Settings Sections', exact: true })).toBeVisible()
  await expect(page).toHaveURL(/\/settings$/)
 })
@@ -638,6 +849,7 @@ test('mobile settings list opens sections, supports back, and retains display dr
   const description = link.locator('small')
   await expect(description).toBeVisible()
   await expect(description).not.toBeEmpty()
+  await expect(description).toHaveCSS('font-weight', '400')
   await expect(link).toHaveAccessibleDescription(await description.innerText())
   const labelBox = (await link.locator('.settings-section-label > span').boundingBox())!
   expect((await description.boundingBox())!.y).toBeGreaterThanOrEqual(labelBox.y + labelBox.height)
@@ -648,12 +860,11 @@ test('mobile settings list opens sections, supports back, and retains display dr
   await expect(section).toBeVisible()
   await expect(section).toBeFocused()
   await expect(page.locator('.settings-section:visible')).toHaveCount(1)
-  await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
   await expect(list).toBeVisible()
   await expect(list.getByRole('link', { name: title, exact: true })).toBeFocused()
  }
  await list.getByRole('link', { name: 'Design', exact: true }).click()
- await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
  const shape = page.locator('.tag-shape-option').last()
  await shape.click()
  await expect(shape).toHaveAttribute('aria-pressed', 'true')
@@ -662,24 +873,24 @@ test('mobile settings list opens sections, supports back, and retains display dr
  await page.goForward()
  await expect(page.locator('#display-tag-format')).toBeVisible()
  await expect(shape).toHaveAttribute('aria-pressed', 'true')
- await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+ await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
  await list.getByRole('link', { name: 'Library & Reading', exact: true }).click()
  await expect(page.getByRole('combobox', { name: 'Works per Page', exact: true })).toBeVisible()
- await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+ await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
  await list.getByRole('link', { name: 'Design', exact: true }).click()
  await expect(shape).toHaveAttribute('aria-pressed', 'true')
  expect(await stored(page)).toBeNull()
  await page.reload()
  await expect(page.locator('#settings-display')).toBeVisible()
- await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+ await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
  await expect(list).toBeVisible()
  await page.goto('/settings#settings-display')
  await page.getByRole('link', { name: 'Edit Work Info Page', exact: true }).click()
- await page.locator('.display-example-page > div:not([hidden]) > .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
+ await page.locator('.display-example-page > div:not([hidden]) .display-save-bar').getByRole('button', { name: 'Cancel', exact: true }).click()
  await expect(page.locator('#settings-display')).toBeVisible()
  await page.goto('/settings#ios-safari-userscript')
  await expect(page.locator('#ios-safari-userscript')).toBeVisible()
- await page.getByRole('link', { name: 'Settings Categories', exact: true }).click()
+ await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
  await expect(list).toBeVisible()
 })
 
@@ -735,7 +946,7 @@ test('AO3 Category and statistics can be added to work tiles and information pag
   await info.getByRole('button', { name: new RegExp(`^Add ${label}`) }).click()
  }
  await manage(info, false)
- await page.locator('.display-example-page > div:not([hidden]) > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+ await page.locator('.display-example-page > div:not([hidden]) .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
  await page.goto('/stories/display-entry')
  const details = page.getByRole('region', { name: 'Story Information' })
  await expect(details).toContainText('Category')
@@ -764,7 +975,7 @@ for (const kind of ['work', 'series'] as const) for (const layout of ['tile', 'p
   else await page.getByRole('button', { name: `${kind === 'work' ? 'Work' : 'Series'} Tile`, exact: true }).click()
  }
  await open()
- const controls = layout === 'page' ? page.locator('.display-example-page > div:not([hidden]) > .display-save-bar') : page.locator(`#display-${kind}-editor .display-save-bar:visible`).first()
+ const controls = layout === 'page' ? page.locator('.display-example-page > div:not([hidden]) .display-save-bar') : page.locator(`#display-${kind}-editor .display-save-bar:visible`).first()
  const preview = editor(page, layout === 'page' ? `Example ${kind === 'work' ? 'Work' : 'Series'} Info Page` : `${kind === 'work' ? 'Work' : 'Series'} Tile`)
  await expect(field(preview, group, hiddenField)).toHaveCount(0)
  await preview.getByRole('button', { name: 'Add Divider', exact: true }).click()
@@ -807,7 +1018,7 @@ test('example work expands editable other metadata and preserves its own field c
  await info.getByRole('button', { name: 'Add Chapter Reading History', exact: true }).click()
  await manage(info, false)
  await expect(chapterHistory).toBeVisible()
- const other = info.frameLocator('iframe').locator('details').filter({ has: info.frameLocator('iframe').locator('summary').filter({ hasText: /^Other Metadata$/ }) })
+ const other = info.locator('details').filter({ has: info.locator('summary').filter({ hasText: /^Other Metadata$/ }) })
  await expect(other).toHaveAttribute('open', '')
  await expect(field(info, 'workOther', 'language')).toBeVisible()
  await expect(field(info, 'workOther', 'warnings')).toBeVisible()
@@ -817,13 +1028,13 @@ test('example work expands editable other metadata and preserves its own field c
  await expect(field(info, 'workOther', 'language')).toHaveCount(0)
  await manage(info, true)
  await expect(info.getByRole('heading', { name: 'Hide/Show Information', exact: true })).toHaveCount(0)
- const available = info.locator('details[aria-label="Available Information"]')
- const section = available.locator('section').filter({ has: page.getByRole('heading', { name: 'Work Pages · Other Metadata', exact: true }) })
+ const available = info.locator('details[aria-label="Hidden Information"]')
+ const section = available.locator('section').filter({ has: page.getByRole('heading', { name: 'Other Metadata', exact: true }) })
  const addLanguage = section.getByRole('button', { name: 'Add Language', exact: true })
  await expect(addLanguage).toBeVisible()
  await available.locator('summary').click()
  await expect(addLanguage).toBeHidden()
- const shown = info.locator('details[aria-label="Shown Information"]').locator('section').filter({ has: page.getByRole('heading', { name: 'Work Pages · Other Metadata', exact: true }) })
+ const shown = info.locator('details[aria-label="Shown Information"]').locator('section').filter({ has: page.getByRole('heading', { name: 'Other Metadata', exact: true }) })
  await expect(shown.getByRole('button', { name: 'Select Verified Canonical URL', exact: true })).toBeVisible()
  await available.locator('summary').click()
  await addLanguage.click()
@@ -831,7 +1042,7 @@ test('example work expands editable other metadata and preserves its own field c
  await expect(field(info, 'workOther', 'language')).toBeVisible()
  await field(info, 'workOther', 'canonical').click()
  await info.getByRole('button', { name: 'Hide/Delete Selected', exact: true }).click()
- await page.locator('.display-example-page > div:not([hidden]) > .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
+ await page.locator('.display-example-page > div:not([hidden]) .display-save-bar').getByRole('button', { name: 'Save', exact: true }).click()
  await expect(page).toHaveURL(/\/settings#settings-display$/)
  await page.goto('/settings/example-work')
  await expect(field(editor(page, 'Example Work Info Page'), 'workOther', 'language')).toBeVisible()
@@ -904,39 +1115,85 @@ test('saves All Tags category order and applies it before collapsed tile limits'
 })
 
 
-test('settings categories, layout tabs, both-layout saves, and saved colors work together', async ({ page }, info) => {
+test('collapsed settings sidebar keeps only category icons with tooltips', async ({ page }) => {
  await fixture(page)
- await page.goto('/settings'); await login(page)
- await expect(page.getByRole('navigation', { name: 'Settings Categories', exact: true })).toBeHidden()
+ await page.goto('/settings')
+ await login(page)
+ const outline = page.getByRole('navigation', { name: 'Settings Categories', exact: true })
+ await expect(outline).toBeHidden()
  await page.getByRole('link', { name: 'Design', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Design', exact: true })).toBeVisible()
- await page.getByRole('button', { name: 'Collapse Settings Navigation' }).click()
- await expect(page.getByRole('navigation', { name: 'Settings Categories', exact: true })).toBeHidden()
- await page.getByRole('button', { name: 'Expand Settings Navigation' }).click()
+
+ const category = outline.getByRole('link', { name: 'Library & Reading', exact: true })
+ await expect(category).toHaveCSS('border-bottom-style', 'solid')
+ await expect(category).toHaveCSS('border-top-style', 'solid')
+ await expect(category).toHaveCSS('border-left-width', '0px')
+ await expect(category).toHaveCSS('border-right-width', '0px')
+ const railBounds = (await outline.boundingBox())!
+ const categoryBounds = (await category.boundingBox())!
+ expect(categoryBounds.x).toBeCloseTo(railBounds.x, 0)
+ expect(categoryBounds.width).toBeCloseTo(railBounds.width, 0)
+ const collapse = page.getByRole('button', { name: 'Collapse Sidebar', exact: true })
+ await expect(collapse).toHaveText('Collapse Sidebar')
+ const tagFormat = outline.getByRole('link', { name: 'Tag Format', exact: true })
+ await expect(tagFormat).toBeVisible()
+ await collapse.click()
+ await expect(outline.getByRole('link')).toHaveCount(6)
+ await expect(tagFormat).toHaveCount(0)
+ expect(await outline.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
+ for (const link of await outline.getByRole('link').all()) await expect(link.locator('svg')).toBeVisible()
+
+ await category.hover()
+ await expect(page.getByRole('tooltip').filter({ hasText: /^Library & Reading$/ })).toBeVisible()
+ await page.getByRole('button', { name: 'Expand Sidebar', exact: true }).click()
+ await expect(tagFormat).toHaveText('Tag Format')
+ await tagFormat.focus()
+ await expect(page.getByRole('tooltip').filter({ hasText: /^Tag Format$/ })).toBeVisible()
+ await tagFormat.press('Enter')
+ await expect(page).toHaveURL(/#display-tag-format$/)
+ await expect(tagFormat).toHaveAttribute('aria-current', 'location')
+})
+
+test('settings layout tabs, both-layout saves, and saved colors work together', async ({ page }, info) => {
+ await fixture(page)
+ await page.goto('/settings#design')
+ await login(page)
  await page.getByRole('button', { name: 'Work Tile', exact: true }).click()
  const tabs = page.getByRole('tablist', { name: 'Work Tile Layout', exact: true })
- await tabs.getByRole('tab', { name: 'Mobile Layout' }).click()
+ await tabs.getByRole('tab', { name: 'Mobile' }).click()
  const mobile = page.getByRole('region', { name: 'Mobile Work Tile Layout', exact: true })
  await expect(page.getByRole('region', { name: 'Desktop Work Tile Layout', exact: true })).toBeHidden()
  const authors = mobile.frameLocator('iframe').locator('[data-display-field="authors"]')
  await authors.click(); await page.keyboard.press('Backspace')
- await mobile.getByRole('checkbox', { name: 'Apply to Both Layouts' }).check()
+ await tabs.locator('..').getByRole('checkbox', { name: 'Apply to Both Layouts' }).check()
  await mobile.getByRole('button', { name: 'Save', exact: true }).click()
  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('between-chapters:display:v1')!))
  expect(saved.mobile.workTile.hidden).toContain('authors')
  expect(saved.workTile.hidden).toContain('authors')
- await tabs.getByRole('tab', { name: 'Desktop Layout' }).click()
+ await tabs.getByRole('tab', { name: 'Desktop' }).click()
  await expect(page.getByRole('region', { name: 'Desktop Work Tile Layout', exact: true }).frameLocator('iframe').locator('.authors')).toHaveCount(0)
- await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
  const color = page.getByRole('group', { name: 'Relationships Color', exact: true })
  await color.getByRole('button', { name: 'Custom Color', exact: true }).click()
  await color.getByRole('textbox', { name: 'Custom Color (Hex)', exact: true }).fill('#123456')
  await color.getByRole('button', { name: 'Save Color', exact: true }).click()
  await expect(color.getByRole('button', { name: 'Use Saved Color #123456' })).toBeVisible()
  await page.reload()
- await page.getByRole('button', { name: 'Tag Format', exact: true }).click()
  await color.getByRole('button', { name: 'Custom Color', exact: true }).click()
  await expect(color.getByRole('button', { name: 'Use Saved Color #123456' })).toBeVisible()
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
  await page.screenshot({ path: `test-results/settings-updates-${info.project.name}.png` })
+})
+
+test('stacked select labels match the Tag Text Color spacing', async ({ page }) => {
+ await fixture(page)
+ await page.goto('/settings#settings-display'); await login(page)
+ const roles = page.getByRole('combobox', { name: /^(Tag Text Color|Tag Color Mode|Fandom Text Color|Text Scaling)$/ })
+ await expect(roles).toHaveCount(4, { timeout: 20000 })
+ const gaps = await roles.evaluateAll(controls => controls.map(select => {
+  const label = select.closest('label')!, text = label.firstChild!
+  const range = document.createRange()
+  range.selectNodeContents(text)
+  return select.getBoundingClientRect().top - range.getBoundingClientRect().bottom
+ }))
+ for (const gap of gaps.slice(1)) expect(gap).toBeCloseTo(gaps[0], 1)
 })

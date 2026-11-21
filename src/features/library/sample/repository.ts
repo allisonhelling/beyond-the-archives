@@ -415,6 +415,14 @@ export async function importSampleWorks(works: (CsvWork & { choice?: 'keep' | 'o
 }
 
 export async function addSampleStoriesToCollections(storyIds: string[], collectionIds: string[]) {
+  changeSampleStoryMemberships(storyIds, collectionIds, true)
+}
+
+export async function removeSampleStoriesFromCollection(storyIds: string[], collectionId: string) {
+  changeSampleStoryMemberships(storyIds, [collectionId], false)
+}
+
+function changeSampleStoryMemberships(storyIds: string[], collectionIds: string[], add: boolean) {
   const data = read(), stories = storyIds.map(id => find(data, id)), now = new Date().toISOString()
   const collections = collectionIds.map(id => {
     const collection = data.collections.find(item => item.id === id && !item.default_key)
@@ -423,7 +431,8 @@ export async function addSampleStoriesToCollections(storyIds: string[], collecti
     return collection
   })
   for (const story of stories) for (const collection of collections) {
-    if (!story.collectionIds.includes(collection.id)) {
+    if (!add) story.collectionIds = story.collectionIds.filter(id => id !== collection.id)
+    else if (!story.collectionIds.includes(collection.id)) {
       story.collectionIds.push(collection.id)
       collection.last_story_added_at = now
     }

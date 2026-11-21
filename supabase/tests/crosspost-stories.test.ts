@@ -91,6 +91,7 @@ it('transfers only a contiguous prefix of complete reviewed groups and invalidat
  await as(alice, async () => {
   const captured = await scalar<StoryVersions>('public.story_versions($1,null,$2)', [source,['https://archiveofourown.org/works/571232']])
   expect(captured.candidates.map(edition=>edition.id)).toEqual([target])
+  expect((await versions(source, '571232')).candidates).toEqual([])
   const found=await versions(source,'Alternate Edition')
   await change(source,found.candidates[0],'link',found.revision)
   const linked=await versions(source)
@@ -148,6 +149,7 @@ it('transfers only a contiguous prefix of complete reviewed groups and invalidat
 
 it('reconciles group-owned settings across versions, checked writes, filters, restore, and unlink', async () => {
  const sourceUrl = 'https://fiction.example/first-organization', targetUrl = 'https://fiction.example/second-organization'
+ const foreign = await as(bob, () => save('Foreign Work', 'https://fiction.example/foreign-bulk', 7, 2))
  const backup = await as(alice, async () => {
   const source = await save('First Organization',sourceUrl,9,2)
   const target = await save('Second Organization',targetUrl,7,4)
@@ -194,6 +196,21 @@ it('reconciles group-owned settings across versions, checked writes, filters, re
   expect(updated.versions[1].metadata.title).toBe('Renamed Edition')
   expect(updated.versions.map(story => story.last_read_chapter)).toEqual([2,4])
   expect((await query(custom)).stories.map(story => story.id)).toEqual([source])
+  const ordinary = await save('Separate Work', 'https://fiction.example/separate-bulk', 5, 1)
+  await scalar('public.add_stories_to_collections($1,$2)', [[ordinary], [custom, extra]])
+  await expect(scalar('public.remove_stories_from_collection($1,$2)', [[ordinary, foreign], custom])).rejects.toThrow('Choose available stories')
+  expect((await query(custom)).total).toBe(2)
+  const matches = await scalar<{id:string;organizationGroup:string|null}[]>('public.library_collection_work_ids($1)', [custom])
+  expect(matches).toHaveLength(2)
+  expect(matches).toEqual(expect.arrayContaining([{id:source,organizationGroup:group},{id:ordinary,organizationGroup:null}]))
+  await scalar('public.remove_stories_from_collection($1,$2)', [[target, ordinary], custom])
+  await scalar('public.remove_stories_from_collection($1,$2)', [[target, ordinary], custom])
+  expect((await query(custom)).total).toBe(0)
+  expect((await versions(source)).versions.map(story => story.collectionIds)).toEqual([[extra], [extra]])
+  expect((await versions(source)).versions[0].sourceOrganization?.collections).toEqual([custom])
+  expect((await versions(ordinary)).versions[0].collectionIds).toEqual([extra])
+  await db.query('delete from public.library_entries where id=$1', [ordinary])
+  await scalar('public.add_stories_to_collections($1,$2)', [[source], [custom]])
   await db.query('update public.collections set automatic_rules=$2 where id=$1',[extra,automaticCollectionRules({ ...defaultReadingFilters, within: 'Renamed Edition' })])
   expect((await versions(source)).versions[0].collectionIds).toEqual([custom])
   await db.query('update public.collections set automatic_rules=null where id=$1',[extra])

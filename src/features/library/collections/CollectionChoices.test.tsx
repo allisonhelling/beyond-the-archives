@@ -178,11 +178,11 @@ it('deletes empty collections directly and retries reload without repeating dele
   expect(state.remove).toHaveBeenCalledOnce()
 })
 
-it('edits and clears a single collection summary', async () => {
+it('edits and clears a single collection description', async () => {
   const onClose = vi.fn(), user = userEvent.setup()
   render(<NewCollectionDialog collection={{ ...collection, description: 'Existing summary' }} onClose={onClose} />)
-  expect(screen.getByRole('textbox', { name: 'Summary' })).toHaveValue('Existing summary')
-  await user.clear(screen.getByRole('textbox', { name: 'Summary' }))
+  expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('Existing summary')
+  await user.clear(screen.getByRole('textbox', { name: 'Description' }))
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
   expect(state.save).toHaveBeenCalledWith('Night reads', 'existing', { color: '#123456', symbol: 'moon' }, '')
@@ -192,7 +192,7 @@ it('bulk edits only chosen appearance fields and excludes names and summaries', 
   const onClose = vi.fn(), user = userEvent.setup()
   render(<NewCollectionDialog selectedCollections={[collection, { ...collection, id: 'second', name: 'Other', description: 'Keep this' }]} onClose={onClose} />)
   expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('textbox', { name: 'Summary' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   await user.click(screen.getByRole('checkbox', { name: 'Change Symbol' }))
   await user.click(screen.getByRole('radio', { name: 'Leaf' }))

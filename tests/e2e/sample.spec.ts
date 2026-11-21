@@ -550,3 +550,18 @@ test('Reset Sample Data restores the captured library after local changes', asyn
  expect(restored.collections.find((c:{name:string})=>c.name==='Deleted Works')).toMatchObject({automatic_rules:{filters:{publication:['deleted']}}})
  expect(await page.evaluate(()=>localStorage.getItem('between-chapters:collection-sort:v1'))).toBeNull()
 })
+
+test('search stays editable at 14 px without a focus decoration', async ({ page }) => {
+ await page.goto('/library')
+ const search = page.locator('.reading-toolbar').getByRole('searchbox')
+ await expect(search).toHaveCSS('font-size', '14px')
+ const border = await search.evaluate(field => getComputedStyle(field).borderColor)
+ await search.focus()
+ await expect(search).toBeFocused()
+ await expect(search).toHaveCSS('outline-style', 'none')
+ await expect(search).toHaveCSS('box-shadow', 'none')
+ await expect(search).toHaveCSS('border-color', border)
+ await page.keyboard.type('Kiss of Death')
+ await page.keyboard.press('Enter')
+ await expect(page.getByRole('link', { name: 'Kiss of Death', exact: true })).toBeVisible()
+})

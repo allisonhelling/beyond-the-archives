@@ -92,9 +92,9 @@ test('existing manual collections can become automatic without replacing their i
   return {rules:box('.collection-rule-filters'),preview:box('.collection-preview'),dates:box('.updated-filter'),toggles:box('.filter-membership-toggles'),input:box('.date-filter-input'),overflow:element.scrollWidth>element.clientWidth}
  })
  expect(layout.overflow).toBe(false)
+ expect(layout.toggles.bottom).toBeLessThanOrEqual(layout.dates.top)
  if(info.project.name==='mobile') {
   expect(layout.rules.bottom).toBeLessThanOrEqual(layout.preview.top)
-  expect(layout.toggles.bottom).toBeLessThanOrEqual(layout.dates.top)
   await expect(dialog.getByRole('radio',{name:'Forest',exact:true})).toHaveCount(0)
   const chooseColor=dialog.getByRole('button',{name:'Choose Color',exact:true})
   await chooseColor.click()
@@ -112,8 +112,6 @@ test('existing manual collections can become automatic without replacing their i
   await expect(chooseSymbol).toHaveAttribute('aria-expanded','false')
   await expect(dialog).toBeVisible()
  } else {
-  expect(layout.toggles.left).toBeGreaterThanOrEqual(layout.dates.right)
-  expect(layout.toggles.top).toBeLessThan(layout.dates.bottom)
   expect(layout.input.width).toBeLessThan(160)
   await expect(dialog.getByRole('button',{name:'Choose Color',exact:true})).toBeHidden()
  }
@@ -142,7 +140,19 @@ test('turning automation off keeps current works, removes filter tags, and stops
  }
  await page.goto('/library?shelf=automatic-stop'); await login(page)
  await expect(page.locator('.work-card')).toHaveCount(1)
- await expect(page.getByRole('list',{name:'Automatic Collection Filters',exact:true})).toHaveText('Author: Writer')
+ const heading = page.locator('.collection-shelf-heading')
+ const info = heading.getByRole('button', { name: 'Automatic Collection Information' })
+ const description = heading.locator('.collection-description')
+ const rules = heading.getByRole('list', { name: 'Automatic Collection Filters' })
+ await expect(rules).toHaveText('Author: Writer')
+ await expect(description).toHaveText('My summary')
+ const [titleRow, descriptionBounds, ruleBounds] = await Promise.all([heading.locator('.collection-title-row'), description, rules].map(async item => (await item.boundingBox())!))
+ expect(descriptionBounds.y - titleRow.y - titleRow.height).toBeCloseTo(ruleBounds.y - descriptionBounds.y - descriptionBounds.height)
+ const bottomPadding = await heading.evaluate(element => getComputedStyle(element).paddingBottom)
+ expect(bottomPadding).toBe('12px')
+ await info.focus()
+ await expect(page.getByRole('tooltip', { name: 'Automatic collection: Matching works are included as your library changes.' })).toBeVisible()
+ await info.press('Escape')
  const edit=async()=>{
   await page.getByRole('button',{name:'Edit Collections',exact:true}).click()
   await page.getByRole('navigation',{name:'Library Shelves',exact:true}).getByRole('button',{name:'Batman reads',exact:true}).click()
@@ -160,7 +170,10 @@ test('turning automation off keeps current works, removes filter tags, and stops
  await dialog.getByRole('button',{name:'Save',exact:true}).click()
  await expect(dialog).toHaveCount(0)
  await expect(page.locator('.work-card')).toHaveCount(1)
- await expect(page.getByRole('list',{name:'Automatic Collection Filters',exact:true})).toHaveCount(0)
+ await expect(rules).toHaveCount(0)
+ await expect(info).toHaveCount(0)
+ await expect(description).toHaveText('My summary')
+ await expect(heading).toHaveCSS('padding-bottom', bottomPadding)
  expect(tables.collection_works).toEqual([{collection_id:'automatic-stop',library_entry_id:'entry-801'}])
  expect(tables.collections[0].automatic_rules).toBeNull()
  Object.assign(tables.library_entries[1],{metadata_overrides:{title:'Work 802',authors:['Writer']}})

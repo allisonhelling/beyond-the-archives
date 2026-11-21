@@ -1,25 +1,40 @@
+import { TabList } from '../../src/components/TabList'
 import { SummarySettings } from '../../src/features/library/summaries/SummarySettings'
 import { useState } from 'react'
 import { ReaderSection } from './ReaderSettings'
 import { DisplayEditor } from '../../src/features/library/display/DisplayEditor'
 import { useLayout, type DisplayLayout } from '../../src/lib/use-layout'
-import { viewportPresets, type TagAppearance, type DisplayPreferences } from '../../src/features/library/display/display-settings'
+import { ViewportSettings } from '../../src/features/library/display/ViewportSettings'
+import { usePreviewViewports } from '../../src/features/library/display/useDisplayPreference'
+import type { TagAppearance, DisplayPreferences } from '../../src/features/library/display/display-settings'
 import { ReaderTile } from './ReaderTile'
 import { defaultReaderTile, readerTileFields, readerTilePreferences } from './tile-layout'
 import { blankMetadata, type CatalogBook, type Preferences } from './model'
 const noop=()=>{}
 const sample:CatalogBook={id:'preview',workId:null,active:true,hasFile:true,metadata:{...blankMetadata,title:'A Story to Carry With You',authors:['Example Author'],fandoms:['Example Fandom'],additional_tags:['Found Family','Adventure'],summary:'A saved EPUB, ready for your next chapter.',word_count:42000,published_chapters:8,rating:'Teen And Up Audiences',publication_status:'in_progress'},importedAt:'2026-10-01',metadataAt:'2026-10-01',position:{chapter:'one',fraction:.4},status:'reading',collections:[],chapterCount:8,wordCount:42000,completedCount:3}
-export function TileSettings({asPage=false,preferences,appearance,book=sample,onSave,onClose}:{asPage?:boolean;preferences:Preferences;appearance:TagAppearance;book?:CatalogBook;onSave:(layout:DisplayLayout,value:DisplayPreferences['workTile'])=>Promise<void>;onClose:()=>void}) {
+export function TileSettings({asPage=false,preferences,appearance,book=sample,onSave,onClose}:{asPage?:boolean;preferences:Preferences;appearance:TagAppearance;book?:CatalogBook;onSave:(layout:DisplayLayout,value:DisplayPreferences['workTile'],applyBoth:boolean)=>Promise<void>;onClose:()=>void}) {
  const device=useLayout(),[layout,setLayout]=useState<DisplayLayout>(device)
+ const [summaryVersion,setSummaryVersion]=useState(0)
+ const [applyBoth,setApplyBoth]=useState(false)
+ const previewViewports = usePreviewViewports()
  const [drafts,setDrafts]=useState(()=>({mobile:readerTilePreferences(preferences,'mobile',appearance),desktop:readerTilePreferences(preferences,'desktop',appearance)})),[version,setVersion]=useState(0),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  const draft={...drafts[layout],tagAppearance:appearance}
- async function save(){setBusy(true);setError('');try{await onSave(layout,draft.workTile);setMessage(`${layout==='mobile'?'Mobile':'Desktop'} tile layout saved.`)}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function save(){setBusy(true);setError('');try {
+  await onSave(layout,draft.workTile,applyBoth)
+  if (applyBoth) setDrafts({ mobile: draft, desktop: draft })
+  setMessage(applyBoth ? 'Mobile and desktop tile layouts saved.' : `${layout==='mobile'?'Mobile':'Desktop'} tile layout saved.`)
+ }catch(e){setError(String(e))}finally{setBusy(false)}}
  return <ReaderSection page={asPage} title="Customize Tiles" className="tile-settings-dialog" busy={busy} onClose={onClose}>
   <p>Move and hide information directly in the preview. Group fields on one line or add dividers. Mobile and desktop layouts save separately. Tag Format controls tag style and colors.</p>
-  <SummarySettings /><div className="dialog-actions" role="group" aria-label="Tile Layout"><button aria-pressed={layout==='desktop'} onClick={()=>{setLayout('desktop');setMessage('')}}>Desktop</button><button aria-pressed={layout==='mobile'} onClick={()=>{setLayout('mobile');setMessage('')}}>Mobile</button></div>
-  <DisplayEditor key={`${layout}:${version}`} title="Reader Tile" groups={['workTile']} fields={{workTile:readerTileFields}} state={{draft,change:next=>{setDrafts(current=>({...current,[layout]:next}));setMessage('Unsaved changes')}}} viewport={viewportPresets[layout==='mobile'?'iphone-16':'desktop']}>
-   <ReaderTile onMarking={async()=>{}} onProgress={async()=>{}} busy book={book} preferences={preferences} appearance={appearance} onRead={noop} onManage={noop} onDetails={noop} onRemove={noop} onDelete={noop} onSearch={noop} />
+  <ViewportSettings />
+  <div className="display-layout-controls"><TabList tabs={[{id:'desktop',label:'Desktop'},{id:'mobile',label:'Mobile'}]} active={layout} onChange={next=>{setLayout(next);setMessage('')}} label="Tile Layout" prefix="reader-tile-layout" className="tab-bar compact-tab-bar" />
+  <label className="check-label"><input type="checkbox" checked={applyBoth} onChange={event => setApplyBoth(event.target.checked)} />Apply to Both Layouts</label></div>
+  <SummarySettings onApply={()=>setSummaryVersion(value=>value+1)} />
+  <div role="tabpanel" id={`reader-tile-layout-panel-${layout}`} aria-labelledby={`reader-tile-layout-tab-${layout}`}>
+  <DisplayEditor key={`${layout}:${version}`} title="Reader Tile" groups={['workTile']} fields={{workTile:readerTileFields}} state={{draft,change:next=>{setDrafts(current=>({...current,[layout]:next}));setMessage('Unsaved changes')}}} viewport={previewViewports[layout]}>
+   <ReaderTile key={summaryVersion} onMarking={async()=>{}} onProgress={async()=>{}} busy book={book} preferences={preferences} appearance={appearance} onRead={noop} onManage={noop} onDetails={noop} onRemove={noop} onDelete={noop} onSearch={noop} />
   </DisplayEditor>
+  </div>
   <div className="dialog-actions"><button className="primary" disabled={busy} onClick={()=>void save()}>Save Layout</button><button disabled={busy} onClick={()=>{setDrafts(current=>({...current,[layout]:{...current[layout],workTile:defaultReaderTile()}}));setVersion(value=>value+1);setMessage('Default layout ready. Save Layout to apply.')}}>Restore to Default</button><button disabled={busy} onClick={onClose}>Cancel</button></div>
   <p role="status">{message}</p>{error&&<p role="alert">{error}</p>}
  </ReaderSection>

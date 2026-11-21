@@ -7,6 +7,6 @@
   padding: 0.75rem 1rem;
   background: #f5eddf;
   color: #574731;
-  font-size: 0.85rem;
+  font-size: max(0.85rem, var(--minimum-text-size));
   border-bottom: 1px solid #ded0b8;
 }

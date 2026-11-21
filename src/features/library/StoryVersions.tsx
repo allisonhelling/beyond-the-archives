@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Dialog } from '../../components/Dialog'
 import { sampleMode } from '../../lib/sample-mode'
@@ -8,16 +8,11 @@ import { CollectionChoices } from './collections/CollectionChoices'
 import { PersonalTagInput } from './PersonalTagInput'
 import { StarRating } from './StarRating'
 import { loadStoryCompletion, loadStoryVersions, writeStoryCompletion, writeStoryVersions, type StoryCompletion, type StoryVersions as VersionSet } from './repository'
-import { capturedStoryLinks, storySourceVersion } from './story-source'
+import { capturedStoryLinks, sourceLabel, storySourceVersion } from './story-source'
 import { StoryChapterGroups } from './StoryChapterGroups'
 import { publicationStatuses } from './publication-status'
 import { readingLabel } from './chapter-edit'
 import { Pagination } from './browsing/Pagination'
-
-function sourceLabel(story: Story) {
- const identity = storySourceVersion(story).identity
- return identity?.kind === 'native' && identity.platform === 'ao3' ? 'AO3' : identity?.kind === 'url' ? new URL(identity.origin).hostname : 'Saved Source'
-}
 
 function VersionSummary({ story }: { story: Story }) {
  const [page, setPage] = useState(1)
@@ -26,9 +21,9 @@ function VersionSummary({ story }: { story: Story }) {
   .filter(ordinal => Number.isInteger(ordinal) && ordinal > 0 && chapterUrl(story, ordinal))
   .sort((left, right) => left - right), [story])
  const pages = Math.max(1, Math.ceil(chapters.length / size)), current = Math.min(page, pages)
- return <section className="settings-card">
-  <h3>{story.metadata.title} · {sourceLabel(story)}</h3>
-  {story.metadata.authors.length > 0 && <p>{story.metadata.authors.join(', ')}</p>}
+ return <section className="settings-card version-summary">
+  <h3>{story.metadata.title}</h3>
+  {story.metadata.authors.length > 0 && <p>By {story.metadata.authors.join(', ')}</p>}
   <p>{readingLabel(story) ?? statuses[story.reading_status]} · {story.last_read_chapter} / {story.metadata.published_chapters ?? '?'} Chapters Read</p>
   <p>{publicationStatuses[story.metadata.publication_status].label.replace(/ on AO3$/, '').replace(/^AO3 Status Unknown$/, 'Publication Status Unknown')}</p>
   {story.metadata.summary && <details><summary>Summary</summary><p>{story.metadata.summary}</p></details>}
@@ -36,7 +31,7 @@ function VersionSummary({ story }: { story: Story }) {
   {chapters.length > 0 && <details><summary>Verified Chapter Links</summary><ol>{chapters.slice((current - 1) * size, current * size).map(ordinal =>
    <li key={ordinal} value={ordinal}><a href={chapterUrl(story, ordinal)!} target="_blank" rel="noreferrer">Chapter {ordinal}</a></li>
   )}</ol>{pages > 1 && <Pagination page={current} pages={pages} size={size} total={chapters.length} onPage={setPage} itemLabel="chapters" />}</details>}
-  <a href={savedWorkUrl(story)} target="_blank" rel="noreferrer">Open Source</a>
+  <a className="clickable-text" href={savedWorkUrl(story)} target="_blank" rel="noreferrer">{sourceLabel(story)}</a>
  </section>
 }
 
@@ -51,13 +46,13 @@ function OrganizationReview({ versions, shared, busy, action, onSave }: {
   <h3>Reconcile Shared Settings</h3>
   <p>Choose the settings for the linked story. Each source keeps its original settings, reading progress, and history.</p>
   <fieldset disabled={busy}>
-   <div className="form-grid">{versions.map(version => {
+   <div className="form-grid version-grid">{versions.map(version => {
     const source = version.sourceOrganization ?? storyOrganization(version)
     return <section className="settings-card" key={version.id}>
      <h4>{version.metadata.title} · {sourceLabel(version)}</h4>
      <dl>
-      <dt>Favorite</dt><dd>{source.favorite ? 'Yes' : 'No'}</dd>
-      <dt>Personal Rating</dt><dd>{source.rating === null ? 'Unrated' : `${source.rating}/5`}</dd>
+      <div className="version-personal"><div><dt>Favorite</dt><dd>{source.favorite ? 'Yes' : 'No'}</dd></div>
+      <div><dt>Personal Rating</dt><dd>{source.rating === null ? 'Unrated' : `${source.rating}/5`}</dd></div></div>
       <dt>Collections</dt><dd>{list(source.collections.map(id => names.get(id) ?? id))}</dd>
       <dt>Personal Tags</dt><dd>{list(source.tags)}</dd>
       <dt>Private Notes</dt><dd className="story-summary">{source.notes || 'None'}</dd>
@@ -67,8 +62,8 @@ function OrganizationReview({ versions, shared, busy, action, onSave }: {
       onClick={() => setDraft(source)}>Copy These Settings</button>
     </section>
    })}</div>
-   <label className="check-label"><input type="checkbox" checked={draft.favorite} onChange={event => setDraft({ ...draft, favorite: event.target.checked })} />Shared Favorite</label>
-   <StarRating value={draft.rating} onChange={rating => setDraft({ ...draft, rating })} />
+   <div className="version-personal"><label className="check-label"><input type="checkbox" checked={draft.favorite} onChange={event => setDraft({ ...draft, favorite: event.target.checked })} />Shared Favorite</label>
+   <StarRating value={draft.rating} onChange={rating => setDraft({ ...draft, rating })} /></div>
    <fieldset><legend>Shared Collections</legend><CollectionChoices collections={collections} selected={draft.collections} onChange={selected => setDraft({ ...draft, collections: selected })} /></fieldset>
    <fieldset><legend>Shared Personal Tags</legend><PersonalTagInput value={draft.tags} onChange={tags => setDraft({ ...draft, tags })} /></fieldset>
    <label>Shared Private Notes<textarea rows={4} value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} /></label>
@@ -151,18 +146,18 @@ function CompareVersions({ story, onClose, onChanged }: { story: Story; onClose:
   } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save the story versions.') }
   finally { setBusy(false) }
  }
- return <Dialog title="Compare Versions" onClose={onClose} busy={busy}>
+ return <Dialog title="Compare Versions" className="story-versions-dialog" onClose={onClose} busy={busy}>
   {error && <p role="alert">{error} <button type="button" className="text-button" disabled={busy} onClick={() => void search()}>Reload Versions</button></p>}
   {!versions && !error && <p role="status">Loading saved versions…</p>}
   {versions && <>
-   <div className="form-grid">{versions.versions.map((version, index) => <div key={version.id}>
+   <div className="form-grid version-grid">{versions.versions.map((version, index) => <div key={version.id}>
     <VersionSummary story={version} />
     {versions.versions.length > 1 && <div className="form-actions">
      {index === 0 ? <span>Preferred Version</span> : <button type="button" className="button secondary" disabled={busy} onClick={() => void change('prefer', version)}>Make Preferred Version</button>}
      {version.id !== story.id && <Link to={`/stories/${version.id}`} state={location.state} onClick={onClose}>View Version</Link>}
      <button type="button" className="button secondary" disabled={busy} onClick={() => void change('unlink', version)}>Unlink {sourceLabel(version)} Version</button>
     </div>}
-   </div>)}</div>
+   </div>)}{target && <VersionSummary story={target} />}</div>
    {currentSource?.organizationGroup && versions.versions.length === 2 && <p className="field-help">Unlinking either version restores each source’s saved settings and discards the group’s shared settings.</p>}
    {currentSource && !currentSource.organizationGroup && otherVersions.length > 0 && !review && <button type="button" className="button secondary" disabled={busy} onClick={() => setReview({ versionSet: versions })}>Review Shared Settings</button>}
    {currentSource && review && !target && <OrganizationReview key={review.versionSet.revision} versions={review.versionSet.versions} busy={busy} action="Save Shared Settings"
@@ -177,8 +172,8 @@ function CompareVersions({ story, onClose, onChanged }: { story: Story; onClose:
     }} />
    </>}
    <form className="story-form" onSubmit={event => { event.preventDefault(); void search() }}>
-    <label>Find Another Saved Version<input value={query} onChange={event => setQuery(event.target.value)} maxLength={200} disabled={busy} /></label>
-    <button className="button secondary" disabled={busy}>Find Versions</button>
+    <label>Find Another Saved Version<input type="search" placeholder="Search library for story name" value={query} onChange={event => setQuery(event.target.value)} maxLength={200} disabled={busy} /></label>
+    <button className="button secondary" disabled={busy}>Search</button>
    </form>
    {versions.candidates.length > 0 && <section>
     <h3>Possible Crossposts</h3>
@@ -189,9 +184,7 @@ function CompareVersions({ story, onClose, onChanged }: { story: Story; onClose:
    </section>}
    {target && review && reviewedSource && <section>
     <h3>Review Selected Version</h3>
-    <VersionSummary story={target} />
     {sourceUrl && sourceLinks.has(storySourceVersion(target).normalizedUrl ?? '') && capturedStoryLinks(target).includes(sourceUrl) && <p>The captured source summaries link to each other.</p>}
-    <p>Confirm that these sources are versions of the same story.</p>
     <OrganizationReview key={target.id} versions={[...review.versionSet.versions, target]} shared={reviewedSource.organizationGroup ? storyOrganization(reviewedSource) : undefined}
      busy={busy} action="Confirm Same Story" onSave={settings => void change('link', target, settings)} />
    </section>}
@@ -200,17 +193,17 @@ function CompareVersions({ story, onClose, onChanged }: { story: Story; onClose:
  </Dialog>
 }
 
-export function StoryVersions({ story, onChanged }: { story: Story; onChanged: (ids: string[]) => Promise<void> }) {
+export function StoryVersions({ story, source, example = false, onChanged }: { story: Story; source: ReactNode; example?: boolean; onChanged: (ids: string[]) => Promise<void> }) {
  const [open, setOpen] = useState(false)
  const [reviewRevision, setReviewRevision] = useState(0)
- if (sampleMode) return null
- return <>
-  <button type="button" className="button secondary" onClick={() => setOpen(true)}>Compare Versions</button>
+ return <div className="details-published-on">
+  <dt className="published-on-heading"><span>Published On</span>{!example && <button type="button" className="button secondary compact version-trigger" disabled={sampleMode} onClick={() => setOpen(true)}>{story.crosspost_group_id ? 'Compare Versions' : 'Link Crosspost'}</button>}</dt>
+  <dd>{source}
   {story.crosspost_group_id && <>
-   <p className="field-help">Current Source · {sourceLabel(story)}</p>
    <p className="field-help">{story.organizationGroup ? 'Favorites, collections, ratings, personal tags, and notes are shared across linked versions.' : 'Review shared settings in Compare Versions.'}</p>
    <SharedStoryCompletion key={`${story.id}:${reviewRevision}`} story={story} />
   </>}
   {open && <CompareVersions key={story.id} story={story} onClose={() => { setOpen(false); setReviewRevision(value => value + 1) }} onChanged={onChanged} />}
- </>
+  </dd>
+ </div>
 }

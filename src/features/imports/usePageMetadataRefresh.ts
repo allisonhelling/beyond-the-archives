@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { useRef, useState } from 'react'
 import { useActivity } from '../../lib/use-activity'
 import { sampleMode } from '../../lib/sample-mode'
@@ -20,8 +21,8 @@ export function usePageMetadataRefresh(stories: Story[], scope: 'Page' | 'Series
     || history.data.jobs.some(job => job.status === 'failed' || job.status === 'cancelled' || job.error_category))
   const status: MetadataRefreshStatus = submitting ? 'submitting' : error ? 'failed' : request ? finished ? failed ? 'partial' : 'completed' : 'pending' : 'idle'
   const message = error || (request ? history.error || (finished
-    ? `${scope} metadata refresh finished for ${request.count} works.${failed ? ' Some works could not be refreshed. See import history for details.' : ''}`
-    : `Metadata refresh queued for ${request.count} works. See import history for progress.`) : '')
+    ? `${scope} metadata refresh finished for ${request.count} ${countNoun(request.count, 'work')}.${failed ? ' Some works could not be refreshed. See import history for details.' : ''}`
+    : `Metadata refresh queued for ${request.count} ${countNoun(request.count, 'work')}. See import history for progress.`) : '')
   const urls = [...new Set(stories.flatMap(story => story.work.ao3_work_id ? [`https://archiveofourown.org/works/${story.work.ao3_work_id}`] : []))]
 
   async function refresh() {

@@ -2,7 +2,8 @@ import { brandName } from '../../src/lib/brand'
 import { seriesWorkMetadata } from '../../src/features/library/series/series'
 import { defaultRatingInfo } from '../../src/features/library/rating-info'
 import { resumeReadingStatus } from '../../src/features/library/reading-history'
-import { active, caughtUpReadingStatus, parseLines, statuses, validateProgress } from '../../src/features/library/model'
+import { active, caughtUpReadingStatus, parseLines, progressReadingStatus, statuses, validateProgress } from '../../src/features/library/model'
+import { browserBarSettingsSection } from '../../src/features/settings/settings-sections'
 import { collectChapterRead, collectWorkPage, readPage, readWorkTiles, readChapterSections, chapterDefaults } from './page'
 import styles from './styles.css?inline'
 import { conflictFromError, EditConflict, mergeEdits, resolveEdits } from '../../src/features/library/edit-merge'
@@ -13,6 +14,8 @@ export async function mountLibrary(doc = document, href = location.href, options
  const readingLabel = browser === 'safari' ? 'Reading' : 'Currently Reading'
  const readingStatuses = { ...statuses, ...(browser === 'safari' ? { waiting_for_updates: 'Waiting' } : {}) }
  const backendUrl = config?.backend ?? __SUPABASE_URL__, appOrigin = config?.appOrigin ?? __APP_ORIGIN__, publicKey = config?.publicKey ?? __SUPABASE_KEY__
+ const settingsUrl = `${appOrigin}/settings`
+ const [browserBarHash] = browserBarSettingsSection.aliases
  const page = tile?.page ?? readPage(doc, href)
  if (!page) {
   for (const workTile of readWorkTiles(doc, href)) await mountLibrary(doc, workTile.url, { ...options, tile: workTile })
@@ -75,7 +78,7 @@ export async function mountLibrary(doc = document, href = location.href, options
  panel.append(editorPanel, connectionPanel)
  const conflictPanel = doc.createElement('div'); section.append(conflictPanel)
  const footer = doc.createElement('small'); footer.textContent = `${brandName} v${__SCRIPT_VERSION__} · `
- const update = doc.createElement('a'); update.href = `${appOrigin}/settings#${browser === 'chrome' ? 'ao3-browser-bar' : 'ios-safari-userscript'}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & Update Instructions'
+ const update = doc.createElement('a'); update.href = `${settingsUrl}${browser === 'chrome' ? browserBarHash : `#${browserBarSettingsSection.id}`}`; update.target = '_blank'; update.rel = 'noopener noreferrer'; update.textContent = 'Connection & Update Instructions'
  footer.append(update); section.append(footer)
  showPanel(null)
  const draftKey = () => `draft:${backendUrl}:${connection.userId}:${page.series ? 'series:' : ''}${page.work}`
@@ -279,8 +282,8 @@ export async function mountLibrary(doc = document, href = location.href, options
      error.textContent = ''; fieldset.disabled = true; dialog.setAttribute('aria-busy', 'true')
      try {
       if (!input.value.trim()) throw new Error('Enter chapters read.')
-      const value = validateProgress(Number(input.value), page.metadata)
-      const status = (entry.status === 'to_read' && value > 0) || (entry.status === 'finished' && value < entry.progress) ? 'reading' : entry.status
+      const value = Number(input.value)
+      const status = ['paused_reading', 'did_not_finish'].includes(entry.status) ? entry.status : progressReadingStatus(value, page.metadata, entry.status)
       await progress(value, status, false, page.current, 'derived')
       closeProgressEditor()
      } catch (failure) {
@@ -347,11 +350,11 @@ export async function mountLibrary(doc = document, href = location.href, options
    icon(['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 5-6'], indicator)
    node('span', 'Read', indicator)
   } else if (!(entry.status === 'paused_reading' && top && current === entry.progress + 1)) {
-   const final = isFinalChapter(current)
    const starting = ['to_read', 'paused_reading'].includes(entry.status)
-   const label = starting ? 'Mark Read' : final ? 'Finish Fic' : active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
+   const finish = !starting && isFinalChapter(current)
+   const label = finish ? 'Finish Story' : !starting && active({ reading_status: entry.status }) ? 'Read' : 'Mark Read'
    const status = entry.status === 'paused_reading' ? resumeReadingStatus({ reading_history: entry.readingHistory }) : entry.status === 're_reading' ? 're_reading' : 'reading'
-   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current, label === 'Finish Fic' ? 'explicit' : 'derived'), actions)
+   const complete = button(label, () => progress(Math.max(entry.progress, current), current === page.metadata.published_chapters ? caughtUpReadingStatus(status, page.metadata) : status, true, current, finish ? 'explicit' : 'derived'), actions)
    complete.className = 'complete-chapter'
    complete.prepend(icon(['m5 12 4 4L19 6'], complete))
   }
@@ -392,7 +395,10 @@ export async function mountLibrary(doc = document, href = location.href, options
     if (tile || top && current === 1) button('To Read', () => saveUnsaved('to_read', current), center)
     if (!tile && current) {
      if (top && current === 1) button('Reading', () => saveUnsaved('reading', current), center)
-     else button(!top && isFinalChapter(current) ? 'Finish Fic' : 'Mark Read', () => saveUnsaved('reading', current, true, !top && isFinalChapter(current) ? 'explicit' : 'derived'), center)
+     else {
+      const finish = !top && isFinalChapter(current)
+      button(finish ? 'Finish Story' : 'Mark Read', () => saveUnsaved('reading', current, true, finish ? 'explicit' : 'derived'), center)
+     }
     }
    }
   }
@@ -451,8 +457,8 @@ export async function mountLibrary(doc = document, href = location.href, options
   button('Cancel', () => { ratingText.value = ratingInfo; ratingEditor.hidden = true; ratingToggle.setAttribute('aria-expanded', 'false'); ratingToggle.focus() }, ratingActions)
   const libraryLink = node('a', `Library Settings (${appOrigin})`, connectionPanel)
   libraryLink.className = 'library-settings-link'
-  libraryLink.href = `${appOrigin}/settings#ao3-browser-bar`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
-  node('p', 'In Library Settings → AO3 Browser Bar, create a pairing code. Paste it here within 5 minutes. This connects the device until you disconnect it here or remove it in Library Settings.', connectionPanel)
+  libraryLink.href = `${settingsUrl}${browserBarHash}`; libraryLink.target = '_blank'; libraryLink.rel = 'noopener noreferrer'
+  node('p', `In Library Settings → ${browserBarSettingsSection.title}, create a pairing code. Paste it here within 5 minutes. This connects the device until you disconnect it here or remove it in Library Settings.`, connectionPanel)
   const label = node('label', 'One-Time Pairing Code', connectionPanel), input = node('input', '', label)
   input.type = 'password'; input.autocomplete = 'off'; input.spellcheck = false
   const actions = node('div', '', connectionPanel); actions.className = 'row'
@@ -633,7 +639,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   const status = field('Reading Status', 'select', 'status')
   for (const [key, title] of Object.entries(readingStatuses)) { const option = node('option', key === 'reading' ? readingLabel : title, status); option.value = key }
   status.value = draft.status
-  help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the fic as previously read (Finished) and still tracks your chapter.')
+  help(status, 'reading status', 'To Read marks no chapters as read. Finished status marks every published chapter read. Re-Reading marks the story as previously read (Finished) and still tracks your chapter.')
   const chapter = field('Current Chapter', 'input', 'chapter'); chapter.type = 'number'; chapter.min = '1'; chapter.step = '1'; chapter.value = draft.chapter
   if (page.metadata.published_chapters) chapter.max = String(page.metadata.published_chapters)
   help(chapter, 'current chapter', 'Current Chapter − 1 counts as completed; check finished to include this chapter.')
@@ -719,7 +725,7 @@ export async function mountLibrary(doc = document, href = location.href, options
   if (entry) {
    const reload = node('span', '', actions); reload.className = 'field-control reload-entry'
    button('Reload Saved Entry', async () => { await load(); await reconcileDraft(); message.textContent = 'Saved entry reloaded. Unchanged fields were updated; your local edits are retained.' }, reload)
-   infoHelp(reload, 'reload saved entry', 'Loads this fic’s latest saved information from your hosted library. Newer saved notes and other fields update only fields you have not edited here. Your local edits are kept, and changes to different fields merge automatically. If both devices edited the same field, choose a version or combine notes before saving. Reloading does not save your draft or refresh AO3 metadata.')
+   infoHelp(reload, 'reload saved entry', 'Loads this story’s latest saved information from your hosted library. Newer saved notes and other fields update only fields you have not edited here. Your local edits are kept, and changes to different fields merge automatically. If both devices edited the same field, choose a version or combine notes before saving. Reloading does not save your draft or refresh AO3 metadata.')
   }
   status.focus()
  }

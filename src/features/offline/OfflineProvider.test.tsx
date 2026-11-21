@@ -8,7 +8,7 @@ vi.mock('../auth/auth-context',()=>({useAuth:()=>({authenticated:true,session:{u
 const snapshot={connected:true,userId:'owner',savedAt:'2026-11-01T12:00:00Z',readers:[],stories:[],cloudBooks:[]}
 function Controls(){
  const hub=useOffline()
- return <><p>{hub.snapshot?'Retained':'Empty'}</p><p role="status">{hub.error}</p><p aria-label="Reports">{hub.snapshot?.readers.map(reader=>reader.id).join(',')}</p><button onClick={()=>void hub.disconnect().catch(()=>{})}>Disconnect</button><button onClick={()=>void hub.forgetReport('older').catch(()=>{})}>Remove Older Report</button></>
+ return <><p>{hub.snapshot?'Retained':'Empty'}</p><p role="status">{hub.error}</p><p aria-label="Reports" aria-busy={hub.refreshingReports}>{hub.snapshot?.readers.map(reader=>reader.id).join(',')}</p><button onClick={()=>void hub.disconnect().catch(()=>{})}>Disconnect</button><button onClick={()=>void hub.forgetReport('older').catch(()=>{})}>Remove Older Report</button></>
 }
 beforeEach(()=>{
  mocks.updateEntry.mockReset().mockResolvedValue(undefined)
@@ -45,10 +45,12 @@ it('does not restore a removed report when an earlier refresh finishes late',asy
  mocks.rpc.mockImplementation((name:string,args?:{p_action:string})=>args?.p_action==='forget_report'?Promise.resolve({error:null}):{abortSignal:()=>name==='reader_offline_snapshot'?pending:Promise.resolve({data:{enabled:true},error:null})})
  render(<OfflineProvider><Controls /></OfflineProvider>)
  await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('reader_offline_snapshot'))
+ expect(screen.getByLabelText('Reports')).toHaveAttribute('aria-busy', 'true')
  fireEvent.click(screen.getByRole('button',{name:'Remove Older Report'}))
  await waitFor(()=>expect(screen.getByLabelText('Reports')).toHaveTextContent('current'))
  expect(screen.getByLabelText('Reports')).not.toHaveTextContent('older')
  await act(async()=>{resolve({data:retained,error:null});await pending})
+ expect(screen.getByLabelText('Reports')).toHaveAttribute('aria-busy', 'false')
  expect(screen.getByLabelText('Reports')).not.toHaveTextContent('older')
 })
 it('disables the account connection and clears only the retained hub after success',async()=>{

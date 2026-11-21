@@ -16,19 +16,19 @@ export function FandomChoices({ options, selected, onChange, label = 'Search Fan
       const value = option.value ?? option.name
       return <label key={value} className="check-label" onMouseDown={event => { if (event.target !== event.currentTarget.control) event.preventDefault() }} htmlFor={`${id}-${encodeURIComponent(value)}`}><input id={`${id}-${encodeURIComponent(value)}`} type="checkbox" checked={selected.includes(value)} onChange={event => onChange(event.target.checked ? [...selected, value] : selected.filter(name => name !== value))} /><span className="fandom-option-label"><span>{option.name}</span>{' '}<span className="fandom-count">({option.count})</span></span></label>
     })}</div>
-    {!matches.length && <p>No matching fandoms.</p>}
+    {!matches.length && <p>No matching {label.replace(/^Search (?:Group \d+ )?/, '').toLowerCase()}.</p>}
   </>
 }
-export function FandomSelect({ options, selected, onChange, label = 'Select Fandoms', matchingControl, modeControl, matchingPanel, editor, summary }: { label?: string; matchingControl?: ReactNode; modeControl?: ReactNode; matchingPanel?: { id: string; 'aria-labelledby': string }; editor?: ReactNode; summary?: string; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
+export function FandomSelect({ options, selected, onChange, label = 'Select Fandoms', searchLabel = 'Search Fandoms', matchingControl, modeControl, matchingPanel, editor, summary }: { label?: string; searchLabel?: string; matchingControl?: ReactNode; modeControl?: ReactNode; matchingPanel?: { id: string; 'aria-labelledby': string }; editor?: ReactNode; summary?: string; options: FandomOption[]; selected: string[]; onChange: (value: string[]) => void }) {
   const [open, setOpen] = useState(false), id = useId()
   const ref = useDismissible<HTMLDivElement>(open, () => setOpen(false), { outsideEvent: 'click' })
   useEffect(() => { if (open) ref.current?.querySelector<HTMLInputElement>('input[type=search]')?.focus() }, [open, ref])
   return <div className="fandom-select" ref={ref}>
     <button type="button" className="filter-input fandom-trigger" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><span>{label} {selected.length ? `(${selected.length})` : ''}</span><ChevronDown size={16} /></button>
-    {!open && selected.length > 0 && <div className="filter-chips"><MetadataTags values={summary ? [summary] : selected} removeLabel={name => `Remove Fandom ${name}`} onRemove={name => onChange(summary ? [] : selected.filter(f => f !== name))} /></div>}
+    {!open && selected.length > 0 && <div className="filter-chips"><MetadataTags values={summary ? [summary] : selected} removeLabel={name => `Remove ${searchLabel === 'Search Fandoms' ? 'Fandom' : searchLabel.replace(/^Search /, '')} ${name}`} onRemove={name => onChange(summary ? [] : selected.filter(f => f !== name))} /></div>}
     {open && <div id={id} className="fandom-panel menu-surface" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setOpen(false); ref.current?.querySelector<HTMLButtonElement>('.fandom-trigger')?.focus() } }}>
       {modeControl}
-      {editor ?? <div {...matchingPanel} role={matchingPanel ? 'tabpanel' : undefined}><FandomChoices options={options} selected={selected} onChange={onChange} /></div>}
+      {editor ?? <div {...matchingPanel} role={matchingPanel ? 'tabpanel' : undefined}><FandomChoices label={searchLabel} options={options} selected={selected} onChange={onChange} /></div>}
     </div>}
     {matchingControl}
   </div>

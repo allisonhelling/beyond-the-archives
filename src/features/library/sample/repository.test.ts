@@ -3,7 +3,7 @@ import { automaticCollectionRules } from '../collections/automatic-collections'
 import { defaultReadingFilters } from '../reading-search'
 import { orderCollections, moveCollectionIds } from '../collections/collection-appearance'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { importSampleWorks, addSampleStoriesToCollections, loadSampleLibrary, resetSampleLibrary, updateSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
+import { importSampleWorks, addSampleStoriesToCollections, removeSampleStoriesFromCollection, loadSampleLibrary, resetSampleLibrary, updateSampleLibrary, updateSampleEntry, saveSampleStory, saveSampleCollection, deleteSampleCollection, deleteSampleStory, restoreSampleStory, saveSampleSeriesNote, updateSampleSeries, finishSampleSeries, reorderSampleCollections, updateSampleCollections, deleteSampleCollections } from './repository'
 import { librarySeries, seriesReadingStatus } from '../series/series'
 import defaultState from './default-state.json'
 import { parseWorkUrl, validateProgress } from '../model'
@@ -341,6 +341,11 @@ it('adds memberships in either direction without replacing personal fields or ch
   expect(final.stories.find(story => story.id === first.id)).toEqual(firstSaved)
   expect(final.stories.find(story => story.id === second.id)).toEqual({ ...second, collectionIds: [...second.collectionIds, collection] })
   await expect(addSampleStoriesToCollections([first.id], ['missing'])).rejects.toThrow('Collection no longer available')
+  await removeSampleStoriesFromCollection([first.id, second.id], collection)
+  const removed = await loadSampleLibrary()
+  expect(removed.stories.find(story => story.id === first.id)).toEqual({ ...first, collectionIds: [...first.collectionIds, other] })
+  expect(removed.stories.find(story => story.id === second.id)).toEqual(second)
+  expect(removed.collections.find(item => item.id === collection)!.last_story_added_at).toBe(final.collections.find(item => item.id === collection)!.last_story_added_at)
 })
 
 it('merges other-tab personal edits and requires review when both tabs edit notes', async () => {

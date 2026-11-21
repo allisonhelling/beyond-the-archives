@@ -4,15 +4,16 @@ import { remembersSession, rememberSession } from '../../lib/auth-session-storag
 import { readerAppUrl } from '../../lib/connected-login'
 import { connectedLoginRedirect } from '../../lib/connected-login-redirect'
 import { useActivity } from '../../lib/use-activity'
-import { useState, type FormEvent } from 'react'
-import { ArrowRight, BookOpen, LockKeyhole, ShieldCheck } from 'lucide-react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { ArrowRight, BookOpen } from 'lucide-react'
 import { Brand } from '../../components/Brand'
 import { authRedirectUrl, supabase } from '../../lib/supabase'
 import { useAuth } from './auth-context'
 import { sampleMode } from '../../lib/sample-mode'
 import { brandName } from '../../lib/brand'
+import { usePageTitle } from '../../lib/use-page-title'
 
-export function AuthScreen() {
+export function AuthScreen({ offlineLink }: { offlineLink?: ReactNode } = {}) {
   const { error: sessionError, needsPassword, passwordSaved, signIn } = useAuth()
   const [mode, setMode] = useState<AccountMode>(() => new URLSearchParams(location.search).get('auth') === 'recovery' ? 'reset' : 'login')
   const [email, setEmail] = useState(sampleMode ? 'Sample' : '')
@@ -23,6 +24,7 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const configured = sampleMode || Boolean(supabase)
+  usePageTitle(!configured ? 'Setup' : needsPassword ? 'Set Password' : mode === 'reset' ? 'Password Recovery' : mode === 'signup' ? 'Create Account' : 'Sign In')
 
   function changeMode(next: AccountMode) {
     setMode(next); setError(null); setMessage(null); setPassword('')
@@ -67,20 +69,16 @@ export function AuthScreen() {
   }
 
   return <div className="auth-page">
-    <header className="public-header"><Brand /><span className="eyebrow desktop-note">YOUR STORIES, ALWAYS WITHIN REACH</span></header>
+    <header className="public-header"><Brand showTagline />{offlineLink}</header>
     <main id="main" className="auth-main">
       <section className="auth-intro">
-        <span className="eyebrow accent">KEEP YOUR PLACE IN EVERY STORY</span>
         <h1>Your Stories.<br />Your <em>Library.</em></h1>
-        <p>Organize the fics you love, track your reading, and return to the chapters waiting for you.</p>
+        <p>Organize the stories you love, track your reading, and return to the chapters waiting for you.</p>
         <div className="book-scene" aria-hidden="true"><div className="scene-circle" /><div className="book book-one"><span>ONE MORE CHAPTER</span></div><div className="book book-two"><span>WORLDS TO RETURN TO</span></div><div className="book book-three"><BookOpen size={36} strokeWidth={1} /><span>The Next<br /><em>Great Story</em></span></div><span className="scene-star star-one">✧</span><span className="scene-star star-two">✧</span></div>
-        <div className="privacy-note"><ShieldCheck size={18} /><span>Private by design. Just you and your library.</span></div>
       </section>
       <section className="auth-card" aria-labelledby="auth-title">
-        <div className="small-icon"><LockKeyhole size={20} /></div>
-        <span className="eyebrow">YOUR PERSONAL READING SPACE</span>
         <h2 id="auth-title">{!configured ? 'Your Library Starts Here.' : needsPassword ? 'Make Yourself at Home.' : mode === 'reset' ? 'Find Your Way Back.' : mode === 'signup' ? 'Create Account' : 'Sign In'}</h2>
-        <p className="muted">{!configured ? 'The foundation is ready. Connect your private Supabase project to open your library.' : needsPassword ? 'Set a strong password to secure your private account.' : mode === 'reset' ? 'Enter your account email and we’ll send a recovery link.' : mode === 'signup' ? 'Create one account for both apps, or continue with your existing reader account.' : 'Sign in to pick up where you left off.'}</p>
+        {(!configured || needsPassword || mode !== 'login') && <p className="muted">{!configured ? 'The foundation is ready. Connect your private Supabase project to open your library.' : needsPassword ? 'Set a strong password to secure your private account.' : mode === 'reset' ? 'Enter your account email and we’ll send a recovery link.' : mode === 'signup' ? 'Create one account for both apps, or continue with your existing reader account.' : ''}</p>}
         {!configured ? <div className="setup-panel"><span className="status-pill">SETUP NEEDED</span><ol><li>Create your Supabase project and apply the migrations.</li><li>Add the public project URL and publishable key to your environment.</li><li>Enable email signup, then restart the app.</li></ol><p>Step-by-step instructions are in the project README.</p></div> : <form className="account-auth-form" onSubmit={submit}>
           {sampleMode && <p className="field-help">Sample login: <strong>Sample</strong> · Password: <strong>123</strong>. Your sample library stays in this browser.</p>}
           <SignInFields mode={needsPassword ? 'password' : mode} busy={busy} email={email} password={password} username={username} onUsernameChange={event=>setUsername(event.target.value)} onEmailChange={event=>setEmail(event.target.value)} onPasswordChange={event=>setPassword(event.target.value)} remember={remember} onRememberChange={value=>{setRemember(value);rememberSession('organizer',value)}} onToggleMode={()=>changeMode('reset')} />
@@ -90,10 +88,10 @@ export function AuthScreen() {
           {!needsPassword && mode !== 'reset' && <button type="button" className="button secondary" disabled={busy} onClick={() => void continueFromReader()}>Continue From Reader</button>}
           <button className="button primary" disabled={busy} type="submit">{busy ? 'Please Wait…' : needsPassword ? 'Save Password' : mode === 'reset' ? 'Send Recovery Link' : mode === 'signup' ? 'Create Account' : 'Sign In'}<ArrowRight size={17} /></button>
           </div>
-          {!needsPassword && <AccountModeSwitch mode={mode} busy={busy} onChange={changeMode} />}
+          {!needsPassword && <AccountModeSwitch mode={mode} busy={busy} onChange={changeMode} signupPrompt="New to beyond the archives?" />}
         </form>}
       </section>
     </main>
-    <footer className="public-footer"><span>{brandName}</span><span>An independent reading companion. Not affiliated with AO3.</span></footer>
+    <footer className="public-footer"><span>{brandName}</span><span>An independent reading organizer. Not affiliated with AO3.</span></footer>
   </div>
 }

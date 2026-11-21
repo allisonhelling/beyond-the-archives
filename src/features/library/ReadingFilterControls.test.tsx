@@ -57,7 +57,7 @@ it('discards pending edits when browsing another scope without collapsing the pa
 it('validates pending dates without changing the applied results', () => {
  const onChange = vi.fn()
  render(<ReadingFilterControls stories={[]} filters={defaultReadingFilters} onChange={onChange} alwaysExpanded />)
- fireEvent.change(screen.getByLabelText('From', { exact: true }), { target: { value: '02/31/2026' } })
+ fireEvent.change(screen.getByRole('textbox', { name: 'From' }), { target: { value: '02/31/2026' } })
  expect(screen.getByRole('button', { name: 'Apply Filters' })).toBeDisabled()
  expect(screen.getByRole('alert')).toHaveTextContent('valid From date')
  expect(onChange).not.toHaveBeenCalled()
@@ -89,9 +89,9 @@ it('removes individual applied filters immediately while retaining the other sel
  const onChange = vi.fn()
  const filters = { ...defaultReadingFilters, fandoms: ['First', 'Second'], tags: 'Fluff, Angst', crossovers: 'exclude' as const, sort: 'words' as const }
  render(<ReadingFilterControls stories={[]} filters={filters} onChange={onChange} />)
- fireEvent.click(screen.getByRole('button', { name: 'Remove Filter Fandom: First' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Remove Filter Include (Any): First' }))
  expect(onChange).toHaveBeenLastCalledWith({ ...filters, fandoms: ['Second'] })
- fireEvent.click(screen.getByRole('button', { name: 'Remove Filter Tags: Fluff' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Remove Filter Include (All): Fluff' }))
  expect(onChange).toHaveBeenLastCalledWith({ ...filters, tags: 'Angst' })
  fireEvent.click(screen.getByRole('button', { name: 'Remove Filter Crossovers Exclude' }))
  expect(onChange).toHaveBeenLastCalledWith({ ...filters, crossovers: 'allowed' })

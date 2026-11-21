@@ -11,7 +11,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DisplayInfo } from './DisplayInfo'
 import { DisplayEditorContext } from './display-editor-context'
-import { displayGroups, previewViewports, savePreviewViewports, tagAppearance, displayPreference, displayPreferences, displaySettingsKey, moveDisplaySelection, deleteDisplaySelection, moveDisplayField, removeDisplayLine, separateDisplayField, saveDisplay, type DisplayGroup } from './display-settings'
+import { displayGroups, previewViewports, savePreviewViewports, tagAppearance, displayPreference, displayPreferences, displaySettingsKey, moveDisplaySelection, deleteDisplaySelection, moveDisplayField, removeDisplayLine, separateDisplayField, saveDisplay, saveTextScale, textScale, type DisplayGroup } from './display-settings'
 
 beforeEach(() => {
   vi.stubGlobal('innerWidth', 1280)
@@ -19,6 +19,17 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) })
 })
 afterEach(() => vi.unstubAllGlobals())
+
+it('retains legacy text scaling and other saved display preferences', () => {
+ const saved = { textScale: 'large', summaryMode: 'collapsed' }
+ localStorage.setItem(displaySettingsKey, JSON.stringify(saved))
+ expect(textScale()).toBe('large')
+ expect(textScale('{"textScale":"unknown"}')).toBe('standard')
+ expect(textScale('bad json')).toBe('standard')
+ saveTextScale('extra-large')
+ expect(textScale()).toBe('extra-large')
+ expect(JSON.parse(localStorage.getItem(displaySettingsKey)!)).toEqual({ ...saved, textScale: 'extra-large' })
+})
 
 it('starts both layouts from legacy arrangements and saves only the edited profile', () => {
  localStorage.setItem(displaySettingsKey, JSON.stringify({ workTile: { order: ['summary', 'authors'], hidden: ['authors'] } }))
@@ -40,10 +51,10 @@ it('retains shared tag colors and viewport sizes while independently saving layo
  const mobile = displayPreferences(undefined, 'mobile')
  mobile.tagAppearance.shape = 'sharp'
  saveDisplay(mobile, 'mobile')
- expect(previewViewports()).toEqual(sizes)
+ expect(previewViewports().mobile).toEqual(sizes.mobile)
  expect(displayPreferences().tagAppearance.shape).toBe('sharp')
  expect(() => savePreviewViewports({ ...sizes, mobile: { width: 100, height: 900 } })).toThrow('Enter a preview size within the width and height limits.')
- expect(previewViewports()).toEqual(sizes)
+ expect(previewViewports().mobile).toEqual(sizes.mobile)
 })
 it('switches mounted tiles to the saved profile when the browser crosses the mobile breakpoint', () => {
  const mobile = displayPreferences(undefined, 'mobile')
@@ -222,14 +233,14 @@ it('colors active filter tags by category and updates them when settings are sav
  act(() => saveDisplay(preferences))
  render(<ReadingFilterControls stories={[]} filters={{ ...defaultReadingFilters, relationship: 'A/B', characters: 'A', tags: 'Fluff', rating: ['Teen And Up Audiences'], personalRating: ['1'] }} onChange={vi.fn()} />)
  const active = within(screen.getByLabelText('Active Filters'))
- const tag = (label: string) => active.getByText(label).closest('.categorized-tags')
- for (const [label, color] of [['Relationships: A/B', '#123abc'], ['Characters: A', '#456def'], ['Tags: Fluff', '#789abc'], ['Content Rating: Teen and Up', 'var(--color-link)'], ['Rating: 1/5', 'var(--color-link)']]) {
+ const tag = (label: string) => active.getByRole('button', { name: `Remove Filter ${label}` }).closest('.categorized-tags')
+ for (const [label, color] of [['Include (All): A/B', '#123abc'], ['Include (All): A', '#456def'], ['Include (All): Fluff', '#789abc'], ['Content Rating: Teen and Up', 'var(--color-link)'], ['Personal Rating: 1/5', 'var(--color-link)']]) {
   expect(tag(label)).toHaveStyle(`--tag-color: ${color}`)
   expect(tag(label)).toHaveAttribute('data-tag-shape', 'sharp')
  }
  preferences.tagAppearance.colors.relationships = '#abcdef'
  act(() => saveDisplay(preferences))
- expect(tag('Relationships: A/B')).toHaveStyle('--tag-color: #abcdef')
+ expect(tag('Include (All): A/B')).toHaveStyle('--tag-color: #abcdef')
 })
 
 it('shows a drop shadow in the same slot used by the move operation without saving the draft', () => {
@@ -270,6 +281,7 @@ it('labels hidden series in active library filters and switches to Show Series w
  expect(screen.getByLabelText('Active Filters')).toHaveTextContent('Hide Series')
  view.rerender(<ReadingFilterControls {...props} filters={{ ...props.filters, showSeries: true }} />)
  expect(screen.getByLabelText('Active Filters')).toHaveTextContent('Show Series')
+ expect(screen.queryByRole('button', { name: 'Remove Filter Show Series' })).not.toBeInTheDocument()
  expect(screen.getByLabelText('Active Filters')).not.toHaveTextContent('Hide Series')
  view.rerender(<ReadingFilterControls {...props} mode="reading" />)
  expect(screen.queryByLabelText('Active Filters')).not.toBeInTheDocument()
@@ -403,7 +415,8 @@ it('defaults to the iPhone 16 CSS viewport and preserves saved custom dimensions
 })
 it('edits preview sizes in inches and millimeters while saving exact CSS viewport dimensions', () => {
  render(<ViewportSettings />)
- const mobile = within(screen.getByRole('group', { name: 'Mobile Preview' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mobile Preview Screen Size' }))
+ const mobile = within(screen.getByRole('group', { name: 'Mobile Preview Screen Size' }))
  expect(mobile.getByLabelText('Device')).toHaveValue('iphone-16')
  fireEvent.change(mobile.getByLabelText('Device'), { target: { value: 'iphone-14-pro' } })
  expect(mobile.getByLabelText('Device')).toHaveValue('iphone-14-pro')

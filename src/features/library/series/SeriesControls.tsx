@@ -35,7 +35,7 @@ export function SeriesControls({ series, children }: { series: LibrarySeries; ch
  }
  const favorite = <FavoriteButton selected={series.record?.is_favorite ?? false} disabled={busy} onChange={favorite => void save({ favorite })} />
  const rec = <PersonalToggleButton kind="rec" selected={series.record?.is_rec ?? false} disabled={busy} onChange={rec => void save({ rec })} />
- const collectionProps = { onRefresh: refresh, selectedIds: series.record?.collectionIds ?? [], disabled: busy, onOpen: () => setMenuOpen(false), description: `Choose collections for “${series.title}”. Individual fics keep their own collections.`, onSave: async (collections: string[], base: string[]) => { await ensureSaved(); await updateSeries(series.seriesId, { collections }, { collections: base }) } }
+ const collectionProps = { onRefresh: refresh, selectedIds: series.record?.collectionIds ?? [], disabled: busy, onOpen: () => setMenuOpen(false), description: `Choose collections for “${series.title}”. Individual stories keep their own collections.`, onSave: async (collections: string[], base: string[]) => { await ensureSaved(); await updateSeries(series.seriesId, { collections }, { collections: base }) } }
  const collectionButton = <EditCollectionsButton {...collectionProps} />
  const collectionsField = <EditCollectionsButton {...collectionProps} variant="field" />
  const finishButton = seriesReadingStatus(series) === 'finished' ? null : <button type="button" className="button secondary" disabled={busy} onClick={() => { setMenuOpen(false); setFinishing(true) }}><Check size={16} aria-hidden="true" />Mark as Finished</button>

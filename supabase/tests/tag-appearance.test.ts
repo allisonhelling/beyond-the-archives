@@ -57,3 +57,27 @@ it('shares category order, rejects invalid orders, detects conflicting reorders,
  const legacy={shape:'sharp',colors:{}}
  expect(await settings({tagAppearance:legacy,base:reordered})).toEqual({tagAppearance:{...legacy,order:reordered.order}})
 })
+
+it('saves a separate mono color and retains it for older clients', async () => {
+ await asUser()
+ const base = (await settings()).tagAppearance
+ const next = { ...base, shape: 'pill', colors: { tags: '#123456' }, colorMode: 'mono', allColor: '#654321' }
+ await settings({ tagAppearance: next, base })
+ expect((await device(reader, 'tag_get')).tagAppearance).toMatchObject(next)
+ await asUser()
+ await expect(settings({ tagAppearance: { ...next, allColor: 'red' }, base: next })).rejects.toThrow('Invalid All Tags color')
+ await expect(settings({ tagAppearance: { ...next, colorMode: 'random' }, base: next })).rejects.toThrow('Invalid tag color mode')
+ const { colorMode, allColor, ...legacy } = next
+ expect((await settings({ tagAppearance: { ...legacy, shape: 'sharp' }, base: next })).tagAppearance).toMatchObject({ shape: 'sharp', colorMode, allColor })
+})
+
+it('validates and preserves independently styled fandom tags', async () => {
+ await asUser()
+ const base = (await settings()).tagAppearance
+ const fandom = { shape: 'sharp', textColor: 'black', color: '#aabbcc' }
+ const next = { ...base, shape: 'pill', colors: { tags: '#123456' }, fandom }
+ expect((await settings({ tagAppearance: next, base })).tagAppearance).toMatchObject(next)
+ await expect(settings({ tagAppearance: { ...next, fandom: { ...fandom, color: 'red' } }, base: next })).rejects.toThrow('Invalid fandom tag appearance')
+ const legacy = { ...next, fandom: undefined }
+ expect((await settings({ tagAppearance: { ...legacy, shape: 'curved' }, base: next })).tagAppearance).toMatchObject({ shape: 'curved', fandom })
+})

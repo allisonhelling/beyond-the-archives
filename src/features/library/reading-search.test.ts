@@ -238,3 +238,17 @@ it('filters crossovers independently of one-shots and sorts known word counts be
  expect(filterReading(entries, { ...defaultReadingFilters, sort: 'words' })).toEqual(entries)
  expect(filterReading(entries, { ...defaultReadingFilters, sort: 'words_reverse' })).toEqual([entries[1], entries[0], entries[2]])
 })
+
+it('combines range bounds and independent exclusion modes against saved metadata', () => {
+ const first = story('First', { created_at: '2026-10-20T23:00:00-04:00', metadata: { ...blankMetadata, word_count: 100, character_tags: ['Aang'], relationship_tags: ['Aang/Katara'] }, personalTags: ['Keep'] })
+ const second = story('Second', { created_at: '2026-10-21T00:00:00Z', metadata: { ...blankMetadata, word_count: 100, character_tags: ['Aang', 'Katara'] }, personalTags: ['Skip'] })
+ const unknown = story('Unknown')
+ const filters = { ...defaultReadingFilters,
+  ranges: { word_count: { min: '100', max: '100' }, imported: { min: '2026-10-21', max: '2026-10-21' } },
+  excludedTags: { characters: { mode: 'all' as const, tags: ['Aang', 'Katara'] }, personalTags: { mode: 'any' as const, tags: ['Skip'] } },
+ }
+ expect(filterReading([first, second, unknown], filters)).toEqual([first])
+ expect(filterReading([first, second], { ...filters, excludedTags: { characters: { mode: 'any', tags: ['Aang', 'Katara'] } } })).toEqual([])
+ expect(filterReading([first], { ...filters, excludedTags: { relationship: { mode: 'all', tags: ['Aang/Katara'] } } })).toEqual([])
+ expect(() => filterReading([], { ...filters, ranges: { hits: { min: '10', max: '2' } } })).toThrow('minimum must not exceed maximum')
+})

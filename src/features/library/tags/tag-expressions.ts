@@ -10,6 +10,25 @@ export type TagFilterKey = keyof typeof tagFilterConfig
 export type TagMatchMode = 'any' | 'all' | 'custom'
 export type TagExpression = { mode: 'any' | 'all'; tags: string[] } | { mode: 'custom'; groups: string[][] }
 export type TagExpressions = Partial<Record<TagFilterKey, TagExpression>>
+export const workTagFilters = {
+  relationship: { label: 'Relationships', category: 'relationships', source: 'relationship' },
+  characters: { label: 'Characters', category: 'characters', source: 'character' },
+  tags: { label: 'Tags', category: 'tags', source: 'freeform' },
+  personalTags: { label: 'Personal Tags', category: 'personalTags', source: null },
+} as const
+export type WorkTagKey = keyof typeof workTagFilters
+export const workTagKeys = Object.keys(workTagFilters) as WorkTagKey[]
+export type ExcludedTagExpressions = Partial<Record<WorkTagKey, Extract<TagExpression, { tags: string[] }>>>
+
+export function normalizeExcludedTags(value: unknown): ExcludedTagExpressions {
+  const result: ExcludedTagExpressions = {}
+  if (!value || typeof value !== 'object') return result
+  for (const key of workTagKeys) {
+    const expression = normalizeTagExpression((value as ExcludedTagExpressions)[key])
+    if (expression && expression.mode !== 'custom' && expression.tags.length) result[key] = expression
+  }
+  return result
+}
 type FilterInput = { fandoms: string[]; relationship: string; characters: string; tags: string; tagExpressions?: TagExpressions }
 
 /** Preserve first spelling/order; identity normalization follows the existing matcher. */

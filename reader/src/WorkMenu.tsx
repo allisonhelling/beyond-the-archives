@@ -10,7 +10,7 @@ export function WorkMenu({ onViewDetails, onRemoveDownload, onDelete, organizerH
   return <details className="work-menu story-menu" ref={ref} open={open} onToggle={event => setOpen(event.currentTarget.open)} onKeyDown={event => {
     if (event.key === 'Escape') { event.preventDefault(); setOpen(false); ref.current?.querySelector('summary')?.focus() }
   }}>
-    <summary aria-label="Work Actions" title="Work Actions" aria-expanded={open} aria-controls={open ? id : undefined}><Ellipsis size={20} aria-hidden="true" /></summary>
+    <summary aria-label="Work Actions" title="Work Actions" aria-expanded={open} aria-controls={open ? id : undefined}><Ellipsis size={22} aria-hidden="true" /></summary>
     {open && <div className="menu-surface" id={id}>{markings}<button className="menu-item" onClick={() => { setOpen(false); ref.current?.querySelector('summary')?.focus(); onViewDetails() }}><Info size={16} aria-hidden="true" />View Details</button>{organizerHref && <a className="menu-item" href={organizerHref} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}><ExternalLink size={16} aria-hidden="true" />View in Organizer</a>}{onRemoveDownload && <button className="menu-item" onClick={() => { setOpen(false); ref.current?.querySelector('summary')?.focus(); onRemoveDownload() }}><Download size={16} aria-hidden="true" />Remove Download</button>}<hr className="menu-divider" /><button className="menu-item danger" onClick={() => { setOpen(false); ref.current?.querySelector('summary')?.focus(); onDelete() }}><Trash2 size={16} aria-hidden="true" />Delete EPUB</button></div>}
   </details>
 }

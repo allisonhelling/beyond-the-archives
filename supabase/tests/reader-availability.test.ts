@@ -80,18 +80,23 @@ it('retains library caches for reader heartbeats while invalidating changed down
 it('filters by reader platform across installations with matching facets and owner isolation', async () => {
  await db.exec('reset role;begin')
  try {
-  await db.exec(`insert into public.works(ao3_work_id,title) values(84001,'First Download'),(84002,'Second Download'),(84003,'BookFusion Only');
+  await db.exec(`insert into public.works(ao3_work_id,title) values(84001,'First Download'),(84002,'Second Download'),(84003,'BookFusion Only'),(84004,'Online Story');
    insert into public.library_entries(user_id,work_id,original_url,metadata_overrides)
    select '${owner}',id,'https://archiveofourown.org/works/'||ao3_work_id,
-    case when ao3_work_id=84003 then '{"bookfusion_link":{"url":"https://www.bookfusion.com/reader/123","kind":"book"}}'::jsonb else '{}'::jsonb end
-   from public.works where ao3_work_id between 84001 and 84003;`)
+    case when ao3_work_id in (84002,84003) then '{"bookfusion_link":{"url":"https://www.bookfusion.com/reader/123","kind":"book"}}'::jsonb else '{}'::jsonb end
+   from public.works where ao3_work_id between 84001 and 84004;`)
   await report(['84001'])
   await report(['84002'],{installationId:'20000000-0000-0000-0000-000000000002'})
   await db.exec(`reset role;insert into public.reader_availability(device_id,user_id,installation_id,name,url,works)
-   select device_id,'${other}','20000000-0000-0000-0000-000000000003','Other Reader','https://reader.example/','["84003"]'
+   select device_id,'${other}','20000000-0000-0000-0000-000000000003','Other Reader','https://reader.example/','["84004"]'
    from public.reader_availability limit 1;`)
   await asUser()
-  for (const [availability,titles] of [['unfolded',['First Download','Second Download']],['bookfusion',['BookFusion Only']]] as const) {
+  for (const [availability,titles] of [
+   ['unfolded',['First Download','Second Download']],
+   ['bookfusion',['Second Download','BookFusion Only']],
+   ['any-offline',['First Download','Second Download','BookFusion Only']],
+   ['online-only',['Online Story']],
+  ] as const) {
    const q=JSON.stringify({mode:'library',shelf:'all',availability,filters:{showSeries:true},terms:[]})
    const page=(await db.query<{r:{total:number;stories:{metadata:{title:string}}[]}}>('select public.query_library($1,1,25) r',[q])).rows[0].r
    expect(page.stories.map(story=>story.metadata.title).sort()).toEqual([...titles].sort())

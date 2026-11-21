@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { readSeriesReviewDraft, saveSeriesReviewDraft, seriesReviewScope } from './series-review-draft'
 import { useActivity } from '../../lib/use-activity'
 import { Dialog } from '../../components/Dialog'
@@ -20,7 +21,7 @@ type Review = { preview?: SeriesPreview; selected: Set<number>; error?: string; 
 const reviewPageSize = 30
 
 function SeriesScopeAction({ label, scope, disabled, expanded, onClick }: { label: string; scope: string; disabled?: boolean; expanded?: boolean; onClick(): void }) {
- return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className="text-button clickable-text" aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
+ return <Tooltip portal description={`Applies to ${scope}`}>{id => <button type="button" className={`text-button clickable-text${expanded === undefined ? '' : ' disclosure-toggle'}`} aria-describedby={id} aria-expanded={expanded} disabled={disabled} onClick={onClick}>{label}</button>}</Tooltip>
 }
 
 export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: externalBusy, onConfirm, onCancel, initialPreviews = [], initialReadingStatus = 'to_read', onReadingStatusChange, onBusyChange, showReadingStatus = true, fitActions = false, confirmLabel = 'Import Selected Works', cancelLabel = 'Cancel', allowEmpty = false, automatic = false, embedded = false, singleSeries = false, error = '', status = '', previewCache, onPreview, bookmarkedSeriesIds, bookmarkGroupingUnavailable = false, relatedSeriesLabel = 'Series Containing Bookmarked Works', draftScope, onImportSelected }: {
@@ -203,7 +204,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
   {bookmarkGroupingUnavailable && <p className="field-help" role="status">This scan did not retain which series were explicitly bookmarked, so bookmark groups cannot be separated. Update the companion extension and start a new scan to enable grouping. Library membership does not determine whether a series was bookmarked.</p>}
   {error && <p role="alert" className="error-message">{error}</p>}
   {automatic && ready && !canConfirm && <p role="status">No new available series works to import. Already saved works are kept.</p>}
-  {!singleSeries && <p>{series.size} series detected · {direct.size} directly linked works included.</p>}
+  {!singleSeries && <p>{series.size} series detected · {direct.size} {countNoun(direct.size, 'directly linked work')} included.</p>}
   <p className="field-help">{automatic ? 'All available series works are included automatically.' : 'Only selected works are added to your library.'}{!singleSeries && ' Previews are temporary unless you choose to save full series details. Saving details includes information about unsaved works; it does not add them to your library.'} For extension previews, keep this page open and complete any AO3 sign-in in the separate series preview window.</p>
    {onImportSelected && <p className="field-help">Import Selected Works keeps this review open and the scan paused. Finishing the batch closes this review{confirmLabel === 'Import Batch and Continue' ? ' and resumes scanning' : ''}.</p>}
   {showReadingStatus && <><ImportReadingStatus value={readingStatus} disabled={disabled} onChange={status => { setReadingStatus(status); onReadingStatusChange?.(status) }} />
@@ -229,7 +230,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
     <SeriesScopeAction label={expanded ? 'Hide All' : 'View All'} scope={scope} disabled={!preview.works.length} expanded={expanded} onClick={() => setVisibility(!expanded, id)} />
    </>
    const saveControl = !singleSeries && catalogLoaded !== false && !seriesSaved(id) && <Tooltip portal description={saveDescription}>{tooltipId => <button type="button" className="button secondary series-preview-save" aria-describedby={tooltipId} disabled={disabled || !preview} onClick={() => void saveDetails(id, url)}>Save</button>}</Tooltip>
-   const worksToggle = !!preview?.works.length && <button type="button" className="text-button clickable-text" aria-expanded={shownSeries.has(id)} onClick={() => setShownSeries(current => {
+   const worksToggle = !!preview?.works.length && <button type="button" className="text-button clickable-text disclosure-toggle" aria-expanded={shownSeries.has(id)} onClick={() => setShownSeries(current => {
     const next = new Set(current)
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
@@ -241,7 +242,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
     {review?.error && <p className="error-message" role="alert">{review.error}</p>}
     {!preview && (review?.error ? <button className="button secondary" disabled={disabled} onClick={() => void load(id, url)}>Retry Preview</button> : <p role="status">{loading === id ? 'Loading Series…' : 'Waiting to load series…'}</p>)}
     {preview && <>
-     <p>{preview.works.length} visible works · {inLibrary} in library · {automatic ? available.length : available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>
+     <p>{preview.works.length} {countNoun(preview.works.length, 'visible work')} · {inLibrary} in library · {automatic ? available.length : available.filter(work => review.selected.has(work.workId)).length} selected. AO3 may hide unavailable or restricted works.</p>
      <div className="form-actions series-preview-controls" role="group" aria-label="Series Selection Controls">{worksToggle}{selectionControls}</div>
      {!preview.works.length && <p>No available works were found in this listing.</p>}
      {shownSeries.has(id) && visibleWorks.map(work => {
@@ -249,7 +250,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
       const choiceDisabled = automatic || disabled || saved || linked
       return <div className="series-import-work" key={work.workId}>
        <div className="series-import-work-title"><label className="check-label series-work-choice" aria-disabled={choiceDisabled}><input type="checkbox" disabled={choiceDisabled} checked={automatic || saved || linked || review.selected.has(work.workId)} onChange={event => select(id, event.target.checked ? [...review.selected, work.workId] : [...review.selected].filter(value => value !== work.workId))} />{work.position ? `Part ${work.position}: ` : ''}{work.title}</label><Tooltip description="View on AO3">{tooltipId => <a className="clickable-text series-work-link" href={work.url} target="_blank" rel="noreferrer" aria-label={`View on AO3: ${work.title}`} aria-describedby={tooltipId}><ExternalLink size={18} aria-hidden="true" /></a>}</Tooltip></div>
-       <p className="field-help">{work.authors.join(', ') || 'Unknown author'} · {work.fandoms?.join(' · ') || 'Fandom unknown'} · {work.wordCount === null ? 'Word count unknown' : `${work.wordCount.toLocaleString()} words`} · {work.chapters || 'Chapters unknown'} · {work.complete === null ? 'Completion unknown' : work.complete ? 'Complete' : 'In progress'}{saved ? ' · Already saved' : linked ? ' · Included via pasted work link' : ''}</p>
+       <p className="field-help">{work.authors.join(', ') || 'Unknown author'} · {work.fandoms?.join(' · ') || 'Fandom unknown'} · {work.wordCount === null ? 'Word count unknown' : `${work.wordCount.toLocaleString()} ${countNoun(work.wordCount, 'word')}`} · {work.chapters || 'Chapters unknown'} · {work.complete === null ? 'Completion unknown' : work.complete ? 'Complete' : 'In progress'}{saved ? ' · Already saved' : linked ? ' · Included via pasted work link' : ''}</p>
        <details open={!review.closed?.summary?.has(work.workId)} onToggle={event => toggleSection(id, work.workId, 'summary', event.currentTarget.open)}><summary>Summary</summary><div className="story-summary"><WorkSummary metadata={work} fallback="No summary provided." /></div></details>
        <details open={!review.closed?.tags?.has(work.workId)} onToggle={event => toggleSection(id, work.workId, 'tags', event.currentTarget.open)}><summary>Tags</summary><p className="field-help">{work.tags.join(' · ') || 'No tags provided.'}</p></details>
       </div>
@@ -266,7 +267,7 @@ export function SeriesImportReview({ text, savedIds: suppliedSavedIds, busy: ext
    <SeriesScopeAction label="Select All" scope="all series" disabled={disabled || automatic} onClick={() => setAllSelected(true)} />
   </div>}
   <footer className="series-review-actions" aria-label="Series Import Actions">
-   <p role="status">{selected.size} selected works{draftSaved && ' · Saved in this browser'}</p>
+   <p role="status">{selected.size} {countNoun(selected.size, 'selected work')}{draftSaved && ' · Saved in this browser'}</p>
    {!draftSaved && <p className="error-message">Review progress could not be saved in this browser. Keep this window open to retain your selections.</p>}
    {status && <p role="status">{status}</p>}
    <div className={`form-actions${fitActions || onImportSelected ? ' form-actions-fit' : ''}`}>

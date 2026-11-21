@@ -8,8 +8,8 @@ import { EditConflict } from '../edit-merge'
 import { useLibrary } from '../LibraryProvider'
 
 /** Works and series share the same collection editor and conflict handling. */
-export function EditCollectionsButton({ selectedIds, onSave, disabled = false, onOpen, description, variant = 'button', onRefresh, automaticIds = [] }: {
- automaticIds?: string[]; onRefresh?: () => Promise<void>; selectedIds: string[]; onSave: (ids: string[], base: string[]) => Promise<void>; disabled?: boolean; onOpen?: () => void; description?: string; variant?: 'button' | 'field'
+export function EditCollectionsButton({ selectedIds, onSave, disabled = false, onOpen, description, variant = 'button', label = 'Add to Collection', onRefresh, automaticIds = [] }: {
+ automaticIds?: string[]; onRefresh?: () => Promise<void>; selectedIds: string[]; onSave: (ids: string[], base: string[]) => Promise<void>; disabled?: boolean; onOpen?: () => void; description?: string; variant?: 'button' | 'field'; label?: string
 }) {
  const { collections, refresh } = useLibrary()
  const [open, setOpen] = useState(false), [selected, setSelected] = useState<string[]>([]), [base, setBase] = useState<string[]>([])
@@ -29,7 +29,7 @@ export function EditCollectionsButton({ selectedIds, onSave, disabled = false, o
   setBusy(true); setError('')
   try { await onSave(selected, base); await (onRefresh ?? refresh)(); close() } catch (error) { failed(error) } finally { setBusy(false) }
  }
- const button = <button ref={trigger} type="button" className={iconOnly ? 'icon-button inline-edit-icon' : 'button secondary'} disabled={disabled} aria-haspopup="dialog" aria-label={iconOnly ? 'Edit Collections' : undefined} title={iconOnly ? 'Edit Collections' : undefined} onClick={() => { setSelected(selectedIds); setBase(selectedIds); setError(''); setConflict(null); setOpen(true); onOpen?.() }}>{iconOnly ? <Pencil size={14} aria-hidden="true" /> : <><FolderPlus size={16} aria-hidden="true" />Add to Collection</>}</button>
+ const button = <button ref={trigger} type="button" className={iconOnly ? 'icon-button inline-edit-icon' : 'button secondary'} disabled={disabled} aria-haspopup="dialog" aria-label={iconOnly ? 'Edit Collections' : undefined} title={iconOnly ? 'Edit Collections' : undefined} onClick={() => { setSelected(selectedIds); setBase(selectedIds); setError(''); setConflict(null); setOpen(true); onOpen?.() }}>{iconOnly ? <Pencil size={14} aria-hidden="true" /> : <><FolderPlus size={16} aria-hidden="true" />{label}</>}</button>
  return <>{variant === 'field' ? <section className="details-collections" aria-label="Collections"><div className="details-collections-heading"><h2 className="details-control-heading">Collections</h2>{iconOnly && button}</div><div className="details-collections-content">{assigned.length ? <ul className="collection-name-list">{assigned.map(collection => <li key={collection.id}><Square size={12} aria-hidden="true" /><span>{collection.name}</span></li>)}</ul> : button}</div></section> : button}
 
   {open && <Dialog title="Edit Collections" onClose={close} busy={busy}>

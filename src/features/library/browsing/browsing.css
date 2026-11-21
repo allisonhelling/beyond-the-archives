@@ -2,7 +2,7 @@
 .browsing-settings > label + label { margin-top: 24px; }
 .date-format-examples { padding-inline-start: 24px; }
 
-.results-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 18px; }
+.results-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
 .pagination-trailing, .pagination-controls, .pagination-page, .pagination-size { display: flex; align-items: center; gap: 8px; }
 .pagination-leading { grid-column: 1; grid-row: 1; min-width: 0; }
 .pagination-leading + .pagination-page { grid-row: 2; }
@@ -16,7 +16,7 @@
 .pagination-page, .pagination-size { font-size: inherit; flex-direction: row; }
 .pagination-size { flex-wrap: wrap; }
 @media (max-width: 900px) {
- .results-pagination { grid-template-columns: minmax(0, 1fr) auto; font-size: 13px; }
+ .results-pagination { grid-template-columns: minmax(0, 1fr) auto; font-size: var(--minimum-text-size); }
  .pagination-trailing { grid-column: 2; grid-row: 1; }
  .pagination-page { grid-column: 1; grid-row: 1; }
  .pagination-page input, .pagination-size select { min-height: 32px; padding: 5px 8px; }
@@ -26,6 +26,6 @@
 
  .pagination-inline:has(> .pagination-trailing) .pagination-controls { grid-column: 1; grid-row: 1; }
  .pagination-inline:has(> .pagination-trailing) .pagination-leading { grid-row: 2; }
- .pagination-inline .pagination-controls { flex-wrap: nowrap; justify-content: center; width: 100%; min-width: 0; gap: 4px; font-size: 12px; }
+ .pagination-inline .pagination-controls { flex-wrap: nowrap; justify-content: center; width: 100%; min-width: 0; gap: 4px; font-size: var(--minimum-text-size); }
  .pagination-inline .pagination-controls > [role=status] { min-width: 0; white-space: normal; }
 }

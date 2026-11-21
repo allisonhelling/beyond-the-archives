@@ -1,23 +1,25 @@
+import { TextScalingControl } from '../../../components/TextScalingControl'
 import { TabList } from '../../../components/TabList'
 import { SummarySettings } from '../summaries/SummarySettings'
 import { usePreviewViewports } from './useDisplayPreference'
-import { useLayout, type DisplayLayout } from '../../../lib/use-layout'
+import { LayoutWidthContext, useLayout, type DisplayLayout } from '../../../lib/use-layout'
 import { DisplayEditor } from './DisplayEditor'
 import { ViewportSettings } from './ViewportSettings'
 import { ConfirmationDialog } from '../../../components/ConfirmationDialog'
-import { displaySettingsSection } from './settings-sections'
+import { displaySettingsSection, displayTagFormatSection, displayTileAndPageSection, accessibilitySettingsSection } from './settings-sections'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { MetadataTags } from '../MetadataTags'
 import { TagOrderSettings } from './TagOrderSettings'
-import { TagColorSettings } from './TagColorSettings'
+import { FandomTagSettings, TagShapeSettings, TagTextColorControl } from './TagAppearanceControls'
+import { TagColorMode, TagColorSettings } from './TagColorSettings'
 import { StoryCard, StoryDetailsPage } from '../LibraryPages'
 import { SeriesCard } from '../series/SeriesCollection'
 import { SeriesPage } from '../series/SeriesPage'
 import { DisplayEditorContext } from './display-editor-context'
 import { exampleSeries, exampleWork } from './display-examples'
-import { displayGroups, tagShapes, tagTextColor, type TagTextColor, type TagShape, displayPreferences, type TagAppearance, saveDisplay, sameTagAppearance, subscribeDisplay, type DisplayGroup, type DisplayPreferences } from './display-settings'
+import { defaultAllTagColor, defaultFandomAppearance, displayGroups, tagTextColor, displayPreferences, type TagAppearance, saveDisplay, sameTagAppearance, subscribeDisplay, type DisplayGroup, type DisplayPreferences } from './display-settings'
 
+const layoutTabs = [{ id: 'desktop', label: 'Desktop' }, { id: 'mobile', label: 'Mobile' }] as const
 const workTileGroups: DisplayGroup[] = ['workTile']
 const seriesTileGroups: DisplayGroup[] = ['seriesTile']
 const tileGroups = [...workTileGroups, ...seriesTileGroups]
@@ -48,11 +50,13 @@ function useDisplayDraft(groups: DisplayGroup[], editTags = false, layout: Displ
     saveDisplay(next, layout); setBaseline(next); setDraft(next); setMessage(message); setError('')
   }
   function restoreDefaults() {
-    commit(displayPreferences('{}', layout), 'Default settings restored.')
+    const defaults = displayPreferences('{}', layout)
+    if (editTags) defaults.tagAppearance = { ...defaults.tagAppearance, colorMode: 'multi', allColor: defaultAllTagColor, fandom: defaultFandomAppearance }
+    commit(defaults, 'Default settings restored.')
     setVersion(value => value + 1)
   }
   function save(applyBoth = false) {
-    if (editTags && Object.values(draft.tagAppearance.colors).some(color => !/^#[a-fA-F0-9]{6}$/.test(color))) { setError('Enter a tag color as # followed by six hexadecimal digits before saving.'); return false }
+    if (editTags && [...Object.values(draft.tagAppearance.colors), draft.tagAppearance.allColor ?? defaultAllTagColor, draft.tagAppearance.fandom?.color ?? defaultFandomAppearance.color].some(color => !/^#[a-fA-F0-9]{6}$/.test(color))) { setError('Enter a tag color as # followed by six hexadecimal digits before saving.'); return false }
     try {
       if (applyBoth) {
         const otherLayout = layout === 'mobile' ? 'desktop' : 'mobile'
@@ -77,51 +81,62 @@ function TagAppearanceSettings({ state }: { state: Draft }) {
   const appearance = state.draft.tagAppearance
   function change(next: TagAppearance) { state.change({ ...state.draft, tagAppearance: next }) }
   return <DisplayEditorContext value={{ preferences: state.draft, groups: [], selected: null }}><section className="display-tag-appearance" aria-label="Site-Wide Tag Appearance"><p className="field-help">Tag shape, colors, and All Tags category order apply throughout the site and sync with your organizer account. Save applies your changes. Linked EPUB readers follow these settings; unlinked readers keep their own format.</p>
-    <fieldset className="display-tag-shapes settings-subsection"><legend>Tag Shape</legend><p className="field-help">All styles use the category colors below. Use Change All Tags to apply one color to every category.</p><div className="display-tag-shape-options">{(Object.entries(tagShapes) as [TagShape, string][]).map(([shape, name]) => <button type="button" className="tag-shape-option" key={shape} aria-pressed={appearance.shape === shape} onClick={() => change({ ...appearance, shape })}><MetadataTags values={['Humor', 'Fluff']} shape={shape} /><span>{name}</span></button>)}</div></fieldset>
-    <label>Tag Text Color<select value={tagTextColor(appearance)} onChange={event => change({ ...appearance, textColor: event.target.value as TagTextColor })}><option value="colored">Colored Text</option><option value="black">Black Text</option></select></label>
+    <TagShapeSettings appearance={appearance} onChange={shape => change({ ...appearance, shape })} />
+    <div className="tag-color-modes"><TagColorMode appearance={appearance} onChange={change} /><TagTextColorControl value={tagTextColor(appearance)} onChange={textColor => change({ ...appearance, textColor })} /></div>
     <TagColorSettings appearance={appearance} onChange={change} />
     <TagOrderSettings appearance={appearance} onChange={change} />
+    <FandomTagSettings value={appearance.fandom} examples={exampleWork.metadata.fandoms} colorExample="Batman" onChange={fandom => change({ ...appearance, fandom })} />
   </section></DisplayEditorContext>
 }
 
-function TileLayoutEditor({ kind, layout, appearance }: { kind: 'work' | 'series'; layout: DisplayLayout; appearance: TagAppearance }) {
+function TileLayoutEditor({ kind, layout, appearance, applyBoth, summaryVersion }: { applyBoth: boolean; summaryVersion: number; kind: 'work' | 'series'; layout: DisplayLayout; appearance: TagAppearance }) {
  const groups = kind === 'work' ? workTileGroups : seriesTileGroups
  const state = useDisplayDraft(groups, false, layout)
- const [applyBoth, setApplyBoth] = useState(false)
  const sizes = usePreviewViewports()
  const title = `${kind === 'work' ? 'Work' : 'Series'} Tile`
  return <section className="display-device-editor" aria-label={`${layout === 'mobile' ? 'Mobile' : 'Desktop'} ${title} Layout`}>
-  <h4>{layout === 'mobile' ? 'Mobile' : 'Desktop'} Layout</h4>
-  <DisplayEditor key={state.version} title={title} showTitle={false} groups={groups} viewport={sizes[layout]} state={{ ...state, draft: { ...state.draft, tagAppearance: appearance } }}>{kind === 'work' ? <StoryCard story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor>
-  <label className="check-label"><input type="checkbox" checked={applyBoth} onChange={event => setApplyBoth(event.target.checked)} />Apply to Both Layouts</label><SaveControls state={state} applyBoth={applyBoth} />
+  <DisplayEditor key={state.version} title={title} showTitle={false} groups={groups} viewport={sizes[layout]} state={{ ...state, draft: { ...state.draft, tagAppearance: appearance } }}>{kind === 'work' ? <StoryCard key={summaryVersion} story={exampleWork} /> : <SeriesCard series={exampleSeries} />}</DisplayEditor>
+  <SaveControls state={state} applyBoth={applyBoth} />
  </section>
 }
 export function DisplaySettings() {
   const layout = useLayout()
   const tagState = useDisplayDraft([], true)
   const [tileLayout, setTileLayout] = useState<DisplayLayout>(layout)
-  const [expanded, setExpanded] = useState({ work: false, series: false, tags: false })
-  return <div id={displaySettingsSection.id} tabIndex={-1} className="display-settings"><section className="settings-card"><p className="muted">Arrange your tiles directly in the previews. Mobile and desktop arrangements are saved separately. Save applies to the active layout; select Apply to Both Layouts to use it for both. Tag appearance applies to both layouts.</p>
-    <ViewportSettings /><SummarySettings /></section>
-    <fieldset className="display-tag-format-section settings-subsection settings-card" aria-labelledby="display-tag-format-title"><legend className="display-tile-heading"><button type="button" aria-expanded={expanded.tags} aria-controls="display-tag-format" onClick={() => setExpanded(current => ({ ...current, tags: !current.tags }))}><span id="display-tag-format-title">Tag Format</span><span aria-hidden="true">{expanded.tags ? '▴' : '▾'}</span></button></legend>
-    <div id="display-tag-format" hidden={!expanded.tags}><TagAppearanceSettings key={tagState.version} state={tagState} /><SaveControls state={tagState} /></div></fieldset>
-    <section className="settings-card"><h2>{displaySettingsSection.title}</h2><div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><button type="button" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}><span id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</span><span aria-hidden="true">{expanded[kind] ? '▴' : '▾'}</span></button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><TabList tabs={[{ id: 'desktop', label: 'Desktop Layout' }, { id: 'mobile', label: 'Mobile Layout' }]} active={tileLayout} onChange={setTileLayout} label={`${kind === 'work' ? 'Work' : 'Series'} Tile Layout`} prefix={`tile-${kind}`} /><div className="display-device-previews">{(['desktop', 'mobile'] as const).map(device => <div key={device} role="tabpanel" id={`tile-${kind}-panel-${device}`} aria-labelledby={`tile-${kind}-tab-${device}`} hidden={tileLayout !== device}><TileLayoutEditor kind={kind} layout={device} appearance={tagState.draft.tagAppearance} /></div>)}</div></div></fieldset>)}</div>
+  const [expanded, setExpanded] = useState({ work: false, series: false })
+  const [applyBoth, setApplyBoth] = useState({ work: false, series: false })
+  const [summaryVersion, setSummaryVersion] = useState(0)
+  return <div id={displaySettingsSection.id} tabIndex={-1} className="display-settings">
+    <section id={accessibilitySettingsSection.id} tabIndex={-1} className="settings-card" aria-labelledby="text-scaling-title">
+      <h2 id="text-scaling-title">{accessibilitySettingsSection.title}</h2>
+      <TextScalingControl />
+    </section>
+    <section id={displayTagFormatSection.id} tabIndex={-1} className="display-tag-format-section settings-card" aria-labelledby="display-tag-format-title">
+      <h2 id="display-tag-format-title">{displayTagFormatSection.title}</h2>
+      <TagAppearanceSettings key={tagState.version} state={tagState} />
+      <SaveControls state={tagState} />
+    </section>
+    <section id={displayTileAndPageSection.id} tabIndex={-1} className="settings-card" aria-labelledby="display-tile-and-page-title">
+      <h2 id="display-tile-and-page-title">{displayTileAndPageSection.title}</h2>
+      <p className="muted">Customize and arrange the work and series tiles directly in the previews.</p>
+      <ViewportSettings />
+      <div className="display-tile-previews">{(['work', 'series'] as const).map(kind => <fieldset key={kind} className="display-tile-section settings-subsection" aria-labelledby={`display-${kind}-title`}><legend className="display-tile-heading"><button type="button" className="disclosure-toggle" aria-expanded={expanded[kind]} aria-controls={`display-${kind}-editor`} onClick={() => setExpanded(current => ({ ...current, [kind]: !current[kind] }))}><span id={`display-${kind}-title`}>{kind === 'work' ? 'Work' : 'Series'} Tile</span></button></legend><div id={`display-${kind}-editor`} hidden={!expanded[kind]}><div className="display-layout-controls"><TabList tabs={layoutTabs} className="tab-bar compact-tab-bar" active={tileLayout} onChange={setTileLayout} label={`${kind === 'work' ? 'Work' : 'Series'} Tile Layout`} prefix={`tile-${kind}`} /><label className="check-label"><input type="checkbox" checked={applyBoth[kind]} onChange={event => setApplyBoth(current => ({ ...current, [kind]: event.target.checked }))} />Apply to Both Layouts</label></div>{kind === 'work' && <SummarySettings onApply={() => setSummaryVersion(value => value + 1)} />}<div className="display-device-previews">{(['desktop', 'mobile'] as const).map(device => <div key={device} role="tabpanel" id={`tile-${kind}-panel-${device}`} aria-labelledby={`tile-${kind}-tab-${device}`} hidden={tileLayout !== device}><TileLayoutEditor kind={kind} layout={device} appearance={tagState.draft.tagAppearance} applyBoth={applyBoth[kind]} summaryVersion={summaryVersion} /></div>)}</div></div></fieldset>)}</div>
     <fieldset className="display-page-links settings-subsection" aria-labelledby="display-info-pages-title"><legend><h3 id="display-info-pages-title">Information Pages</h3></legend><div className="form-actions"><Link className="button secondary" to="/settings/example-work">Edit Work Info Page</Link><Link className="button secondary" to="/settings/example-series">Edit Series Info Page</Link></div><p className="muted">Open an example page and switch between mobile and desktop layouts.</p></fieldset>
   </section></div>
 }
-function ExampleLayoutEditor({ kind, layout, active }: { kind: 'work' | 'series'; layout: DisplayLayout; active: boolean }) {
+function ExampleLayoutEditor({ kind, layout, active, hasTabs }: { kind: 'work' | 'series'; layout: DisplayLayout; active: boolean; hasTabs: boolean }) {
  const state = useDisplayDraft(pageGroups(kind), false, layout), navigate = useNavigate(), sizes = usePreviewViewports()
  const title = `Example ${kind === 'work' ? 'Work' : 'Series'} Info Page`
- return <div hidden={!active}>
-  <SaveControls state={state} onCancel={() => navigate('/settings#settings-display')} onSave={() => navigate('/settings#settings-display')} />
-  <DisplayEditor key={`${kind}:${state.version}`} title={title} showTitle={false} groups={pageGroups(kind)} state={state} viewport={sizes[layout]}>{kind === 'work' ? <StoryDetailsPage example={exampleWork} /> : <SeriesPage example={exampleSeries} />}</DisplayEditor>
+ const back = () => navigate('/settings#settings-display')
+ return <div role="tabpanel" id={`info-layout-panel-${layout}`} aria-labelledby={hasTabs ? `info-layout-tab-${layout}` : undefined} aria-label={hasTabs ? undefined : title} hidden={!active}>
+  <div className="page-heading display-example-heading"><h1>{title}</h1><SaveControls state={state} onCancel={back} onSave={back} /></div>
+  <LayoutWidthContext value={layout === 'mobile' ? sizes.mobile.width : undefined}><div className="display-example-content" style={layout === 'mobile' ? { maxWidth: sizes.mobile.width } : undefined}>
+   <DisplayEditor key={`${kind}:${state.version}`} title={title} showTitle={false} groups={pageGroups(kind)} state={state}>{kind === 'work' ? <StoryDetailsPage example={exampleWork} /> : <SeriesPage example={exampleSeries} />}</DisplayEditor>
+  </div></LayoutWidthContext>
  </div>
 }
 export function DisplayExamplePage({ kind }: { kind: 'work' | 'series' }) {
- const device = useLayout(), [view, setView] = useState<DisplayLayout>(device)
+ const device = useLayout(650), [view, setView] = useState<DisplayLayout>(device)
  const layout = device === 'mobile' ? 'mobile' : view
- return <div className="display-example-page"><div className="page-heading"><h1>Example {kind === 'work' ? 'Work' : 'Series'} Info Page</h1></div>
-  <div className="form-actions" role="group" aria-label="Information Page Preview Layout">{(device === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(option => <button key={option} className={`button ${layout === option ? 'primary' : 'secondary'}`} aria-pressed={layout === option} onClick={() => setView(option)}>{option === 'mobile' ? 'Mobile View' : 'Desktop View'}</button>)}</div>
-  {(device === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(option => <ExampleLayoutEditor key={option} kind={kind} layout={option} active={layout === option} />)}
- </div>
+ return <div className="display-example-page">{device !== 'mobile' && <TabList tabs={layoutTabs} active={layout} onChange={setView} label="Information Page Preview Layout" prefix="info-layout" className="tab-bar compact-tab-bar" />}{(device === 'mobile' ? ['mobile'] as const : ['desktop', 'mobile'] as const).map(option => <ExampleLayoutEditor key={option} kind={kind} layout={option} active={layout === option} hasTabs={device !== 'mobile'} />)}</div>
 }

@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { DesktopRetrievalGate } from './DesktopRetrievalGate'
 import { TabList } from '../../components/TabList'
 import { useActivity } from '../../lib/use-activity'
@@ -13,6 +14,7 @@ import { useState } from 'react'
 import { Pagination } from '../library/browsing/Pagination'
 import { useImportHistory } from './useImportHistory'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { usePageTitle } from '../../lib/use-page-title'
 import { useLibrary } from '../library/LibraryProvider'
 import { useAuth } from '../auth/auth-context'
 import { SiteBulkForm } from './SiteBulkForm'
@@ -29,7 +31,7 @@ const importTabs = [
  { id: 'links', mobileLabel: 'Links', label: 'Work or Series Links' },
  { id: 'site-links', mobileLabel: 'Websites', label: 'Website Links' },
  { id: 'sync', mobileLabel: 'AO3 Sync', label: 'AO3 Library Sync' },
- { id: 'csv', mobileLabel: 'CSV', label: 'CSV (Bookmarks or Marked for Later)' },
+ { id: 'csv', label: 'CSV List' },
  { id: 'bookfusion', mobileLabel: 'Bookfusion', label: 'Calibre (Bookfusion)' },
 ] as const
 const activeStatuses=['pending','processing']
@@ -40,6 +42,8 @@ export function ImportPage() {
  const [pendingSources, setPendingSources] = useState<{ batch: string; urls: string[] }>()
  const [countReview, setCountReview] = useState<string>()
  const activeTab = importTabs.find(tab => tab.id === params.get('tab'))?.id ?? 'links'
+ const pageTitle = activeTab === 'site-links' ? 'Mass Import' : 'Mass Import from AO3'
+ usePageTitle(pageTitle)
  function setActiveTab(id: typeof importTabs[number]['id']) {
   setParams(previous => { const next = new URLSearchParams(previous); next.set('tab', id); return next }, { replace: true })
  }
@@ -94,8 +98,8 @@ export function ImportPage() {
  const onImported = async (id: string | null) => { if(id)setSelected(id); await library.refresh(); if(!sampleMode)await reload() }
  const batchHistory = <>
  <section className="settings-card"><h2>Previous Batches</h2>{history.error&&<p role="alert" className="error-message">{history.error}</p>}{sampleMode?<p>Batch history is available in the connected library. Local sample imports do not create account batches.</p>:loading?<p role="status">Loading import history…</p>:!data.batches.length?<p>No imports yet. Paste your first batch above.</p>:<label>Batch<select value={batch?.id??''} onChange={event=>{setResultPage(1);setSelected(event.target.value)}}>{data.batches.map(b=><option key={b.id} value={b.id}>{formatDateTime(b.created_at)}{b.source_url ? ` · Library Sync · ${b.source_url}` : ''}{b.cancelled_at?' · Cancelled':''}</option>)}</select></label>}
- {batch&&<><p>{total} tracked URLs · {data.summary?.imported??data.items.filter(i=>i.result==='imported'&&i.status==='completed').length} imported with metadata · {data.summary?.alreadySaved??data.items.filter(i=>i.result==='already_saved').length} already saved{siteBatch && ` · ${counts.pending ?? 0} queued · ${data.summary?.completed ?? 0} processed · ${data.summary?.reviewNeeded ?? 0} missing chapter counts`}</p><div className="import-status-filters" role="group" aria-label="Filter Import Results by Status"><button className="text-button" aria-pressed={statusFilter==='all'} aria-controls="import-result-table" onClick={()=>setStatusFilter('all')}>All Results: {total}</button>{finished&&<button className="text-button" aria-pressed={statusFilter==='review'} aria-controls="import-result-table" onClick={()=>setStatusFilter('review')}>Review: {reviewCount}</button>}{Object.entries(counts).map(([name,n])=><button key={name} className="text-button" aria-pressed={statusFilter===name} aria-controls="import-result-table" onClick={()=>setStatusFilter(name)}>{name}: {n}</button>)}</div>
- <p className="muted" role="status">{statusFilter==='review'?(reviewCount?`Batch finished. Showing failed, skipped, and cancelled results for your review. ${visibleCount} of ${total} results.`:'Batch finished. No failed, skipped, or cancelled results to review.'):`Showing ${visibleCount} of ${total} results${statusFilter!=='all'?` · ${statusFilter}`:''}`}</p>
+ {batch&&<><p>{total} {countNoun(total, 'tracked URL')} · {data.summary?.imported??data.items.filter(i=>i.result==='imported'&&i.status==='completed').length} imported with metadata · {data.summary?.alreadySaved??data.items.filter(i=>i.result==='already_saved').length} already saved{siteBatch && ` · ${counts.pending ?? 0} queued · ${data.summary?.completed ?? 0} processed · ${data.summary?.reviewNeeded ?? 0} ${countNoun(data.summary?.reviewNeeded, 'work')} missing chapter counts`}</p><div className="import-status-filters" role="group" aria-label="Filter Import Results by Status"><button className="text-button" aria-pressed={statusFilter==='all'} aria-controls="import-result-table" onClick={()=>setStatusFilter('all')}>All Results: {total}</button>{finished&&<button className="text-button" aria-pressed={statusFilter==='review'} aria-controls="import-result-table" onClick={()=>setStatusFilter('review')}>Review: {reviewCount}</button>}{Object.entries(counts).map(([name,n])=><button key={name} className="text-button" aria-pressed={statusFilter===name} aria-controls="import-result-table" onClick={()=>setStatusFilter(name)}>{name}: {n}</button>)}</div>
+ <p className="muted" role="status">{statusFilter==='review'?(reviewCount?`Batch finished. Showing failed, skipped, and cancelled results for your review. ${visibleCount} of ${total} ${countNoun(total, 'result')}.`:'Batch finished. No failed, skipped, or cancelled results to review.'):`Showing ${visibleCount} of ${total} ${countNoun(total, 'result')}${statusFilter!=='all'?` · ${statusFilter}`:''}`}</p>
  <progress aria-label="Import Progress" max={Math.max(total,1)} value={data.summary?.completed??data.items.filter(i=>!activeStatuses.includes(i.status)).length}/>
  <div className="form-actions"><button className="button secondary" disabled={busy||!!batch.cancelled_at||!(data.summary?.active??data.jobs.some(j=>activeStatuses.includes(j.status)))} onClick={()=>void action(()=>cancelBatch(batch.id))}>Cancel Remaining Retrieval</button><button className="text-button" disabled={busy} onClick={()=>void action(async()=>{})}>Refresh Results</button></div>
  {siteBatch && <div className="form-actions">
@@ -113,7 +117,7 @@ export function ImportPage() {
  </section>
  {siteBatch && batch && owner && countReview === batch.id && <ImportCountReview key={`${owner}:${batch.id}`} batch={batch.id} owner={owner} onSaved={reload} onClose={() => setCountReview(undefined)} />}
  </>
- return <div className="mass-import-page"><div className="page-heading"><div><h1>{activeTab === 'site-links' ? 'Mass Import' : 'Mass Import from AO3'}</h1><p>Choose website links, AO3 work and series links, an AO3 library sync, CSV files, or Calibre Bookfusion links.</p></div></div>
+ return <div className="mass-import-page"><div className="page-heading"><div><h1>{pageTitle}</h1><p>Choose AO3 work or series links, miscellaneous website links, an AO3 library sync, CSV files for AO3 Bookmarks or Marked for Later lists, or Calibre Bookfusion links.</p></div></div>
  <TabList tabs={importTabs} active={activeTab} onChange={setActiveTab} label="Mass Import Sections" prefix="imports" className="import-tabs tab-bar" />
  {importTabs.map(tab => <section key={tab.id} role="tabpanel" id={`imports-panel-${tab.id}`} aria-labelledby={`imports-tab-${tab.id}`} hidden={activeTab !== tab.id} tabIndex={0}>
   {tab.id === 'bookfusion' && <BookFusionImport />}
@@ -129,7 +133,7 @@ export function ImportPage() {
  <ImportReadingStatus description="Applies to all links imported." value={readingStatus} onChange={setReadingStatus} disabled={busy} />
  <SeriesImportOptions reviewRelatedSeries={seriesBehavior.reviewRelatedSeries} onReviewRelatedSeriesChange={seriesBehavior.setReviewRelatedSeries} defaultBehavior={seriesBehavior.defaultBehavior} override={seriesBehavior.override} onChange={seriesBehavior.setOverride} disabled={busy || reviewing} />
  </div>
- <p className="field-help">{urls.length} links found · {ignored} unrelated links will be ignored.{seriesCount>0&&` ${seriesCount} series detected; ${seriesBehavior.behavior === 'all' ? 'all available works will be included.' : 'review and select their works before importing.'}`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
+ <p className="field-help">{urls.length} {countNoun(urls.length, 'link')} found · {ignored} {countNoun(ignored, 'unrelated link')} will be ignored.{seriesCount>0&&` ${seriesCount} series detected; ${seriesBehavior.behavior === 'all' ? 'all available works will be included.' : 'review and select their works before importing.'}`} Up to 2,000 URLs per batch. Chapter IDs only set progress when their positions are verified.</p>
  <div className="form-actions"><button className="button primary" disabled={busy||!urls.length}>{busy?'Saving…':seriesCount ? seriesBehavior.behavior === 'all' ? 'Import All Series Works' : 'Review Series' : 'Import URLs'}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setText('')}>Clear</button></div>
  </form>}
  {!sampleMode && <p className="muted">The connected desktop companion retrieves metadata. Keep your browser running and complete any AO3 confirmation in the requested tab. This page checks persisted progress every five seconds. Closing it does not cancel jobs.</p>}

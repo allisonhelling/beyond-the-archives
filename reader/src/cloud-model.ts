@@ -1,3 +1,4 @@
+import { countNoun } from '../../src/lib/count-noun'
 import { readerProgress, statuses, type BookDetails, type Preferences } from './model'
 export type CloudValue = { key: string; value: unknown; revision: number }
 export type CloudEdit = { id: string; key: string; value: unknown; base: number }
@@ -24,7 +25,7 @@ export function describeCloudValue(key: string, value: unknown, book?: BookDetai
  if (field === 'favorite' || field === 'rec') return value ? 'Marked.' : 'Not marked.'
  if (field === 'notes') return typeof value === 'string' && value ? value : 'No personal notes.'
  if (field === 'status') return statuses[value as keyof typeof statuses] ?? 'No reading status saved.'
- if (field === 'progress') return `${typeof value === 'number' ? value : 0} chapters read.`
+ if (field === 'progress') return `${typeof value === 'number' ? value : 0} ${countNoun(typeof value === 'number' ? value : 0, 'chapter')} read.`
  if (field === 'completed') return Array.isArray(value) ? `${value.length} ${value.length === 1 ? 'chapter' : 'chapters'} marked read.` : 'No chapters marked read.'
  if (field === 'position') {
   const chapter = book?.chapters.find(chapter => chapter.id === data.chapter)
@@ -39,7 +40,7 @@ export function describeCloudValue(key: string, value: unknown, book?: BookDetai
  if (field === 'preferences') return `Reader display settings: ${data.dark ? 'dark' : 'light'} mode, ${data.layout === 'pages' ? 'paginated' : 'scrolling'} layout${typeof data.size === 'number' ? `, font size ${data.size}` : ''}${typeof data.width === 'number' ? `, reading width ${data.width}` : ''}. Saved tag formatting and tile layouts also belong to this version.`
  if (field?.startsWith('history:')) {
   const chapter = book?.chapters.find(chapter => chapter.id === data.chapter)
-  return `${data.reread ? 'Reread' : 'Read'} ${chapter?.title ?? 'a chapter'}${typeof data.at === 'string' ? ` on ${new Date(data.at).toLocaleString()}` : ''}${typeof data.words === 'number' ? ` · ${data.words.toLocaleString()} words` : ''}.`
+  return `${data.reread ? 'Reread' : 'Read'} ${chapter?.title ?? 'a chapter'}${typeof data.at === 'string' ? ` on ${new Date(data.at).toLocaleString()}` : ''}${typeof data.words === 'number' ? ` · ${data.words.toLocaleString()} ${countNoun(data.words, 'word')}` : ''}.`
  }
  return 'This version contains different saved reading information.'
 }

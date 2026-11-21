@@ -1,6 +1,8 @@
+import { LoadingStatus, LoadingWorkCards } from '../../components/ActivityIndicator'
 import { TagFilterContext } from './tag-filter-context'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { ReaderControls } from '../offline/ReaderControls'
+import { matchesLibraryAvailability, parseLibraryAvailability } from '../offline/availability-filter'
 import { SeriesSummaryContext } from './series/series-summary-context'
 import { RetryError } from '../../components/RetryError'
 import { ConfirmationDialog } from '../../components/ConfirmationDialog'
@@ -10,6 +12,9 @@ import { LibraryResults } from './LibraryResults'
 import { useLibrary } from './LibraryProvider'
 import { sampleMode } from '../../lib/sample-mode'
 import { SeriesCard } from './series/SeriesCollection'
+import { SelectableCollectionWork } from './collections/SelectableCollectionWork'
+import { useCollectionWorkSelection } from './collections/useCollectionWorkSelection'
+import { loadCollectionWorksForSelection } from './repository'
 import { useLibraryResults } from './useLibraryResults'
 import { readBrowsing, writeBrowsing, readingPreferencesKey } from './browsing/browsing'
 import { filterDefaultScope, readFilterDefaults } from './browsing/filter-defaults'
@@ -34,7 +39,7 @@ const groupOptions: { value: ReadingFilters['groupBy']; label: string }[] = [
   { value: 'author', label: 'Author' }, { value: 'series', label: 'Series' },
 ]
 function SortSelect({ value, onChange }: { value: SortOrder; onChange: (value: SortOrder) => void }) {
-  return <Dropdown fitContent label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value.replace(/_reverse$/, '')} onChange={next => onChange((next === value && next !== 'random' ? `${next}_reverse` : next) as SortOrder)} options={sortOptions.map(option => ({ ...option, label: `${option.label}${option.value === value.replace(/_reverse$/, '') && value !== 'random' ? value.endsWith('_reverse') !== (option.value === 'alpha') ? ' ↑' : ' ↓' : ''}` }))} />
+  return <Dropdown fitContent label="Sort" icon={ArrowDownWideNarrow} compact mobileIconOnly value={value.replace(/_reverse$/, '')} onChange={next => onChange((next === value && next !== 'random' ? `${next}_reverse` : next) as SortOrder)} options={sortOptions.map(option => ({ ...option, sizingLabel: option.value === 'random' ? option.label : `${option.label} ↑`, label: `${option.label}${option.value === value.replace(/_reverse$/, '') && value !== 'random' ? value.endsWith('_reverse') !== (option.value === 'alpha') ? ' ↑' : ' ↓' : ''}` }))} />
 }
 const mobileQuery = '(max-width: 650px)'
 const mobileSectionOrder: Partial<Record<string, number>> = { to_read: 4, waiting: 5, paused_reading: 6, view_all: 7 }
@@ -46,7 +51,7 @@ const sections = [
   ['to_read', 'To Read', 'Saved for later', Bookmark],
 ] as const
 
-export function ReadingDashboard({ stories, renderStory, mode = 'reading', showActions = true, renderHeader, filterItems = filterReading, author, localOnly = false }: { localOnly?: boolean; stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; showActions?: boolean; renderHeader?: (actions: ReactNode, total: number | undefined, selectShelf: (shelf: string) => void) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
+export function ReadingDashboard({ stories, renderStory, mode = 'reading', showActions = true, renderHeader, filterItems = filterReading, author, localOnly = false, editingCollections = false }: { localOnly?: boolean; editingCollections?: boolean; stories: Story[]; renderStory: (story: Story, linkId?: string) => ReactNode; mode?: 'reading' | 'library' | 'series'; showActions?: boolean; renderHeader?: (actions: ReactNode, total: number | undefined, selectShelf: (shelf: string) => void) => ReactNode; filterItems?: typeof filterReading; author?: string }) {
   const localResults = sampleMode || localOnly
   const [mobile, setMobile] = useState(() => window.matchMedia?.(mobileQuery).matches ?? false)
   useEffect(() => {
@@ -79,7 +84,7 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
   if (defaults.scope !== defaultScope || defaults.entryKey !== entryKey) setDefaults({ scope: defaultScope, entryKey, filters: readFilterDefaults(defaultScope) })
   const decoded = useMemo(() => readBrowsing(params, defaults.filters), [params, defaults.filters])
   // Retain local selections across detail navigation; a reload creates a new provider.
-  const { temporaryPageSizes, revisionError, checkRevision } = useLibrary()
+  const { temporaryPageSizes, revisionError, checkRevision, collections } = useLibrary()
   const [temporarySize, setTemporarySize] = useState(() => pageSize(params.get('size')) === undefined ? temporaryPageSizes.get(mode) : undefined)
   const [draft, setDraft] = useState<{ source: string; filters: ReadingFilters } | null>(null)
   const currentUrl = params.toString()
@@ -130,11 +135,16 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
     return mode === 'reading' ? tracked(works) : works
   }, [mode, stories, author])
   function change<K extends keyof ReadingFilters>(key: K, value: ReadingFilters[K]) { setFilters(previous => ({ ...previous, [key]: value, ...(key === 'sort' && value === 'random' && { randomSeed: crypto.randomUUID() }) })) }
+  const availability = parseLibraryAvailability(params.get('availability'))
   let error = '', filtered: Story[] = []
   try { filtered = filterItems(localResults ? pool : [], filters) } catch (e) { error = (e as Error).message }
+  // Sample data has no synced installation reports. It can still have saved BookFusion links.
+  if (sampleMode && !localOnly && availability) {
+    const downloaded = new Set<string>()
+    filtered = filtered.filter(story => matchesLibraryAvailability(story, availability, downloaded))
+  }
   const localShown = error ? [] : filtered.filter(s => mode !== 'reading' || inReadingSection(s, selected))
-  const availability = params.get('availability')
-  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(availability === 'unfolded' || availability === 'bookfusion' ? { availability } : params.get('reader') ? { reader: params.get('reader')! } : {}), ...(author !== undefined && { author }) }, page, size, !localResults && !error)
+  const remote = useLibraryResults({ mode, shelf: selected, filters, ...(availability ? { availability } : params.get('reader') ? { reader: params.get('reader')! } : {}), ...(author !== undefined && { author }) }, page, size, !localResults && !error)
   const displayed = remote.result ?? remote.previousResult
   const countsStale = !localResults && !remote.result
   const total = localResults ? localShown.length : displayed?.total
@@ -142,6 +152,21 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
   const currentPage = localResults ? Math.min(page, pages) : remote.result?.page ?? page
   const shown = localResults ? localShown.slice((currentPage - 1) * size, currentPage * size) : remote.result?.stories ?? remote.previousResult?.stories ?? []
   const seriesById = new Map((remote.result ?? remote.previousResult)?.series.map(series => [`series:${series.seriesId}`, series]) ?? [])
+  const selectingWorks = editingCollections && mode === 'library' && !localOnly
+  const workSelection = useCollectionWorkSelection({
+    scope: selectingWorks ? selected : undefined,
+    pageWorks: selectingWorks && (localResults || remote.result) && !error ? shown.filter(story => !story.id.startsWith('series:')) : [],
+    blocked: Boolean(error || remote.loading || remote.error),
+    manualCollection: collections.find(collection => collection.id === selected && !collection.default_key && !collection.automatic_rules),
+    loadAll: async signal => localResults ? stories.filter(story => !story.id.startsWith('series:')) : loadCollectionWorksForSelection(selected, signal),
+  })
+  function renderResult(story: Story, linkId?: string) {
+    const series = seriesById.get(story.id)
+    if (series) return <SeriesCard key={story.id} series={series} linkId={linkId} />
+    const tile = renderStory(story, linkId)
+    if (!workSelection || story.id.startsWith('series:')) return tile
+    return <SelectableCollectionWork key={story.id} title={story.metadata.title} selection={workSelection.tile(story)}>{tile}</SelectableCollectionWork>
+  }
   const refreshStories = shown.flatMap(story => seriesById.get(story.id)?.savedStories ?? [story])
   const metadataRefresh = usePageMetadataRefresh(refreshStories)
   const [confirmRefresh, setConfirmRefresh] = useState(false)
@@ -166,11 +191,12 @@ export function ReadingDashboard({ stories, renderStory, mode = 'reading', showA
     })}</nav>}
     {revisionError && <p role="status" className="field-help">{revisionError} <button className="text-button" onClick={() => void checkRevision(true)}>Retry Counts</button></p>}
     <ReadingFilterControls navigationKey={String(filterNavigation.revision)} availabilityControl={!localOnly && mode === 'library' ? <ReaderControls /> : undefined} worksOnly={localOnly || author !== undefined} defaultScope={defaultScope} stories={pool} filters={filters} onChange={applyFilters} mode={mode} orderingControls={orderingControls} sortControl={mobile ? sortControl : undefined} suggestions={remote.suggestions} fandomOptions={remote.facets?.fandoms} />
+    {workSelection?.toolbar}
     {pagination(true)}
     {remote.facetsError && <RetryError message={remote.facetsError} onRetry={remote.retrySuggestions} retryLabel="Retry Suggestions" />}
-    {remote.loading && <p role="status" data-results-loading="true">Loading results…</p>}
+    {remote.loading && <div data-results-loading="true">{shown.length ? <LoadingStatus>Loading Results…</LoadingStatus> : <LoadingWorkCards>Loading Results…</LoadingWorkCards>}</div>}
     {error && <RetryError message={error} onRetry={remote.error ? remote.retry : undefined} />}
-    {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <TagFilterContext value={searchTag}><LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={(story, linkId) => seriesById.has(story.id) ? <SeriesCard key={story.id} series={seriesById.get(story.id)!} linkId={linkId} /> : renderStory(story, linkId)} /></TagFilterContext> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'New Chapter requires a saved notification and a verified unread-chapter destination. Phase 2 does not retrieve updates automatically.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
+    {(!error || Boolean(remote.error && shown.length)) && (shown.length ? <TagFilterContext value={searchTag}><LibraryResults stories={shown} groupBy={filters.groupBy} renderStory={renderResult} /></TagFilterContext> : !remote.loading && <section className="library-empty"><h2>{selected === 'new' ? 'No Verified Chapter Updates' : 'No Stories Here Yet'}</h2><p>{selected === 'new' ? 'This section shows saved notifications that link to an unread chapter.' : hasReadingFilters(filters) ? 'Try another search or clear your filters.' : mode === 'library' ? 'Add a story manually or choose another shelf.' : selected === 'view_all' ? 'Start reading a saved story, or choose To Read to see stories saved for later.' : 'Choose another tile, or use Add in the navigation to save a story.'}</p></section>)}
     {!error && (localResults ? shown.length > 0 : (displayed?.total ?? 0) > 0) && (!remote.loading || Boolean(displayed)) && pagination()}
   </SeriesSummaryContext>
 }

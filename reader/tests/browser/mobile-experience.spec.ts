@@ -27,9 +27,16 @@ test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, h
 
 test('shows full summaries, organizer-style controls and four persistent mobile destinations', async ({ page }) => {
  await importBook(page, true)
+ await expect(page).toHaveTitle('Recovered & Remembered · archives unfolded')
  await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
- const summary = page.locator('.summary')
+ await expect(page).toHaveTitle('The Bookshelf · archives unfolded')
+ const summary = page.locator('.story-summary')
  expect(await summary.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true)
+ const tile = page.locator('.story-card')
+ await expect(tile.locator('.work-tile-origin')).toHaveText('AO3')
+ const header = page.getByRole('navigation', { name: 'Main Navigation' })
+ await expect(header.getByRole('button', { name: '＋ Import EPUB', exact: true })).toBeVisible()
+ await expect(header.getByRole('button', { name: 'Metadata', exact: true })).toBeVisible()
  const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
  await expect(nav.getByRole('button')).toHaveText(['Bookshelf', 'Import', 'Storage', 'Settings'])
  await expect(page.getByRole('button', { name: 'Calibre', exact: true })).toHaveCount(0)
@@ -47,10 +54,13 @@ test('shows full summaries, organizer-style controls and four persistent mobile 
 test('opens mobile settings categories as pages and supports history and direct Storage navigation', async ({ page }) => {
  const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
  await nav.getByRole('button', { name: 'Settings', exact: true }).click()
+ await expect(page).toHaveTitle('Settings · archives unfolded')
  const categories = page.getByRole('navigation', { name: 'Settings Sections' })
- await expect(categories.getByRole('link')).toHaveText([/Reader Account/, /Cloud Library/, /Organizer & Sync/, /Tag Format/, /Customize Tiles/, /Manage Local Storage/])
- for (const title of ['Reader Account', 'Cloud Library', 'Organizer & Sync', 'Tag Format', 'Customize Tiles', 'Manage Local Storage']) {
+ const sectionTitles = ['Reader Account', 'Cloud Library', 'Organizer & Sync', 'Accessibility', 'Tag Format', 'Customize Tiles', 'Manage Local Storage']
+ await expect(categories.getByRole('link')).toHaveCount(sectionTitles.length)
+ for (const title of sectionTitles) {
   await categories.getByRole('link', { name: title, exact: true }).click()
+  await expect(page).toHaveTitle(`${title} · archives unfolded`)
   await expect(page.getByRole('button', { name: 'Back to Settings', exact: true })).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.getByRole('button', { name: 'Back to Settings', exact: true }).click()
@@ -58,8 +68,10 @@ test('opens mobile settings categories as pages and supports history and direct 
  await nav.getByRole('button', { name: 'Storage', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Manage Local Storage', exact: true })).toBeVisible()
  await page.reload()
+ await expect(page).toHaveTitle('Manage Local Storage · archives unfolded')
  await expect(page.getByRole('heading', { name: 'Manage Local Storage', exact: true })).toBeVisible()
  await page.goBack()
+ await expect(page).toHaveTitle('Settings · archives unfolded')
  await expect(categories).toBeVisible()
 })
 
@@ -70,7 +82,7 @@ test('opens an anthology fic from the Storage page and returns to the bookshelf'
  await page.getByRole('button', { name: 'Dismiss Message' }).click()
  await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('button', { name: 'Storage', exact: true }).click()
  await page.getByRole('region', { name: 'Manage Local Storage' }).getByRole('cell', { name: 'Three Fic Anthology', exact: true }).dblclick()
- await page.getByRole('dialog', { name: 'View Details' }).getByRole('button', { name: 'Read This Fic', exact: true }).nth(1).click()
+ await page.getByRole('dialog', { name: 'View Details' }).getByRole('button', { name: 'Read This Story', exact: true }).nth(1).click()
  await expect(page.getByLabel('Book Content')).toBeVisible()
  await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'The Bookshelf', exact: true })).toBeVisible()

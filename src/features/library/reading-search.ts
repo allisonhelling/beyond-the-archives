@@ -2,12 +2,12 @@ import { needsCompletionVerification } from './chapter-edit'
 import { fieldConfidence, type MetadataConfidence } from './story-source'
 import { matchesCrossoverStatus } from './fandoms/crossover-evidence'
 import { projectedCrossoverStatus } from './fandoms/fandom-classification'
-import { expressionTags, matchesTagExpression, tagExpression, tagFilterConfig, type TagExpressions } from './tags/tag-expressions'
+import { expressionTags, matchesTagExpression, normalizeExcludedTags, tagExpression, tagFilterConfig, workTagKeys, workTagFilters, type ExcludedTagExpressions, type TagExpressions } from './tags/tag-expressions'
 import { normalizeTag as normalize, tagMatches, type TagAliases } from './tags/tag-resolution'
-import { datePlaceholder } from '../../lib/dates'
+import { normalizeFilterRanges, rangeMatcher, type FilterRanges } from './filter-ranges'
 import { inSeries, seriesMemberships } from './series/series'
 import { publicationStatuses } from './publication-status'
-import { active, isCalendarDate, isOneShot, statuses, tagNames, type Story } from './model'
+import { active, isOneShot, statuses, tagNames, type Story } from './model'
 
 type BaseSortOrder = 'updated' | 'added' | 'ready' | 'words' | 'alpha'
 export type SortOrder = BaseSortOrder | `${BaseSortOrder}_reverse` | 'random'
@@ -15,20 +15,21 @@ export type GroupBy = 'none' | 'fandom' | 'author' | 'series'
 export type SearchScope = 'any' | 'summary' | 'notes'
 export type ReadingFilters = {
   countConfidence?: MetadataConfidence | ''; publicationConfidence?: MetadataConfidence | ''; needsCompletionVerification?: boolean;
-  tagAliases?: TagAliases; tagExpressions?: TagExpressions;
+  tagAliases?: TagAliases; tagExpressions?: TagExpressions; excludedTags?: ExcludedTagExpressions; ranges?: FilterRanges;
   query: string; fandoms: string[]; publication: Story['metadata']['publication_status'][];
   crossovers?: 'allowed' | 'only' | 'exclude'; oneShot: 'allowed' | 'only' | 'exclude'; inSeries: boolean; showSeries: boolean; excludeLaterSeries: boolean; rating: string[]; personalRating: string[]; favorites: boolean; personalNotes: boolean; recs: boolean; relationship: string; characters: string; tags: string; personalTags?: string;
   updatedAfter: string; updatedBefore: string; within: string; scope: SearchScope;
   sort: SortOrder; groupBy: GroupBy; randomSeed?: string;
 }
 export const defaultReadingFilters: ReadingFilters = {
-  countConfidence: '', publicationConfidence: '', needsCompletionVerification: false, tagExpressions: {}, query: '', fandoms: [], publication: [], crossovers: 'allowed', oneShot: 'allowed', inSeries: false, showSeries: false, excludeLaterSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
+  countConfidence: '', publicationConfidence: '', needsCompletionVerification: false, tagExpressions: {}, excludedTags: {}, ranges: {}, query: '', fandoms: [], publication: [], crossovers: 'allowed', oneShot: 'allowed', inSeries: false, showSeries: false, excludeLaterSeries: false, rating: [], personalRating: [], favorites: false, personalNotes: false, recs: false,
   relationship: '', characters: '', tags: '', personalTags: '', updatedAfter: '', updatedBefore: '', within: '', scope: 'any',
   sort: 'added', groupBy: 'none',
 }
 export function hasReadingFilters(filters: ReadingFilters) {
-  return Object.keys(tagFilterConfig).some(key => expressionTags(tagExpression(filters, key as keyof typeof tagFilterConfig)).length > 0) ||
-    (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope', 'showSeries', 'tagExpressions', ...Object.keys(tagFilterConfig)].includes(key) && JSON.stringify(filters[key] ?? defaultReadingFilters[key]) !== JSON.stringify(defaultReadingFilters[key]))
+  return Object.keys(normalizeExcludedTags(filters.excludedTags)).length > 0 || Object.keys(normalizeFilterRanges(filters.ranges)).length > 0 ||
+    Object.keys(tagFilterConfig).some(key => expressionTags(tagExpression(filters, key as keyof typeof tagFilterConfig)).length > 0) ||
+    (Object.keys(defaultReadingFilters) as (keyof ReadingFilters)[]).some(key => !['sort', 'groupBy', 'scope', 'showSeries', 'tagExpressions', 'excludedTags', 'ranges', ...Object.keys(tagFilterConfig)].includes(key) && JSON.stringify(filters[key] ?? defaultReadingFilters[key]) !== JSON.stringify(defaultReadingFilters[key]))
 }
 export { normalizeTag as normalize } from './tags/tag-resolution'
 
@@ -119,22 +120,25 @@ export function shuffleKey(id: string, seed = '') {
   return (hash ^ (hash >>> 16)) >>> 0
 }
 export function filterReading(stories: Story[], filters: ReadingFilters, { authorOnly = false }: { authorOnly?: boolean } = {}) {
-  for (const [name, date] of [['From', filters.updatedAfter], ['Through', filters.updatedBefore]]) {
-    if (date && !isCalendarDate(date)) throw new Error(`Enter a valid ${name} date (${datePlaceholder()}).`)
-  }
-  if (filters.updatedAfter && filters.updatedBefore && filters.updatedAfter > filters.updatedBefore) throw new Error('The last-updated start date must be before the end date.')
+  const matchesRanges = rangeMatcher(filters)
   const within = compileSearch(filters.within)
   const query = normalize(filters.query.trim())
-  const expressions = { fandoms: tagExpression(filters, 'fandoms'), relationship: tagExpression(filters, 'relationship'), characters: tagExpression(filters, 'characters'), tags: tagExpression(filters, 'tags') }
-  const personalTags = normalize(filters.personalTags ?? '').split(',').map(term => term.trim()).filter(Boolean)
-  const after = filters.updatedAfter ? Date.parse(`${filters.updatedAfter}T00:00:00Z`) : null
-  const before = filters.updatedBefore ? Date.parse(`${filters.updatedBefore}T00:00:00Z`) + 86400000 : null
+  const fandomExpression = tagExpression(filters, 'fandoms')
+  const exclusions = normalizeExcludedTags(filters.excludedTags)
+  const expressions = workTagKeys.map(key => ({
+    source: workTagFilters[key].source, exclude: exclusions[key],
+    include: key === 'personalTags' ? { mode: 'all' as const, tags: (filters.personalTags ?? '').split(',').map(term => term.trim()).filter(Boolean) } : tagExpression(filters, key),
+  })).filter(({ include, exclude }) => exclude || expressionTags(include).length)
   return stories.filter(s => {
-    const updated = s.work.ao3_updated_at ? Date.parse(s.work.ao3_updated_at) : null
+    const matchesTags = expressions.every(({ source, include, exclude }) => {
+      const values = source ? tagNames(s.metadata, source) : s.personalTags
+      const match = (term: string) => source ? tagMatches(values, normalize(term), source, filters.tagAliases, s.source_url ? null : 'ao3') : values.some(tag => normalize(tag).includes(normalize(term)))
+      return matchesTagExpression(include, match) && !(exclude && matchesTagExpression(exclude, match))
+    })
     return (!filters.countConfidence || filters.countConfidence === 'any' || fieldConfidence(s, 'published_chapters') === filters.countConfidence) &&
       (!filters.publicationConfidence || filters.publicationConfidence === 'any' || fieldConfidence(s, 'publication_status') === filters.publicationConfidence) &&
       (!filters.needsCompletionVerification || needsCompletionVerification(s)) && (!query || normalize([...(authorOnly ? [] : [s.metadata.title, String(s.work.ao3_work_id ?? '')]), ...s.metadata.authors].join('\n')).includes(query)) &&
-      matchesTagExpression(expressions.fandoms, term => s.metadata.fandoms.includes(term)) &&
+      matchesTagExpression(fandomExpression, term => s.metadata.fandoms.includes(term)) &&
       (!filters.publication.length || filters.publication.includes(s.metadata.publication_status)) &&
       (filters.oneShot === 'allowed' || isOneShot(s.metadata, s.personalTags) === (filters.oneShot === 'only')) &&
       matchesCrossoverStatus(projectedCrossoverStatus(s), filters.crossovers ?? 'allowed') &&
@@ -143,14 +147,7 @@ export function filterReading(stories: Story[], filters: ReadingFilters, { autho
       (!filters.rating.length || filters.rating.includes(s.metadata.rating)) && (!filters.favorites || s.is_favorite) &&
       (!filters.personalNotes || Boolean(s.notes?.trim())) && (!filters.recs || s.is_rec) &&
       (!filters.personalRating?.length || (s.personalRatings?.length ? s.personalRatings : [s.personal_rating ?? null]).some(rating => filters.personalRating.includes(rating === null ? 'unrated' : String(rating)))) &&
-      // This effective-metadata path accepts AO3 records/owner corrections only.
-      // A future provider must establish mapping authority before entering it.
-      matchesTagExpression(expressions.relationship, term => tagMatches(tagNames(s.metadata, 'relationship'), normalize(term), 'relationship', filters.tagAliases, s.source_url ? null : 'ao3')) &&
-      matchesTagExpression(expressions.characters, term => tagMatches(tagNames(s.metadata, 'character'), normalize(term), 'character', filters.tagAliases, s.source_url ? null : 'ao3')) &&
-      personalTags.every(term => s.personalTags.some(tag => normalize(tag).includes(term))) &&
-      matchesTagExpression(expressions.tags, term => tagMatches(tagNames(s.metadata, 'freeform'), normalize(term), 'freeform', filters.tagAliases, s.source_url ? null : 'ao3')) &&
-      (after === null || (updated !== null && updated >= after)) &&
-      (before === null || (updated !== null && updated < before)) && within(searchText(s, filters.scope))
+      matchesTags && matchesRanges(s) && within(searchText(s, filters.scope))
   }).sort((a, b) => {
     if (filters.sort === 'random') return shuffleKey(a.id, filters.randomSeed) - shuffleKey(b.id, filters.randomSeed) || a.id.localeCompare(b.id)
     const reverse = filters.sort.endsWith('_reverse')

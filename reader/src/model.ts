@@ -2,7 +2,7 @@ import type { DisplayPreference, TagAppearance } from '../../src/features/librar
 import { caughtUpReadingStatus, type Metadata, type Status } from '../../src/features/library/model'
 export { statuses, blankMetadata } from '../../src/features/library/model'
 export type { Metadata, Status }
-export type ReaderMetadata = Metadata & { calibre_work_link?: string; ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
+export type ReaderMetadata = Metadata & { series_positions?: Record<string, number>; calibre_work_link?: string; ao3_collections?: string[]; published_at?: string; updated_at?: string; packaged_at?: string; publisher?: string; language_code?: string }
 export type Chapter = { displayNumber?: number; sourceWorkId?: string; workKey?: string; sectionType?: 'title' | 'notes' | 'other'; workTitle?: string; workStart?: boolean; kind?: 'frontmatter' | 'chapter'; id: string; ao3Id: string | null; number: number | null; title: string; html: string; words: number | null; path: string }
 export type AnthologyWork = { key: string; title: string; workId: string | null; metadata: ReaderMetadata; status?: Status; progress?: number; remote?: Remote; account?: string }
 export type Remote = { favorite?: boolean; rec?: boolean; publication?: { metadata: Metadata; at: string }; id: string; version: string; status: Status; progress: number; notes: string; collections?: string[]; tags?: string[] }

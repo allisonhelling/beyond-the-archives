@@ -2,11 +2,13 @@ import type { ComponentProps } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { Dialog } from '../../src/components/Dialog'
 import { SettingsCategoryList } from '../../src/components/SettingsCategoryList'
+import { accessibilitySettingsSection } from '../../src/features/library/display/settings-sections'
 
 export const readerSettingsSections = [
  { id: 'account', title: 'Reader Account', description: 'Username, email, password, and sign-in.' },
  { id: 'cloud', title: 'Cloud Library', description: 'Cloud storage, library sync, and conflict resolution.' },
  { id: 'sync', title: 'Organizer & Sync', description: 'Organizer connection and reading updates.' },
+ { id: 'text-scaling', title: accessibilitySettingsSection.title, description: 'Change the size of text, buttons, and other items.' },
  { id: 'tags', title: 'Tag Format', description: 'Tag shapes, colors, and category order.' },
  { id: 'tiles', title: 'Customize Tiles', description: 'Arrange the information on work tiles.' },
  { id: 'storage', title: 'Manage Local Storage', description: 'Manage downloads and storage protection.' },
@@ -17,6 +19,6 @@ export function ReaderSettingsIndex() {
 }
 /** Existing settings bodies serve both desktop dialogs and mobile pages. */
 export function ReaderSection({ page = false, children, ...props }: ComponentProps<typeof Dialog> & { page?: boolean }) {
- if (!page) return <Dialog {...props}>{children}</Dialog>
+ if (!page) return <Dialog {...props} className={`settings-content ${props.className ?? ''}`}>{children}</Dialog>
  return <main className="reader-settings settings-content"><button className="button secondary" disabled={props.busy} onClick={props.onClose}><ArrowLeft size={17} aria-hidden="true" />Back to Settings</button><section className={`settings-card reader-settings-section ${props.className ?? ''}`} aria-label={props.title} aria-busy={props.busy}><h2>{props.title}</h2>{children}</section></main>
 }

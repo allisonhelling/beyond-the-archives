@@ -13,7 +13,7 @@ function ServiceIcon({ kind, indicator }: {kind:'network'|SyncService;indicator:
   const bounds={x:cloud?12:11,y:cloud?16:13,width:cloud?16:18,height:cloud?16:18}
   return <svg className="connection-status-icon" viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     {kind==='network'?<circle cx="20" cy="20" r="16" fill={filled?'currentColor':'none'}/>:cloud?<Cloud x="0" y="0" width="40" height="40" strokeWidth="1.3" fill={filled?'currentColor':'none'}/>:<path d="M9 35V16a11 11 0 0 1 22 0v19Z" fill={filled?'currentColor':'none'}/>}
-    {indicator.mark==='alert'?<svg {...bounds} viewBox="0 0 24 24" className="connection-status-symbol"><path d="M12 4v10"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg>:indicator.mark&&<Mark {...bounds} strokeWidth="2.5" className={indicator.mark==='arrows'?'loading-icon connection-status-symbol':'connection-status-symbol'}/>}
+    {indicator.mark==='alert'?<svg {...bounds} viewBox="0 0 24 24" className="connection-status-symbol"><path d="M12 4v10"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg>:indicator.mark&&<svg {...bounds} viewBox="0 0 24 24"><Mark strokeWidth="2.5" className={indicator.mark==='arrows'?'loading-icon connection-status-symbol':'connection-status-symbol'}/></svg>}
   </svg>
 }
 export function ConnectionStatus({online,connection,pending}:{online:boolean;connection?:Connection;pending:Pending[]}) {

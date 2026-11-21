@@ -6,7 +6,7 @@ const changeEvent = 'between-chapters:display-changed'
 export const displayGroups = {
   workTile: { title: 'Work Tiles', fields: { favorite: 'Favorite Icon', rec: 'Recommended Icon', authors: ao3MetadataLabels.authors, fandoms: ao3MetadataLabels.fandoms, series: ao3MetadataLabels.series, rating: ao3MetadataLabels.rating, words: ao3MetadataLabels.words, chapters: ao3MetadataLabels.chapters, summary: ao3MetadataLabels.summary, relationships: ao3MetadataLabels.relationships, characters: ao3MetadataLabels.characters, tags: ao3MetadataLabels.tags, warnings: ao3MetadataLabels.warnings, personalRating: 'Personal Rating', collections: 'Custom Collections', kudos: ao3MetadataLabels.kudos, notes: 'Private Notes', reading: 'Reading Status', saved: 'Saved Date', updated: ao3MetadataLabels.updated, progress: 'Chapter Progress and Reading Shortcuts', ...metadataLabels(newWorkTileFields) } },
   workHeader: { title: 'Work Pages · Header', fields: { series: 'Series', authors: 'Authors', fandoms: 'Fandoms and AO3 Rating', stats: 'Statistics' } },
-  workStats: { title: 'Work Pages · Statistics', fields: { words: 'Word Count', chapters: 'Chapters', publication: 'Publication Status', updated: 'Date Updated' } },
+  workStats: { title: 'Work Pages · Statistics', fields: { publication: 'Publication Status', chapters: 'Published / Total Chapters', words: 'Word Count', updated: 'Date Updated', publishedOn: 'Published On' } },
   workPage: { title: 'Work Pages · Sections', fields: { progress: 'Reading and Organization', notes: 'Private Notes', information: 'Story Information', metadata: 'Metadata Controls' } },
   workInfo: { title: 'Work Pages · Story Information', fields: { summary: ao3MetadataLabels.summary, relationships: ao3MetadataLabels.relationships, characters: ao3MetadataLabels.characters, tags: ao3MetadataLabels.tags, allTags: ao3MetadataLabels.allTags, personalTags: 'Personal Tags', saved: 'Saved Date', chapterHistory: 'Chapter Reading History', edited: 'Last Edited', other: 'Other Metadata', ...metadataLabels(newWorkInfoFields) } },
   workOther: { title: 'Work Pages · Other Metadata', fields: { ...ao3MetadataLabels, checked: 'Metadata Last Checked', canonical: 'Verified Canonical URL', original: 'Original Provided URL', provided: 'Updated Provided URL' } },
@@ -23,7 +23,9 @@ export function isDisplayFieldHidden(preference: DisplayPreference, field: strin
  return preference.hidden.includes(field) || Object.entries(preference.lines ?? {}).some(([line, fields]) => fields.includes(field) && preference.hidden.includes(line))
 }
 export type TagTextColor = 'colored' | 'black'
-export type TagAppearance = { shape: TagShape; textColor?: TagTextColor; colors: Partial<Record<TagCategory, string>>; order?: AllTagCategory[] }
+export type FandomAppearance = { shape: TagShape; textColor: TagTextColor; color: string }
+export const defaultFandomAppearance: FandomAppearance = { shape: 'bullets', textColor: 'colored', color: '#800020' }
+export type TagAppearance = { fandom?: FandomAppearance; shape: TagShape; colorMode?: 'mono' | 'multi'; allColor?: string; textColor?: TagTextColor; colors: Partial<Record<TagCategory, string>>; order?: AllTagCategory[] }
 export type DisplayPreferences = Record<DisplayGroup, DisplayPreference> & { tagAppearance: TagAppearance }
 const defaultHidden: Partial<Record<DisplayGroup, string[]>> = { workTile: ['chapters', 'relationships', 'characters', 'tags', 'notes', 'reading', 'saved', 'updated', 'warnings', 'personalRating', 'collections', 'kudos', ...newWorkTileFields.filter(field => field !== 'allTags')], workInfo: [...newWorkInfoFields], seriesTile: ['reading', 'notes', 'category', 'creatorNotes', 'updated', 'begun', 'relationships', 'characters', 'tags', 'warnings', 'personalRating', 'collections', 'kudos'], seriesInfo: ['category', 'libraryCount', 'words', 'relationships', 'characters', 'tags', 'warnings', 'kudos'] }
 export const defaultAllTagColor = '#382b2b'
@@ -86,8 +88,8 @@ export function previewViewports(raw = displaySnapshot()): Record<DisplayLayout,
  try { saved = JSON.parse(raw) ?? {} } catch { /* Use standard viewport sizes. */ }
  return Object.fromEntries((['mobile', 'desktop'] as const).map(layout => {
   const value = saved.previewViewports?.[layout]
-  const actual = { width: Math.max(280, Math.min(3840, window.innerWidth)), height: Math.max(320, Math.min(3840, window.innerHeight)) }
-  const size = value && validViewport(value) ? value : layout === 'mobile' ? viewportPresets['iphone-16'] : window.innerWidth > 1100 ? actual : viewportPresets.desktop
+  const actual = { width: window.screen.width || window.innerWidth, height: window.screen.height || window.innerHeight }
+  const size = layout === 'desktop' ? actual : value && validViewport(value) ? value : viewportPresets['iphone-16']
   return [layout, { width: size.width, height: size.height }]
  })) as Record<DisplayLayout, PreviewViewport>
 }
@@ -95,10 +97,10 @@ export function validViewport(value: PreviewViewport) {
  return (['width', 'height'] as const).every(axis => Number.isInteger(value[axis]) && value[axis] >= viewportRanges[axis].min && value[axis] <= viewportRanges[axis].max)
 }
 export function savePreviewViewports(viewports: Record<DisplayLayout, PreviewViewport>) {
- if (!Object.values(viewports).every(validViewport)) throw new Error('Enter a preview size within the width and height limits.')
+ if (!validViewport(viewports.mobile)) throw new Error('Enter a preview size within the width and height limits.')
  let saved: Record<string, unknown> = {}
  try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
- writeDisplay({ ...saved, previewViewports: viewports })
+ writeDisplay({ ...saved, previewViewports: { mobile: viewports.mobile } })
 }
 const tileFacts: Partial<Record<DisplayGroup, string[]>> = { workTile: ['series', 'rating', 'words'], seriesTile: ['reading', 'count', 'words'] }
 export const displayDivider = (key: string) => /^divider:[a-zA-Z0-9-]{1,80}$/.test(key)
@@ -118,6 +120,7 @@ export function displayPreference(group: DisplayGroup, raw: string, layout: Disp
   const value = saved[group]
   const strings = (input: unknown) => Array.isArray(input) ? input.filter((key): key is string => typeof key === 'string') : []
   let order = strings(value?.order)
+  if (group === 'workStats' && order.join() === 'words,chapters,publication,updated') order = keys
   let hidden = strings(value?.hidden)
   let inputLines = value?.lines
   // Preserve existing tile layouts while making their facts individually movable.
@@ -163,11 +166,13 @@ export function tagAppearance(raw: string): TagAppearance {
   const legacy = (Object.keys(displayGroups) as DisplayGroup[]).map(group => saved[group] as { colors?: TagAppearance['colors']; tagShape?: TagShape } | undefined).filter(Boolean)
   const shape = global ? global.shape : legacy.find(value => value?.tagShape && value.tagShape !== 'bullets')?.tagShape
   const colors = global ? global.colors : Object.assign({}, ...legacy.map(value => value?.colors ?? {}).reverse())
-  return { ...(global?.textColor === 'colored' || global?.textColor === 'black' ? { textColor: global.textColor } : {}), ...(Array.isArray(global?.order)?{order:allTagOrder(global.order)}:{}), shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
+  const fandom = global?.fandom
+  const savedFandom = fandom && Object.hasOwn(tagShapes, fandom.shape) && (fandom.textColor === 'colored' || fandom.textColor === 'black') && /^#[a-fA-F0-9]{6}$/.test(fandom.color)
+  return { ...(savedFandom ? { fandom: { shape: fandom.shape, textColor: fandom.textColor, color: fandom.color } } : {}), ...(global?.colorMode === 'mono' || global?.colorMode === 'multi' ? { colorMode: global.colorMode } : {}), ...(global?.allColor && /^#[a-fA-F0-9]{6}$/.test(global.allColor) ? { allColor: global.allColor } : {}), ...(global?.textColor === 'colored' || global?.textColor === 'black' ? { textColor: global.textColor } : {}), ...(Array.isArray(global?.order)?{order:allTagOrder(global.order)}:{}), shape: typeof shape === 'string' && Object.hasOwn(tagShapes, shape) ? shape as TagShape : 'bullets', colors: Object.fromEntries(Object.entries(colors && typeof colors === 'object' ? colors : {}).filter(([category, color]) => Object.hasOwn(tagColors, category) && typeof color === 'string' && /^#[a-fA-F0-9]{6}$/.test(color))) }
 }
 export function sameTagAppearance(a: TagAppearance | null | undefined, b: TagAppearance | null | undefined) {
  if (!a || !b) return a === b
- return a.shape === b.shape && a.textColor === b.textColor && JSON.stringify(allTagOrder(a.order)) === JSON.stringify(allTagOrder(b.order)) && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
+ return a.shape === b.shape && a.fandom?.shape === b.fandom?.shape && a.fandom?.color === b.fandom?.color && a.fandom?.textColor === b.fandom?.textColor && (a.colorMode ?? 'multi') === (b.colorMode ?? 'multi') && (a.allColor ?? defaultAllTagColor) === (b.allColor ?? defaultAllTagColor) && a.textColor === b.textColor && JSON.stringify(allTagOrder(a.order)) === JSON.stringify(allTagOrder(b.order)) && (Object.keys({ ...a.colors, ...b.colors }) as TagCategory[]).every(key => a.colors[key] === b.colors[key])
 }
 export function displayPreferences(raw = displaySnapshot(), layout: DisplayLayout = 'desktop'): DisplayPreferences {
   return { ...Object.fromEntries((Object.keys(displayGroups) as DisplayGroup[]).map(group => [group, displayPreference(group, raw, layout)])), tagAppearance: tagAppearance(raw) } as DisplayPreferences
@@ -225,6 +230,32 @@ export function deleteDisplaySelection(preference: DisplayPreference, fields: st
   else result = { ...result, hidden: [...new Set([...result.hidden, field])] }
  }
  return result
+}
+
+export const textScaleOptions = {
+ standard: 'Standard',
+ large: 'Large',
+ 'extra-large': 'Extra Large',
+ largest: 'Largest',
+} as const
+export type TextScale = keyof typeof textScaleOptions
+
+function normalizeTextScale(value: unknown): TextScale {
+ return typeof value === 'string' && Object.hasOwn(textScaleOptions, value) ? value as TextScale : 'standard'
+}
+
+export function textScale(raw = displaySnapshot()): TextScale {
+ try { return normalizeTextScale(JSON.parse(raw)?.textScale) }
+ catch { return 'standard' }
+}
+export function saveTextScale(scale: string) {
+ let saved: Record<string, unknown> = {}
+ try { saved = JSON.parse(displaySnapshot()) ?? {} } catch { /* Repair malformed preferences. */ }
+ writeDisplay({ ...saved, textScale: normalizeTextScale(scale) })
+}
+
+export function applyTextScale(element = document.documentElement) {
+ element.dataset.textScale = textScale()
 }
 
 export type SummaryMode = 'full' | 'expanded' | 'collapsed'

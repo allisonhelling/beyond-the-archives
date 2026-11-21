@@ -17,20 +17,50 @@
 
 /* Shared palette and typography for the organizer and independent reader. */
 :root {
-  --app-header-height: 100px;
   --library-content-width: 1120px;
-  --library-page-gutter: 40px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --library-page-gutter: calc(var(--space-5) * 2);
+  --text-scale-step: 0;
+  --text-size-increase: calc(2px * var(--text-scale-step));
+  --button-icon-scale: calc(1 + .1 * var(--text-scale-step));
   --minimum-text-size: 13px;
+  --small-ui-text-size: calc(14px + var(--text-size-increase));
+  --medium-ui-text-size: calc(15px + var(--text-size-increase));
+  --ui-text-size: calc(16px + var(--text-size-increase));
+  --subheading-text-size: calc(18px + var(--text-size-increase));
+  --font-archive-sans: 'Avenir Next', 'Segoe UI', sans-serif;
   --font-archive-serif: 'Serif Numerals', Georgia, 'Times New Roman', serif;
+  --font-sans: var(--font-archive-sans);
+  --font-serif: var(--font-archive-serif);
+  --page-heading-text-size: 39px;
+  --settings-heading-text-size: 23px;
   --radius-surface: 0px;
   --radius-compact-control: 4px;
   --radius-control: 6px;
   --radius-form-field: 7px;
   --radius-filter-panel: var(--radius-surface);
   --radius-work-card: var(--radius-surface);
-  --work-summary-text-size: 15px;
-  --work-tile-label-size: 13px;
-  --bullet-divider-spacing: 4px;
+  --spine-edge-width: 3px;
+  --spine-edge-color: #6e0907;
+  --work-tile-label-size: var(--small-ui-text-size);
+  --work-summary-text-size: var(--work-tile-label-size);
+  --work-source-text-size: var(--work-tile-label-size);
+  --bullet-divider-spacing: var(--space-1);
+  --filter-control-line-height: calc(20px + var(--text-size-increase));
+  --filter-control-height: calc(36px + 2 * var(--text-size-increase));
+  --select-label-gap: 0px;
+  --select-label-line-height: 1.8;
+  --control-height: calc(44px + 2 * var(--text-size-increase));
+  --button-text-size: var(--small-ui-text-size);
+  --button-inline-padding: calc(14px + var(--text-size-increase));
+  --interaction-duration: 150ms;
+  --focus-outline: 2px solid var(--color-brand);
   --color-control-border: #dfcbc5;
   --color-fieldset-border: #e8d8d3;
   --color-filter-border: #e6c8c1;
@@ -38,6 +68,8 @@
   --color-surface: #fcf7ec;
   --color-surface-secondary: #f1e1d1;
   --color-border: #e8ddda;
+  --color-text: #382b2b;
+  --color-on-brand: #fff;
   --color-link: #800020;
   --color-muted: #756363;
   --color-brand: #970000;
@@ -45,4 +77,26 @@
   --color-brand-soft: var(--color-surface-secondary);
 }
 
-@media (max-width: 650px) { :root { --library-page-gutter: 20px; } }
+:root[data-text-scale="large"] { --text-scale-step: 1; }
+:root[data-text-scale="extra-large"] { --text-scale-step: 2; }
+:root[data-text-scale="largest"] { --text-scale-step: 3; }
+
+:root[data-text-scale]:not([data-text-scale="standard"]) {
+  --minimum-text-size: var(--small-ui-text-size);
+}
+
+:root[data-text-scale]:not([data-text-scale="standard"]) body { font-size: var(--ui-text-size); }
+
+@media (max-width: 650px) { :root { --library-page-gutter: var(--space-5); } }
+
+/* Shared interface text roles for reader and organizer. */
+:root { font-family: var(--font-sans); font-weight: 500; color: var(--color-text); background: var(--color-paper); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+:is(.page-heading, .library-heading) h1 { font-size: var(--page-heading-text-size); letter-spacing: -1.1px; margin: 8px 0 9px; }
+@media (max-width: 650px) { :root { --page-heading-text-size: 32px; } }
+small { font-size: var(--minimum-text-size); }
+h1, h2, h3, h4, h5, h6, legend { font-family: var(--font-serif); font-weight: 400; }
+.muted { color: var(--color-muted); font-size: max(var(--work-tile-min-font-size, 0px), var(--small-ui-text-size)); line-height: 1.8; }
+.field-help { display: block; margin-top: var(--space-2); color: var(--color-muted); font-size: var(--ui-text-size); line-height: 1.6; font-weight: 500; }
+
+.empty-state h2 { font-size: 29px; letter-spacing: -.65px; }
+@media (max-width: 650px) { .empty-state h2 { font-size: 25px; } }

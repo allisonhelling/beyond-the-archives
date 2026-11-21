@@ -1,3 +1,4 @@
+import { countNoun } from '../../lib/count-noun'
 import { useActivity } from '../../lib/use-activity'
 import { librarySyncRepairs } from './library-sync-state'
 import { useState } from 'react'
@@ -19,12 +20,12 @@ export function LibrarySyncSummary({ state }: { state: LibrarySyncState }) {
  const count = details === 'skipped' ? state.skipped : state.chapterDatesUnavailable ?? 0
  const repairs = librarySyncRepairs(state)
  return <>
-  {Boolean(state.batchStart) && <p className="field-help">{state.batchStart} pages already imported · {state.pages - (state.batchStart ?? 0)} pages in the current batch. Page and work totals below include all batches.</p>}
-  <p role="status">{state.status} · {state.listPages !== undefined && <>{state.listPages} {listName} pages saved · </>}{state.pages} total pages saved · {state.count} works collected · {state.skipped ? <button type="button" className="text-button" onClick={() => setDetails('skipped')}>{state.skipped} Unsupported Entries Skipped</button> : '0 unsupported entries skipped'}</p>
-  {state.hasMore && <p className="field-help">Batch ready: {state.pages - (state.batchStart ?? 0)} saved pages await import. Import this batch to continue with the remaining list pages and series. The Quick Sync baseline updates only after the entire scan finishes.</p>}
+  {Boolean(state.batchStart) && <p className="field-help">{state.batchStart} {countNoun(state.batchStart, 'page')} already imported · {state.pages - (state.batchStart ?? 0)} {countNoun(state.pages - (state.batchStart ?? 0), 'page')} in the current batch. Page and work totals below include all batches.</p>}
+  <p role="status">{state.status} · {state.listPages !== undefined && <>{state.listPages} {listName} {countNoun(state.listPages, 'page')} saved · </>}{state.pages} {countNoun(state.pages, 'total page')} saved · {state.count} {countNoun(state.count, 'work')} collected · {state.skipped ? <button type="button" className="text-button" onClick={() => setDetails('skipped')}>{state.skipped} Unsupported Entries Skipped</button> : '0 unsupported entries skipped'}</p>
+  {state.hasMore && <p className="field-help">Batch ready: {state.pages - (state.batchStart ?? 0)} {countNoun(state.pages - (state.batchStart ?? 0), 'saved page')} await import. Import this batch to continue with the remaining list pages and series. The Quick Sync baseline updates only after the entire scan finishes.</p>}
   {state.endedEarly && <p className="field-help">{['running', 'paused'].includes(state.status) ? 'Ending scan: new listing pages have stopped. Remaining series pages and enabled chapter-date checks must finish before review.' : 'Scan ended early. Collected works and their available series and chapter-date information are included.'} The Quick Sync baseline is unchanged.</p>}
   {state.checkChapterDates && <p className="field-help">Chapter Dates: {state.chapterDatesChecked ?? 0} indexes checked · {state.chapterDatesUnavailable ? <button type="button" className="text-button" onClick={() => setDetails('dates')}>{state.chapterDatesUnavailable} Unavailable or Incomplete</button> : '0 unavailable or incomplete'}.</p>}
-  {state.repairPages && <p className="field-help">Updated AO3 information for {repairs.metadata} works, including series information for {repairs.series} works. Found {repairs.reading} possible reading-status corrections. Use Review Reading Corrections to accept or keep them.</p>}
+  {state.repairPages && <p className="field-help">Updated AO3 information for {repairs.metadata} {countNoun(repairs.metadata, 'work')}, including series information for {repairs.series} {countNoun(repairs.series, 'work')}. Found {repairs.reading} {countNoun(repairs.reading, 'possible reading-status correction')}. Use Review Reading Corrections to accept or keep them.</p>}
   {state.limited && <p className="field-help">Partial scan · pages {state.startPage ?? 1}–{state.endPage ?? 'end of list'}{state.partial && !state.endedEarly ? ' · stopped at the selected end page; more pages remain on AO3' : ''}. Importing this range will not update the Quick Sync baseline.</p>}
   {details && <Dialog title={details === 'skipped' ? 'Skipped AO3 Entries' : 'Unavailable or Incomplete Chapter Dates'} onClose={() => setDetails(null)}>
    <div className="confirmation-description">
@@ -56,13 +57,13 @@ export function LibrarySyncReportHistory({ latest }: { latest?: LibrarySyncState
  const report = history?.reports.find(report => report.id === selected)
  return <div className="story-form">
   <div className="form-actions form-actions-fit">
-   <button type="button" className="text-button clickable-text sync-reports-trigger" aria-expanded={open} onClick={() => { setOpen(!open); if (!open && !history && !busy) void load() }}>{open ? 'Hide Saved Sync Reports' : 'View Saved Sync Reports'}</button>
+   <button type="button" className="text-button clickable-text sync-reports-trigger disclosure-toggle" aria-expanded={open} onClick={() => { setOpen(!open); if (!open && !history && !busy) void load() }}>{open ? 'Hide Saved Sync Reports' : 'View Saved Sync Reports'}</button>
    {open && <button type="button" className="text-button clickable-text" disabled={busy} onClick={() => void load()}>{busy ? 'Loading Sync Reports…' : 'Refresh'}</button>}
   </div>
   {open && error && <p role="alert" className="error-message">{error}</p>}
   {open && history && <>
    {!history.total ? <p>No saved sync reports yet.</p> : <>
-    <label>Sync Report<select value={selected} onChange={event => setSelected(event.target.value)}>{history.reports.map(report => <option key={report.id} value={report.id}>{formatDateTime(report.completed_at)} · {report.report.count} works · {report.report.url}</option>)}</select></label>
+    <label>Sync Report<select value={selected} onChange={event => setSelected(event.target.value)}>{history.reports.map(report => <option key={report.id} value={report.id}>{formatDateTime(report.completed_at)} · {report.report.count} {countNoun(report.report.count, 'work')} · {report.report.url}</option>)}</select></label>
     <Pagination inlinePage itemLabel="reports" page={page} pages={Math.ceil(history.total / 10)} total={history.total} size={10} onPage={next => { if (!busy) void load(next) }} />
     {report && <LibrarySyncSummary key={report.id} state={report.report} />}
    </>}

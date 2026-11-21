@@ -10,7 +10,7 @@ export function DesktopRetrievalGate({ children }: { children: ReactNode }) {
  {!connected && <section className="settings-card">
   <h2>Desktop Companion Required</h2>
   <p>{desktopExtensionHelp}</p>
-  <div className="form-actions">
+  <div className="form-actions companion-gate-actions">
    <Link className="clickable-text" to="/settings#settings-metadata">Companion Settings</Link>
    <Link className="clickable-text" to="/add?import=manual">Add a Story Manually</Link>
    <button className="button secondary" disabled={checking} onClick={reconnect}>{checking ? 'Checking Connection…' : 'Check Connection'}</button>

@@ -1,3 +1,4 @@
+import { applyTextScale, subscribeDisplay } from './features/library/display/display-settings'
 import { isLoginBridge, readerAppUrl, serveConnectedLogin, serveConnectedLoginInTab } from './lib/connected-login'
 import { supabase } from './lib/supabase'
 import { StrictMode } from 'react'
@@ -8,6 +9,9 @@ import './features/library/browsing/browsing.css'
 import './features/library/display/display.css'
 import './features/library/summaries/summary.css'
 import { isLocalApp } from './lib/local-app'
+
+applyTextScale()
+subscribeDisplay(() => applyTextScale())
 
 const root = createRoot(document.getElementById('root')!)
 const localPreview = import.meta.env.DEV

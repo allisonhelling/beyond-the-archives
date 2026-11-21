@@ -1,4 +1,5 @@
-import { normalizeTagExpressions, tagFilterConfig } from '../tags/tag-expressions'
+import { normalizeFilterRanges } from '../filter-ranges'
+import { normalizeExcludedTags, normalizeTagExpressions, tagFilterConfig } from '../tags/tag-expressions'
 import { defaultReadingFilters, type ReadingFilters } from '../reading-search'
 import { pageSize, savedPageSize } from './page-size'
 export const readingPreferencesKey = 'between-chapters:reading-preferences:v1'
@@ -7,7 +8,7 @@ export const collectionSortKey = 'between-chapters:collection-sort:v1'
 export function isFilterNavigation(from: string, to: string) {
   const previous = new URL(from || '/', 'https://library.local'), next = new URL(to, 'https://library.local')
   return previous.pathname === next.pathname && previous.hash === next.hash && previous.searchParams.get('shelf') === next.searchParams.get('shelf') &&
-    Object.keys(defaultReadingFilters).some(key => previous.searchParams.get(key) !== next.searchParams.get(key))
+    ['availability', 'reader', ...Object.keys(defaultReadingFilters)].some(key => previous.searchParams.get(key) !== next.searchParams.get(key))
 }
 
 export function readBrowsing(params: URLSearchParams, defaults = defaultReadingFilters) {
@@ -17,6 +18,12 @@ export function readBrowsing(params: URLSearchParams, defaults = defaultReadingF
     if (value === null) continue
     if (key === 'tagExpressions') {
       try { filters.tagExpressions = normalizeTagExpressions(JSON.parse(value)) } catch { filters.tagExpressions = {} }
+    } else if (key === 'excludedTags' || key === 'ranges') {
+      try {
+        const parsed = JSON.parse(value)
+        if (key === 'excludedTags') filters.excludedTags = normalizeExcludedTags(parsed)
+        else filters.ranges = normalizeFilterRanges(parsed)
+      } catch { /* Ignore malformed links. */ }
     } else if (Array.isArray(defaultReadingFilters[key])) {
       try { const parsed = JSON.parse(value); if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) Object.assign(filters, { [key]: parsed }) } catch { /* Ignore malformed links. */ }
     } else if (typeof defaultReadingFilters[key] === 'boolean') Object.assign(filters, { [key]: value === 'true' })

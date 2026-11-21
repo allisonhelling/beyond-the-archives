@@ -16,7 +16,7 @@ beforeEach(() => {
 })
 it('reviews conflicts, supports per-work and bulk choices, and skips existing Later works', async () => {
  render(<CsvImportForm onImported={mocks.imported} />); upload()
- expect(await screen.findByText('2 unique works · 1 bookmark conflicts · 1 existing Marked for Later works will keep personal data.')).toBeVisible()
+ expect(await screen.findByText('2 unique works · 1 bookmark conflict · 1 existing Marked for Later work will keep personal data.')).toBeVisible()
  expect(screen.getByText('Old notes')).toBeVisible(); expect(screen.getByText('My summary')).toBeVisible()
  const choice = screen.getByRole('combobox', { name: 'Action for Bookmark' })
  expect(choice).toHaveValue('keep')
@@ -26,7 +26,7 @@ it('reviews conflicts, supports per-work and bulk choices, and skips existing La
  fireEvent.click(screen.getByRole('button', { name: 'Import CSV Works' }))
  await waitFor(() => expect(mocks.submit).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ notes: 'My summary', tags: ['My tag'] })]), expect.any(Array), { 1: 'overwrite' }, false))
  expect(mocks.imported).toHaveBeenCalledWith('batch')
- expect(await screen.findByRole('status')).toHaveTextContent('Imported 1 works. Kept 1 existing works.')
+ expect(await screen.findByRole('status')).toHaveTextContent('Imported 1 work. Kept 1 existing work.')
 })
 it('preserves review choices after a failed import and reports invalid files before writes', async () => {
  render(<CsvImportForm onImported={mocks.imported} />); upload('not a scraper file')

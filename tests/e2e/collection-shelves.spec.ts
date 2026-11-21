@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { fixture, login } from './library-fixture'
+import { displaySettingsKey } from '../../src/features/library/display/display-settings'
 import { exampleWork } from '../../src/features/library/display/display-examples'
 
 test('scrolls the complete shelf at every width and hides only known empty collections', async ({ page }) => {
@@ -20,12 +21,77 @@ test('scrolls the complete shelf at every width and hides only known empty colle
  await track.evaluate(element => { element.scrollLeft = element.scrollWidth })
  expect(await track.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
  await expect(shelves.getByRole('button', { name: 'Shelf 0', exact: true }).locator('.collection-spine-count')).toHaveText('1')
- await page.getByRole('button', { name: 'Hide Empty', exact: true }).click()
+ const hideEmpty = page.getByRole('button', { name: 'Hide Empty', exact: true })
+ const edit = page.getByRole('button', { name: 'Edit Collections', exact: true })
+ await expect(hideEmpty).toHaveCount(0)
+ await shelves.getByRole('button', { name: 'Shelf 0', exact: true }).click()
+ await expect(page.getByRole('button', { name: '+ Add', exact: true })).toHaveCSS('height', '44px')
+ await expect(page.getByRole('button', { name: 'Sort', exact: true })).toHaveCSS('height', page.viewportSize()!.width <= 650 ? '36px' : '44px')
+ await edit.click()
+ await expect(shelves.locator('.collection-shelf-row')).toHaveCount(1)
+ if (page.viewportSize()!.width <= 650) {
+  await track.evaluate(element => { element.scrollLeft = 0 })
+  const spine = (await shelves.getByRole('button', { name: 'All Works', exact: true }).boundingBox())!
+  const touch = { x: Math.round(spine.x + spine.width / 2), y: Math.round(spine.y + spine.height / 2) }
+  const client = await page.context().newCDPSession(page)
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch] })
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...touch, x: touch.x - 55 }] })
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await client.detach()
+  await expect.poll(() => track.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+ }
+ const shelfSpine = shelves.getByRole('button', { name: 'Shelf 0', exact: true })
+ await shelfSpine.press('Alt+ArrowRight')
+ await expect.poll(() => tables.collections.find(item => item.id === 'shelf-0')?.sort_position).toBe(1)
+ await expect(shelves.locator('.collection-shelf-row')).toHaveCount(1)
+ await expect(hideEmpty).toHaveCSS('height', '44px')
+ const [hide, hidden, select] = await Promise.all([hideEmpty, page.getByRole('button', { name: 'Hidden', exact: true }), page.getByRole('button', { name: 'Select Collections', exact: true })].map(async control => (await control.boundingBox())!))
+ expect(hidden.x - hide.x - hide.width).toBeCloseTo(select.x - hidden.x - hidden.width)
+ expect(hide.y).toBeCloseTo(select.y)
+ await hideEmpty.click()
+ await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+ await expect(hideEmpty).toHaveCount(0)
  await expect(shelves.getByRole('button', { name: 'Shelf 0', exact: true })).toHaveCount(1)
  await expect(shelves.getByRole('button', { name: 'Shelf 14', exact: true })).toHaveCount(0)
  await page.reload()
- await expect(page.getByRole('button', { name: 'Hide Empty', exact: true })).toHaveAttribute('aria-pressed', 'true')
  await expect(shelves.getByRole('button', { name: 'Shelf 14', exact: true })).toHaveCount(0)
+ await edit.click()
+ await expect(hideEmpty).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('grows collection spines and reflows expanded shelves when the text scale changes', async ({ page }) => {
+ const tables = await fixture(page)
+ tables.collections = Array.from({ length: 15 }, (_, index) => ({ id: `scaled-shelf-${index}`, name: `Shelf ${index}`, default_key: null, sort_position: index }))
+ await page.goto('/library')
+ await login(page)
+
+ const shelves = page.getByRole('navigation', { name: 'Library Shelves', exact: true })
+ const firstRowItems = shelves.locator('.collection-shelf-row').first().locator(':scope > *')
+ const spine = shelves.getByRole('button', { name: 'All Works', exact: true })
+ const compactTitle = shelves.locator('.collection-spine-mini .collection-spine-title')
+ const symbol = spine.locator('.collection-spine-symbol')
+ await shelves.getByRole('button', { name: 'Show All Collections', exact: true }).click()
+ await expect(spine).toHaveCSS('font-size', '13px')
+ await expect.poll(() => firstRowItems.count()).toBeGreaterThan(1)
+ const initialCapacity = await firstRowItems.count()
+ const initialSize = (await spine.boundingBox())!
+ const initialSymbolSize = (await symbol.boundingBox())!
+
+ await page.evaluate(key => {
+  const oldValue = localStorage.getItem(key)
+  const newValue = JSON.stringify({ ...JSON.parse(oldValue ?? '{}'), textScale: 'largest' })
+  localStorage.setItem(key, newValue)
+  window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }))
+ }, displaySettingsKey)
+
+ await expect(spine).toHaveCSS('font-size', '20px')
+ await expect(spine).toHaveCSS('width', `${initialSize.width + 30}px`)
+ await expect(spine).toHaveCSS('height', `${initialSize.height + 48}px`)
+ await expect(symbol).toHaveCSS('width', `${initialSymbolSize.width + 6}px`)
+ await expect.poll(() => firstRowItems.count()).toBeLessThan(initialCapacity)
+ expect(await compactTitle.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true)
+ expect(await shelves.locator('.collection-shelf-rows').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 })
 
 test('retains Offline collections and counts cloud works without duplicate versions or installation-only files', async ({ page }) => {
@@ -52,8 +118,8 @@ test('retains Offline collections and counts cloud works without duplicate versi
  await shelves.getByRole('button', { name: 'Cloud Shelf', exact: true }).click()
  await expect(page.locator('.story-card')).toHaveCount(2)
  await expect(page.getByRole('button', { name: 'Edit Collections', exact: true })).toHaveCount(0)
- await page.getByRole('button', { name: 'Hide Empty', exact: true }).click()
- await expect(shelves.getByRole('button', { name: 'Empty Shelf', exact: true })).toHaveCount(0)
+ await expect(page.getByRole('button', { name: 'Hide Empty', exact: true })).toHaveCount(0)
+ await expect(shelves.getByRole('button', { name: 'Empty Shelf', exact: true })).toBeVisible()
  await page.evaluate(() => {
   for (const storage of [localStorage, sessionStorage]) for (const key of Object.keys(storage)) if (key.startsWith('sb-') && key.endsWith('-auth-token')) storage.removeItem(key)
   sessionStorage.setItem('connected-login-signed-out', '1')
@@ -62,4 +128,55 @@ test('retains Offline collections and counts cloud works without duplicate versi
  await expect(page.getByRole('link', { name: 'Online Sign-In', exact: true })).toBeVisible()
  await expect(shelves.getByRole('button', { name: 'Cloud Shelf', exact: true }).locator('.collection-spine-count')).toHaveText('1')
  await expect(page.locator('.story-card')).toHaveCount(2)
+})
+
+
+test('bulk work selection spans the open collection and changes only chosen memberships', async ({ page }) => {
+ const tables = await fixture(page)
+ tables.collections = ['Source Shelf', 'Destination Shelf'].map((name, index) => ({ id: `bulk-shelf-${index}`, name, default_key: null }))
+ for (let i = 0; i < 28; i++) {
+  const id = `bulk-work-${i}`, title = i === 26 ? 'Filtered Out' : `Visible Work ${String(i + 1).padStart(2, '0')}`
+  tables.works.push({ ...exampleWork.work, id, ao3_work_id: 9000 + i })
+  tables.library_entries.push({ ...exampleWork, id: `bulk-entry-${i}`, work_id: id, metadata_overrides: { ...exampleWork.metadata, title } })
+  if (i < 27) tables.collection_works.push({ collection_id: 'bulk-shelf-0', library_entry_id: `bulk-entry-${i}` })
+ }
+ await page.goto('/library?shelf=bulk-shelf-0&size=25&query=Visible&sort=alpha')
+ await login(page)
+ await page.getByRole('button', { name: 'Edit Collections', exact: true }).click()
+ const actions = page.getByRole('group', { name: 'Work Selection' })
+ const count = actions.getByRole('status')
+ await page.getByRole('button', { name: 'Select Visible Work 01', exact: true }).click()
+ await expect(count).toHaveText('1 work selected')
+ await actions.getByRole('button', { name: 'Select Page', exact: true }).click()
+ await expect(count).toHaveText('25 works selected')
+ await page.getByRole('navigation', { name: 'Result Pages' }).first().getByRole('button', { name: 'Next', exact: true }).click()
+ const lastVisible = page.getByRole('button', { name: 'Select Visible Work 26', exact: true })
+ await expect(lastVisible).toHaveAttribute('aria-pressed', 'false')
+ await actions.getByRole('button', { name: 'Select Page', exact: true }).click()
+ await expect(count).toHaveText('26 works selected')
+ await actions.getByRole('button', { name: 'Clear Selection', exact: true }).click()
+ await expect(count).toHaveText('0 works selected')
+ await actions.getByRole('button', { name: 'Select All', exact: true }).click()
+ await expect(count).toHaveText('27 works selected')
+ await actions.getByRole('button', { name: 'Add to Collection', exact: true }).click()
+ const add = page.getByRole('dialog', { name: 'Add to Collection', exact: true })
+ await add.getByRole('checkbox', { name: 'Destination Shelf', exact: true }).check()
+ await add.getByRole('button', { name: 'Add to Collections', exact: true }).click()
+ await expect(add).toHaveCount(0)
+ await expect(count).toHaveText('0 works selected')
+ expect(tables.collection_works.filter(link => link.collection_id === 'bulk-shelf-1')).toHaveLength(27)
+ expect(tables.collection_works.some(link => link.collection_id === 'bulk-shelf-1' && link.library_entry_id === 'bulk-entry-26')).toBe(true)
+
+ await actions.getByRole('button', { name: 'Select All', exact: true }).click()
+ await expect(count).toHaveText('27 works selected')
+ await actions.getByRole('button', { name: 'Remove from Collection', exact: true }).click()
+ const remove = page.getByRole('dialog', { name: 'Remove from Collection?', exact: true })
+ await remove.getByRole('button', { name: 'Remove from Collection', exact: true }).click()
+ await expect(remove).toHaveCount(0)
+ await expect(count).toHaveText('0 works selected')
+ expect(tables.collection_works.filter(link => link.collection_id === 'bulk-shelf-0')).toHaveLength(0)
+ expect(tables.collection_works.filter(link => link.collection_id === 'bulk-shelf-1')).toHaveLength(27)
+ expect(tables.library_entries).toHaveLength(28)
+ await page.getByRole('button', { name: 'Done Editing', exact: true }).click()
+ await expect(actions).toHaveCount(0)
 })
