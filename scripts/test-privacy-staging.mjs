@@ -22,8 +22,12 @@ try {
   account.entries.push(id)
   cleanup.push(async () => { checked(await account.client.from('library_entries').delete().eq('id', id).eq('user_id', account.id)) })
   // Unique path per run: never replace an existing reader original.
-  account.path = `${account.id}/${randomUUID()}.epub`
-  cleanup.push(async () => { checked(await account.client.storage.from('reader-epubs').remove([account.path])) })
+  const fixtureHash = createHash('sha256').update(randomUUID()).digest('hex')
+  account.path = `${account.id}/${fixtureHash}/0.epub`
+  cleanup.push(async () => {
+   checked(await account.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:`${fixtureHash}/deleted`,p_value:true,p_base:0,p_generation:0}))
+   checked(await account.client.storage.from('reader-epubs').remove([account.path]))
+  })
   checked(await account.client.storage.from('reader-epubs').upload(account.path, bytes, { contentType: 'application/epub+zip', upsert: false }))
  }
  for (const [index, account] of accounts.entries()) {

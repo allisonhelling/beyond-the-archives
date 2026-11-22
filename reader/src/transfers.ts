@@ -1,13 +1,14 @@
+import { readerEpubPath } from '../../src/lib/reader-cloud-protocol'
 import { readerSeries } from './metadata'
-import { readerCloud, readerCloudConfig, syncCloud } from './cloud'
+import { readerCloud, readerCloudConfig, syncCloud, hasUploadedOriginal } from './cloud'
 import { digest } from './epub'
 import { importedVersion, prepareImport, prepareImportVersion, writeImport } from './import-books'
 import type { ReaderMetadata } from './model'
 import { all, bookStores, getBookDetails, loadSetting, readerOwner, removeDownload, setting, transaction } from './storage'
 
 export type TransferPair = { version: 1; id: string; token: string; device: string; label: string; account: string; cloud: boolean; origin: string; cloud_url?: string; local_url: string; mode: 'Automatic' | 'Cloud Inbox' | 'Local Reader' }
-export type ImportJob = { id: string; hash: string; filename: string; metadata: Record<string, unknown>; status: 'queued' | 'imported' | 'duplicate' | 'error' | 'cancelled'; message: string; hasFile?: boolean; releaseDownload?: boolean }
-type InboxRow = { destination: string; id: string; hash: string; metadata: Record<string, unknown>; status: ImportJob['status']; message: string }
+export type ImportJob = { id: string; hash: string; generation?: number; filename: string; metadata: Record<string, unknown>; status: 'queued' | 'imported' | 'duplicate' | 'error' | 'cancelled'; message: string; hasFile?: boolean; releaseDownload?: boolean }
+type InboxRow = { destination: string; id: string; generation: number; hash: string; metadata: Record<string, unknown>; status: ImportJob['status']; message: string }
 const jobKey = (id: string) => `calibre-job:${id}`
 const fileKey = (id: string) => `calibre-file:${id}`
 export const transferJobs = async () => (await all<{value: ImportJob}>('settings', 'calibre-job:')).map(row => row.value)
@@ -98,6 +99,9 @@ export async function processTransfers() {
     if (job.status !== 'queued' || !job.hasFile) continue
     if (cancelled) { await setting(jobKey(job.id),{...job,status:'cancelled',message:'Cancelled before import. Retry to resume.'}); continue }
     try {
+      const marker = await loadSetting<{generation: number}>(`cloud-base:${job.hash}/deleted`)
+      const epoch = marker?.generation ?? 0
+      if (job.generation !== undefined && epoch + epoch % 2 !== job.generation) throw new Error('This delivery belongs to a retired EPUB generation.')
       if (job.metadata._reader_download !== undefined && typeof job.metadata._reader_download !== 'boolean') throw new Error('Invalid import storage choice.')
       if (job.metadata._reader_download === false && !readerOwner) throw new Error('Cloud Only imports require a reader account.')
       const existing = await getBookDetails(job.hash)
@@ -124,11 +128,20 @@ export async function processTransfers() {
         const apply = () => {
           if (previous) { const request=tx.objectStore('books').get(previous.id); request.onsuccess=()=>save(request.result) } else save()
         }
+        const applyCurrent = () => {
+          if (job.generation === undefined) { apply(); return }
+          const marker = tx.objectStore('settings').get(`cloud-base:${job.hash}/deleted`)
+          marker.onsuccess = () => {
+            const epoch = marker.result?.value.generation ?? 0
+            if (epoch + epoch % 2 === job.generation) apply()
+            else tx.abort()
+          }
+        }
         if (existing?.hasFile) {
           // A download removed while identity resolution was pending must not be resurrected without its file.
           const request=tx.objectStore('books').get(next.id)
-          request.onsuccess=()=>{if(!request.result?.hasFile)tx.abort();else apply()}
-        } else apply()
+          request.onsuccess=()=>{if(!request.result?.hasFile)tx.abort();else applyCurrent()}
+        } else applyCurrent()
       })
       count++
     } catch(error) {
@@ -171,18 +184,22 @@ async function receive() {
   let cloudRows: InboxRow[] = []
   if (readerOwner && navigator.onLine) {
     try {
-      await syncCloud()
-      // Any account device can consume the inbox. Exact hashes make concurrent deliveries harmless.
-      const inbox = await readerCloud.from('reader_import_inbox').select('*').eq('status','queued').order('created_at').order('id').limit(50)
-      if (inbox.error) throw inbox.error
-      cloudRows=inbox.data as unknown as InboxRow[]
+      const pending = await readerCloud.from('reader_import_inbox').select('id').eq('status','queued').limit(1)
+      if (pending.error) throw pending.error
+      if (pending.data.length) {
+        await syncCloud()
+        // Re-read the inbox after the deletion preflight, which may have removed a delivery.
+        const inbox = await readerCloud.from('reader_import_inbox').select('*').eq('status','queued').order('created_at').order('id').limit(50)
+        if (inbox.error) throw inbox.error
+        cloudRows=inbox.data as unknown as InboxRow[]
+      }
       for(const row of cloudRows) {
         const id=`cloud:${row.destination}:${row.id}`
         if(await loadSetting(jobKey(id))) continue
         const existing=await getBookDetails(row.hash)
-        const {data,error}=existing?.hasFile ? {data:undefined,error:null} : await readerCloud.storage.from('reader-epubs').download(`${readerOwner}/${row.hash}.epub`)
+        const {data,error}=existing?.hasFile ? {data:undefined,error:null} : await readerCloud.storage.from('reader-epubs').download(readerEpubPath(readerOwner,row.hash,row.generation))
         if(error) throw error
-        await stageTransfer({id,hash:row.hash,filename:typeof row.metadata._filename === 'string' ? row.metadata._filename : `${row.id}.epub`,metadata:row.metadata,status:'queued',message:''},data)
+        await stageTransfer({id,hash:row.hash,generation:row.generation,filename:typeof row.metadata._filename === 'string' ? row.metadata._filename : `${row.id}.epub`,metadata:row.metadata,status:'queued',message:''},data)
       }
     } catch(error) { errors.push(error) }
   }
@@ -194,7 +211,7 @@ async function receive() {
     if (conflicts.length && releases.length) throw new Error('Resolve cloud sync conflicts before finishing Cloud Only imports. Downloads are retained until then.')
     for (const job of releases) {
       // Keep the temporary original until its manifest and reading state are published.
-      if (!await loadSetting(`cloud-file:${job.hash}`)) throw new Error('Cloud upload is incomplete. The temporary download is retained for retry.')
+      if (!await hasUploadedOriginal(job.hash)) throw new Error('Cloud upload is incomplete. The temporary download is retained for retry.')
       const book = await getBookDetails(job.hash)
       if (book?.hasFile) await removeDownload(book)
       await setting(jobKey(job.id), {...job,releaseDownload:false,message:job.message + ' Saved in cloud; download available on request.'})

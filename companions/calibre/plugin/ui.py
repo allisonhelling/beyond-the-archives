@@ -8,6 +8,7 @@ from calibre.utils.config import JSONConfig, config_dir
 from qt.core import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel,
                      QMenu, QPlainTextEdit, QProgressBar, QPushButton, QThread,
                      QTabWidget, QVBoxLayout, pyqtSignal)
+from calibre_plugins.archives_unfolded import PLUGIN_ID, READER_NAME
 from calibre_plugins.archives_unfolded.transfer import (
     Bridge, METADATA_FIELDS, MODES, RESULT_GROUPS, TransferStore, book_metadata, destination, result_group, validate_pair)
 
@@ -68,8 +69,8 @@ class Worker(QThread):
 
 
 class ArchivesUnfoldedAction(InterfaceAction):
-    name = 'archives unfolded'
-    action_spec = ('archives unfolded', None, 'Sync EPUBs to your paired reader', None)
+    name = PLUGIN_ID
+    action_spec = (READER_NAME, None, 'Sync EPUBs to your paired reader', None)
 
     def genesis(self):
         self.store = TransferStore(Path(config_dir) / 'plugins' / 'archives-unfolded-queue')

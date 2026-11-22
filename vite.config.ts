@@ -1,5 +1,6 @@
 import { sampleData } from './scripts/sample-data'
 import { offlineShell } from './scripts/offline-shell'
+import { siteBranding } from './scripts/site-branding'
 
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
@@ -12,19 +13,9 @@ import { brandName, brandTagline } from './src/lib/brand'
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   validateBrowserEnv(env, mode !== 'test' && !(command === 'serve' && env.VITE_SAMPLE_DATA === 'true'), process.env, command === 'build')
-  const manifest = JSON.stringify({ name: brandName, short_name: brandName, start_url: '/', display: 'standalone', background_color: '#faf8f4', theme_color: '#faf8f4' })
   return {
-    plugins: [sampleData(env.VITE_SAMPLE_DATA === 'true'), react(), tailwindcss(), svgr(), offlineShell('organizer', ['/manifest.webmanifest']), {
-      name: 'site-branding',
-      configureServer(server) {
-        server.middlewares.use('/manifest.webmanifest', (_request, response) => {
-          response.setHeader('Content-Type', 'application/manifest+json')
-          response.end(manifest)
-        })
-      },
-      generateBundle() { this.emitFile({ type: 'asset', fileName: 'manifest.webmanifest', source: manifest }) },
-      transformIndexHtml: html => html.replaceAll('__SITE_NAME__', brandName).replaceAll('__SITE_TAGLINE__', brandTagline),
-    }],
+    plugins: [sampleData(env.VITE_SAMPLE_DATA === 'true'), react(), tailwindcss(), svgr(), offlineShell('organizer', ['/manifest.webmanifest']),
+      siteBranding(brandName, brandTagline, { background_color: '#faf8f4', theme_color: '#faf8f4' })],
     // Browser tests need stable pages while reports and other files are written.
     server: { watch: mode === 'e2e' ? null : undefined },
     build: {

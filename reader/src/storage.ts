@@ -88,13 +88,13 @@ export async function getBook(id: string): Promise<Book | undefined> {
   })
   return getBook(id)
 }
-export function putBook(tx: IDBTransaction, book: Book | BookDetails, fromCloud = false) {
+export function putBook(tx: IDBTransaction, book: Book | BookDetails, fromCloud = false, restoring = false) {
   const details = 'file' in book ? bookDetails(book) : book
   if (readerOwner && !fromCloud) {
     const previous = tx.objectStore('books').get(book.id)
     previous.onsuccess = () => {
       const before = previous.result ? cloudBookFields(previous.result) : {}
-      for (const [field, value] of Object.entries(cloudBookFields(details))) if (!equal(before[field], value)) queueCloud(tx, `${book.id}/${field}`, value)
+      for (const [field, value] of Object.entries(cloudBookFields(details))) if (!equal(before[field], value)) queueCloud(tx, `${book.id}/${field}`, value, restoring)
     }
   }
   tx.objectStore('books').put(details)
@@ -104,9 +104,19 @@ export function putBook(tx: IDBTransaction, book: Book | BookDetails, fromCloud 
     else tx.objectStore('contents').delete(book.id)
   }
 }
+export function queueOrganizerEdit(tx: IDBTransaction, event: Pending) {
+  const settings = tx.objectStore('settings')
+  const marker = settings.get(`cloud-base:${event.book}/deleted`)
+  const restore = settings.get(`cloud-edit:${event.book}/deleted`)
+  restore.onsuccess = () => {
+    const generation = marker.result?.value.generation ?? 0
+    tx.objectStore('pending').put({ ...event, generation: generation +
+      Number(marker.result?.value.value === true && restore.result?.value.value === false) })
+  }
+}
 export async function saveBook(book: Book | BookDetails, pending?: Pending | Pending[], preservePosition = false) {
   await transaction(pending ? [...bookStores, 'pending'] : bookStores, tx => {
-    const save = (value: Book | BookDetails) => { putBook(tx, value); for (const event of pending ? Array.isArray(pending) ? pending : [pending] : []) tx.objectStore('pending').put(event) }
+    const save = (value: Book | BookDetails) => { putBook(tx, value); for (const event of pending ? Array.isArray(pending) ? pending : [pending] : []) queueOrganizerEdit(tx,event) }
     if (!preservePosition) { save(book); return }
     const request = tx.objectStore('books').get(book.id)
     request.onsuccess = () => save({ ...book, position: request.result?.position ?? book.position })
@@ -119,7 +129,7 @@ export async function removeDownload(book: BookDetails) {
 export function eraseBook(tx: IDBTransaction, id: string, afterErase?: () => void, replacementId?: string) {
   for (const name of ['books', 'catalog', 'contents']) tx.objectStore(name).delete(id)
   const pending = tx.objectStore('pending').openCursor()
-  pending.onsuccess = () => { const cursor = pending.result; if (!cursor) return; if (cursor.value.book === id) { if (replacementId) cursor.update({...cursor.value,book:replacementId}); else cursor.delete() } cursor.continue() }
+  pending.onsuccess = () => { const cursor = pending.result; if (!cursor) return; if (cursor.value.book === id) { if (replacementId) queueOrganizerEdit(tx,{...cursor.value,book:replacementId}); else cursor.delete() } cursor.continue() }
   const settings = tx.objectStore('settings').openCursor()
   settings.onsuccess = () => {
     const cursor = settings.result
@@ -138,7 +148,8 @@ export function deleteBook(tx: IDBTransaction, id: string, replacementId?: strin
   const catalog = readerOwner && retainCatalog ? tx.objectStore('catalog').get(id) : undefined
   const settings = tx.objectStore('settings'), baseline = settings.get(`cloud-base:${id}/deleted`)
   baseline.onsuccess = () => eraseBook(tx, id, () => {
-    if (readerOwner) settings.put({id:`cloud-edit:${id}/deleted`,value:{id:crypto.randomUUID(),key:`${id}/deleted`,value:true,base:baseline.result?.value.revision ?? 0} satisfies CloudEdit})
+    if (baseline.result) settings.put(baseline.result)
+    if (readerOwner) settings.put({id:`cloud-edit:${id}/deleted`,value:{id:crypto.randomUUID(),key:`${id}/deleted`,value:true,base:baseline.result?.value.revision ?? 0,generation:baseline.result?.value.generation ?? 0} satisfies CloudEdit})
     if (catalog?.result) tx.objectStore('catalog').put({ ...catalog.result, deleting: true })
   }, replacementId)
 }
@@ -157,14 +168,45 @@ export async function mutateBook(id: string, update: (book: BookDetails) => Book
   })
 }
 
-export function queueCloud(tx: IDBTransaction, key: string, value: unknown) {
+function queueCloud(tx: IDBTransaction, key: string, value: unknown, restoring = false) {
   const store = tx.objectStore('settings'), baseline = store.get(`cloud-base:${key}`)
-  baseline.onsuccess = () => {
-    store.put({ id: `cloud-edit:${key}`, value: { id: crypto.randomUUID(), key, value, base: baseline.result?.value?.revision ?? 0 } satisfies CloudEdit })
+  const book = key.includes('/') ? key.split('/')[0] : undefined
+  const marker = book ? store.get(`cloud-base:${book}/deleted`) : undefined
+  const restore = book ? store.get(`cloud-edit:${book}/deleted`) : undefined
+  const write = () => {
+    const observed = marker?.result?.value as CloudValue | undefined
+    const generation = (observed?.generation ?? 0) + Number(observed?.value === true && !key.endsWith('/deleted') &&
+      (restoring || restore?.result?.value.value === false))
+    const base = baseline.result?.value as CloudValue | undefined
+    store.put({ id: `cloud-edit:${key}`, value: { id: crypto.randomUUID(), key, value,
+      base: base?.generation === generation ? base?.revision ?? 0 : 0, generation } satisfies CloudEdit })
   }
+  if (restore) restore.onsuccess = write
+  else baseline.onsuccess = write
 }
-export async function cloudEdits() {
-  return (await all<{ id: string; value: CloudEdit }>('settings', 'cloud-edit:')).filter(row => row.id.startsWith('cloud-edit:')).map(row => row.value)
+
+export async function claimCloudEdit(handled: ReadonlySet<string>): Promise<CloudEdit | undefined> {
+  let edit: CloudEdit | undefined
+  await transaction(['settings'], tx => {
+    const store = tx.objectStore('settings'), flight = store.get('cloud-flight')
+    flight.onsuccess = () => {
+      if (flight.result) { edit = flight.result.value; return }
+      const outbox = store.getAll(IDBKeyRange.bound('cloud-edit:', 'cloud-edit:\uffff'))
+      outbox.onsuccess = () => {
+        const candidates = (outbox.result as { value: CloudEdit }[]).map(row => row.value).filter(row => !handled.has(row.key))
+        edit = candidates.find(row => row.key.endsWith('/deleted')) ?? candidates[0]
+        if (edit) store.put({ id: 'cloud-flight', value: edit })
+      }
+    }
+  })
+  return edit
+}
+
+export async function releaseCloudEdit(id: string) {
+  await transaction(['settings'], tx => {
+    const store = tx.objectStore('settings'), flight = store.get('cloud-flight')
+    flight.onsuccess = () => { if (flight.result?.value.id === id) store.delete('cloud-flight') }
+  })
 }
 export async function hasCloudChanges(): Promise<boolean> {
   const db = await database
@@ -176,26 +218,31 @@ export async function hasCloudChanges(): Promise<boolean> {
     tx.onabort = () => reject(tx.error)
   })
 }
-export async function acceptCloud(value: CloudValue, edit?: CloudEdit) {
+export async function acceptCloud(value: CloudValue, edit: CloudEdit) {
   await transaction(bookStores, tx => {
-    const store = tx.objectStore('settings')
-    store.put({ id: `cloud-base:${value.key}`, value })
-    if (edit) {
-      const request = store.get(`cloud-edit:${value.key}`)
-      request.onsuccess = () => {
-        if (request.result?.value.id === edit.id) {
-          store.delete(`cloud-edit:${value.key}`)
-          if (!equal(edit.value, value.value) && /\/(favorite|rec|progress|status)$/.test(value.key)) {
-            const [id, field] = value.key.split('/')
-            const book = tx.objectStore('books').get(id)
-            book.onsuccess = () => {
-              if (!book.result) return
-              const next = { ...book.result, [field]: value.value }
-              putBook(tx, field === 'progress' && typeof value.value === 'number' && !isAnthology(next) ? withReadingProgress(next,value.value) : next, true)
-            }
+    const store = tx.objectStore('settings'), flight = store.get('cloud-flight')
+    const marker = edit.key.includes('/') ? store.get(`cloud-base:${edit.key.split('/')[0]}/deleted`) : undefined
+    const request = store.get(`cloud-edit:${value.key}`), baseline = store.get(`cloud-base:${value.key}`)
+    baseline.onsuccess = () => {
+      if (flight.result?.value.id !== edit.id) return
+      store.delete('cloud-flight')
+      const observed = marker?.result?.value.generation ?? 0
+      if (observed > value.generation || (baseline.result?.value.generation === value.generation &&
+          baseline.result.value.revision > value.revision)) return
+      store.put({ id: `cloud-base:${value.key}`, value })
+      if (request.result?.value.id === edit.id) {
+        store.delete(`cloud-edit:${value.key}`)
+        if (!equal(edit.value, value.value) && /\/(favorite|rec|progress|status)$/.test(value.key)) {
+          const [id, field] = value.key.split('/')
+          const book = tx.objectStore('books').get(id)
+          book.onsuccess = () => {
+            if (!book.result) return
+            const next = { ...book.result, [field]: value.value }
+            putBook(tx, field === 'progress' && typeof value.value === 'number' && !isAnthology(next) ? withReadingProgress(next,value.value) : next, true)
           }
         }
-        else if (request.result) store.put({ ...request.result, value: { ...request.result.value, base: value.revision } })
+      } else if (request.result?.value.generation === value.generation) {
+        store.put({ ...request.result, value: { ...request.result.value, base: value.revision } })
       }
     }
   })

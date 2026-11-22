@@ -64,7 +64,7 @@ test('platform availability filters saved works without offering organizer insta
  await expect(page.locator('.work-card')).toHaveCount(3)
  await expect(page.getByRole('link',{name:'Online Story',exact:true})).toHaveCount(0)
  await selector.click()
- await page.getByRole('option',{name:'Archives Unfolded',exact:true}).click()
+ await page.getByRole('option',{name:'bta reader',exact:true}).click()
  await expect(page).toHaveURL(/availability=unfolded/)
  await expect(page.locator('.work-card')).toHaveCount(2)
  await selector.click();await page.getByRole('option',{name:'BookFusion',exact:true}).click()
@@ -184,7 +184,7 @@ test('work reader shortcuts replace the BookFusion section and plain note action
  tables.works.push({ id: 'hover-work', ao3_work_id: 12001, verified_chapters: {} })
  tables.library_entries.push({ id: 'hover-entry', work_id: 'hover-work', original_url: 'https://archiveofourown.org/works/12001', reading_status: 'to_read', last_read_chapter: 0, notes: '', metadata_overrides: { title: 'Hover States', authors: ['Author'], published_chapters: 1, total_chapters: 1, publication_status: 'complete' } })
  await page.goto('/stories/hover-entry'); await login(page)
- const unfolded = page.getByRole('link', { name: 'Unfolded', exact: true })
+ const unfolded = page.getByRole('link', { name: 'bta reader', exact: true })
  await expect(unfolded).toHaveCount(0)
  await expect(page.getByRole('link', { name: 'Bookfusion', exact: true })).toHaveCount(0)
  await expect(page.getByRole('button', { name: 'Edit BookFusion Link', exact: true })).toHaveCount(0)
@@ -346,7 +346,7 @@ test('work tiles and phone organizer controls use the requested reading layout',
  await card.getByRole('link',{name:'Layout Order Story',exact:true}).click()
  // Exercise the fallback font used when Avenir Next and Segoe UI are unavailable.
  if(mobile) await page.addStyleTag({content:':root { --font-sans: Arial, sans-serif; }'})
- const read=page.getByRole('link',{name:'Unfolded',exact:true}),wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true})
+ const read=page.getByRole('link',{name:'bta reader',exact:true}),wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true})
  await expect(read).toBeVisible()
  if(mobile) {
   for(const width of [390,320]) {
@@ -360,12 +360,12 @@ test('work tiles and phone organizer controls use the requested reading layout',
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
    }).toPass({ timeout: 5000 })
   }
- } else await expect(page.locator('.details-updated-action').getByRole('link',{name:'Unfolded',exact:true})).toBeVisible()
+ } else await expect(page.locator('.details-updated-action').getByRole('link',{name:'bta reader',exact:true})).toBeVisible()
  await page.screenshot({path:test.info().outputPath('work-info-actions.png'),fullPage:true})
  if(mobile) for(const display of [{workStats:{hidden:['updated']}},{workHeader:{hidden:['stats']}}]) {
   await page.evaluate(value=>localStorage.setItem('between-chapters:display:v1',JSON.stringify(value)),display)
   await page.reload()
-  await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'Unfolded',exact:true})).toBeVisible()
+  await expect(page.locator('.story-metadata-actions').getByRole('link',{name:'bta reader',exact:true})).toBeVisible()
  }
 })
 
@@ -416,7 +416,7 @@ test('Read Offline follows availability and the saved priority in the shared boo
  await expect(footer.getByRole('button', { name: 'Read Offline', exact: true })).toBeDisabled()
 })
 
-test('exports one work in either format and shows Unfolded only for a connected EPUB', async ({page},info)=>{
+test('exports one work in either format and shows bta reader only for a connected EPUB', async ({page},info)=>{
  const tables=await fixture(page)
  let available=false
  await page.route('**/rest/v1/rpc/reader_offline_snapshot',route=>route.fulfill({json:{readers:[{id:'export-reader',name:'My Reader',url:'https://reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]},{id:'second-reader',name:'Second Reader',url:'https://second-reader.example/',reportedAt:'2026-11-01T00:00:00Z',works:available?['99001']:[]}],stories:[]}}))
@@ -456,7 +456,7 @@ test('exports one work in either format and shows Unfolded only for a connected 
  await page.keyboard.press('Escape')
  await card.getByRole('link',{name:'Export Example',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Export Example',exact:true})).toBeVisible()
- await expect(page.getByRole('link',{name:'Unfolded',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('link',{name:'bta reader',exact:true})).toHaveCount(0)
  const headerExport=page.locator('.work-details-actions').getByRole('button',{name:'Export Metadata',exact:true})
  const refresh=page.locator('.work-details-actions').getByRole('button',{name:'Retry / Update Metadata',exact:true})
  await expect(headerExport).toHaveText('Export Metadata')
@@ -471,10 +471,10 @@ test('exports one work in either format and shows Unfolded only for a connected 
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
  available=true
  await page.reload()
- const wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'Unfolded',exact:true})
+ const wayback=page.getByRole('link',{name:'Search in Wayback Machine',exact:true}),read=page.getByRole('link',{name:'bta reader',exact:true})
  await expect(wayback).toHaveText('Wayback')
  await expect(read).toHaveAttribute('href','https://reader.example/?work=99001')
- await expect(page.locator('.details-updated-action').getByRole('link',{name:'Unfolded',exact:true})).toBeVisible()
+ await expect(page.locator('.details-updated-action').getByRole('link',{name:'bta reader',exact:true})).toBeVisible()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })
 

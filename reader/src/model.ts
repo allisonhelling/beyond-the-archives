@@ -65,7 +65,7 @@ export function catalogBook(book: BookDetails): CatalogBook {
   return { ...catalog, organizerEntryId: book.remote?.id, position: { chapter: position.chapter, fraction: position.fraction }, chapterCount: chapters.filter(chapter => chapter.kind !== 'frontmatter').length, wordCount: chapters.filter(chapter => chapter.kind !== 'frontmatter').reduce((sum, chapter) => sum + (chapter.words ?? 0), 0), completedCount: readerProgress(book) }
 }
 export type Connection = { expiresAt?: string | null; backend: string; key: string; secret: string; account: string; label: string; name: string }
-export type Pending = { memberKey?: string; id: string; book: string; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
+export type Pending = { memberKey?: string; id: string; book: string; generation?: number; work: string; account: string; base: Remote; input: Record<string, unknown>; action?: 'save' | 'progress'; error?: string }
 export type Preferences = { pageAnimation?: 'none' | 'slide' | 'curl'; font?: 'default' | 'georgia' | 'palatino' | 'sans' | 'mono'; theme?: 'system' | 'light' | 'night' | 'sepia' | 'charcoal' | 'gray'; lineHeight?: number; brightness?: number; textColor?: string; linkColor?: string; backgroundColor?: string; tileLayouts?: Partial<Record<'mobile' | 'desktop', DisplayPreference>>; storageColumns?: string[]; storageSort?: { key: string; ascending: boolean }; content: 'chapter' | 'entire'; layout: 'scroll' | 'pages'; size: number; width: number; dark: boolean; chapterBar?: boolean; tagAppearance?: TagAppearance; tagSyncAccount?: string }
 export const defaultTagAppearance: TagAppearance = { shape: 'filled', colors: {} }
 export const readingRanges = {

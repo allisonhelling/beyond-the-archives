@@ -1,6 +1,6 @@
 # Calibre Reader Plugin
 
-Send existing EPUB formats from Calibre to **archives unfolded**, independently of organizer connections. Requires Calibre 7+ and the reader version containing **Calibre Transfers**. Books without EPUB formats are skipped; the plugin does not convert formats or remove DRM.
+Send existing EPUB formats from Calibre to **bta reader**, independently of organizer connections. Requires Calibre 7+ and the reader version containing **Calibre Transfers**. Books without EPUB formats are skipped; the plugin does not convert formats or remove DRM.
 
 ## Build And Install
 
@@ -10,13 +10,13 @@ From the repository root, using Python 3.11+:
 python3 companions/calibre/build.py
 ```
 
-In Calibre, open **Preferences → Plugins → Load Plugin From File**, select `companions/calibre/dist/archives-unfolded-calibre.zip`, and restart Calibre. If the action is hidden, add **archives unfolded** through **Preferences → Toolbars & Menus**. The package follows Calibre’s [UI plugin guide](https://manual.calibre-ebook.com/creating_plugins.html) and reads books through its [thread-safe database API](https://manual.calibre-ebook.com/db_api.html).
+In Calibre, open **Preferences → Plugins → Load Plugin From File**, select `companions/calibre/dist/archives-unfolded-calibre.zip`, and restart Calibre. If the toolbar button is hidden, add the action through **Preferences → Toolbars & Menus**. Calibre may list the action under its existing registration name, **archives unfolded**. The package follows Calibre’s [UI plugin guide](https://manual.calibre-ebook.com/creating_plugins.html) and reads books through its [thread-safe database API](https://manual.calibre-ebook.com/db_api.html).
 
 ## Pair And Send
 
 1. Open the intended reader library. Sign into the **reader account** and open that account’s library to use cloud delivery. Organizer connection does not select the library.
 2. Choose **Calibre Transfers → Pair Calibre**, name the destination, and **Copy Pairing Configuration**. Keep this configuration private: it contains a delivery credential.
-3. In Calibre’s **archives unfolded** menu, choose **Pair Reader Destination**, paste the configuration, and save. The plugin remembers the library’s account, device, reader origin, and preferred mode. One active pairing is supported per Calibre configuration and reader library.
+3. In Calibre’s **bta reader** menu, choose **Pair Reader Destination**, paste the configuration, and save. The plugin remembers the library’s account, device, reader origin, and preferred mode. One active pairing is supported per Calibre configuration and reader library.
 4. Choose **Sync Selected Books** or **Sync All Books**. Review the destination name, account, device, and transfer mode before confirming. **Sync All Books** includes the entire current Calibre database, independently of searches or virtual-library filtering.
 5. Keep the reader open to receive and parse files. The reader checks roughly every 15 seconds while visible; **Check for Incoming Books** checks immediately. This action and **Cancel Pending Imports** appear only while Calibre is paired. Calibre shows per-book transfer results; choose **Retry Queued Transfers** to refresh cloud import results and retry uploads after reconnecting. Local results update when the reader acknowledges receipt.
 

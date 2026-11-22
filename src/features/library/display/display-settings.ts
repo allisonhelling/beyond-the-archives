@@ -1,4 +1,5 @@
 import type { DisplayLayout } from '../../../lib/use-layout'
+import { readerShortName } from '../../../lib/brand'
 import { ao3MetadataLabels, metadataLabels, newWorkInfoFields, newWorkTileFields } from './ao3-fields'
 export const displaySettingsKey = 'between-chapters:display:v1'
 const changeEvent = 'between-chapters:display-changed'
@@ -265,7 +266,7 @@ export function saveSummaryMode(summaryMode: SummaryMode) {
  writeDisplay({ ...saved, summaryMode })
 }
 
-export const offlineReadingOptions = { unfolded: 'Archives Unfolded', bookfusion: 'BookFusion' } as const
+export const offlineReadingOptions = { unfolded: readerShortName, bookfusion: 'BookFusion' } as const
 export type OfflineReadingPriority = keyof typeof offlineReadingOptions
 export function offlineReadingPriority(raw = displaySnapshot()): OfflineReadingPriority {
  try { return JSON.parse(raw)?.offlineReadingPriority === 'bookfusion' ? 'bookfusion' : 'unfolded' }

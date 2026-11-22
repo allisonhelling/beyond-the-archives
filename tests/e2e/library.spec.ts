@@ -4077,7 +4077,7 @@ test('fits sort and filter menus, collapses filter categories, and shares inline
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
  await page.goto('/stories/refinements-entry')
  await expect(page.getByRole('heading',{name:'Reading and Organization',exact:true})).toBeVisible({timeout:15000})
- await expect(page.getByRole('link',{name:'Unfolded',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('link',{name:'bta reader',exact:true})).toHaveCount(0)
  await page.getByRole('link',{name:'Search in Wayback Machine',exact:true}).focus()
  await expect(page.getByRole('tooltip',{name:'Search in Wayback Machine',exact:true})).toBeVisible()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)

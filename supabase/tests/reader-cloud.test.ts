@@ -6,7 +6,7 @@ import { createTestDatabase } from '../../scripts/test-database.mjs'
 let db:PGlite
 const owner='10000000-0000-0000-0000-000000000001',other='10000000-0000-0000-0000-000000000002'
 async function asUser(id=owner){await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${id}'`)}
-async function apply(key:string,value:unknown,base=0,id=crypto.randomUUID()) {return (await db.query<{result:{key:string;value:unknown;revision:number;conflict?:boolean}}>('select public.reader_cloud_apply($1,$2,$3,$4) result',[id,key,JSON.stringify(value),base])).rows[0].result}
+async function apply(key:string,value:unknown,base=0,id=crypto.randomUUID(),generation=0) {return (await db.query<{result:{key:string;value:unknown;revision:number;generation:number;conflict?:boolean;stale?:boolean}}>('select public.reader_cloud_apply($1,$2,$3,$4,$5) result',[id,key,JSON.stringify(value),base,generation])).rows[0].result}
 beforeAll(async()=>{db=await createTestDatabase();await db.exec(`insert into auth.users values('${owner}'),('${other}');insert into public.reader_app_access values('${owner}')`);await asUser()},30000)
 afterAll(async()=>{await db?.close()})
 it('denies unapproved accounts and isolates rows',async()=>{
@@ -24,15 +24,24 @@ it('checks revisions and retries a lost response without duplicating writes',asy
  expect(await apply('book/position',{chapter:'two',textOffset:20},0,id)).toEqual(first)
  expect(await apply('book/position',{chapter:'one',textOffset:0},0)).toMatchObject({conflict:true,revision:1})
  expect(await apply('book/position',{chapter:'one',textOffset:0},1)).toMatchObject({revision:2,value:{chapter:'one',textOffset:0}})
+ expect(await apply('book/position',{textOffset:20,chapter:'two'},0,id)).toEqual(first)
+ await expect(apply('book/position',{chapter:'two',textOffset:20},1,id)).rejects.toThrow('request mismatch')
+ await expect(apply('book/position',{chapter:'two',textOffset:20},0,id,1)).rejects.toThrow('request mismatch')
+ await expect(apply('book/notes','different',0,id)).rejects.toThrow('request mismatch')
+ await expect(db.query('select * from public.reader_cloud_receipts')).rejects.toThrow('permission denied')
+ await db.exec('reset role')
+ expect((await db.query('select accepted_value,accepted_revision from public.reader_cloud_receipts where id=$1',[id])).rows)
+   .toEqual([{accepted_value:null,accepted_revision:1}])
+ await asUser()
  // Same-value concurrent writes do not produce false conflicts.
  expect(await apply('book/position',{chapter:'one',textOffset:0},0)).not.toHaveProperty('conflict')
 })
 it('retains distinct history IDs and immutable private EPUB objects',async()=>{
  await apply('book/history:a',{id:'a'});await apply('book/history:b',{id:'b'})
  expect((await db.query("select key from public.reader_cloud_values where key like '%history:%'")).rows).toHaveLength(2)
- const name=`${owner}/${'a'.repeat(64)}.epub`
+ const name=`${owner}/${'a'.repeat(64)}/0.epub`
  await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[name])
- await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${other}/${'b'.repeat(64)}.epub`])).rejects.toThrow()
+ await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${other}/${'b'.repeat(64)}/0.epub`])).rejects.toThrow()
  await asUser(other)
  expect((await db.query("select * from storage.objects where bucket_id='reader-epubs'")).rows).toEqual([])
  await asUser()
@@ -55,7 +64,7 @@ it('erases cloud reading data and receipts, blocks stale-device resurrection, an
  const book='d'.repeat(64),key=`${book}/deleted`,id=crypto.randomUUID()
  await apply(`${book}/manifest`,{title:'Private title'})
  await apply(`${book}/notes`,'Private notes');await apply(`${book}/history:read`,{id:'read'})
- const name=`${owner}/${book}.epub`
+ const name=`${owner}/${book}/0.epub`
  await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[name])
  const destination=crypto.randomUUID()
  await db.query('insert into public.reader_transfer_destinations(id,user_id,device,label,token_hash) values($1,$2,$3,$4,$5)',[destination,owner,'device','Reader','c'.repeat(64)])
@@ -64,20 +73,28 @@ it('erases cloud reading data and receipts, blocks stale-device resurrection, an
  await asUser()
  const deleted=await apply(key,true,0,id)
  expect(await apply(key,true,0,id)).toEqual(deleted)
- expect((await db.query('select * from public.reader_import_inbox where hash=$1',[book])).rows).toEqual([])
+ expect((await db.query('select status,metadata from public.reader_import_inbox where hash=$1',[book])).rows).toEqual([{status:'retired',metadata:{}}])
  expect((await db.query('select key from public.reader_cloud_values where starts_with(key,$1)',[`${book}/`])).rows).toEqual([{key}])
  await db.exec('reset role')
- expect((await db.query("select result from public.reader_cloud_receipts where starts_with(result->>'key',$1)",[`${book}/`])).rows).toEqual([{result:deleted}])
+ expect((await db.query("select count(*)::int identities,count(accepted_value)::int payloads from public.reader_cloud_receipts where starts_with(key,$1)",[`${book}/`])).rows)
+   .toEqual([{identities:4,payloads:0}])
  await asUser()
- expect(await apply(`${book}/notes`,'Stale notes')).toEqual(deleted)
- await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${owner}/${book}.epub`])).rejects.toThrow()
+ expect(await apply(`${book}/notes`,'Stale notes')).toMatchObject({...deleted,stale:true})
+ await expect(apply(key,false,1,crypto.randomUUID(),1)).rejects.toThrow('Retired EPUB removal')
+ await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${owner}/${book}/0.epub`])).rejects.toThrow()
  await asUser(other)
  expect((await db.query("delete from storage.objects where name=$1 returning name",[name])).rows).toEqual([])
  await asUser()
  expect((await db.query("delete from storage.objects where name=$1 returning name",[name])).rows).toEqual([{name}])
- expect(await apply(key,false,deleted.revision)).toMatchObject({value:false,revision:2})
- await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[name])
- expect(await apply(`${book}/manifest`,{title:'Fresh import'})).toMatchObject({revision:1})
+ expect(await apply(key,false,deleted.revision,crypto.randomUUID(),1)).toMatchObject({value:false,revision:2,generation:2})
+ const restored = `${owner}/${book}/2.epub`
+ await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[restored])
+ expect(await apply(key,true,0,id)).toEqual(deleted)
+ expect((await db.query("delete from storage.objects where name in ($1,$2) returning name",[name,restored])).rows).toEqual([])
+ expect((await db.query('select name from storage.objects where name=$1',[restored])).rows).toEqual([{name:restored}])
+ await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[name])).rejects.toThrow()
+ expect(await apply(`${book}/notes`,'Stale notes')).toMatchObject({stale:true,generation:2})
+ expect(await apply(`${book}/manifest`,{title:'Fresh import'},0,crypto.randomUUID(),2)).toMatchObject({revision:1,generation:2})
 })
 
 it('shares markings and reading state with the organizer and every EPUB version, including deliberate corrections',async()=>{
@@ -96,7 +113,14 @@ it('shares markings and reading state with the organizer and every EPUB version,
  expect((await db.query('select last_read_chapter,reading_status,is_favorite,is_rec from public.library_entries where id=$1',[entry])).rows[0]).toEqual({last_read_chapter:7,reading_status:'reading',is_favorite:true,is_rec:true})
  await asUser()
  await apply(`${second}/manifest`,{workId:'99801',metadata:{title:'Older EPUB'}})
- expect(await apply(`${second}/progress`,0)).toMatchObject({value:7})
+ const normalizedId=crypto.randomUUID()
+ const normalized=await apply(`${second}/progress`,0,0,normalizedId)
+ expect(normalized).toMatchObject({value:7})
+ await db.exec('reset role')
+ expect((await db.query('select accepted_value from public.reader_cloud_receipts where id=$1',[normalizedId])).rows)
+  .toEqual([{accepted_value:7}])
+ await asUser()
+ expect(await apply(`${second}/progress`,0,0,normalizedId)).toEqual(normalized)
  expect(await apply(`${second}/status`,'to_read')).toMatchObject({value:'reading'})
  expect(await apply(`${second}/favorite`,false)).toMatchObject({value:true})
  // Organizer corrections must reach both versions and permit unmarking.
@@ -150,4 +174,46 @@ it('preserves verified shared progress when importing an older metadata snapshot
  await apply(`${hash}/status`,'reading')
  const saved=(await db.query<{id:string}>("select public.save_library_story('https://archiveofourown.org/works/99803',$1,'to_read',0,'',null,false,'{}','{}') id",[JSON.stringify({title:'Older EPUB',published_chapters:3,total_chapters:3})])).rows[0].id
  expect((await db.query('select last_read_chapter,reading_status from public.library_entries where id=$1',[saved])).rows[0]).toEqual({last_read_chapter:8,reading_status:'reading'})
+})
+
+it('redacts normalized private results on deletion and serializes duplicate requests',async()=>{
+ await asUser()
+ const first='5'.repeat(64), second='6'.repeat(64), id=crypto.randomUUID()
+ await apply(`${first}/manifest`,{workId:'89100'})
+ await apply(`${first}/progress`,9)
+ await apply(`${second}/manifest`,{workId:'89100'})
+ const requests=await Promise.all([apply(`${second}/progress`,0,0,id),apply(`${second}/progress`,0,0,id)])
+ expect(requests[0]).toEqual(requests[1])
+ expect(requests[0].value).toBe(9)
+ expect((await db.query('select revision from public.reader_cloud_values where key=$1',[`${second}/progress`])).rows)
+   .toEqual([{revision:requests[0].revision}])
+ await apply(`${second}/deleted`,true)
+ expect(await apply(`${second}/progress`,0,0,id)).toMatchObject({stale:true,generation:1,value:true})
+ await expect(apply(`${second}/progress`,1,0,id)).rejects.toThrow('request mismatch')
+ await db.exec('reset role')
+ expect((await db.query('select accepted_value,redacted from public.reader_cloud_receipts where id=$1',[id])).rows)
+   .toEqual([{accepted_value:null,redacted:true}])
+ await asUser()
+})
+
+it('allows staging only the next generation and rejects stale uploads and delivery publication',async()=>{
+ await asUser()
+ const hash='7'.repeat(64), key=`${hash}/deleted`, next=`${owner}/${hash}/2.epub`
+ await apply(key,true)
+ await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[next])).rejects.toThrow()
+ await db.exec('reset role;set role service_role')
+ await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[next])
+ await expect(db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${owner}/${hash}/0.epub`])).rejects.toThrow()
+ await asUser()
+ expect((await db.query('delete from storage.objects where name=$1 returning name',[next])).rows).toEqual([])
+ await apply(key,false,1,crypto.randomUUID(),1)
+ expect((await db.query('delete from storage.objects where name=$1 returning name',[next])).rows).toEqual([])
+ const otherId=crypto.randomUUID()
+ const second=await apply(`${hash}/notes`,'First account',0,otherId,2)
+ await db.exec('reset role')
+ await db.query('insert into public.reader_app_access values($1) on conflict do nothing',[other])
+ await asUser(other)
+ expect(await apply(`${hash}/notes`,'Other account',0,otherId)).toMatchObject({value:'Other account',revision:1,generation:0})
+ await asUser()
+ expect(await apply(`${hash}/notes`,'First account',0,otherId,2)).toEqual(second)
 })

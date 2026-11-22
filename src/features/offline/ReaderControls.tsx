@@ -1,4 +1,5 @@
 import { readerWorkIdentities } from '../../lib/reader-work-identities'
+import { readerShortName } from '../../lib/brand'
 import { useEffect, useState } from 'react'
 import { Dropdown } from '../../components/Dropdown'
 import { BookOpen } from 'lucide-react'
@@ -46,6 +47,6 @@ export function ReadEpub({ workId, bookId, variant = 'default', chapter }: { wor
     const label = `Read Chapter ${chapter ?? 1} in EPUB`
     return <Tooltip description={label}>{id => <a className="spine-action" href={href} target="_blank" rel="noopener noreferrer" aria-label={label} aria-describedby={id}><BookOpen size={16} aria-hidden="true" /></a>}</Tooltip>
   }
-  const link = (descriptionId?: string) => <a className="button secondary" href={href} aria-describedby={descriptionId}>{variant === 'details' ? <><span aria-hidden="true">▤</span>Unfolded</> : reader ? 'Read EPUB' : 'Open in Reader'}</a>
-  return <div className="form-actions reader-work-actions">{variant === 'details' ? <Tooltip description="Open in archives unfolded EPUB reader">{id => link(id)}</Tooltip> : link()}{reports.length > 1 && <label>Open in Reader<select value={reader?.id ?? ''} onChange={event => { const next = new URLSearchParams(readerId); next.set('reader', event.target.value); setReaderId(next, { replace: true }) }}>{reports.map(reader => <option key={reader.id} value={reader.id}>{reader.name}</option>)}</select></label>}</div>
+  const link = (descriptionId?: string) => <a className="button secondary" href={href} aria-describedby={descriptionId}>{variant === 'details' ? <><span aria-hidden="true">▤</span>{readerShortName}</> : reader ? 'Read EPUB' : 'Open in Reader'}</a>
+  return <div className="form-actions reader-work-actions">{variant === 'details' ? <Tooltip description={`Open in ${readerShortName}`}>{id => link(id)}</Tooltip> : link()}{reports.length > 1 && <label>Open in Reader<select value={reader?.id ?? ''} onChange={event => { const next = new URLSearchParams(readerId); next.set('reader', event.target.value); setReaderId(next, { replace: true }) }}>{reports.map(reader => <option key={reader.id} value={reader.id}>{reader.name}</option>)}</select></label>}</div>
 }

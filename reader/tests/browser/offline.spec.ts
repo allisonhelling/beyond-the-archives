@@ -49,13 +49,13 @@ test('imports, reads, changes layout, and cold-starts offline with saved history
   await page.getByRole('button', { name: 'Bookshelf' }).click()
   await expect(page.getByRole('button',{name:'Chapter 1 of 3 — Edit Progress',exact:true})).toBeVisible()
   const shelfCard = page.locator('.story-card').first()
-  for(const width of [390,1280]){
-    await page.setViewportSize({width,height:844})
-    const title=(await shelfCard.locator('h2').boundingBox())!,menu=(await shelfCard.getByLabel('Work Actions',{exact:true}).boundingBox())!
-    if (width <= 900) expect(title.y).toBeGreaterThanOrEqual(menu.y + menu.height - 4)
-    else expect(Math.abs(title.y-menu.y)).toBeLessThan(5)
-    await expect(shelfCard.locator('.work-fandoms')).toHaveCSS('margin-top','2px')
-    await expect(shelfCard.locator('.work-fandoms')).toHaveCSS('margin-bottom','4px')
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    const header = shelfCard.locator('.work-tile-bar')
+    await expect(header.getByLabel('Work Actions', { exact: true })).toBeVisible()
+    const [title, bar] = await Promise.all([shelfCard.getByRole('heading').boundingBox(), header.boundingBox()])
+    expect(title!.y).toBeGreaterThanOrEqual(bar!.y + bar!.height)
+    await expect(shelfCard.locator('.work-fandoms')).toHaveCSS('margin-block', '0px')
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
   }
   expect(await shelfCard.locator('.byline').evaluate(node => node.nextElementSibling?.classList.contains('work-fandoms'))).toBe(true)
@@ -140,8 +140,8 @@ test('filters rich EPUB metadata offline with ranges, dates, exclusions and rese
   await page.reload()
   await expect(page.locator('.bookshelf-toolbar').getByRole('button', { name: /^Select Fandoms/ })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Bookshelf Filters' })).toHaveCount(0)
-  await expect(page.locator('.brand')).toContainText('archives unfolded')
-  await expect(page).toHaveTitle('archives unfolded')
+  await expect(page.locator('.brand')).toContainText('beyond the archives reader')
+  await expect(page).toHaveTitle('bta reader')
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   await expect(page.getByRole('button', { name: /^Select Fandoms/ })).toHaveCount(1)
   await page.getByRole('button', { name: 'Author', exact: true }).click()
@@ -428,7 +428,8 @@ test('opens saved work details from the shelf menu and reading title, including 
   await page.getByRole('button', { name: 'View Details', exact: true }).click()
   const details = page.getByRole('dialog', { name: 'View Details', exact: true })
   await expect(details).toBeVisible()
-  for (const text of ['Recovered & Remembered', 'Fullmetal Alchemist', 'Yuri on Ice', 'Families of Choice', '54,791', '11,496', '2020-05-18', 'Quality Gen Fics', 'Remember this story', 'Available Here']) await expect(details.getByText(text, { exact: true }).first()).toBeVisible()
+  await expect(details.getByRole('definition').filter({ hasText: 'Fullmetal Alchemist' })).toContainText('Yuri on Ice')
+  for (const text of ['Recovered & Remembered', 'Families of Choice', '54,791', '11,496', '2020-05-18', 'Quality Gen Fics', 'Remember this story', 'Available Here']) await expect(details.getByText(text, { exact: true }).first()).toBeVisible()
   await expect(details.getByRole('link', { name: 'Open Work on AO3' })).toHaveAttribute('href', 'https://archiveofourown.org/works/8001')
   await expect(details.getByText('Unknown / Not Saved', { exact: true }).first()).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
@@ -571,8 +572,10 @@ test('uses organizer publication symbols and tooltips and separates work facts w
   await expectTileEdges('rgb(110, 9, 7)')
   await page.getByRole('button', { name: 'Profile Menu', exact: true }).click()
   await page.getByRole('button', { name: 'Toggle Dark Mode', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expectTileEdges('rgb(255, 167, 163)')
   await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expectTileEdges('rgb(255, 167, 163)')
 })
 
@@ -597,7 +600,7 @@ test('opens details from the work title, places its tooltip below, and navigates
   expect(await picker.locator('.chapter-name').evaluate(el => getComputedStyle(el).textDecorationLine)).toContain('underline')
   const before = await picker.evaluate(el => getComputedStyle(el).color)
   await picker.hover()
-  expect(await picker.evaluate(el => getComputedStyle(el).color)).not.toBe(before)
+  await expect(picker).not.toHaveCSS('color', before)
   await picker.click()
   await page.getByRole('option', { name: '1. Home', exact: true }).click()
   await expect(nav.getByRole('heading', { name: '1. Home', exact: true })).toBeVisible()
@@ -703,19 +706,25 @@ test('labels the viewed chapter and marks it and all earlier chapters read, unde
   await expect(toolbar.getByRole('button', { name: 'Mark As Read', exact: true })).toBeVisible()
   expect(await toolbar.getByRole('button', { name: 'Bookshelf' }).evaluate(el => el.nextElementSibling?.textContent)).toBe('Contents')
   const contents = page.getByRole('complementary', { name: 'Contents', exact: true })
+  const content = page.getByLabel('Book Content')
+  // Mobile continuous reading reserves one pixel of document scrolling for Go to Chapter Start.
+  const documentBounds = (element: Element) => {
+    const { x, y, width, height } = element.getBoundingClientRect()
+    return { x: x + window.scrollX, y: y + window.scrollY, width, height }
+  }
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
-    const contentBounds = await page.getByLabel('Book Content').boundingBox()
+    const contentBounds = await content.evaluate(documentBounds)
     await toolbar.getByRole('button', { name: 'Contents', exact: true }).click()
     await expect(contents).toBeVisible()
     await expect(toolbar.getByRole('button', { name: 'Contents', exact: true }).locator('svg')).toBeVisible()
-    expect(await page.getByLabel('Book Content').boundingBox()).toEqual(contentBounds)
-    const panelBounds = (await contents.boundingBox())!
-    expect(panelBounds.x).toBeCloseTo(contentBounds!.x, 0)
+    expect(await content.evaluate(documentBounds)).toEqual(contentBounds)
+    const panelBounds = await contents.evaluate(documentBounds)
+    expect(panelBounds.x).toBeCloseTo(contentBounds.x, 0)
     await expect(contents.getByRole('heading', { name: 'Contents', exact: true })).toHaveCSS('font-size', '20px')
     await expect(page.locator('.reader-toolbar .chapter-progress-button')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Show Chapter Bar', exact: true })).toHaveCount(0)
-    expect(panelBounds.y).toBeCloseTo(contentBounds!.y + (width === 390 ? 64 : 0), 0)
+    expect(panelBounds.y).toBeCloseTo(contentBounds.y + (width === 390 ? 64 : 0), 0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
     await page.screenshot({ path: `test-results/contents-panel-${width}.png` })
     await page.keyboard.press('ArrowRight')
@@ -727,9 +736,9 @@ test('labels the viewed chapter and marks it and all earlier chapters read, unde
     await contents.getByRole('button', { name: 'Close Contents', exact: true }).click()
     await expect(contents).toHaveCount(0)
     await toolbar.getByRole('button', { name: 'Contents', exact: true }).click()
-    await page.getByLabel('Book Content').click({ position: { x: contentBounds!.width - 8, y: 200 } })
+    await content.click({ position: { x: contentBounds.width - 8, y: 200 } })
     await expect(contents).toHaveCount(0)
-    if (width === 390) { await page.getByLabel('Book Content').click({ position: { x: contentBounds!.width - 8, y: 200 } }); await expect(toolbar).toBeVisible() }
+    if (width === 390) { await content.click({ position: { x: contentBounds.width - 8, y: 200 } }); await expect(toolbar).toBeVisible() }
   }
   await page.setViewportSize({ width: 1280, height: 900 })
   await toolbar.getByRole('button', { name: 'Contents', exact: true }).click()
@@ -878,7 +887,7 @@ test('preserves summary formatting on the shelf and in work details', async ({ p
   await page.getByLabel('Import EPUB File').setInputFiles({ name: 'formatted.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(await createZip(files).arrayBuffer()) })
   await expect(page.getByLabel('Book Content')).toBeVisible()
   await page.getByRole('button', { name: 'Bookshelf' }).click()
-  const summary = page.locator('.story-card .summary')
+  const summary = page.locator('.story-card .story-summary')
   await expect(summary.locator('em')).toHaveText('line')
   await expect(summary.locator('p')).toHaveCount(2)
   await expect(summary.locator('br')).toHaveCount(1)

@@ -13,8 +13,9 @@ test('counts the complete cloud inbox before staging files and retains known cou
   const url=new URL(route.request().url()),path=url.pathname
   if(path.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
   if(path.includes('/reader_import_inbox')){
-   const metadataOnly=url.searchParams.get('select')!=='*'
-   if(!metadataOnly)return route.fulfill({json:incoming.slice(0,50)})
+   const select=url.searchParams.get('select')
+   if(select==='id')return route.fulfill({json:incoming.slice(0,1).map(({id})=>({id}))})
+   if(select==='*')return route.fulfill({json:incoming.slice(0,50)})
    metadataPages++
    if(failQueue)return route.fulfill({status:500,json:{code:'57014',message:'Queue request timed out'}})
    const cursor=url.searchParams.get('or')??'',destination=cursor.match(/destination\.gt\.([0-9a-f-]+)/)?.[1],id=cursor.match(/id\.gt\.([0-9a-f-]+)/)?.[1]

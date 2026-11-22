@@ -153,9 +153,9 @@ dialog.tag-format-dialog { --dialog-width: 1040px; }
 .empty-state p { max-width: 410px; margin: 0 auto 24px; color: var(--color-muted); }
 .pending-item pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16rem; overflow: auto; }
 .notice, .pending-item { min-width: 0; overflow-wrap: anywhere; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius); margin: 12px 0; background: var(--color-brand-soft); }
-.toast { position: fixed; z-index: 30; bottom: var(--toast-bottom, 18px); left: 50%; transform: translateX(-50%); width: min(650px,calc(100% - 32px)); display: flex; align-items: center; gap: 18px; padding: 12px 16px; border: 1px solid var(--color-brand); background: var(--color-surface); border-radius: var(--radius); box-shadow: 0 5px 25px #0002; font-size: var(--minimum-text-size); }
+.toast { position: fixed; z-index: 30; bottom: var(--toast-bottom, 18px); left: 50%; transform: translateX(-50%); width: min(650px,calc(100% - 32px)); display: flex; align-items: center; gap: 18px; padding: 12px 16px; border: 1px solid var(--color-brand); background: var(--color-surface); border-radius: var(--radius); box-shadow: 0 5px 25px #0002; font-size: var(--minimum-text-size); pointer-events: none; }
 .reading-screen ~ .toast { --toast-bottom: calc(120px + env(safe-area-inset-bottom)); }
-.toast button { margin-left: auto; }
+.toast button { margin-left: auto; pointer-events: auto; }
 .confirmation-dialog form:not(.account-auth-form) { display: grid; gap: 15px; margin: 22px 0; }
 .dialog-actions, .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .dialog-actions { margin-top: 20px; }
@@ -240,7 +240,7 @@ dialog.tag-format-dialog { --dialog-width: 1040px; }
 .reading-viewport:not(.paginated) .prose { max-width: min(calc(var(--reading-width) + 56px), 100%); margin: 0 auto; padding: 35px 28px 60px; }
 .prose h1, .prose h2 { text-align: center; font-size: 1.5em; letter-spacing: normal; margin: 1.5em 0; }
 .prose hr { color: inherit; border: 0; border-top: 1px solid currentColor; margin: 1.5em 0; }
-.prose a { color: var(--reading-link); }
+.prose a, .chapter-navigation-title .dropdown-trigger:is(:hover, :focus-visible) { color: var(--reading-link); }
 .prose p { line-height: inherit; }
 .prose img { display: block; margin-inline: auto; max-width: 100%; height: auto; }
 .prose blockquote { margin: 1.5em 1em; }
@@ -318,6 +318,7 @@ dialog.tag-format-dialog { --dialog-width: 1040px; }
   .app-header .profile-wrapper { grid-column: 2; grid-row: 1; }
   .connection-status-box { grid-column: 1 / -1; grid-row: 2; justify-self: end; }
   .reader-mobile-nav { --mobile-nav-columns: 4; }
+  .bookshelf .progress-popover { inset-block: auto calc(100% + var(--space-2)); margin-top: 0; }
   .toast { --toast-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 16px); }
   .desktop-reader-action { display: none; }
   .reader-settings { padding: 24px 5vw calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 24px); }

@@ -1,10 +1,11 @@
+import { readerShortName } from '../../lib/brand'
 import { safeBookFusionLink } from '../library/bookfusion/bookfusion'
 import type { Story } from '../library/model'
 
 const platforms = [
   { value: 'any-offline', label: 'Any Offline Stories' },
   { value: 'online-only', label: 'Online Only' },
-  { value: 'unfolded', label: 'Archives Unfolded' },
+  { value: 'unfolded', label: readerShortName },
   { value: 'bookfusion', label: 'BookFusion' },
 ] as const
 

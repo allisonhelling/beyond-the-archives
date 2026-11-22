@@ -3,7 +3,7 @@ import { blankMetadata } from '../../src/features/library/model'
 test('cold starts a cached hub, filters retained tiles, and hands off identifiers without server lookups', async ({ page, context }) => {
   await page.goto('/')
   await page.evaluate(async () => { await navigator.serviceWorker.ready })
-  const snapshot = { userId: 'account', savedAt: '2026-10-29T12:00:00Z', cloudBooks: [{ id: 'a'.repeat(64), workId: '8002', metadata: { ...blankMetadata, title: 'Cloud Story', authors: ['Cloud Writer'] }, status: 'to_read', notes: '', completedCount: 0 }], readers: [{ id: 'installation', name: 'Laptop Reader', url: 'https://reader.example/', reportedAt: '2026-10-29T12:00:00Z', works: ['8001'] }], stories: [{ id: 'work', detailsLoaded: true, metadata: { ...blankMetadata, title: 'Cached Story', authors: ['Writer'], fandoms: ['Fandom'] }, work: { ao3_work_id: 8001, verified_chapters: {} }, collectionIds: [], personalTags: [], reading_status: 'reading', last_read_chapter: 0, notes: '', created_at: '2026-10-29T12:00:00Z', original_url: 'https://archiveofourown.org/works/8001' }] }
+  const snapshot = { userId: 'account', savedAt: '2026-10-29T12:00:00Z', cloudBooks: [{ id: 'a'.repeat(64), workId: '8002', generation: 0, favoriteRevision: 0, recRevision: 0, metadata: { ...blankMetadata, title: 'Cloud Story', authors: ['Cloud Writer'] }, status: 'to_read', notes: '', completedCount: 0 }], readers: [{ id: 'installation', name: 'Laptop Reader', url: 'https://reader.example/', reportedAt: '2026-10-29T12:00:00Z', works: ['8001'] }], stories: [{ id: 'work', detailsLoaded: true, metadata: { ...blankMetadata, title: 'Cached Story', authors: ['Writer'], fandoms: ['Fandom'] }, work: { ao3_work_id: 8001, verified_chapters: {} }, collectionIds: [], personalTags: [], reading_status: 'reading', last_read_chapter: 0, notes: '', created_at: '2026-10-29T12:00:00Z', original_url: 'https://archiveofourown.org/works/8001' }] }
   await page.evaluate(snapshot => localStorage.setItem('bta:offline-hub:v1', JSON.stringify(snapshot)), snapshot)
   await page.close()
   await context.setOffline(true)
@@ -33,7 +33,7 @@ test('cold starts a cached hub, filters retained tiles, and hands off identifier
   await expect(offline.locator('.story-card')).toHaveCount(2)
   await toolbar.getByRole('button', { name: 'Apply Filters' }).click()
   await expect(offline.locator('.story-card')).toHaveCount(1)
-  await expect(offline.getByLabel('Active Filters')).toContainText('Custom · 1 Groups')
+  await expect(offline.getByLabel('Active Filters')).toContainText('Custom · 1 Group · Fandom')
   await offline.reload()
   await expect(offline.locator('.story-card')).toHaveCount(1)
   await offline.getByRole('button', { name: 'Clear All Filters', exact: true }).first().click()

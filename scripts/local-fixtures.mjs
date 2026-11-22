@@ -44,12 +44,25 @@ export async function createSyntheticAccounts(clients, count=2) {
   return accounts
  } catch(error) {await removeSyntheticAccounts(clients,accounts);throw error}
 }
+async function listSyntheticObjects(bucket, prefix) {
+ const paths=[]
+ for(let offset=0;;offset+=100) {
+  const entries=checked(await bucket.list(prefix,{limit:100,offset,sortBy:{column:'name',order:'asc'}}))
+  for(const entry of entries) {
+   const path=`${prefix}/${entry.name}`
+   if(entry.id) paths.push(path)
+   else paths.push(...await listSyntheticObjects(bucket,path))
+  }
+  if(entries.length<100)return paths
+ }
+}
 export async function removeSyntheticAccounts(clients,accounts) {
  for(const account of accounts) {
   if(!/^s1-[a-f0-9-]+@example\.test$/.test(account.email))throw new Error('Refusing non-synthetic fixture cleanup.')
   for(const bucket of ['reader-epubs','library-backups']) {
-   const objects=checked(await clients.admin.storage.from(bucket).list(account.id))
-   if(objects.length)checked(await clients.admin.storage.from(bucket).remove(objects.map(x=>`${account.id}/${x.name}`)))
+   const storage=clients.admin.storage.from(bucket)
+   const objects=await listSyntheticObjects(storage,account.id)
+   if(objects.length)checked(await storage.remove(objects))
   }
   await account.client.auth.signOut()
   checked(await clients.admin.auth.admin.deleteUser(account.id))

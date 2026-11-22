@@ -27,7 +27,7 @@ it('offers platforms instead of installation names and leaves unsupported platfo
  mocks.readers=[report('My Organizer',['123'])]
  render(<MemoryRouter initialEntries={['/library?reader=old-installation&page=3']}><ReaderControls /><CurrentQuery /></MemoryRouter>)
  const trigger=screen.getByRole('button',{name:'Available Offline'})
- expect(trigger).toHaveTextContent('Archives Unfolded')
+ expect(trigger).toHaveTextContent('bta reader')
  fireEvent.click(trigger)
  expect(screen.queryByRole('option',{name:'My Organizer'})).not.toBeInTheDocument()
  for (const name of ['Apple Books','Kindle','PocketBook']) expect(screen.getByRole('option',{name})).toBeDisabled()
@@ -44,7 +44,7 @@ it.each([[],[report('empty',[])],[report('other',['456'])]].map(readers=>[reader
  mocks.readers=readers
  render(<MemoryRouter><ReadEpub workId={123} /><ReadEpub workId={123} variant="details" /></MemoryRouter>)
  expect(screen.queryByRole('link',{name:'Read EPUB'})).not.toBeInTheDocument()
- expect(screen.queryByRole('link',{name:'Unfolded'})).not.toBeInTheDocument()
+ expect(screen.queryByRole('link',{name:'bta reader'})).not.toBeInTheDocument()
 })
 it('chooses only readers that have the EPUB even when another reader is selected',()=>{
  mocks.readers=[report('missing',[]),report('first',['123']),report('second',['123'])]
@@ -73,7 +73,7 @@ it.each(['workId','calibre_work_link'])('opens cloud-only works through %s in or
  mocks.cloudBooks=[{id:'cloud-book',workId:source==='workId'?'123':null,metadata:{...blankMetadata,calibre_work_link:'https://archiveofourown.org/works/123/chapters/4'} as CloudReaderBook['metadata'],status:'to_read',notes:'',completedCount:0}]
  render(<MemoryRouter><ReadEpub workId={123} /><ReadEpub workId={123} variant="details" /><ReaderControls hub /></MemoryRouter>)
  expect(screen.getByRole('link',{name:'Open in Reader'})).toHaveAttribute('href',expect.stringContaining('?work=123'))
- expect(screen.getByRole('link',{name:'Unfolded'})).toHaveAttribute('href',expect.stringContaining('?work=123'))
+ expect(screen.getByRole('link',{name:'bta reader'})).toHaveAttribute('href',expect.stringContaining('?work=123'))
  expect(screen.queryByRole('link',{name:'Read EPUB'})).not.toBeInTheDocument()
  expect(screen.getByText(/1 work saved in the reader cloud/)).toBeVisible()
 })

@@ -8,7 +8,7 @@ Phase 2 implements single-source manual stories and safe chapter-total editing. 
 
 ## Purpose
 
-Support stories from any URL with manual tracking, richer site-aware extraction where available, optional visual mappings, deterministic tag classification, and confirmed crosspost linking, while preserving AO3 and archives unfolded behavior.
+Support stories from any URL with manual tracking, richer site-aware extraction where available, optional visual mappings, deterministic tag classification, and confirmed crosspost linking, while preserving AO3 and bta reader behavior.
 
 ## Documents
 

@@ -1,7 +1,7 @@
 import { countNoun } from '../../src/lib/count-noun'
 import { readerProgress, statuses, type BookDetails, type Preferences } from './model'
-export type CloudValue = { key: string; value: unknown; revision: number }
-export type CloudEdit = { id: string; key: string; value: unknown; base: number }
+export type CloudValue = { key: string; value: unknown; revision: number; generation: number }
+export type CloudEdit = { id: string; key: string; value: unknown; base: number; generation: number }
 export const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function cloudBookFields(book: BookDetails): Record<string, unknown> {
   // Organizer pairing, copied organizer state, and layout-dependent pixels never leave this installation.

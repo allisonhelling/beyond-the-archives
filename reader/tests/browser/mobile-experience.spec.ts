@@ -27,9 +27,9 @@ test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, h
 
 test('shows full summaries, organizer-style controls and four persistent mobile destinations', async ({ page }) => {
  await importBook(page, true)
- await expect(page).toHaveTitle('Recovered & Remembered · archives unfolded')
+ await expect(page).toHaveTitle('Recovered & Remembered · bta reader')
  await page.getByRole('button', { name: 'Bookshelf', exact: true }).click()
- await expect(page).toHaveTitle('The Bookshelf · archives unfolded')
+ await expect(page).toHaveTitle('bta reader')
  const summary = page.locator('.story-summary')
  expect(await summary.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true)
  const tile = page.locator('.story-card')
@@ -54,13 +54,13 @@ test('shows full summaries, organizer-style controls and four persistent mobile 
 test('opens mobile settings categories as pages and supports history and direct Storage navigation', async ({ page }) => {
  const nav = page.getByRole('navigation', { name: 'Mobile Navigation' })
  await nav.getByRole('button', { name: 'Settings', exact: true }).click()
- await expect(page).toHaveTitle('Settings · archives unfolded')
+ await expect(page).toHaveTitle('Settings · bta reader')
  const categories = page.getByRole('navigation', { name: 'Settings Sections' })
  const sectionTitles = ['Reader Account', 'Cloud Library', 'Organizer & Sync', 'Accessibility', 'Tag Format', 'Customize Tiles', 'Manage Local Storage']
  await expect(categories.getByRole('link')).toHaveCount(sectionTitles.length)
  for (const title of sectionTitles) {
   await categories.getByRole('link', { name: title, exact: true }).click()
-  await expect(page).toHaveTitle(`${title} · archives unfolded`)
+  await expect(page).toHaveTitle(`${title} · bta reader`)
   await expect(page.getByRole('button', { name: 'Back to Settings', exact: true })).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.getByRole('button', { name: 'Back to Settings', exact: true }).click()
@@ -68,10 +68,10 @@ test('opens mobile settings categories as pages and supports history and direct 
  await nav.getByRole('button', { name: 'Storage', exact: true }).click()
  await expect(page.getByRole('heading', { name: 'Manage Local Storage', exact: true })).toBeVisible()
  await page.reload()
- await expect(page).toHaveTitle('Manage Local Storage · archives unfolded')
+  await expect(page).toHaveTitle('Manage Local Storage · bta reader')
  await expect(page.getByRole('heading', { name: 'Manage Local Storage', exact: true })).toBeVisible()
  await page.goBack()
- await expect(page).toHaveTitle('Settings · archives unfolded')
+ await expect(page).toHaveTitle('Settings · bta reader')
  await expect(categories).toBeVisible()
 })
 

@@ -4,7 +4,7 @@ import { requireRuntimeEnvironmentConfig } from '../../src/lib/environment'
 import { reportSyncStatus, reportSyncFailure } from './sync-status'
 import { importEpub } from './epub'
 import type { TagAppearance } from '../../src/features/library/display/display-settings'
-import { readerInstallationId, readerInstallationAliases, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
+import { readerInstallationId, readerInstallationAliases, queueOrganizerEdit, all, getBookDetails, getBook, listCatalog, loadSetting, mutateBook, putBook, setting, transaction } from './storage'
 import { isAnthology, withPublication, withOrganizerProgress } from './model'
 import { withWorkProgress } from './anthology'
 import type { AnthologyWork, Book, BookDetails, Connection, Pending, Remote } from './model'
@@ -27,18 +27,20 @@ export function pendingUpdate(book: Book | BookDetails, connection: Connection |
   if (!connection || book.account !== connection.account || !book.remote || !book.workId) return
   return { id: crypto.randomUUID(), book: book.id, work: book.workId, account: connection.account, base: book.remote, input }
 }
-let running: Promise<string> | undefined
-export function synchronize(connection: Connection, force = false): Promise<string> {
-  if (!navigator.onLine) return Promise.resolve('Offline. Changes are saved on this device.')
+type OrganizerSyncResult = { message: string; attemptedWrite: boolean }
+let running: Promise<OrganizerSyncResult> | undefined
+export function synchronize(connection: Connection, force = false): Promise<OrganizerSyncResult> {
+  if (!navigator.onLine) return Promise.resolve({ message: 'Offline. Changes are saved on this device.', attemptedWrite: false })
   if (running) return running
+  const progress = { attemptedWrite: false }
   reportSyncStatus('organizer','syncing')
-  running = performSync(connection, force)
-    .then(report => { reportSyncStatus('organizer',report.startsWith('Reading updates are synced.') ? 'success' : 'attention',report); return report })
+  running = performSync(connection, force, progress)
+    .then(message => { reportSyncStatus('organizer',message.startsWith('Reading updates are synced.') ? 'success' : 'attention',message); return { message, ...progress } })
     .catch(error => { reportSyncFailure('organizer',error); throw error })
     .finally(() => { running = undefined })
   return running
 }
-async function performSync(connection: Connection, force: boolean) {
+async function performSync(connection: Connection, force: boolean, progress: Pick<OrganizerSyncResult, 'attemptedWrite'>) {
   if (!navigator.onLine) return 'Offline. Changes are saved on this device.'
   await reportAvailability(connection)
   const events = (await all<Pending>('pending')).filter(p => p.account === connection.account)
@@ -55,7 +57,10 @@ async function performSync(connection: Connection, force: boolean) {
     }
     if (!pending.input.version) { pending.input = { ...pending.input, version: member?.remote?.version ?? book.remote?.version ?? pending.base.version, base: { ...pending.base } }; await transaction(['pending'], tx => tx.objectStore('pending').put(pending)) }
     try {
-      const result = await rpc(connection, pending.action ?? 'progress', pending.work, pending.input)
+      // A lost response may still have committed changes through the organizer triggers.
+      progress.attemptedWrite = true
+      const result = await rpc(connection, pending.action ?? 'progress', pending.work,
+        { ...pending.input, readerBook: pending.book, readerGeneration: pending.generation ?? 0 })
       if (!result.entry) throw new Error('The organizer work no longer exists. Local reading history is retained.')
       await mutateBook(book.id, current => {
         if (!member) return { ...withPublication(current, result.entry!), remote: result.entry! }
@@ -111,7 +116,7 @@ async function performSync(connection: Connection, force: boolean) {
                 // First association retains standalone progress without inventing chapter-read events.
                 if (!member.remote && linked.progress! > result.entry!.progress) {
                   const event = pendingUpdate(projected, connection, { progress: linked.progress, status: linked.status }, linked)
-                  if (event) tx.objectStore('pending').put(event)
+                  if (event) queueOrganizerEdit(tx,event)
                 }
               }
             }
@@ -157,7 +162,7 @@ async function performSync(connection: Connection, force: boolean) {
     // Advance only after a complete group succeeds; failures retry this group safely.
     await setting(checkpointKey, { after: group.at(-1)!.id, at: Date.now() })
   }
-  if ((await all<Pending>('pending')).some(event => event.account === connection.account && !events.some(old => old.id === event.id))) return performSync(connection, force)
+  if ((await all<Pending>('pending')).some(event => event.account === connection.account && !events.some(old => old.id === event.id))) return performSync(connection, force, progress)
   const available = await reportAvailability(connection)
   const linked = (await listCatalog()).filter(book => book.account === connection.account && book.workId && book.organizerEntryId).length
   return `Reading updates are synced. Catalog: ${catalog.length} ${countNoun(catalog.length, 'EPUB version')}. Checked ${checked} ${countNoun(checked, 'identified EPUB version')}; ${linked} ${countNoun(linked, 'version')} linked. ${unidentified} checked version${unidentified === 1 ? ' needs' : 's need'} an AO3 work link.${waitingCount ? ` ${waitingCount} ${countNoun(waitingCount, 'version has', 'versions have')} pending reading changes.` : ''}${unreadable ? ` ${unreadable} downloaded ${countNoun(unreadable, 'EPUB')} could not be read for identity recovery.` : ''}${catalog.length > candidates.length ? ` ${catalog.length - candidates.length} ${countNoun(catalog.length - candidates.length, 'version belongs', 'versions belong')} to another organizer connection and were left unchanged.` : ''} ${available} downloaded ${countNoun(available, 'work')} reported for Offline.${!force && candidates.length > batch.length ? ' More catalog versions will be checked on a later sync; Sync Now checks the full catalog.' : ''} Cloud-only EPUBs are not downloaded by sync.`

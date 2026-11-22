@@ -1,4 +1,6 @@
-# archives unfolded
+# beyond the archives reader
+
+**A COMPANION EPUB READER, AVAILABLE OFFLINE**
 
 Use the organizer for website link previews, site mappings, and linking crossposts. The reader continues to open EPUBs and exchanges supported reading state through the existing organizer connection. [Organizer and reader compatibility](../docs/universal-stories/PHASE_6_RELEASE_READINESS.md)
 
@@ -149,6 +151,10 @@ Confirm your email before using a newly created cloud account. See the [cloud se
 
 ## Optional Organizer Connection
 
+Offline changes keep their place in the sync queue through a restart. If you permanently delete an EPUB and later reimport the same file, the new copy has separate cloud state. Wait for deletion to finish before reimporting.
+
+While the reader is visible and online, it refreshes the cloud library about once a minute. Pending reader edits can sync sooner. Returning to the reader, reconnecting, or choosing **Sync Now** requests a refresh.
+
 If an older EPUB shows no **Link to Organizer Work**, choose **Sync Now**. The reader recovers missing AO3 IDs from an explicit saved AO3 source or a downloaded original when possible, preserving notes, reading history, and existing links. Versions without reliable AO3 identity remain unlinked; enter their AO3 work URL manually. Titles are never used to guess a match. Library sync leaves cloud-only originals undownloaded; opening a specific work/book link downloads its matching EPUB and then opens it while online.
 
 Sign in to the same account in both apps. Organizer sync enables automatically after confirmed sign-in and access checks; the reader registers or restores this installation when opened and authenticated. Guest reading remains local. Legacy pairing codes are available only under **Organizer & Sync → Advanced Troubleshooting**. For local or self-hosted use, configure the same public backend values in both apps.
@@ -191,7 +197,7 @@ npx playwright test
 
 The browser suite uses the production preview on port 4174 and requires an installed Playwright Chromium. Also perform a real-device airplane-mode check after closing and reopening the installed reader; browser automation cannot emulate every platform’s storage and PWA lifecycle.
 
-EPUB summaries retain metadata paragraphs, line breaks, and safe emphasis in archives unfolded’s shelf previews and full details, using the organizer’s shared summary parser and renderer. Plain-text descriptions preserve literal newlines; existing local EPUB metadata is re-indexed without changing reading progress.
+EPUB summaries retain metadata paragraphs, line breaks, and safe emphasis in bta reader’s shelf previews and full details, using the organizer’s shared summary parser and renderer. Plain-text descriptions preserve literal newlines; existing local EPUB metadata is re-indexed without changing reading progress.
 
 ## Import From Calibre
 
@@ -213,4 +219,4 @@ Guest mode is for local reading only: books, notes, and progress stay on this de
 
 Connect your organizer account to use the same collection shelves, manual and automatic collections, appearance editors, bulk editing, reordering, and hide/show controls. Collection edits use your shared organizer library directly while online. Loading errors identify the failed request and its cause; Retry Collections shows a pending state until the reload finishes. Downloaded EPUBs remain readable while collection loading is unavailable. Use Add to Collection on a linked EPUB tile to add or remove its manual memberships. The selected shelf filters the reader's saved EPUBs; shelf counts include only distinct works actually available as EPUBs in your cloud library. Multiple versions of one work count once. Locally imported files awaiting upload do not increase these counts. Saved counts remain available if a later refresh fails. + Add and Edit align to the right of the collection heading. + Add opens the shared story picker for a manual collection. Edit opens the selected custom collection’s editor and exits shelf editing when closed. Collection titles keep their color on hover. Shelves scroll horizontally at every screen size; Show All Collections expands them. Edit Collections keeps the current shelf layout and enables work tile selection for books linked to organizer works. Select Page selects the current results and Select All selects eligible works across the open reader shelf. Add to Collection targets manual collections, and Remove from Collection is available while viewing a manual collection. In Edit Collections, Hide Empty hides zero-count collections and remembers the choice in this browser. Collection editing requires a connected account and an online connection. Downloaded EPUBs remain readable if collection requests fail.
 
-The reader reopens the EPUB you were reading after a reload; choose Bookshelf to close it explicitly. The browser tab shows the open EPUB’s title, the Bookshelf, or the active settings page. Bookshelf tiles have matching top and bottom accents inside the tile outline. Both accents turn lighter in dark mode. Last Opened is the default sort. Selecting the current sort again reverses its arrow. Customize Tiles → Work Tile Summaries offers full summaries or Show More/Show Less with expanded or truncated defaults. Manage Local Storage initially sorts by Title; sorting keeps column widths fixed, and removal feedback appears inside the dialog.
+The reader reopens the EPUB you were reading after a reload; choose Bookshelf to close it explicitly. The Bookshelf tab is titled **bta reader**. When you open an EPUB or settings page, the tab shows its title. Bookshelf tiles have matching top and bottom accents inside the tile outline. Both accents turn lighter in dark mode. Last Opened is the default sort. Selecting the current sort again reverses its arrow. Customize Tiles → Work Tile Summaries offers full summaries or Show More/Show Less with expanded or truncated defaults. Manage Local Storage initially sorts by Title; sorting keeps column widths fixed, and removal feedback appears inside the dialog.

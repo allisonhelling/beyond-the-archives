@@ -298,7 +298,7 @@ test('preserves guest books and old queued edits without contacting the organize
 test('manual Sync Now links the full cloud catalog and distinguishes cloud-only EPUBs from offline downloads',async({page,context})=>{
  await signedIn(context);await backend(context,true)
  const stamp='2026-11-01T00:00:00Z'
- const values=Array.from({length:62},(_,index)=>({key:`version-${String(index).padStart(3,'0')}/manifest`,revision:1,value:{id:`version-${String(index).padStart(3,'0')}`,workId:index===61?null:String(8001+index),active:true,metadata:{...blankMetadata,title:`Cloud Work ${index}`,authors:['Writer']},chapters:[],importedAt:stamp,metadataAt:stamp,position:{chapter:'',fraction:0},history:[],completed:[],notes:'',status:'to_read',collections:[]}}))
+ const values=Array.from({length:62},(_,index)=>({key:`version-${String(index).padStart(3,'0')}/manifest`,revision:1,generation:0,value:{id:`version-${String(index).padStart(3,'0')}`,workId:index===61?null:String(8001+index),active:true,metadata:{...blankMetadata,title:`Cloud Work ${index}`,authors:['Writer']},chapters:[],importedAt:stamp,metadataAt:stamp,position:{chapter:'',fraction:0},history:[],completed:[],notes:'',status:'to_read',collections:[]}}))
  const checks=new Set<number>(),reports:string[][]=[]
  await context.route('**/rest/v1/reader_cloud_values*',route=>route.fulfill({json:new URL(route.request().url()).searchParams.has('like')?[]:values}))
  await context.route('**/rest/v1/rpc/userscript_library',route=>{

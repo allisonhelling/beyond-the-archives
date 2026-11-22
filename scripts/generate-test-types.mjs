@@ -61,7 +61,7 @@ try {
       account_has_password: { Args: Record<PropertyKey, never>; Returns: boolean }
       manage_account_username: { Args: { p_username?: string }; Returns: string | null }
       reader_has_access: { Args: Record<string, never>; Returns: boolean }
-      reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number }; Returns: Json }
+      reader_cloud_apply: { Args: { p_id: string; p_key: string; p_value: Json; p_base: number; p_generation: number }; Returns: Json }
       reading_stats_works: { Args: { p_after?: string; p_limit?: number }; Returns: Json }
       reader_offline_snapshot: { Args: Record<string, never>; Returns: Json }
       review_import_reading: { Args: { p_ids?: string[]; p_action?: string; p_page?: number; p_scope?: string[] }; Returns: Json }

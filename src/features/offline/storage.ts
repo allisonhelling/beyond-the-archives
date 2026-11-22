@@ -1,3 +1,4 @@
+import type { ReaderCloudRequest } from '../../lib/reader-cloud-protocol'
 import type { EditValues } from '../library/edit-merge'
 import { readerBaseUrl } from '../../lib/reader-connection'
 import { readerWorkIdentities } from '../../lib/reader-work-identities'
@@ -5,8 +6,8 @@ import { blankMetadata, statuses, savedWorkIdentity, type Collection, type Metad
 import { applyAutomaticCollections, collectionRules } from '../library/collections/automatic-collections'
 
 export type ReaderReport = { id: string; name: string; url: string; reportedAt: string; works: string[] }
-export type CloudReaderBook = { workIds?: string[]; workCount?: number; favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
-export type OfflineMarking = { id: string; book?: string; entry?: string; base?: EditValues; field: 'favorite' | 'rec'; value: boolean }
+export type CloudReaderBook = { workIds?: string[]; workCount?: number; generation?: number; favoriteRevision?: number; recRevision?: number; favorite?: boolean; rec?: boolean; id: string; workId: string | null; metadata: Metadata; status: Status; notes: string; completedCount: number; createdAt?: string; updatedAt?: string }
+export type OfflineMarking = { id: string; book?: string; entry?: string; base?: EditValues; cloud?: ReaderCloudRequest & { p_value: boolean }; sent?: boolean; conflict?: boolean; field: 'favorite' | 'rec'; value: boolean }
 export type OfflineSnapshot = { collections?: Collection[]; pendingMarkings?: OfflineMarking[]; cloudBooks?: CloudReaderBook[]; connected?: boolean; userId: string; savedAt: string; readers: ReaderReport[]; stories: Story[] }
 const key = 'bta:offline-hub:v1'
 export const offlineCleared = 'bta:offline-cleared'

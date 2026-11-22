@@ -108,7 +108,7 @@ test('pulls AO3 chapter progress into the downloaded EPUB and opens the requeste
  await context.route('**/rest/v1/rpc/reader_cloud_apply',async route=>{
   const input=route.request().postDataJSON()
   cloudFields.set(input.p_key,input.p_value)
-  return route.fulfill({json:{key:input.p_key,value:input.p_value,revision:input.p_base+1}})
+  return route.fulfill({json:{key:input.p_key,value:input.p_value,revision:input.p_base+1,generation:input.p_generation}})
  })
  await context.route('**/rest/v1/rpc/userscript_library',async route=>{
   const request=route.request().postDataJSON()

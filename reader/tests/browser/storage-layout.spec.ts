@@ -90,6 +90,12 @@ test('reader reuses the tile editor and saves desktop and mobile layouts indepen
 
 test('profile menu keeps reader settings accessible on desktop and mobile', async ({page}) => {
  await page.goto('/')
+ const manifest = await page.request.get('/manifest.webmanifest')
+ expect(manifest.ok()).toBe(true)
+ expect(await manifest.json()).toMatchObject({ name: 'bta reader', short_name: 'bta reader' })
+ await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'beyond the archives reader')
+ await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'bta reader')
+ await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', 'A COMPANION EPUB READER, AVAILABLE OFFLINE')
  for (const dark of [false,true]) {
  if(dark){
   const trigger=page.getByRole('button',{name:'Profile Menu',exact:true})
@@ -102,9 +108,9 @@ test('profile menu keeps reader settings accessible on desktop and mobile', asyn
   await page.setViewportSize({width,height:844})
   const header = page.getByRole('banner')
   const footer = page.getByRole('contentinfo')
-  await expect(header.locator('.brand')).toHaveText('▤ archives unfolded')
+  await expect(header.locator('.brand')).toHaveText(width === 390 ? '▤ bta reader' : '▤ beyond the archives reader')
   expect((await header.boundingBox())!.height).toBeLessThan(width < 1100 ? 120 : 80)
-  await expect(footer).toHaveText('AN EPUB READER, AVAILABLE ONLINE AND OFFLINE')
+  await expect(footer).toHaveText('A COMPANION EPUB READER, AVAILABLE OFFLINE')
   await expect(footer).toHaveCSS('border-top-color', dark ? 'rgb(89, 67, 70)' : 'rgb(236, 221, 216)')
   expect(await footer.evaluate(element => {
    const bounds = element.getBoundingClientRect()

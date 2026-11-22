@@ -30,7 +30,7 @@ import { useDismissible } from '../../src/components/useDismissible'
 import { useFilterDraft } from '../../src/components/useFilterDraft'
 import { TagSettings } from './TagSettings'
 import { useTagSettings } from './useTagSettings'
-import { readerBrandName, readerBrandTagline } from '../../src/lib/brand'
+import { readerBrandName, readerBrandTagline, readerShortName } from '../../src/lib/brand'
 import { usePageTitle } from '../../src/lib/use-page-title'
 import { Pagination } from '../../src/features/library/browsing/Pagination'
 import { BookshelfFilters } from './BookshelfFilters'
@@ -45,7 +45,7 @@ import { ActivityIndicator, LoadingWorkCards } from '../../src/components/Activi
 import { beginActivity } from '../../src/lib/activity'
 import { parseWorkUrl } from '../../src/features/imports/urls'
 import { digest, importEpub } from './epub'
-import { lastOpenBook, rememberOpenBook, all, getBook, getBookDetails, listCatalog, loadSetting, mutateBook, putBook, deleteEpub, removeDownload, saveBook, setting, transaction, readerInstallationId, readerOwner } from './storage'
+import { lastOpenBook, rememberOpenBook, all, getBook, getBookDetails, hasCloudChanges, listCatalog, loadSetting, mutateBook, putBook, deleteEpub, removeDownload, saveBook, setting, transaction, readerInstallationId, readerOwner } from './storage'
 import { isAnthology, progressNumber, readerProgress, chapterNumber, withOrganizerProgress, hasVerifiedMapping, withPublication, bookDetails, catalogBook, completionStatus, defaultPreferences, defaultTagAppearance, statuses, type AnthologyWork, type BookDetails, type CatalogBook, type Book, type Chapter, type Connection, type Pending, type Preferences, type ReadingPosition } from './model'
 import { pendingUpdate, rpc, synchronize } from './sync'
 import { ReadingView } from './ReadingView'
@@ -136,13 +136,13 @@ export function App({ initialPairing, sampleAccount }: { initialPairing?: Reader
   function cancelWorkOpening() { openingIntent.current++; pendingWorkOpening.current = undefined }
   const requestedOpening = useRef<WorkOpening | undefined>(undefined)
   const [epubChoice, setEpubChoice] = useState<WorkOpening>(), [openingVersion, setOpeningVersion] = useState(0)
-  const picker = useRef<HTMLInputElement>(null), connectionRef = useRef(connection), syncing = useRef(false), syncRequested = useRef<{force:boolean;quiet:boolean} | undefined>(undefined), saving = useRef(Promise.resolve())
+  const picker = useRef<HTMLInputElement>(null), connectionRef = useRef(connection), syncing = useRef(false), syncFailed = useRef(false), syncRequested = useRef<{force:boolean;quiet:boolean} | undefined>(undefined), saving = useRef(Promise.resolve())
   connectionRef.current = connection
   const [active, setActive] = useState<Book>(), [manage, setManage] = useState<BookDetails>(), [page, setPage] = useState(1)
   const accountPage = location.pathname === '/auth/callback' && modal === 'account'
   const readingTitle = active?.id === selected ? active?.metadata.title : undefined
   usePageTitle(settingsPage ? activeSettings?.title ?? 'Settings' : accountPage ? 'Reader Account' :
-    selected ? readingTitle || 'Reading' : 'The Bookshelf', readerBrandName)
+    selected ? readingTitle || 'Reading' : undefined, readerShortName, { fallbackToBrand: true })
   const localTagAppearance = preferences.tagAppearance ?? defaultTagAppearance
   const tagsLinked = Boolean(connection && preferences.tagSyncAccount === connection.account)
   const tagSettings = useTagSettings(connection, tagsLinked, localTagAppearance)
@@ -325,30 +325,35 @@ export function App({ initialPairing, sampleAccount }: { initialPairing?: Reader
       return
     }
     syncing.current = true
+    syncFailed.current = false
     if (force && !quiet) setMessage('Syncing the cloud catalog and organizer links… Cloud-only EPUBs will stay in the cloud.')
     try {
       await saving.current
       const messages: string[] = []
       let cloudReady = true
-      const syncAccount = async () => {
-        try { const conflicts = await syncCloud(true); setCloudConflicts(conflicts); if (conflicts.length) messages.push('Reading-progress sync needs attention. Open Cloud Library to choose which edits to keep.') }
-        catch (error) { cloudReady = false; if (isStorageFull(error)) reportError(error); messages.push(`Cloud storage and reading-progress sync paused: ${operationErrorMessage(error, 'Connection failed.')}`) }
+      const syncAccount = async (fresh: boolean) => {
+        try { const conflicts = await syncCloud(fresh); setCloudConflicts(conflicts); if (conflicts.length) messages.push('Reading-progress sync needs attention. Open Cloud Library to choose which edits to keep.') }
+        catch (error) { cloudReady = false; syncFailed.current = true; if (isStorageFull(error)) reportError(error); messages.push(`Cloud storage and reading-progress sync paused: ${operationErrorMessage(error, 'Connection failed.')}`) }
       }
       if (navigator.onLine) {
-        try {reportSyncStatus('organizer','syncing');linked=await restoreOrganizerConnection(linked);setConnection(linked);connectionRef.current=linked;if(!linked)reportSyncStatus('organizer','idle')} catch(error){reportSyncFailure('organizer',error);linked=undefined;messages.push(`Organizer sync setup paused: ${error instanceof Error ? error.message : 'The connection could not be restored.'} Your local reading changes are retained.`)}
+        try {reportSyncStatus('organizer','syncing');linked=await restoreOrganizerConnection(linked);setConnection(linked);connectionRef.current=linked;if(!linked)reportSyncStatus('organizer','idle')} catch(error){syncFailed.current=true;reportSyncFailure('organizer',error);linked=undefined;messages.push(`Organizer sync setup paused: ${error instanceof Error ? error.message : 'The connection could not be restored.'} Your local reading changes are retained.`)}
       }
 
       if (force && !quiet && await loadSetting<boolean>('organizer-disabled-here')) messages.push('Organizer reading-progress sync is paused on this device. Open Cloud Library → Advanced Troubleshooting → Repair Organizer Connection to resume.')
-      await syncAccount()
+      await syncAccount(force || await hasCloudChanges())
       if (linked) {
+        let organizerMayHaveWritten = true
         try {
-          const report = await synchronize(linked, force)
+          const { message, attemptedWrite } = await synchronize(linked, force)
+          organizerMayHaveWritten = attemptedWrite
           // Background success stays quiet; manual sync and problems remain visible.
-          if (force && !quiet || !report.startsWith('Reading updates are synced.')) messages.push(report)
+          if (force && !quiet || !message.startsWith('Reading updates are synced.')) messages.push(message)
         }
-        catch (error) { if (isStorageFull(error)) reportError(error); messages.push(`Organizer sync paused: ${error instanceof Error ? error.message : String(error)}`) }
+        catch (error) { syncFailed.current = true; if (isStorageFull(error)) reportError(error); messages.push(`Organizer sync paused: ${error instanceof Error ? error.message : String(error)}`) }
+        // Organizer saves can update cloud rows through SQL triggers. Its pull
+        // can also enqueue local reader fields that still need publishing.
+        if (cloudReady && (organizerMayHaveWritten || await hasCloudChanges())) await syncAccount(true)
       }
-      if (linked && cloudReady) await syncAccount()
       if (force && !quiet && !messages.length) messages.push('Sync finished. Your cloud library and reading progress are up to date.')
       if (messages.length) setMessage([...new Set(messages)].join(' '))
       const prefs = await loadSetting<Preferences>('preferences')
@@ -404,12 +409,21 @@ export function App({ initialPairing, sampleAccount }: { initialPairing?: Reader
       setProfileIdentity({name,email:user?.email??''})
       if(event==='PASSWORD_RECOVERY')setModal('account')
     })
-    const reconnect = () => { setOnline(navigator.onLine); if (navigator.onLine) void sync() }, foreground = () => { if (document.visibilityState === 'visible') void sync(true, true) }
+    const reconnect = () => { setOnline(navigator.onLine); if (navigator.onLine) void sync() }
+    const visibleOnline = () => Boolean(readerOwner) && navigator.onLine && document.visibilityState === 'visible'
+    const canPoll = () => visibleOnline() && !syncing.current
+    const foreground = () => { if (visibleOnline() && (!syncing.current || syncFailed.current)) void sync(true, true) }
+    const flushOutbox = async () => {
+      if (!canPoll()) return
+      try { if (await hasCloudChanges() && canPoll()) void sync() }
+      catch (error) { reportError(error) }
+    }
     const pairingChanged = () => { if (sampleMode) return; const incoming = consumeReaderPairing(); if (incoming) void attempt('Connecting Organizer…', () => receivePairing(incoming)) }
     window.addEventListener('hashchange', pairingChanged)
-    const cloudInterval = window.setInterval(() => { if (document.visibilityState === 'visible') void sync() }, 30000)
+    const cloudInterval = window.setInterval(() => { if (canPoll()) void sync() }, 60000)
+    const outboxInterval = window.setInterval(() => void flushOutbox(), 30000)
     window.addEventListener('focus', foreground); window.addEventListener('online', reconnect); window.addEventListener('offline', reconnect); document.addEventListener('visibilitychange', foreground)
-    return () => { authListener?.data.subscription.unsubscribe();window.removeEventListener('hashchange', pairingChanged); window.clearInterval(cloudInterval); window.removeEventListener('focus', foreground);window.removeEventListener('online', reconnect); window.removeEventListener('offline', reconnect); document.removeEventListener('visibilitychange', foreground) }
+    return () => { authListener?.data.subscription.unsubscribe();window.removeEventListener('hashchange', pairingChanged); window.clearInterval(cloudInterval); window.clearInterval(outboxInterval); window.removeEventListener('focus', foreground);window.removeEventListener('online', reconnect); window.removeEventListener('offline', reconnect); document.removeEventListener('visibilitychange', foreground) }
   }, [])
   useEffect(() => {
     if (sampleMode) return
@@ -425,7 +439,10 @@ export function App({ initialPairing, sampleAccount }: { initialPairing?: Reader
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => { document.documentElement.dataset.theme = preferences.dark ? 'dark' : 'light' }, [preferences.dark])
-  function updatePreferences(next: Preferences) { setPreferences(next); void setting('preferences', next).catch(reportError) }
+  function updatePreferences(next: Preferences, { afterSave = false } = {}) {
+    if (!afterSave) setPreferences(next)
+    void setting('preferences', next).then(() => { if (afterSave) setPreferences(next) }).catch(reportError)
+  }
   async function commit(book: Book | BookDetails, event?: Pending | Pending[], preservePosition = true) {
     await saving.current
     let details = 'file' in book ? bookDetails(book) : book
@@ -641,7 +658,7 @@ export function App({ initialPairing, sampleAccount }: { initialPairing?: Reader
     {active?.file && active.id === selected && <ReadingView key={active.id} book={active} onProgress={progress => updateProgress(active.id, progress)} onViewDetails={() => viewDetails(active.id)} preferences={preferences} onPreferences={updatePreferences} onPosition={position} onRead={(c,t) => void read(c,t)} onClose={() => { openingIntent.current++; shelfReturn.current = true; rememberOpenBook(undefined); void saving.current.then(refresh); setSelected(undefined) }} />}
     <div className="app-shell" hidden={Boolean(selected)}>
       <header className="app-header">
-        <a className="brand" href="/">▤ <span>{readerBrandName}</span></a>
+        <a className="brand" href="/">▤ <span>{mobile ? readerShortName : readerBrandName}</span></a>
         <nav aria-label="Main Navigation">
           <button type="button" className="button secondary desktop-reader-action" onClick={() => { cancelWorkOpening(); setStorageFull(false); setModal('storage') }}>Storage</button>
           <button type="button" className="button primary" disabled={busy} onClick={openEpubPicker}>＋ Import EPUB</button>
@@ -656,7 +673,7 @@ export function App({ initialPairing, sampleAccount }: { initialPairing?: Reader
             <button className="profile-action" onClick={() => openProfileOption('cloud')}><HardDrive size={17} aria-hidden="true" />Cloud Library</button>
             <button className="profile-action" onClick={() => openProfileOption('account')}><UserRound size={17} aria-hidden="true" />Reader Account</button>
             <button className="profile-action" onClick={() => openProfileOption('sync')}><RefreshCw size={17} aria-hidden="true" />Organizer & Sync</button>
-            <button type="button" className="profile-action" onClick={() => updatePreferences({ ...preferences, dark: !preferences.dark })}>{preferences.dark ? <><Sun size={17} aria-hidden="true" />Toggle Light Mode</> : <><Moon size={17} aria-hidden="true" />Toggle Dark Mode</>}</button>
+            <button type="button" className="profile-action" onClick={() => updatePreferences({ ...preferences, dark: !preferences.dark }, { afterSave: true })}>{preferences.dark ? <><Sun size={17} aria-hidden="true" />Toggle Light Mode</> : <><Moon size={17} aria-hidden="true" />Toggle Dark Mode</>}</button>
             <button className="profile-action" onClick={() => openProfileOption('text-scaling')}><Type size={17} aria-hidden="true" />{accessibilitySettingsSection.title}</button>
             <button className="profile-action" onClick={() => openProfileOption('tags')}><Tags size={17} aria-hidden="true" />Tag Format</button>
             <button className="profile-action" onClick={() => openProfileOption('tiles')}><LayoutGrid size={17} aria-hidden="true" />Customize Tiles</button>

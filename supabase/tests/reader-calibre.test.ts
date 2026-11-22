@@ -8,6 +8,14 @@ const owner='20000000-0000-0000-0000-000000000001',other='20000000-0000-0000-000
 async function asUser(id=owner){await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${id}'`)}
 beforeAll(async()=>{db=await createTestDatabase();await db.exec(`insert into auth.users values('${owner}'),('${other}');insert into public.reader_app_access values('${owner}')`);await asUser()},30000)
 afterAll(async()=>{await db?.close()})
+it('lets the inbox service verify Reader access without managing access grants',async()=>{
+ await db.exec('reset role;set role service_role')
+ try {
+  expect((await db.query('select user_id from public.reader_app_access where user_id=$1',[owner])).rows).toEqual([{user_id:owner}])
+  expect((await db.query('select user_id from public.reader_app_access where user_id=$1',[other])).rows).toEqual([])
+  await expect(db.query('delete from public.reader_app_access where user_id=$1',[owner])).rejects.toThrow()
+ } finally {await asUser()}
+})
 it('requires reader access and prevents pairing to another account',async()=>{
  await expect(db.query('insert into public.reader_transfer_destinations(id,user_id,device,label,token_hash) values($1,$2,$3,$4,$5)',[destination,other,'device','Reader','a'.repeat(64)])).rejects.toThrow()
  await asUser(other)

@@ -125,7 +125,7 @@ try {
   checked(await clients.admin.from('fandom_classifications').upsert({user_id,key:'synthetic-privacy',fandoms:['Synthetic Private Fandom']}))
   stage=`seeding ${account.identity}: reading_records`
   checked(await clients.admin.from('reading_records').insert({id:randomUUID(),user_id,original_url:'https://synthetic.example/history',reading_status:'finished',last_read_chapter:1,created_at:new Date().toISOString(),reading_history:[],metadata:{title:'Synthetic Archived Story'}}))
-  await rpc(account,'reader_cloud_apply',{p_id:randomUUID(),p_key:'synthetic/privacy',p_value:{private:account.identity},p_base:0})
+  await rpc(account,'reader_cloud_apply',{p_id:randomUUID(),p_key:'synthetic/privacy',p_value:{private:account.identity},p_base:0,p_generation:0})
   account.installation=randomUUID()
   account.readerSecret=(await rpc(account,'reader_organizer_connection',{p_action:'restore',p_installation:account.installation})).secret
   checked(await anonymous.rpc('userscript_library',{p_secret:account.readerSecret,p_action:'reader_report',p_work:0,p_input:{installationId:account.installation,name:'Synthetic Reader',url:origins.READER_ORIGIN,works:['999999991']}}))
@@ -135,7 +135,7 @@ try {
   account.transfer=randomUUID()
   stage=`seeding ${account.identity}: reader_import_inbox`
   checked(await clients.admin.from('reader_import_inbox').insert({destination:account.destination,id:account.transfer,user_id,hash,metadata:{title:'Synthetic Private EPUB'}}))
-  account.epub=`${user_id}/${hash}.epub`
+  account.epub=`${user_id}/${hash}/0.epub`
   stage=`seeding ${account.identity}: reader-epubs`
   checked(await c.storage.from('reader-epubs').upload(account.epub,bytes,{contentType:'application/epub+zip'}))
   account.backup=`${user_id}/synthetic-s3-${randomUUID()}.json`
@@ -268,13 +268,15 @@ try {
     assert.equal(digest(new Uint8Array(await after.arrayBuffer())),expected)
    }
    const key=digest(randomUUID())
-   assert.ok((await c.storage.from('reader-epubs').upload(`${victim.id}/${key}.epub`,bytes,{contentType:'application/epub+zip'})).error)
-   assert.ok((await c.storage.from('reader-epubs').createSignedUploadUrl(`${victim.id}/${key}.epub`)).error)
+   assert.ok((await c.storage.from('reader-epubs').upload(`${victim.id}/${key}/0.epub`,bytes,{contentType:'application/epub+zip'})).error)
+   assert.ok((await c.storage.from('reader-epubs').createSignedUploadUrl(`${victim.id}/${key}/0.epub`)).error)
    assert.ok((await c.storage.from('reader-epubs').update(account.epub,bytes,{contentType:'application/epub+zip'})).error)
-   assert.ok((await c.storage.from('reader-epubs').move(account.epub,`${victim.id}/${key}.epub`)).error)
+   assert.ok((await c.storage.from('reader-epubs').move(account.epub,`${victim.id}/${key}/0.epub`)).error)
    assert.ok((await c.storage.from('library-backups').upload(`${account.id}/direct-upload.json`,'{}',{contentType:'application/json'})).error)
-   const disposable=`${account.id}/${key}.epub`
+   const disposable=`${account.id}/${key}/0.epub`
    checked(await c.storage.from('reader-epubs').upload(disposable,bytes,{contentType:'application/epub+zip'}))
+   assert.equal(checked(await c.storage.from('reader-epubs').remove([disposable])).length,0)
+   await rpc(account,'reader_cloud_apply',{p_id:randomUUID(),p_key:`${key}/deleted`,p_value:true,p_base:0,p_generation:0})
    assert.equal(checked(await c.storage.from('reader-epubs').remove([disposable])).length,1)
    assert.ok((await c.storage.from('reader-epubs').download(disposable)).error)
    const disposableBackup=`${account.id}/s3-disposable.json`

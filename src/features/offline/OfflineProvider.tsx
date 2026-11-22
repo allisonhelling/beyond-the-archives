@@ -30,13 +30,10 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     window.addEventListener(offlineCleared, clear)
     return () => window.removeEventListener(offlineCleared, clear)
   }, [])
-  const refreshing = useRef(false)
+  const refreshing = useRef(false), refreshRequested = useRef(false)
   const [refreshingReports, setRefreshingReports] = useState(false)
-  const refresh = useCallback(async () => {
-    if (!supabase || !authenticated || !userId || !navigator.onLine) return
-    if (refreshing.current) return
-    refreshing.current = true
-    setRefreshingReports(true)
+  const refreshOnce = useCallback(async () => {
+    if (!supabase || !authenticated || !userId || identity.current !== userId || !navigator.onLine) return
     const requestGeneration = generation.current
     try {
       const retained = readOfflineSnapshot()
@@ -44,13 +41,38 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         if (identity.current !== userId || generation.current !== requestGeneration) return
         if (edit.entry) await updateEntry(edit.entry, edit.field === 'favorite' ? { is_favorite: edit.value } : { is_rec: edit.value }, edit.base ?? {})
         else if (edit.book) {
-          const key = `${edit.book}/${edit.field}`
-          const previous = await supabase.from('reader_cloud_values').select('revision').eq('key', key).maybeSingle()
-          if (previous.error) throw previous.error
-          if (identity.current !== userId || generation.current !== requestGeneration) return
-          const result = await supabase.rpc('reader_cloud_apply', { p_id: edit.id, p_key: key, p_value: edit.value, p_base: previous.data?.revision ?? 0 })
+          const current = readOfflineSnapshot()
+          const queued = current?.pendingMarkings?.find(item => item.id === edit.id)
+          if (current?.userId !== userId || !queued || queued.conflict) continue
+          if (!queued.cloud) throw new Error('Reset the previous reader marking queue before syncing.')
+          const request = queued.cloud
+          if (!queued.sent) saveOfflineSnapshot({ ...current, pendingMarkings: current.pendingMarkings?.map(item =>
+            item.id === edit.id ? { ...item, sent: true } : item) })
+          const result = await supabase.rpc('reader_cloud_apply', request)
           if (result.error) throw result.error
-          if ((result.data as { conflict?: boolean })?.conflict) throw new Error('Marking changed during sync. Retry.')
+          const reply = result.data as { conflict?: boolean; stale?: boolean; revision: number; generation: number }
+          if (identity.current !== userId) return
+          if (reply.conflict) {
+            const saved = readOfflineSnapshot()
+            if (saved?.userId === userId) saveOfflineSnapshot({ ...saved, pendingMarkings: saved.pendingMarkings
+              ?.map(item => item.id === edit.id ? { ...item, conflict: true } : item) })
+            continue
+          }
+          const latest = readOfflineSnapshot()
+          if (latest?.userId === userId) {
+            const pendingMarkings = latest.pendingMarkings?.filter(item => item.id !== edit.id).map(item => {
+              if (reply.stale || item.sent || item.cloud?.p_key !== request.p_key ||
+                  item.cloud.p_generation !== reply.generation || item.cloud.p_base !== request.p_base) return item
+              const id = crypto.randomUUID()
+              refreshRequested.current = true
+              return { ...item, id, cloud: { ...item.cloud, p_id: id, p_base: reply.revision } }
+            })
+            const cloudBooks = latest.cloudBooks?.map(book => !reply.stale && book.id === edit.book && book.generation === reply.generation
+              ? { ...book, [edit.field === 'favorite' ? 'favoriteRevision' : 'recRevision']: reply.revision } : book)
+            saveOfflineSnapshot({ ...latest, cloudBooks, pendingMarkings })
+          }
+          if (generation.current !== requestGeneration) return
+          continue
         }
         if (identity.current !== userId || generation.current !== requestGeneration) return
         const current = readOfflineSnapshot()
@@ -69,17 +91,39 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       const enabled = (association.data as { enabled?: boolean } | null)?.enabled
       if (enabled === false) { clearOfflineSnapshot(); setError(''); return }
       next.connected = typeof enabled === 'boolean' ? enabled : Boolean(next.readers.length || next.cloudBooks?.length)
-      saveOfflineSnapshot(next); setSnapshot(next); setError('')
-    } catch { if (identity.current === userId && generation.current === requestGeneration) setError('Could not update reader reports or retain them locally. Showing the last saved report, if available.') } finally { refreshing.current = false; setRefreshingReports(false) }
+      const saved = readOfflineSnapshot()
+      if (saved?.userId === userId) next.pendingMarkings = saved.pendingMarkings
+      saveOfflineSnapshot(next); setSnapshot(next)
+      setError(next.pendingMarkings?.some(item => item.conflict) ? 'A reader marking changed elsewhere. Choose the marking again to retry.' : '')
+    } catch { if (identity.current === userId && generation.current === requestGeneration) setError('Could not update reader reports or retain them locally. Showing the last saved report, if available.') }
   }, [authenticated, userId])
+  const refresh = useCallback(async () => {
+    if (!authenticated || !userId || !navigator.onLine) return
+    if (refreshing.current) { refreshRequested.current = true; return }
+    refreshing.current = true
+    setRefreshingReports(true)
+    try {
+      do {
+        refreshRequested.current = false
+        await refreshOnce()
+      } while (refreshRequested.current && identity.current === userId)
+    } finally {
+      refreshing.current = false
+      setRefreshingReports(false)
+    }
+  }, [authenticated, userId, refreshOnce])
   async function mark(story: Story, field: 'favorite' | 'rec', value: boolean) {
     const current = readOfflineSnapshot()
     if (!current || userId && current.userId !== userId) throw new Error('Open the matching library to save markings.')
     const book = current.cloudBooks?.find(book => story.id === `reader-cloud-${book.id}` || Boolean((book.workCount ?? 0) <= 1 && savedWorkIdentity(book) && savedWorkIdentity(book) === String(story.work.ao3_work_id)))
-    if (story.id.startsWith('reader-cloud-') && !book) throw new Error('Refresh the reader library before changing this work.')
-    const edit: OfflineMarking = { id: crypto.randomUUID(), ...(!story.id.startsWith('reader-cloud-') ? { entry: story.id, base: { [field]: Boolean(field === 'favorite' ? story.is_favorite : story.is_rec) } } : book ? { book: book.id } : {}), field, value }
+    if (story.id.startsWith('reader-cloud-') && book?.generation === undefined) throw new Error('Refresh the reader library before changing this work.')
+    const id = crypto.randomUUID()
+    const edit: OfflineMarking = story.id.startsWith('reader-cloud-') && book?.generation !== undefined
+      ? { id, book: book.id, field, value, cloud: { p_id: id, p_key: `${book.id}/${field}`, p_value: value,
+        p_generation: book.generation, p_base: (field === 'favorite' ? book.favoriteRevision : book.recRevision) ?? 0 } }
+      : { id, entry: story.id, base: { [field]: Boolean(field === 'favorite' ? story.is_favorite : story.is_rec) }, field, value }
     generation.current++
-    const next: OfflineSnapshot = { ...current, pendingMarkings: [...(current.pendingMarkings ?? []), edit],
+    const next: OfflineSnapshot = { ...current, pendingMarkings: [...(current.pendingMarkings ?? []).filter(item => !item.conflict || item.cloud?.p_key !== edit.cloud?.p_key), edit],
       cloudBooks: current.cloudBooks?.map(item => item.id === book?.id || Boolean(book?.workId && item.workId === book.workId) ? { ...item, [field]: value } : item),
       stories: current.stories.map(item => item.id === story.id ? { ...item, [field === 'favorite' ? 'is_favorite' : 'is_rec']: value } : item) }
     saveOfflineSnapshot(next); setSnapshot(next)

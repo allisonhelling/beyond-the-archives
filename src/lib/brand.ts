@@ -1,5 +1,6 @@
 export const brandName = 'Beyond the Archives'
 export const brandTagline = 'A PRIVATE AO3 ORGANIZER'
 export const brandSlug = 'beyond-the-archives'
-export const readerBrandName = 'archives unfolded'
-export const readerBrandTagline = 'AN EPUB READER, AVAILABLE ONLINE AND OFFLINE'
+export const readerBrandName = 'beyond the archives reader'
+export const readerShortName = 'bta reader'
+export const readerBrandTagline = 'A COMPANION EPUB READER, AVAILABLE OFFLINE'

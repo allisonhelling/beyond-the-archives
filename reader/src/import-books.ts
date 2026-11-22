@@ -58,7 +58,7 @@ export function writeImport(tx: IDBTransaction, saved: Book | BookDetails, old?:
   }
   // Only an explicit import may restore a deleted version.
   restoreDeletedVersion(tx, saved.id)
-  putBook(tx, saved)
+  putBook(tx, saved, false, true)
 }
 export async function saveImportedVersion(saved: Book, old?: BookDetails, replace = false) {
   await transaction(bookStores, tx => writeImport(tx, saved, old, replace))

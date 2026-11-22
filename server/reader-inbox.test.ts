@@ -14,8 +14,10 @@ function fixture(uploadFailure?: string) {
    return Response.json(revoked ? [] : [{id,user_id:owner,device:'paired-device',label:'Reader'}])
   }
   if(url.pathname.includes('reader_app_access')) return Response.json(access ? [{user_id:owner}] : [])
+  if(url.pathname.includes('reader_cloud_values')) return Response.json([])
   if(url.pathname.includes('reader_import_inbox')) {
    if(request.method==='POST') {rows.push(await request.json());return new Response(null,{status:201})}
+   if(request.method==='PATCH') {Object.assign(rows[0],await request.json());return new Response(null,{status:204})}
    return Response.json(request.headers.get('accept')?.includes('vnd.pgrst.object') ? rows[0] : rows)
   }
   if(url.pathname.includes('/storage/v1/object/reader-epubs/')) {if(uploadFailure)throw new Error(uploadFailure);uploads++;return Response.json({Key:'stored'})}
@@ -32,9 +34,10 @@ it('requires a scoped token and reader access, including after revocation',async
  expect(denied.uploads).toBe(0)
 })
 it('checks uploaded hashes and retries the same receipt without replacing files or results',async()=>{
+ const corrupt=fixture()
+ expect((await corrupt.handler(request('corrupt','a'.repeat(64)))).status).toBe(400)
+ expect(corrupt.uploads).toBe(0)
  const state=fixture()
- expect((await state.handler(request('corrupt','a'.repeat(64)))).status).toBe(400)
- expect(state.uploads).toBe(0)
  expect((await state.handler(request())).status).toBe(202)
  expect(state.rows[0]).toMatchObject({destination:id,id,user_id:owner,hash:createHash('sha256').update('epub bytes').digest('hex')})
  state.rows[0].status='imported'
@@ -54,4 +57,13 @@ it('withholds storage error details from responses and operational logs',async()
   expect(JSON.stringify(log.mock.calls)).not.toContain(privateDetail)
   expect(log).toHaveBeenCalledWith('Reader inbox request failed')
  }finally{log.mockRestore()}
+})
+
+it('keeps a retired delivery ID from uploading the same hash into a restored generation',async()=>{
+ const state=fixture()
+ expect((await state.handler(request())).status).toBe(202)
+ state.rows[0].status='retired'
+ state.rows[0].message='EPUB removed.'
+ expect(await (await state.handler(request())).json()).toMatchObject({status:'cancelled'})
+ expect(state.uploads).toBe(1)
 })

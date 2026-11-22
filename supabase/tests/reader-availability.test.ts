@@ -173,9 +173,9 @@ it('includes active cloud originals with no installation report and excludes del
  await db.query('insert into public.reader_organizer_links(user_id) values($1) on conflict do nothing',[owner])
  for (const [hash, workId, user] of [['a','8002',owner],['b','8003',owner],['c','8004',owner],['d','8005',other],['e','8006',owner],['f',null,owner]] as const) {
   await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3)',[user,`${hash.repeat(64)}/manifest`,JSON.stringify({id:hash.repeat(64),workId,active:true,metadata:{title:`Cloud ${workId}`}})])
-  if(hash!=='e') await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${user}/${hash.repeat(64)}.epub`])
+  if(hash!=='e') await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${user}/${hash.repeat(64)}/0.epub`])
  }
- await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3),($1,$4,$5)',[owner,`${'b'.repeat(64)}/deleted`,'true',`${'c'.repeat(64)}/active`,'false'])
+ await db.query('insert into public.reader_cloud_values(user_id,key,value,generation) values($1,$2,$3,1),($1,$4,$5,0)',[owner,`${'b'.repeat(64)}/deleted`,'true',`${'c'.repeat(64)}/active`,'false'])
  await db.query('update public.reader_cloud_values set value=$3 where user_id=$1 and key=$2',[owner,`${'a'.repeat(64)}/progress`,'3'])
  await asUser()
  const snapshot=(await db.query<{result:{cloudBooks:{workId:string|null;completedCount:number}[];stories:{work:{ao3_work_id:number}}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result
@@ -190,7 +190,7 @@ it('exposes only uploaded anthology member identities and retains the owner’s 
   await db.query('insert into public.reader_organizer_links(user_id) values($1) on conflict do nothing',[owner])
   await db.query('delete from public.reader_availability where user_id=$1',[owner])
   await db.query('insert into public.reader_cloud_values(user_id,key,value) values($1,$2,$3)',[owner,`${hash}/manifest`,JSON.stringify({id:hash,workId:null,active:true,metadata:{title:'Three Fic Anthology'},works:[{workId:'8001'},{workId:'8002'},{workId:null}]})])
-  await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${owner}/${hash}.epub`])
+  await db.query("insert into storage.objects(bucket_id,name) values('reader-epubs',$1)",[`${owner}/${hash}/0.epub`])
   await asUser()
   const snapshot=(await db.query<{result:{cloudBooks:{id:string;workId:string|null;workIds:string[];workCount:number}[];stories:{work:{ao3_work_id:number}}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result
   const anthology=snapshot.cloudBooks.find(book=>book.id===hash)!
@@ -201,7 +201,7 @@ it('exposes only uploaded anthology member identities and retains the owner’s 
   await asUser(other)
   expect((await db.query<{result:{cloudBooks:{id:string}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result.cloudBooks.some(book=>book.id===hash)).toBe(false)
   await db.exec('reset role')
-  await db.query('delete from storage.objects where name=$1',[`${owner}/${hash}.epub`])
+  await db.query('delete from storage.objects where name=$1',[`${owner}/${hash}/0.epub`])
   await asUser()
   expect((await db.query<{result:{cloudBooks:{id:string}[]}}>('select public.reader_offline_snapshot() result')).rows[0].result.cloudBooks.some(book=>book.id===hash)).toBe(false)
  } finally {await db.exec('rollback')}

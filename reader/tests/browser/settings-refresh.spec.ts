@@ -71,7 +71,7 @@ test('updates the reader interface scale and restores it on reload', async ({ pa
  await expect(bar).toHaveCSS('padding-top', '9px')
  await expect(tile.locator('h2')).toHaveCSS('font-size', '20px')
  for (const selector of ['.byline', '.work-fandoms', '.display-grouped-line', '.metadata-tag']) {
-  await expect(tile.locator(selector).first()).toHaveCSS('font-size', '16px')
+  await expect(tile.locator(selector).first()).toHaveCSS('font-size', '14px')
  }
  await expect(tile.locator('.card-progress')).toHaveCSS('padding-bottom', '8px')
  const [tileBox, barBox] = await Promise.all([tile.boundingBox(), bar.boundingBox()])

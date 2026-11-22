@@ -20,7 +20,7 @@ async function seedLegacy(page: Page, count: number, connected = false) {
       for (let index = 0; index < count; index++) {
         const id = String(index).padStart(6, '0'), chapter = `chapter:${id}`
         // Cloud originals are already present; measure organizer pulls alone.
-        if(connected)tx.objectStore('settings').put({id:`cloud-file:${id}`,value:true})
+        if(connected)tx.objectStore('settings').put({id:`cloud-file:${id}`,value:0})
         tx.objectStore('books').put({ id, workId: String(index + 1), active: true,
           metadata: { ...metadata, title: `Story ${id}`, authors: ['Test Author'], fandoms: ['Test Fandom'] }, metadataVersion: version, chapterVersion,
           chapters: [{ id: chapter, ao3Id: String(index + 100), number: 1, title: 'Chapter One', html: `<p>Story ${id} prose.</p>`, words: 3, path: 'chapter.xhtml' }],

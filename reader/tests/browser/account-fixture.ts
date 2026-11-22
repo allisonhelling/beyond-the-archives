@@ -30,7 +30,7 @@ export async function organizerAccount(context:BrowserContext) {
    if(input.p_action==='disable')linked=false
    return route.fulfill({json:{enabled:linked,userId:owner}})
   }
-  if(path==='/rest/v1/rpc/reader_cloud_apply')return route.fulfill({json:{key:input.p_key,value:input.p_value,revision:input.p_base+1}})
+  if(path==='/rest/v1/rpc/reader_cloud_apply')return route.fulfill({json:{key:input.p_key,value:input.p_value,revision:input.p_base+1,generation:input.p_generation}})
   return route.fulfill({json:path.startsWith('/storage/')?{}:[]})
  })
  await context.route(`${testOrganizer.organizerUrl}/auth/bridge`,route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Signed Out Organizer</title>'}))

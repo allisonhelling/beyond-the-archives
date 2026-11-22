@@ -9,10 +9,10 @@ export async function restoreDrill() {
   const backup=checked(await alice.client.rpc('export_library_backup'))
   const foreign=checked(await bob.client.rpc('export_library_backup'))
   const bytes=await syntheticEpub()
-  const hash=createHash('sha256').update(bytes).digest('hex'),path=`${alice.id}/${hash}.epub`
+  const hash=createHash('sha256').update(bytes).digest('hex'),path=`${alice.id}/${hash}/0.epub`
   const cloud={key:`${hash}/notes`,value:'Synthetic reader annotation'}
   checked(await alice.client.storage.from('reader-epubs').upload(path,bytes,{contentType:'application/epub+zip'}))
-  checked(await alice.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:cloud.key,p_value:cloud.value,p_base:0}))
+  checked(await alice.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:cloud.key,p_value:cloud.value,p_base:0,p_generation:0}))
   assert.ok((await bob.client.storage.from('reader-epubs').download(path)).error,'Cross-account original download must fail')
   assert.equal(checked(await bob.client.from('reader_cloud_values').select('*').eq('user_id',alice.id)).length,0)
   checked(await alice.client.from('library_entries').update({notes:'Synthetic mutation to recover'}).eq('id',alice.entries[0]))
@@ -27,11 +27,14 @@ export async function restoreDrill() {
   assert.deepEqual(checked(await bob.client.rpc('export_library_backup')).tables,foreign.tables)
   // Reader originals and cloud records are separate recovery assets, not implied
   // by organizer JSON restore. Reconstruct only this drill's generated fixtures.
+  const marker=`${hash}/deleted`
+  checked(await alice.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:marker,p_value:true,p_base:0,p_generation:0}))
   checked(await alice.client.storage.from('reader-epubs').remove([path]))
-  checked(await clients.admin.from('reader_cloud_values').delete().eq('user_id',alice.id))
-  checked(await alice.client.storage.from('reader-epubs').upload(path,bytes,{contentType:'application/epub+zip'}))
-  checked(await alice.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:cloud.key,p_value:cloud.value,p_base:0}))
-  const recovered=checked(await alice.client.storage.from('reader-epubs').download(path))
+  checked(await alice.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:marker,p_value:false,p_base:1,p_generation:1}))
+  const restoredPath=`${alice.id}/${hash}/2.epub`
+  checked(await alice.client.storage.from('reader-epubs').upload(restoredPath,bytes,{contentType:'application/epub+zip'}))
+  checked(await alice.client.rpc('reader_cloud_apply',{p_id:randomUUID(),p_key:cloud.key,p_value:cloud.value,p_base:0,p_generation:2}))
+  const recovered=checked(await alice.client.storage.from('reader-epubs').download(restoredPath))
   assert.equal(createHash('sha256').update(new Uint8Array(await recovered.arrayBuffer())).digest('hex'),hash)
   assert.equal(checked(await alice.client.from('reader_cloud_values').select('value').eq('key',cloud.key).single()).value,cloud.value)
   assert.equal(checked(await alice.client.rpc('reader_organizer_connection',{p_action:'status'})).enabled,true)

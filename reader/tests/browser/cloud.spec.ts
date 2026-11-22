@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { createZip } from '../../../src/lib/zip'
 import { epubFiles } from '../../../src/test/epub-fixture'
 import { account as readerAccount, cloudLibrary as account, accountSession, organizerAccount, owner, signedIn } from './account-fixture'
-type Value={key:string;value:unknown;revision:number}
+type Value={key:string;value:unknown;revision:number;generation:number}
 test('shows backend error messages and codes when cloud sync fails',async({page,context})=>{
  await organizerAccount(context)
  await context.route('**/rest/v1/reader_app_access*',route=>route.fulfill({status:500,json:{code:'57014',message:'Statement timeout during background sync'}}))
@@ -15,6 +15,8 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  test.setTimeout(60000)
  let loseNoteResponse = false, failDelete = false, rejectMultipart = true
  let downloadRequests = 0
+ let originalDelete: {id:string;key:string;value:boolean;base:number;generation:number} | undefined
+ const removals: string[] = []
  const values=new Map<string,Value>(),receipts=new Map<string,Value>(),files=new Map<string,Buffer>()
  async function device(catalogGate?: Promise<void>){
   const context=await browser.newContext();await signedIn(context)
@@ -27,13 +29,15 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
     const input=request.postDataJSON(),before=values.get(input.p_key)
     if(receipts.has(input.p_id))return route.fulfill({json:receipts.get(input.p_id)})
     const id=input.p_key.split('/')[0],deleted=values.get(`${id}/deleted`)
-    if(deleted?.value===true && !(input.p_key===deleted.key && input.p_value===false && input.p_base===deleted.revision))return route.fulfill({json:deleted})
+    const generation = deleted?.generation ?? 0
+    if(input.p_generation!==generation || (deleted?.value===true && !(input.p_key===deleted.key && input.p_value===false && input.p_base===deleted.revision)))
+     return route.fulfill({json:{...deleted,stale:true}})
     if(input.p_key===`${id}/deleted` && input.p_value===true){
      for(const [key,row] of values)if(row.key.startsWith(`${id}/`))values.delete(key)
-     for(const [key,row] of receipts)if(row.key.startsWith(`${id}/`))receipts.delete(key)
+     originalDelete={id:input.p_id,key:input.p_key,value:true,base:input.p_base,generation:input.p_generation}
     }
     if((before?.revision??0)!==input.p_base && JSON.stringify(before?.value)!==JSON.stringify(input.p_value))return route.fulfill({json:{...before,conflict:true}})
-    const next={key:input.p_key,value:input.p_value,revision:(before?.revision??0)+1};values.set(next.key,next);receipts.set(input.p_id,next);if(loseNoteResponse && input.p_key.endsWith('/notes')){loseNoteResponse=false;return route.abort()}return route.fulfill({json:next})
+    const next={key:input.p_key,value:input.p_value,revision:(before?.revision??0)+1,generation:generation+Number(input.p_key.endsWith('/deleted'))};values.set(next.key,next);receipts.set(input.p_id,next);if(loseNoteResponse && input.p_key.endsWith('/notes')){loseNoteResponse=false;return route.abort()}return route.fulfill({json:next})
    }
    if(url.pathname.includes('/reader_cloud_values')) {
     if (catalogGate) await catalogGate
@@ -42,7 +46,7 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
    if(url.pathname.includes('/storage/v1/object/')){
     if(request.method()==='DELETE'){
      if(failDelete){return route.fulfill({status:503,json:{message:'Storage temporarily unavailable'}})}
-     for(const key of request.postDataJSON().prefixes)files.delete(key)
+     for(const key of request.postDataJSON().prefixes){removals.push(key);files.delete(key)}
      return route.fulfill({json:[]})
     }
     const key=url.pathname.split('reader-epubs/')[1]
@@ -54,7 +58,7 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
       const blob=[...form.values()].find(value=>typeof value!=='string') as File
       original=Buffer.from(await blob.arrayBuffer())
      } else original=request.postDataBuffer()!
-     expect(key).toBe(`${owner}/${createHash('sha256').update(original).digest('hex')}.epub`)
+     expect(key).toBe(`${owner}/${createHash('sha256').update(original).digest('hex')}/${key.split('/').at(-1)}`)
      files.set(key,original);return route.fulfill({json:{Key:key}})
     }
     downloadRequests++
@@ -150,10 +154,18 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  await account(other);await other.getByRole('button',{name:'Sync Now'}).click()
  await expect(other.getByText('Conflicting Personal Notes',{exact:true})).toBeVisible()
  await other.setViewportSize({width:390,height:844})
- const deviceChoice=(await other.getByRole('button',{name:'Use This Device',exact:true}).boundingBox())!,cloudChoice=(await other.getByRole('button',{name:'Use Cloud Version',exact:true}).boundingBox())!
- expect(Math.abs(deviceChoice.y-cloudChoice.y)).toBeLessThan(1)
- expect(cloudChoice.x+cloudChoice.width).toBeLessThanOrEqual(390)
- await other.getByRole('button',{name:'Use Cloud Version',exact:true}).click()
+ const cloudChoice=other.getByRole('button',{name:'Use Cloud Version',exact:true})
+ await expect(cloudChoice).toBeEnabled()
+ // Read both positions in one layout so a dialog reflow can't skew the comparison.
+ const choices=other.getByRole('button',{name:/^(Use This Device|Use Cloud Version)$/})
+ const [deviceBounds,cloudBounds]=await choices.evaluateAll(buttons=>buttons.map(button=>{
+  const {top,left,right}=button.getBoundingClientRect()
+  return {top,left,right}
+ }))
+ expect(Math.abs(deviceBounds.top-cloudBounds.top)).toBeLessThan(1)
+ expect(deviceBounds.left).toBeGreaterThanOrEqual(0)
+ expect(cloudBounds.right).toBeLessThanOrEqual(390)
+ await cloudChoice.click()
  await expect(other.getByText('Conflicting Personal Notes',{exact:true})).toHaveCount(0)
  await other.getByText('Preserved Conflict Versions',{exact:true}).click()
  await expect(other.getByRole('dialog')).toContainText('Second device note')
@@ -224,6 +236,21 @@ test('syncs originals and state while organizer setup is unavailable, downloads 
  await account(other);await other.getByRole('button',{name:'Sync Now',exact:true}).click()
  await expect.poll(()=>files.size).toBe(2)
  await expect.poll(()=>[...values.values()].find(row=>row.key===`${createHash('sha256').update(file).digest('hex')}/notes`)?.value).toBe('')
+ const restoredPath=`${owner}/${createHash('sha256').update(file).digest('hex')}/2.epub`
+ expect(files.has(restoredPath)).toBe(true)
+ await other.evaluate(async ({owner, originalDelete}) => {
+  const db=await new Promise<IDBDatabase>(resolve=>{const req=indexedDB.open(`bta-reader-account:${owner}`);req.onsuccess=()=>resolve(req.result)})
+  try { await new Promise<void>(resolve=>{
+   const tx=db.transaction('settings','readwrite')
+   tx.objectStore('settings').put({id:'cloud-flight',value:originalDelete});tx.oncomplete=()=>resolve()
+  }) } finally {db.close()}
+ },{owner,originalDelete})
+ const replay=other.waitForResponse(response=>response.url().endsWith('/reader_cloud_apply')&&response.request().postDataJSON().p_id===originalDelete?.id)
+ await other.getByRole('button',{name:'Sync Now',exact:true}).click()
+ expect(await (await replay).json()).toMatchObject({value:true,generation:1})
+ await expect(other.getByRole('button',{name:'Sync Now',exact:true})).toBeEnabled()
+ expect(removals).not.toContain(restoredPath)
+ expect(files.has(restoredPath)).toBe(true)
  await second.close();await first.close()
 })
 
@@ -243,7 +270,7 @@ for (const {cloudOnly,bulk} of [{cloudOnly:false,bulk:false},{cloudOnly:true,bul
   const request=route.request(),url=new URL(request.url())
   if(url.pathname.includes('/reader_app_access'))return route.fulfill({json:{user_id:owner}})
   if(url.pathname.includes('/rpc/reader_cloud_apply')){
-   const input=request.postDataJSON(),row={key:input.p_key,value:input.p_value,revision:1}
+   const input=request.postDataJSON(),row={key:input.p_key,value:input.p_value,revision:1,generation:input.p_generation+Number(input.p_key.endsWith('/deleted'))}
    if(holdEdit&&input.p_key.endsWith('/favorite')){
     holdEdit=false
     await new Promise<void>(resolve=>{releaseEdit=resolve})
@@ -269,7 +296,7 @@ for (const {cloudOnly,bulk} of [{cloudOnly:false,bulk:false},{cloudOnly:true,bul
     result=request.postDataJSON().status
     return route.fulfill({status:204})
    }
-   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:`40000000-0000-0000-0000-${String(delivery+2).padStart(12,'0')}`,hash,metadata:{title:delivery===2?'Updated Cloud Story':'Cloud Inbox Story',_calibre_uuid:'20000000-0000-0000-0000-000000000001',_reader_download:delivery===1?false:!cloudOnly,calibre_work_link:'https://archiveofourown.org/works/8001'},status:'queued',message:''}] : []})
+   return route.fulfill({json:result==='queued' ? [{destination:'40000000-0000-0000-0000-000000000001',id:`40000000-0000-0000-0000-${String(delivery+2).padStart(12,'0')}`,hash,generation:0,metadata:{title:delivery===2?'Updated Cloud Story':'Cloud Inbox Story',_calibre_uuid:'20000000-0000-0000-0000-000000000001',_reader_download:delivery===1?false:!cloudOnly,calibre_work_link:'https://archiveofourown.org/works/8001'},status:'queued',message:''}] : []})
   }
   if(url.pathname.includes('/reader_transfer_destinations'))return route.fulfill({status:201,body:''})
   if(url.pathname.includes('/storage/v1/object/')){
@@ -332,7 +359,7 @@ for (const {cloudOnly,bulk} of [{cloudOnly:false,bulk:false},{cloudOnly:true,bul
  const extraHash='f'.repeat(64)
  if(bulk){
   const manifest=values.get(`${hash}/manifest`)!.value as Record<string,unknown>
-  values.set(`${extraHash}/manifest`,{key:`${extraHash}/manifest`,revision:1,value:{...manifest,id:extraHash}})
+  values.set(`${extraHash}/manifest`,{key:`${extraHash}/manifest`,revision:1,generation:0,value:{...manifest,id:extraHash}})
   await account(page)
   await page.getByRole('button',{name:'Sync Now',exact:true}).click()
   await expect.poll(()=>page.evaluate(async({owner,id})=>{

@@ -23,7 +23,7 @@ Before creating a branch, run `git status --short` and `git branch --show-curren
 - Treat Phase 0 contracts and normalized-work fixtures as a regression gate for every subsequent phase; update schemas, error mappings, and fixture expectations with intentional behavior changes.
 
 - Reuse the **already prepared multi-site architecture**. Audit the actual schema, types, RPCs, import paths, and extension contracts before adding migrations; do not assume a new identity refactor is needed.
-- Preserve existing AO3 work IDs, canonical tag evidence, reading progress/history, series, collections, Wayback links, private overrides, exports, and archives unfolded sync.
+- Preserve existing AO3 work IDs, canonical tag evidence, reading progress/history, series, collections, Wayback links, private overrides, exports, and bta reader sync.
 - Keep original/source observations separate from manual overrides; field-level provenance and status derivation must be explicit.
 - Manual save/edit must remain possible without a desktop extension; do not reintroduce retired hosted AO3 retrieval.
 - Add migration, RLS, account-isolation, backup/restore, and regression tests for every persisted contract.
@@ -36,7 +36,7 @@ Implementation record: [Phase 0 Baseline](PHASE_0_BASELINE.md). The actual branc
 
 **Goal:** Establish safe interoperability between independently deployed components and a regression baseline **before** implementing new universal-site features. Reuse existing contracts and unsupported-option checks; do not rewrite working integrations.
 
-- [x] Inventory live boundaries: organizer, Chrome/Edge companion, Safari userscript, archives unfolded reader, Edge Functions, database, and any active workers; document observed versions, payloads, auth, and rollout order.
+- [x] Inventory live boundaries: organizer, Chrome/Edge companion, Safari userscript, bta reader reader, Edge Functions, database, and any active workers; document observed versions, payloads, auth, and rollout order.
 - [x] Define explicit contract schema versions distinct from component versions and advertised capabilities; retain existing `metadata-retrieval-v1` semantics.
 - [x] Specify and implement/validate narrow request/response/error envelopes at existing boundaries, with legacy compatibility and safe `CONTRACT_UNSUPPORTED` behavior.
 - [x] Create a mixed-version capability matrix covering old/new companions, reader, Safari, and staged backend upgrades; verify manual fallbacks.
@@ -176,7 +176,7 @@ Implementation record: [Phase 5 Crossposts And Version-Aware Reading](PHASE_5_CR
 - [x] Add a limited FanFiction.net desktop header adapter and fixture tests. Live browser acceptance is pending, and Wattpad remains conditional.
 - [ ] Harden mapping repair, import/export, permission scoping, security, accessibility, and performance.
 - [ ] Verify companion release compatibility, migrations, rollout/rollback, and user documentation.
-- [ ] Run end-to-end regression suites for AO3, generic sites, Safari/manual fallback, and archives unfolded.
+- [ ] Run end-to-end regression suites for AO3, generic sites, Safari/manual fallback, and bta reader.
 - [ ] Measure deterministic tag classifier errors; evaluate optional browser-local ML only if useful, with opt-in, privacy, and abstention criteria.
 - [ ] Revisit source indicator visual design and optional top-level mapping navigation only if usage warrants.
 

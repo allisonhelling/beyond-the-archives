@@ -100,3 +100,32 @@ it('retains offline marking edits across a remount and flushes them after reconn
  await waitFor(()=>expect(mocks.updateEntry).toHaveBeenCalledWith('offline-entry',{is_favorite:true},expect.objectContaining({favorite:false})))
  await waitFor(()=>expect(JSON.parse(localStorage.getItem('bta:offline-hub:v1')!).pendingMarkings??[]).toEqual([]))
 })
+
+it('retries a reader-only marking with the same UUID, base and generation after an ambiguous response',async()=>{
+ const { exampleWork } = await import('../library/display/display-examples')
+ const hash='a'.repeat(64), story={...exampleWork,id:`reader-cloud-${hash}`}
+ const retained={...snapshot,cloudBooks:[{id:hash,workId:null,metadata:exampleWork.metadata,generation:2,favoriteRevision:4}]}
+ localStorage.setItem('bta:offline-hub:v1',JSON.stringify(retained))
+ Object.defineProperty(navigator,'onLine',{configurable:true,value:false})
+ const requests: unknown[]=[]
+ mocks.rpc.mockImplementation((name:string,args:unknown)=>{
+  if(name==='reader_cloud_apply'){
+   requests.push(args)
+   return Promise.resolve(requests.length===1 ? {error:new Error('lost response')} : {error:null,data:{revision:5,generation:2}})
+  }
+  return {abortSignal:()=>Promise.resolve({data:name==='reader_offline_snapshot'?retained:{enabled:true},error:null})}
+ })
+ function Marking(){const hub=useOffline();return <button onClick={()=>void hub.mark(story,'favorite',true)}>Mark Cloud Favorite</button>}
+ const first=render(<OfflineProvider><Marking /></OfflineProvider>)
+ fireEvent.click(screen.getByRole('button',{name:'Mark Cloud Favorite'}))
+ expect(requests).toHaveLength(0)
+ Object.defineProperty(navigator,'onLine',{configurable:true,value:true})
+ await act(async()=>{window.dispatchEvent(new Event('online'))})
+ await waitFor(()=>expect(requests).toHaveLength(1))
+ first.unmount()
+ render(<OfflineProvider><Marking /></OfflineProvider>)
+ await waitFor(()=>expect(requests).toHaveLength(2))
+ expect(requests[0]).toMatchObject({p_key:`${hash}/favorite`,p_base:4,p_generation:2,p_value:true})
+ expect(requests[1]).toEqual(requests[0])
+ await waitFor(()=>expect(JSON.parse(localStorage.getItem('bta:offline-hub:v1')!).pendingMarkings).toEqual([]))
+})

@@ -14,7 +14,7 @@ Phase 2 adds owner-private generic source candidates and field times, optional c
 
 ## Purpose And Boundaries
 
-Beyond the Archives has independently deployed components: organizer web app, archives unfolded EPUB reader, Chrome/Edge companion, Safari userscript, Supabase Edge Functions, any still-active worker services, and the database. The architecture is already prepared for future multi-site support. This specification adds **incremental compatibility protections**, not a platform rewrite or a revival of the retired hosted AO3 metadata worker.
+Beyond the Archives has independently deployed components: organizer web app, bta reader, Chrome/Edge companion, Safari userscript, Supabase Edge Functions, any still-active worker services, and the database. The architecture is already prepared for future multi-site support. This specification adds **incremental compatibility protections**, not a platform rewrite or a revival of the retired hosted AO3 metadata worker.
 
 Objectives:
 1. Make communication contracts explicit, versioned, validated, and negotiated by capability.

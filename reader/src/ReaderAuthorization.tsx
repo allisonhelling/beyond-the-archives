@@ -5,7 +5,7 @@ import { signInWithLogin } from '../../src/lib/auth-account'
 import { remembersSession, rememberSession } from '../../src/lib/auth-session-storage'
 import { issueHandoff, organizerAppUrl } from '../../src/lib/connected-login'
 import { loginAuthorization, loginAuthorizationReturn } from '../../src/lib/connected-login-redirect'
-import { readerBrandName } from '../../src/lib/brand'
+import { readerBrandName, readerShortName } from '../../src/lib/brand'
 import { usePageTitle } from '../../src/lib/use-page-title'
 import { readerCloud } from './cloud'
 
@@ -15,7 +15,7 @@ export function ReaderAuthorization() {
  const [checking, setChecking] = useState(true), [busy, setBusy] = useState(false)
  const [error, setError] = useState(''), [message, setMessage] = useState('')
  const [reset, setReset] = useState(false), [remember, setRemember] = useState(() => remembersSession('reader'))
- usePageTitle(reset ? 'Password Recovery' : 'Authorize Organizer', readerBrandName)
+ usePageTitle(reset ? 'Password Recovery' : 'Authorize Organizer', readerShortName)
  useEffect(() => {
   if (!request) return
   let active = true

@@ -10,6 +10,8 @@ import { seedLargeLibraries } from '../../scripts/performance-library.mjs'
 // @ts-expect-error Shared source/live metadata inventory.
 import { privacyCatalog } from '../../scripts/privacy-catalog.mjs'
 
+const protocolMigration='20261121000100_reader_hybrid_sync.sql'
+const inboxAccessMigration='20261121000200_reader_inbox_access_grant.sql'
 const backupExportMigration='20261120000400_optimize_library_backup_export.sql'
 const releaseMigration='20261116000100_application_rbac.sql'
 const account='84000000-0000-0000-0000-000000000001'
@@ -55,9 +57,9 @@ afterAll(async()=>{await clean?.close();await upgrade?.close()})
 
 it('replays the entire ordered migration chain on a fresh embedded PostgreSQL database',async()=>{
  const names=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')).sort()
- expect(names).toHaveLength(145)
+ expect(names).toHaveLength(147)
  expect(new Set(names.map(name=>name.split('_')[0])).size).toBe(names.length)
- expect(names.at(-1)).toBe(backupExportMigration)
+ expect(names.slice(-3)).toEqual([backupExportMigration,protocolMigration,inboxAccessMigration])
  const catalog=await privacyCatalog(async(sql:string)=>(await clean.query(sql)).rows)
  expect(catalog.relations.filter((table:{kind:string})=>table.kind==='r')).toHaveLength(57)
  expect(catalog.relations.filter((table:{kind:string})=>table.kind==='v')).toHaveLength(4)
@@ -108,7 +110,7 @@ it('upgrades the populated observed production prefix through both Universal dep
   const prior=await snapshot(db)
   const backup=async()=>user(db,async()=>(await db.query<{backup:{version:number}}>('select public.export_library_backup() backup')).rows[0].backup)
   expect((await backup()).version).toBe(1)
-  const pending=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')&&name>=firstPending).sort()
+  const pending=(await readdir(new URL('../migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')&&name>=firstPending&&name<protocolMigration).sort()
   expect(pending).toEqual([
    firstPending,
    '20261112000400_universal_backup_compatibility.sql',
@@ -151,3 +153,16 @@ it('upgrades the populated observed production prefix through both Universal dep
   expect((await db.query("select * from public.user_roles where role_id='owner'")).rows).toEqual([])
  }finally{await db.close()}
 },60000)
+
+it('refuses the protocol transition with populated legacy reader data and preserves the old RPC',async()=>{
+ const db=await createTestDatabase({beforeMigration:protocolMigration})
+ try {
+  await seedExistingAccount(db)
+  const prior=await snapshot(db)
+  await expect(db.exec(await readFile(new URL(`../migrations/${protocolMigration}`,import.meta.url),'utf8')))
+   .rejects.toThrow('explicitly authorized reader data reset')
+  await db.exec('rollback')
+  expect(await snapshot(db)).toEqual(prior)
+  expect((await db.query('select result from public.reader_cloud_receipts')).rows).toHaveLength(1)
+ }finally{await db.close()}
+},30000)

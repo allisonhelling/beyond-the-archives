@@ -93,7 +93,7 @@ test('downloads a chosen cloud anthology and opens the requested member', async 
       const tx = db.transaction(['books','catalog','contents','settings'], 'readwrite')
       for (const name of ['books','catalog']) { const store = tx.objectStore(name), request = store.get(id); request.onsuccess = () => store.put({ ...request.result, hasFile: false }) }
       tx.objectStore('contents').delete(id)
-      tx.objectStore('settings').put({ id: `cloud-file:${id}`, value: true })
+      tx.objectStore('settings').put({ id: `cloud-file:${id}`, value: 0 })
       tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
     }) } finally { db.close() }
   }, { owner, id: cloud.id })
