@@ -1,5 +1,5 @@
 import { readPublicConfig } from '../src/lib/config.ts'
-import { environmentOrigin, requireEnvironmentConfig, productionProjectRef, stagingProjectRef } from '../src/lib/environment.ts'
+import { environmentOrigin, requireEnvironmentConfig, productionProjectRef, stagingProjectRef, productionAppOrigins, productionOrganizerOrigin, productionReaderOrigin } from '../src/lib/environment.ts'
 
 export function validateBrowserEnv(env: Record<string, string>, requireEnvironment = false, provider: Record<string, string | undefined> = {}, allowProduction = true) {
   // Fail before Vite can embed a privileged credential, even if it was misnamed.
@@ -60,14 +60,14 @@ export function stagingVercelConfig<T extends VercelHeaders>(config: T, organize
   const reader = environmentOrigin(readerUrl, 'staging')
   if (organizer === reader || [organizer, reader].some(origin => !new URL(origin).hostname.endsWith('.vercel.app'))) throw new Error('Provide distinct, verified Vercel branch origins for both staging apps.')
   const result = hostedVercelConfig(config, organizer, reader, app, stagingProjectRef)
-  if (/https:\/\/(beyondthearchives|archivesunfolded)\.vercel\.app/.test(JSON.stringify(result.headers))) throw new Error('Production application origins remain in the staging header configuration.')
+  if (productionAppOrigins.some(origin => JSON.stringify(result.headers).includes(origin))) throw new Error('Production application origins remain in the staging header configuration.')
   return result
 }
 
 export function productionVercelConfig<T extends VercelHeaders>(config: T, organizerUrl: string, readerUrl: string, app: 'organizer' | 'reader'): T {
   const organizer = environmentOrigin(organizerUrl, 'production')
   const reader = environmentOrigin(readerUrl, 'production')
-  if (organizer !== 'https://beyondthearchives.vercel.app' || reader !== 'https://archivesunfolded.vercel.app') throw new Error('Production candidates require the exact configured production app origins.')
+  if (organizer !== productionOrganizerOrigin || reader !== productionReaderOrigin) throw new Error('Production candidates require the exact configured production app origins.')
   const result = hostedVercelConfig(config, organizer, reader, app, productionProjectRef)
   const headers = JSON.stringify(result.headers)
   if (headers.includes(stagingProjectRef) || headers.includes('-git-staging-') || [...headers.matchAll(/(?:https|wss):\/\/([^/;\s"']+)\.supabase\.co/g)].some(match => match[1] !== productionProjectRef)) throw new Error('Foreign or wildcard backend remains in the production header candidate.')

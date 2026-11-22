@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { environmentOrigin, productionProjectRef, stagingProjectRef } from '../src/lib/environment.ts'
+import { environmentOrigin, productionAppOrigins, productionProjectRef, stagingProjectRef } from '../src/lib/environment.ts'
 
 export { stagingProjectRef }
 const projectName = 'beyond-the-archives-staging'
@@ -78,7 +78,7 @@ function deploymentOperations(plan) {
  for (const operation of plan.operations) {
   if (!fieldsOnly(operation, ['id', 'action', 'payload', 'sha256']) || typeof operation.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(operation.id) || operations.has(operation.id)) invalidPlan()
   const body = JSON.stringify(operation.payload)
-  if (!text(body) || operationHash(operation.id, operation.action, body) !== operation.sha256 || [productionProjectRef, 'beyondthearchives.vercel.app', 'archivesunfolded.vercel.app'].some(value => body.toLowerCase().includes(value))) invalidPlan()
+  if (!text(body) || operationHash(operation.id, operation.action, body) !== operation.sha256 || [productionProjectRef, ...productionAppOrigins.map(origin => new URL(origin).hostname)].some(value => body.toLowerCase().includes(value))) invalidPlan()
   // Snapshot reviewed bytes before any network work; later caller edits cannot retarget a write.
   const payload = JSON.parse(body)
   let path, method, requestBody = body
