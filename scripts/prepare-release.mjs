@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { productionVercelConfig } from './build-env.ts'
 import { migrationInventory } from './staging-inventory.mjs'
-import { productionProjectRef, stagingProjectRef } from '../src/lib/environment.ts'
+import { productionOrganizerOrigin, productionProjectRef, productionReaderOrigin, stagingProjectRef } from '../src/lib/environment.ts'
 
 const root=fileURLToPath(new URL('../',import.meta.url))
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex')
@@ -40,7 +40,7 @@ try {
  for(const app of ['organizer','reader']) {
   const path=app==='organizer'?'vercel.json':'reader/vercel.json'
   const original=JSON.parse(await readFile(join(root,path),'utf8'))
-  const config=productionVercelConfig(original,'https://beyondthearchives.vercel.app','https://archivesunfolded.vercel.app',app)
+  const config=productionVercelConfig(original,productionOrganizerOrigin,productionReaderOrigin,app)
   const bytes=JSON.stringify(config,null,2)+'\n'
   candidates.push({app,path:`${app}.production.vercel.json`,sha256:hash(bytes),bytes})
  }

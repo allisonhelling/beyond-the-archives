@@ -4,6 +4,10 @@ import { isLocalHostname as isLoopback } from './local-app.ts'
 // Public identity denylist, never an authorization credential.
 export const productionProjectRef = 'pnrdztfydurupcqwumvr'
 export const stagingProjectRef = 'vzqrpjzfwcuuiqxanyoy'
+export const productionOrganizerOrigin = 'https://beyondthearchives.vercel.app'
+export const productionReaderOrigin = 'https://bta-reader.vercel.app'
+export const legacyReaderOrigin = 'https://archivesunfolded.vercel.app'
+export const productionAppOrigins = [productionOrganizerOrigin, productionReaderOrigin, legacyReaderOrigin]
 export type AppEnvironment = 'local' | 'staging' | 'production'
 export type EnvironmentConfig = PublicConfig & { environment: AppEnvironment; projectRef: string; organizerUrl: string; readerUrl: string }
 
@@ -13,7 +17,7 @@ export function environmentOrigin(value: unknown, environment: AppEnvironment) {
  try { url = new URL(value) } catch { throw new Error('Configure a valid application origin.') }
  if (url.username || url.password || url.search || url.hash || url.pathname !== '/' ||
    (environment === 'local' ? !isLoopback(url.hostname) || !['http:', 'https:'].includes(url.protocol) : url.protocol !== 'https:' || isLoopback(url.hostname))) throw new Error('Application origin does not match the selected environment.')
- if (environment !== 'production' && ['beyondthearchives.vercel.app', 'archivesunfolded.vercel.app'].includes(url.hostname)) throw new Error('Production application origins cannot be used outside production.')
+ if (environment !== 'production' && productionAppOrigins.some(origin => new URL(origin).hostname === url.hostname)) throw new Error('Production application origins cannot be used outside production.')
  return url.origin
 }
 
@@ -45,6 +49,9 @@ export function requireEnvironmentConfig(env: Record<string, unknown>, vercelEnv
 
 export function requireRuntimeEnvironmentConfig(env: Record<string, unknown>) {
  const config=requireEnvironmentConfig(env)
- if (config.environment!=='local' && ![config.organizerUrl,config.readerUrl].includes(window.location.origin)) throw new Error('Hosted configuration cannot run on this application origin.')
+ const origins = [config.organizerUrl, config.readerUrl]
+ // Existing readers need their original origin to open and sync device-local books.
+ if (config.environment === 'production' && config.readerUrl === productionReaderOrigin) origins.push(legacyReaderOrigin)
+ if (config.environment!=='local' && !origins.includes(window.location.origin)) throw new Error('Hosted configuration cannot run on this application origin.')
  return config
 }

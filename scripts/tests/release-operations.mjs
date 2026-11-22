@@ -39,7 +39,7 @@ test('production candidates use a provider-bound public key and exact callbacks 
  assert.equal(result.backendPublicKeyVerified, true)
  assert.equal(result.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'sb_publishable_verified')
  assert.ok(result.vercelBindings.every(binding => binding.environment === 'production' && binding.gitBranch === null))
- assert.equal(result.desiredAuth.uri_allow_list, 'https://beyondthearchives.vercel.app/auth/callback,https://archivesunfolded.vercel.app/auth/callback')
+ assert.equal(result.desiredAuth.uri_allow_list, 'https://beyondthearchives.vercel.app/auth/callback,https://bta-reader.vercel.app/auth/callback,https://archivesunfolded.vercel.app/auth/callback')
  assert.doesNotMatch(JSON.stringify(result), /sb_secret_|private-password|private-origin-value/)
  await assert.rejects(productionConfiguration(async () => ({ ref: 'vzqrpjzfwcuuiqxanyoy' })))
 })

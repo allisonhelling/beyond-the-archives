@@ -1,5 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest'
-import {requireEnvironmentConfig,requireRuntimeEnvironmentConfig,productionProjectRef,stagingProjectRef} from './environment'
+import {requireEnvironmentConfig,requireRuntimeEnvironmentConfig,productionProjectRef,stagingProjectRef,legacyReaderOrigin,productionReaderOrigin} from './environment'
 import {productionVercelConfig,stagingBootstrapConfig,stagingVercelConfig,validateBrowserEnv} from '../../scripts/build-env'
 import organizerVercel from '../../vercel.json'
 import readerVercel from '../../reader/vercel.json'
@@ -16,7 +16,8 @@ it('denies staging/local production routing and mismatched backend identity befo
  for(const env of [
   {...local,VITE_SUPABASE_URL:production}, {...staging,VITE_SUPABASE_URL:production},
   {...staging,VITE_SUPABASE_PROJECT_REF:productionProjectRef,VITE_SUPABASE_URL:production},
-  {...staging,VITE_READER_URL:'https://archivesunfolded.vercel.app/'},
+  {...staging,VITE_READER_URL:legacyReaderOrigin},
+  {...staging,VITE_READER_URL:productionReaderOrigin},
   {...staging,VITE_ORGANIZER_URL:'https://beyondthearchives.vercel.app/'},
   {...staging,VITE_SUPABASE_URL:'https://user:password@synthetic-staging.supabase.co/'},
   {...staging,VITE_SUPABASE_URL:'https://synthetic-staging.supabase.co/functions/v1'},
@@ -26,7 +27,7 @@ it('binds Vercel Preview to staging and Production to its explicit production co
  expect(()=>requireEnvironmentConfig(local,'preview')).toThrow()
  expect(()=>requireEnvironmentConfig(staging,'production')).toThrow()
  expect(requireEnvironmentConfig(staging,'preview').environment).toBe('staging')
- const production={...staging,VITE_APP_ENV:'production',VITE_SUPABASE_PROJECT_REF:productionProjectRef,VITE_SUPABASE_URL:`https://${productionProjectRef}.supabase.co`,VITE_ORGANIZER_URL:'https://beyondthearchives.vercel.app/',VITE_READER_URL:'https://archivesunfolded.vercel.app/'}
+ const production={...staging,VITE_APP_ENV:'production',VITE_SUPABASE_PROJECT_REF:productionProjectRef,VITE_SUPABASE_URL:`https://${productionProjectRef}.supabase.co`,VITE_ORGANIZER_URL:'https://beyondthearchives.vercel.app/',VITE_READER_URL:productionReaderOrigin}
  expect(()=>requireEnvironmentConfig(production,'preview')).toThrow()
  expect(requireEnvironmentConfig(production,'production').environment).toBe('production')
  expect(()=>validateBrowserEnv(production,true,undefined,false)).toThrow('development servers')
@@ -39,7 +40,7 @@ it('rejects privileged credentials and environment omissions in both app build b
  expect(()=>validateBrowserEnv({...staging,VITE_READER_URL:''},true)).toThrow('Set VITE_READER_URL for')
 })
 it('rejects staging branch promotion even with internally consistent inherited Production variables',()=>{
- const production={...staging,VITE_APP_ENV:'production',VITE_SUPABASE_PROJECT_REF:productionProjectRef,VITE_SUPABASE_URL:`https://${productionProjectRef}.supabase.co`,VITE_ORGANIZER_URL:'https://beyondthearchives.vercel.app',VITE_READER_URL:'https://archivesunfolded.vercel.app'}
+ const production={...staging,VITE_APP_ENV:'production',VITE_SUPABASE_PROJECT_REF:productionProjectRef,VITE_SUPABASE_URL:`https://${productionProjectRef}.supabase.co`,VITE_ORGANIZER_URL:'https://beyondthearchives.vercel.app',VITE_READER_URL:productionReaderOrigin}
  const provider={VERCEL:'1',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'staging'}
  expect(()=>validateBrowserEnv(production,true,provider)).toThrow('staging branch')
  expect(()=>validateBrowserEnv(production,true,{...provider,VERCEL_GIT_COMMIT_REF:'main'})).not.toThrow()
@@ -67,6 +68,15 @@ it('allows staging clients only on configured app origins, preserving local beha
  }
  expect(requireRuntimeEnvironmentConfig(local).environment).toBe('local')
 })
+it('keeps the former Reader origin available for production browser-local libraries',()=>{
+ const production={...staging,VITE_APP_ENV:'production',VITE_SUPABASE_PROJECT_REF:productionProjectRef,
+  VITE_SUPABASE_URL:`https://${productionProjectRef}.supabase.co`,VITE_READER_URL:productionReaderOrigin}
+ for(const origin of [productionReaderOrigin, legacyReaderOrigin]){
+  vi.stubGlobal('window',{location:{origin}})
+  expect(requireRuntimeEnvironmentConfig(production).readerUrl).toBe(productionReaderOrigin)
+ }
+ expect(()=>requireRuntimeEnvironmentConfig({...production,VITE_READER_URL:'https://another-reader.example'})).toThrow('application origin')
+})
 it('derives staging CSP from both existing configs without changing production policies or routing',()=>{
  const organizer='https://synthetic-organizer-git-staging-test.vercel.app'
  const reader='https://synthetic-reader-git-staging-test.vercel.app'
@@ -90,7 +100,7 @@ it('derives staging CSP from both existing configs without changing production p
   expect(csp).toContain(`frame-ancestors ${sibling};`)
   expect(csp).toContain(`https://${stagingProjectRef}.supabase.co`)
   expect(csp).not.toContain('*.supabase.co')
-  expect(JSON.stringify(prepared.headers)).not.toMatch(/https:\/\/(beyondthearchives|archivesunfolded)\.vercel\.app/)
+  expect(JSON.stringify(prepared.headers)).not.toMatch(/https:\/\/(beyondthearchives|archivesunfolded|bta-reader)\.vercel\.app/)
   expect(prepared.headers.find(rule=>rule.source==='/((?!auth/bridge$).*)')!.headers).toContainEqual({key:'X-Frame-Options',value:'DENY'})
  }
  expect(()=>stagingVercelConfig(organizerVercel,organizer,organizer,'organizer')).toThrow('distinct')
@@ -111,7 +121,7 @@ it('prepares dependency-free bootstrap candidates with no application entrypoint
  }
 })
 it('derives production candidates from staging headers while preserving active files, routes and bridge protections',()=>{
- const organizer='https://beyondthearchives.vercel.app',reader='https://archivesunfolded.vercel.app'
+ const organizer='https://beyondthearchives.vercel.app',reader=productionReaderOrigin
  for(const [app,source,sibling] of [['organizer',organizerVercel,reader],['reader',readerVercel,organizer]] as const) {
   const original=JSON.stringify(source)
   const candidate=productionVercelConfig(source,organizer,reader,app)

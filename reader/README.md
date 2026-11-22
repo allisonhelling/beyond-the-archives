@@ -205,6 +205,8 @@ Account sign-in accepts your username or email and password. Password recovery r
 
 Continue From Organizer signs in with your existing organizer account without requiring organizer sync to be enabled. If Remember Me was unchecked in the organizer, keep that signed-in tab open while continuing. Failed handoffs show a message in Reader Account; you can also use your username or email and password.
 
+The production Reader is at `https://bta-reader.vercel.app`. Existing downloads, guest libraries, and unsynced edits stay in browser storage at `https://archivesunfolded.vercel.app`. Open that address to access them. If you want your guest books on the new site, sign in and use **Import Guest Library** on the old site, then sync and sign in to the same account on the new site. Download your books again there for offline use. Re-pair the Calibre local bridge from the new address.
+
 Guest mode is for local reading only: books, notes, and progress stay on this device, with no organizer sync, availability reports, or cloud uploads. Sign in to the matching shared account to connect an organizer; one organizer belongs to one reader account, which can run on multiple devices. Pairing links received as a guest wait in this tab during sign-in, subject to the code’s five-minute expiry. Existing guest books and notes remain saved, and **Import Guest Library** explicitly copies them into an account. Old guest connections and queued organizer edits are preserved locally but no longer sent. Account downloads remain readable offline when a session expires.
 
 ## Collections
